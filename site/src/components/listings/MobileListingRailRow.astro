@@ -118,6 +118,9 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         {railMediaItems.map((railMedia, mediaIndex) => {
           const imageUrl = railMedia.src.startsWith('/') ? withBase(railMedia.src) : eventImageUrl(railMedia.src);
           const loading = priority && mediaIndex === 0 ? 'eager' : 'lazy';
+          const sourceWidth = Number(railMedia.asset?.width || 0);
+          const sourceHeight = Number(railMedia.asset?.height || 0);
+          const sourceRatio = sourceWidth > 0 && sourceHeight > 0 ? sourceWidth / sourceHeight : null;
           const style = `--media-width:${railMedia.width}px;--media-frame-ratio:${railMedia.ratio};--media-frame-object-position:${railMedia.objectPosition}`;
           return imageUrl ? (
             <span
@@ -137,13 +140,14 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
               data-media-frame-clip="frame"
               data-media-frame-radius="surface"
               data-media-frame-fill="true"
-              data-media-frame-source-width={railMedia.asset?.width || undefined}
-              data-media-frame-source-height={railMedia.asset?.height || undefined}
+              data-media-frame-source-width={sourceWidth || undefined}
+              data-media-frame-source-height={sourceHeight || undefined}
+              data-media-frame-source-ratio={sourceRatio ? sourceRatio.toFixed(5) : undefined}
               data-media-frame-loading={loading}
               data-media-frame-priority={priority && mediaIndex === 0 ? 'true' : undefined}
+              data-media-frame-resource-state="pending"
               data-media-frame-interaction-owner="caller"
               data-image-text-mode={railMedia.imageTextMode}
-              data-media-state="loading"
               data-rail-media-reason={railMedia.reason}
               data-rail-media-fit={railMedia.fit}
               data-rail-media-ratio={railMedia.ratio}
@@ -154,13 +158,14 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
               <img
                 data-media-frame-image
                 src={imageUrl}
-                width={railMedia.asset?.width || undefined}
-                height={railMedia.asset?.height || undefined}
+                width={sourceWidth || undefined}
+                height={sourceHeight || undefined}
                 alt=""
                 loading={loading}
                 fetchpriority={priority && mediaIndex === 0 ? 'high' : 'auto'}
                 decoding="async"
               />
+              <span class="media-frame__fallback" data-media-frame-fallback aria-hidden="true" hidden></span>
             </span>
           ) : null;
         })}
@@ -221,13 +226,13 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
       const rail = row.querySelector('.rail-window');
       const sync = () => {
         const temporalState = row.dataset.mobileRailTemporalState;
-        const media = Array.from(row.querySelectorAll('[data-media-frame][data-media-state]'))
+        const media = Array.from(row.querySelectorAll('[data-media-frame][data-media-frame-resource-state]'))
           .filter((item) => item instanceof HTMLElement);
-        const mediaState = media.some((item) => item.dataset.mediaState === 'error')
+        const mediaState = media.some((item) => ['broken', 'fallback'].includes(item.dataset.mediaFrameResourceState || ''))
           ? 'media-error'
-          : media.some((item) => item.dataset.mediaState === 'loading')
+          : media.some((item) => item.dataset.mediaFrameResourceState === 'pending')
             ? 'media-loading'
-            : media.length && media.every((item) => item.dataset.mediaState === 'loaded')
+            : media.length && media.every((item) => item.dataset.mediaFrameResourceState === 'loaded')
               ? 'media-loaded'
               : null;
         const interactionState = rail instanceof HTMLElement
@@ -260,7 +265,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
           'aria-pressed',
           'data-not-interested',
           'data-mobile-rail-temporal-state',
-          'data-media-state',
+          'data-media-frame-resource-state',
         ],
       });
       sync();
