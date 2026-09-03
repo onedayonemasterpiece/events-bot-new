@@ -1,18 +1,21 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
 import {
+  AUTHORED_AGAINST_SOURCE,
+  CANONICAL_A0_V0_MATRIX,
   CONTRACT_VERSION,
   OWNERS,
   SELECTORS,
-  SOURCE_CHECKPOINT,
   auditContract,
   classifyObservation,
 } from '../scripts/v0-browser-audit-contract.mjs';
 
 const target = {
   previewUrl: 'https://kenigevents.ru/example/__preview/',
-  sourceSha: SOURCE_CHECKPOINT,
+  sourceSha: AUTHORED_AGAINST_SOURCE,
   dataMode: 'real',
   contractVersion: CONTRACT_VERSION,
 };
@@ -37,9 +40,10 @@ const classify = (doc, extra = {}) => classifyObservation({
 
 const defect = (result, code) => result.defects.find((item) => item.code === code);
 
-test('contract is pinned to 1.10.0 and routes each domain to the current lowest owner', () => {
+test('contract 1.10 routes each current domain to its lowest owner without creating data-ui identity', () => {
   assert.equal(CONTRACT_VERSION, '1.10.0');
-  assert.equal(auditContract.sourceCheckpoint, SOURCE_CHECKPOINT);
+  assert.equal(auditContract.authoredAgainstSource, AUTHORED_AGAINST_SOURCE);
+  assert.equal(auditContract.checkpointSemantics, 'NON_GATING');
   assert.deepEqual(OWNERS, {
     acceptance: 'N0',
     foundations: 'F0',
@@ -47,8 +51,47 @@ test('contract is pinned to 1.10.0 and routes each domain to the current lowest 
     components: 'M0',
     routes: 'A0',
   });
-  assert.match(SELECTORS.eventCardAuxiliaryTarget, /data-ds-family="EventCard"/u);
+  assert.match(SELECTORS.auxiliaryTarget, /data-ds-family="EventCard"/u);
   assert.doesNotMatch(JSON.stringify(auditContract), /data-ui-(?:root|role)/u);
+});
+
+test('the executable overlay references rather than replaces the canonical A0-V0 matrix and release gate', () => {
+  assert.equal(CANONICAL_A0_V0_MATRIX.relationship, 'EXECUTABLE_OVERLAY_NOT_REPLACEMENT');
+  assert.equal(CANONICAL_A0_V0_MATRIX.path, 'catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json');
+  assert.equal(CANONICAL_A0_V0_MATRIX.blobSha, 'e81a75a77a62c2f2efc2b9f0c72625f56c1fc38b');
+  assert.equal(auditContract.executionBoundary.startsBrowser, false);
+  assert.equal(auditContract.executionBoundary.replacesExistingReleaseGate, false);
+  assert.equal(auditContract.executionBoundary.replacesCanonicalA0V0Matrix, false);
+  assert.equal(auditContract.executionBoundary.existingLocalReleaseGate, 'site/scripts/check-browser-release-gate.mjs');
+  assert.equal(auditContract.flowControl.fr0CutoverRequiredBeforeFramingWrites, true);
+  assert.equal(auditContract.flowControl.fr0MustNotDelayAlreadyReadySuccessor, true);
+});
+
+test('authored source is evidence, not a hard gate for a newer or older exact preview target', () => {
+  const result = classifyObservation({
+    target: { ...target, sourceSha: '4536847f9fbdaa27326ebb3ec9ec1c825736e107' },
+    documents: [document()],
+  });
+  assert.equal(result.verdict, 'PASS');
+  assert.equal(result.authoredAgainstSource, AUTHORED_AGAINST_SOURCE);
+  assert.equal(result.checkpointSemantics, 'NON_GATING');
+  assert.equal(defect(result, 'SOURCE_SHA_MISMATCH'), undefined);
+});
+
+test('classification does not mutate the browser observation payload', () => {
+  const inputDocument = {
+    routeKey: 'free',
+    width: 375,
+    httpStatus: 200,
+    clientWidth: 375,
+    documentScrollWidth: 375,
+    bodyScrollWidth: 375,
+    visibleH1Count: 1,
+  };
+  const snapshot = structuredClone(inputDocument);
+  classifyObservation({ target, documents: [inputDocument] });
+  assert.deepEqual(inputDocument, snapshot);
+  assert.equal(Object.hasOwn(inputDocument, 'route'), false);
 });
 
 test('44px auxiliary target passes while route, component and foundation failures keep distinct owners', () => {
@@ -65,16 +108,17 @@ test('44px auxiliary target passes while route, component and foundation failure
   assert.equal(defect(foundation, 'EVENT_CARD_AUXILIARY_TARGET_BELOW_44PX').owner, 'F0');
 });
 
-test('canonical identity uses data-ds markers and routes missing roots by scope', () => {
+test('canonical identity uses data-ds markers and routes EventMediaRail or MediaFrame roots to FR0', () => {
   const result = classify(document({
     identityExpectations: [
       { family: 'EventLayout', scope: 'route', present: false },
       { family: 'EventCard', scope: 'component', present: false },
-      { family: 'MediaFrame', scope: 'framing', present: false },
+      { family: 'MediaFrame', scope: 'component', present: false },
+      { family: 'EventMediaRail', scope: 'component', present: false },
     ],
   }));
   const missing = result.defects.filter((item) => item.code === 'CANONICAL_IDENTITY_MISSING');
-  assert.deepEqual(missing.map((item) => item.owner), ['A0', 'M0', 'FR0']);
+  assert.deepEqual(missing.map((item) => item.owner), ['A0', 'M0', 'FR0', 'FR0']);
 });
 
 test('target=_blank is neutral when both safety tokens exist and A0 drift otherwise', () => {
@@ -165,7 +209,7 @@ test('AdaptiveEventCardGrid occupancy, cardinality and remainder defects are M0;
   assert.equal(defect(result, 'ROUTE_LOCAL_GRID_WRAPPER_PRESENT').owner, 'A0');
 });
 
-test('shell, keyboard and foundation focus checks retain separate ownership', () => {
+test('shell and general focus remain A0/F0 while EventMediaRail accessibility belongs to FR0', () => {
   const result = classify(document({
     width: 981,
     shell: { desktopNavigationVisible: false, mobileNavigationVisible: true },
@@ -181,27 +225,60 @@ test('shell, keyboard and foundation focus checks retain separate ownership', ()
   }));
   assert.equal(defect(result, 'SHELL_RESPONSIVE_TRANSITION').owner, 'A0');
   assert.equal(defect(result, 'SKIP_LINK_FOCUS_ORDER_DRIFT').owner, 'A0');
-  assert.equal(defect(result, 'MEDIA_RAIL_ACCESSIBILITY_DRIFT').owner, 'M0');
+  assert.equal(defect(result, 'MEDIA_RAIL_ACCESSIBILITY_DRIFT').owner, 'FR0');
   assert.equal(defect(result, 'FOCUS_INDICATOR_FOUNDATION_DRIFT').owner, 'F0');
 });
 
-test('complete audits fail closed when a route/viewport pair is missing', () => {
-  const result = classify(document(), {
+test('case-specific completeness fails closed without inventing a route-by-width Cartesian product', () => {
+  const result = classifyObservation({
+    target,
     complete: true,
-    expectedRouteKeys: ['free'],
-    expectedWidths: [375, 390],
+    expectedPairs: [
+      { caseId: 'PM0-37-04', routeKey: 'free', width: 390 },
+      { caseId: 'PM0-37-04', routeKey: 'free', width: 1728 },
+    ],
+    documents: [document({ caseId: 'PM0-37-04', width: 390, clientWidth: 390, documentScrollWidth: 390, bodyScrollWidth: 390 })],
   });
   assert.equal(result.verdict, 'INCOMPLETE');
-  assert.deepEqual(result.auditGaps, [{ code: 'ROUTE_VIEWPORT_PAIR_MISSING', routeKey: 'free', width: 390 }]);
+  assert.deepEqual(result.auditGaps, [{
+    code: 'ROUTE_VIEWPORT_PAIR_MISSING',
+    caseId: 'PM0-37-04',
+    routeKey: 'free',
+    width: 1728,
+  }]);
 });
 
-test('machine-readable matrix stays aligned with the executable contract', async () => {
+test('CLI classifies a browser observation from stdin for direct R0/V0 consumption', () => {
+  const scriptPath = fileURLToPath(new URL('../scripts/v0-browser-audit-contract.mjs', import.meta.url));
+  const execution = spawnSync(process.execPath, [scriptPath, '--classify', '-'], {
+    encoding: 'utf8',
+    input: JSON.stringify({ target, documents: [document()] }),
+  });
+  assert.equal(execution.status, 0, execution.stderr);
+  const result = JSON.parse(execution.stdout);
+  assert.equal(result.verdict, 'PASS');
+  assert.equal(result.checkpointSemantics, 'NON_GATING');
+});
+
+test('machine-readable overlay aligns with executable seams and canonical PM0-37 authority', async () => {
   const matrix = JSON.parse(await readFile(new URL('./fixtures/v0-browser-audit-matrix.v1.json', import.meta.url), 'utf8'));
   assert.equal(matrix.schema, 'kenigevents.v0-browser-audit-matrix.v1');
   assert.equal(matrix.contract_version, CONTRACT_VERSION);
-  assert.equal(matrix.source_checkpoint, SOURCE_CHECKPOINT);
+  assert.equal(matrix.authored_against_source, AUTHORED_AGAINST_SOURCE);
+  assert.equal(matrix.checkpoint_semantics, 'NON_GATING');
   assert.deepEqual(matrix.owners, OWNERS);
+  assert.equal(matrix.authority.relationship, 'EXECUTABLE_OVERLAY_NOT_REPLACEMENT');
+  assert.equal(matrix.authority.canonical_a0_v0_matrix.path, CANONICAL_A0_V0_MATRIX.path);
+  assert.equal(matrix.authority.canonical_a0_v0_matrix.blob_sha, CANONICAL_A0_V0_MATRIX.blobSha);
   assert.deepEqual(matrix.viewports.map((item) => item.width), auditContract.viewports.map((item) => item.width));
+  assert.deepEqual(matrix.viewports.map((item) => item.id), auditContract.viewports.map((item) => item.id));
+  assert.equal(matrix.viewports.length, 19);
   assert.equal(matrix.selectors.media_frames, SELECTORS.mediaFrames);
   assert.equal(matrix.gates.control_minimum_px, 44);
+  assert.equal(matrix.pm0_item_37_overlay.denominator, 19);
+  assert.equal(matrix.pm0_item_37_overlay.cases.length, 19);
+  assert.equal(new Set(matrix.pm0_item_37_overlay.cases.map((item) => item.id)).size, 19);
+  assert.equal(matrix.rollback.product_behavior_effect, 'none');
+  assert.equal(matrix.execution_boundary.replaces_existing_release_gate, false);
+  assert.equal(matrix.execution_boundary.replaces_canonical_a0_v0_matrix, false);
 });
