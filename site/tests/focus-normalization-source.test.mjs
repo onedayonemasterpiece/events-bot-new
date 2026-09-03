@@ -12,6 +12,7 @@ const consumers = {
   lab: 'src/components/FocusGroupLabPanel.astro',
   intake: 'src/components/FocusGroupInviteIntake.astro',
   connectivity: 'src/components/FocusConnectivityDiagnostic.astro',
+  thanks: 'src/components/FocusGroupThankYou.astro',
 };
 
 test('normalized focus consumers load the one product-contour foundation registry', async () => {
@@ -114,7 +115,7 @@ test('focus invite intake consumes the central focus roles and canonical success
   );
 });
 
-test('connectivity diagnostic consumes its complete product-theme cluster without changing probe topology', async () => {
+test('connectivity diagnostic consumes product-theme and residual continuity roles without changing probe topology', async () => {
   const source = await read(consumers.connectivity);
 
   assert.match(source, /data-ds-family="FocusConnectivityDiagnostic"/u);
@@ -135,20 +136,57 @@ test('connectivity diagnostic consumes its complete product-theme cluster withou
     '--ke-connectivity-card-max',
     '--ke-color-connectivity-card-border',
     '--ke-elevation-connectivity-card',
+    '--ke-connectivity-page-padding-top',
+    '--ke-connectivity-card-gap',
+    '--ke-connectivity-card-padding',
+    '--ke-connectivity-heading-size',
     '--ke-connectivity-action-min-height',
+    '--ke-connectivity-action-padding-block',
     '--ke-elevation-connectivity-action',
+    '--ke-connectivity-results-gap',
+    '--ke-connectivity-result-radius',
     '--ke-color-connectivity-result-surface',
     '--ke-color-connectivity-success',
     '--ke-color-connectivity-error',
+    '--ke-connectivity-send-radius',
     '--ke-color-connectivity-input-border',
+    '--ke-connectivity-input-radius',
+    '--ke-connectivity-copy-action-min-height',
     '--ke-color-connectivity-copy-surface',
     '--ke-connectivity-card-radius-mobile',
   ]) assert.match(source, new RegExp(token, 'u'));
 
   assert.doesNotMatch(
     source,
-    /color:\s*#33261e|border:\s*1px solid #e3d2bd|background:\s*#fffdf8|box-shadow:\s*0 16px 40px|background:\s*#a74523|background:\s*#f5eee5|color:\s*#1f744e|color:\s*#b02c2c|border:\s*1px solid #d9c5b4/u,
-    'connectivity surface no longer owns the central product-theme palette or elevation',
+    /padding:\s*max\(\.7rem|gap:\s*\.7rem|padding:\s*clamp\(1rem,\s*4vw,\s*1\.5rem\)|font-size:\s*clamp\(2rem,\s*8vw,\s*3rem\)|color:\s*#33261e|border:\s*1px solid #e3d2bd|background:\s*#fffdf8|box-shadow:\s*0 16px 40px|background:\s*#a74523|background:\s*#f5eee5|color:\s*#1f744e|color:\s*#b02c2c|border:\s*1px solid #d9c5b4/u,
+    'connectivity surface no longer owns central product-theme or residual continuity values',
+  );
+});
+
+test('focus thank-you surface consumes its exact residual family roles', async () => {
+  const source = await read(consumers.thanks);
+
+  assert.match(source, /data-ds-family="FocusGroupThankYou"/u);
+  assert.match(source, /data-ds-version="1"/u);
+  assert.match(source, /data-ds-variant=\{compact \? 'compact' : 'default'\}/u);
+  assert.match(source, /data-ds-state="informational"/u);
+  assert.match(source, /data-ke-foundation-consumer="focus-thank-you"/u);
+  for (const token of [
+    '--ke-focus-thanks-partner-column',
+    '--ke-focus-thanks-gap',
+    '--ke-focus-thanks-radius',
+    '--ke-color-focus-thanks-border',
+    '--ke-color-focus-thanks-marker-glow',
+    '--ke-elevation-focus-thanks',
+    '--ke-focus-thanks-logo-max',
+    '--ke-focus-thanks-heading-size',
+    '--ke-focus-thanks-notice-border',
+    '--ke-focus-thanks-mobile-logo-max',
+  ]) assert.match(source, new RegExp(token, 'u'));
+  assert.doesNotMatch(
+    source,
+    /grid-template-columns:\s*minmax\(180px|gap:\s*clamp\(1\.25rem|border-radius:\s*1\.6rem|rgb\(255 193 13 \/ 17%\)|box-shadow:\s*var\(--ke-shadow-1|border-left:\s*3px solid #ffc10d/u,
+    'thank-you consumer no longer owns its residual family values',
   );
 });
 
