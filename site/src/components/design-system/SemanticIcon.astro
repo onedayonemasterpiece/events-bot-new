@@ -1,0 +1,45 @@
+---
+import Icon from '../Icon.astro';
+import './foundations.css';
+import type { IconSizeRole, SemanticIconName, UiIconName } from './foundations';
+
+interface Props {
+  name: SemanticIconName;
+  role?: IconSizeRole;
+  className?: string;
+  title?: string;
+}
+
+const {
+  name,
+  role = 'control',
+  className = '',
+  title,
+} = Astro.props;
+
+const classes = [
+  'ke-icon-role',
+  `ke-icon-role--${role}`,
+  `ke-semantic-icon--${name}`,
+  className,
+].filter(Boolean).join(' ');
+const existingName = name as UiIconName;
+const labelled = Boolean(title);
+---
+{name === 'trend-up' ? (
+  <svg
+    class={classes}
+    data-ke-icon-name="trend-up"
+    data-ke-icon-role={role}
+    aria-hidden={labelled ? undefined : 'true'}
+    role={labelled ? 'img' : undefined}
+    viewBox="0 0 24 24"
+    focusable="false"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {title && <title>{title}</title>}
+    <path d="M3 17.5 8.7 12l3.8 3.4L20.8 7v4H23V3h-8v2.2h4.2l-6.8 6.9-3.8-3.4L1.5 15.8 3 17.5Z" />
+  </svg>
+) : (
+  <Icon name={existingName} className={classes} title={title} />
+)}

@@ -1,28 +1,59 @@
 ---
 import { withBase } from '../lib/events';
+import './design-system/foundations.css';
+import type { IconSizeRole, SocialIconName } from './design-system/foundations';
 
 interface Props {
-  name: 'telegram' | 'vk' | 'max';
+  name: SocialIconName;
+  role?: IconSizeRole;
+  className?: string;
 }
 
-const { name } = Astro.props;
-const className = `social-icon social-icon--${name}`;
+const {
+  name,
+  role = 'control',
+  className = '',
+} = Astro.props;
+const classes = [
+  'social-icon',
+  `social-icon--${name}`,
+  'ke-icon-role',
+  `ke-icon-role--${role}`,
+  className,
+].filter(Boolean).join(' ');
 ---
+<!-- Official service-brand fills are canonical asset data, not UI palette tokens. -->
 {name === 'telegram' && (
-  <svg class={className} viewBox="0 0 240 240" aria-hidden="true" focusable="false">
+  <svg
+    class={classes}
+    data-ke-icon-name="telegram"
+    data-ke-icon-role={role}
+    viewBox="0 0 240 240"
+    aria-hidden="true"
+    focusable="false"
+  >
     <circle cx="120" cy="120" r="120" fill="#2AABEE" />
     <path d="M81.486 130.178 52.2 120.636s-3.5-1.42-2.373-4.64c.232-.664.7-1.229 2.1-2.2 6.489-4.523 120.106-45.36 120.106-45.36s3.208-1.081 5.1-.362a2.766 2.766 0 0 1 1.885 2.055c.197.805.294 1.676.254 2.585-.009.752-.1 1.449-.169 2.542-.692 11.165-21.4 94.493-21.4 94.493s-1.239 4.876-5.678 5.043a8.13 8.13 0 0 1-5.925-2.292c-8.711-7.493-38.819-27.727-45.472-32.177a1.27 1.27 0 0 1-.546-.9c-.093-.469.417-1.05.417-1.05s52.426-46.6 53.821-51.492c.108-.379-.3-.566-.848-.4-3.482 1.281-63.844 39.4-70.506 43.607a3.21 3.21 0 0 1-1.48.09Z" fill="#fff" />
   </svg>
 )}
 {name === 'vk' && (
-  <svg class={className} viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
+  <svg
+    class={classes}
+    data-ke-icon-name="vk"
+    data-ke-icon-role={role}
+    viewBox="0 0 1024 1024"
+    aria-hidden="true"
+    focusable="false"
+  >
     <path d="M179.929 32h664.142C925.767 32 992 98.23 992 179.929v664.142C992 925.767 925.767 992 844.071 992H179.929C98.23 992 32 925.767 32 844.071V179.929C32 98.23 98.23 32 179.929 32Z" fill="#4C75A3" />
     <path d="M503.946 704.029h39.269s11.859-1.307 17.922-7.831c5.573-5.997 5.395-17.249 5.395-17.249s-.768-52.692 23.683-60.451c24.114-7.648 55.07 50.924 87.88 73.448 24.812 17.039 43.667 13.31 43.667 13.31l87.739-1.226s45.895-2.832 24.132-38.917c-1.781-2.947-12.678-26.693-65.238-75.48-55.019-51.063-47.644-42.802 18.626-131.128 40.359-53.791 56.491-86.629 51.45-100.692-4.803-13.4-34.489-9.86-34.489-9.86l-98.787.611s-7.329-.997-12.756 2.251c-5.31 3.176-8.717 10.598-8.717 10.598s-15.641 41.622-36.486 77.025c-43.988 74.693-61.58 78.647-68.77 74.001-16.729-10.811-12.548-43.422-12.548-66.596 0-72.389 10.98-102.571-21.381-110.383-10.737-2.591-18.647-4.305-46.11-4.585-35.251-.359-65.078.109-81.971 8.384-11.239 5.504-19.91 17.765-14.626 18.471 6.531.87 21.314 3.991 29.152 14.656 10.126 13.777 9.772 44.703 9.772 44.703s5.818 85.212-13.585 95.794c-13.314 7.26-31.581-7.56-70.799-75.327-20.09-34.711-35.264-73.085-35.264-73.085s-2.922-7.169-8.141-11.007c-6.33-4.65-15.174-6.124-15.174-6.124l-93.876.613s-14.089.393-19.267 6.522c-4.606 5.455-.368 16.724-.368 16.724s73.49 171.943 156.711 258.592c76.315 79.454 162.957 74.24 162.957 74.24Z" fill="#fff" />
   </svg>
 )}
 {name === 'max' && (
   <img
-    class={className}
+    class={classes}
+    data-ke-icon-name="max"
+    data-ke-icon-role={role}
     src={withBase('/assets/social/max-colored-official.svg')}
     width="100"
     height="100"
