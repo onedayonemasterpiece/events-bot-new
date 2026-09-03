@@ -1,0 +1,54 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/integration/ui-normalization-launch-20260902
+base_branch: integration/ui-normalization-launch-20260902
+integration_branch: r0/ui-normalization-current-candidate-20260903
+global_constraints:
+  - no palette or redesign
+  - no irreversible production or data mutation
+  - immutable build prefix only
+  - V0 retains final independent verdict
+verification_owner: R0
+stop_conditions:
+  - exact reachable preview and local browser smoke complete
+  - genuine semantic or irreversible-risk boundary
+lanes:
+  - id: issue-contract
+    role: planner
+    requirement_ids: [R01]
+    target: issue 621 and contract 1.6.0
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: [all]
+    expected_output: current contract and gate census
+    verification_scope: inspection_only
+    status: committed
+  - id: branch-source-census
+    role: planner
+    requirement_ids: [R02, R03]
+    target: role refs, ancestry, producers and consumers
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: [all]
+    expected_output: latest safe transaction inputs
+    verification_scope: inspection_only
+    status: committed
+  - id: r0-current-candidate
+    role: merge_reviewer
+    requirement_ids: [R04, R05, R06, R07, R08]
+    target: integrated candidate, fresh build, immutable publication and smoke
+    depends_on: [issue-contract, branch-source-census]
+    execution_mode: serial_after_dependency
+    branch: r0/ui-normalization-current-candidate-20260903
+    worktree: /home/dev/.codex/worktrees/events-bot-new/ui-normalization-r0-current
+    writable_files: [site, docs/features/static-site-pages, CHANGELOG.md, .codex/lanes/r0-current-candidate, .codex/integration/INTEGRATION_REPORT.md]
+    forbidden_files: [production_database, penpot]
+    expected_output: exact URL, ancestry, checks and browser smoke
+    verification_scope: full_local
+    status: spawned
