@@ -1,16 +1,21 @@
 {
   "schema": "kenigevents.m0.downstream-bindings.v1",
-  "version": "1.0.0",
-  "contract_version": "1.9.0",
+  "version": "1.1.0",
+  "contract_version": "1.10.0",
   "role": "M0",
+  "status": "POST_FR0_CARD_GRID_CONSOLIDATION_RUNTIME_PENDING",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
-  "instruction_comment": 5526326906,
+  "instruction_comment": 5529661330,
   "authority": {
     "executable_repository": "onedayonemasterpiece/events-bot-new",
     "role_branch": "work/ui-normalization-m0-continuity-20260903",
-    "source_checkpoint_before_binding_commit": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+    "fr0_cutover_base": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+    "m0_downstream_base": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "authoring_parent": "6eee157944e0a67457f2ab5168a30468274ef275",
     "current_successor_branch": "agent/static-site-single-kaggle-contract",
-    "current_successor_sha_at_review": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
+    "current_successor_sha_at_review": "cebeafeee08251a327145ee973ee035cced65204",
+    "current_successor_contains_m0_downstream_base": true,
+    "current_successor_contains_post_cutover_consolidation": false,
     "thin_s_repository": "onedayonemasterpiece/lovekgd-design-system",
     "thin_s_branch": "integration/launch-normalized-sot-penpot-20260902",
     "candidate_acceptance_owner": "N0",
@@ -18,79 +23,80 @@
     "runtime_kaggle_owner": "R0",
     "penpot_writer": "R0.PENPOT"
   },
+  "cutover": {
+    "acknowledged": true,
+    "fr0_owns": [
+      "site/src/components/media-frame.css",
+      "site/src/components/EventMediaRail.astro",
+      "site/src/components/EventHero.astro framing internals",
+      "site/tests/fr0-*.test.mjs",
+      "canonical MediaFrame protocol internals"
+    ],
+    "m0_owns": [
+      "site/src/components/EventCard.astro",
+      "site/src/components/listings/ListingEventCard.astro",
+      "site/src/components/AdaptiveEventCardGrid.astro",
+      "site/src/components/OptimizedEventCardGrid.astro",
+      "site/src/lib/relatedCardLayout.mjs",
+      "M0 card/grid/action/metadata regression tests"
+    ],
+    "pre_cutover_framing_artifacts": "COHERENT_PUBLISHED_HISTORICAL_SNAPSHOT_NOT_AMENDED",
+    "no_third_wave": true
+  },
   "truth_boundary": {
     "source_implemented_does_not_mean_candidate_integrated": true,
     "candidate_integrated_does_not_mean_browser_passed": true,
     "spec_only_does_not_mean_penpot_materialized": true,
+    "fr0_protocol_dependency_is_not_m0_protocol_ownership": true,
     "local_test_execution_claimed": false,
     "browser_pass_claimed": false,
     "penpot_materialization_claimed": false
   },
   "published_evidence": {
-    "fresh_real": {
-      "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
-      "source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
-      "classification": "HTTP_200_CANONICAL_KAGGLE_OLDER_M0_TRANSACTION_UNAUDITED_BY_CURRENT_V0",
-      "current_m0_credit": false
+    "fresh_real_normalized": {
+      "result_comment": 5529740140,
+      "url": "https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/",
+      "source_sha": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "classification": "HTTP_200_CANONICAL_KAGGLE_PRE_CUTOVER_CONSOLIDATION",
+      "r0_negative_target_min_height_px": 44,
+      "independent_v0_verdict": "PENDING",
+      "current_post_cutover_m0_credit": false
+    },
+    "current_successor": {
+      "result_comment": 5531586743,
+      "source_sha": "cebeafeee08251a327145ee973ee035cced65204",
+      "classification": "TESTED_SOURCE_SUCCESSOR_CONTAINS_M0_BASE_AND_FR0_NOT_CURRENT_M0_CONSOLIDATION",
+      "public_url": null,
+      "kaggle_publication_state": "IN_PROGRESS_AT_REVIEW"
     },
     "golden": {
       "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
       "source_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
       "v0_comment": 5527892153,
       "verdict": "DRIFT",
-      "accepted_m0_relevant_finding": "EventCard auxiliary not-interested target measured approximately 36.28px; current M0 canonical minimum is 44px but requires successor browser retest"
-    },
-    "current_v0_blocker": {
-      "comment": 5529063082,
-      "status": "NOT_EXECUTED",
-      "reason": "my-browser-bridge actions absent from that V0 activation",
-      "browser_pass_claimed": false
+      "accepted_card_finding": "EventCard auxiliary target was 36.28px on the old Golden source; canonical 44px source closure exists and still requires exact-current-successor V0 observation"
     }
   },
+  "fr0_dependency": {
+    "cutover_base": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+    "current_fr0_head_at_review": "2231e1d668f896d634e5663b59520bc710d5fea6",
+    "result_comment": 5530977687,
+    "consumed_contract": "Cards publish MediaFrame inputs and resource state; FR0 owns framing paint, rail framing and protocol internals.",
+    "m0_forbidden_actions": [
+      "edit MediaFrame CSS",
+      "edit EventMediaRail",
+      "edit EventHero framing internals",
+      "edit FR0 tests",
+      "add a parallel framing protocol"
+    ]
+  },
   "families": [
-    {
-      "id": "m0.media-frame",
-      "astro_family": "MediaFrame",
-      "version": 1,
-      "source_roots": [
-        "site/src/components/media-frame.css"
-      ],
-      "variants": [
-        "event-card",
-        "listing-card",
-        "media-rail",
-        "event-hero"
-      ],
-      "states": [
-        "visual-cover",
-        "document-contain",
-        "unknown-contain",
-        "fallback"
-      ],
-      "protocol": [
-        "role",
-        "kind",
-        "ratio",
-        "fit",
-        "crop-permission",
-        "object-position",
-        "focal-position",
-        "clip",
-        "radius",
-        "loading",
-        "priority",
-        "fallback",
-        "interaction-owner"
-      ],
-      "penpot_master_target": "M0 / MediaFrame"
-    },
     {
       "id": "m0.event-card",
       "astro_family": "EventCard",
       "version": 2,
       "source_roots": [
-        "site/src/components/EventCard.astro",
-        "site/src/components/event-card.css"
+        "site/src/components/EventCard.astro"
       ],
       "variants": [
         "split-actions",
@@ -107,10 +113,31 @@
         "media-fallback",
         "consumer-metadata"
       ],
+      "resource_states": [
+        "pending",
+        "loaded",
+        "fallback",
+        "broken"
+      ],
       "canonical_children": [
-        "MediaFrame",
+        "FR0 MediaFrame protocol consumer",
         "SemanticIcon",
         "EventOccurrenceLabel"
+      ],
+      "action_contract": {
+        "negative_action_min_height_px": 44,
+        "roles": [
+          "not_interested",
+          "calendar",
+          "share",
+          "like"
+        ]
+      },
+      "metadata_contract": [
+        "event type",
+        "occurrence",
+        "admission/status",
+        "place"
       ],
       "penpot_master_target": "M0 / EventCard"
     },
@@ -140,8 +167,18 @@
         "media-fallback",
         "consumer-metadata"
       ],
+      "resource_states": [
+        "pending",
+        "loaded",
+        "fallback",
+        "broken"
+      ],
+      "proof_contract": {
+        "no_social_proof_placement": "none",
+        "no_side_identity_or_proof_tail_width_px": 0
+      },
       "canonical_children": [
-        "MediaFrame",
+        "FR0 MediaFrame protocol consumer",
         "SemanticIcon"
       ],
       "penpot_master_target": "M0 / ListingEventCard"
@@ -154,12 +191,8 @@
         "site/src/components/AdaptiveEventCardGrid.astro"
       ],
       "variants": [
-        "flow-1-column",
-        "flow-2-column",
-        "flow-3-column",
-        "packed-1-column",
-        "packed-2-column",
-        "packed-3-column"
+        "flow-N-column",
+        "packed-N-column"
       ],
       "states": [
         "responsive-fixed",
@@ -172,62 +205,30 @@
         "empty"
       ],
       "diagnostics_contract": "input-source-rendered-v1",
+      "diagnostic_populations": [
+        "input count/order",
+        "admitted source count/order",
+        "rendered count/order"
+      ],
+      "duplicate_identity": "event-id:source-index",
       "layout_engine": "flex-lines",
+      "remainder_contract": "complete | stretch-N-of-M",
       "penpot_master_target": "M0 / AdaptiveEventCardGrid"
-    },
-    {
-      "id": "m0.event-media-rail",
-      "astro_family": "EventMediaRail",
-      "version": 1,
-      "source_roots": [
-        "site/src/components/EventMediaRail.astro"
-      ],
-      "variants": [
-        "gallery-thumbnails",
-        "hero-selector",
-        "poster-strip"
-      ],
-      "states": [
-        "complete",
-        "overflow",
-        "responsive-pending"
-      ],
-      "input_contracts": [
-        "asset-input-v1",
-        "resolved-items-v1"
-      ],
-      "semantic_gate": "cover requires kind=visual and imageTextMode=visual_only; contradictory resolved input fails closed to contain",
-      "penpot_master_target": "M0 / EventMediaRail"
-    },
-    {
-      "id": "m0.event-hero",
-      "astro_family": "EventHero",
-      "version": 1,
-      "source_roots": [
-        "site/src/components/EventHero.astro"
-      ],
-      "variants": [
-        "poster-billboard",
-        "poster-attached-card",
-        "photo-cinematic-sheet",
-        "photo-parallax-sheet",
-        "compact-ticketing"
-      ],
-      "states": [
-        "poster-stage",
-        "photo-cover",
-        "fallback-art",
-        "gallery",
-        "fallback"
-      ],
-      "canonical_children": [
-        "MediaFrame"
-      ],
-      "interaction_boundary": "existing event-hero visual button owns gallery opening; inner MediaFrame is non-interactive",
-      "internal_composition": "full-screen hero-gallery viewer preserves per-slide protected crop and is not a second primary-frame family root",
-      "penpot_master_target": "M0 / EventHero"
     }
   ],
+  "row_layout_service": {
+    "id": "m0.related-card-layout",
+    "source": "site/src/lib/relatedCardLayout.mjs",
+    "responsibilities": [
+      "normalize public limit and rowSize inputs",
+      "normalize target aspect ratios",
+      "enforce 20 percent OCR/document crop budget at the public resolver boundary",
+      "deterministic packed order",
+      "full rows plus at most one final remainder",
+      "contiguous rowColumn occupancy"
+    ],
+    "document_crop_budget": 0.2
+  },
   "compatibility_adapters": [
     {
       "path": "site/src/components/OptimizedEventCardGrid.astro",
@@ -251,7 +252,7 @@
         "collection and discovery compositions"
       ],
       "migration_owner": "A0",
-      "m0_status": "root_and_metadata_bridge_ready"
+      "m0_status": "root_actions_metadata_resource_state_ready"
     },
     {
       "family": "ListingEventCard",
@@ -261,7 +262,7 @@
         "popular desktop and adaptive rows"
       ],
       "migration_owner": "A0",
-      "m0_status": "root_and_metadata_bridge_ready"
+      "m0_status": "root_admission_proof_resource_state_ready"
     },
     {
       "family": "AdaptiveEventCardGrid",
@@ -273,78 +274,78 @@
         "collection and discovery feeds"
       ],
       "migration_owner": "A0",
-      "m0_status": "public API covers current consumers"
-    },
-    {
-      "family": "EventMediaRail",
-      "current_successor_consumers": [
-        "DesktopEventPage hero-selector",
-        "DesktopEventPage poster-strip",
-        "design-system gallery-thumbnails specimen"
-      ],
-      "migration_owner": "A0",
-      "m0_status": "all three APIs and runtime hooks covered"
-    },
-    {
-      "family": "EventHero",
-      "current_successor_consumers": [
-        "event-detail mobile and shared event hero routes"
-      ],
-      "migration_owner": "A0",
-      "m0_status": "MediaFrame adapter accepted"
+      "m0_status": "single_diagnostics_writer_and_public_api_ready"
     }
   ],
   "candidate_review": {
-    "current_successor_sha": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
-    "embedded_m0_checkpoint": "c808c75dd975a9851e148ccf993c32787d2b6886",
-    "classification": "PARTIAL_M0_INCLUDED_CURRENT_TAIL_MISSING",
-    "already_preserved_in_successor": [
-      "AdaptiveEventCardGrid responsive seam specificity",
-      "EventHero family identity and primary MediaFrame adapter",
-      "DesktopEventPage EventMediaRail consumer migration",
-      "EventLayout 36px auxiliary override removal"
-    ],
-    "missing_current_m0_source": [
+    "current_successor_sha": "cebeafeee08251a327145ee973ee035cced65204",
+    "embedded_m0_downstream_base": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "embedded_fr0_head": "2231e1d668f896d634e5663b59520bc710d5fea6",
+    "classification": "CURRENT_SUCCESSOR_ACCEPTS_CUTOVER_BASE_POST_CUTOVER_CARD_GRID_TAIL_MISSING",
+    "missing_post_cutover_m0_source": [
       {
-        "path": "site/src/components/EventMediaRail.astro",
-        "candidate_blob": "4609fac9046204cd5f1df5546958378ec5e37bf7",
-        "required_m0_blob": "1e49e4b765488ef7703473693b6f619d185acfde",
-        "reason": "candidate cover gate ignores imageTextMode and accepts contradictory resolved visual input"
+        "path": "site/src/components/EventCard.astro",
+        "reason": "canonical MediaFrame resource-state and broken fallback transition from FR0 requirement 5530953025"
       },
       {
-        "path": "site/tests/event-media-rail-hardening.test.mjs",
-        "reason": "candidate lacks contradictory-kind/imageTextMode fail-closed regression"
+        "path": "site/src/components/listings/ListingEventCard.astro",
+        "reason": "canonical MediaFrame resource-state and broken fallback transition from FR0 requirement 5530895109"
+      },
+      {
+        "path": "site/src/lib/relatedCardLayout.mjs",
+        "reason": "public resolver must enforce the same 20 percent document crop budget as row packing"
       },
       {
         "path": "site/tests/ui-normalization-m0-contract.test.mjs",
-        "reason": "candidate expects the superseded unsafe rail-fit expression"
+        "reason": "mixed historical ownership must remain card-grid-row-layout only after FR0 replacement coverage"
       },
       {
-        "path": "site/tests/m0-event-hero-media-frame-contract.test.mjs",
-        "reason": "candidate source has the adapter but lacks the M0 positive family/interaction regression"
+        "path": "site/tests/m0-post-fr0-test-ownership.v1.json",
+        "reason": "machine-readable cutover and test transfer boundary"
       }
     ],
+    "external_consumer_requirement": {
+      "comment": 5530928932,
+      "paths": [
+        "site/src/components/listings/MobileListingRailRow.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
+      "owner": "FR0_A0_R0_CONSUMER_LINE",
+      "m0_source_edit": false
+    },
     "rejected_replay": [
-      "the obsolete A0 EventHero temporary MediaFrame exception registry and its negative exception test",
-      "any A0 historical copy of an M0 canonical root",
-      "a parallel data-ui identity protocol",
-      "blanket rejection of safe target=_blank links"
+      "any modification to the coherent framing batch through c71351de",
+      "MediaFrame or EventMediaRail protocol redesign",
+      "EventHero framing edits",
+      "a third M0 branch or unintegrated wave",
+      "whole divergent A0 replay"
     ]
+  },
+  "transferred_test_ownership": {
+    "manifest": "site/tests/m0-post-fr0-test-ownership.v1.json",
+    "m0_mixed_suite": "site/tests/ui-normalization-m0-contract.test.mjs",
+    "m0_mixed_suite_status": "CARD_GRID_ROW_LAYOUT_ONLY",
+    "fr0_replacement_head": "2231e1d668f896d634e5663b59520bc710d5fea6",
+    "fr0_replacements": [
+      "site/tests/fr0-media-rail-fallback-contract.test.mjs",
+      "site/tests/fr0-media-rail-clip-owner.test.mjs",
+      "site/tests/fr0-event-hero-resource-fallback.test.mjs",
+      "site/tests/fr0-exhibitions-media-frame-contract.test.mjs"
+    ],
+    "coverage_deleted": false
   },
   "regression_contracts": [
     "site/tests/ui-normalization-m0-contract.test.mjs",
-    "site/tests/adaptive-event-card-grid.test.mjs",
-    "site/tests/adaptive-grid-diagnostic-cardinality.test.mjs",
-    "site/tests/event-media-rail-hardening.test.mjs",
-    "site/tests/media-frame-style-owner.test.mjs",
-    "site/tests/check-preview-media-frame-contract.test.mjs",
-    "site/tests/m0-media-frame-gallery-fallback-coverage.test.mjs",
+    "site/tests/m0-post-fr0-test-ownership.test.mjs",
+    "site/tests/m0-event-card-media-frame-resource-state.test.mjs",
     "site/tests/listing-event-card-media-fallback.test.mjs",
-    "site/tests/event-card-flex-placement.test.mjs",
     "site/tests/event-card-control-target.test.mjs",
     "site/tests/m0-card-icon-role-contract.test.mjs",
+    "site/tests/event-card-flex-placement.test.mjs",
+    "site/tests/adaptive-event-card-grid.test.mjs",
+    "site/tests/adaptive-grid-diagnostic-cardinality.test.mjs",
+    "site/tests/optimized-grid-adapter.test.mjs",
     "site/tests/related-card-packer-inputs.test.mjs",
-    "site/tests/m0-event-hero-media-frame-contract.test.mjs",
     "site/tests/m0-downstream-contracts.test.mjs"
   ],
   "downstream_targets": {
@@ -353,24 +354,46 @@
     "v0_matrix": "catalog/normalization/evidence/m0-v0-acceptance-matrix.v1.json",
     "integration_rollback": "docs/launch-normalization/m0-source-integration-and-rollback.v1.json"
   },
+  "post_cutover_downstream": {
+    "binding": "site/src/data/m0-downstream-bindings.v1.json",
+    "test_ownership": "site/tests/m0-post-fr0-test-ownership.v1.json",
+    "legacy_target_policy": "DO_NOT_AMEND_FRAMING_PORTION; bind current card/grid source after R0 integration and V0 evidence"
+  },
   "pm0_items": {
-    "20": "SOURCE_DONE",
-    "21": "SOURCE_DONE",
-    "22": "SOURCE_DONE",
-    "23": "A0_MIGRATION_AND_V0_REQUIRED",
-    "24": "SOURCE_AND_NEGATIVE_CONTRACTS_DONE_EXECUTION_REQUIRED",
-    "25": "M0_BINDINGS_READY_AFTER_DOWNSTREAM_COMMIT",
-    "26": "SOURCE_DONE_CURRENT_SUCCESSOR_TAIL_AND_V0_REQUIRED",
-    "27": "V0_REQUIRED_ON_CURRENT_M0_SUCCESSOR",
-    "28": "ROOTS_DONE_A0_CONSUMER_ACCEPTANCE_REQUIRED",
-    "29": "SOURCE_DONE_V0_44PX_REQUIRED",
-    "30": "SOURCE_DONE_V0_FINAL_LINE_AND_REMAINDER_REQUIRED",
-    "31": "V0_REQUIRED_ON_CURRENT_M0_SUCCESSOR"
+    "20": "POST_CUTOVER_CARD_GRID_CENSUS_DONE",
+    "21": "CARD_GRID_ROOTS_SOURCE_DONE_CURRENT_TAIL_INTEGRATION_REQUIRED",
+    "22": "CARD_GRID_VARIANTS_STATES_SOURCE_DONE",
+    "23": "A0_CONSUMER_AND_V0_REQUIRED",
+    "24": "M0_NEGATIVE_CONTRACTS_AUTHORED_RUNTIME_REQUIRED",
+    "25": "POST_CUTOVER_CARD_GRID_BINDING_READY_SOURCE_INTEGRATION_AND_V0_REQUIRED",
+    "26": "FR0_OWNED_AFTER_CUTOVER",
+    "27": "FR0_AND_V0_OWNED_AFTER_CUTOVER",
+    "28": "CARD_ROOTS_DONE_CURRENT_TAIL_AND_A0_ACCEPTANCE_REQUIRED",
+    "29": "SOURCE_DONE_V0_44PX_AND_RESOURCE_STATE_REQUIRED",
+    "30": "SOURCE_DONE_V0_FINAL_LINE_REMAINDER_AND_OCCUPANCY_REQUIRED",
+    "31": "V0_REQUIRED_ON_EXACT_POST_CUTOVER_SUCCESSOR"
   },
   "next_product_gate": {
-    "required_source": "N0-accepted successor containing current M0 rail semantic tail and current cross-role roots",
-    "required_runtime": "one full fresh-real Kaggle build with matching preview-build.json, immutable snapshot and explicit ancestry",
-    "required_browser": "independent V0 route/viewport verdict when my-browser-bridge is callable",
-    "after_pass": "bind exact accepted source and V0 cases to native Penpot masters and linked route instances, then run Golden A=S=P"
+    "required_source": "R0 integrates the exact current head of work/ui-normalization-m0-continuity-20260903 onto an accepted cebeafeee descendant without replaying FR0 internals",
+    "required_runtime": "execute the focused M0 card-grid-action-metadata packet on the exact integrated SHA, then one full fresh-real Kaggle build with matching preview-build.json, immutable snapshot and explicit ancestry",
+    "required_browser": "independent V0 verifies EventCard and ListingEventCard resource states, 44px actions, proof spacing, AdaptiveEventCardGrid diagnostics/remainders/occupancy and responsive seams",
+    "after_pass": "bind exact post-cutover card/grid source and V0 cases into thin S and linked Penpot instances without amending FR0 framing ownership"
+  },
+  "rollback": {
+    "base": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "unit": "M0-POST-FR0-CARD-GRID-CONSOLIDATION",
+    "scope": [
+      "EventCard resource-state binding",
+      "ListingEventCard resource-state binding",
+      "relatedCardLayout public crop-budget boundary",
+      "card-grid-only test ownership split and downstream binding"
+    ],
+    "forbidden_rollback_targets": [
+      "FR0 cutover base c71351decdcee02941acb26c5e2fbaf88faf0378",
+      "work/ui-normalization-fr0-20260903",
+      "MediaFrame CSS/protocol internals",
+      "EventMediaRail",
+      "EventHero framing"
+    ]
   }
 }

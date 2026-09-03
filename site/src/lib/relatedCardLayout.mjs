@@ -162,11 +162,13 @@ function cropFraction(sourceRatio, targetRatio) {
  * Final compact-card treatment. Classified visual media fills its shell.
  * Classified OCR/document assets may use cover only inside the 20% crop
  * budget; unclassified/error media remains whole because there is no positive
- * crop evidence. packRelatedCardRows guarantees the bounded-cover precondition.
+ * crop evidence. The public resolver enforces the crop budget itself, so direct
+ * callers and packRelatedCardRows share the same fail-closed boundary.
  */
 export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = relatedCardMediaGeometry(item)) {
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);
-  const potentialCoverCrop = cropFraction(mediaRatio, targetAspect);
+  const normalizedTargetAspect = finiteRatio(targetAspect, mediaRatio);
+  const potentialCoverCrop = cropFraction(mediaRatio, normalizedTargetAspect);
   if (geometry?.documentMedia) {
     // Unknown classification and explicit classifier errors have no positive
     // crop evidence. Even known pixel dimensions cannot turn them into the
@@ -197,6 +199,17 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
         coverCrop:null,
       };
     }
+    if (potentialCoverCrop > MAX_DOCUMENT_CROP + EPSILON) {
+      return {
+        mediaKind:'document',
+        mediaTreatment:'document-contain',
+        fit:'contain',
+        objectPosition:'50% 50%',
+        cropReason:'document_crop_budget_exceeded',
+        potentialCoverCrop,
+        coverCrop:0,
+      };
+    }
     return {
       mediaKind:'document',
       mediaTreatment:'document-safe-cover',
@@ -207,7 +220,7 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
       coverCrop:potentialCoverCrop,
     };
   }
-  const crop = resolveEventImageCrop(geometry?.asset || relatedCardPrimaryImageAsset(item), targetAspect);
+  const crop = resolveEventImageCrop(geometry?.asset || relatedCardPrimaryImageAsset(item), normalizedTargetAspect);
   const objectPosition = crop.fit === 'cover'
     ? (crop.objectPosition || visualFallbackObjectPosition(item))
     : visualFallbackObjectPosition(item);

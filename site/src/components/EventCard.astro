@@ -126,8 +126,9 @@ const mediaShellStyle = [
   documentMedia ? `--card-focal-y:${focalY};--card-focal-offset:${focalOffset}%` : null,
   (desktopRelatedCrop || mobileFlowMedia) ? `--dynamic-media-ratio:${desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio}` : null,
 ].filter(Boolean).join(';');
-const imageLoadHandler = `const shell=this.closest('.event-card__media-shell');${mobileFlowMedia && relatedMediaDecision?.useNaturalAspect ? "if(shell&&this.naturalWidth>0&&this.naturalHeight>0){shell.style.setProperty('--dynamic-media-ratio',this.naturalWidth+' / '+this.naturalHeight);shell.dataset.naturalAspectReconciled='true';}" : ''}shell?.classList.remove('is-image-loading');shell?.classList.add('is-image-loaded');shell?.removeAttribute('aria-busy');`;
-const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.closest('.event-card__media-shell')?.removeAttribute('aria-busy'); this.hidden = true; this.removeAttribute('src');";
+const failedResourceTransition = "if(shell){shell.dataset.mediaFrameResourceState='broken';shell.dataset.mediaFrameKind='fallback';shell.dataset.mediaFrameFit='contain';shell.dataset.mediaFrameCropPermission='forbidden';shell.dataset.mediaFrameCropReason='resource_load_error';shell.dataset.mediaFrameObjectPosition='50% 50%';shell.dataset.mediaFrameFocalPosition='50% 50%';shell.setAttribute('data-media-frame-fallback','');shell.style.setProperty('--media-frame-object-position','50% 50%');shell.classList.remove('is-image-loading','is-image-loaded');shell.classList.add('is-image-missing');shell.removeAttribute('aria-busy');}const fallback=shell?.querySelector(':scope > [data-card-image-fallback]');fallback?.removeAttribute('hidden');this.hidden=true;this.removeAttribute('src');this.removeAttribute('srcset');";
+const imageLoadHandler = `const shell=this.closest('.event-card__media-shell');if(!(this.naturalWidth>0&&this.naturalHeight>0)){${failedResourceTransition}return;}${mobileFlowMedia && relatedMediaDecision?.useNaturalAspect ? "if(shell){shell.style.setProperty('--dynamic-media-ratio',this.naturalWidth+' / '+this.naturalHeight);shell.dataset.naturalAspectReconciled='true';}" : ''}if(shell){shell.dataset.mediaFrameResourceState='loaded';shell.removeAttribute('data-media-frame-fallback');shell.classList.remove('is-image-loading','is-image-missing');shell.classList.add('is-image-loaded');shell.removeAttribute('aria-busy');}const fallback=shell?.querySelector(':scope > [data-card-image-fallback]');fallback?.setAttribute('hidden','');`;
+const imageErrorHandler = `const shell=this.closest('.event-card__media-shell');${failedResourceTransition}`;
 const fixedLayoutMetric = (value: number | null | undefined, digits: number) => Number.isFinite(value) ? Number(value).toFixed(digits) : undefined;
 const mediaFrameKind = !imageUrl
   ? 'fallback'
@@ -145,6 +146,9 @@ const mediaFrameCropPermission = mediaFrameFit === 'contain'
     ? 'reviewed-bounded'
     : 'allowed';
 const mediaFrameRatio = desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio;
+const mediaFrameSourceRatio = primaryImageAsset?.width && primaryImageAsset?.height
+  ? primaryImageAsset.width / primaryImageAsset.height
+  : desktopRelatedLayout?.mediaRatio;
 const mediaFrameObjectPosition = cardObjectPosition || '50% 50%';
 const mediaFrameStyle = [
   mediaShellStyle,
@@ -239,9 +243,11 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
         data-media-frame-fit={mediaFrameFit}
         data-media-frame-crop-permission={mediaFrameCropPermission}
         data-media-frame-ratio={fixedLayoutMetric(mediaFrameRatio, 5)}
+        data-media-frame-source-ratio={fixedLayoutMetric(mediaFrameSourceRatio, 5)}
         data-media-frame-object-position={mediaFrameObjectPosition}
         data-media-frame-focal-position={mediaFrameObjectPosition}
         data-media-frame-crop-reason={cardCrop.cropReason}
+        data-media-frame-resource-state="pending"
         data-media-frame-clip="frame"
         data-media-frame-radius="surface"
         data-media-frame-fill={mediaFrameFill ? 'true' : undefined}
@@ -291,6 +297,7 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
         data-media-frame-object-position="50% 50%"
         data-media-frame-focal-position="50% 50%"
         data-media-frame-crop-reason="event_card_fallback"
+        data-media-frame-resource-state="fallback"
         data-media-frame-clip="frame"
         data-media-frame-radius="surface"
         data-media-frame-fill="true"

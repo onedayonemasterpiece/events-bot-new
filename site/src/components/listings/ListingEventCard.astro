@@ -163,6 +163,9 @@ const cardState = [
   Object.keys(safeRootAttributes).length > 0 && 'consumer-metadata',
 ].filter(Boolean).join(' ') || undefined;
 const mediaFrameRatio = image.ratio.toFixed(5);
+const mediaFrameSourceRatio = image.asset?.width && image.asset?.height
+  ? (image.asset.width / image.asset.height).toFixed(5)
+  : undefined;
 const mediaFrameObjectPosition = image.objectPosition;
 const mediaFrameRole = mediaFrameKind === 'fallback'
   ? 'fallback'
@@ -170,7 +173,7 @@ const mediaFrameRole = mediaFrameKind === 'fallback'
 const mediaFrameCropPermission = mediaFrameFit === 'cover'
   ? image.adaptiveCrop ? 'reviewed' : 'allowed'
   : 'forbidden';
-const mediaFrameInitialState = imageUrl ? 'loading' : 'fallback';
+const mediaFrameInitialResourceState = imageUrl ? 'pending' : 'fallback';
 const style = [
   `--ke-listing-image-ratio:${mediaFrameRatio}`,
   `--ke-listing-object-position:${mediaFrameObjectPosition}`,
@@ -251,9 +254,11 @@ const socialProofLabel = [
       data-media-frame-fit={mediaFrameFit}
       data-media-frame-crop-permission={mediaFrameCropPermission}
       data-media-frame-ratio={mediaFrameRatio}
+      data-media-frame-source-ratio={mediaFrameSourceRatio}
       data-media-frame-object-position={mediaFrameObjectPosition}
       data-media-frame-focal-position={mediaFrameObjectPosition}
       data-media-frame-crop-reason={mediaFrameCropReason}
+      data-media-frame-resource-state={mediaFrameInitialResourceState}
       data-media-frame-clip="frame"
       data-media-frame-radius="surface"
       data-media-frame-fill="true"
@@ -262,7 +267,7 @@ const socialProofLabel = [
       data-media-frame-loading={priority ? 'eager' : 'lazy'}
       data-media-frame-priority={priority ? 'true' : undefined}
       data-media-frame-interaction-owner="caller"
-      data-media-frame-state={mediaFrameInitialState}
+      data-media-frame-fallback={imageUrl ? undefined : ''}
     >
       {imageUrl ? (
         <img
@@ -342,37 +347,55 @@ const socialProofLabel = [
       if (!(frame instanceof HTMLElement) || frame.dataset.listingMediaReady === 'true') return;
       const mediaFrame = frame.querySelector('[data-media-frame]');
       const image = frame.querySelector('[data-media-frame-image]');
-      const fallback = frame.querySelector('[data-media-frame-fallback]');
-      const finish = (loaded) => {
+      const fallback = mediaFrame?.querySelector(':scope > [data-media-frame-fallback]');
+      const finish = (resourceState) => {
+        const loaded = resourceState === 'loaded';
+        const broken = resourceState === 'broken';
         frame.classList.remove('ke-skeleton');
         frame.dataset.listingMediaReady = 'true';
-        if (mediaFrame instanceof HTMLElement) mediaFrame.dataset.mediaFrameState = loaded ? 'loaded' : 'fallback';
+        if (mediaFrame instanceof HTMLElement) {
+          mediaFrame.dataset.mediaFrameResourceState = resourceState;
+          if (loaded) {
+            mediaFrame.removeAttribute('data-media-frame-fallback');
+          } else {
+            mediaFrame.setAttribute('data-media-frame-fallback', '');
+            mediaFrame.dataset.mediaFrameKind = 'fallback';
+            mediaFrame.dataset.mediaFrameFit = 'contain';
+            mediaFrame.dataset.mediaFrameCropPermission = 'forbidden';
+            mediaFrame.dataset.mediaFrameCropReason = broken ? 'resource_load_error' : 'listing_fallback';
+            mediaFrame.dataset.mediaFrameObjectPosition = '50% 50%';
+            mediaFrame.dataset.mediaFrameFocalPosition = '50% 50%';
+            mediaFrame.style.setProperty('--media-frame-object-position', '50% 50%');
+          }
+        }
         if (fallback instanceof HTMLElement) fallback.hidden = loaded;
-        if (!loaded && image instanceof HTMLImageElement) {
+        if (broken && image instanceof HTMLImageElement) {
           image.hidden = true;
           image.removeAttribute('srcset');
           image.removeAttribute('src');
         }
       };
       if (!(image instanceof HTMLImageElement)) {
-        finish(false);
+        finish('fallback');
         return;
       }
       const decodeAndFinish = () => {
         if (!image.naturalWidth || !image.naturalHeight) {
-          finish(false);
+          finish('broken');
           return;
         }
         if (typeof image.decode !== 'function') {
-          finish(true);
+          finish('loaded');
           return;
         }
-        image.decode().then(() => finish(true)).catch(() => finish(image.naturalWidth > 0 && image.naturalHeight > 0));
+        image.decode()
+          .then(() => finish('loaded'))
+          .catch(() => finish(image.naturalWidth > 0 && image.naturalHeight > 0 ? 'loaded' : 'broken'));
       };
       if (image.complete) decodeAndFinish();
       else {
         image.addEventListener('load', decodeAndFinish, { once: true });
-        image.addEventListener('error', () => finish(false), { once: true });
+        image.addEventListener('error', () => finish('broken'), { once: true });
       }
     });
   }

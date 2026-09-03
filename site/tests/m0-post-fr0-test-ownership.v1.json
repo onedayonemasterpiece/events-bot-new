@@ -1,0 +1,168 @@
+{
+  "schema_version": "kenigevents.m0-post-fr0-test-ownership.v1",
+  "contract_version": "1.10.0",
+  "role": "M0",
+  "status": "CARD_GRID_OWNERSHIP_CONSOLIDATED_RUNTIME_PENDING",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "cutover": {
+    "branch": "work/ui-normalization-m0-continuity-20260903",
+    "fr0_cutover_base": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+    "m0_downstream_base": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "authoring_parent": "e80163449524ddbd2d2de2d705b8444a97e24d92",
+    "last_reconciled_parent": "042438c923adbcf032833334067656a5113861d3",
+    "rule": "Framing implementation through the FR0 cutover base is coherent and must not be amended or recreated by M0."
+  },
+  "m0_owned_sources": [
+    "site/src/components/EventCard.astro",
+    "site/src/components/listings/ListingEventCard.astro",
+    "site/src/components/AdaptiveEventCardGrid.astro",
+    "site/src/components/OptimizedEventCardGrid.astro",
+    "site/src/lib/relatedCardLayout.mjs"
+  ],
+  "m0_retained_test_domains": [
+    {
+      "domain": "EventCard root, actions, metadata, 44px negative-action binding and resource-state consumer binding",
+      "tests": [
+        "site/tests/m0-event-card-media-frame-resource-state.test.mjs",
+        "site/tests/event-card-control-target.test.mjs",
+        "site/tests/m0-card-icon-role-contract.test.mjs",
+        "site/tests/event-card-flex-placement.test.mjs"
+      ]
+    },
+    {
+      "domain": "ListingEventCard root, admission, event-type metadata, proof placement and resource-state consumer binding",
+      "tests": [
+        "site/tests/listing-event-card-media-fallback.test.mjs",
+        "site/tests/m0-card-icon-role-contract.test.mjs"
+      ]
+    },
+    {
+      "domain": "AdaptiveEventCardGrid diagnostics, duplicate-safe identity, deterministic order, remainders and responsive seams",
+      "tests": [
+        "site/tests/ui-normalization-m0-contract.test.mjs",
+        "site/tests/adaptive-event-card-grid.test.mjs",
+        "site/tests/adaptive-grid-diagnostic-cardinality.test.mjs",
+        "site/tests/optimized-grid-adapter.test.mjs"
+      ]
+    },
+    {
+      "domain": "relatedCardLayout numeric normalization, document crop budget, deterministic packing and row occupancy",
+      "tests": [
+        "site/tests/related-card-packer-inputs.test.mjs"
+      ]
+    }
+  ],
+  "fr0_transferred_test_domains": [
+    {
+      "domain": "EventMediaRail fallback/resource-state protocol",
+      "fr0_equivalent": "site/tests/fr0-media-rail-fallback-contract.test.mjs"
+    },
+    {
+      "domain": "EventMediaRail and canonical MediaFrame clip ownership",
+      "fr0_equivalent": "site/tests/fr0-media-rail-clip-owner.test.mjs"
+    },
+    {
+      "domain": "EventHero primary framing and broken-resource fallback",
+      "fr0_equivalent": "site/tests/fr0-event-hero-resource-fallback.test.mjs"
+    },
+    {
+      "domain": "Exhibitions framing and gallery geometry",
+      "fr0_equivalent": "site/tests/fr0-exhibitions-media-frame-contract.test.mjs"
+    }
+  ],
+  "fr0_equivalent_verification": {
+    "branch": "work/ui-normalization-fr0-20260903",
+    "head": "2231e1d668f896d634e5663b59520bc710d5fea6",
+    "result_comment": 5530977687,
+    "coverage_exists_before_mixed_test_transfer": true
+  },
+  "consumer_transferred_test_domains": [
+    {
+      "domain": "MobileListingRailRow SemanticIcon role consumption",
+      "former_m0_test": "site/tests/m0-card-icon-role-contract.test.mjs",
+      "external_equivalent": "site/tests/mobile-listing-rails.test.mjs",
+      "external_owner": "FR0_A0_R0_CONSUMER_LINE",
+      "verified_successor": "cebeafeee08251a327145ee973ee035cced65204",
+      "coverage_exists_before_transfer": true,
+      "m0_test_after_transfer": "EventCard and ListingEventCard only"
+    },
+    {
+      "domain": "EventLayout removal of the historical 36px override and central 44px token integration",
+      "former_m0_test": "site/tests/event-card-control-target.test.mjs",
+      "external_equivalent": "site/tests/n0-v0-golden-drift-acceptance.test.mjs",
+      "external_owner": "N0_A0_F0_ACCEPTANCE_LINE",
+      "verified_successor": "cebeafeee08251a327145ee973ee035cced65204",
+      "coverage_exists_before_transfer": true,
+      "m0_test_after_transfer": "EventCard selector and 44px fallback binding only"
+    }
+  ],
+  "cross_role_read_only_integration_contracts": [
+    {
+      "path": "site/tests/event-card-flex-placement.test.mjs",
+      "reads_external_path": "site/src/layouts/EventLayout.astro",
+      "purpose": "Ensure the A0 runtime consumer preserves row diagnostics and does not revive an inconsistent partial grid-placement bridge.",
+      "external_writer_owner": "A0",
+      "m0_authority": "READ_ONLY_NEGATIVE_INTEGRATION_CHECK",
+      "m0_source_mutation_authorized": false
+    }
+  ],
+  "untouched_fr0_internals": [
+    "site/src/components/media-frame.css",
+    "site/src/components/EventMediaRail.astro",
+    "site/src/components/EventHero.astro framing internals",
+    "site/tests/fr0-*.test.mjs",
+    "canonical MediaFrame protocol internals"
+  ],
+  "closed_fr0_api_requirements": [
+    {
+      "comment": 5530953025,
+      "consumer": "site/src/components/EventCard.astro",
+      "status": "SOURCE_AND_M0_REGRESSION_COMMITTED"
+    },
+    {
+      "comment": 5530895109,
+      "consumer": "site/src/components/listings/ListingEventCard.astro",
+      "status": "SOURCE_AND_M0_REGRESSION_COMMITTED"
+    }
+  ],
+  "external_consumer_requirement": {
+    "comment": 5530928932,
+    "paths": [
+      "site/src/components/listings/MobileListingRailRow.astro",
+      "site/src/components/listings/MobileListingRailSurface.astro"
+    ],
+    "owner": "FR0_A0_R0_CONSUMER_LINE",
+    "status": "OUTSIDE_POST_CUTOVER_M0_WRITABLE_CONTOUR",
+    "m0_action": "No parallel source edit; preserve as exact external integration requirement."
+  },
+  "coverage_policy": {
+    "delete_pre_cutover_coverage": false,
+    "mixed_suite": "site/tests/ui-normalization-m0-contract.test.mjs",
+    "mixed_suite_after_cutover": "M0_CARD_GRID_ROW_LAYOUT_ONLY",
+    "additional_split_tests": [
+      "site/tests/m0-card-icon-role-contract.test.mjs",
+      "site/tests/event-card-control-target.test.mjs"
+    ],
+    "fr0_equivalents_must_be_integrated_before_old_framing_suites_are_retired": true,
+    "consumer_equivalents_must_exist_before_cross_role_assertions_leave_M0_tests": true,
+    "local_or_browser_pass_claimed": false
+  },
+  "rollback": {
+    "unit": "M0-POST-FR0-CARD-GRID-CONSOLIDATION",
+    "base": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "scope": [
+      "EventCard resource-state consumer binding",
+      "ListingEventCard resource-state consumer binding",
+      "relatedCardLayout public crop-budget enforcement",
+      "M0-only mixed-suite, icon-role and control-target ownership split",
+      "post-cutover downstream compatibility metadata"
+    ],
+    "does_not_revert": [
+      "FR0 cutover base c71351decdcee02941acb26c5e2fbaf88faf0378",
+      "FR0 branch work/ui-normalization-fr0-20260903",
+      "canonical MediaFrame CSS/protocol internals",
+      "EventMediaRail or EventHero framing",
+      "A0/N0/F0 external acceptance contracts"
+    ]
+  }
+}
