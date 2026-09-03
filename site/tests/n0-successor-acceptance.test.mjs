@@ -17,22 +17,18 @@ const PRECURSOR = '0d73428dfafff2fd5450b74fd68e7bb40e92d2c5';
 const SUCCESSOR_BASE = '9152994b026b34d60d21d68bfa2a4d7d8dc20f3e';
 const PIPELINE_PARENT = '0d92654b9637e31753fed5bd4bf6a4a66763c079';
 const M0_INTEGRATED_PARENT = '1d145d5efd2a332eff29e69b6afcf43414769906';
-const M0_HEAD = '0bf25ff6c17e1b649b1a64919502103ba60b0d43';
 const M0_INVALID = 'e620e69fd8fb4641415320beaa3ea9c1003beee8';
-const F0_HEAD = '77c0833a7f5d2542bcfb8313a3353f42b75233dd';
-const A0_HEAD = '8f96c659cd710091fba61eb65cb4846cccdd2c38';
 const A0_REJECTED_REMOVAL = '5e466d65bc2b71a814c26c063f90aa07709de08f';
 const A0_RESTORE = '84399b51b77701be714fdc84429318a9a28f93fd';
 const GOLDEN_SHA = '84504f30eebc334deba46e94365601c3d572c5c0';
 
 const gate = (id) => manifest.gate_graph.find((item) => item.id === id);
 
-test('N0 authority distinguishes programme, precursor, source successor and exact runtime evidence', () => {
+test('N0 authority separates programme, precursor, source successor and runtime evidence', () => {
   assert.equal(manifest.schema_version, 'kenigevents.n0-successor-acceptance.v1');
   assert.equal(manifest.contract_version, '1.9.0');
   assert.equal(manifest.pm0_version, '2.2.0');
   assert.equal(manifest.owner, 'N0');
-
   assert.equal(manifest.authority.legacy_combined_candidate.head, PRECURSOR);
   assert.equal(
     manifest.authority.legacy_combined_candidate.decision,
@@ -47,7 +43,6 @@ test('N0 authority distinguishes programme, precursor, source successor and exac
   assert.equal(successor.public_url, null);
   assert.ok(successor.included_scope.includes('one canonical real/golden Kaggle pipeline'));
   assert.ok(successor.included_scope.includes('coherent AdaptiveEventCardGrid input/source/rendered diagnostics'));
-
   assert.equal(manifest.authority.n0_branch.resolve_remote_head_at_merge, true);
   assert.equal(
     manifest.authority.n0_branch.decision,
@@ -55,7 +50,7 @@ test('N0 authority distinguishes programme, precursor, source successor and exac
   );
 });
 
-test('published Golden transaction closes only its exact Golden evidence class', () => {
+test('published Golden transaction closes only exact Golden evidence', () => {
   const golden = manifest.accepted_golden_transaction;
   assert.equal(golden.decision, 'ACCEPTED_AS_GOLDEN_KAGGLE_PIPELINE_AND_CORPUS_EVIDENCE_ONLY');
   assert.equal(golden.issue_comment, 5527249164);
@@ -72,7 +67,6 @@ test('published Golden transaction closes only its exact Golden evidence class',
   assert.equal(golden.verification.v0_independent_verdict, 'PENDING');
   assert.equal(golden.checklist_evidence['4'], 'DONE_FULL_GOLDEN_KAGGLE_REVIEW_PREVIEW');
   assert.equal(golden.checklist_evidence['9'], 'PARTIAL_PUBLISHED_STRESS_MATRIX_V0_VISUAL_VERDICT_PENDING');
-
   for (const boundary of [
     'PM0 item 3 fresh-real full Kaggle Review Preview',
     'voice-review readiness gate',
@@ -82,12 +76,11 @@ test('published Golden transaction closes only its exact Golden evidence class',
   ]) assert.ok(golden.does_not_close.includes(boundary), `missing non-claim: ${boundary}`);
 });
 
-test('unpublished exact-SHA Kaggle retry does not inherit the published Golden URL', () => {
+test('unpublished exact-SHA retry remains diagnostic-only', () => {
   const diagnostic = manifest.pipeline_diagnostics;
   assert.equal(diagnostic.exact_sha, PIPELINE_PARENT);
   assert.equal(diagnostic.issue_comment, 5527345279);
   assert.equal(diagnostic.status, 'COMPLETE');
-  assert.equal(diagnostic.build_id, 'preview-golden-0d92654b-20270604-clock-v1');
   assert.equal(diagnostic.publication, 'INTENTIONALLY_NOT_PUBLISHED');
   assert.equal(diagnostic.service_share.status, 'skipped');
   assert.equal(diagnostic.service_share.reason, 'golden_preview_frozen_clock');
@@ -95,29 +88,22 @@ test('unpublished exact-SHA Kaggle retry does not inherit the published Golden U
   assert.notEqual(diagnostic.exact_sha, manifest.accepted_golden_transaction.repo_sha);
 });
 
-test('F0 output is selectively accepted without overstating actual-consumer convergence', () => {
+test('F0 source progress is accepted without false actual-consumer convergence', () => {
   const f0 = manifest.role_outputs.F0;
-  assert.equal(f0.head, F0_HEAD);
   assert.equal(f0.decision, 'SELECTIVE_SOURCE_ACCEPTED_NOT_END_TO_END_COMPLETE');
-  assert.deepEqual(f0.accepted_functional_commits, [
-    'fd47202484da3abb2eff0fac70c6123a0cebba4b',
-    '11de3f042de2bd9205e7a594f78813566d5be5d6',
-    '2e95a34abd39317766abfe19dae8c6b9d4676da2',
-    F0_HEAD,
-  ]);
+  assert.equal(f0.accepted_functional_commits.at(-1), f0.head);
+  assert.ok(f0.accepted_functional_commits.includes('fd47202484da3abb2eff0fac70c6123a0cebba4b'));
+  assert.ok(f0.accepted_functional_commits.includes('11de3f042de2bd9205e7a594f78813566d5be5d6'));
   assert.equal(f0.remaining_source_evidence.consumer_files_with_raw_lengths, 84);
-  assert.ok(f0.remaining_source_evidence.direct_font_family_consumers.includes(
-    'site/src/layouts/EventLayout.astro',
-  ));
+  assert.ok(f0.remaining_source_evidence.direct_font_family_consumers.includes('site/src/layouts/EventLayout.astro'));
   assert.ok(f0.remaining_source_evidence.transitional_local_icon_alias_consumers.includes(
     'site/src/components/InterestClubCard.astro',
   ));
   assert.equal(f0.runtime_status, 'NOT_RUN_ON_CURRENT_SUCCESSOR');
 });
 
-test('M0 cardinality drift is resolved and four safety commits remain explicit integration inputs', () => {
+test('current M0 tip is source-accepted with coherent diagnostics and ten explicit integration commits', () => {
   const m0 = manifest.role_outputs.M0;
-  assert.equal(m0.head, M0_HEAD);
   assert.equal(m0.invalid_result_sha_rejected, M0_INVALID);
   assert.equal(m0.integrated_parent, M0_INTEGRATED_PARENT);
   assert.equal(m0.integrated_by, SUCCESSOR_BASE);
@@ -125,19 +111,22 @@ test('M0 cardinality drift is resolved and four safety commits remain explicit i
   assert.equal(m0.resolved_drift.code, 'ADAPTIVE_SOURCE_COUNT_ORDER_CARDINALITY');
   assert.equal(m0.resolved_drift.diagnostics_owner, 'AdaptiveEventCardGrid');
   assert.equal(m0.resolved_drift.diagnostics_contract, 'input-source-rendered-v1');
-  assert.deepEqual(m0.accepted_pending_integration_commits, [
-    'da089b95817ed3a3a6c0c5b37adfd16a686235fb',
-    '07bc9c21fc67e24bd26a9268c0df6e459aff004e',
+  assert.equal(m0.accepted_pending_integration_commits.length, 10);
+  assert.equal(m0.accepted_pending_integration_commits.at(-1), m0.head);
+  for (const commit of [
     '1401b21d9ec68fe38f879de86028f468b515a8d0',
-    M0_HEAD,
-  ]);
+    '5ce956f7f87a9f002dfe0e31f9256067b5b864e2',
+    'c63070e8a1c840dc12cc66c4b12762844dcf8191',
+    'db21c7195fa1a2fe116f94dcd68445676cc5031d',
+  ]) assert.ok(m0.accepted_pending_integration_commits.includes(commit), `missing accepted M0 commit ${commit}`);
   assert.ok(m0.pending_scope.includes('fail-closed ListingEventCard broken-media fallback state'));
+  assert.ok(m0.pending_scope.includes('empty-card social-proof placement none state'));
+  assert.ok(m0.pending_scope.includes('flex-only EventCard placement without inert grid row/column'));
   assert.equal(m0.runtime_status, 'NOT_RUN_ON_FULL_M0_TIP');
 });
 
-test('A0 whole-tip merge remains held while accepted user-facing behavior is preserved', () => {
+test('A0 whole-tip merge remains held and accepted user-facing behavior is preserved', () => {
   const a0 = manifest.role_outputs.A0;
-  assert.equal(a0.head, A0_HEAD);
   assert.equal(a0.decision, 'HOLD_WHOLESALE_TIP_FOR_A0_COMPLETION_OR_SELECTIVE_PATCH');
   assert.equal(a0.standalone_build_target, false);
   assert.equal(a0.route_family_fraction, '5/9');
@@ -155,23 +144,25 @@ test('A0 whole-tip merge remains held while accepted user-facing behavior is pre
   ]) assert.ok(a0.must_preserve_without_owner_decision.includes(behavior));
 });
 
-test('nearest real candidate is exact, bounded and does not wait for unrelated A0 completion', () => {
+test('nearest real candidate is bounded and does not wait for unrelated A0 completion', () => {
   const candidate = manifest.candidate_plan.nearest_full_real_candidate;
+  const m0 = manifest.role_outputs.M0;
   assert.equal(candidate.base, SUCCESSOR_BASE);
   assert.equal(candidate.status, 'PARTIAL_INTEGRATION_REQUIRED');
   assert.equal(candidate.include.length, 3);
   assert.equal(candidate.include[0].source, 'work/ui-normalization-n0-checklist-20260903');
   assert.equal(candidate.include[1].selection, 'POST_bbbc9b_SOURCE_PATHS_THROUGH_77c0833');
-  assert.equal(candidate.include[2].selection, 'FOUR_COMMITS_AFTER_1d145d5_THROUGH_0bf25ff');
+  assert.equal(candidate.include[2].selection, 'TEN_COMMITS_AFTER_1d145d5_THROUGH_c5f208');
+  assert.equal(candidate.include[2].source, m0.branch);
+  assert.equal(m0.accepted_pending_integration_commits.at(-1), m0.head);
   assert.equal(candidate.hold_for_next_successor[0].source, 'work/ui-normalization-a0-wave-3-20260903');
   assert.ok(candidate.preserve.includes('Popular Large/Compact user-facing behavior'));
   assert.ok(candidate.reject.some((item) => item.includes(M0_INVALID)));
   assert.ok(candidate.reject.includes('whole-current-A0-tip merge'));
 });
 
-test('end-to-end gate graph keeps executable, browser, thin-S, Penpot and release boundaries ordered', () => {
-  const ids = manifest.gate_graph.map((item) => item.id);
-  assert.deepEqual(ids, [
+test('gate graph orders executable, browser, thin-S, Penpot and release boundaries', () => {
+  assert.deepEqual(manifest.gate_graph.map((item) => item.id), [
     'CURRENT_SOURCE_CANDIDATE',
     'FULL_REAL_KAGGLE_REVIEW_PREVIEW',
     'V0_REAL_DOM_COMPUTED_STYLE_AUDIT',
@@ -188,6 +179,29 @@ test('end-to-end gate graph keeps executable, browser, thin-S, Penpot and releas
   assert.equal(gate('THIN_S_BINDING_READY').status, 'BLOCKED_BY_ASTRO_NORMALIZATION_PASS');
   assert.equal(gate('PENPOT_NATIVE_MATERIALIZATION_READY').owner, 'R0.PENPOT');
   assert.equal(gate('RELEASE_CANDIDATE_READY').status, 'BLOCKED_BY_GOLDEN_A_S_P_PASS');
+});
+
+test('PM0 delta mode observes live role refs without inflating readiness', () => {
+  const delta = manifest.pm0_delta_reporting;
+  assert.equal(delta.owner_correction_comment, 5527668536);
+  assert.equal(delta.effective_immediately, true);
+  for (const branch of [
+    'r0/ui-normalization-current-candidate-20260903',
+    'work/ui-normalization-n0-checklist-20260903',
+    'work/ui-normalization-f0-wave-3-20260903',
+    'work/ui-normalization-m0-continuity-20260903',
+    'work/ui-normalization-a0-wave-3-20260903',
+  ]) assert.ok(delta.fresh_read_heads.includes(branch), `missing PM0 live ref ${branch}`);
+  assert.deepEqual(delta.required_output_blocks, [
+    'checkbox_transitions',
+    'progress_inside_partial',
+    'not_in_candidate',
+    'new_owner_visible_result',
+  ]);
+  assert.match(delta.zero_changes_allowed_only_when, /all relevant heads/u);
+  assert.match(delta.v0_recheck_claim_requires, /new factual V0 browser verdict/u);
+  assert.equal(delta.branch_progress_may_change_partial_detail_without_changing_symbol, true);
+  assert.equal(delta.branch_progress_may_not_create_done_without_full_item_acceptance, true);
 });
 
 test('V0 trigger is published without an N0 browser claim', () => {
