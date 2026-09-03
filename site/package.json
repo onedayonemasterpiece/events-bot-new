@@ -36,7 +36,7 @@
     "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
     "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
     "test:n0-successor-acceptance": "node --test tests/n0-successor-acceptance.test.mjs tests/n0-current-ref-overlay.test.mjs",
-    "test:n0-delivery-semantics": "node --test tests/n0-delivery-semantics.test.mjs tests/n0-public-preview-identity.test.mjs tests/n0-exhibitions-vertical-slice-acceptance.test.mjs tests/n0-integrated-successor-acceptance.test.mjs tests/n0-v0-verdict-admission.test.mjs tests/n0-runtime-eventcard-mediaframe-drift.test.mjs",
+    "test:n0-delivery-semantics": "node --test tests/n0-delivery-semantics.test.mjs tests/n0-public-preview-identity.test.mjs tests/n0-exhibitions-vertical-slice-acceptance.test.mjs tests/n0-integrated-successor-acceptance.test.mjs tests/n0-integrated-successor-publication.test.mjs tests/n0-v0-verdict-admission.test.mjs tests/n0-runtime-eventcard-mediaframe-drift.test.mjs",
     "test:n0-v0-golden-drift": "node --test tests/n0-v0-golden-drift-acceptance.test.mjs",
     "test:golden-preview-contract": "node --test tests/golden-review-preview-contract.test.mjs tests/golden-review-actions.test.mjs",
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
