@@ -123,15 +123,18 @@ test('Golden generation reuses ordinary routes, restores real data and has an ex
   const builder = read('scripts/build-golden-preview.mjs');
   const previewBuilder = read('scripts/build-preview.mjs');
   const checker = read('scripts/check-golden-preview.mjs');
-  const deployer = read('scripts/deploy-preview-yc.mjs');
+  const runner = readFileSync(join(repositoryRoot, 'scripts', 'run_static_site_builder_kaggle.py'), 'utf8');
+  const publisher = readFileSync(join(repositoryRoot, 'static_site_release.py'), 'utf8');
 
   assert.equal(packageJson.scripts['build:golden-preview'], 'node scripts/build-golden-preview.mjs');
-  assert.equal(packageJson.scripts['check:golden-preview'], 'node scripts/check-golden-preview.mjs');
-  assert.equal(packageJson.scripts['test:golden-preview-contract'], 'node --test tests/golden-review-preview-contract.test.mjs');
+  assert.match(packageJson.scripts['check:golden-preview'], /check-golden-preview\.mjs/u);
+  assert.match(packageJson.scripts['test:golden-preview-contract'], /golden-review-preview-contract\.test\.mjs/u);
+  assert.equal(packageJson.scripts['deploy:preview'], undefined);
+  assert.equal(packageJson.scripts['deploy:golden-preview'], undefined);
   assert.match(builder, /PREVIEW_DATA_MODE:'golden'/u);
   assert.match(builder, /STATIC_SITE_CURRENT_DATE:corpus\.frozen_clock\.current_date/u);
   assert.match(builder, /PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE:corpus\.frozen_clock\.current_date/u);
-  assert.match(builder, /finally \{[\s\S]*writeFileSync\(eventsPath, originalRaw\)[\s\S]*rmSync\(lockPath/u);
+  assert.match(builder, /finally \{[\s\S]*atomicWrite\(eventsPath, originalRaw\)[\s\S]*rmSync\(lockPath/u);
   assert.match(builder, /restoredDigest !== originalDigest/u);
   assert.match(previewBuilder, /dataMode: previewDataMode/u);
   assert.match(previewBuilder, /goldenCorpusDigest/u);
@@ -139,8 +142,10 @@ test('Golden generation reuses ordinary routes, restores real data and has an ex
   assert.match(checker, /WeekendListingSurface/u);
   assert.match(checker, /FreeCollectionSurface/u);
   assert.match(checker, /ordinary_routes_only:true/u);
-  assert.match(deployer, /s3:\/\/${bucket}\/${buildId}\//u);
-  assert.match(deployer, /KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY/u);
+  assert.match(runner, /--preview-data-mode/u);
+  assert.match(runner, /publish_preview_archive/u);
+  assert.ok(publisher.includes('f"{build_id}/{relative}"'));
+  assert.match(publisher, /IfNoneMatch="\*"/u);
   assert.equal(existsSync(join(siteDir, 'src', 'pages', 'golden')), false, 'a second Golden UI route is forbidden');
   assert.equal(existsSync(join(siteDir, 'src', 'pages', 'lab', 'golden')), false, 'an owner-facing Golden lab is forbidden');
   assert.equal(existsSync(GOLDEN_CORPUS_PATH), true);

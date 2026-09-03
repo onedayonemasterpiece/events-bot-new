@@ -17,7 +17,7 @@ const A0_REJECTED = '5e466d65bc2b71a814c26c063f90aa07709de08f';
 
 test('N0 manifest freezes the first real preview and keeps successor work separate', () => {
   assert.equal(manifest.schema_version, 'kenigevents.n0-successor-acceptance.v1');
-  assert.equal(manifest.contract_version, '1.8.0');
+  assert.equal(manifest.contract_version, '1.9.0');
   assert.equal(manifest.owner, 'N0');
   assert.equal(manifest.base_candidate.sha, BASE);
   assert.equal(manifest.base_candidate.decision, 'ACCEPTED_PRECURSOR');
@@ -50,18 +50,10 @@ test('accepted role deltas have explicit non-overlap and executable gates', () =
   assert.ok(manifest.required_source_commands.some((command) => command.includes('ui-normalization-m0-contract.test.mjs')));
   assert.ok(manifest.required_source_commands.some((command) => command.includes('focus-normalization-source.test.mjs')));
   assert.ok(manifest.required_source_commands.some((command) => command.includes('test:golden-preview-contract')));
-  assert.ok(manifest.required_source_commands.some((command) => command.includes('test:golden-deploy-contract')));
-  assert.deepEqual(manifest.required_successor_real_gate.slice(0, 3), [
-    'npm run build:preview',
-    'npm run check:preview',
-    'npm run check:unified-prototype',
-  ]);
-  assert.deepEqual(manifest.required_golden_gate_after_successor_real.slice(0, 4), [
-    'npm run build:golden-preview',
-    'npm run check:golden-preview',
-    'npm run check:preview',
-    'npm run check:unified-prototype',
-  ]);
+  assert.equal(manifest.required_source_commands.some((command) => command.includes('golden-deploy')), false);
+  assert.match(manifest.required_successor_real_gate[0], /run_static_site_builder_kaggle\.py --preview-data-mode real/u);
+  assert.match(manifest.required_golden_gate_after_successor_real[0], /run_static_site_builder_kaggle\.py --preview-data-mode golden/u);
+  assert.ok(manifest.required_golden_gate_after_successor_real.some((command) => command.includes('check:golden-preview')));
 });
 
 test('manifest never turns source review into runtime, browser or voice-review PASS', () => {

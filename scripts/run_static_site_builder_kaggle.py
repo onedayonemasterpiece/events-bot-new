@@ -654,6 +654,24 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         raise RuntimeError('Kaggle result build identity/status mismatch')
     if result.get('profile') != args.profile:
         raise RuntimeError('Kaggle result profile mismatch')
+    expected_data_mode = str(getattr(args, 'preview_data_mode', 'real') or 'real')
+    if str(result.get('data_mode') or 'real') != expected_data_mode:
+        raise RuntimeError('Kaggle result preview data-mode mismatch')
+    if expected_data_mode == 'golden' and (
+        not re.fullmatch(
+            r'golden-review-[a-z0-9-]+-v\d+',
+            str(result.get('golden_corpus_id') or ''),
+        )
+        or not re.fullmatch(
+            r'[0-9a-f]{64}', str(result.get('golden_corpus_digest') or '')
+        )
+    ):
+        raise RuntimeError('Kaggle result Golden corpus identity mismatch')
+    if expected_data_mode == 'real' and (
+        result.get('golden_corpus_id') is not None
+        or result.get('golden_corpus_digest') is not None
+    ):
+        raise RuntimeError('Kaggle real result contains Golden corpus identity')
     expected_page_classes = tuple(getattr(args, 'page_classes', ('all',)))
     result_page_classes = tuple(result.get('page_classes') or ('all',))
     if result_page_classes != expected_page_classes:
@@ -1368,6 +1386,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'build_id': build_id,
         'run_id': args.run_id or build_id,
         'profile': args.profile,
+        'preview_data_mode': str(getattr(args, 'preview_data_mode', 'real') or 'real'),
         'page_classes': list(getattr(args, 'page_classes', ('all',))),
         'catalog_mode': args.catalog_mode,
         'repo_sha': args.repo_sha or None,
@@ -1599,6 +1618,12 @@ def main() -> int:
     parser.add_argument('--expected-snapshot-sha256', default='')
     parser.add_argument('--expected-snapshot-size', type=int, default=0)
     parser.add_argument('--profile', choices=['preview', 'production-candidate'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
+    parser.add_argument(
+        '--preview-data-mode',
+        choices=['real', 'golden'],
+        default=os.getenv('STATIC_SITE_PREVIEW_DATA_MODE', 'real'),
+        help='Preview corpus mode. Both modes use this Kaggle runner and publisher.',
+    )
     parser.add_argument('--catalog-mode', choices=['slice', 'full'], default=os.getenv('STATIC_SITE_CATALOG_MODE', 'slice'))
     parser.add_argument(
         '--page-class',
@@ -1812,6 +1837,16 @@ def main() -> int:
             raise SystemExit('production-candidate forbids page-class slicing')
     elif args.catalog_mode != 'slice':
         raise SystemExit('preview profile requires --catalog-mode slice')
+    if args.preview_data_mode == 'golden' and (
+        args.profile != 'preview'
+        or args.page_classes != ('all',)
+        or not re.fullmatch(r'preview-golden-[A-Za-z0-9][A-Za-z0-9._-]{0,183}', args.build_id)
+    ):
+        raise SystemExit(
+            'golden preview requires the preview profile, page class all, and a preview-golden-* build id'
+        )
+    if args.profile != 'preview' and args.preview_data_mode != 'real':
+        raise SystemExit('production-candidate accepts only --preview-data-mode real')
     if args.publish_preview and (
         args.profile != 'preview' or not args.download_output or args.no_wait
     ):

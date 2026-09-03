@@ -466,6 +466,9 @@ class PreviewPublicationReceipt:
     repo_sha: str
     artifact_sha256: str
     page_classes: tuple[str, ...]
+    data_mode: str
+    golden_corpus_id: str | None
+    golden_corpus_digest: str | None
     object_count: int
     total_bytes: int
     public_url: str
@@ -2768,6 +2771,9 @@ def publish_preview_archive(
     if build_result.get("profile") != "preview":
         raise StaticSitePermanentError("preview_publish_profile_invalid")
     build_id = str(build_result.get("build_id") or "")
+    data_mode = str(build_result.get("data_mode") or "real")
+    if data_mode not in {"real", "golden"}:
+        raise StaticSitePermanentError("preview_publish_data_mode_invalid")
     page_classes = tuple(str(item) for item in (build_result.get("page_classes") or ()))
     if (
         not page_classes
@@ -2802,14 +2808,43 @@ def publish_preview_archive(
     except Exception as exc:
         raise StaticSitePermanentError(f"preview_publish_manifest_invalid:{exc}") from exc
     repo_sha = str(manifest.get("repo_sha") or "")
+    golden_corpus_id = manifest.get("goldenCorpusId")
+    golden_corpus_digest = manifest.get("goldenCorpusDigest")
     if (
         manifest.get("buildId") != build_id
         or manifest.get("basePath") != f"/{build_id}"
         or tuple(manifest.get("pageClasses") or ()) != page_classes
+        or str(manifest.get("dataMode") or "real") != data_mode
         or not re.fullmatch(r"[0-9a-f]{40}", repo_sha)
         or not (root / "__preview" / "index.html").is_file()
     ):
         raise StaticSitePermanentError("preview_publish_manifest_identity_mismatch")
+    if data_mode == "golden":
+        try:
+            golden_corpus_path = root / "golden-review-corpus.v1.json"
+            golden_evidence_path = root / "data" / "golden" / "evidence.json"
+            golden_evidence = json.loads(golden_evidence_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise StaticSitePermanentError(
+                f"preview_publish_golden_evidence_invalid:{exc}"
+            ) from exc
+        if (
+            not build_id.startswith("preview-golden-")
+            or page_classes != ("all",)
+            or not re.fullmatch(r"golden-review-[a-z0-9-]+-v\d+", str(golden_corpus_id or ""))
+            or not re.fullmatch(r"[0-9a-f]{64}", str(golden_corpus_digest or ""))
+            or build_result.get("golden_corpus_id") != golden_corpus_id
+            or build_result.get("golden_corpus_digest") != golden_corpus_digest
+            or not golden_corpus_path.is_file()
+            or _sha256_file(golden_corpus_path) != golden_corpus_digest
+            or golden_evidence.get("build_id") != build_id
+            or golden_evidence.get("repo_sha") != repo_sha
+            or golden_evidence.get("corpus_id") != golden_corpus_id
+            or golden_evidence.get("corpus_sha256") != golden_corpus_digest
+        ):
+            raise StaticSitePermanentError("preview_publish_golden_identity_mismatch")
+    elif golden_corpus_id is not None or golden_corpus_digest is not None:
+        raise StaticSitePermanentError("preview_publish_real_golden_identity_present")
     files = sorted(path for path in root.rglob("*") if path.is_file())
     if not files or len(files) > 100_000:
         raise StaticSitePermanentError("preview_publish_file_count_invalid")
@@ -2899,6 +2934,9 @@ def publish_preview_archive(
         repo_sha=repo_sha,
         artifact_sha256=str(artifact.get("sha256") or ""),
         page_classes=page_classes,
+        data_mode=data_mode,
+        golden_corpus_id=str(golden_corpus_id) if golden_corpus_id is not None else None,
+        golden_corpus_digest=str(golden_corpus_digest) if golden_corpus_digest is not None else None,
         object_count=len(objects),
         total_bytes=sum(int(item["size"]) for item in objects),
         public_url=public_url,

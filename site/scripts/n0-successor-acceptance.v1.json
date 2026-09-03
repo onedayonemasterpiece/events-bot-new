@@ -1,7 +1,7 @@
 {
   "schema_version": "kenigevents.n0-successor-acceptance.v1",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
-  "contract_version": "1.8.0",
+  "contract_version": "1.9.0",
   "generated_at": "2026-09-03T12:50:00.000Z",
   "owner": "N0",
   "base_candidate": {
@@ -128,24 +128,19 @@
     "cd site && node --test tests/ui-normalization-m0-contract.test.mjs tests/adaptive-event-card-grid.test.mjs tests/mobile-listing-rails.test.mjs tests/mobile-listing-rail-row-state.test.mjs tests/keyboard-event-navigation-production.test.mjs tests/event-detail-runtime-regressions.test.mjs tests/visual-keyboard-regressions.test.mjs",
     "cd site && node --test tests/focus-normalization-source.test.mjs tests/focus-group-product-surface.test.mjs tests/focus-pwa-membership.test.mjs tests/static-site-auth.test.mjs",
     "cd site && npm run test:golden-preview-contract",
-    "cd site && npm run test:golden-deploy-contract",
     "cd site && npm run check:design-system-production-surfaces",
     "cd site && npm run check:design-system-iconography"
   ],
   "required_successor_real_gate": [
-    "npm run build:preview",
-    "npm run check:preview",
-    "npm run check:unified-prototype",
-    "immutable-prefix deploy with KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY=1",
+    "python scripts/run_static_site_builder_kaggle.py --preview-data-mode real --page-class all --publish-preview ...",
+    "Kaggle build:preview plus check:preview",
+    "events-bot-new checked-artifact immutable-prefix publisher",
     "public 2xx owner URL and matching preview-build.json"
   ],
   "required_golden_gate_after_successor_real": [
-    "npm run build:golden-preview",
-    "npm run check:golden-preview",
-    "npm run check:preview",
-    "npm run check:unified-prototype",
-    "npm run deploy:golden-preview dry run",
-    "npm run deploy:golden-preview",
+    "python scripts/run_static_site_builder_kaggle.py --preview-data-mode golden --page-class all --publish-preview ...",
+    "Kaggle build:golden-preview plus check:golden-preview; check:preview/check:unified-prototype remain on the successor real-data gate",
+    "events-bot-new checked-artifact immutable-prefix publisher",
     "public 2xx owner URL, preview-build.json, corpus and machine evidence"
   ],
   "checklist_effect": {

@@ -48,6 +48,14 @@ Kaggle-to-artifact-to-host-publisher transaction with a different final slug.
 Neither profile may overwrite stable `/ics/`, a root control key or another
 build prefix.
 
+Preview has two explicit corpus modes on that same rail. `--preview-data-mode
+real` (the default) consumes the selected immutable production projection;
+`--preview-data-mode golden` overlays the versioned Golden corpus only inside
+the Kaggle workspace, restores the staged real JSON byte-for-byte, runs the
+Golden full-route gate, and returns Golden corpus identity in
+the checked result and publication receipt. Golden requires `--page-class all`
+and a `preview-golden-*` build ID. It is not a separate builder or publisher.
+
 #### Preview page-class slicing
 
 `preview` accepts repeatable `--page-class` (or
@@ -88,6 +96,11 @@ python scripts/run_static_site_builder_kaggle.py \
   --astro-asset-base-url 'https://static.kenigevents.ru/{buildId}' \
   --download-output --publish-preview
 ```
+
+For a full Golden review transaction, use the same command with
+`--preview-data-mode golden --page-class all` and an immutable
+`preview-golden-*` build ID. Running `npm run build:golden-preview` locally is
+permitted only as an unpublished diagnostic.
 
 `--publish-preview` is valid only together with a waited, downloaded `preview`
 run. The host revalidates the artifact hash, safe archive containment,

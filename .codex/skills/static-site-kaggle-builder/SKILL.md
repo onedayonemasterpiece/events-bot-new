@@ -37,6 +37,9 @@ Reuse the existing events-bot Kaggle infrastructure:
 9. Preview retention is `static_site_release.prune_preview_objects`; callers
    supply protected current/previous build IDs, never individual object keys.
    Apply only after a checked publication and fail closed on a missing prefix.
+10. Use `--preview-data-mode real|golden` on the same runner. Golden requires
+    `--page-class all` and `preview-golden-*`; never add or revive a local
+    Golden deploy command. `npm run build:golden-preview` is diagnostic-only.
 
 ## Known Kaggle pitfalls already solved
 

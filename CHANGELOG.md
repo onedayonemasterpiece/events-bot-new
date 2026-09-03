@@ -13,7 +13,12 @@
   maintaining independent allowlists. Preview retention is implemented by the
   same events-bot release module: it accepts only whole protected build IDs,
   fails closed when a protected prefix is missing, and preserves a bounded
-  rollback/grace cohort before deleting old immutable prefixes.
+  rollback/grace cohort before deleting old immutable prefixes. Real and
+  deterministic Golden Review previews are explicit data modes of that same
+  runner: Golden uses the same Kaggle kernel, artifact validation and
+  create-only publisher, requires a full-page build and records its corpus ID
+  and digest in the build result and publication receipt. The previously
+  proposed local Golden deploy wrapper is intentionally not part of the rail.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK

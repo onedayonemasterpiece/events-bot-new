@@ -3,7 +3,7 @@
 Status: `SOURCE_READY_RUNTIME_UNVERIFIED`  
 Coordination: `onedayonemasterpiece/events-bot-new#621`  
 Owner: `N0`  
-Contract: `kenigevents.launch-normalized-ui.v1@1.8.0`
+Contract: `kenigevents.launch-normalized-ui.v1@1.9.0`
 
 ## 1. Scope
 
@@ -153,7 +153,6 @@ Required source checks on the integrated successor SHA:
 ```bash
 cd site
 npm run test:golden-preview-contract
-npm run test:golden-deploy-contract
 npm run check:design-system-production-surfaces
 npm run check:design-system-iconography
 ```
@@ -165,29 +164,37 @@ GOLDEN_SHA="$(git rev-parse HEAD)"
 GOLDEN_BUILD_ID="preview-golden-${GOLDEN_SHA:0:8}-20270604-v1"
 ```
 
-Required build/check chain:
+The local commands below are diagnostic only. They do not create publishable
+evidence and must never upload `site/dist` directly:
 
 ```bash
 PREVIEW_BUILD_ID="$GOLDEN_BUILD_ID" npm run build:golden-preview
 PREVIEW_BUILD_ID="$GOLDEN_BUILD_ID" npm run check:golden-preview
-PREVIEW_BUILD_ID="$GOLDEN_BUILD_ID" npm run check:preview
-PREVIEW_BUILD_ID="$GOLDEN_BUILD_ID" npm run check:unified-prototype
 ```
 
-Required publication rehearsal and publication:
+`check:preview` and `check:unified-prototype` remain fresh-real-data successor
+gates: their current-catalog recommendation, transport and mutual-occurrence
+specimens are intentionally not reclassified as Golden evidence. Golden uses
+its own full-route, density, media, lifecycle, action and restoration gate.
+
+The reproducible publishable transaction is owned by `events-bot-new` and uses
+the same Kaggle runner, checked artifact handoff and Object Storage publisher as
+real preview. Only `--preview-data-mode` and the immutable build ID differ:
 
 ```bash
-KENIGEVENTS_SITE_DEPLOY_DRY_RUN=1 \
-PREVIEW_BUILD_ID="$GOLDEN_BUILD_ID" \
-  npm run deploy:golden-preview
-
-PREVIEW_BUILD_ID="$GOLDEN_BUILD_ID" \
-  npm run deploy:golden-preview
+python scripts/run_static_site_builder_kaggle.py \
+  --profile preview \
+  --preview-data-mode golden \
+  --page-class all \
+  --repo-sha "$GOLDEN_SHA" \
+  --build-id "$GOLDEN_BUILD_ID" \
+  --download-output \
+  --publish-preview
 ```
 
-`deploy:golden-preview` requires an explicit `preview-golden-*` ID and enables
-`KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY=1` before loading the existing preview
-deployer. The destination remains exactly:
+The runner requires an explicit `preview-golden-*` ID, executes
+`build:golden-preview`, all Golden/full-preview gates, validates the returned
+archive and publishes create-only below exactly:
 
 ```text
 s3://<bucket>/<GOLDEN_BUILD_ID>/
