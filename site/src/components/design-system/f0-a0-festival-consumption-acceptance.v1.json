@@ -1,0 +1,95 @@
+{
+  "schema": "kenigevents.f0-a0-festival-consumption-acceptance.v1",
+  "version": "1.0.0",
+  "status": "ACCEPTED_BOUNDED_PACKET_REQUIRES_F0_SOURCE_AND_INTEGRATED_EXECUTION",
+  "role": "F0",
+  "contract_version": "1.10.0",
+  "a0": {
+    "branch": "work/ui-normalization-a0-wave-3-20260903",
+    "source_commit": "230e574745bc99cc187e6f892927fa92474ddd07",
+    "test_commit": "ffee86fb6ce466b1cb303c7b3daea67f84127b67",
+    "script": "site/scripts/apply-a0-current-successor-consumer-closure.mjs",
+    "test": "site/tests/a0-current-successor-consumer-closure.test.mjs",
+    "consumer": "site/src/pages/festivali/index.astro"
+  },
+  "required_f0": {
+    "source_boundary": "d3e36f84de0fa58cb72d494d00cea5c67d54bdff",
+    "festival_semantic_source": "8941723b1eceb3d18a54f13b907eb465b9ee6af1",
+    "foundation": "site/src/components/design-system/route-theme-foundations.css",
+    "binding": "site/src/components/design-system/f0-route-theme-bindings.v1.json",
+    "semantic_separation": "site/src/components/design-system/f0-festival-semantic-separation.v1.json",
+    "strict_checker": "site/src/components/design-system/check-f0-route-theme-bindings.mjs"
+  },
+  "accepted_changes": [
+    "selector-scoped binding of .festival-guide__icon--heart to --ke-color-festival-guide-like-surface",
+    "selector-scoped binding of .festival-month__categories li to --ke-color-festival-category-surface",
+    "category container and taxonomy asset geometry bound to their distinct F0 roles",
+    "guide and favorite actions use canonical SemanticIcon identities and central control glyph dimensions",
+    "favorite targets bind to the 44px minimum role on desktop and mobile",
+    "route-theme values consume the existing F0 festival token cluster",
+    "safe external blank targets retain both noopener and noreferrer",
+    "family/version/variant/state and foundation-consumer diagnostics remain explicit"
+  ],
+  "semantic_review": {
+    "unsafe_global_shared_value_replacement_removed": true,
+    "guide_action_and_taxonomy_variables_distinct": true,
+    "equal_current_visual_values_preserved": true,
+    "variable_aliasing_introduced": false,
+    "category_masks_reclassified_as_ui_icons": false,
+    "fifth_icon_role_introduced": false,
+    "timeline_packing_or_copy_changed": false,
+    "favorite_storage_behavior_changed": false,
+    "safe_link_contract_preserved": true
+  },
+  "regression_review": {
+    "test_names_both_semantic_roles": true,
+    "test_rejects_category_using_guide_token": true,
+    "test_rejects_unsafe_global_script_pattern": true,
+    "test_preserves_category_assets": true,
+    "execution_claimed": false
+  },
+  "standalone_boundary": {
+    "a0_branch_contains_required_f0_source": false,
+    "a0_head_is_standalone_candidate": false,
+    "whole_a0_branch_merge_allowed": false,
+    "integration_rule": "apply the accepted script/test delta only after materializing F0 source boundary d3e36f84 onto the current successor"
+  },
+  "integration": {
+    "owner": "R0",
+    "base": "agent/static-site-single-kaggle-contract@1bc6d9cb4c122046f4782532381de953727c1da6 or current descendant",
+    "required_sequence": [
+      "materialize F0 source through d3e36f84de0fa58cb72d494d00cea5c67d54bdff",
+      "materialize the accepted festival A0 source and test deltas 230e574/ffee86f",
+      "preserve festival safe-link regression and all later successor changes",
+      "do not execute the current exhibitions transform until separately accepted",
+      "run the default and strict F0 route-theme gate",
+      "include the exact tested SHA in the next canonical full fresh-real Kaggle build"
+    ],
+    "strict_command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "expected_strict_festival_state": {
+      "semantic_separation": "SEMANTICALLY_SEPARATED",
+      "closure_script_state": "CONTEXT_SCOPED_SEMANTIC_REPLACEMENTS",
+      "target_state": "CENTRAL_44PX_MIN_BOUND",
+      "icon_role_count": 4
+    }
+  },
+  "rollback": {
+    "unit": "F0-RB-FESTIVALS-THEME-AND-CONTROLS",
+    "semantic_subunit": "F0-RB-FESTIVAL-SEMANTIC-SEPARATION",
+    "trigger": "strict source failure, changed timeline/category/favorite behavior, safe-link regression or computed visual drift",
+    "action": "revert only the festival consumer/test delta and/or omit its F0 semantic subunit; preserve unrelated accepted club/exhibitions/successor changes and immutable previews"
+  },
+  "backlog_effect": {
+    "festival_f0_decision_item_closed": true,
+    "festival_a0_consumer_review_closed": true,
+    "remaining_route_theme_consumer": "site/src/components/ExhibitionsPersonalSurface.astro",
+    "remaining_f0_owned_item": false
+  },
+  "claims_not_made": [
+    "festival packet is integrated into the source successor",
+    "the script or tests executed",
+    "the strict F0 route-theme gate passed",
+    "a post-festival fresh-real preview exists",
+    "V0 accepted the route"
+  ]
+}
