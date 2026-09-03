@@ -1,6 +1,6 @@
 {
   "schema": "kenigevents.n0-delivery-semantics.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "role": "N0",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_reference": {
@@ -22,11 +22,15 @@
     "repository": "onedayonemasterpiece/events-bot-new",
     "branch": "agent/static-site-single-kaggle-contract",
     "sha": "cebeafeee08251a327145ee973ee035cced65204",
-    "r0_result_comment": 5531586743,
-    "publication_state": "IN_PROGRESS_AS_OF_LAST_MEANINGFUL_ISSUE_READ",
+    "initial_r0_result_comment": 5531586743,
+    "publication_result_comment": 5531984205,
+    "publication_state": "N0_ACCEPTED_EXACT_IMMUTABLE_PUBLICATION",
     "build_id": "preview-real-cebeafeee-normalized-20260903-v1",
+    "public_url": "https://kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/__preview/",
+    "manifest_url": "https://kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/preview-build.json",
     "data_mode": "real",
     "page_classes": ["all"],
+    "catalog_mode": "slice",
     "snapshot": {
       "id": "issue621-real-cebeafeee-20260903T201333Z",
       "sha256": "db3e7dc2cc2c5e5ce3609500286c4de903f1b37a07c8ebf99926c2137df7ef20",
@@ -36,19 +40,66 @@
       "event_rows": 8312,
       "max_event_id": 8723
     },
+    "kaggle": {
+      "runner": "scripts/run_static_site_builder_kaggle.py",
+      "profile": "preview",
+      "input_dataset": "zigomaro/static-site-builder-input-20260903202018-f8d2db",
+      "kernel": "zigomaro/kenigevents-static-site-builder",
+      "kernel_input_match": true,
+      "status": "COMPLETE",
+      "started_at": "2026-09-03T20:20:58.889987Z",
+      "finished_at": "2026-09-03T20:24:06.459374Z",
+      "semantic_provider_calls": 0
+    },
+    "artifact": {
+      "result_sha256": "ac997edbe4ad5e7a9d10c99e6d2b0f7b4e725b83f915f74ba0fc8c2ee6401813",
+      "archive_sha256": "928bc1f010c94bc338ee2020d9d95b78813e0919643b356e9b526804f505b3bb",
+      "archive_size_bytes": 53012787
+    },
+    "publication": {
+      "owner_http": 200,
+      "manifest_http": 200,
+      "object_count": 1423,
+      "total_bytes": 270479644,
+      "verified_at": "2026-09-03T20:27:16.036063Z",
+      "root_mutation": false,
+      "stable_ics_mutation": false,
+      "manifest_build_id": "preview-real-cebeafeee-normalized-20260903-v1",
+      "manifest_repo_sha": "cebeafeee08251a327145ee973ee035cced65204",
+      "manifest_base_path": "/preview-real-cebeafeee-normalized-20260903-v1",
+      "manifest_data_mode": "real",
+      "manifest_page_classes": ["all"],
+      "manifest_authorized_search_configured": true
+    },
     "source_and_local_gate_result": "ACCEPTED_FOR_CANONICAL_PUBLICATION",
+    "N0_identity_acceptance": "ACCEPTED",
+    "N0_runtime_scope": "PIPELINE_SNAPSHOT_MANIFEST_ANCESTRY_ONLY_NOT_BROWSER_VERDICT",
     "do_not_reopen_or_delay_for_later_role_outputs": true,
     "later_outputs_are_next_candidate_inputs_only": [
       "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
       "105bac16be6c73916a25f3e78b02116869ed5e1e",
       "3ef253980bdfe0731158f5b8b4b47965fa153ce9"
+    ]
+  },
+  "ancestry_acceptance": {
+    "decision": "ACCEPTED_DIRECT_GITHUB_COMPARE",
+    "rule": "Every named anchor is a direct ancestor: compare status ahead, behind_by 0, merge base equals anchor.",
+    "anchors": [
+      {"role": "baseline", "sha": "1bc6d9cb4c122046f4782532381de953727c1da6", "ahead_by": 90},
+      {"role": "programme", "sha": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8", "ahead_by": 402},
+      {"role": "N0", "sha": "fac1a2434ee550b37c9630c3502130574be53ecc", "ahead_by": 189},
+      {"role": "F0_source", "sha": "0fb2938344cf96b05be0df09dfb9e69525b3717d", "ahead_by": 349},
+      {"role": "F0_exhibitions_boundary", "sha": "a4db631dbb3b01e1f71c42e0e3b87d077a538d19", "ahead_by": 333},
+      {"role": "M0_cutover", "sha": "c71351decdcee02941acb26c5e2fbaf88faf0378", "ahead_by": 194},
+      {"role": "M0_downstream", "sha": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133", "ahead_by": 192},
+      {"role": "M0_wave2", "sha": "a18210e8fb9574d7ea6ca30a0ca8ca5a3b31c3f3", "ahead_by": 386},
+      {"role": "FR0", "sha": "2231e1d668f896d634e5663b59520bc710d5fea6", "ahead_by": 4},
+      {"role": "V0_harness", "sha": "2e71e5521a1ebbd5f98c794abebd70aced030639", "ahead_by": 49}
     ],
-    "required_post_publication_verification": [
-      "exact public owner URL returns HTTP 200",
-      "preview-build.json repo SHA equals cebeafeee08251a327145ee973ee035cced65204",
-      "snapshot identity matches this receipt",
-      "programme and accepted role ancestry is explicit",
-      "one canonical events-bot-new Kaggle StaticSiteBuilder and create-only immutable-prefix publication are evidenced"
+    "A0_integration_form": "BOUNDED_NET_CONSUMER_PROJECTION_NOT_WHOLE_BRANCH",
+    "A0_projection_commits": [
+      "041a391201bb9527f7e19d89c5f3fdc358358cd8",
+      "3ae487cc4"
     ]
   },
   "f0_result_classification": {
@@ -70,7 +121,7 @@
   "current_pull_integrator_refs": {
     "N0": {
       "branch": "work/ui-normalization-n0-checklist-20260903",
-      "head_before_this_receipt": "fac1a2434ee550b37c9630c3502130574be53ecc"
+      "head_before_this_acceptance": "fac1a2434ee550b37c9630c3502130574be53ecc"
     },
     "F0": {
       "branch": "work/ui-normalization-f0-wave-3-20260903",
@@ -161,15 +212,14 @@
     "may_enter_later_candidate_only_as_separately_accepted_A0_consumer_batch": true
   },
   "post_publication_v0_trigger": {
-    "state": "PENDING_EXACT_PUBLIC_URL_AND_MANIFEST",
-    "must_publish_immediately_after_N0_identity_acceptance": true,
-    "must_name": [
-      "exact owner URL",
-      "exact source SHA",
-      "snapshot id and digest",
-      "matching preview-build.json",
-      "canonical Kaggle operation and artifact identity"
-    ],
+    "state": "N0_READY_TO_PUBLISH_EXACT_TRIGGER",
+    "R0_trigger_comment": 5531986889,
+    "source_sha": "cebeafeee08251a327145ee973ee035cced65204",
+    "public_url": "https://kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/__preview/",
+    "manifest_url": "https://kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/preview-build.json",
+    "FR0_requirement_comments": [5531944339, 5531980502],
+    "late_F0_M0_A0_credit_forbidden": true,
+    "R0_smoke_is_independent_V0_verdict": false,
     "N0_must_not_issue_browser_PASS": true
   },
   "vertical_slice": {
@@ -191,8 +241,6 @@
     "defect_isolation": "a failed unrelated route does not reject this vertical slice"
   },
   "non_claims": [
-    "canonical cebeafee publication completed",
-    "public manifest verified",
     "independent V0 verdict received",
     "vertical slice browser-accepted",
     "next successor integrated or tested",
