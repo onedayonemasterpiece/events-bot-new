@@ -349,13 +349,15 @@
     "site/tests/m0-downstream-contracts.test.mjs"
   ],
   "downstream_targets": {
-    "post_cutover_binding": "site/src/data/m0-downstream-bindings.v1.json",
+    "thin_s": "catalog/normalization/m0-family-thin-s-bindings.v1.json",
+    "penpot_ready": "penpot/candidate/m0-family-master-spec.v1.json",
+    "v0_matrix": "catalog/normalization/evidence/m0-v0-acceptance-matrix.v1.json",
+    "integration_rollback": "docs/launch-normalization/m0-source-integration-and-rollback.v1.json"
+  },
+  "post_cutover_downstream": {
+    "binding": "site/src/data/m0-downstream-bindings.v1.json",
     "test_ownership": "site/tests/m0-post-fr0-test-ownership.v1.json",
-    "pre_cutover_thin_s_snapshot": "catalog/normalization/m0-family-thin-s-bindings.v1.json",
-    "pre_cutover_penpot_snapshot": "penpot/candidate/m0-family-master-spec.v1.json",
-    "pre_cutover_v0_snapshot": "catalog/normalization/evidence/m0-v0-acceptance-matrix.v1.json",
-    "pre_cutover_rollback_snapshot": "docs/launch-normalization/m0-source-integration-and-rollback.v1.json",
-    "pre_cutover_snapshot_policy": "DO_NOT_AMEND_FRAMING_PORTION; bind current card/grid source after R0 integration and V0 evidence"
+    "legacy_target_policy": "DO_NOT_AMEND_FRAMING_PORTION; bind current card/grid source after R0 integration and V0 evidence"
   },
   "pm0_items": {
     "20": "POST_CUTOVER_CARD_GRID_CENSUS_DONE",
