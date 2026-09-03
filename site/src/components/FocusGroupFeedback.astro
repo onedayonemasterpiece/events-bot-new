@@ -1,5 +1,7 @@
 ---
 import Button from './design-system/Button.astro';
+import SemanticIcon from './design-system/SemanticIcon.astro';
+import './design-system/product-contour-foundations.css';
 
 interface Props {
   pageFamily?: string;
@@ -73,7 +75,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
           <h2 id={`${idPrefix}-dialog-title`}>Что вы хотите оценить?</h2>
         </div>
         <button class="focus-feedback__close" type="button" data-feedback-close aria-label="Закрыть обратную связь">
-          <span aria-hidden="true">×</span>
+          <SemanticIcon name="close" role="control" />
         </button>
       </header>
 
@@ -262,67 +264,67 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 1rem 2rem;
     align-items: center;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
-    border-radius: 1.5rem;
-    padding: clamp(1.15rem, 3vw, 2rem);
-    background: var(--ke-color-surface-strong, #fff);
-    box-shadow: var(--ke-shadow-1, 0 8px 22px rgb(72 45 25 / 8%));
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+    border-radius: var(--ke-focus-panel-radius);
+    padding: var(--ke-space-focus-panel-padding);
+    background: var(--ke-color-focus-panel-surface);
+    box-shadow: var(--ke-elevation-focus-panel);
   }
 
   .focus-feedback__eyebrow {
     margin: 0 0 .35rem;
-    color: var(--ke-color-accent-700, #0f5d57);
-    font-size: .72rem;
-    font-weight: 900;
-    letter-spacing: .11em;
+    color: var(--ke-color-action-accent-strong);
+    font: var(--ke-type-eyebrow);
+    letter-spacing: var(--ke-type-eyebrow-letter);
     text-transform: uppercase;
   }
 
-  .focus-feedback h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 2rem); line-height: 1.08; }
-  .focus-feedback h2 + p { max-width: 65ch; margin: .7rem 0 0; color: var(--ke-color-muted, #6d6259); line-height: 1.55; }
-  .focus-feedback__launchers { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
+  .focus-feedback h2 { margin: 0; font: var(--ke-type-focus-heading); }
+  .focus-feedback h2 + p { max-width: 65ch; margin: .7rem 0 0; color: var(--ke-color-text-muted); line-height: 1.55; }
+  .focus-feedback__launchers { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ke-space-focus-control-gap); }
   .focus-feedback__boundary {
     grid-column: 1 / -1;
     margin: .1rem 0 0;
-    border-radius: .9rem;
-    padding: .75rem .9rem;
-    background: var(--ke-color-info-50, #e7f2f7);
-    color: var(--ke-color-info-700, #1f658d);
+    border-radius: var(--ke-focus-boundary-radius);
+    padding: var(--ke-space-focus-boundary-block) var(--ke-space-focus-boundary-inline);
+    background: var(--ke-color-status-info-background);
+    color: var(--ke-color-status-info-foreground);
     font-size: .8rem;
     line-height: 1.45;
   }
 
   .focus-feedback__dialog {
-    width: min(720px, calc(100% - 1rem));
-    max-height: min(88dvh, 780px);
+    width: min(var(--ke-focus-dialog-max), calc(100% - 1rem));
+    max-height: var(--ke-focus-dialog-max-height);
     border: 0;
-    border-radius: 1.5rem;
+    border-radius: var(--ke-focus-dialog-radius);
     padding: 0;
     background: transparent;
-    color: var(--ke-color-copy, #44362d);
-    box-shadow: var(--ke-shadow-3, 0 24px 64px rgb(72 45 25 / 18%));
+    color: var(--ke-color-text-secondary);
+    box-shadow: var(--ke-elevation-overlay);
   }
 
-  .focus-feedback__dialog::backdrop { background: rgb(34 26 20 / 58%); backdrop-filter: blur(3px); }
-  .focus-feedback__sheet { overflow: auto; max-height: inherit; padding: clamp(1rem, 3vw, 1.65rem); background: var(--ke-color-surface, #fffdf8); }
+  .focus-feedback__dialog::backdrop { background: var(--ke-color-focus-dialog-backdrop); backdrop-filter: blur(var(--ke-focus-dialog-backdrop-blur)); }
+  .focus-feedback__sheet { overflow: auto; max-height: inherit; padding: var(--ke-space-focus-dialog-padding); background: var(--ke-color-focus-sheet-surface); }
   .focus-feedback__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-  .focus-feedback__header h2 { font-size: clamp(1.4rem, 4vw, 2.1rem); }
+  .focus-feedback__header h2 { font: var(--ke-type-focus-dialog-heading); }
   .focus-feedback__close {
-    width: 44px;
-    height: 44px;
+    width: var(--ke-focus-control-min);
+    height: var(--ke-focus-control-min);
     flex: 0 0 auto;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
+    display: grid;
+    place-items: center;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
     border-radius: 50%;
-    background: #fff;
-    color: var(--ke-color-ink, #221a14);
-    font: 400 1.8rem/1 var(--ke-font-sans, system-ui, sans-serif);
+    background: var(--ke-color-focus-control-surface);
+    color: var(--ke-color-text-primary);
     cursor: pointer;
   }
 
   .focus-feedback__close:focus-visible,
   .focus-feedback__switcher button:focus-visible,
   .focus-feedback__scale label:has(input:focus-visible) {
-    outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 60%, transparent);
+    outline: 3px solid var(--ke-color-focus-ring-accent);
     outline-offset: 2px;
   }
 
@@ -333,94 +335,94 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
     margin: 1.2rem 0;
     border-radius: 1rem;
     padding: .35rem;
-    background: var(--ke-color-canvas-soft, #f2e7d7);
+    background: var(--ke-color-background-subtle);
   }
 
   .focus-feedback__switcher button {
-    min-height: 44px;
+    min-height: var(--ke-focus-control-min);
     border: 0;
-    border-radius: .75rem;
+    border-radius: var(--ke-focus-control-radius);
     padding: .6rem .7rem;
     background: transparent;
-    color: var(--ke-color-copy, #44362d);
-    font: 800 .82rem/1.2 var(--ke-font-sans, system-ui, sans-serif);
+    color: var(--ke-color-text-secondary);
+    font: 800 .82rem/1.2 var(--ke-font-family-sans);
     cursor: pointer;
   }
 
   .focus-feedback__switcher button[aria-pressed="true"] {
-    background: #fff;
-    color: var(--ke-color-brand-800, #793014);
-    box-shadow: 0 4px 14px rgb(72 45 25 / 10%);
+    background: var(--ke-color-focus-control-surface);
+    color: var(--ke-color-action-primary-strong);
+    box-shadow: var(--ke-elevation-focus-selected);
   }
 
   .focus-feedback__panel { display: grid; gap: 1rem; }
   .focus-feedback__panel[hidden] { display: none; }
   .focus-feedback__panel fieldset { min-width: 0; margin: 0; border: 0; padding: 0; }
-  .focus-feedback__panel legend { max-width: 46ch; padding: 0; color: var(--ke-color-ink, #221a14); font-size: clamp(1.05rem, 3vw, 1.35rem); font-weight: 850; line-height: 1.35; }
-  .focus-feedback__hint { margin: .5rem 0 0; color: var(--ke-color-muted, #6d6259); font-size: .8rem; line-height: 1.4; }
+  .focus-feedback__panel legend { max-width: 46ch; padding: 0; color: var(--ke-color-text-primary); font-size: clamp(1.05rem, 3vw, 1.35rem); font-weight: 850; line-height: 1.35; }
+  .focus-feedback__hint { margin: .5rem 0 0; color: var(--ke-color-text-muted); font-size: .8rem; line-height: 1.4; }
   .focus-feedback__hint code { overflow-wrap: anywhere; }
   .focus-feedback__scale { display: grid; grid-template-columns: repeat(11, minmax(42px, 1fr)); gap: .35rem; margin-top: 1rem; }
   .focus-feedback__scale label { position: relative; min-width: 0; cursor: pointer; }
   .focus-feedback__scale input { position: absolute; width: 1px; height: 1px; opacity: 0; }
   .focus-feedback__scale span {
-    min-height: 44px;
+    min-height: var(--ke-focus-control-min);
     display: grid;
     place-items: center;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
-    border-radius: .7rem;
-    background: #fff;
-    color: var(--ke-color-copy, #44362d);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+    border-radius: var(--ke-focus-control-radius);
+    background: var(--ke-color-focus-control-surface);
+    color: var(--ke-color-text-secondary);
     font-size: .88rem;
     font-weight: 850;
   }
-  .focus-feedback__scale input:checked + span { border-color: var(--ke-color-accent-600, #0f766e); background: #d7f0ec; color: #0f5d57; box-shadow: inset 0 0 0 1px #0f766e; }
+  .focus-feedback__scale input:checked + span { border-color: var(--ke-color-action-accent); background: var(--ke-color-focus-control-selected-accent); color: var(--ke-color-action-accent-strong); box-shadow: inset 0 0 0 1px var(--ke-color-action-accent); }
   .focus-feedback__issue-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-top: 1rem; }
   .focus-feedback__issue-types label { position: relative; min-width: 0; cursor: pointer; }
   .focus-feedback__issue-types input { position: absolute; width: 1px; height: 1px; opacity: 0; }
   .focus-feedback__issue-types span {
-    min-height: 44px;
+    min-height: var(--ke-focus-control-min);
     display: grid;
     place-items: center;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
-    border-radius: .75rem;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+    border-radius: var(--ke-focus-control-radius);
     padding: .5rem;
-    background: #fff;
-    color: var(--ke-color-copy, #44362d);
+    background: var(--ke-color-focus-control-surface);
+    color: var(--ke-color-text-secondary);
     font-size: .82rem;
     font-weight: 800;
     text-align: center;
   }
-  .focus-feedback__issue-types label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 60%, transparent); outline-offset: 2px; border-radius: .75rem; }
-  .focus-feedback__issue-types input:checked + span { border-color: var(--ke-color-brand-600, #a54821); background: #f8e5d8; color: var(--ke-color-brand-900, #5f250f); box-shadow: inset 0 0 0 1px rgb(165 72 33 / 20%); }
-  .focus-feedback__ends { display: flex; justify-content: space-between; gap: 1rem; margin-top: .4rem; color: var(--ke-color-muted, #6d6259); font-size: .7rem; }
+  .focus-feedback__issue-types label:has(input:focus-visible) { outline: 3px solid var(--ke-color-focus-ring-accent); outline-offset: 2px; border-radius: var(--ke-focus-control-radius); }
+  .focus-feedback__issue-types input:checked + span { border-color: var(--ke-color-action-primary); background: var(--ke-color-focus-control-selected-brand); color: var(--ke-color-action-primary-ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ke-color-action-primary) 20%, transparent); }
+  .focus-feedback__ends { display: flex; justify-content: space-between; gap: 1rem; margin-top: .4rem; color: var(--ke-color-text-muted); font-size: .7rem; }
   .focus-feedback__panel > .ke-button { justify-self: end; }
   .focus-feedback__textarea { display: grid; gap: .45rem; }
-  .focus-feedback__textarea strong { color: var(--ke-color-ink, #221a14); font-size: 1.05rem; }
-  .focus-feedback__textarea strong small { color: var(--ke-color-muted, #6d6259); font-size: .78rem; font-weight: 650; }
-  .focus-feedback__textarea > span { color: var(--ke-color-muted, #6d6259); font-size: .8rem; }
+  .focus-feedback__textarea strong { color: var(--ke-color-text-primary); font-size: 1.05rem; }
+  .focus-feedback__textarea strong small { color: var(--ke-color-text-muted); font-size: .78rem; font-weight: 650; }
+  .focus-feedback__textarea > span { color: var(--ke-color-text-muted); font-size: .8rem; }
   .focus-feedback__textarea textarea {
     width: 100%;
     min-height: 150px;
     resize: vertical;
-    border: 1px solid #cdbfad;
-    border-radius: 1rem;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-input);
+    border-radius: var(--ke-focus-input-radius);
     padding: .85rem;
-    background: #fff;
-    color: var(--ke-color-ink, #221a14);
-    font: 1rem/1.5 var(--ke-font-sans, system-ui, sans-serif);
+    background: var(--ke-color-focus-control-surface);
+    color: var(--ke-color-text-primary);
+    font: 1rem/1.5 var(--ke-font-family-sans);
   }
-  .focus-feedback__textarea textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 35%, transparent); border-color: var(--ke-color-focus, #0f766e); }
+  .focus-feedback__textarea textarea:focus-visible { outline: 3px solid var(--ke-color-focus-ring-accent-subtle); border-color: var(--ke-color-focus-ring); }
   .focus-feedback__form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .focus-feedback__form-footer > span { color: var(--ke-color-muted, #6d6259); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .focus-feedback__form-footer > span { color: var(--ke-color-text-muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
   .focus-feedback__fact-boundary {
-    border-radius: .9rem;
-    padding: .8rem .9rem;
-    background: var(--ke-color-warning-50, #fff8db);
-    color: var(--ke-color-warning-800, #5a3b06);
+    border-radius: var(--ke-focus-boundary-radius);
+    padding: .8rem var(--ke-space-focus-boundary-inline);
+    background: var(--ke-color-status-warning-background);
+    color: var(--ke-color-status-warning-foreground);
     font-size: .82rem;
     line-height: 1.45;
   }
-  .focus-feedback__status { min-height: 1.5em; margin: .9rem 0 0; color: var(--ke-color-success-700, #0f6c3d); font-size: .85rem; font-weight: 750; line-height: 1.4; }
+  .focus-feedback__status { min-height: 1.5em; margin: .9rem 0 0; color: var(--ke-color-status-success-foreground); font-size: .85rem; font-weight: 750; line-height: 1.4; }
 
   @media (max-width: 800px) {
     .focus-feedback { grid-template-columns: 1fr; }
@@ -429,7 +431,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
 
   @media (max-width: 640px) {
     .focus-feedback__launchers .ke-button { width: 100%; }
-    .focus-feedback__dialog { width: 100%; max-height: 92dvh; margin: auto 0 0; border-radius: 1.35rem 1.35rem 0 0; }
+    .focus-feedback__dialog { width: 100%; max-height: 92dvh; margin: auto 0 0; border-radius: var(--ke-focus-panel-radius-compact) var(--ke-focus-panel-radius-compact) 0 0; }
     .focus-feedback__switcher { grid-template-columns: 1fr; }
     .focus-feedback__scale { grid-template-columns: repeat(6, minmax(42px, 1fr)); }
     .focus-feedback__issue-types { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -439,9 +441,9 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .focus-feedback__dialog[open] { animation: focus-feedback-in 180ms ease-out; }
+    .focus-feedback__dialog[open] { animation: focus-feedback-in var(--ke-focus-entry-duration) var(--ke-focus-entry-ease); }
     @keyframes focus-feedback-in {
-      from { opacity: 0; transform: translateY(12px) scale(.985); }
+      from { opacity: 0; transform: translateY(var(--ke-focus-entry-offset)) scale(var(--ke-focus-entry-scale)); }
       to { opacity: 1; transform: none; }
     }
   }
