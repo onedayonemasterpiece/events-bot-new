@@ -158,6 +158,32 @@ test('EventCard and ListingEventCard use one MediaFrame protocol and one structu
 test('current DesktopEventPage rail consumers are either migrated or fully covered by EventMediaRail API', async () => {
   const rail = await read('src/components/EventMediaRail.astro');
   const desktop = await read('src/components/DesktopEventPage.astro');
+  const requiredItemFields = [
+    'src:',
+    'thumbnailSrc:',
+    'thumbnailSrcset?',
+    'thumbnailWidth?',
+    'thumbnailHeight?',
+    'width?',
+    'height?',
+    'alt?',
+    'galleryIndex:',
+    'sourceIndex?',
+    'imageTextMode:',
+    'mediaRole:',
+    'kind:',
+    'fit:',
+    'objectPosition?',
+    'cropReason:',
+    'roleLabel?',
+    'actionLabel:',
+    'rotationEligible?',
+    'railAspect?',
+    'railRatio?',
+    'slotWidth?',
+  ];
+  for (const field of requiredItemFields) assert.ok(rail.includes(field), `rail item API gap for current consumer: ${field}`);
+
   const requiredHooks = [
     'data-clean-hero-thumb',
     'data-responsive-rail-item',
@@ -172,8 +198,29 @@ test('current DesktopEventPage rail consumers are either migrated or fully cover
     'data-rail-thumbnail',
     'data-thumbnail-src',
     'data-thumbnail-srcset',
+    'data-image-text-mode',
+    'data-media-role',
+    'data-source-index',
+    'data-rail-aspect',
   ];
   for (const hook of requiredHooks) assert.ok(rail.includes(hook), `rail API gap for current consumer: ${hook}`);
+
+  for (const preservedClass of [
+    'desktop-prototype__media-rail',
+    'desktop-prototype__media-rail--hero',
+    'desktop-prototype__media-rail--poster',
+    'desktop-prototype__media-rail-more',
+  ]) assert.ok(rail.includes(preservedClass), `rail migration must preserve runtime/CSS class: ${preservedClass}`);
+
+  assert.match(rail, /variant === 'hero-selector' && index === 0 && 'is-current'/u);
+  assert.match(rail, /aria-pressed=\{variant === 'hero-selector' \? \(index === 0 \? 'true' : 'false'\) : undefined\}/u);
+  assert.match(rail, /data-src=\{variant === 'hero-selector' \? item\.src : undefined\}/u);
+  assert.match(rail, /data-crop-fit=\{variant === 'hero-selector' \? item\.fit : undefined\}/u);
+  assert.match(rail, /data-crop-reason=\{variant === 'hero-selector' \? item\.cropReason : undefined\}/u);
+  assert.match(rail, /data-efficient-viewer-start=\{variant === 'poster-strip' && splitPortraitViewer \? viewerStart : undefined\}/u);
+  assert.match(rail, /data-hero-gallery-open=\{variant === 'poster-strip' && splitPortraitViewer \? undefined : galleryId\}/u);
+  assert.match(rail, /data-thumbnail-src=\{item\.thumbnailSrc\}/u);
+  assert.match(rail, /data-thumbnail-srcset=\{item\.thumbnailSrcset\}/u);
 
   const migrated = /import EventMediaRail(?:,| from)/u.test(desktop) && /<EventMediaRail/u.test(desktop);
   if (!migrated) {

@@ -8,7 +8,7 @@ import { resolveMobileListingRailMediaItems } from '../../lib/mobileListingRailM
 import { getListingIdentityMedallions } from '../../lib/listingVenueMedallions';
 import './mobile-listing-foundation-bindings.css';
 import '../media-frame.css';
-import Icon from '../Icon.astro';
+import SemanticIcon from '../design-system/SemanticIcon.astro';
 import AmberRailArtifact from './AmberRailArtifact.astro';
 
 interface Props {
@@ -87,7 +87,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
 >
   <div class="rail-window" tabindex="0" aria-label={`${event.title}. ${scheduleAria}. ${railMediaItems.length > 1 ? `${railMediaItems.length} фото, ` : 'Фото, '}описание и действия доступны горизонтальным листанием`}>
     <span class="dislike-underlay" aria-hidden="true"><span>Неинтересно</span></span>
-    <span class="like-underlay" aria-hidden="true"><Icon name="heart" className="ke-icon-role ke-icon-role--feature" /></span>
+    <span class="like-underlay" aria-hidden="true"><SemanticIcon name="heart" role="feature" /></span>
     <span class="event-track">
       <a class="event-link" href={href} data-prefetch aria-label={`${event.title}. ${scheduleAria}`}>
         <span class="track-start"></span>
@@ -106,7 +106,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
             <span class="event-description">{place}</span>
             <span class="event-signals">
               <span class="event-signal event-signal--like" data-small-like hidden={likesCount <= 0}>
-                <Icon name="heart" className="ke-icon-role ke-icon-role--inline" />
+                <SemanticIcon name="heart" role="inline" />
                 <span data-small-like-count>{likesCount}</span>
               </span>
             </span>
@@ -194,7 +194,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         aria-pressed="false"
         aria-label={`Поставить лайк: ${event.title}. Сейчас ${likesCount}`}
       >
-        <Icon name="heart" className="ke-icon-role ke-icon-role--action" />
+        <SemanticIcon name="heart" role="action" />
         <strong data-like-count data-feedback-count>{likesCount}</strong>
       </button>
       <button

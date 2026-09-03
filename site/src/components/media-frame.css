@@ -29,6 +29,14 @@
   object-position: var(--media-frame-object-position, 50% 50%);
 }
 
+/* A normal EventCard document is intentionally not a fixed-height fill frame.
+ * It still must consume the complete card width with natural vertical height.
+ * Keeping this here lets A0 remove its duplicate route/layout image sizing. */
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="event-card"][data-media-frame-fit="contain"]:not([data-media-frame-fill="true"]) > [data-media-frame-image] {
+  width: 100%;
+  height: auto;
+}
+
 [data-media-frame][data-media-frame-contract="v1"][data-media-frame-fill="true"] > [data-media-frame-image],
 [data-media-frame][data-media-frame-contract="v1"][data-media-frame-fit="cover"] > [data-media-frame-image] {
   width: 100%;

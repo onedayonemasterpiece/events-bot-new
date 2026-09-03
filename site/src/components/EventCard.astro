@@ -1,5 +1,5 @@
 ---
-import Icon from './Icon.astro';
+import SemanticIcon from './design-system/SemanticIcon.astro';
 import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import type { PreviewEvent } from '../lib/types';
 import { displayDate, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOccurrencePresentation, isCalendarEligible, withBase } from '../lib/events';
@@ -219,7 +219,7 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
   data-lab-potential-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.potentialCoverCrop, 4) : undefined}
   data-lab-row-worst-crop={fixedLayoutMetric(desktopRelatedLayout?.rowWorstCrop, 4)}
   data-lab-row-cost={desktopRelatedLayout?.rowCost.toFixed(5)}
-  style={desktopRelatedLayout ? `--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)};grid-row:${desktopRelatedLayout.rowIndex + 1};grid-column:${desktopRelatedLayout.rowColumn + 1}` : undefined}
+  style={desktopRelatedLayout ? `--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)}` : undefined}
   tabindex="0"
   aria-label={`${event.title}: ${dateLabel}`}
 >
@@ -321,7 +321,7 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
   {variant === 'overlay-controls' && (
     <div class={feedbackClass} data-nosnippet aria-label={`Оценить событие: ${event.title}`}>
       <button type="button" class="feedback-button feedback-button--negative" data-nosnippet data-feedback-action="not_interested" data-event-id={event.id} data-event-title={event.title} aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
-        <Icon name="dislike" />
+        <SemanticIcon name="dislike" role="action" />
         <span>Не интересно</span>
       </button>
       <button
@@ -345,12 +345,12 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
         data-share-admission={statusLabel}
         aria-label={`Поделиться событием: ${event.title}`}
       >
-        <Icon name="share" />
+        <SemanticIcon name="share" role="action" />
         <span class="share-label" data-share-label>Поделиться</span>
         <span class="feedback-count" data-share-count>{shareCountLabel}</span>
       </button>
       <button type="button" class="feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
-        <Icon name="heart" />
+        <SemanticIcon name="heart" role="action" />
         <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
       </button>
     </div>
@@ -360,12 +360,12 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
     <>
       <div class="event-card__utility-row" data-nosnippet aria-label={`Дополнительные действия: ${event.title}`}>
         <button type="button" class="feedback-button feedback-button--negative" data-nosnippet data-feedback-action="not_interested" data-event-id={event.id} data-event-title={event.title} aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
-          <Icon name="dislike" />
+          <SemanticIcon name="dislike" role="action" />
           <span>Не интересно</span>
         </button>
         {canAddToCalendar && (
           <a class="feedback-button feedback-button--calendar" href={calendarHref} type="text/calendar" data-calendar-action data-calendar-event-id={event.id} data-calendar-expiry-day={calendarExpiryDay} data-calendar-event-title={event.title} aria-label={`Добавить в календарь: ${event.title}`}>
-            <Icon name="calendar" />
+            <SemanticIcon name="calendar" role="action" />
             <span data-calendar-label>В календарь</span>
           </a>
         )}
@@ -392,12 +392,12 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
           data-share-admission={statusLabel}
           aria-label={`Поделиться событием: ${event.title}`}
         >
-          <Icon name="share" />
+          <SemanticIcon name="share" role="action" />
           <span class="share-label" data-share-label>Поделиться</span>
           <span class="feedback-count" data-share-count>{shareCountLabel}</span>
         </button>
         <button type="button" class="feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={likeAria}>
-          <Icon name="heart" />
+          <SemanticIcon name="heart" role="action" />
           <span class="feedback-count" data-feedback-count>{likeCountLabel}</span>
         </button>
       </div>

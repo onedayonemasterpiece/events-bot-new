@@ -1,6 +1,6 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
-import Icon from '../Icon.astro';
+import SemanticIcon from '../design-system/SemanticIcon.astro';
 import { eventHref } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 import { cityKey, selectListingImage } from '../../lib/listingPresentation';
@@ -170,6 +170,7 @@ const mediaFrameRole = mediaFrameKind === 'fallback'
 const mediaFrameCropPermission = mediaFrameFit === 'cover'
   ? image.adaptiveCrop ? 'reviewed' : 'allowed'
   : 'forbidden';
+const mediaFrameInitialState = imageUrl ? 'loading' : 'fallback';
 const style = [
   `--ke-listing-image-ratio:${mediaFrameRatio}`,
   `--ke-listing-object-position:${mediaFrameObjectPosition}`,
@@ -222,7 +223,7 @@ const socialProofLabel = [
   data-image-text-mode={image.asset?.image_text_mode || event.image_text_mode}
   data-venue-medallion={overlayMedallion?.slug || identityMedallions[0]?.slug}
   data-listing-has-social-proof={hasSocialProof ? 'true' : 'false'}
-  data-listing-proof-placement={proofInside ? 'inside' : 'rail'}
+  data-listing-proof-placement={hasSocialProof ? (proofInside ? 'inside' : 'rail') : 'none'}
   data-listing-proof-rows={socialProofRows}
   data-listing-identity-count={totalIdentityCount}
   data-listing-side-identity-count={visibleIdentityCount}
@@ -261,6 +262,7 @@ const socialProofLabel = [
       data-media-frame-loading={priority ? 'eager' : 'lazy'}
       data-media-frame-priority={priority ? 'true' : undefined}
       data-media-frame-interaction-owner="caller"
+      data-media-frame-state={mediaFrameInitialState}
     >
       {imageUrl ? (
         <img
@@ -276,9 +278,13 @@ const socialProofLabel = [
           data-listing-native-loading={priority ? 'eager' : 'lazy'}
           data-media-frame-image
         />
-      ) : (
-        <span class="ke-listing-card__fallback" data-media-frame-fallback aria-hidden="true">{event.event_type || 'событие'}</span>
-      )}
+      ) : null}
+      <span
+        class="ke-listing-card__fallback"
+        data-media-frame-fallback
+        hidden={Boolean(imageUrl)}
+        aria-hidden="true"
+      >{event.event_type || 'событие'}</span>
     </span>
     {overlayMedallion ? (
       <span class="ke-listing-card__medallion" data-listing-medallion-slug={overlayMedallion.slug} style={medallionStyle(overlayMedallion)} title={overlayMedallion.name} aria-label={overlayMedallion.ariaLabel}>
@@ -293,8 +299,8 @@ const socialProofLabel = [
   </a>
   {proofInside ? (
     <a class="ke-listing-card__social-proof ke-listing-card__social-proof--inside" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
-      {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
-      {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
+      {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><SemanticIcon name="share" role="inline" /><b data-listing-share-count>{sharesCount}</b></span> : null}
+      {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><SemanticIcon name="heart" role="inline" /><b data-listing-like-count>{likesCount}</b></span> : null}
     </a>
   ) : null}
   {hasSideRail ? (
@@ -314,8 +320,8 @@ const socialProofLabel = [
       ) : null}
       {hasSocialProof && !proofInside ? (
         <a class="ke-listing-card__social-proof" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
-          {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
-          {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
+          {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><SemanticIcon name="share" role="inline" /><b data-listing-share-count>{sharesCount}</b></span> : null}
+          {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><SemanticIcon name="heart" role="inline" /><b data-listing-like-count>{likesCount}</b></span> : null}
         </a>
       ) : null}
     </div>
@@ -333,22 +339,40 @@ const socialProofLabel = [
 <script>
   function initListingMediaSkeletons(root = document) {
     root.querySelectorAll('[data-listing-media-loading]').forEach((frame) => {
-      if (frame.dataset.listingMediaReady === 'true') return;
+      if (!(frame instanceof HTMLElement) || frame.dataset.listingMediaReady === 'true') return;
+      const mediaFrame = frame.querySelector('[data-media-frame]');
       const image = frame.querySelector('[data-media-frame-image]');
-      if (!image) {
+      const fallback = frame.querySelector('[data-media-frame-fallback]');
+      const finish = (loaded) => {
         frame.classList.remove('ke-skeleton');
         frame.dataset.listingMediaReady = 'true';
+        if (mediaFrame instanceof HTMLElement) mediaFrame.dataset.mediaFrameState = loaded ? 'loaded' : 'fallback';
+        if (fallback instanceof HTMLElement) fallback.hidden = loaded;
+        if (!loaded && image instanceof HTMLImageElement) {
+          image.hidden = true;
+          image.removeAttribute('srcset');
+          image.removeAttribute('src');
+        }
+      };
+      if (!(image instanceof HTMLImageElement)) {
+        finish(false);
         return;
       }
-      const finish = () => {
-        frame.classList.remove('ke-skeleton');
-        frame.dataset.listingMediaReady = 'true';
+      const decodeAndFinish = () => {
+        if (!image.naturalWidth || !image.naturalHeight) {
+          finish(false);
+          return;
+        }
+        if (typeof image.decode !== 'function') {
+          finish(true);
+          return;
+        }
+        image.decode().then(() => finish(true)).catch(() => finish(image.naturalWidth > 0 && image.naturalHeight > 0));
       };
-      const decodeAndFinish = () => image.decode?.().catch(() => {}).finally(finish) || finish();
       if (image.complete) decodeAndFinish();
       else {
         image.addEventListener('load', decodeAndFinish, { once: true });
-        image.addEventListener('error', finish, { once: true });
+        image.addEventListener('error', () => finish(false), { once: true });
       }
     });
   }

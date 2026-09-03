@@ -30,9 +30,10 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(row, /railMediaItems\.map\(\(railMedia, mediaIndex\)/u);
   assert.match(row, /data-rail-gallery-index=\{mediaIndex\}/u);
   assert.match(row, /data-mobile-rail-gallery-count=\{railMediaItems\.length\}/u);
-  assert.match(row, /import Icon from '\.\.\/Icon\.astro'/u);
+  assert.match(row, /import SemanticIcon from '\.\.\/design-system\/SemanticIcon\.astro'/u);
+  assert.doesNotMatch(row, /import Icon from '\.\.\/Icon\.astro'/u);
   for (const role of ['feature', 'inline', 'action']) {
-    assert.match(row, new RegExp(`<Icon name="heart" className="ke-icon-role ke-icon-role--${role}" \\/>`, 'u'));
+    assert.match(row, new RegExp(`<SemanticIcon name="heart" role="${role}" \\/>`, 'u'));
   }
   assert.doesNotMatch(row, />♥</u);
   assert.match(row, /data-feedback-action="not_interested"/u);
