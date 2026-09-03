@@ -1,0 +1,176 @@
+{
+  "schema": "kenigevents.n0-delivery-semantics.v1",
+  "version": "1.0.0",
+  "role": "N0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "contract_reference": {
+    "version": "1.10.0",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "head_at_read": "0eb9199d9cb14261a8f33ed0d6f49cf6ea894f00",
+    "mutation_by_this_receipt": false
+  },
+  "correction_scope": {
+    "kind": "DELIVERY_SEMANTICS_ONLY",
+    "changes_topology": false,
+    "changes_ownership": false,
+    "changes_branches": false,
+    "changes_contract": false,
+    "changes_T0": false,
+    "changes_generation_path": false
+  },
+  "frozen_transaction": {
+    "repository": "onedayonemasterpiece/events-bot-new",
+    "branch": "agent/static-site-single-kaggle-contract",
+    "sha": "cebeafeee08251a327145ee973ee035cced65204",
+    "r0_result_comment": 5531586743,
+    "publication_state": "IN_PROGRESS_AS_OF_LAST_MEANINGFUL_ISSUE_READ",
+    "build_id": "preview-real-cebeafeee-normalized-20260903-v1",
+    "data_mode": "real",
+    "page_classes": ["all"],
+    "snapshot": {
+      "id": "issue621-real-cebeafeee-20260903T201333Z",
+      "sha256": "db3e7dc2cc2c5e5ce3609500286c4de903f1b37a07c8ebf99926c2137df7ef20",
+      "size_bytes": 80838656,
+      "created_at": "2026-09-03T20:14:05.866814Z",
+      "latest_effect_at": "2026-09-03T20:13:37.001580Z",
+      "event_rows": 8312,
+      "max_event_id": 8723
+    },
+    "source_and_local_gate_result": "ACCEPTED_FOR_CANONICAL_PUBLICATION",
+    "do_not_reopen_or_delay_for_later_role_outputs": true,
+    "later_outputs_are_next_candidate_inputs_only": [
+      "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
+      "8b0c6709beca1f7b0bef81b27464f786df1d7806",
+      "3ef253980bdfe0731158f5b8b4b47965fa153ce9"
+    ],
+    "required_post_publication_verification": [
+      "exact public owner URL returns HTTP 200",
+      "preview-build.json repo SHA equals cebeafeee08251a327145ee973ee035cced65204",
+      "snapshot identity matches this receipt",
+      "programme and accepted role ancestry is explicit",
+      "one canonical events-bot-new Kaggle StaticSiteBuilder and create-only immutable-prefix publication are evidenced"
+    ]
+  },
+  "f0_result_classification": {
+    "comment": 5531682890,
+    "frozen_transaction_verdict": "ACCEPTED_WITH_NONBLOCKING_VOCABULARY_CHECKER_DELTA",
+    "festivals": "ACCEPTED_SOURCE",
+    "exhibitions": "ACCEPTED_SOURCE",
+    "fr0_batch_4": "ACCEPTED_SOURCE",
+    "duplicate_f0_token_or_style_owner": "NOT_FOUND",
+    "vocabulary_checker_correction": {
+      "sha": "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
+      "classification": "NEXT_CANDIDATE_ONLY",
+      "product_consumer_change": false,
+      "blocks_frozen_publication": false
+    }
+  },
+  "current_pull_integrator_refs": {
+    "N0": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "head_before_this_receipt": "fac1a2434ee550b37c9630c3502130574be53ecc"
+    },
+    "F0": {
+      "branch": "work/ui-normalization-f0-wave-3-20260903",
+      "head": "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
+      "decision": "ACCEPTED_FOR_NEXT_SUCCESSOR"
+    },
+    "M0": {
+      "branch": "work/ui-normalization-m0-continuity-20260903",
+      "result_comment": 5531788718,
+      "published_merge_ready_head": "7e879210f68f7a7e4a53755f2e9431c61f445569",
+      "current_head": "8b0c6709beca1f7b0bef81b27464f786df1d7806",
+      "compatibility_tail": [
+        "1828bde1c869150b25a292a65e8b20a646a5d611",
+        "8b0c6709beca1f7b0bef81b27464f786df1d7806"
+      ],
+      "changed_product_source_after_published_merge_ready_head": false,
+      "decision": "CURRENT_HEAD_ACCEPTED_AS_THE_ONE_M0_NEXT_SUCCESSOR_BATCH"
+    },
+    "A0": {
+      "branch": "work/ui-normalization-a0-current-successor-consumer-batch-20260903",
+      "head": "3ef253980bdfe0731158f5b8b4b47965fa153ce9",
+      "result_comment": 5531482466,
+      "source_delta": "NONE",
+      "regression_delta": "ONE_ADDITIVE_BOUNDARY_TEST",
+      "decision": "ACCEPTED_FOR_NEXT_SUCCESSOR"
+    },
+    "FR0": {
+      "branch": "work/ui-normalization-fr0-20260903",
+      "head": "2231e1d668f896d634e5663b59520bc710d5fea6",
+      "decision": "NO_NEW_SOURCE_BATCH_UNTIL_FACTUAL_FR0_DRIFT"
+    },
+    "V0": {
+      "branch": "work/ui-normalization-v0-harness-20260903",
+      "head": "2e71e5521a1ebbd5f98c794abebd70aced030639"
+    }
+  },
+  "next_successor_intake": {
+    "base": "cebeafeee08251a327145ee973ee035cced65204",
+    "ordered_batches": [
+      {
+        "role": "F0",
+        "sha": "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
+        "scope": "contract-1.10 vocabulary and strict checker correction only"
+      },
+      {
+        "role": "M0",
+        "sha": "8b0c6709beca1f7b0bef81b27464f786df1d7806",
+        "scope": "post-FR0 EventCard, ListingEventCard and relatedCardLayout consolidation plus current compatibility tail"
+      },
+      {
+        "role": "A0",
+        "sha": "3ef253980bdfe0731158f5b8b4b47965fa153ce9",
+        "scope": "additive current-successor consumer/FR0 boundary regression"
+      }
+    ],
+    "FR0_source_batch": null,
+    "FR0_admission_rule": "ONLY_AFTER_FACTUAL_FR0_DRIFT",
+    "max_merge_ready_batches_outside_successor_per_role": 1,
+    "candidate_lag_minutes_max": 30,
+    "next_full_real_preview_after_compatible_batch_count": [2, 3],
+    "next_full_real_preview_max_minutes": 60,
+    "broken_batch_exclusion_is_individual": true,
+    "materialization_owner": "R0",
+    "candidate_acceptance_owner": "N0",
+    "browser_verdict_owner": "V0"
+  },
+  "post_publication_v0_trigger": {
+    "state": "PENDING_EXACT_PUBLIC_URL_AND_MANIFEST",
+    "must_publish_immediately_after_N0_identity_acceptance": true,
+    "must_name": [
+      "exact owner URL",
+      "exact source SHA",
+      "snapshot id and digest",
+      "matching preview-build.json",
+      "canonical Kaggle operation and artifact identity"
+    ],
+    "N0_must_not_issue_browser_PASS": true
+  },
+  "vertical_slice": {
+    "id": "EXHIBITIONS_FR0_MEDIAFRAME",
+    "chain": [
+      "ExhibitionsPersonalSurface",
+      "ExhibitionPrototypeRow",
+      "FR0 MediaFrame"
+    ],
+    "source_state": "ACCEPTED_IN_CEBEAFEE",
+    "browser_state": "PENDING_V0_SECTION_VERDICT",
+    "accept_when": [
+      "the exact cebeafee public transaction is identity-accepted",
+      "V0 reports the exhibitions route and relevant viewport sections without critical structural drift",
+      "FR0 fit, focal, clip, resource-state and fallback sections pass",
+      "no competing route-local MediaFrame owner is observed"
+    ],
+    "acceptance_owner": "N0",
+    "defect_isolation": "a failed unrelated route does not reject this vertical slice"
+  },
+  "non_claims": [
+    "canonical cebeafee publication completed",
+    "public manifest verified",
+    "independent V0 verdict received",
+    "vertical slice browser-accepted",
+    "next successor integrated or tested",
+    "next successor full-real preview published"
+  ]
+}
