@@ -1,0 +1,56 @@
+{
+  "schema": "kenigevents.a0.downstream-bindings-index.v1",
+  "version": "1.0.0",
+  "status": "SOURCE_BOUND_AWAITING_INTEGRATION",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "source": {
+    "repository": "onedayonemasterpiece/events-bot-new",
+    "role_branch": "work/ui-normalization-a0-wave-3-20260903",
+    "candidate_branch": "r0/ui-normalization-current-candidate-20260903",
+    "integration_branch": "integration/ui-normalization-launch-20260902",
+    "route_matrix": "site/src/data/a0-route-family-normalization.v1.json",
+    "mechanical_batch": "site/src/data/a0-r0-mechanical-batch.v1.json",
+    "media_exception": "site/src/components/design-system/a0-media-frame-exceptions.v1.json"
+  },
+  "thin_s": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "route_bindings": "bindings/launch-normalization/a0-route-family-bindings.v1.json",
+    "status": "MACHINE_READABLE_SOURCE_BINDINGS_PUBLISHED"
+  },
+  "penpot": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "spec": "bindings/launch-normalization/a0-penpot-ready-spec.v1.json",
+    "file_id": "40e06342-8830-80d6-8008-8fc8a3a4cd4f",
+    "writer": "R0.PENPOT",
+    "status": "SPEC_READY_NOT_MATERIALIZED"
+  },
+  "v0": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "acceptance_matrix": "bindings/launch-normalization/a0-v0-acceptance-matrix.v1.json",
+    "verdict_owner": "V0",
+    "status": "MATRIX_READY_AWAITING_EXACT_HTTP_200_PREVIEW"
+  },
+  "coverage_and_rollback": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "spec": "bindings/launch-normalization/a0-coverage-rollback.v1.json",
+    "source_converged": 5,
+    "mechanical_pending": 3,
+    "product_decision_pending": 1,
+    "total_grouped_route_families": 9,
+    "browser_pass": 0,
+    "penpot_linked": 0,
+    "strict_a_equals_s_equals_p": 0
+  },
+  "evidence_boundaries": {
+    "branch_source_is_product_pass": false,
+    "source_test_is_browser_pass": false,
+    "thin_s_spec_is_penpot_instance": false,
+    "penpot_spec_is_a_equals_s_equals_p": false,
+    "local_diagnostic_is_review_preview": false,
+    "v0_pass_requires_exact_kaggle_preview": true
+  }
+}
