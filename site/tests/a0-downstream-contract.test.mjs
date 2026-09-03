@@ -24,17 +24,30 @@ test('A0 downstream contract freezes one selective source transaction', () => {
   ]);
 });
 
-test('thin-S, Penpot, V0 and rollback pointers are exact immutable commits', () => {
-  assert.equal(contract.thin_s.commit, 'a800f619b66cdf713e94f234382481bb8621dd22');
-  assert.equal(contract.penpot_ready_spec.commit, '3d4e148b74594f6d0dda3adda0649441dc17bde7');
+test('thin-S base and exact focus-route extension are immutable', () => {
+  assert.equal(contract.thin_s.repository, 'onedayonemasterpiece/lovekgd-design-system');
+  assert.equal(contract.thin_s.branch, 'integration/launch-normalized-sot-penpot-20260902');
+  assert.equal(contract.thin_s.base.commit, 'a800f619b66cdf713e94f234382481bb8621dd22');
+  assert.equal(contract.thin_s.extensions.length, 1);
+  assert.equal(contract.thin_s.extensions[0].commit, '410c643cb24a529f211d7d88e609fb61f830cacf');
+  assert.equal(contract.thin_s.extensions[0].scope, 'PM0-37-16 through PM0-37-19');
+});
+
+test('Penpot base and focus-route linked-instance extension are immutable', () => {
+  assert.equal(contract.penpot_ready_spec.repository, 'onedayonemasterpiece/lovekgd-design-system');
+  assert.equal(contract.penpot_ready_spec.branch, 'integration/launch-normalized-sot-penpot-20260902');
+  assert.equal(contract.penpot_ready_spec.base.commit, '3d4e148b74594f6d0dda3adda0649441dc17bde7');
+  assert.equal(contract.penpot_ready_spec.extensions.length, 1);
+  assert.equal(contract.penpot_ready_spec.extensions[0].commit, '0c9f781a524b05f99d275ae3cd77b06b146f32e5');
+  assert.deepEqual(contract.penpot_ready_spec.extensions[0].masters, ['A0-M15', 'A0-M16', 'A0-M17']);
+  assert.deepEqual(contract.penpot_ready_spec.extensions[0].route_boards, ['A0-R18', 'A0-R19', 'A0-R20', 'A0-R21']);
+  assert.equal(contract.penpot_ready_spec.status, 'SPEC_ONLY_NOT_MATERIALIZED');
+});
+
+test('V0 and rollback pointers are exact immutable commits', () => {
   assert.equal(contract.v0_acceptance_matrix.commit, '952315ce0a4a5312e3f34c5afc7e8b05066c2147');
   assert.equal(contract.integration_and_rollback.commit, 'd0509f97e04fda3f24b026dd767262d2098f5463');
-  for (const layer of [
-    contract.thin_s,
-    contract.penpot_ready_spec,
-    contract.v0_acceptance_matrix,
-    contract.integration_and_rollback,
-  ]) {
+  for (const layer of [contract.v0_acceptance_matrix, contract.integration_and_rollback]) {
     assert.equal(layer.repository, 'onedayonemasterpiece/lovekgd-design-system');
     assert.equal(layer.branch, 'integration/launch-normalized-sot-penpot-20260902');
     assert.match(layer.commit, /^[0-9a-f]{40}$/u);
@@ -44,6 +57,7 @@ test('thin-S, Penpot, V0 and rollback pointers are exact immutable commits', () 
 test('PM0 item 37 and product-evidence boundaries cannot be inflated', () => {
   assert.equal(contract.v0_acceptance_matrix.pm0_item_37_denominator, 19);
   assert.equal(contract.v0_acceptance_matrix.source_identity_at_v0_recensus, '16/19');
+  assert.equal(contract.v0_acceptance_matrix.source_identity_after_mechanical_target, '19/19');
   assert.equal(contract.v0_acceptance_matrix.current_full_kaggle_build_identity, '0/19');
   assert.equal(contract.v0_acceptance_matrix.v0_browser_reviewed, '0/19');
   assert.equal(contract.golden_preflight.classification, 'PIPELINE_PREFLIGHT_ONLY');
@@ -51,5 +65,4 @@ test('PM0 item 37 and product-evidence boundaries cannot be inflated', () => {
   assert.equal(contract.source_checkpoint.tests_executed, false);
   assert.equal(contract.source_checkpoint.candidate_integrated, false);
   assert.equal(contract.source_checkpoint.browser_verdict, 'NOT_CLAIMED');
-  assert.equal(contract.penpot_ready_spec.status, 'SPEC_ONLY_NOT_MATERIALIZED');
 });
