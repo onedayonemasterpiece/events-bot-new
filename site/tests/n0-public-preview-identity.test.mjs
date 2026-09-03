@@ -170,17 +170,24 @@ test('network gate fails closed on unreachable HTML, MIME drift or public identi
   );
 });
 
-test('existing build and deploy paths retain full-SHA metadata and immutable-prefix publication', async () => {
-  const [buildSource, deploySource] = await Promise.all([
+test('build identity remains full-SHA and N0 publication policy is Kaggle-only', async () => {
+  const [buildSource, packageSource, acceptanceSource] = await Promise.all([
     readFile(new URL('../scripts/build-preview.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../scripts/deploy-preview-yc.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    readFile(new URL('../scripts/n0-successor-acceptance.v1.json', import.meta.url), 'utf8'),
   ]);
   assert.match(buildSource, /STATIC_SITE_REPO_SHA/u);
   assert.match(buildSource, /repo_sha:\s*gitFullSha\(\)/u);
   assert.match(buildSource, /preview-build\.json/u);
   assert.match(buildSource, /SITE_BASE_PATH:\s*`\/\$\{buildId\}`/u);
-  assert.match(deploySource, /const target = `s3:\/\/\$\{bucket\}\/\$\{buildId\}\//u);
-  assert.match(deploySource, /KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY/u);
-  assert.doesNotMatch(deploySource, /s3['"],\s*['"]sync['"]/u);
-  assert.doesNotMatch(deploySource, /--delete/u);
+
+  const packageJson = JSON.parse(packageSource);
+  assert.equal(packageJson.scripts['deploy:preview'], undefined);
+  assert.equal(packageJson.scripts['deploy:golden-preview'], undefined);
+
+  const acceptance = JSON.parse(acceptanceSource);
+  assert.ok(acceptance.next_real_gate.required.includes('the canonical events-bot-new Kaggle StaticSiteBuilder'));
+  assert.ok(acceptance.next_real_gate.required.includes('--preview-data-mode real'));
+  assert.ok(acceptance.next_real_gate.required.includes('--page-class all'));
+  assert.ok(acceptance.prohibitions.includes('do not use deploy:preview or deploy:golden-preview as a launch path'));
 });
