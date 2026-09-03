@@ -37,6 +37,7 @@
     "plan:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs plan",
     "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
     "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
+    "test:n0-successor-acceptance": "node --test tests/n0-successor-acceptance.test.mjs",
     "test:golden-preview-contract": "node --test tests/golden-review-preview-contract.test.mjs tests/golden-review-actions.test.mjs",
     "test:golden-deploy-contract": "node --test tests/golden-review-deploy-contract.test.mjs",
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
