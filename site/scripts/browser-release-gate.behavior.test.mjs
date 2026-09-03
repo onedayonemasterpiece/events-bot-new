@@ -112,6 +112,9 @@ test('R03 mandatory browser gate has bounded action/navigation waits and no netw
   assert.match(source, /data-hide-sticky-after/gu);
   assert.match(source, /page\.mouse\.wheel\(0, 320\)/gu);
   assert.match(source, /cardLocator\.nth\(index\)\.scrollIntoViewIfNeeded\(\)/u);
+  assert.match(source, /imageButton\?\.getAttribute\('aria-busy'\) === 'false'/u);
+  assert.match(source, /!root\?\.hasAttribute\('data-keyboard-shortcut-pending'\)/u);
+  assert.match(source, /window\.__releaseGateClipboard\.text\.length === count \+ 1/u);
   assert.match(source, /closeAllConnections/u);
   assert.match(source, /url\.href === expected, \{ timeout: 12_000, waitUntil:'domcontentloaded' \}/u);
   assert.match(source, /let server = null;[\s\S]*let browser = null;/u);

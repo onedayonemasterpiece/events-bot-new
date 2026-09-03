@@ -701,3 +701,9 @@ Browser release gate перед проверкой `loaded|missing` послед
 каждую карточку recommendations/continuation. Это сохраняет production
 `loading="lazy"`, но исключает ложный timeout второй строки, которая до
 скролла законно находилась вне preload distance Chromium.
+
+Повторная footer-проверка `P` -> `S` ждёт завершения именно текущей service-share
+транзакции (`aria-busy=false` и снятый pending marker), а не совпадающий текст
+toast от первого `P`. Поэтому медленная подготовка изображения больше не может
+создать ложный отказ следующего shortcut; продуктовая обработка клавиш не
+изменялась.

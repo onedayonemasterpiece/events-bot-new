@@ -860,13 +860,19 @@ async function assertFooterShortcuts(page, origin, route) {
   }), 'offscreen-focus footer specimen was not established');
   await page.keyboard.press('KeyP');
   await page.waitForFunction(() => window.__releaseGateClipboard.images.length === 2, null, { timeout: 8_000 });
-  // Clipboard write resolves before the async service-share handler finishes
-  // its success state. Wait on that concrete UI signal before sending S;
-  // otherwise the still-busy P transaction can legitimately reject the next
-  // shortcut on slower/prefixed candidate assets.
-  await page.waitForFunction(() => /Карточка скопирована/iu.test(document.querySelector('[data-mobile-toast-message]')?.textContent || ''), null, { timeout: 8_000 });
+  // The toast may still contain the identical message from the first P. Wait
+  // for the second concrete service transaction to leave its busy/pending
+  // state instead of accepting that stale text and racing the following S.
+  await page.waitForFunction(() => {
+    const root = document.querySelector('[data-service-share-surface="footer"]');
+    const imageButton = root?.querySelector('[data-service-share-intent="image"]');
+    return imageButton?.getAttribute('aria-busy') === 'false'
+      && !root?.hasAttribute('data-keyboard-shortcut-pending');
+  }, null, { timeout: 8_000 });
+  const textWrites = await page.evaluate(() => window.__releaseGateClipboard.text.length);
   await page.keyboard.press('KeyS');
-  await page.waitForFunction(() => window.__releaseGateClipboard.text.length >= 2 && window.__releaseGateClipboard.text.at(-1)?.endsWith('\nhttps://kenigevents.ru/'), null, { timeout: 8_000 });
+  await page.waitForFunction((count) => window.__releaseGateClipboard.text.length === count + 1
+    && window.__releaseGateClipboard.text.at(-1)?.endsWith('\nhttps://kenigevents.ru/'), textWrites, { timeout: 8_000 });
   invariant(await footer.locator('[data-service-share-intent="image"]:focus, [data-service-share-intent="text"]:focus').count() === 0, 'browser gate must not focus footer controls');
 }
 

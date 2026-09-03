@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed: the browser release gate now waits for the repeated footer poster-copy
+  transaction itself to become idle before sending the text-copy shortcut,
+  instead of accepting an identical stale toast from the first transaction.
+
 - Fixed: the browser release gate now crosses every lazy recommendation card
   before waiting for loaded/missing media state, so an off-screen continuation
   row is tested after Chromium legitimately starts its image requests rather
