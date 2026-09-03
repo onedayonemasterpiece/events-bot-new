@@ -219,7 +219,7 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
   data-lab-potential-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.potentialCoverCrop, 4) : undefined}
   data-lab-row-worst-crop={fixedLayoutMetric(desktopRelatedLayout?.rowWorstCrop, 4)}
   data-lab-row-cost={desktopRelatedLayout?.rowCost.toFixed(5)}
-  style={desktopRelatedLayout ? `--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)};grid-row:${desktopRelatedLayout.rowIndex + 1};grid-column:${desktopRelatedLayout.rowColumn + 1}` : undefined}
+  style={desktopRelatedLayout ? `--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)}` : undefined}
   tabindex="0"
   aria-label={`${event.title}: ${dateLabel}`}
 >
