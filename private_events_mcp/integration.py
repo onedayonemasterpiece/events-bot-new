@@ -11,6 +11,7 @@ from aiohttp import web
 from .chatgpt_refresh_policy import install_chatgpt_refresh_policy
 from .config import PrivateEventsMCPConfig
 from .media_contract import AssetIngestor
+from .queue_read import attach_owner_queue_observability
 from .server import (
     ENDPOINT_FINGERPRINT_APP_KEY,
     SERVER_APP_KEY,
@@ -109,6 +110,10 @@ def attach_private_events_mcp(
         social_workspace_adapters=social_workspace_adapters,
         asset_ingestor=asset_ingestor,
     )
+    # R0 deliberately extends only the owner ChatGPT/OpenCode descriptor and
+    # handler for the existing operations_snapshot tool. The Codex protocol,
+    # scopes, database schema, workers, and provider adapters remain unchanged.
+    attach_owner_queue_observability(server)
     install_chatgpt_refresh_policy(server.oauth)
     # Audio transcription is an independent, default-off capability. It extends
     # only the ChatGPT/OpenCode protocol and leaves the exact-seven Codex surface
