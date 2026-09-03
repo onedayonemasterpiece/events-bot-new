@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => readFile(path.join(siteRoot, relativePath), 'utf8');
 
-test('MobileListingRailRow publishes complete identity and mirrors existing runtime states', async () => {
+test('MobileListingRailRow publishes complete identity and mirrors canonical runtime states', async () => {
   const row = await read('src/components/listings/MobileListingRailRow.astro');
 
   for (const marker of [
@@ -17,14 +17,20 @@ test('MobileListingRailRow publishes complete identity and mirrors existing runt
     'data-ds-variant={occurrenceMode}',
     'data-ds-state={rowState}',
     'data-mobile-listing-row-base-state={rowState}',
+    'data-media-frame-resource-state="pending"',
+    'data-media-frame-source-ratio=',
+    'data-media-frame-fallback aria-hidden="true" hidden',
   ]) assert.ok(row.includes(marker), `missing row identity marker: ${marker}`);
 
+  assert.doesNotMatch(row, /data-media-state=|dataset\.mediaState/u);
   assert.match(row, /function bindMobileListingRailRowDiagnostics\(root = document\)/u);
   assert.match(row, /querySelectorAll\('\[data-mobile-listing-row\]'\)/u);
   assert.match(row, /row\.dataset\.mobileListingRowDiagnosticsBound = 'true'/u);
   assert.match(row, /row\.dataset\.mobileRailTemporalState/u);
   assert.match(row, /row\.dataset\.notInterested === 'true' \? 'not-interested'/u);
   assert.match(row, /row\.classList\.contains\('is-liked'\) \? 'liked'/u);
+  assert.match(row, /item\.dataset\.mediaFrameResourceState === 'pending'/u);
+  assert.match(row, /\['broken', 'fallback'\]\.includes\(item\.dataset\.mediaFrameResourceState/u);
   for (const state of [
     'is-dragging',
     'is-settling',
@@ -45,6 +51,6 @@ test('MobileListingRailRow publishes complete identity and mirrors existing runt
     "'aria-pressed'",
     "'data-not-interested'",
     "'data-mobile-rail-temporal-state'",
-    "'data-media-state'",
+    "'data-media-frame-resource-state'",
   ]) assert.ok(row.includes(attribute), `missing observed state attribute: ${attribute}`);
 });
