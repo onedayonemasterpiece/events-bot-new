@@ -1,0 +1,40 @@
+/*
+ * Canonical MediaFrame v1 structural and fit owner.
+ *
+ * Callers own semantic classification, crop selection, dimensions, loading and
+ * interaction. Surface CSS may size the frame, but it must not reinterpret the
+ * published fit/object-position decision or duplicate the frame anatomy.
+ */
+[data-media-frame][data-media-frame-contract="v1"] {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-fill="true"] {
+  height: 100%;
+}
+
+[data-media-frame][data-media-frame-contract="v1"] > [data-media-frame-image] {
+  display: block;
+  max-width: 100%;
+  object-position: var(--media-frame-object-position, 50% 50%);
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-fit="cover"] > [data-media-frame-image],
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-fill="true"] > [data-media-frame-image] {
+  width: 100%;
+  height: 100%;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-fit="cover"] > [data-media-frame-image] {
+  object-fit: cover;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-fit="contain"] > [data-media-frame-image] {
+  object-fit: contain;
+}
