@@ -35,7 +35,16 @@ export const UI_ICON_NAMES = [
 
 export type UiIconName = (typeof UI_ICON_NAMES)[number];
 
-export const SEMANTIC_ICON_NAMES = [...UI_ICON_NAMES, 'trend-up'] as const;
+export const LOCAL_SEMANTIC_ICON_NAMES = [
+  'trend-up',
+  'close',
+  'arrow-left',
+  'arrow-right',
+  'chevron-down',
+] as const;
+export type LocalSemanticIconName = (typeof LOCAL_SEMANTIC_ICON_NAMES)[number];
+
+export const SEMANTIC_ICON_NAMES = [...UI_ICON_NAMES, ...LOCAL_SEMANTIC_ICON_NAMES] as const;
 export type SemanticIconName = (typeof SEMANTIC_ICON_NAMES)[number];
 
 export const SOCIAL_ICON_NAMES = ['telegram', 'vk', 'max'] as const;
@@ -43,8 +52,8 @@ export type SocialIconName = (typeof SOCIAL_ICON_NAMES)[number];
 
 /**
  * One canonical visible SVG identity per semantic action.
- * Existing actions continue to render through ../Icon.astro. The mobile
- * listing trend glyph is centralized in SemanticIcon.astro as `trend-up`.
+ * Existing actions continue to render through ../Icon.astro. Semantic-only
+ * navigation/status glyphs are centralized in SemanticIcon.astro.
  */
 export const CANONICAL_SVG_BY_ACTION = {
   'feedback.like': { component: '../Icon.astro', name: 'heart' },
@@ -60,11 +69,15 @@ export const CANONICAL_SVG_BY_ACTION = {
   'action.gallery': { component: '../Icon.astro', name: 'image' },
   'action.phone': { component: '../Icon.astro', name: 'phone' },
   'action.copy': { component: '../Icon.astro', name: 'copy' },
+  'action.install': { component: '../Icon.astro', name: 'install' },
+  'action.close': { component: './SemanticIcon.astro', name: 'close' },
+  'action.disclosure': { component: './SemanticIcon.astro', name: 'chevron-down' },
+  'navigation.previous': { component: './SemanticIcon.astro', name: 'arrow-left' },
+  'navigation.next': { component: './SemanticIcon.astro', name: 'arrow-right' },
   'status.success': { component: '../Icon.astro', name: 'check' },
   'transport.bus': { component: '../Icon.astro', name: 'bus' },
   'transport.car': { component: '../Icon.astro', name: 'car' },
   'transport.walk': { component: '../Icon.astro', name: 'walk' },
-  'action.install': { component: '../Icon.astro', name: 'install' },
   'listing.trend': { component: './SemanticIcon.astro', name: 'trend-up' },
 } as const satisfies Record<string, { component: string; name: SemanticIconName }>;
 

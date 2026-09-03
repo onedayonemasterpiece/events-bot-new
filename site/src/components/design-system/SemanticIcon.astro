@@ -25,11 +25,16 @@ const classes = [
 ].filter(Boolean).join(' ');
 const existingName = name as UiIconName;
 const labelled = Boolean(title);
+const localSemantic = name === 'trend-up'
+  || name === 'close'
+  || name === 'arrow-left'
+  || name === 'arrow-right'
+  || name === 'chevron-down';
 ---
-{name === 'trend-up' ? (
+{localSemantic ? (
   <svg
     class={classes}
-    data-ke-icon-name="trend-up"
+    data-ke-icon-name={name}
     data-ke-icon-role={role}
     aria-hidden={labelled ? undefined : 'true'}
     role={labelled ? 'img' : undefined}
@@ -38,7 +43,21 @@ const labelled = Boolean(title);
     xmlns="http://www.w3.org/2000/svg"
   >
     {title && <title>{title}</title>}
-    <path d="M3 17.5 8.7 12l3.8 3.4L20.8 7v4H23V3h-8v2.2h4.2l-6.8 6.9-3.8-3.4L1.5 15.8 3 17.5Z" />
+    {name === 'trend-up' && (
+      <path d="M3 17.5 8.7 12l3.8 3.4L20.8 7v4H23V3h-8v2.2h4.2l-6.8 6.9-3.8-3.4L1.5 15.8 3 17.5Z" />
+    )}
+    {name === 'close' && (
+      <path d="M6.75 6.75 17.25 17.25M17.25 6.75 6.75 17.25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    )}
+    {name === 'arrow-left' && (
+      <path d="m10 5-7 7 7 7M3 12h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    )}
+    {name === 'arrow-right' && (
+      <path d="m14 5 7 7-7 7M21 12H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    )}
+    {name === 'chevron-down' && (
+      <path d="m5 9 7 7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    )}
   </svg>
 ) : (
   <Icon name={existingName} className={classes} title={title} />
