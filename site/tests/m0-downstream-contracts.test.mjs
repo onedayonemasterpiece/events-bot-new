@@ -41,10 +41,10 @@ test('M0 downstream index covers the complete PM0 20-31 family contour and exact
   assert.ok(binding.candidate_review.rejected_replay.some((item) => /temporary MediaFrame exception/u.test(item)));
 
   assert.deepEqual(binding.downstream_targets, {
-    thin_s:'bindings/launch-normalization/m0-family-bindings.v1.json',
-    penpot_ready:'bindings/launch-normalization/m0-penpot-ready-spec.v1.json',
-    v0_matrix:'bindings/launch-normalization/m0-v0-acceptance-matrix.v1.json',
-    integration_rollback:'bindings/launch-normalization/m0-source-integration-and-rollback.v1.json',
+    thin_s:'catalog/normalization/m0-family-thin-s-bindings.v1.json',
+    penpot_ready:'penpot/candidate/m0-family-master-spec.v1.json',
+    v0_matrix:'catalog/normalization/evidence/m0-v0-acceptance-matrix.v1.json',
+    integration_rollback:'docs/launch-normalization/m0-source-integration-and-rollback.v1.json',
   });
 });
 
