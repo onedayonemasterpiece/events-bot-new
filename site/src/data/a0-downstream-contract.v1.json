@@ -6,7 +6,8 @@
   "source_checkpoint": {
     "repository": "onedayonemasterpiece/events-bot-new",
     "branch": "work/ui-normalization-a0-wave-3-20260903",
-    "sha_before_this_pointer": "ec926580fa2cc003318006f4c1d671fc459ea26c",
+    "semantic_source_sha": "ec926580fa2cc003318006f4c1d671fc459ea26c",
+    "branch_head_before_pointer_extension": "ee9d392f6a0c408acbe3f53a789028b0762a3ce4",
     "tests_executed": false,
     "candidate_integrated": false,
     "browser_verdict": "NOT_CLAIMED"
@@ -36,15 +37,43 @@
   "thin_s": {
     "repository": "onedayonemasterpiece/lovekgd-design-system",
     "branch": "integration/launch-normalized-sot-penpot-20260902",
-    "path": "catalog/normalization/a0-thin-s-bindings.v1.json",
-    "commit": "a800f619b66cdf713e94f234382481bb8621dd22",
+    "base": {
+      "path": "catalog/normalization/a0-thin-s-bindings.v1.json",
+      "commit": "a800f619b66cdf713e94f234382481bb8621dd22"
+    },
+    "extensions": [
+      {
+        "path": "catalog/normalization/a0-focus-route-bindings.v1.json",
+        "commit": "410c643cb24a529f211d7d88e609fb61f830cacf",
+        "scope": "PM0-37-16 through PM0-37-19"
+      }
+    ],
     "status": "MACHINE_READABLE"
   },
   "penpot_ready_spec": {
     "repository": "onedayonemasterpiece/lovekgd-design-system",
     "branch": "integration/launch-normalized-sot-penpot-20260902",
-    "path": "penpot/candidate/a0-route-instance-spec.v1.json",
-    "commit": "3d4e148b74594f6d0dda3adda0649441dc17bde7",
+    "base": {
+      "path": "penpot/candidate/a0-route-instance-spec.v1.json",
+      "commit": "3d4e148b74594f6d0dda3adda0649441dc17bde7"
+    },
+    "extensions": [
+      {
+        "path": "penpot/candidate/a0-focus-route-instance-spec.v1.json",
+        "commit": "0c9f781a524b05f99d275ae3cd77b06b146f32e5",
+        "masters": [
+          "A0-M15",
+          "A0-M16",
+          "A0-M17"
+        ],
+        "route_boards": [
+          "A0-R18",
+          "A0-R19",
+          "A0-R20",
+          "A0-R21"
+        ]
+      }
+    ],
     "status": "SPEC_ONLY_NOT_MATERIALIZED",
     "writer": "R0.PENPOT"
   },
@@ -56,6 +85,7 @@
     "status": "PENDING_CURRENT_SUCCESSOR_BUILD_AND_V0",
     "pm0_item_37_denominator": 19,
     "source_identity_at_v0_recensus": "16/19",
+    "source_identity_after_mechanical_target": "19/19",
     "current_full_kaggle_build_identity": "0/19",
     "v0_browser_reviewed": "0/19"
   },
