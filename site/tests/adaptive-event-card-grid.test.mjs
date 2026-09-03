@@ -51,6 +51,47 @@ test('AdaptiveEventCardGrid clamps inputs and exposes the exact diagnostics cont
   assert.match(adaptive, /data-optimized-event-card-grid=\{legacyOptimizedContract \? '' : undefined\}/u);
 });
 
+test('Wave 2 keeps consumer metadata data-only and canonical diagnostics reserved', async () => {
+  const [adaptive, card] = await Promise.all([
+    read('src/components/AdaptiveEventCardGrid.astro'),
+    read('src/components/EventCard.astro'),
+  ]);
+
+  assert.match(adaptive, /rootAttributes\?: EventCardRootAttributes/u);
+  assert.match(adaptive, /itemRoots\?: Record<string, AdaptiveEventCardItemRoot>/u);
+  assert.match(adaptive, /\^data-\[a-z0-9_\.:-\]\+\$/u);
+  assert.match(adaptive, /!ADAPTIVE_ROOT_RESERVED_ATTRIBUTES\.has\(name\)/u);
+  assert.match(adaptive, /return itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\] \|\| itemRoots\[String\(item\.id\)\]/u);
+  assert.match(adaptive, /rootClassName=\{itemRootFor\(item\)\?\.className\}/u);
+  assert.match(adaptive, /rootAttributes=\{itemRootFor\(item\)\?\.attributes\}/u);
+  assert.equal((adaptive.match(/<EventCard\b/gu) || []).length, 1, 'metadata bridge must not add a wrapper or second card root');
+
+  assert.match(card, /rootClassName\?: string/u);
+  assert.match(card, /rootAttributes\?: EventCardRootAttributes/u);
+  assert.match(card, /!EVENT_CARD_RESERVED_ROOT_ATTRIBUTES\.has\(name\)/u);
+  assert.match(card, /<article\s+\{\.\.\.safeRootAttributes\}[\s\S]*data-ds-component="EventCard"/u);
+});
+
+test('Wave 2 responsive strategies and legacy adapter mapping remain explicit', async () => {
+  const [adaptive, legacy] = await Promise.all([
+    read('src/components/AdaptiveEventCardGrid.astro'),
+    read('src/components/OptimizedEventCardGrid.astro'),
+  ]);
+
+  assert.match(adaptive, /type ResponsiveStrategy = 'fixed' \| 'progressive' \| 'stack'/u);
+  assert.match(adaptive, /requestedResponsive === 'progressive' \|\| requestedResponsive === 'stack' \|\| requestedResponsive === 'fixed'/u);
+  assert.match(adaptive, /: responsiveMobile \? 'stack' : 'fixed'/u);
+  assert.match(adaptive, /data-adaptive-grid-responsive=\{responsive\}/u);
+  for (const diagnostic of ['source-count', 'rendered-count', 'remainder-count', 'source-order', 'rendered-order', 'item-root-contract']) {
+    assert.ok(adaptive.includes(`data-adaptive-grid-${diagnostic}`), `missing ${diagnostic} diagnostic`);
+  }
+  assert.match(adaptive, /@media \(max-width: 1023px\)[\s\S]*adaptive-event-card-grid--responsive-stack/u);
+  assert.match(adaptive, /@media \(max-width: 960px\)[\s\S]*adaptive-event-card-grid--responsive-progressive/u);
+  assert.match(adaptive, /@media \(max-width: 620px\)[\s\S]*adaptive-event-card-grid--responsive-progressive/u);
+  assert.match(legacy, /responsive=\{responsiveMobile \? 'stack' : 'fixed'\}/u);
+  assert.doesNotMatch(legacy, /<style>|packRelatedCardRows|<EventCard\b/u);
+});
+
 test('AdaptiveEventCardGrid flex lines fill complete and final rows without phantom tracks', async () => {
   const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
 
@@ -90,5 +131,9 @@ test('normalized component families and MediaFrame diagnostics retain their exac
   assert.match(rail, /if \(asset\.media_semantic_status === 'error'\) return 'unknown'/u);
   assert.match(rail, /mediaFrameKind\(asset\) === 'visual' \? 'cover' : 'contain'/u);
   assert.match(rail, /style=\{`object-fit:\$\{mediaFrameFit\(asset\)\};object-position:50% 50%`\}/u);
-  assert.doesNotMatch(rail, /<a\b[^>]*data-media-frame/u);
+  for (const source of [card, listing, rail]) {
+    assert.doesNotMatch(source, /<(?:a|button)\b[^>]*data-media-frame/u);
+    assert.match(source, /data-media-frame-interaction-owner="caller"/u);
+    assert.match(source, /data-media-frame-(?:image|fallback)/u);
+  }
 });
