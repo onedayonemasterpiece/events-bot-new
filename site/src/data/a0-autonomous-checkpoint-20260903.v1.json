@@ -1,75 +1,156 @@
 {
   "schema_version": "a0-autonomous-checkpoint-v1",
+  "checkpoint_version": "2.0.0",
   "role": "A0",
   "contract_version": "1.9.0",
   "branch": "work/ui-normalization-a0-wave-3-20260903",
+  "branch_head_before_checkpoint_update": "2e4b2f93d4fe0e92f3e01d763d8753ba8edb3bf5",
+  "frozen_inputs": {
+    "accepted_combined_precursor": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+    "f0_dependency": "de92dabd4551e117ca1af1be7915ff223321cc32",
+    "m0_dependency": "4c83fc7769b1dec2d92469373e3b15154af437f4",
+    "semantic_source_checkpoint": "ec926580fa2cc003318006f4c1d671fc459ea26c"
+  },
   "checklist": {
-    "grouped_route_family_fraction": "5/9",
+    "strict_grouped_route_family_fraction": "3/9",
+    "substantive_grouped_route_family_fraction": "5/9",
+    "pm0_item_37_source_identity_at_v0_recensus": "16/19",
+    "pm0_item_37_source_identity_after_mechanical_target": "19/19",
+    "pm0_item_37_current_full_kaggle_build": "0/19",
+    "pm0_item_37_v0_browser_reviewed": "0/19",
     "browser_acceptance_owner": "V0",
+    "candidate_acceptance_owner": "N0",
     "runtime_build_owner": "R0"
   },
-  "accepted_source_work": [
-    "restored accepted Popular Large/Compact density behavior after N0 rejection",
-    "reduced OptimizedEventCardGrid to an AdaptiveEventCardGrid compatibility adapter",
-    "normalized InterestProfile while preserving local tri-state and digest behavior",
-    "normalized focus programme, invite, feedback, lab, connectivity, thank-you and FocusEgg roots",
-    "created one canonical CollectionCatalog root and removed route-local item ownership",
-    "normalized Partners, InterestClubCard and ArtifactCollection foundation ownership",
-    "published one bounded temporary EventHero media-frame exception",
-    "published exact nine-family A0 source matrix and regression contracts"
-  ],
-  "source_converged_families": [
-    "collections",
-    "for_me",
-    "focus_group",
-    "artifacts",
-    "information_pages"
-  ],
-  "partial_families": [
-    "festivals",
-    "exhibitions",
-    "event_detail",
-    "interest_clubs"
-  ],
-  "stop_reason": "actual_platform_limit",
-  "ready_owned_items": 5,
-  "writer_blocked_items": [
+  "source_work_completed_in_this_turn": [
     {
-      "path": "site/src/pages/festivali/index.astro",
-      "work": "add route family identity and canonical visible guide icons without full-file reconstruction"
+      "cluster": "Popular accepted behavior",
+      "commits": [
+        "3630c3eb92088c5b8de163805bb2c4f564def57c",
+        "142086f1d9ee6c2782bd0181e5ce2569d208f016"
+      ],
+      "result": "The visible density switch selects exactly two visible canonical representations; persistence, keyboard, pinch and anchor preservation remain."
     },
     {
-      "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-      "work": "replace local --ex-* visible theme ownership with the published exhibition foundation cluster"
+      "cluster": "Adaptive grid consumer ownership",
+      "commits": [
+        "d50ca4b12261883d02904c88c84cb5fc158d4100",
+        "b239870d0c5527146e1c0a38e7f12f31ab6c6425",
+        "7106e558a44e7fac720c078aeeecf7393a7c3b8e",
+        "8cfac46df8be93309efad2f5452cf843250b9b12"
+      ],
+      "result": "PersonalFeed, Home and Favorites no longer write count/order/remainder/runtime diagnostics; the M0 grid remains the sole owner."
     },
     {
-      "path": "site/src/components/DesktopEventPage.astro",
-      "work": "replace the two handwritten rail anatomies with EventMediaRail"
+      "cluster": "Interest clubs and icon roles",
+      "commits": [
+        "92264f06f79ad1fedb20096dfb4bbecc3a8f6f72",
+        "e28b0b6ba57637fc6caebca743a302444a271b3b",
+        "ec926580fa2cc003318006f4c1d671fc459ea26c"
+      ],
+      "result": "The index consumes the F0 route foundation contract and catalog-grid; card inline icon sizing is left to the four-role owner."
     },
     {
-      "path": "site/src/layouts/EventLayout.astro",
-      "work": "remove the orphan EventCard shell/media style owner"
+      "cluster": "Artifact icon ownership",
+      "commits": [
+        "75465138eae249024eb611e5e4ffd7c9a4988738",
+        "ec926580fa2cc003318006f4c1d671fc459ea26c"
+      ],
+      "result": "The close control uses the central control role without a local square override."
     },
     {
-      "path": "site/src/components/listings/MobileListingRailSurface.astro",
-      "work": "remove duplicate object-fit/object-position ownership already supplied by MobileListingRailRow MediaFrame state"
+      "cluster": "Coverage and executable downstream pointer",
+      "commits": [
+        "0018c99d9f55c9961b0a19ec171dfcd781c1f42c",
+        "f9217d66711731a911543314d17e35fed9824a2a",
+        "362f02aa9e04d9efaa6ffe6e139fc3e22eadf9d6",
+        "ee9d392f6a0c408acbe3f53a789028b0762a3ce4",
+        "3ae43e77923d79d25e07e527a094d6c98c5aa022",
+        "2e4b2f93d4fe0e92f3e01d763d8753ba8edb3bf5"
+      ],
+      "result": "The strict 3/9 versus substantive 5/9 distinction, exact 19-case PM0 boundary and immutable downstream pointers have source contracts and regression tests."
     }
   ],
-  "deferred_decision": {
-    "path": "site/src/pages/kluby-po-interesam/index.astro",
-    "trigger": "F0 exact route-local club hero/deck theme binding review"
+  "single_mechanical_batch": {
+    "issue_comment": 5527907602,
+    "status": "READY_FOR_R0_MECHANICAL",
+    "clusters": [
+      "A0-MECH-01 final InterestProfile icon role cleanup",
+      "A0-MECH-02 SearchResultsComposition identity and state",
+      "A0-MECH-03 MobileListingRailSurface MediaFrame and foundation ownership cleanup",
+      "A0-MECH-04 event-detail consumer convergence",
+      "A0-MECH-05 exhibitions and festivals identity boundary",
+      "A0-MECH-06 focus collection and closed-hub route identities"
+    ],
+    "reason_for_external_materialization": "The GitHub contents writer can only replace complete files; the remaining large shared files cannot be safely reconstructed from truncated reads."
   },
-  "temporary_exception": {
-    "path": "site/src/components/EventHero.astro",
-    "registry": "site/src/components/design-system/a0-media-frame-exceptions.v1.json",
-    "review_trigger": "first atomic patch-capable A0 writer or direct M0 EventHeroMediaFrame adapter accepted by N0"
+  "downstream_work_completed": {
+    "thin_s_base": {
+      "path": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/a0-thin-s-bindings.v1.json",
+      "commit": "a800f619b66cdf713e94f234382481bb8621dd22"
+    },
+    "thin_s_focus_extension": {
+      "path": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/a0-focus-route-bindings.v1.json",
+      "commit": "410c643cb24a529f211d7d88e609fb61f830cacf"
+    },
+    "penpot_base_spec": {
+      "path": "onedayonemasterpiece/lovekgd-design-system/penpot/candidate/a0-route-instance-spec.v1.json",
+      "commit": "3d4e148b74594f6d0dda3adda0649441dc17bde7",
+      "status": "SPEC_ONLY_NOT_MATERIALIZED"
+    },
+    "penpot_focus_extension": {
+      "path": "onedayonemasterpiece/lovekgd-design-system/penpot/candidate/a0-focus-route-instance-spec.v1.json",
+      "commit": "0c9f781a524b05f99d275ae3cd77b06b146f32e5",
+      "status": "SPEC_ONLY_NOT_MATERIALIZED"
+    },
+    "v0_acceptance_matrix": {
+      "path": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json",
+      "commit": "952315ce0a4a5312e3f34c5afc7e8b05066c2147"
+    },
+    "integration_and_rollback": {
+      "path": "onedayonemasterpiece/lovekgd-design-system/docs/launch-normalization/a0-source-integration-and-rollback.v1.json",
+      "commit": "d0509f97e04fda3f24b026dd767262d2098f5463"
+    },
+    "executable_pointer": {
+      "path": "site/src/data/a0-downstream-contract.v1.json",
+      "last_commit_before_checkpoint": "3ae43e77923d79d25e07e527a094d6c98c5aa022"
+    }
   },
-  "remaining_external_trigger": "atomic patch-capable GitHub writer for the five exact paths above; then R0 integration/build result for work/ui-normalization-a0-wave-3-20260903 and V0 verdict for the resulting preview URL",
+  "external_dependencies": [
+    {
+      "owner": "F0",
+      "required_result": "Exact token-only foundation bindings for site/src/pages/kluby-po-interesam/[slug]/index.astro, site/src/components/ExhibitionsPersonalSurface.astro and site/src/pages/festivali/index.astro."
+    },
+    {
+      "owner": "R0",
+      "required_result": "Selective materialization of issue comment 5527907602 after accepted F0/M0 tips, with exact source-test exits and constructed successor SHA."
+    },
+    {
+      "owner": "N0",
+      "required_result": "Explicit acceptance or rejection of the constructed successor, including ancestry and smallest rollback boundary."
+    },
+    {
+      "owner": "R0",
+      "required_result": "One canonical full fresh-real Kaggle StaticSiteBuilder operation/artifact and exact HTTP-200 /<buildId>/__preview/ URL for the accepted successor."
+    },
+    {
+      "owner": "V0",
+      "required_result": "Independent DOM/computed-style PASS or DRIFT against the exact accepted successor URL using the 19-case matrix."
+    },
+    {
+      "owner": "R0.PENPOT",
+      "required_result": "One bounded native linked-instance materialization transaction from the base and focus-route Penpot specs after source and V0 gates."
+    }
+  ],
+  "stop_reason": "OWNED_BACKLOG_EXHAUSTED",
+  "ready_owned_items": 0,
+  "remaining_external_trigger": "F0 publishes the three exact foundation-binding results; R0 then materializes issue comment 5527907602 after current F0/M0, runs its focused source-test packet plus site/tests/a0-downstream-contract.test.mjs and posts the constructed successor SHA; N0 posts its acceptance; R0 posts the matching full fresh-real Kaggle operation/artifact and exact HTTP-200 /<buildId>/__preview/ URL; V0 posts the independent 19-case PASS/DRIFT verdict; on PASS R0.PENPOT materializes the two Penpot specs in one bounded transaction.",
   "claims_not_made": [
-    "tests executed",
+    "source tests executed",
     "build passed",
     "candidate integrated",
-    "preview published",
-    "V0 browser acceptance"
+    "preview published for the current successor",
+    "V0 browser acceptance",
+    "Penpot materialized"
   ]
 }
