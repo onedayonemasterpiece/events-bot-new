@@ -125,6 +125,8 @@ const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
   'data-adaptive-grid-remainder-policy',
   'data-adaptive-grid-remainder-variant',
   'data-adaptive-grid-responsive',
+  'data-adaptive-grid-input-count',
+  'data-adaptive-grid-input-order',
   'data-adaptive-grid-source-count',
   'data-adaptive-grid-rendered-count',
   'data-adaptive-grid-remainder-count',
@@ -162,7 +164,15 @@ const itemRootFor = (item: PreviewEvent): AdaptiveEventCardItemRoot | undefined 
   const sourceIndex = sourceIndexByItem.get(item) ?? events.findIndex((candidate) => candidate.id === item.id);
   return itemRoots[`${item.id}:${sourceIndex}`] || itemRoots[String(item.id)];
 };
-const sourceOrder = events.slice(0, Math.min(limit, events.length)).map((item) => item.id).join(',');
+const inputOrder = events.map((item) => item.id).join(',');
+const admittedSource = resolved
+  .map(({ item }) => ({
+    item,
+    sourceIndex: sourceIndexByItem.get(item) ?? events.findIndex((candidate) => candidate.id === item.id),
+  }))
+  .filter(({ sourceIndex }) => sourceIndex >= 0)
+  .sort((left, right) => left.sourceIndex - right.sourceIndex);
+const sourceOrder = admittedSource.map(({ item }) => item.id).join(',');
 const renderedOrder = resolved.map(({ item }) => item.id).join(',');
 const hasItemRoots = Object.keys(itemRoots).length > 0;
 ---
@@ -195,7 +205,9 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-adaptive-grid-remainder-policy="stretch"
   data-adaptive-grid-remainder-variant={initialRemainderVariant}
   data-adaptive-grid-responsive={responsive}
-  data-adaptive-grid-source-count={events.length}
+  data-adaptive-grid-input-count={events.length}
+  data-adaptive-grid-input-order={inputOrder}
+  data-adaptive-grid-source-count={admittedSource.length}
   data-adaptive-grid-rendered-count={resolved.length}
   data-adaptive-grid-remainder-count={remainderCount}
   data-adaptive-grid-source-order={sourceOrder}
