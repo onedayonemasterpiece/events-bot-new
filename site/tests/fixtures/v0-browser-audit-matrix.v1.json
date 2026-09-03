@@ -1,0 +1,119 @@
+{
+  "schema": "kenigevents.v0-browser-audit-matrix.v1",
+  "version": 1,
+  "contract_version": "1.10.0",
+  "source_checkpoint": "1bc6d9cb4c122046f4782532381de953727c1da6",
+  "role": "V0",
+  "status": "READY_FOR_BROWSER_EXECUTION",
+  "owners": {
+    "acceptance": "N0",
+    "foundations": "F0",
+    "framing": "FR0",
+    "components": "M0",
+    "routes": "A0"
+  },
+  "published_targets": {
+    "real": {
+      "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+      "source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+      "data_mode": "real",
+      "v0_verdict": "NOT_EXECUTED",
+      "source_relation_to_checkpoint": "ancestor"
+    },
+    "golden": {
+      "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+      "source_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+      "data_mode": "golden",
+      "v0_verdict": "DRIFT",
+      "v0_comment": 5527892153
+    }
+  },
+  "current_refs": {
+    "successor": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "N0": "fac1a2434ee550b37c9630c3502130574be53ecc",
+    "F0_source_boundary": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+    "F0_reporting_head": "0246d5bc1cd606bf5e71d4d3419892d63c54216e",
+    "FR0_status": "NOT_MATERIALIZED_CUTOVER_BASE_REQUIRED",
+    "FR0_branch": null,
+    "M0_source_boundary": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+    "M0_downstream_head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "A0": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+    "thin_sot": "d14ac7c932ba0b554b229e5dcab0504c10ca2328"
+  },
+  "routes": [
+    { "key": "home", "path": "/", "discovery": "fixed" },
+    { "key": "preview", "path": "/__preview/", "discovery": "fixed" },
+    { "key": "today", "path": "/segodnya/", "discovery": "fixed" },
+    { "key": "tomorrow", "path": "/zavtra/", "discovery": "fixed" },
+    { "key": "date", "path": "/date-YYYY-MM-DD/", "discovery": "first-http-200-linked-date" },
+    { "key": "weekend", "path": "/vyhodnye/", "discovery": "fixed" },
+    { "key": "popular", "path": "/populyarnoe/", "discovery": "fixed" },
+    { "key": "exhibitions", "path": "/vystavki/", "discovery": "fixed" },
+    { "key": "festivals", "path": "/festivali/", "discovery": "fixed" },
+    { "key": "free", "path": "/podborki/besplatnye-sobytiya/", "discovery": "fixed" },
+    { "key": "event-detail", "path": "/sobytiya/<live-slug>/", "discovery": "first-live-event-href-from-preview" }
+  ],
+  "viewports": [
+    { "width": 360, "height": 812, "class": "mobile" },
+    { "width": 375, "height": 812, "class": "mobile" },
+    { "width": 390, "height": 844, "class": "mobile" },
+    { "width": 620, "height": 900, "class": "mobile-wide" },
+    { "width": 720, "height": 900, "class": "mobile-seam-below" },
+    { "width": 721, "height": 900, "class": "mobile-seam-above" },
+    { "width": 768, "height": 1024, "class": "tablet" },
+    { "width": 980, "height": 900, "class": "desktop-seam-below" },
+    { "width": 981, "height": 900, "class": "desktop-seam-above" },
+    { "width": 1024, "height": 768, "class": "desktop-small" },
+    { "width": 1180, "height": 900, "class": "content-seam-below" },
+    { "width": 1181, "height": 900, "class": "content-seam-above" },
+    { "width": 1366, "height": 768, "class": "desktop" },
+    { "width": 1440, "height": 900, "class": "desktop" },
+    { "width": 1536, "height": 864, "class": "fhd-125-percent" },
+    { "width": 1920, "height": 1080, "class": "fhd" }
+  ],
+  "selectors": {
+    "event_card_auxiliary_target": "[data-ds-family=\"EventCard\"] .event-card__utility-row .feedback-button--negative[data-feedback-action=\"not_interested\"]",
+    "canonical_event_card": "[data-ds-family=\"EventCard\"][data-ds-version][data-ds-variant][data-ds-state]",
+    "canonical_listing_card": "[data-ds-family=\"ListingEventCard\"][data-ds-version][data-ds-variant][data-ds-state]",
+    "canonical_adaptive_grid": "[data-ds-family=\"AdaptiveEventCardGrid\"][data-ds-version][data-ds-variant][data-ds-state]",
+    "canonical_media_rail": "[data-ds-family=\"EventMediaRail\"][data-ds-version][data-ds-variant][data-ds-state]",
+    "external_targets": "a[target=\"_blank\"]",
+    "popular_rows": ".ke-popular-desktop .ke-popular-behavior__row",
+    "media_frames": "[data-media-frame][data-media-frame-contract=\"v1\"]",
+    "adaptive_grid": "[data-adaptive-event-card-grid][data-ds-family=\"AdaptiveEventCardGrid\"]",
+    "adaptive_grid_cards": "[data-adaptive-event-card-grid] > [data-event-card]"
+  },
+  "gates": {
+    "http_status": 200,
+    "document_overflow_tolerance_px": 1,
+    "control_minimum_px": 44,
+    "safe_blank_rel_tokens": ["noopener", "noreferrer"],
+    "canonical_identity_attributes": ["data-ds-family", "data-ds-version", "data-ds-variant", "data-ds-state"],
+    "popular_internal_overflow_allowed": ["auto", "scroll"],
+    "media_frame_contract": "v1",
+    "media_fail_closed_kinds": ["document", "unknown", "fallback"],
+    "media_fail_closed_fit": "contain",
+    "media_fail_closed_crop_permission": "forbidden",
+    "adaptive_grid_layout_engine": "flex-lines",
+    "adaptive_grid_remainder_policy": "stretch",
+    "final_line_occupancy_tolerance_px": 1,
+    "equal_height_tolerance_px": 1,
+    "desktop_navigation_breakpoint_px": 981
+  },
+  "routing": [
+    { "defect_domain": "preview identity, ancestry or acceptance-rule disagreement", "owner": "N0" },
+    { "defect_domain": "foundation token, focus indicator or icon-size role", "owner": "F0" },
+    { "defect_domain": "MediaFrame fit, frame geometry, crop permission or framing selector", "owner": "FR0" },
+    { "defect_domain": "EventCard, ListingEventCard, EventMediaRail navigation or AdaptiveEventCardGrid", "owner": "M0" },
+    { "defect_domain": "route, shell, responsive navigation, route-local wrapper, external-link safety or document overflow", "owner": "A0" }
+  ],
+  "successor_acceptance": {
+    "published_real_requires_audit": true,
+    "newer_source_requires_new_kaggle_publication": true,
+    "browser_connector_required": true,
+    "source_tests_are_not_browser_pass": true,
+    "next_exact_result": "HTTP-200 immutable fresh-real Kaggle preview containing the accepted current N0/F0/FR0/M0/A0 integration, followed by independent V0 classification",
+    "fr0_cutover_required_before_framing_writes": true,
+    "fr0_must_not_delay_ready_successor": true
+  }
+}
