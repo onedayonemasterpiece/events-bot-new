@@ -1,0 +1,122 @@
+/* Transport timetable and route foundation roles. */
+:root {
+  /* Kaup/public-bus green family. Green is route identity, not success. */
+  --ke-color-transport-route: #176653;
+  --ke-color-transport-route-line: #1d6759;
+  --ke-color-transport-route-text: #17201f;
+  --ke-color-transport-route-copy: #204f46;
+  --ke-color-transport-route-muted: #66706e;
+  --ke-color-transport-route-muted-warm: #6c5c51;
+  --ke-color-transport-route-walk-muted: #526460;
+  --ke-color-transport-route-hover: rgba(23, 102, 83, 0.09);
+  --ke-color-transport-route-surface: #e4efec;
+  --ke-color-transport-timeline-surface: #f4f1e8;
+  --ke-color-transport-row-line: rgba(61, 74, 70, 0.14);
+  --ke-color-transport-control-line: rgba(69, 76, 73, 0.22);
+  --ke-color-transport-control-surface: var(--ke-color-background-surface-strong);
+  --ke-color-transport-departure: #d34b3e;
+  --ke-color-transport-tight: #8e3d1e;
+  --ke-color-transport-focus: var(--ke-color-event-detail-action);
+  --ke-color-transport-warning-line: #e49a16;
+  --ke-color-transport-warning-surface: #fff2d8;
+  --ke-color-transport-warning-surface-strong: #fff0d2;
+  --ke-color-transport-warning-text: #3f3320;
+  --ke-color-transport-timeline-progress: #d8c76d;
+  --ke-color-transport-timeline-progress-muted: rgba(219, 233, 228, 0.45);
+  --ke-color-transport-primary-muted: #c7dad4;
+  --ke-color-transport-primary-stop: #dbe9e4;
+  --ke-color-transport-primary-tight: #ffe19b;
+  --ke-color-transport-queue-surface: rgba(255, 255, 255, 0.74);
+  --ke-color-transport-queue-text: #51453d;
+  --ke-color-transport-queue-text-strong: #292119;
+
+  --ke-transport-route-icon-size: var(--ke-icon-size-inline);
+  --ke-transport-map-icon-size: var(--ke-icon-size-control);
+  --ke-transport-walk-icon-size: var(--ke-icon-size-control);
+  --ke-transport-action-icon-size: var(--ke-icon-size-control);
+  --ke-transport-heading-badge-size: 3.1rem;
+  --ke-transport-heading-badge-size-compact: 2.8rem;
+  --ke-transport-heading-badge-radius: 13px;
+  --ke-transport-heading-badge-radius-compact: 11px;
+  --ke-transport-control-min: var(--ke-size-touch-target);
+  --ke-transport-row-radius: 11px;
+  --ke-transport-control-radius: var(--ke-shape-radius-focus-control);
+  --ke-transport-primary-radius: 15px;
+
+  /* Kaup outer surface and official-transfer band. */
+  --ke-color-kaup-surface: #fffdfa;
+  --ke-color-kaup-border: rgba(58, 68, 65, 0.17);
+  --ke-color-kaup-section-line: rgba(93, 71, 43, 0.14);
+  --ke-color-kaup-footer-line: rgba(93, 71, 43, 0.12);
+  --ke-color-kaup-transfer-surface: #302b27;
+  --ke-color-kaup-transfer-surface-compact: #342f2b;
+  --ke-color-kaup-transfer-text: var(--ke-color-surface-warm);
+  --ke-color-kaup-transfer-muted: #e6d9cd;
+  --ke-color-kaup-transfer-copy: #e2d6ca;
+  --ke-color-kaup-transfer-bullet: #d36c3c;
+  --ke-color-kaup-transfer-action: var(--ke-color-event-detail-action-strong);
+  --ke-color-kaup-transfer-action-text: var(--ke-color-text-inverse);
+  --ke-elevation-kaup: 0 12px 30px rgba(39, 49, 46, 0.07);
+  --ke-kaup-radius: 18px;
+  --ke-kaup-radius-compact: 15px;
+  --ke-kaup-bus-radius: var(--ke-space-lg);
+  --ke-kaup-transfer-action-radius: 11px;
+  --ke-kaup-header-icon-size: var(--ke-icon-size-feature);
+  --ke-kaup-header-icon-size-compact: var(--ke-icon-size-action);
+  --ke-kaup-car-icon-size: var(--ke-icon-size-control);
+
+  /* Train schedule: warm railway family. */
+  --ke-color-train-surface: color-mix(in srgb, var(--ke-color-action-primary-strong) 3.5%, transparent);
+  --ke-color-train-border: rgba(145, 45, 36, 0.18);
+  --ke-color-train-section-line: color-mix(in srgb, var(--ke-color-action-primary-strong) 12%, transparent);
+  --ke-color-train-header-surface: rgba(255, 255, 255, 0.56);
+  --ke-color-train-heading: #2d3035;
+  --ke-color-train-step: #96352e;
+  --ke-color-train-copy: #69574c;
+  --ke-color-train-buffer-text: #5d4d43;
+  --ke-color-train-buffer-surface: color-mix(in srgb, var(--ke-color-action-primary-strong) 6%, transparent);
+  --ke-color-train-row-line: rgba(45, 48, 53, 0.1);
+  --ke-color-train-row-surface: rgba(255, 255, 255, 0.82);
+  --ke-color-train-row-hover-line: color-mix(in srgb, var(--ke-color-action-primary-strong) 28%, transparent);
+  --ke-color-train-row-hover-surface: var(--ke-color-background-surface);
+  --ke-color-train-row-pressed-surface: var(--ke-color-control-hover-surface);
+  --ke-color-train-focus: rgba(151, 53, 46, 0.42);
+  --ke-color-train-calendar-surface: #fff7eb;
+  --ke-color-train-calendar-text: var(--ke-color-action-primary-strong);
+  --ke-color-train-cutoff-copy: #4f4640;
+  --ke-color-train-muted-surface: rgba(45, 48, 53, 0.05);
+  --ke-elevation-train: 0 12px 30px rgba(72, 45, 25, 0.06);
+  --ke-train-radius: var(--ke-shape-radius-focus-control);
+  --ke-train-row-radius: var(--ke-shape-radius-control);
+  --ke-train-calendar-container-size: 2.4rem;
+  --ke-train-calendar-icon-size: var(--ke-icon-size-control);
+
+  /* Regional bus schedule: cool blue family. Blue is route modality, not info. */
+  --ke-color-bus-surface: rgba(35, 83, 102, 0.035);
+  --ke-color-bus-border: rgba(35, 83, 102, 0.18);
+  --ke-color-bus-section-line: rgba(35, 83, 102, 0.12);
+  --ke-color-bus-group-line: rgba(35, 83, 102, 0.1);
+  --ke-color-bus-map-link-line: rgba(35, 83, 102, 0.14);
+  --ke-color-bus-heading: #273941;
+  --ke-color-bus-copy: #52666f;
+  --ke-color-bus-accent: #1f708a;
+  --ke-color-bus-shared-stop-surface: rgba(39, 125, 151, 0.055);
+  --ke-color-bus-chip-surface: rgba(255, 255, 255, 0.88);
+  --ke-color-bus-map-surface: #e9eff1;
+  --ke-color-bus-map-link-surface: rgba(255, 255, 255, 0.58);
+  --ke-elevation-bus: 0 12px 30px rgba(38, 75, 90, 0.06);
+  --ke-bus-radius: var(--ke-shape-radius-focus-control);
+  --ke-bus-radius-wide: var(--ke-shape-radius-focus-panel-compact);
+  --ke-bus-symbol-size: 4.4rem;
+  --ke-bus-symbol-size-compact: 3.9rem;
+  --ke-bus-chip-radius: var(--ke-shape-radius-focus-control);
+
+  /* Transport source maps/train/bus illustrations keep intrinsic dimensions as
+     media metadata. Their rendered fit/background uses the roles above. */
+
+  /* Retained transport close pairs:
+     - Kaup green, train red and regional-bus blue encode three modalities;
+     - tight-transfer text is advisory and remains separate from warning block;
+     - train warm and bus cool surfaces preserve modality scanning;
+     - transfer inverse band is a purchase context, not the global footer. */
+}
