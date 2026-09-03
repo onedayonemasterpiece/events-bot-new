@@ -506,7 +506,7 @@
 .ke-listing-card__free-medallion b { font-size: .9rem; }
 .ke-listing-card__utility { flex: 0 0 44px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ke-listing-card__utility--inside { position: absolute; z-index: 3; top: 8px; right: 8px; flex-basis: auto; }
-.ke-listing-card__utility button { width: 44px; min-width: 44px; height: 44px; display: grid; grid-template-columns: 20px auto; place-content: center; align-items: center; gap: 2px; border: 1px solid color-mix(in srgb, var(--ke-color-ink) 14%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--ke-color-surface-strong) 92%, transparent); color: var(--ke-color-ink); cursor: pointer; }
+.ke-listing-card__utility button { width: 44px; min-width: 44px; height: 44px; display: grid; grid-template-columns: var(--ke-icon-size-control) auto; place-content: center; align-items: center; gap: 2px; border: 1px solid color-mix(in srgb, var(--ke-color-ink) 14%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--ke-color-surface-strong) 92%, transparent); color: var(--ke-color-ink); cursor: pointer; }
 .ke-listing-card__utility button:hover { border-color: var(--ke-color-brand-600); color: var(--ke-color-brand-700); }
 .ke-listing-card__utility button[aria-pressed="true"] { background: var(--ke-color-brand-700); color: #fff; }
 .ke-listing-card__utility .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); fill: currentColor; }
