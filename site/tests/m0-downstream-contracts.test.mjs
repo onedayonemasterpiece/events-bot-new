@@ -6,112 +6,159 @@ import { fileURLToPath } from 'node:url';
 
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => readFile(path.join(siteRoot, relativePath), 'utf8');
+const DIRECT_FRAMING_DECLARATION = /(?:^|[;{])\s*object-(?:fit|position)\s*:/mu;
 
-test('M0 downstream index covers the complete PM0 20-31 family contour and exact successor gap', async () => {
+test('M0 downstream index acknowledges the exact FR0 cutover and current successor gap', async () => {
   const binding = JSON.parse(await read('src/data/m0-downstream-bindings.v1.json'));
 
   assert.equal(binding.schema, 'kenigevents.m0.downstream-bindings.v1');
-  assert.equal(binding.contract_version, '1.9.0');
+  assert.equal(binding.version, '1.1.0');
+  assert.equal(binding.contract_version, '1.10.0');
   assert.equal(binding.role, 'M0');
-  assert.equal(binding.instruction_comment, 5526326906);
-  assert.equal(binding.authority.current_successor_sha_at_review, '2e8f4dd2393ce0c5100f8b610aae3f01380aad8c');
-  assert.equal(binding.authority.source_checkpoint_before_binding_commit, 'c71351decdcee02941acb26c5e2fbaf88faf0378');
+  assert.equal(binding.instruction_comment, 5529661330);
+  assert.equal(binding.authority.fr0_cutover_base, 'c71351decdcee02941acb26c5e2fbaf88faf0378');
+  assert.equal(binding.authority.m0_downstream_base, '5eeaba09b5ec432a77ff899ce98fb8b9f492c133');
+  assert.equal(binding.authority.current_successor_sha_at_review, 'cebeafeee08251a327145ee973ee035cced65204');
+  assert.equal(binding.authority.current_successor_contains_m0_downstream_base, true);
+  assert.equal(binding.authority.current_successor_contains_post_cutover_consolidation, false);
+  assert.equal(binding.cutover.acknowledged, true);
+  assert.equal(binding.cutover.no_third_wave, true);
+  assert.equal(binding.truth_boundary.fr0_protocol_dependency_is_not_m0_protocol_ownership, true);
   assert.equal(binding.truth_boundary.browser_pass_claimed, false);
-  assert.equal(binding.truth_boundary.penpot_materialization_claimed, false);
+});
 
+test('post-cutover M0 families contain only EventCard, ListingEventCard and AdaptiveEventCardGrid', async () => {
+  const binding = JSON.parse(await read('src/data/m0-downstream-bindings.v1.json'));
   const expectedFamilies = new Map([
-    ['MediaFrame', 1],
     ['EventCard', 2],
     ['ListingEventCard', 9],
     ['AdaptiveEventCardGrid', 1],
-    ['EventMediaRail', 1],
-    ['EventHero', 1],
   ]);
+
   assert.equal(binding.families.length, expectedFamilies.size);
   for (const family of binding.families) {
     assert.equal(family.version, expectedFamilies.get(family.astro_family), `${family.astro_family} version drift`);
     assert.ok(family.source_roots.length > 0, `${family.astro_family} misses source roots`);
     assert.ok(family.penpot_master_target, `${family.astro_family} misses Penpot target`);
   }
+  for (const transferred of ['MediaFrame', 'EventMediaRail', 'EventHero']) {
+    assert.ok(!binding.families.some((family) => family.astro_family === transferred),
+      `${transferred} must not remain a current M0 family after cutover`);
+  }
 
-  assert.deepEqual(Object.keys(binding.pm0_items).map(Number), Array.from({ length: 12 }, (_, index) => index + 20));
-  assert.equal(binding.candidate_review.classification, 'PARTIAL_M0_INCLUDED_CURRENT_TAIL_MISSING');
-  assert.ok(binding.candidate_review.missing_current_m0_source.some((item) => item.path === 'site/src/components/EventMediaRail.astro'));
-  assert.equal(binding.candidate_review.missing_current_m0_source.find((item) => item.path === 'site/src/components/EventMediaRail.astro')?.required_m0_blob, '1e49e4b765488ef7703473693b6f619d185acfde');
-  assert.ok(binding.candidate_review.rejected_replay.some((item) => /temporary MediaFrame exception/u.test(item)));
-
-  assert.deepEqual(binding.downstream_targets, {
-    thin_s:'catalog/normalization/m0-family-thin-s-bindings.v1.json',
-    penpot_ready:'penpot/candidate/m0-family-master-spec.v1.json',
-    v0_matrix:'catalog/normalization/evidence/m0-v0-acceptance-matrix.v1.json',
-    integration_rollback:'docs/launch-normalization/m0-source-integration-and-rollback.v1.json',
-  });
+  assert.equal(binding.row_layout_service.source, 'site/src/lib/relatedCardLayout.mjs');
+  assert.equal(binding.row_layout_service.document_crop_budget, 0.2);
+  assert.deepEqual(binding.compatibility_adapters, [{
+    path:'site/src/components/OptimizedEventCardGrid.astro',
+    target:'AdaptiveEventCardGrid',
+    status:'adapter_only',
+    penpot_master:false,
+    forbidden_owners:['EventCard DOM', 'packRelatedCardRows', 'layout CSS', 'runtime diagnostics'],
+  }]);
 });
 
-test('canonical M0 roots expose one family lineage and fail-closed media decisions', async () => {
-  const [card, listing, adaptive, optimized, rail, hero, mediaFrame, cardCss] = await Promise.all([
+test('M0 card roots expose one component root, resource states, actions and metadata without framing paint', async () => {
+  const [card, listing, actionCss] = await Promise.all([
     read('src/components/EventCard.astro'),
     read('src/components/listings/ListingEventCard.astro'),
-    read('src/components/AdaptiveEventCardGrid.astro'),
-    read('src/components/OptimizedEventCardGrid.astro'),
-    read('src/components/EventMediaRail.astro'),
-    read('src/components/EventHero.astro'),
-    read('src/components/media-frame.css'),
     read('src/components/event-card.css'),
   ]);
 
+  assert.equal((card.match(/<article\b/gu) || []).length, 1);
+  assert.equal((listing.match(/<article\b/gu) || []).length, 1);
   assert.match(card, /data-ds-family="EventCard"[\s\S]*data-ds-version="2"/u);
-  assert.match(card, /import '\.\/media-frame\.css';/u);
-  assert.match(card, /import '\.\/event-card\.css';/u);
   assert.match(listing, /data-ds-family="ListingEventCard"[\s\S]*data-ds-version="9"/u);
-  assert.match(listing, /data-listing-proof-placement=\{hasSocialProof \? \(proofInside \? 'inside' : 'rail'\) : 'none'\}/u);
 
-  assert.equal((adaptive.match(/<EventCard\b/gu) || []).length, 1);
-  assert.match(adaptive, /data-ds-family="AdaptiveEventCardGrid"[\s\S]*data-ds-version="1"/u);
-  assert.match(adaptive, /data-adaptive-grid-layout-engine="flex-lines"/u);
+  for (const source of [card, listing]) {
+    assert.match(source, /data-media-frame-resource-state=/u);
+    assert.match(source, /data-media-frame-source-ratio=/u);
+    assert.doesNotMatch(source, /data-media-frame-state|dataset\.mediaFrameState/u);
+    assert.doesNotMatch(source, DIRECT_FRAMING_DECLARATION,
+      'card roots may publish framing inputs but cannot own object-fit/object-position declarations');
+  }
+
+  assert.match(card, /data-feedback-action="not_interested"/u);
+  assert.match(card, /data-calendar-action/u);
+  assert.match(card, /data-native-share/u);
+  assert.match(card, /data-feedback-action="like"/u);
+  assert.match(card, /data-card-type/u);
+  assert.match(card, /<EventOccurrenceLabel presentation=\{occurrencePresentation\} \/>/u);
+  assert.match(card, /data-card-status/u);
+  assert.match(actionCss, /min-height: var\(--ke-control-min, 44px\)/u);
+
+  assert.match(listing, /data-listing-event-type=/u);
+  assert.match(listing, /showFree && 'free-admission'/u);
+  assert.match(listing, /data-listing-proof-placement=\{hasSocialProof \? \(proofInside \? 'inside' : 'rail'\) : 'none'\}/u);
+  assert.match(listing, /const tailWidth = splitIdentityProofRail \? 96 : hasSideRail \? \(visibleIdentityCount === 0 \? 40 : 64\) : 0;/u);
+});
+
+test('AdaptiveEventCardGrid and Optimized adapter preserve one diagnostics writer and no phantom tracks', async () => {
+  const [adaptive, optimized] = await Promise.all([
+    read('src/components/AdaptiveEventCardGrid.astro'),
+    read('src/components/OptimizedEventCardGrid.astro'),
+  ]);
+
+  assert.equal((adaptive.match(/data-adaptive-grid-diagnostics-owner=/gu) || []).length, 1);
+  assert.match(adaptive, /data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"/u);
   assert.match(adaptive, /data-adaptive-grid-diagnostics-contract="input-source-rendered-v1"/u);
+  for (const field of [
+    'data-adaptive-grid-input-count',
+    'data-adaptive-grid-input-order',
+    'data-adaptive-grid-source-count',
+    'data-adaptive-grid-source-order',
+    'data-adaptive-grid-rendered-count',
+    'data-adaptive-grid-rendered-order',
+  ]) assert.ok(adaptive.includes(field), `missing grid field: ${field}`);
+  assert.match(adaptive, /itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\]/u);
+  assert.match(adaptive, /data-adaptive-grid-remainder-variant=/u);
+  assert.match(adaptive, /stretch-\$\{remainder\}-of-\$\{size\}/u);
+  assert.match(adaptive, /data-adaptive-grid-layout-engine="flex-lines"/u);
+  assert.match(adaptive, /flex-wrap: wrap/u);
+  assert.doesNotMatch(adaptive, /grid-template-columns\s*:/u);
   assert.match(adaptive, /adaptive-event-card-grid--responsive-stack\[data-adaptive-grid-row-size\]/u);
   assert.match(adaptive, /adaptive-event-card-grid--responsive-progressive\[data-adaptive-grid-row-size\]/u);
 
   assert.match(optimized, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro'/u);
   assert.match(optimized, /legacyOptimizedContract/u);
   assert.doesNotMatch(optimized, /import EventCard|<EventCard\b|packRelatedCardRows|<style>/u);
-
-  for (const variant of ['gallery-thumbnails', 'hero-selector', 'poster-strip']) {
-    assert.ok(rail.includes(variant), `EventMediaRail misses ${variant}`);
-  }
-  assert.match(rail, /const contradictoryVisualKind = requestedKind === 'visual' && imageTextMode !== 'visual_only';/u);
-  assert.match(rail, /requestedCover && kind === 'visual' && imageTextMode === 'visual_only'/u);
-  assert.match(rail, /resolved_visual_kind_mismatch_fail_closed/u);
-  assert.match(rail, /resolved_cover_request_fail_closed/u);
-  assert.doesNotMatch(rail, /item\.fit === 'cover' && kind === 'visual' \? 'cover' : 'contain'/u);
-
-  assert.match(hero, /data-ds-family="EventHero"[\s\S]*data-ds-version="1"/u);
-  assert.match(hero, /class="event-hero__media-frame"[\s\S]*data-media-frame-contract="v1"/u);
-  assert.match(hero, /data-media-frame-interaction-owner="caller"/u);
-  assert.equal((hero.match(/class="event-hero__media-frame"/gu) || []).length, 1);
-
-  assert.match(mediaFrame, /Canonical MediaFrame v1 structural and fit owner/u);
-  assert.match(mediaFrame, /\[data-media-frame-fit="cover"\][\s\S]*object-fit: cover/u);
-  assert.match(mediaFrame, /\[data-media-frame-fit="contain"\][\s\S]*object-fit: contain/u);
-  assert.match(cardCss, /min-height: var\(--ke-control-min, 44px\)/u);
+  assert.doesNotMatch(optimized, /data-adaptive-grid-(?:input|source|rendered|remainder)/u);
 });
 
-test('M0 bindings name actual consumers without claiming A0, V0 or Penpot completion', async () => {
-  const binding = JSON.parse(await read('src/data/m0-downstream-bindings.v1.json'));
-  const byFamily = new Map(binding.actual_consumer_census.map((entry) => [entry.family, entry]));
+test('relatedCardLayout owns normalized inputs, crop budget and deterministic occupancy', async () => {
+  const source = await read('src/lib/relatedCardLayout.mjs');
 
-  for (const family of ['EventCard', 'ListingEventCard', 'AdaptiveEventCardGrid', 'EventMediaRail', 'EventHero']) {
-    const entry = byFamily.get(family);
-    assert.ok(entry, `missing actual-consumer census for ${family}`);
-    assert.ok(entry.current_successor_consumers.length > 0, `${family} has no current successor consumers`);
-    assert.equal(entry.migration_owner, 'A0');
-  }
+  assert.match(source, /const MAX_DOCUMENT_CROP = 0\.2;/u);
+  assert.match(source, /const normalizedTargetAspect = finiteRatio\(targetAspect, mediaRatio\);/u);
+  assert.match(source, /if \(potentialCoverCrop > MAX_DOCUMENT_CROP \+ EPSILON\)/u);
+  assert.match(source, /cropReason:'document_crop_budget_exceeded'/u);
+  assert.match(source, /const limit = Math\.max\(0, Math\.floor\(Number\.isFinite\(requestedLimit\)/u);
+  assert.match(source, /const rowSize = Math\.max\(1, Math\.min\(6, Math\.floor\(Number\.isFinite\(requestedRowSize\)/u);
+  assert.match(source, /return left\.signature\.localeCompare\(right\.signature\);/u);
+  assert.match(source, /rowColumn:index/u);
+  assert.match(source, /return rows\.flatMap\(\(row, rowIndex\) => materializeRow\(row, rowIndex, presentation\)\);/u);
+});
 
-  assert.equal(binding.published_evidence.fresh_real.current_m0_credit, false);
-  assert.equal(binding.published_evidence.golden.verdict, 'DRIFT');
-  assert.equal(binding.published_evidence.current_v0_blocker.status, 'NOT_EXECUTED');
-  assert.match(binding.next_product_gate.required_source, /current M0 rail semantic tail/u);
-  assert.match(binding.next_product_gate.required_runtime, /full fresh-real Kaggle build/u);
-  assert.match(binding.next_product_gate.required_browser, /independent V0/u);
+test('downstream and test ownership are transferred without deleting FR0 coverage', async () => {
+  const [binding, ownership] = await Promise.all([
+    read('src/data/m0-downstream-bindings.v1.json').then(JSON.parse),
+    read('tests/m0-post-fr0-test-ownership.v1.json').then(JSON.parse),
+  ]);
+
+  assert.equal(binding.transferred_test_ownership.manifest, 'site/tests/m0-post-fr0-test-ownership.v1.json');
+  assert.equal(binding.transferred_test_ownership.m0_mixed_suite_status, 'CARD_GRID_ROW_LAYOUT_ONLY');
+  assert.equal(binding.transferred_test_ownership.coverage_deleted, false);
+  assert.equal(ownership.coverage_policy.delete_pre_cutover_coverage, false);
+  assert.deepEqual(binding.transferred_test_ownership.fr0_replacements, [
+    'site/tests/fr0-media-rail-fallback-contract.test.mjs',
+    'site/tests/fr0-media-rail-clip-owner.test.mjs',
+    'site/tests/fr0-event-hero-resource-fallback.test.mjs',
+    'site/tests/fr0-exhibitions-media-frame-contract.test.mjs',
+  ]);
+
+  assert.equal(binding.candidate_review.external_consumer_requirement.comment, 5530928932);
+  assert.equal(binding.candidate_review.external_consumer_requirement.m0_source_edit, false);
+  assert.equal(binding.pm0_items['26'], 'FR0_OWNED_AFTER_CUTOVER');
+  assert.equal(binding.pm0_items['27'], 'FR0_AND_V0_OWNED_AFTER_CUTOVER');
+  assert.match(binding.next_product_gate.required_source, /exact current head of work\/ui-normalization-m0-continuity-20260903/u);
+  assert.match(binding.rollback.forbidden_rollback_targets.join('\n'), /FR0 cutover base c71351de/u);
 });
