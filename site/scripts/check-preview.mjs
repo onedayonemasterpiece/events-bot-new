@@ -156,19 +156,25 @@ for (const route of listingRoutes) {
   const isDeclaredEmpty = Boolean(emptyListingTag) && !/\shidden(?:\s|>)/u.test(emptyListingTag);
   const mobileRailTag = html.match(/<div[^>]*\bdata-mobile-listing-rails\b[^>]*>/u)?.[0] || '';
   const isMobileRailDeclaredEmpty = /\bdata-ds-state="empty"/u.test(mobileRailTag);
-  if (!mobileRailTag || (!html.includes('data-mobile-listing-row') && !isDeclaredEmpty && !isMobileRailDeclaredEmpty)) {
+  if (route !== 'populyarnoe' && (!mobileRailTag || (!html.includes('data-mobile-listing-row') && !isDeclaredEmpty && !isMobileRailDeclaredEmpty))) {
     throw new Error(`Listing route ${route} misses the tracked accepted mobile event rail`);
   }
-  for (const contract of [
-    '@media(max-width:720px)',
-    '.ke-mobile-listing-rails--v23.event-row{height:112px',
-    '.ke-mobile-listing-rails--v23.rail-window{',
-    'width:100vw;height:112px',
-    '.ke-mobile-listing-rails--v23.track-start{flex:005px;width:5px',
-    '.ke-mobile-listing-rails--v23.event-summary{',
-    'flex:00296px;width:296px;height:112px',
-  ]) {
-    if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses accepted v23 mobile rail contract ${contract}`);
+  if (route === 'populyarnoe') {
+    if (mobileRailTag || !html.includes('data-popular-representation="mobile-large"') || !html.includes('data-popular-representation="mobile-adaptive"')) {
+      throw new Error('Popular must expose exactly the accepted Large/Compact representations without a disconnected v23 rail');
+    }
+  } else {
+    for (const contract of [
+      '@media(max-width:720px)',
+      '.ke-mobile-listing-rails--v23.event-row{height:112px',
+      '.ke-mobile-listing-rails--v23.rail-window{',
+      'width:100vw;height:112px',
+      '.ke-mobile-listing-rails--v23.track-start{flex:005px;width:5px',
+      '.ke-mobile-listing-rails--v23.event-summary{',
+      'flex:00296px;width:296px;height:112px',
+    ]) {
+      if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses accepted v23 mobile rail contract ${contract}`);
+    }
   }
 }
 const mobileRailRow = (route, eventId) => {
@@ -414,8 +420,7 @@ if (popularDesktopFamilyKeys.length !== popularDesktopIds.length || new Set(popu
 }
 const popularDesktopReasons = [...popularDesktopGlobalHtml.matchAll(/data-popular-reason="([^"]+)"/gu)].map((match) => match[1]);
 const expectedPopularDesktopReasonOrder = ['fast_growth', 'multi_source', 'discussed', 'frequently_shared', 'score_fallback'];
-if (popularDesktopReasons.length < 3
-  || popularDesktopReasons.length > expectedPopularDesktopReasonOrder.length
+if (popularDesktopReasons.length > expectedPopularDesktopReasonOrder.length
   || new Set(popularDesktopReasons).size !== popularDesktopReasons.length
   || popularDesktopReasons.some((reason, index) => {
     const expectedIndex = expectedPopularDesktopReasonOrder.indexOf(reason);

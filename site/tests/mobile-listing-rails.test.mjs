@@ -5,7 +5,7 @@ import test from 'node:test';
 const read = (relativePath) => readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
 test('accepted v23 full-viewport 112px rail remains on its approved date and weekend surfaces', async () => {
-  const [surface, row, menu, dates, weekend, popular, accessory] = await Promise.all([
+  const [surface, row, menu, dates, weekend, popular, accessory, previewCheck] = await Promise.all([
     read('src/components/listings/MobileListingRailSurface.astro'),
     read('src/components/listings/MobileListingRailRow.astro'),
     read('src/components/Reference4MobileMenu.astro'),
@@ -13,6 +13,7 @@ test('accepted v23 full-viewport 112px rail remains on its approved date and wee
     read('src/components/listings/WeekendListingSurface.astro'),
     read('src/components/listings/PopularListingSurface.astro'),
     read('src/components/listings/MobileDateAccessory.astro'),
+    read('scripts/check-preview.mjs'),
   ]);
   assert.match(surface, /\.ke-mobile-listing-rails--v23 \.event-row\{height:112px/u);
   assert.match(surface, /\.ke-mobile-listing-rails--v23 \.rail-window\{[\s\S]*width:100vw;height:112px/u);
@@ -72,6 +73,10 @@ test('accepted v23 full-viewport 112px rail remains on its approved date and wee
   assert.match(popular, /<PopularMobileBehaviorRows groups=\{groups\} \/>/u);
   assert.match(popular, /<PopularMobileAdaptiveRows groups=\{groups\} \/>/u);
   assert.match(popular, /<ListingMobileDensitySwitch \/>/u);
+  assert.match(previewCheck, /route !== 'populyarnoe'/u);
+  assert.match(previewCheck, /data-popular-representation="mobile-large"/u);
+  assert.match(previewCheck, /data-popular-representation="mobile-adaptive"/u);
+  assert.match(previewCheck, /without a disconnected v23 rail/u);
   assert.match(accessory, /getStaticEventDateAvailability\(\)/u);
   assert.match(accessory, /class="date-rail"/u);
   assert.match(accessory, /class="date-calendar-trigger"/u);
