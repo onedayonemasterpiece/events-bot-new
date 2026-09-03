@@ -7,7 +7,7 @@
     "repository": "onedayonemasterpiece/events-bot-new",
     "branch": "work/ui-normalization-a0-wave-3-20260903",
     "semantic_source_sha": "ec926580fa2cc003318006f4c1d671fc459ea26c",
-    "branch_head_before_pointer_extension": "ee9d392f6a0c408acbe3f53a789028b0762a3ce4",
+    "latest_checkpoint_before_current_ref_review": "65a0b1ac5b654732899670f8d12580c925ce907a",
     "tests_executed": false,
     "candidate_integrated": false,
     "browser_verdict": "NOT_CLAIMED"
@@ -15,7 +15,15 @@
   "dependencies": {
     "accepted_combined_precursor": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
     "f0": "de92dabd4551e117ca1af1be7915ff223321cc32",
-    "m0": "4c83fc7769b1dec2d92469373e3b15154af437f4"
+    "m0": "c808c75dd975a9851e148ccf993c32787d2b6886",
+    "m0_previous_checkpoint": "4c83fc7769b1dec2d92469373e3b15154af437f4"
+  },
+  "current_ref_overlay": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "path": "docs/launch-normalization/a0-current-ref-overlay.v1.json",
+    "commit": "efad360ed112ed1ef20a8015285a3f804c8bf6d0",
+    "m0_compatibility_verdict": "COMPATIBLE_SUCCESSOR_NO_A0_SOURCE_CHANGE_REQUIRED"
   },
   "mechanical_batch": {
     "issue_comment": 5527907602,
@@ -30,7 +38,7 @@
     ],
     "must_apply_after": [
       "F0 dependency",
-      "M0 dependency"
+      "current M0 dependency"
     ],
     "wholesale_a0_branch_merge_allowed": false
   },
@@ -48,6 +56,7 @@
         "scope": "PM0-37-16 through PM0-37-19"
       }
     ],
+    "current_ref_overlay": "efad360ed112ed1ef20a8015285a3f804c8bf6d0",
     "status": "MACHINE_READABLE"
   },
   "penpot_ready_spec": {
@@ -82,6 +91,7 @@
     "branch": "integration/launch-normalized-sot-penpot-20260902",
     "path": "catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json",
     "commit": "952315ce0a4a5312e3f34c5afc7e8b05066c2147",
+    "current_ref_overlay": "efad360ed112ed1ef20a8015285a3f804c8bf6d0",
     "status": "PENDING_CURRENT_SUCCESSOR_BUILD_AND_V0",
     "pm0_item_37_denominator": 19,
     "source_identity_at_v0_recensus": "16/19",
@@ -94,6 +104,7 @@
     "branch": "integration/launch-normalized-sot-penpot-20260902",
     "path": "docs/launch-normalization/a0-source-integration-and-rollback.v1.json",
     "commit": "d0509f97e04fda3f24b026dd767262d2098f5463",
+    "current_ref_overlay": "efad360ed112ed1ef20a8015285a3f804c8bf6d0",
     "status": "READY_FOR_SELECTIVE_MATERIALIZATION",
     "rollback_policy": "smallest failing named cluster"
   },
@@ -106,6 +117,7 @@
   "completion_truth": {
     "a0_source_and_semantic_decisions": "COMPLETE_WITH_ONE_R0_MECHANICAL_BATCH",
     "a0_downstream_bindings_and_specs": "COMPLETE",
+    "current_m0_candidate_review": "COMPLETE_COMPATIBLE",
     "source_tests": "R0_REQUIRED",
     "candidate_integration_and_acceptance": "R0_AND_N0_REQUIRED",
     "fresh_real_kaggle_preview": "R0_REQUIRED",
