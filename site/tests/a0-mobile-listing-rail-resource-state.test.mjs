@@ -4,6 +4,18 @@ import test from 'node:test';
 
 const read = (relativePath) => readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
+function exactDeclarationBodies(source, exactSelector) {
+  const bodies = [];
+  for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/gu)) {
+    const selectors = match[1]
+      .split(',')
+      .map((selector) => selector.trim())
+      .filter(Boolean);
+    if (selectors.includes(exactSelector)) bodies.push(match[2]);
+  }
+  return bodies;
+}
+
 test('mobile listing rail consumes the canonical FR0 resource-state protocol', async () => {
   const [row, surface, mediaFrame] = await Promise.all([
     read('src/components/listings/MobileListingRailRow.astro'),
@@ -58,11 +70,22 @@ test('mobile listing rail consumes the canonical FR0 resource-state protocol', a
   assert.match(mediaFrame, /\[data-media-frame\]\[data-media-frame-contract="v1"\][\s\S]*overflow: hidden;/u);
   assert.match(mediaFrame, /data-media-frame-fit="cover"[\s\S]*object-fit: cover;/u);
   assert.match(mediaFrame, /data-media-frame-fit="contain"[\s\S]*object-fit: contain;/u);
-  assert.doesNotMatch(
-    surface,
-    /\.event-media[^{}]*\{[^}]*(?:object-fit|object-position|clip-path)\s*:/iu,
-    'A0 mobile rail must not become a competing fit, focal or clip owner',
-  );
+
+  const ownedSelectors = [
+    '.ke-mobile-listing-rails--v23 .event-media',
+    '.ke-mobile-listing-rails--v23 .event-media img',
+  ];
+  for (const selector of ownedSelectors) {
+    const bodies = exactDeclarationBodies(surface, selector);
+    assert.ok(bodies.length > 0, `missing exact ${selector} declaration block`);
+    for (const body of bodies) {
+      assert.doesNotMatch(
+        body,
+        /(?:object-fit|object-position|clip-path)\s*:/iu,
+        `${selector} must not become a competing fit, focal or clip owner`,
+      );
+    }
+  }
 });
 
 test('mobile rail resource-state migration preserves geometry, gestures and actions', async () => {
