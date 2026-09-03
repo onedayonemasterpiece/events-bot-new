@@ -1,5 +1,5 @@
 ---
-import EventCard from '../EventCard.astro';
+import AdaptiveEventCardGrid from '../AdaptiveEventCardGrid.astro';
 import EventFacts from '../EventFacts.astro';
 import EventHero, { type HeroComposition, type HeroMode } from '../EventHero.astro';
 import EventTokenMedallions from '../EventTokenMedallions.astro';
@@ -101,10 +101,17 @@ const galleryCta = galleryCtaEvent ? {
 
     <section id="discovery-feed" class="section-card mobile-event-review__discovery" style="margin-top: 1rem;" data-hide-sticky-after>
       <div class="section-card__inner">
-        <h2>Смотрите дальше</h2>
-        <div class="cards-grid cards-grid--immersive" data-feed-card-variant="split-actions">
-          {related.map((candidate) => <EventCard event={candidate} variant="split-actions" />)}
-        </div>
+        <h2 id="mobile-review-discovery-title">Смотрите дальше</h2>
+        <AdaptiveEventCardGrid
+          events={related}
+          mode="flow"
+          rowSize={1}
+          responsive="fixed"
+          mobileFlowMedia={false}
+          className="cards-grid--immersive"
+          ariaLabelledby="mobile-review-discovery-title"
+          rootAttributes={{ 'data-mobile-event-review-discovery-grid':'' }}
+        />
       </div>
     </section>
   </div>
