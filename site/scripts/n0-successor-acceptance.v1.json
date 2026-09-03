@@ -158,7 +158,7 @@
         "required_rel_tokens": ["noopener", "noreferrer"],
         "negative_selectors": [
           "[target=\"_blank\"]:not([rel~=\"noopener\"])",
-          "[target=\"_blank\"]:not([rel~=\"noreferrer\"] )"
+          "[target=\"_blank\"]:not([rel~=\"noreferrer\"])"
         ]
       }
     }
