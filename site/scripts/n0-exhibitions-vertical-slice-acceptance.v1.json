@@ -1,0 +1,161 @@
+{
+  "schema": "kenigevents.n0-exhibitions-vertical-slice-acceptance.v1",
+  "version": "1.0.0",
+  "role": "N0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "contract_version": "1.10.0",
+  "frozen_transaction": {
+    "source_sha": "cebeafeee08251a327145ee973ee035cced65204",
+    "build_id": "preview-real-cebeafeee-normalized-20260903-v1",
+    "publication_state": "IN_PROGRESS",
+    "snapshot_id": "issue621-real-cebeafeee-20260903T201333Z",
+    "snapshot_sha256": "db3e7dc2cc2c5e5ce3609500286c4de903f1b37a07c8ebf99926c2137df7ef20"
+  },
+  "slice": {
+    "id": "EXHIBITIONS_PERSONAL_ROW_FR0_MEDIAFRAME",
+    "chain": [
+      "ExhibitionsPersonalSurface",
+      "ExhibitionPrototypeRow",
+      "FR0 MediaFrame"
+    ],
+    "route": "/vystavki/",
+    "source_verdict": "ACCEPTED_SOURCE",
+    "browser_verdict": "PENDING_V0",
+    "independent_acceptance": true,
+    "unrelated_route_drift_rejects_slice": false
+  },
+  "exact_source": [
+    {
+      "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "blob": "61d065efbc9b05254601ae807b7fcffec701bd04",
+      "owner": "A0_CONSUMER",
+      "required": [
+        "imports ExhibitionPrototypeRow",
+        "imports product-contour-foundations.css",
+        "publishes data-ds-family=ExhibitionsPersonalSurface",
+        "renders new, priority and tail rows through ExhibitionPrototypeRow",
+        "contains no private exhibitions theme registry"
+      ]
+    },
+    {
+      "path": "site/src/components/ExhibitionPrototypeRow.astro",
+      "blob": "ff94b32a288b079f27ca9e8c33d6975f52012478",
+      "owner": "A0_CONSUMER_USING_FR0_PROTOCOL",
+      "required": [
+        "imports media-frame.css",
+        "publishes exhibitions-deck MediaFrame roots",
+        "publishes exhibitions-medallion MediaFrame root",
+        "publishes direct image, placeholder and fallback anatomy",
+        "uses interaction-owner=caller for deck frames",
+        "uses interaction-owner=none for the non-interactive medallion"
+      ]
+    },
+    {
+      "path": "site/src/components/exhibitionsMediaFrameBridge.mjs",
+      "blob": "1898f0ce973676241d54530d51c17b577e7c6509",
+      "owner": "FR0_PROTOCOL_BRIDGE",
+      "required": [
+        "style owner is media-frame.css",
+        "deck, gallery and medallion publish canonical v1 fields",
+        "loading maps to pending",
+        "error maps to broken",
+        "depth maps to fallback",
+        "broken or fallback fails closed to kind=fallback fit=contain crop=forbidden",
+        "gallery keeps responsive srcset and sizes",
+        "medallion publishes interaction-owner=none"
+      ]
+    },
+    {
+      "path": "site/src/components/media-frame.css",
+      "blob": "1231b0665054da3cd9bf936585a7d2e02838b82a",
+      "owner": "FR0_CANONICAL_STYLE",
+      "required": [
+        "one canonical v1 clipping owner",
+        "computed object position comes from --media-frame-object-position",
+        "cover and contain are selected by data-media-frame-fit",
+        "exhibitions deck, gallery and medallion surfaces are explicit",
+        "pending placeholder and broken fallback states are explicit"
+      ]
+    },
+    {
+      "path": "site/tests/fr0-exhibitions-media-frame-contract.test.mjs",
+      "blob": "ff26615718b83134db9bb65e1a10831818381743",
+      "owner": "FR0_REGRESSION",
+      "required": [
+        "source contract covers deck gallery and medallion",
+        "source contract protects A0 interaction loop",
+        "source contract asserts FR0 token consumption"
+      ]
+    }
+  ],
+  "source_acceptance": {
+    "root_identity": "PASS_BY_SOURCE_REVIEW",
+    "canonical_row_reuse": "PASS_BY_SOURCE_REVIEW",
+    "framing_owner": "PASS_BY_SOURCE_REVIEW",
+    "fit_and_focal_protocol": "PASS_BY_SOURCE_REVIEW",
+    "resource_state_protocol": "PASS_BY_SOURCE_REVIEW",
+    "non_interactive_medallion_owner_none": "ACCEPTED_PROTOCOL",
+    "competing_route_local_attribute_scoped_MediaFrame_owner": "NOT_FOUND_BY_SOURCE_REVIEW",
+    "runtime_or_browser_credit": false
+  },
+  "v0_required_sections": {
+    "viewports": [375, 620, 1024, 1440],
+    "route_and_document": [
+      "HTTP 200 for the exact frozen build route",
+      "document horizontal overflow <= 1px",
+      "one visible ExhibitionsPersonalSurface root",
+      "visible ExhibitionPrototypeRow population is nonzero"
+    ],
+    "frame_protocol": [
+      "every visible deck/gallery/medallion frame has contract v1 and style-owner media-frame.css",
+      "data-media-frame-fit equals computed object-fit",
+      "object position equals the published focal/object-position field",
+      "frame clips image and fallback without escape",
+      "document or unknown media never retains cover",
+      "broken media becomes fallback contain forbidden resource_load_error"
+    ],
+    "resource_state_observation": [
+      "resource_state pending|loaded|fallback|broken",
+      "root fallback marker",
+      "direct fallback child presence and visibility",
+      "image resource presence",
+      "source ratio presence or factual absence",
+      "legacy state channel absence"
+    ],
+    "interaction": [
+      "deck/gallery frames are non-interactive roots with interaction-owner=caller",
+      "medallion is a non-interactive span with interaction-owner=none",
+      "medallion and descendants contain no interactive control",
+      "missing/unknown interaction owner or MediaFrame-owned activation is DRIFT"
+    ],
+    "row_and_accessibility": [
+      "row links, deck navigation and gallery controls retain accessible names",
+      "keyboard row/deck/gallery interactions remain operable",
+      "no hidden focusable frame or nested interactive control"
+    ]
+  },
+  "acceptance_rule": {
+    "N0_accepts_slice_when": [
+      "the exact cebeafee publication identity is accepted",
+      "V0 personally reports all required exhibitions and FR0 MediaFrame sections",
+      "no critical structural DRIFT exists in this slice",
+      "no required route/viewport/frame case is omitted"
+    ],
+    "omitted_required_case": "INCOMPLETE_NOT_PASS",
+    "unrelated_route_drift": "DOES_NOT_REJECT_THIS_SLICE",
+    "N0_may_not_self_issue_browser_verdict": true
+  },
+  "rollback_boundary": {
+    "preserve_frozen_immutable_prefix": true,
+    "smallest_units": [
+      "exhibitions consumer materialization",
+      "ExhibitionPrototypeRow protocol binding",
+      "FR0 exhibitions MediaFrame batch"
+    ],
+    "do_not_revert": [
+      "accepted festivals source",
+      "unrelated M0 card/grid batch",
+      "one canonical Kaggle generation path"
+    ]
+  }
+}
