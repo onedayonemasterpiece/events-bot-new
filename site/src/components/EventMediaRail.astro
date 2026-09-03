@@ -1,6 +1,7 @@
 ---
 import type { EventImageAsset, EventImageMediaRole } from '../lib/types';
 import { eventImageUrl } from '../lib/assets';
+import './media-frame.css';
 
 export type EventMediaRailVariant = 'gallery-thumbnails' | 'hero-selector' | 'poster-strip';
 export type EventMediaRailFrameKind = 'visual' | 'document' | 'unknown' | 'fallback';
@@ -122,6 +123,7 @@ const mediaFrameKind = (asset: EventImageAsset): EventMediaRailFrameKind => {
 const mediaFrameFit = (asset: EventImageAsset): EventMediaRailFrameFit => (
   mediaFrameKind(asset) === 'visual' ? 'cover' : 'contain'
 );
+const mediaFrameCropPermission = (fit: EventMediaRailFrameFit) => fit === 'cover' ? 'allowed' : 'forbidden';
 const mediaFrameCropReason = (asset: EventImageAsset) => {
   if (mediaFrameKind(asset) === 'visual') return 'gallery_visual_only_cover';
   if (asset.media_semantic_status && asset.media_semantic_status !== 'classified') return 'semantic_status_fail_closed';
@@ -267,12 +269,13 @@ const rootStyle = variant === 'gallery-thumbnails'
           ? `(min-width:1024px) ${Math.round(item.slotWidth || 116)}px, 1px`
           : '(min-width: 1024px) 92px, 1px';
       const frameStyle = sourceRatio
-        ? `--media-frame-source-ratio:${sourceRatio};--media-frame-object-position:${item.objectPosition}`
+        ? `--media-frame-ratio:${sourceRatio};--media-frame-source-ratio:${sourceRatio};--media-frame-object-position:${item.objectPosition}`
         : `--media-frame-object-position:${item.objectPosition}`;
       const itemStyle = variant === 'poster-strip' && item.railRatio
         ? `--rail-ratio:${item.railRatio.toFixed(4)};`
         : undefined;
       const viewerStart = String(item.sourceIndex ?? `gallery-${item.galleryIndex}`);
+      const cropPermission = mediaFrameCropPermission(item.fit);
       return (
         <button
           type="button"
@@ -309,17 +312,26 @@ const rootStyle = variant === 'gallery-thumbnails'
               class="event-media-rail__frame"
               data-media-frame
               data-media-frame-contract="v1"
+              data-media-frame-style-owner="media-frame.css"
               data-media-frame-surface="media-rail"
+              data-media-frame-role={item.mediaRole}
               data-media-frame-kind={item.kind}
               data-media-frame-fit={item.fit}
+              data-media-frame-crop-permission={cropPermission}
+              data-media-frame-ratio={sourceRatio?.toFixed(5)}
               data-media-frame-object-position={item.objectPosition}
+              data-media-frame-focal-position={item.objectPosition}
               data-media-frame-crop-reason={item.cropReason}
+              data-media-frame-clip="frame"
+              data-media-frame-radius="surface"
+              data-media-frame-fill="true"
               data-media-frame-source-width={item.width}
               data-media-frame-source-height={item.height}
               data-media-frame-source-ratio={sourceRatio?.toFixed(5)}
               data-media-frame-loading="eager"
               data-media-frame-priority="true"
               data-media-frame-interaction-owner="caller"
+              data-media-frame-fallback={item.kind === 'fallback' ? '' : undefined}
               style={frameStyle}
             >
               <img
@@ -331,7 +343,6 @@ const rootStyle = variant === 'gallery-thumbnails'
                 alt=""
                 loading="eager"
                 decoding="async"
-                style={`object-fit:${mediaFrameFit(asset)};object-position:50% 50%`}
                 data-media-frame-image
               />
             </span>
@@ -340,16 +351,25 @@ const rootStyle = variant === 'gallery-thumbnails'
               class="event-media-rail__frame"
               data-media-frame
               data-media-frame-contract="v1"
+              data-media-frame-style-owner="media-frame.css"
               data-media-frame-surface="media-rail"
+              data-media-frame-role={item.mediaRole}
               data-media-frame-kind={item.kind}
               data-media-frame-fit={item.fit}
+              data-media-frame-crop-permission={cropPermission}
+              data-media-frame-ratio={sourceRatio?.toFixed(5)}
               data-media-frame-object-position={item.objectPosition}
+              data-media-frame-focal-position={item.objectPosition}
               data-media-frame-crop-reason={item.cropReason}
+              data-media-frame-clip="frame"
+              data-media-frame-radius="surface"
+              data-media-frame-fill="true"
               data-media-frame-source-width={item.width}
               data-media-frame-source-height={item.height}
               data-media-frame-source-ratio={sourceRatio?.toFixed(5)}
               data-media-frame-loading="lazy"
               data-media-frame-interaction-owner="caller"
+              data-media-frame-fallback={item.kind === 'fallback' ? '' : undefined}
               style={frameStyle}
             >
               <img
@@ -364,7 +384,6 @@ const rootStyle = variant === 'gallery-thumbnails'
                 loading="lazy"
                 decoding="async"
                 fetchpriority="low"
-                style={`object-fit:${item.fit};object-position:${item.objectPosition}`}
                 data-media-frame-image
               />
             </picture>
@@ -441,19 +460,6 @@ const rootStyle = variant === 'gallery-thumbnails'
 <style>
   .event-media-rail {
     min-width: 0;
-  }
-
-  .event-media-rail__frame {
-    display: block;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .event-media-rail__frame img {
-    display: block;
-    width: 100%;
-    height: 100%;
   }
 
   .event-media-rail.event-media-rail--gallery-thumbnails {
