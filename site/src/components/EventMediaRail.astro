@@ -1,20 +1,83 @@
 ---
-import type { EventImageAsset } from '../lib/types';
+import type { EventImageAsset, EventImageMediaRole } from '../lib/types';
 import { eventImageUrl } from '../lib/assets';
 
+export type EventMediaRailVariant = 'gallery-thumbnails' | 'hero-selector' | 'poster-strip';
+export type EventMediaRailFrameKind = 'visual' | 'document' | 'unknown' | 'fallback';
+export type EventMediaRailFrameFit = 'cover' | 'contain';
+export type EventMediaRailAspect = 'portrait' | 'square' | 'landscape';
+
+export interface EventMediaRailItem {
+  src: string;
+  thumbnailSrc: string;
+  thumbnailSrcset?: string;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
+  width?: number;
+  height?: number;
+  alt?: string;
+  galleryIndex: number;
+  sourceIndex?: number;
+  imageTextMode: EventImageAsset['image_text_mode'];
+  mediaRole: EventImageMediaRole;
+  kind: EventMediaRailFrameKind;
+  fit: EventMediaRailFrameFit;
+  objectPosition?: string;
+  cropReason: string;
+  roleLabel?: string;
+  actionLabel: string;
+  rotationEligible?: boolean;
+  railAspect?: EventMediaRailAspect;
+  railRatio?: number;
+  slotWidth?: number;
+}
+
 interface Props {
-  assets: EventImageAsset[];
+  variant?: EventMediaRailVariant;
+  assets?: EventImageAsset[];
+  items?: EventMediaRailItem[];
   galleryId: string;
   eventTitle: string;
   maxVisible?: number;
+  className?: string;
+  ariaLabel?: string;
+  splitPortraitViewer?: boolean;
 }
 
-const { assets, galleryId, eventTitle, maxVisible = 6 } = Astro.props;
-const numericMaxVisible = Number(maxVisible);
-const visibleLimit = Math.max(2, Math.floor(Number.isFinite(numericMaxVisible) ? numericMaxVisible : 6));
-const visibleAssets = assets.slice(0, visibleLimit);
-const hiddenCount = Math.max(0, assets.length - visibleAssets.length);
+interface NormalizedRailItem extends EventMediaRailItem {
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
+  width?: number;
+  height?: number;
+  galleryIndex: number;
+  sourceIndex?: number;
+  objectPosition: string;
+  railRatio?: number;
+  slotWidth?: number;
+}
 
+const {
+  variant = 'gallery-thumbnails',
+  assets = [],
+  items = [],
+  galleryId,
+  eventTitle,
+  maxVisible = 6,
+  className = '',
+  ariaLabel,
+  splitPortraitViewer = false,
+} = Astro.props;
+
+const finitePositive = (value: number | null | undefined) => (
+  Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : undefined
+);
+const finiteIndex = (value: number | null | undefined, fallback: number) => (
+  Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.floor(Number(value)) : fallback
+);
+const normalizedObjectPosition = (value: string | null | undefined) => {
+  const raw = String(value || '').trim();
+  return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '50% 50%';
+};
 const thumbnail = (asset: EventImageAsset) => {
   const derivatives = [...(asset.thumbnail_sources || [])].sort((left, right) => left.width - right.width);
   return derivatives[0]?.src || eventImageUrl(asset.src) || asset.src;
@@ -24,91 +87,435 @@ const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
   .sort((left, right) => left.width - right.width)
   .map((item) => `${item.src} ${item.width}w`)
   .join(', ');
-const mediaFrameKind = (asset: EventImageAsset) => {
+const mediaFrameKind = (asset: EventImageAsset): EventMediaRailFrameKind => {
   if (asset.media_semantic_status === 'error') return 'unknown';
   if (asset.image_text_mode === 'visual_only') return 'visual';
   if (asset.image_text_mode === 'ocr_text') return 'document';
   return 'unknown';
 };
-const mediaFrameFit = (asset: EventImageAsset) => mediaFrameKind(asset) === 'visual' ? 'cover' : 'contain';
+const mediaFrameFit = (asset: EventImageAsset): EventMediaRailFrameFit => (
+  mediaFrameKind(asset) === 'visual' ? 'cover' : 'contain'
+);
 const mediaFrameCropReason = (asset: EventImageAsset) => {
   if (mediaFrameKind(asset) === 'visual') return 'gallery_visual_only_cover';
   if (asset.media_semantic_status && asset.media_semantic_status !== 'classified') return 'semantic_status_fail_closed';
   if (asset.image_text_mode === 'ocr_text') return 'gallery_document_contain';
   return 'gallery_unknown_contain';
 };
-const mediaFrameSourceRatio = (asset: EventImageAsset) => asset.width > 0 && asset.height > 0
-  ? asset.width / asset.height
+const mediaFrameSourceRatio = (width: number | null | undefined, height: number | null | undefined) => (
+  finitePositive(width) && finitePositive(height) ? Number(width) / Number(height) : undefined
+);
+const normalizedResolvedItem = (item: EventMediaRailItem, index: number): NormalizedRailItem => {
+  const kind: EventMediaRailFrameKind = item.kind === 'visual'
+    || item.kind === 'document'
+    || item.kind === 'fallback'
+    || item.kind === 'unknown'
+    ? item.kind
+    : 'unknown';
+  const fit: EventMediaRailFrameFit = item.fit === 'cover' && kind === 'visual' ? 'cover' : 'contain';
+  const width = finitePositive(item.width);
+  const height = finitePositive(item.height);
+  const sourceRatio = mediaFrameSourceRatio(width, height);
+  const railRatio = finitePositive(item.railRatio) || sourceRatio;
+  return {
+    ...item,
+    kind,
+    fit,
+    width,
+    height,
+    thumbnailWidth: finitePositive(item.thumbnailWidth),
+    thumbnailHeight: finitePositive(item.thumbnailHeight),
+    galleryIndex: finiteIndex(item.galleryIndex, index),
+    sourceIndex: item.sourceIndex === undefined ? undefined : finiteIndex(item.sourceIndex, index),
+    objectPosition: normalizedObjectPosition(item.objectPosition),
+    cropReason: String(item.cropReason || 'resolved_media_fail_closed'),
+    actionLabel: String(item.actionLabel || `Открыть изображение ${index + 1} события «${eventTitle}»`),
+    railRatio,
+    slotWidth: finitePositive(item.slotWidth),
+  };
+};
+const normalizedGalleryItem = (asset: EventImageAsset, index: number): NormalizedRailItem => {
+  const derivatives = [...(asset.thumbnail_sources || [])].sort((left, right) => left.width - right.width);
+  const width = finitePositive(asset.width);
+  const height = finitePositive(asset.height);
+  return {
+    src: eventImageUrl(asset.src) || asset.src,
+    thumbnailSrc: thumbnail(asset),
+    thumbnailSrcset: srcset(asset) || undefined,
+    thumbnailWidth: finitePositive(derivatives[0]?.width) || width,
+    thumbnailHeight: finitePositive(derivatives[0]?.height) || height,
+    width,
+    height,
+    alt: asset.alt || '',
+    galleryIndex: index,
+    imageTextMode: asset.image_text_mode,
+    mediaRole: asset.media_role || 'unknown_document',
+    kind: mediaFrameKind(asset),
+    fit: mediaFrameFit(asset),
+    objectPosition: '50% 50%',
+    cropReason: mediaFrameCropReason(asset),
+    actionLabel: `Открыть изображение ${index + 1} события «${eventTitle}»`,
+    rotationEligible: false,
+    railRatio: mediaFrameSourceRatio(width, height),
+  };
+};
+
+const normalizedItems = variant === 'gallery-thumbnails'
+  ? assets.map(normalizedGalleryItem)
+  : items.map(normalizedResolvedItem);
+const numericMaxVisible = Number(maxVisible);
+const visibleLimit = Math.max(2, Math.floor(Number.isFinite(numericMaxVisible) ? numericMaxVisible : 6));
+const visibleItems = variant === 'gallery-thumbnails'
+  ? normalizedItems.slice(0, visibleLimit)
+  : normalizedItems;
+const hiddenCount = variant === 'gallery-thumbnails'
+  ? Math.max(0, normalizedItems.length - visibleItems.length)
+  : 0;
+const shouldRender = variant === 'gallery-thumbnails'
+  ? normalizedItems.length > 1
+  : normalizedItems.length > 0;
+const rootState = variant === 'gallery-thumbnails'
+  ? (hiddenCount > 0 ? 'overflow' : 'complete')
+  : 'responsive';
+const resolvedAriaLabel = ariaLabel || (
+  variant === 'hero-selector'
+    ? 'Выбрать изображение'
+    : variant === 'poster-strip'
+      ? 'Другие изображения события'
+      : `Фотографии события «${eventTitle}»`
+);
+const rootClass = [
+  'event-media-rail',
+  `event-media-rail--${variant}`,
+  variant !== 'gallery-thumbnails' && 'desktop-prototype__media-rail',
+  variant === 'hero-selector' && 'desktop-prototype__media-rail--hero',
+  variant === 'poster-strip' && 'desktop-prototype__media-rail--poster',
+  className,
+].filter(Boolean).join(' ');
+const transparentRailPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+const usesResolvedItems = variant !== 'gallery-thumbnails';
+const rootStyle = variant === 'gallery-thumbnails'
+  ? `--rail-count:${visibleItems.length + (hiddenCount > 0 ? 1 : 0)}`
   : undefined;
 ---
 
-{assets.length > 1 && (
+{shouldRender && (
   <nav
-    class="event-media-rail"
+    class={rootClass}
     data-event-media-rail
+    data-event-media-rail-contract={usesResolvedItems ? 'resolved-items-v1' : 'asset-input-v1'}
+    data-event-media-rail-variant={variant}
     data-ds-component="EventMediaRail"
     data-ds-family="EventMediaRail"
     data-ds-version="1"
-    data-ds-variant="gallery-thumbnails"
-    data-ds-state={hiddenCount > 0 ? 'overflow' : 'complete'}
-    data-event-media-rail-total={assets.length}
-    data-event-media-rail-visible={visibleAssets.length}
+    data-ds-variant={variant}
+    data-ds-state={rootState}
+    data-event-media-rail-total={normalizedItems.length}
+    data-event-media-rail-visible={visibleItems.length}
     data-event-media-rail-hidden={hiddenCount}
-    aria-label={`Фотографии события «${eventTitle}»`}
-    style={`--rail-count:${visibleAssets.length + (hiddenCount > 0 ? 1 : 0)}`}
+    data-event-media-rail-source-owner={usesResolvedItems ? 'caller' : 'EventMediaRail'}
+    data-hero-rail={variant === 'hero-selector' ? '' : undefined}
+    data-responsive-rail={variant === 'hero-selector' ? '' : undefined}
+    data-split-media-rail={variant === 'poster-strip' ? '' : undefined}
+    data-responsive-split-rail={variant === 'poster-strip' ? '' : undefined}
+    aria-label={resolvedAriaLabel}
+    style={rootStyle}
   >
-    {visibleAssets.map((asset, index) => (
-      <button
-        type="button"
-        class="event-media-rail__item"
-        data-hero-gallery-open={galleryId}
-        data-hero-gallery-index={index}
-        aria-label={`Открыть изображение ${index + 1} события «${eventTitle}»`}
-      >
-        <span
-          class="event-media-rail__frame"
-          data-media-frame
-          data-media-frame-contract="v1"
-          data-media-frame-surface="media-rail"
-          data-media-frame-kind={mediaFrameKind(asset)}
-          data-media-frame-fit={mediaFrameFit(asset)}
-          data-media-frame-object-position="50% 50%"
-          data-media-frame-crop-reason={mediaFrameCropReason(asset)}
-          data-media-frame-source-width={asset.width || undefined}
-          data-media-frame-source-height={asset.height || undefined}
-          data-media-frame-source-ratio={mediaFrameSourceRatio(asset)?.toFixed(5)}
-          data-media-frame-loading="eager"
-          data-media-frame-priority="true"
-          data-media-frame-interaction-owner="caller"
-          style={mediaFrameSourceRatio(asset)
-            ? `display:block;width:100%;height:100%;overflow:hidden;--media-frame-source-ratio:${mediaFrameSourceRatio(asset)}`
-            : 'display:block;width:100%;height:100%;overflow:hidden'}
+    {visibleItems.map((item, index) => {
+      const sourceRatio = mediaFrameSourceRatio(item.width, item.height);
+      const usesPlaceholder = variant !== 'gallery-thumbnails';
+      const imageSizes = variant === 'hero-selector'
+        ? '(min-width:1024px) 96px, 1px'
+        : variant === 'poster-strip'
+          ? `${Math.round(item.slotWidth || 116)}px`
+          : '(min-width: 1024px) 92px, 1px';
+      const frameStyle = sourceRatio
+        ? `--media-frame-source-ratio:${sourceRatio};--media-frame-object-position:${item.objectPosition}`
+        : `--media-frame-object-position:${item.objectPosition}`;
+      const itemStyle = variant === 'poster-strip' && item.railRatio
+        ? `--rail-ratio:${item.railRatio}`
+        : undefined;
+      return (
+        <button
+          type="button"
+          class:list={[
+            'event-media-rail__item',
+            variant === 'hero-selector' && index === 0 && 'is-current',
+          ]}
+          aria-pressed={variant === 'hero-selector' ? (index === 0 ? 'true' : 'false') : undefined}
+          data-clean-hero-thumb={variant === 'hero-selector' ? '' : undefined}
+          data-responsive-rail-item={variant === 'hero-selector' ? '' : undefined}
+          data-responsive-split-item={variant === 'poster-strip' ? '' : undefined}
+          data-src={variant === 'hero-selector' ? item.src : undefined}
+          data-alt={variant === 'hero-selector' ? item.alt || '' : undefined}
+          data-width={variant === 'hero-selector' ? item.width : undefined}
+          data-height={variant === 'hero-selector' ? item.height : undefined}
+          data-position={variant === 'hero-selector' ? item.objectPosition : undefined}
+          data-crop-fit={variant === 'hero-selector' ? item.fit : undefined}
+          data-crop-reason={variant === 'hero-selector' ? item.cropReason : undefined}
+          data-mode={variant === 'hero-selector' ? item.imageTextMode : undefined}
+          data-rotation-eligible={variant === 'hero-selector' ? String(item.rotationEligible === true) : undefined}
+          data-rail-aspect={variant === 'poster-strip' ? item.railAspect : undefined}
+          data-image-text-mode={usesResolvedItems ? item.imageTextMode : undefined}
+          data-media-role={usesResolvedItems ? item.mediaRole : undefined}
+          data-source-index={usesResolvedItems ? item.sourceIndex : undefined}
+          data-efficient-viewer-start={variant === 'poster-strip' && splitPortraitViewer ? item.galleryIndex : undefined}
+          data-hero-gallery-open={variant === 'poster-strip' && splitPortraitViewer ? undefined : galleryId}
+          data-hero-gallery-index={item.galleryIndex}
+          style={itemStyle}
+          aria-label={item.actionLabel}
         >
-          <img
-            src={thumbnail(asset)}
-            srcset={srcset(asset) || undefined}
-            sizes="(min-width: 1024px) 92px, 1px"
-            width={asset.thumbnail_sources?.[0]?.width || asset.width}
-            height={asset.thumbnail_sources?.[0]?.height || asset.height}
-            alt=""
-            loading="eager"
-            decoding="async"
-            style={`object-fit:${mediaFrameFit(asset)};object-position:50% 50%`}
-            data-media-frame-image
-          />
-        </span>
-      </button>
-    ))}
-    {hiddenCount > 0 && (
+          <picture
+            class="event-media-rail__frame"
+            data-media-frame
+            data-media-frame-contract="v1"
+            data-media-frame-surface="media-rail"
+            data-media-frame-kind={item.kind}
+            data-media-frame-fit={item.fit}
+            data-media-frame-object-position={item.objectPosition}
+            data-media-frame-crop-reason={item.cropReason}
+            data-media-frame-source-width={item.width}
+            data-media-frame-source-height={item.height}
+            data-media-frame-source-ratio={sourceRatio?.toFixed(5)}
+            data-media-frame-loading={usesPlaceholder ? 'lazy' : 'eager'}
+            data-media-frame-priority={usesPlaceholder ? undefined : 'true'}
+            data-media-frame-interaction-owner="caller"
+            style={frameStyle}
+          >
+            <img
+              src={usesPlaceholder ? transparentRailPixel : item.thumbnailSrc}
+              srcset={usesPlaceholder ? undefined : item.thumbnailSrcset}
+              data-rail-thumbnail={usesPlaceholder ? '' : undefined}
+              data-thumbnail-src={usesPlaceholder ? item.thumbnailSrc : undefined}
+              data-thumbnail-srcset={usesPlaceholder ? item.thumbnailSrcset : undefined}
+              sizes={imageSizes}
+              width={item.thumbnailWidth || item.width}
+              height={item.thumbnailHeight || item.height}
+              alt=""
+              loading={usesPlaceholder ? 'lazy' : 'eager'}
+              decoding="async"
+              fetchpriority={usesPlaceholder ? 'low' : undefined}
+              style={`object-fit:${item.fit};object-position:${item.objectPosition}`}
+              data-media-frame-image
+            />
+          </picture>
+          {usesResolvedItems && item.roleLabel && <span class="event-media-rail__role">{item.roleLabel}</span>}
+        </button>
+      );
+    })}
+
+    {variant === 'gallery-thumbnails' && hiddenCount > 0 && (
       <button
         type="button"
         class="event-media-rail__more"
         data-hero-gallery-open={galleryId}
-        data-hero-gallery-index={visibleAssets.length}
+        data-hero-gallery-index={visibleItems.length}
         aria-label={`Открыть ещё ${hiddenCount} фото события «${eventTitle}»`}
       >
         <strong>+{hiddenCount}</strong><span>фото</span>
       </button>
     )}
+
+    {variant === 'hero-selector' && (
+      <button
+        type="button"
+        class="event-media-rail__more desktop-prototype__media-rail-more"
+        data-responsive-rail-more
+        data-hero-gallery-open={galleryId}
+        data-hero-gallery-index="0"
+        aria-label="Открыть остальные фотографии"
+        hidden
+      >
+        <strong data-responsive-rail-count></strong><span>фото</span>
+      </button>
+    )}
+
+    {variant === 'poster-strip' && (
+      <button
+        type="button"
+        class="event-media-rail__more desktop-prototype__media-rail-more"
+        data-responsive-split-more
+        data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
+        data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
+        aria-label="Открыть остальные изображения"
+        hidden
+      >
+        <strong data-responsive-split-count></strong><span>фото</span>
+      </button>
+    )}
   </nav>
 )}
+
+<style>
+  .event-media-rail {
+    min-width: 0;
+  }
+
+  .event-media-rail__frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .event-media-rail__frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .event-media-rail__frame[data-media-frame-fit="contain"] {
+    background: #181411;
+  }
+
+  .event-media-rail--gallery-thumbnails {
+    display: grid;
+    grid-template-columns: repeat(var(--rail-count, 1), minmax(0, 1fr));
+    gap: 0.42rem;
+    padding: 0.44rem;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 18px;
+    background: rgba(31,27,24,0.92);
+    box-shadow: 0 14px 36px rgba(24,18,14,0.2);
+  }
+
+  .event-media-rail--gallery-thumbnails > .event-media-rail__item,
+  .event-media-rail--gallery-thumbnails > .event-media-rail__more {
+    min-width: 0;
+    height: 54px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 11px;
+    background: #2d2926;
+    color: #fffaf2;
+    cursor: zoom-in;
+  }
+
+  .event-media-rail--gallery-thumbnails > .event-media-rail__more {
+    display: grid;
+    place-content: center;
+    gap: 0.05rem;
+    background: #fffaf2;
+    color: #241c17;
+  }
+
+  .event-media-rail--gallery-thumbnails > .event-media-rail__more strong {
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .event-media-rail--gallery-thumbnails > .event-media-rail__more span {
+    font-size: 0.66rem;
+    font-weight: 850;
+  }
+
+  .event-media-rail--hero-selector,
+  .event-media-rail--poster-strip {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.35rem;
+    padding: 0.45rem;
+    overflow: hidden;
+    border-radius: 16px;
+    background: rgba(31,27,24,0.9);
+  }
+
+  .event-media-rail--hero-selector {
+    justify-content: flex-end;
+  }
+
+  .event-media-rail--hero-selector > .event-media-rail__item {
+    position: relative;
+    flex: 1 1 0;
+    width: auto;
+    min-width: 44px;
+    max-width: 68px;
+    height: 48px;
+    padding: 0;
+    overflow: hidden;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    background: #2b2724;
+    cursor: pointer;
+  }
+
+  .event-media-rail--hero-selector > .event-media-rail__item.is-current {
+    border-color: #fff;
+  }
+
+  .event-media-rail--hero-selector > .event-media-rail__more,
+  .event-media-rail--poster-strip > .event-media-rail__more {
+    display: grid;
+    place-content: center;
+    gap: 0.05rem;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: #fffaf2;
+    color: #241c17;
+    line-height: 1;
+  }
+
+  .event-media-rail--hero-selector > .event-media-rail__item > .event-media-rail__role,
+  .event-media-rail--poster-strip > .event-media-rail__item > .event-media-rail__role {
+    position: absolute;
+    inset: auto 0.25rem 0.2rem;
+    padding: 0.12rem 0.3rem;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.72);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 850;
+  }
+
+  .event-media-rail--hero-selector > .event-media-rail__more strong {
+    font-size: 1.05rem;
+  }
+
+  .event-media-rail--hero-selector > .event-media-rail__more span,
+  .event-media-rail--poster-strip > .event-media-rail__more span {
+    position: static;
+    padding: 0;
+    background: transparent;
+    color: #6f6157;
+    font-size: 0.58rem;
+  }
+
+  .event-media-rail--poster-strip {
+    --split-rail-thumb-height: clamp(104px,13svh,148px);
+    width: 100%;
+    min-height: calc(var(--split-rail-thumb-height) + 20px);
+    gap: 0.5rem;
+    padding: 0.65rem;
+    border-radius: 0;
+    background: #292521;
+  }
+
+  .event-media-rail--poster-strip > .event-media-rail__item,
+  .event-media-rail--poster-strip > .event-media-rail__item[data-rail-aspect="portrait"],
+  .event-media-rail--poster-strip > .event-media-rail__item[data-rail-aspect="landscape"] {
+    position: relative;
+    flex: 0 0 var(--split-thumb-width,112px);
+    width: var(--split-thumb-width,112px);
+    min-width: 88px;
+    max-width: 196px;
+    height: var(--split-rail-thumb-height);
+    padding: 0;
+    overflow: hidden;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    background: #2b2724;
+    cursor: pointer;
+  }
+
+  .event-media-rail--poster-strip[data-rail-complete="true"],
+  .event-media-rail--poster-strip[data-rail-complete="false"] {
+    justify-content: center;
+  }
+
+  .event-media-rail--poster-strip > .event-media-rail__more {
+    flex: 0 0 104px;
+    width: 104px;
+    min-width: 104px;
+  }
+</style>
