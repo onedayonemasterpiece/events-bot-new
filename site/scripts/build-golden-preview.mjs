@@ -6,6 +6,7 @@ import {
   openSync,
   closeSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -16,6 +17,10 @@ import {
   materializeGoldenPreviewData,
   sha256,
 } from './golden-review-corpus.mjs';
+import {
+  applyGoldenActionFixtures,
+  goldenActionContract,
+} from './golden-review-actions.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const eventsPath = join(siteDir, 'src', 'data', 'preview-events.json');
@@ -40,7 +45,17 @@ function safeGoldenBuildId(value) {
   return value;
 }
 
-const { corpus, raw:corpusRaw, digest:corpusDigest } = loadGoldenCorpus();
+function atomicWrite(path, data) {
+  const temporaryPath = `${path}.golden-${process.pid}.tmp`;
+  try {
+    writeFileSync(temporaryPath, data);
+    renameSync(temporaryPath, path);
+  } finally {
+    rmSync(temporaryPath, { force:true });
+  }
+}
+
+const { corpus, digest:corpusDigest } = loadGoldenCorpus();
 const repoSha = gitFullSha();
 const corpusVersion = String(corpus.corpus_id).match(/-v\d+$/u)?.[0]?.slice(1) || 'v1';
 const buildId = safeGoldenBuildId(
@@ -63,14 +78,18 @@ try {
   rmSync(lockPath, { force:true });
   throw new Error(`Cannot parse the real preview data before Golden materialization: ${error?.message || error}`);
 }
-const materialized = materializeGoldenPreviewData(corpus, basePreviewData);
+const materialized = applyGoldenActionFixtures(
+  materializeGoldenPreviewData(corpus, basePreviewData),
+  corpus,
+);
 const materializedRaw = Buffer.from(`${JSON.stringify(materialized, null, 2)}\n`, 'utf8');
 const materializedDigest = sha256(materializedRaw);
 
 let buildStatus = 1;
 let buildError = null;
+let restoreError = null;
 try {
-  writeFileSync(eventsPath, materializedRaw);
+  atomicWrite(eventsPath, materializedRaw);
   const result = spawnSync(process.execPath, ['scripts/build-preview.mjs'], {
     cwd:siteDir,
     env:{
@@ -89,10 +108,18 @@ try {
   buildStatus = Number.isInteger(result.status) ? result.status : 1;
   buildError = result.error || null;
 } finally {
-  writeFileSync(eventsPath, originalRaw);
-  rmSync(lockPath, { force:true });
+  try {
+    atomicWrite(eventsPath, originalRaw);
+  } catch (error) {
+    restoreError = error;
+  } finally {
+    rmSync(lockPath, { force:true });
+  }
 }
 
+if (restoreError) {
+  throw new Error(`Golden preview could not restore the real source data: ${restoreError?.message || restoreError}`);
+}
 const restoredDigest = sha256(readFileSync(eventsPath));
 if (restoredDigest !== originalDigest) {
   throw new Error(`Golden preview source restoration failed: expected ${originalDigest}, received ${restoredDigest}`);
@@ -115,6 +142,7 @@ writeFileSync(join(outputRoot, 'data', 'golden', 'evidence.json'), JSON.stringif
   corpus_sha256:corpusDigest,
   frozen_clock:corpus.frozen_clock,
   route_contract:corpus.route_contract,
+  action_contract:goldenActionContract(corpus),
   pinned_assets:corpus.pinned_assets.map((asset) => ({
     id:asset.id,
     path:asset.path,
