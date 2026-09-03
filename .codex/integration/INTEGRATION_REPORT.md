@@ -230,3 +230,13 @@ research lanes changed no files.
 - `Codex_only_implementation_and_why_it_was_not_economical_for_a_role_window`: none; R0 performed only integration/runtime/evidence work.
 - `blind_wait_seconds: 0`
 - `duplicated_specialist_work: 0`
+
+### Successor role checkpoint (2026-09-03T11:33Z)
+
+- F0 successor `ba59341f50c1a30ac5faeb6780baf2718072412b`, M0 successor `fed7877eca4f283f8fbfe2d11e28e0b11a37c370`, and A0 successor `170cd7e7408101359ae450667c8c46ac08927ff5` merged in F0 -> M0 -> A0 order without conflict.
+- Combined successor source suite: 31/32 PASS. The sole residual is the explicitly dist-dependent personal-feed manifest test; the frozen build is still active.
+- `local_runtime_work_completed`: latest role refs fetched/censused; all three successors merged and source-tested while fresh build remains PID-observed.
+- `role_outputs_integrated_or_verified`: yes, all latest fetched role tips.
+- `Codex_only_implementation_and_why_it_was_not_economical_for_a_role_window`: none; integration/runtime/evidence only.
+- `blind_wait_seconds: 0`
+- `duplicated_specialist_work: 0`
