@@ -57,9 +57,11 @@ test('AdaptiveEventCardGrid owns compatibility, live-region, filtered runtime an
   ]) {
     assert.ok(source.includes(prop), `missing adaptive runtime/live-region API: ${prop}`);
   }
-  assert.match(source, /type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' \| 'initial';/u);
+  assert.match(source, /type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' \| 'all-direct' \| 'initial';/u);
   assert.match(source, /const runtimeManagedGrid = runtimeManaged \?\? \(personalFeed \|\| discoveryFeed\);/u);
-  assert.match(source, /requestedRuntimeSourcePolicy === 'initial'/u);
+  assert.match(source, /const runtimeVisibleOnly = requestedRuntimeVisibleOnly \?\? discoveryFeed;/u);
+  assert.match(source, /requestedRuntimeSourcePolicy === 'all-direct'/u);
+  assert.match(source, /discoveryFeed \? 'all-direct' : 'mirror-rendered'/u);
   assert.match(source, /aria-live=\{ariaLive\}/u);
   assert.match(source, /aria-atomic=\{ariaAtomic === undefined \? undefined : String\(ariaAtomic\)\}/u);
   assert.match(source, /aria-busy=\{ariaBusy === undefined \? undefined : String\(ariaBusy\)\}/u);
@@ -77,7 +79,10 @@ test('AdaptiveEventCardGrid owns compatibility, live-region, filtered runtime an
   assert.match(source, /!ADAPTIVE_ROOT_RESERVED_ATTRIBUTES\.has\(name\)/u);
   assert.match(source, /function bindAdaptiveEventCardGridRuntime\(root = document\)/u);
   assert.match(source, /const cards = visibleOnly \? directCards\.filter\(\(card\) => !card\.hidden\) : directCards;/u);
+  assert.match(source, /const directOrder = directCards\.map/u);
   assert.match(source, /if \(sourcePolicy === 'mirror-rendered'\) \{/u);
+  assert.match(source, /else if \(sourcePolicy === 'all-direct'\) \{/u);
+  assert.match(source, /grid\.dataset\.adaptiveGridSourceCount = String\(directCards\.length\)/u);
   assert.match(source, /grid\.dataset\.adaptiveGridRenderedCount = String\(count\)/u);
   assert.match(source, /grid\.dataset\.adaptiveGridRenderedOrder = order/u);
   assert.match(source, /grid\.dataset\.adaptiveGridRemainderCount = String\(count % runtimeRowSize\)/u);

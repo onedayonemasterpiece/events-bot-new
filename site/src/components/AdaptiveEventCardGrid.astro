@@ -7,7 +7,7 @@ type GridMode = 'flow' | 'packed';
 type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
 type ResponsiveStrategy = 'fixed' | 'progressive' | 'stack';
 type AdaptiveGridLive = 'off' | 'polite' | 'assertive';
-type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' | 'initial';
+type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' | 'all-direct' | 'initial';
 
 export interface AdaptiveEventCardItemRoot {
   className?: string;
@@ -64,7 +64,7 @@ const {
   rootAttributes = {},
   itemRoots = {},
   runtimeManaged,
-  runtimeVisibleOnly = false,
+  runtimeVisibleOnly: requestedRuntimeVisibleOnly,
   runtimeSourcePolicy: requestedRuntimeSourcePolicy,
   ariaLive,
   ariaAtomic,
@@ -82,9 +82,11 @@ const responsive: ResponsiveStrategy = requestedResponsive === 'progressive' || 
   ? requestedResponsive
   : responsiveMobile ? 'stack' : 'fixed';
 const runtimeManagedGrid = runtimeManaged ?? (personalFeed || discoveryFeed);
+const runtimeVisibleOnly = requestedRuntimeVisibleOnly ?? discoveryFeed;
 const runtimeSourcePolicy: AdaptiveGridRuntimeSourcePolicy = requestedRuntimeSourcePolicy === 'initial'
-  ? 'initial'
-  : 'mirror-rendered';
+  || requestedRuntimeSourcePolicy === 'all-direct'
+  ? requestedRuntimeSourcePolicy
+  : discoveryFeed ? 'all-direct' : 'mirror-rendered';
 const gridVariant = `${mode}-${rowSize}-column`;
 const gridBaseState = [
   responsive !== 'fixed' && `responsive-${responsive}`,
@@ -234,11 +236,14 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
       const visibleOnly = grid.dataset.adaptiveGridRuntimeVisibleOnly === 'true';
       const sourcePolicy = grid.dataset.adaptiveGridRuntimeSourcePolicy === 'initial'
         ? 'initial'
-        : 'mirror-rendered';
+        : grid.dataset.adaptiveGridRuntimeSourcePolicy === 'all-direct'
+          ? 'all-direct'
+          : 'mirror-rendered';
       const sync = () => {
         const directCards = Array.from(grid.querySelectorAll(':scope > [data-event-card]'))
           .filter((card) => card instanceof HTMLElement);
         const cards = visibleOnly ? directCards.filter((card) => !card.hidden) : directCards;
+        const directOrder = directCards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
         const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
         const count = cards.length;
         const parsedRowSize = Number.parseInt(grid.dataset.adaptiveGridRowSize || '1', 10);
@@ -247,6 +252,9 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
         if (sourcePolicy === 'mirror-rendered') {
           grid.dataset.adaptiveGridSourceCount = String(count);
           grid.dataset.adaptiveGridSourceOrder = order;
+        } else if (sourcePolicy === 'all-direct') {
+          grid.dataset.adaptiveGridSourceCount = String(directCards.length);
+          grid.dataset.adaptiveGridSourceOrder = directOrder;
         }
         grid.dataset.adaptiveGridRenderedCount = String(count);
         grid.dataset.adaptiveGridRenderedOrder = order;
