@@ -1,0 +1,96 @@
+{
+  "schema": "kenigevents.f0-convergence-census.v1",
+  "generated_at": "2026-09-03T11:45:00Z",
+  "authority": {
+    "issue": "onedayonemasterpiece/events-bot-new#621",
+    "requested_comment": 5524572449,
+    "current_correction_comment": 5524682012,
+    "contract_version": "1.8.0",
+    "contract_repository": "onedayonemasterpiece/lovekgd-design-system",
+    "contract_head": "9f74d9c962eae02f61de1db2f284becbd9e3905a"
+  },
+  "role": "F0",
+  "branch": "work/ui-normalization-f0-wave-3-20260903",
+  "f0_head_at_census_start": "7d661db36eac697ff76526ea2b90527af9adb7b7",
+  "fresh_refs": {
+    "a0": "25adccae5975c447f9ee734b110adfb2f8a9d6ae",
+    "m0": "fed7877eca4f283f8fbfe2d11e28e0b11a37c370"
+  },
+  "central_registry": "site/src/components/design-system/product-contour-foundations.css",
+  "completed_owned_clusters": [
+    "shell/home/free/unusual/gastronomy/personal-feed semantic roles",
+    "event-detail/occurrence/participant/weather/PWA roles",
+    "AdaptiveEventCardGrid and EventMediaRail current-head roles",
+    "HomeHeroTalk, HomeQuickNav, HomeColdStartFeed and PersonalFeedSlot residual roles",
+    "MobileEventReviewPage accepted-v2..v8 metadata/continuation/prose/dock roles",
+    "FocusGroupFeedback, FocusGroupInviteShare, FocusGroupLabPanel and FocusGroupInviteIntake residual roles",
+    "ServiceShareAction and public PwaInstallAction residual roles",
+    "public SiteFooter residual roles",
+    "partners and partnerstvo route roles",
+    "FocusGroupThankYou, FocusPwaInstallAction, FocusConnectivityDiagnostic and InterestProfile residual roles",
+    "collection/artifact/amber roles",
+    "transport and exhibitions product-theme roles",
+    "exact A0/M0 binding tables and negative controls",
+    "canonical link SVG identity",
+    "cross-registry unresolved alias closure"
+  ],
+  "icon_size_roles": {
+    "inline": 16,
+    "control": 20,
+    "action": 24,
+    "feature": 32,
+    "count": 4
+  },
+  "canonical_style_owners": {
+    "Badge": {
+      "selector": ".ke-foundation-badge",
+      "owner": "component-foundations"
+    },
+    "Field": {
+      "selector": ".ke-foundation-field",
+      "owner": "component-foundations"
+    },
+    "StatePanel": {
+      "selector": ".ke-foundation-state-panel",
+      "owner": "component-foundations"
+    }
+  },
+  "ready_owned_items": 0,
+  "blocked_owned_items": [
+    {
+      "id": "F0-LEGACY-STYLE-OWNER-PHYSICAL-CLOSURE",
+      "path": "site/src/styles/design-system.css",
+      "required_change": [
+        "remove obsolete .ke-badge* visual block",
+        "remove obsolete .ke-field* visual block",
+        "remove obsolete .ke-state-panel* visual block",
+        "retain the unmarked .ke-button* compatibility bridge until A0 removes current class-only consumers",
+        "reduce .ke-copy-action* legacy rules to the two source-check non-colour anchors or update the external check first"
+      ],
+      "semantic_analysis_complete": true,
+      "execution_blocked_by": [
+        "the available GitHub writer exposes whole-file replacement but no apply-patch operation",
+        "the connector truncates the large stylesheet response, so a safe byte-complete whole-file reconstruction is unavailable",
+        "repository archive/materialization and local git clone are unavailable in this runtime",
+        "site/scripts/check-design-system.mjs is outside F0 writable scope and currently requires .ke-button--icon plus .ke-copy-action__check-icon and content: \"!\" anchors"
+      ]
+    }
+  ],
+  "verification": {
+    "current_branch_ref_readback": "PASS",
+    "fresh_a0_ref_readback": "PASS",
+    "fresh_m0_ref_readback": "PASS",
+    "contract_readback": "PASS",
+    "four_icon_roles_source_census": "PASS",
+    "canonical_badge_field_state_owner_readback": "PASS",
+    "undefined_cross_registry_aliases_found_and_closed": 5,
+    "github_commit_status_count": 0,
+    "github_check_run_count": 0,
+    "local_source_check": "NOT_RUN_RUNTIME_UNAVAILABLE",
+    "preview_build": "NOT_RUN_RUNTIME_UNAVAILABLE",
+    "preview_check": "NOT_RUN_RUNTIME_UNAVAILABLE",
+    "browser_verdict": "NOT_RUN_V0_OWNED"
+  },
+  "stop_kind": "ACTUAL_PLATFORM_AND_WRITER_BOUNDARY",
+  "remaining_external_trigger": "R0 [RESULT] with an exact commit URL that applies F0-LEGACY-STYLE-OWNER-PHYSICAL-CLOSURE, runs node site/scripts/check-design-system.mjs, npm run build:preview and npm run check:preview successfully, and reports the integrated F0 head"
+}
