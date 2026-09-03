@@ -89,7 +89,7 @@ test('event-detail continuation uses six diverse cards with an honest non-person
   assert.match(layout, /readRecentContinuationIds\(\)/u);
   assert.match(layout, /recordRecentContinuation\(personalFeedCurrentEventId\(section\), ranked\)/u);
   assert.match(layout, /KenigEventsSelectEventContinuation/u);
-  assert.match(layout, /current_event_id: personalFeedCurrentEventId\(section\)/u);
+  assert.match(layout, /currentEventId: personalFeedCurrentEventId\(section\)/u);
   assert.match(layout, /section\.dataset\.personalFeedMode = isPersonal \? 'personal' : 'popular_fallback'/u);
   assert.match(layout, /title\.textContent = isPersonal \? 'По вашим интересам' : 'Ещё события'/u);
   assert.match(layout, /if \(loadMore\) loadMore\.hidden = isEventDetail/u);

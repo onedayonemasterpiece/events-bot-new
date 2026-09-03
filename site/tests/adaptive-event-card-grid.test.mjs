@@ -13,7 +13,7 @@ test('AdaptiveEventCardGrid owns flow and packed layout while the legacy grid is
     read('src/components/OptimizedEventCardGrid.astro'),
   ]);
 
-  assert.match(adaptive, /import EventCard from '\.\/EventCard\.astro'/u);
+  assert.match(adaptive, /import EventCard(?:, \{ type EventCardRootAttributes \})? from '\.\/EventCard\.astro'/u);
   assert.match(adaptive, /import \{ packRelatedCardRows \} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
   assert.equal((adaptive.match(/<EventCard\b/gu) || []).length, 1);
   assert.match(adaptive, /mode === 'packed'\s*\? packRelatedCardRows\(events, \{ limit, rowSize, mediaTreatment \}\)/u);
@@ -89,6 +89,6 @@ test('normalized component families and MediaFrame diagnostics retain their exac
   assert.match(listing, /class="ke-listing-card__media ke-skeleton"[\s\S]*data-media-frame/u);
   assert.match(rail, /if \(asset\.media_semantic_status === 'error'\) return 'unknown'/u);
   assert.match(rail, /mediaFrameKind\(asset\) === 'visual' \? 'cover' : 'contain'/u);
-  assert.match(rail, /style=\{`object-fit:\$\{mediaFrameFit\(asset\)\}`\}/u);
+  assert.match(rail, /style=\{`object-fit:\$\{mediaFrameFit\(asset\)\};object-position:50% 50%`\}/u);
   assert.doesNotMatch(rail, /<a\b[^>]*data-media-frame/u);
 });
