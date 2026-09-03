@@ -72,27 +72,28 @@ owned работы.
 
 ```text
 N0: candidate review → same-data baseline → conditional promotion
-    → fresh generation → reachable preview → V0 trigger
+    → full Kaggle generation → reachable preview → V0 trigger
 +
 F0/M0/A0: saturation всех current owned consumers/invariants
 +
 V0: complete harness → actual browser matrix when URL exists
 +
-R0: persistent ready mechanical backlog
+R0: integration, local focused diagnostics and invocation/observation of the
+    shared Kaggle build
 → first owner-facing normalized /<buildId>/__preview/
 ```
 
 Technical baseline нужен для before/after и не обязан быть owner checkpoint.
-Family не завершена без fresh-real-data build и V0 browser verdict.
+Family не завершена без fresh-real-data Kaggle build и V0 browser verdict.
 
 N0 не дробит critical path на обязательные owner wake-ups, если acceptance
 criteria можно определить заранее. Он задаёт R0 conditional end-to-end branch:
 
 ```text
-IF exact candidate build/tests/same-data baseline PASS
+IF exact candidate focused diagnostics/tests/same-data checks PASS
   THEN promote exact candidate
-  AND run fresh-production generation
-  AND publish reachable preview
+  AND invoke the one shared Kaggle pipeline
+  AND publish reachable preview through its checked artifact
 ELSE
   no promotion/deploy
   continue safe diagnosis
@@ -103,7 +104,92 @@ R0 после каждого result fresh-read-ит #621/current refs и про�
 ready safe mechanical task. При ожидаемом N0 trigger R0 использует bounded watch
 60–120 seconds, maximum 30 minutes, а не немедленный exit.
 
-## 4. Existing generation paths
+## 4. Один build/publish contract
+
+### 4.1 Полные и опубликованные сборки
+
+Существует один canonical static-site build implementation в этом repository,
+один Kaggle StaticSiteBuilder и один текущий Yandex Object Storage bucket.
+
+Через Kaggle CPU всегда выполняются:
+
+```text
+real Review Preview
+Golden Review Preview
+Release Candidate
+production-form build
+```
+
+Они различаются только:
+
+- data mode (`real` или `golden`);
+- immutable root `slug/prefix`;
+- optional allowlisted page-class filter для тестового preview;
+- уровнем проверок и правом promotion.
+
+Focused preview, который публикуется по секретной ссылке, также проходит через
+тот же Kaggle pipeline. Он не является второй архитектурой и не использует
+второй publisher/bucket.
+
+Future/default-off two-root bucket/ALB design не входит в текущий launch path и
+не является prerequisite для review preview, RC или production-form artifact.
+
+### 4.2 Локальная диагностика
+
+Без Kaggle разрешено локально отрендерить один route либо один уже определённый
+page class, чтобы быстро найти syntax/import/build/layout defect.
+
+Локальная диагностика обязана использовать те же:
+
+- Astro route/component sources;
+- exact source SHA;
+- immutable real snapshot либо Golden corpus identity;
+- page-class selector, которым пользуется Kaggle.
+
+Она не:
+
+- загружает результат в Yandex Object Storage;
+- обновляет `preview.current`;
+- создаёт owner-facing secret URL;
+- считается Review Preview, RC, production build, V0 acceptance или A=S=P
+  evidence;
+- образует второй production/build path.
+
+Термины `local build`, `tests/build` и `local browser smoke` далее в этом
+документе означают только такую focused diagnostic работу. Любой полный или
+опубликованный результат означает запуск Kaggle.
+
+### 4.3 Page-class filter
+
+Page-class filter является одной allowlisted моделью в `events-bot-new` и
+используется одинаково локальной диагностикой и Kaggle. `my-data-hub` передаёт
+выбранное значение, но не реализует собственную классификацию страниц.
+
+Существующий `catalog-mode: slice|full` управляет объёмом event data и **не**
+является page-class filter. Эти два понятия нельзя смешивать.
+
+При отсутствующем фильтре строится весь review tree. Нельзя поддерживать два
+разных списка классов/маршрутов в локальном runner и MCP.
+
+### 4.4 My Data Hub
+
+`my-data-hub` — единственный MCP control plane для опубликованных review builds:
+
+```text
+kenigevents.preview.start
+kenigevents.preview.current
+operation.get
+```
+
+Он может разрешить ref в SHA, выбрать snapshot/corpus, поставить operation в
+очередь, вызвать runner и вернуть состояние/ссылку. Он не владеет вторыми
+копиями exporter, page-class selector, Astro builder, Object Storage publisher
+или retention logic.
+
+Любая уже начатая реализация этих MCP methods должна быть найдена и продолжена;
+параллельный второй implementation/worktree запрещён.
+
+### 4.5 Existing implementation paths
 
 Reuse, do not replace:
 
@@ -112,6 +198,7 @@ site/scripts/export-production-preview-data.py
 site/scripts/build-preview.mjs
 site/scripts/build-production.mjs
 scripts/run_static_site_builder_kaggle.py
+kaggle/StaticSiteBuilder/static_site_builder.py
 npm run build:preview
 npm run build:production
 npm run build:secret-candidate
@@ -323,7 +410,9 @@ review prerequisite. После завершения family thin S фиксир�
 - `A0`: shell, listings, routes, consumer migration;
 - `V0`: my-browser-bridge audit; later Golden Penpot audit;
 - `K0`: consultant/process repair;
-- `R0`: persistent bounded Codex execution and sole Penpot writer.
+- `R0`: persistent bounded Codex execution, local focused diagnostics,
+  invocation/observation of the shared Kaggle pipeline and sole Penpot writer;
+- `my-data-hub`: sole MCP facade for published review-build operations.
 
 Нет mandatory `MAT → QA → INTEGRATE → PUBLISH`, нового orchestrator или
 per-Wave owner scheduler.
@@ -349,7 +438,7 @@ external, writer-conflict или irreversible-risk boundary.
 
 Product UI-gap/change work открывается только после:
 
-- reproducible fresh-data generation;
+- reproducible fresh-data full Kaggle generation;
 - tokenized foundations/colors;
 - four icon roles across all consumers;
 - single roots for same components;
@@ -365,12 +454,15 @@ Product UI-gap/change work открывается только после:
 
 Meaningful checkpoint:
 
-- technical fresh-data generation verdict;
+- technical fresh-data generation verdict from the shared Kaggle path;
 - normalized source convergence reviewed by role owner;
 - reachable normalized real-data preview;
 - V0 browser PASS/DRIFT;
 - native Penpot master + linked route board;
 - checked release candidate.
+
+Локальная focused diagnostic может подтвердить/найти дефект, но не закрывает
+preview/generation/owner/A=S=P checkpoint.
 
 Checkpoint publication не завершает роль автоматически. Packet, dispatch,
 worktree, commit без role review, test без output, 404 route и empty Penpot page
