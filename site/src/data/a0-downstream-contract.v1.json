@@ -1,0 +1,85 @@
+{
+  "schema_version": "kenigevents.a0-downstream-contract.v1",
+  "contract_version": "1.9.0",
+  "role": "A0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "source_checkpoint": {
+    "repository": "onedayonemasterpiece/events-bot-new",
+    "branch": "work/ui-normalization-a0-wave-3-20260903",
+    "sha_before_this_pointer": "ec926580fa2cc003318006f4c1d671fc459ea26c",
+    "tests_executed": false,
+    "candidate_integrated": false,
+    "browser_verdict": "NOT_CLAIMED"
+  },
+  "dependencies": {
+    "accepted_combined_precursor": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+    "f0": "de92dabd4551e117ca1af1be7915ff223321cc32",
+    "m0": "4c83fc7769b1dec2d92469373e3b15154af437f4"
+  },
+  "mechanical_batch": {
+    "issue_comment": 5527907602,
+    "status": "READY_FOR_R0_MECHANICAL",
+    "clusters": [
+      "A0-MECH-01",
+      "A0-MECH-02",
+      "A0-MECH-03",
+      "A0-MECH-04",
+      "A0-MECH-05",
+      "A0-MECH-06"
+    ],
+    "must_apply_after": [
+      "F0 dependency",
+      "M0 dependency"
+    ],
+    "wholesale_a0_branch_merge_allowed": false
+  },
+  "thin_s": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "path": "catalog/normalization/a0-thin-s-bindings.v1.json",
+    "commit": "a800f619b66cdf713e94f234382481bb8621dd22",
+    "status": "MACHINE_READABLE"
+  },
+  "penpot_ready_spec": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "path": "penpot/candidate/a0-route-instance-spec.v1.json",
+    "commit": "3d4e148b74594f6d0dda3adda0649441dc17bde7",
+    "status": "SPEC_ONLY_NOT_MATERIALIZED",
+    "writer": "R0.PENPOT"
+  },
+  "v0_acceptance_matrix": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "path": "catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json",
+    "commit": "952315ce0a4a5312e3f34c5afc7e8b05066c2147",
+    "status": "PENDING_CURRENT_SUCCESSOR_BUILD_AND_V0",
+    "pm0_item_37_denominator": 19,
+    "source_identity_at_v0_recensus": "16/19",
+    "current_full_kaggle_build_identity": "0/19",
+    "v0_browser_reviewed": "0/19"
+  },
+  "integration_and_rollback": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "branch": "integration/launch-normalized-sot-penpot-20260902",
+    "path": "docs/launch-normalization/a0-source-integration-and-rollback.v1.json",
+    "commit": "d0509f97e04fda3f24b026dd767262d2098f5463",
+    "status": "READY_FOR_SELECTIVE_MATERIALIZATION",
+    "rollback_policy": "smallest failing named cluster"
+  },
+  "golden_preflight": {
+    "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+    "repo_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+    "classification": "PIPELINE_PREFLIGHT_ONLY",
+    "current_successor_acceptance_credit": false
+  },
+  "completion_truth": {
+    "a0_source_and_semantic_decisions": "COMPLETE_WITH_ONE_R0_MECHANICAL_BATCH",
+    "a0_downstream_bindings_and_specs": "COMPLETE",
+    "source_tests": "R0_REQUIRED",
+    "candidate_integration_and_acceptance": "R0_AND_N0_REQUIRED",
+    "fresh_real_kaggle_preview": "R0_REQUIRED",
+    "browser_verdict": "V0_REQUIRED",
+    "penpot_materialization": "R0.PENPOT_REQUIRED_AFTER_ACCEPTANCE"
+  }
+}
