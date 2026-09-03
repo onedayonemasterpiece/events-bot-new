@@ -19,7 +19,7 @@ const styleText = (path, source) => {
 };
 const sourcePaths = paths.filter((path) => (
   path.startsWith('site/src/')
-  && /\.(?:astro|css|ts|mjs)$/u.test(path)
+  && /\.(?:astro|css|ts|mjs|json)$/u.test(path)
 ));
 const consumerPaths = sourcePaths.filter((path) => (
   /^(?:site\/src\/(?:components|pages|layouts)\/)/u.test(path)
@@ -83,6 +83,26 @@ const iconRoles = Object.fromEntries(
 );
 const fontDeclaration = legacyCss.match(/--ke-font-sans:\s*([^;]+);/u)?.[1]?.trim() || null;
 const fontAssets = paths.filter((path) => /(?:^|\/)(?:fonts?|assets\/[^/]*fonts?)(?:\/|$)|\.(?:woff2?|ttf|otf)$/iu.test(path));
+const typographyAuthorityPath = 'site/src/components/design-system/f0-typography-authority.v1.json';
+const typographyAuthority = paths.includes(typographyAuthorityPath)
+  ? JSON.parse(show(typographyAuthorityPath))
+  : null;
+const activeFontAssetPaths = new Set(typographyAuthority?.delivery?.authoritative_asset_paths || []);
+const fontAssetInventory = {
+  classification: 'repository_inventory_not_implicit_UI_authority',
+  total_count: fontAssets.length,
+  active_authority_paths: fontAssets.filter((path) => activeFontAssetPaths.has(path)),
+  inactive_inventory_paths: fontAssets.filter((path) => !activeFontAssetPaths.has(path)),
+};
+const registeredFontBypassPaths = new Set(
+  typographyAuthority?.actual_consumer_migration_bindings?.map((binding) => binding.path) || [],
+);
+const unregisteredFontFamilyConsumers = typographyAuthority
+  ? fontFamilyFiles.filter((item) => (
+      item.values.some((value) => /\bInter\b/u.test(value))
+      && !registeredFontBypassPaths.has(item.path)
+    ))
+  : fontFamilyFiles.filter((item) => item.values.some((value) => /\bInter\b/u.test(value)));
 const typeRoles = [...foundationCss.matchAll(/--ke-type-([a-z0-9-]+):/giu)].map((match) => match[1]);
 const centralContainers = [...foundationCss.matchAll(/--ke-container-([a-z0-9-]+):/giu)].map((match) => match[1]);
 const centralBreakpoints = [...foundationCss.matchAll(/--ke-breakpoint-([a-z0-9-]+):/giu)].map((match) => match[1]);
@@ -99,7 +119,24 @@ const report = {
   checklist_evidence: {
     11: {
       font_declaration: fontDeclaration,
+      font_authority: typographyAuthority ? {
+        status: typographyAuthority.status,
+        primary_family: typographyAuthority.family.primary,
+        css_stack: typographyAuthority.family.css_stack,
+        primitive_owner: typographyAuthority.family.primitive_owner,
+        semantic_owner: typographyAuthority.family.semantic_owner,
+        owner_approval_claimed: typographyAuthority.family.owner_approval_claimed,
+        delivery_mode: typographyAuthority.delivery.mode,
+        pm0_state: typographyAuthority.pm0_item_11_state,
+      } : {
+        status: 'MISSING_FROM_REF',
+        path: typographyAuthorityPath,
+      },
+      font_assets_are_authority: false,
       font_assets: fontAssets,
+      font_asset_inventory: fontAssetInventory,
+      registered_consumer_migration_bindings: typographyAuthority?.actual_consumer_migration_bindings || [],
+      unregistered_named_family_consumers: unregisteredFontFamilyConsumers,
       weight_role_count: new Set([...foundationCss.matchAll(/--ke-type-[a-z0-9-]+-weight:/giu)].map((match) => match[0])).size,
     },
     12: {

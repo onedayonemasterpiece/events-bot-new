@@ -1,0 +1,104 @@
+{
+  "schema": "kenigevents.f0-typography-authority.v1",
+  "status": "ACTIVE_CURRENT_SOURCE_BASELINE",
+  "scope": "launch-critical Astro UI typography authority and A=S=P binding",
+  "authority_kind": "existing-behavior-normalization-not-new-font-selection",
+  "family": {
+    "primary": "Inter",
+    "fallbacks": [
+      "ui-sans-serif",
+      "system-ui",
+      "-apple-system",
+      "BlinkMacSystemFont",
+      "Segoe UI",
+      "sans-serif"
+    ],
+    "css_stack": "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "primitive_owner": {
+      "path": "site/src/styles/design-system.css",
+      "token": "--ke-font-sans"
+    },
+    "semantic_owner": {
+      "path": "site/src/components/design-system/foundations.css",
+      "token": "--ke-font-family-sans",
+      "value": "var(--ke-font-sans)"
+    },
+    "owner_approval_claimed": false,
+    "change_requires": "N0 recorded owner/product decision plus updated Astro/thin-S/Penpot binding"
+  },
+  "delivery": {
+    "mode": "unbundled-css-fallback-stack",
+    "blocking_font_request": false,
+    "font_face_required": false,
+    "authoritative_asset_paths": [],
+    "repository_font_binaries_are_launch_ui_authority": false,
+    "repository_font_binary_classification": "inactive inventory unless an explicit future authority decision names an exact asset and checksum"
+  },
+  "weights": {
+    "owner": "semantic --ke-type-*-weight tokens in site/src/components/design-system/*.css",
+    "core_roles": {
+      "--ke-type-body-weight": 400,
+      "--ke-type-body-strong-weight": 500,
+      "--ke-type-metadata-weight": 700,
+      "--ke-type-label-weight": 800,
+      "--ke-type-label-strong-weight": 850,
+      "--ke-type-h4-weight": 850,
+      "--ke-type-h3-weight": 900,
+      "--ke-type-h2-weight": 900,
+      "--ke-type-h1-compact-weight": 920,
+      "--ke-type-h1-weight": 950
+    },
+    "consumer_rule": "consume semantic weight tokens; do not redeclare a second font-family authority"
+  },
+  "actual_consumer_migration_bindings": [
+    {
+      "path": "site/src/layouts/EventLayout.astro",
+      "owner": "A0",
+      "current_bypass": "direct Inter fallback-stack declaration on the document root",
+      "target": "font-family: var(--ke-font-family-sans)",
+      "removal_boundary": "remove only after the layout imports the canonical F0 registry and V0 confirms unchanged computed family/order"
+    },
+    {
+      "path": "site/src/components/listings/MobileListingRailSurface.astro",
+      "owner": "A0",
+      "current_bypass": "direct Inter stacks in the rail root and typography shorthands",
+      "target": "var(--ke-font-family-sans) plus existing semantic --ke-type-* roles",
+      "removal_boundary": "preserve accepted mobile rail density and line metrics; replace family ownership without redesign"
+    },
+    {
+      "path": "site/src/layouts/PrelaunchLayout.astro",
+      "owner": "A0",
+      "current_bypass": "direct Inter fallback-stack declaration",
+      "target": "font-family: var(--ke-font-family-sans)",
+      "removal_boundary": "migrate when this route enters the accepted launch-critical consumer set; no parallel font authority"
+    }
+  ],
+  "thin_s_binding": {
+    "family_token": "typography.family.sans",
+    "family_source": "--ke-font-family-sans",
+    "weight_token_prefix": "typography.weight.",
+    "weight_source_pattern": "--ke-type-*-weight",
+    "delivery_note": "record the CSS family stack and weight roles; do not bind arbitrary repository font binaries"
+  },
+  "penpot_binding": {
+    "family_label": "Inter",
+    "fallback_stack_is_metadata_not_extra_penpot_families": true,
+    "weight_source_pattern": "--ke-type-*-weight",
+    "asset_binding": "NONE_IN_CURRENT_ASTRO_AUTHORITY",
+    "availability_boundary": "R0.PENPOT may bind only an available matching family after N0 accepts the exact mapping; otherwise record a product decision blocker rather than silently substituting"
+  },
+  "v0_acceptance": {
+    "source": [
+      "one primitive family-stack owner",
+      "one semantic family alias",
+      "no launch-critical consumer introduces another named family authority",
+      "repository font binaries are not counted as active web typography"
+    ],
+    "browser": [
+      "computed font-family order matches the canonical stack on representative headings, body, labels and metadata",
+      "computed font-weight matches the semantic role used by each specimen",
+      "no unexpected network font request or font-face substitution is required by the current source baseline"
+    ]
+  },
+  "pm0_item_11_state": "PARTIAL_UNTIL_CONSUMER_BYPASSES_ARE_REMOVED_AND_N0_ACCEPTS_THE_ASTRO_THIN_S_PENPOT_MAPPING"
+}
