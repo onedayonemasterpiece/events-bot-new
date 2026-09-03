@@ -31,12 +31,30 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(row, /data-rail-gallery-index=\{mediaIndex\}/u);
   assert.match(row, /data-mobile-rail-gallery-count=\{railMediaItems\.length\}/u);
   assert.match(row, /import Icon from '\.\.\/Icon\.astro'/u);
-  assert.equal((row.match(/<Icon name="heart" \/>/gu) || []).length, 3);
+  for (const role of ['feature', 'inline', 'action']) {
+    assert.match(row, new RegExp(`<Icon name="heart" className="ke-icon-role ke-icon-role--${role}" \\/>`, 'u'));
+  }
   assert.doesNotMatch(row, />♥</u);
   assert.match(row, /data-feedback-action="not_interested"/u);
   assert.match(row, /data-feedback-count/u);
   assert.match(row, /data-image-text-mode=\{railMedia\.imageTextMode\}/u);
   assert.match(row, /data-media-state="loading"/u);
+  assert.match(row, /import '\.\.\/media-frame\.css';/u);
+  for (const marker of [
+    'data-media-frame-contract="v1"',
+    'data-media-frame-style-owner="media-frame.css"',
+    'data-media-frame-role=',
+    'data-media-frame-kind=',
+    'data-media-frame-fit=',
+    'data-media-frame-crop-permission=',
+    'data-media-frame-ratio=',
+    'data-media-frame-focal-position=',
+    'data-media-frame-clip="frame"',
+    'data-media-frame-radius="surface"',
+    'data-media-frame-fill="true"',
+    'data-media-frame-interaction-owner="caller"',
+  ]) assert.ok(row.includes(marker), `missing mobile rail MediaFrame marker: ${marker}`);
+  assert.doesNotMatch(row, /--rail-media-fit|--focus-x|--focus-y/u);
   assert.match(surface, /mobile-rail-media-skeleton/u);
   assert.match(surface, /if \(img\.complete\) decodeLoaded\(\)/u);
   assert.match(surface, /img\.addEventListener\('error', \(\) => done\(false\)/u);
