@@ -491,8 +491,10 @@ function materializeRow(row, rowIndex, presentation) {
  * the declared cost model rather than a greedy per-row guess.
  */
 export function packRelatedCardRows(items, options = {}) {
-  const limit = Math.max(0, Math.floor(Number(options.limit ?? items.length)));
-  const rowSize = Math.max(1, Math.min(6, Number(options.rowSize ?? 3)));
+  const requestedLimit = Number(options.limit ?? items.length);
+  const limit = Math.max(0, Math.floor(Number.isFinite(requestedLimit) ? requestedLimit : items.length));
+  const requestedRowSize = Number(options.rowSize ?? 3);
+  const rowSize = Math.max(1, Math.min(6, Math.floor(Number.isFinite(requestedRowSize) ? requestedRowSize : 3)));
   const mediaTreatment = options.mediaTreatment || 'hybrid';
   const presentation = options.presentation === 'flow' ? 'flow' : 'related-grid';
   const geometry = options.geometry || relatedCardMediaGeometry;
