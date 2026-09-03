@@ -1,0 +1,88 @@
+{
+  "schema": "kenigevents.f0-a0-club-detail-consumption-acceptance.v1",
+  "version": "1.0.0",
+  "status": "ACCEPTED_BOUNDED_PATCH_REQUIRES_F0_SOURCE_AND_SUCCESSOR_INTEGRATION",
+  "role": "F0",
+  "contract_version": "1.10.0",
+  "a0": {
+    "branch": "work/ui-normalization-a0-wave-3-20260903",
+    "commit": "2aa70f2ff8819d83e58da1473a35435d22783578",
+    "parent": "29538035d94a15adac9fd8ee7463ece87c8d1033",
+    "message": "refactor(ui): bind club detail route to F0 theme roles",
+    "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+    "blob": "34015cac46d29b6ce32879e97f9d83fe36bc3f1e"
+  },
+  "f0_source": {
+    "required_commit": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+    "foundation": "site/src/components/design-system/route-theme-foundations.css",
+    "binding": "site/src/components/design-system/f0-route-theme-bindings.v1.json",
+    "checker": "site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "registry_import": "site/src/components/design-system/product-contour-foundations.css"
+  },
+  "accepted_changes": [
+    "import the canonical product-contour registry",
+    "replace the text back arrow with SemanticIcon arrow-left/inline",
+    "bind hero gradient, fact cards, meetings, empty state, note and action target to F0 route-theme roles",
+    "preserve verified-club family/version/variant/state identity",
+    "preserve external meeting-link noopener noreferrer nofollow behavior",
+    "preserve data projection, breadcrumbs, future/history state, copy and mobile one-column composition"
+  ],
+  "strict_cluster_evidence": {
+    "required_substrings_present": [
+      "var(--ke-color-club-detail-hero-start)",
+      "var(--ke-color-club-detail-note-surface)",
+      "var(--ke-club-detail-action-min)",
+      "<SemanticIcon name=\"arrow-left\" role=\"inline\" />"
+    ],
+    "forbidden_substrings_absent": [
+      "background:linear-gradient(135deg, #fffdf8, rgba(215,240,236,.7))",
+      "background:rgba(215,240,236,.58)",
+      "<span aria-hidden=\"true\">←</span>"
+    ],
+    "icon_role_count_after_integration": 4,
+    "strict_command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "execution_claimed": false
+  },
+  "residual_consumer_values": {
+    "classification": "A0_MICRO_LAYOUT_AND_LEGACY_ALIAS_FOLLOW_UP_NOT_A_SECOND_THEME_OR_ICON_OWNER",
+    "examples": [
+      "var(--muted)",
+      "var(--primary-strong)",
+      "0.15rem definition rhythm",
+      "0.1rem date rhythm",
+      "0.3rem place rhythm",
+      "0.2rem note-copy rhythm",
+      "0.4rem back-action gap",
+      "0.35rem mobile row gap",
+      "620px media-query condition"
+    ],
+    "decision": "do not manufacture global F0 aliases for single-route optical micro-values; A0 may replace legacy color aliases with existing --ke-color-* roles and must explicitly retain or migrate micro-layout values during route-shell closure",
+    "pm0_effect": "this accepted route-theme cluster does not by itself complete global PM0 items 12, 13 or 15"
+  },
+  "standalone_boundary": {
+    "a0_branch_contains_required_f0_foundation": false,
+    "a0_branch_is_standalone_build_candidate": false,
+    "whole_a0_branch_merge_allowed": false,
+    "integration_rule": "materialize F0-owned source first, then apply only the net route patch onto the current successor; never replace the newer successor route with an older whole-branch tree"
+  },
+  "rollback": {
+    "unit": "F0-RB-CLUB-DETAIL-THEME",
+    "trigger": "missing token, strict gate failure, computed theme/icon/target drift or route behavior change",
+    "action": "revert only the bounded club-detail substitutions and omit the corresponding F0 route-theme unit; preserve unrelated successor, A0, M0 and immutable-preview state"
+  },
+  "review": {
+    "family_anatomy_changed": false,
+    "user_facing_semantics_changed": false,
+    "palette_redesigned": false,
+    "canonical_svg_used": true,
+    "fifth_icon_role_introduced": false,
+    "decision": "ACCEPT_EXACT_PATCH_NOT_STANDALONE_BRANCH"
+  },
+  "claims_not_made": [
+    "the patch is integrated into the current successor",
+    "the strict route-theme command passed",
+    "all route-local spacing and typography is normalized",
+    "a post-F0 fresh-real preview exists",
+    "V0 accepted this route"
+  ]
+}
