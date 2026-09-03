@@ -2,6 +2,7 @@
 import EventLayout from '../../../layouts/EventLayout.astro';
 import Breadcrumbs from '../../../components/Breadcrumbs.astro';
 import SemanticIcon from '../../../components/design-system/SemanticIcon.astro';
+import '../../../components/design-system/product-contour-foundations.css';
 import { siteHomeAbsoluteUrl, siteHomeHref, absoluteUrl, displayDateValue, SITE_NAME, withBase } from '../../../lib/events';
 import { getInterestClubBySlug, getInterestClubs, interestClubAbsoluteUrl, interestClubMeetingHref } from '../../../lib/clubs';
 
@@ -117,11 +118,11 @@ const structuredData = [
   .club-detail__hero { background:linear-gradient(135deg, var(--ke-color-club-detail-hero-start), var(--ke-color-club-detail-hero-end)); }
   .club-detail__hero h1 { max-width:var(--ke-club-detail-hero-heading-max); font-size:var(--ke-club-detail-hero-heading-size); line-height:var(--ke-club-detail-hero-heading-line); }
   .club-detail__facts { display:grid; grid-template-columns:var(--ke-club-detail-facts-columns); gap:var(--ke-club-detail-facts-gap); margin:var(--ke-club-detail-facts-margin-top) 0 0; }
-  .club-detail__facts div { padding:var(--ke-club-detail-fact-padding); border:1px solid var(--ke-color-club-detail-fact-border); border-radius:var(--ke-club-detail-fact-radius); background:var(--ke-color-club-detail-fact-surface); }
+  .club-detail__facts div { padding:var(--ke-club-detail-fact-padding); border:var(--ke-shape-border-hairline) solid var(--ke-color-club-detail-fact-border); border-radius:var(--ke-club-detail-fact-radius); background:var(--ke-color-club-detail-fact-surface); }
   dt { color:var(--muted); font-size:var(--ke-club-detail-term-size); }
   dd { margin:.15rem 0 0; font-weight:var(--ke-club-detail-value-weight); overflow-wrap:anywhere; }
   .meeting-list { display:grid; gap:var(--ke-club-detail-meeting-gap); margin:1rem 0 0; padding:0; list-style:none; }
-  .meeting-list li { display:grid; grid-template-columns:var(--ke-club-detail-meeting-columns); gap:var(--ke-club-detail-meeting-column-gap); padding:var(--ke-club-detail-meeting-padding-block) 0; border-top:1px solid var(--ke-color-club-detail-meeting-border); }
+  .meeting-list li { display:grid; grid-template-columns:var(--ke-club-detail-meeting-columns); gap:var(--ke-club-detail-meeting-column-gap); padding:var(--ke-club-detail-meeting-padding-block) 0; border-top:var(--ke-shape-border-hairline) solid var(--ke-color-club-detail-meeting-border); }
   .meeting-list__date { display:grid; align-content:start; gap:.1rem; color:var(--primary-strong); font-weight:900; }
   .meeting-list__date span { color:var(--muted); font-size:.88rem; }
   .meeting-list h3 { margin:0; font-size:var(--ke-club-detail-meeting-title-size); }
