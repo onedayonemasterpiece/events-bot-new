@@ -12,7 +12,7 @@ export const AUTHORED_AGAINST_SOURCE = '1bc6d9cb4c122046f4782532381de953727c1da6
 export const OWNERS = freeze({ acceptance:'N0', foundations:'F0', framing:'FR0', components:'M0', routes:'A0' });
 export const CANONICAL_A0_V0_MATRIX = freeze({
   repository: 'onedayonemasterpiece/lovekgd-design-system',
-  ref: 'd14ac7c932ba0b554b229e5dcab0504c10ca2328',
+  ref: 'b3395b944f8255defed20c69338d775a94b3ad02',
   path: 'catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json',
   blobSha: 'e81a75a77a62c2f2efc2b9f0c72625f56c1fc38b',
   schemaVersion: 'kenigevents.a0-v0-acceptance-matrix.v1',
@@ -20,7 +20,7 @@ export const CANONICAL_A0_V0_MATRIX = freeze({
   relationship: 'EXECUTABLE_OVERLAY_NOT_REPLACEMENT',
 });
 export const PUBLISHED_TARGETS = freeze({
-  real: freeze({ url:'https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/', sourceSha:'4536847f9fbdaa27326ebb3ec9ec1c825736e107', dataMode:'real', status:'HTTP_200_UNAUDITED_BY_V0' }),
+  real: freeze({ url:'https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/', sourceSha:'1bc6d9cb4c122046f4782532381de953727c1da6', dataMode:'real', status:'HTTP_200_CURRENT_PUBLIC_PRE_F0_BASELINE_UNAUDITED_BY_V0', supersedes:'https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/' }),
   golden: freeze({ url:'https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/', sourceSha:'84504f30eebc334deba46e94365601c3d572c5c0', dataMode:'golden', status:'V0_DRIFT_5527892153' }),
 });
 export const VIEWPORTS = freeze([
