@@ -147,13 +147,17 @@ for (const width of [320, 390]) {
   const shell = page.locator('.event-media').first();
   await shell.waitFor();
   const before = await shell.boundingBox();
-  assert.equal(await shell.getAttribute('data-media-state'), 'loading');
-  await page.waitForFunction(() => document.querySelector('.event-media')?.dataset.mediaState === 'loaded');
+  assert.equal(await shell.getAttribute('data-media-frame-resource-state'), 'pending');
+  assert.ok(Number(await shell.getAttribute('data-media-frame-source-ratio')) > 0);
+  assert.equal(await shell.locator(':scope > [data-media-frame-fallback]').getAttribute('hidden'), '');
+  await page.waitForFunction(() => document.querySelector('.event-media')?.dataset.mediaFrameResourceState === 'loaded');
   const after = await shell.boundingBox();
   closeEnough(before.height, after.height);
   closeEnough(before.width, after.width);
+  assert.equal(await shell.getAttribute('data-media-frame-fallback'), null);
+  assert.equal(await shell.locator(':scope > [data-media-frame-fallback]').getAttribute('hidden'), '');
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.querySelector('.event-media')?.dataset.mediaState === 'loaded');
+  await page.waitForFunction(() => document.querySelector('.event-media')?.dataset.mediaFrameResourceState === 'loaded');
   await context.close();
 }
 
@@ -161,13 +165,46 @@ for (const width of [320, 390]) {
   const context = await contextFor(390, { failRemoteImages: true });
   const page = await context.newPage();
   await page.goto(`${baseUrl}/segodnya/`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.querySelector('.event-media')?.dataset.mediaState === 'error');
-  const state = await page.locator('.event-media').first().evaluate((node) => ({
-    height: node.getBoundingClientRect().height,
-    background: getComputedStyle(node).backgroundColor,
-  }));
+  await page.waitForFunction(() => document.querySelector('.event-media')?.dataset.mediaFrameResourceState === 'broken');
+  const state = await page.locator('.event-media').first().evaluate((node) => {
+    const image = node.querySelector(':scope > [data-media-frame-image]');
+    const fallback = node.querySelector(':scope > [data-media-frame-fallback]');
+    return {
+      height: node.getBoundingClientRect().height,
+      background: getComputedStyle(node).backgroundColor,
+      resourceState: node.dataset.mediaFrameResourceState,
+      kind: node.dataset.mediaFrameKind,
+      fit: node.dataset.mediaFrameFit,
+      cropPermission: node.dataset.mediaFrameCropPermission,
+      cropReason: node.dataset.mediaFrameCropReason,
+      objectPosition: node.dataset.mediaFrameObjectPosition,
+      rootFallback: node.hasAttribute('data-media-frame-fallback'),
+      fallbackHidden: fallback?.hidden,
+      src: image?.getAttribute('src'),
+      srcset: image?.getAttribute('srcset'),
+      imageHidden: image?.hidden,
+      rowState: node.closest('[data-mobile-listing-row]')?.dataset.dsState,
+    };
+  });
   closeEnough(state.height, 112);
   assert.notEqual(state.background, 'rgba(0, 0, 0, 0)');
+  assert.deepEqual(state, {
+    ...state,
+    resourceState:'broken',
+    kind:'fallback',
+    fit:'contain',
+    cropPermission:'forbidden',
+    cropReason:'resource_load_error',
+    objectPosition:'50% 50%',
+    rootFallback:true,
+    fallbackHidden:false,
+    src:null,
+    srcset:null,
+    imageHidden:true,
+  });
+  assert.match(state.rowState || '', /media-error/u);
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator('.event-media').first().getAttribute('data-media-frame-fit'), 'contain');
   await context.close();
 }
 
