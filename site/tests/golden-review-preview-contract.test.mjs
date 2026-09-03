@@ -139,7 +139,7 @@ test('Golden generation reuses ordinary routes, restores real data and has an ex
   assert.match(checker, /WeekendListingSurface/u);
   assert.match(checker, /FreeCollectionSurface/u);
   assert.match(checker, /ordinary_routes_only:true/u);
-  assert.match(deployer, /s3:\/\/${bucket}\/${buildId}\//u);
+  assert.ok(deployer.includes('const target = `s3://${bucket}/${buildId}/`;'));
   assert.match(deployer, /KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY/u);
   assert.equal(existsSync(join(siteDir, 'src', 'pages', 'golden')), false, 'a second Golden UI route is forbidden');
   assert.equal(existsSync(join(siteDir, 'src', 'pages', 'lab', 'golden')), false, 'an owner-facing Golden lab is forbidden');
