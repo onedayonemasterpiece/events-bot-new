@@ -1,6 +1,6 @@
 {
   "schema": "kenigevents.n0-delivery-semantics.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "role": "N0",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_reference": {
@@ -40,7 +40,7 @@
     "do_not_reopen_or_delay_for_later_role_outputs": true,
     "later_outputs_are_next_candidate_inputs_only": [
       "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
-      "8b0c6709beca1f7b0bef81b27464f786df1d7806",
+      "105bac16be6c73916a25f3e78b02116869ed5e1e",
       "3ef253980bdfe0731158f5b8b4b47965fa153ce9"
     ],
     "required_post_publication_verification": [
@@ -53,6 +53,7 @@
   },
   "f0_result_classification": {
     "comment": 5531682890,
+    "delivery_confirmation_comment": 5531902859,
     "frozen_transaction_verdict": "ACCEPTED_WITH_NONBLOCKING_VOCABULARY_CHECKER_DELTA",
     "festivals": "ACCEPTED_SOURCE",
     "exhibitions": "ACCEPTED_SOURCE",
@@ -60,9 +61,10 @@
     "duplicate_f0_token_or_style_owner": "NOT_FOUND",
     "vocabulary_checker_correction": {
       "sha": "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
-      "classification": "NEXT_CANDIDATE_ONLY",
+      "classification": "THE_ONE_F0_NEXT_CANDIDATE_BATCH",
       "product_consumer_change": false,
-      "blocks_frozen_publication": false
+      "blocks_frozen_publication": false,
+      "whole_branch_merge_allowed": false
     }
   },
   "current_pull_integrator_refs": {
@@ -78,13 +80,20 @@
     "M0": {
       "branch": "work/ui-normalization-m0-continuity-20260903",
       "result_comment": 5531788718,
+      "FR0_delivery_review_comment": 5531918584,
       "published_merge_ready_head": "7e879210f68f7a7e4a53755f2e9431c61f445569",
-      "current_head": "8b0c6709beca1f7b0bef81b27464f786df1d7806",
-      "compatibility_tail": [
-        "1828bde1c869150b25a292a65e8b20a646a5d611",
-        "8b0c6709beca1f7b0bef81b27464f786df1d7806"
+      "current_head": "105bac16be6c73916a25f3e78b02116869ed5e1e",
+      "current_is_descendant_of_published_merge_ready_head": true,
+      "tail_commit_count": 6,
+      "tail_changed_product_source": false,
+      "tail_changed_paths": [
+        "site/src/data/m0-downstream-bindings.v1.json",
+        "site/tests/m0-card-icon-role-contract.test.mjs",
+        "site/tests/event-card-control-target.test.mjs",
+        "site/tests/m0-post-fr0-test-ownership.test.mjs",
+        "site/tests/m0-post-fr0-test-ownership.v1.json"
       ],
-      "changed_product_source_after_published_merge_ready_head": false,
+      "FR0_card_source_review": "ACCEPTED_SOURCE",
       "decision": "CURRENT_HEAD_ACCEPTED_AS_THE_ONE_M0_NEXT_SUCCESSOR_BATCH"
     },
     "A0": {
@@ -111,12 +120,14 @@
       {
         "role": "F0",
         "sha": "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
-        "scope": "contract-1.10 vocabulary and strict checker correction only"
+        "scope": "contract-1.10 vocabulary and strict checker correction only",
+        "whole_branch_merge_allowed": false
       },
       {
         "role": "M0",
-        "sha": "8b0c6709beca1f7b0bef81b27464f786df1d7806",
-        "scope": "post-FR0 EventCard, ListingEventCard and relatedCardLayout consolidation plus current compatibility tail"
+        "sha": "105bac16be6c73916a25f3e78b02116869ed5e1e",
+        "scope": "one post-FR0 EventCard, ListingEventCard and relatedCardLayout consolidation batch plus its test-ownership corrections",
+        "whole_branch_merge_allowed": false
       },
       {
         "role": "A0",
@@ -134,6 +145,20 @@
     "materialization_owner": "R0",
     "candidate_acceptance_owner": "N0",
     "browser_verdict_owner": "V0"
+  },
+  "deferred_independent_unit": {
+    "id": "MOBILE_LISTING_RAIL_RESOURCE_STATE_BINDING",
+    "FR0_delivery_review_comment": 5531918584,
+    "source_writer": "A0_CONSUMER_LINE",
+    "affected_paths": [
+      "site/src/components/listings/MobileListingRailRow.astro",
+      "site/src/components/listings/MobileListingRailSurface.astro"
+    ],
+    "classification": "SMALLEST_OWNER_REJECTION_DEFERRED_OUTSIDE_CURRENT_THREE_BATCH_INTAKE",
+    "blocks_frozen_cebeafee_publication": false,
+    "blocks_F0_M0_A0_next_candidate_intake": false,
+    "creates_FR0_source_batch": false,
+    "may_enter_later_candidate_only_as_separately_accepted_A0_consumer_batch": true
   },
   "post_publication_v0_trigger": {
     "state": "PENDING_EXACT_PUBLIC_URL_AND_MANIFEST",
