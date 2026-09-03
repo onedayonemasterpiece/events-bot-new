@@ -161,16 +161,33 @@ const safeRootAttributes = Object.fromEntries(
     && !ADAPTIVE_ROOT_RESERVED_ATTRIBUTES.has(name)
   )),
 );
-const sourceIndexByItem = new Map(events.map((item, index) => [item, index]));
-const itemRootFor = (item: PreviewEvent): AdaptiveEventCardItemRoot | undefined => {
-  const sourceIndex = sourceIndexByItem.get(item) ?? events.findIndex((candidate) => candidate.id === item.id);
-  return itemRoots[`${item.id}:${sourceIndex}`] || itemRoots[String(item.id)];
-};
+const sourceIndexesByItem = new Map<PreviewEvent, number[]>();
+const sourceIndexesByEventId = new Map<string, number[]>();
+events.forEach((item, index) => {
+  const itemIndexes = sourceIndexesByItem.get(item) || [];
+  itemIndexes.push(index);
+  sourceIndexesByItem.set(item, itemIndexes);
+  const eventId = String(item.id);
+  const eventIndexes = sourceIndexesByEventId.get(eventId) || [];
+  eventIndexes.push(index);
+  sourceIndexesByEventId.set(eventId, eventIndexes);
+});
+const claimedSourceIndexes = new Set<number>();
+const resolvedSourceIndexes = resolved.map(({ item }) => {
+  const exactIndex = sourceIndexesByItem.get(item)?.find((index) => !claimedSourceIndexes.has(index));
+  const eventIdIndex = sourceIndexesByEventId.get(String(item.id))?.find((index) => !claimedSourceIndexes.has(index));
+  const sourceIndex = exactIndex ?? eventIdIndex ?? -1;
+  if (sourceIndex >= 0) claimedSourceIndexes.add(sourceIndex);
+  return sourceIndex;
+});
+const itemRootFor = (item: PreviewEvent, sourceIndex: number): AdaptiveEventCardItemRoot | undefined => (
+  itemRoots[`${item.id}:${sourceIndex}`] || itemRoots[String(item.id)]
+);
 const inputOrder = events.map((item) => item.id).join(',');
 const admittedSource = resolved
-  .map(({ item }) => ({
+  .map(({ item }, renderedIndex) => ({
     item,
-    sourceIndex: sourceIndexByItem.get(item) ?? events.findIndex((candidate) => candidate.id === item.id),
+    sourceIndex: resolvedSourceIndexes[renderedIndex] ?? -1,
   }))
   .filter(({ sourceIndex }) => sourceIndex >= 0)
   .sort((left, right) => left.sourceIndex - right.sourceIndex);
@@ -239,17 +256,20 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   aria-label={ariaLabel}
   aria-labelledby={ariaLabelledby}
 >
-  {resolved.map(({ item, layout }) => (
-    <EventCard
-      event={item}
-      variant="split-actions"
-      desktopRelatedCrop={mode === 'packed'}
-      desktopRelatedLayout={mode === 'packed' ? layout : undefined}
-      mobileFlowMedia={mode === 'flow' && mobileFlowMedia}
-      rootClassName={itemRootFor(item)?.className}
-      rootAttributes={itemRootFor(item)?.attributes}
-    />
-  ))}
+  {resolved.map(({ item, layout }, renderedIndex) => {
+    const itemRoot = itemRootFor(item, resolvedSourceIndexes[renderedIndex] ?? -1);
+    return (
+      <EventCard
+        event={item}
+        variant="split-actions"
+        desktopRelatedCrop={mode === 'packed'}
+        desktopRelatedLayout={mode === 'packed' ? layout : undefined}
+        mobileFlowMedia={mode === 'flow' && mobileFlowMedia}
+        rootClassName={itemRoot?.className}
+        rootAttributes={itemRoot?.attributes}
+      />
+    );
+  })}
 </div>
 
 <script>
