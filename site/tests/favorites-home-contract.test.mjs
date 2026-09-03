@@ -109,7 +109,7 @@ test('post-action local state drives durable like/unlike and calendar add/remove
   ]);
 });
 
-test('favorites and home source contracts use the shared auth/card runtime and never browser secrets', async () => {
+test('favorites and home source contracts use canonical adaptive/card runtimes and never browser secrets', async () => {
   const [page, surface, home, homeFeed, authRuntime, savedRuntime, migration] = await Promise.all([
     read('src/pages/izbrannoe/index.astro'),
     read('src/components/FavoritesSurface.astro'),
@@ -121,10 +121,16 @@ test('favorites and home source contracts use the shared auth/card runtime and n
   ]);
   assert.match(page, /<EventLayout[\s\S]*\bnoindex\b/u);
   assert.match(page, /data-favorites-page/u);
+  assert.match(surface, /data-ds-family="FavoritesSurface"/u);
   assert.match(surface, /data-favorites-skeleton/u);
-  assert.match(surface, /data-favorites-grid/u);
+  assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*mode="flow"[\s\S]*rowSize=\{3\}[\s\S]*responsive="progressive"/u);
+  assert.match(surface, /'data-favorites-grid'\s*:\s*''/u);
+  assert.match(surface, /'data-favorites-runtime-host'\s*:\s*'adaptive-v1'/u);
+  assert.match(surface, /syncAdaptiveDiagnostics/u);
   assert.match(surface, /KenigEventsCreateEventCard/u);
   assert.match(surface, /joinFutureSavedEvents/u);
+  assert.doesNotMatch(surface, /\.favorites-surface__grid\s*\{[\s\S]*grid-template-columns/u,
+    'FavoritesSurface must not own a second event-card grid');
   assert.match(authRuntime, /PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY/u);
   assert.match(savedRuntime, /setDurableSavedEvent/u);
   assert.match(savedRuntime, /settleAfterLocalCommit/u);
@@ -133,8 +139,12 @@ test('favorites and home source contracts use the shared auth/card runtime and n
   assert.doesNotMatch([surface, authRuntime, savedRuntime].join('\n'), /PERSONALIZATION_SUPABASE_SECRET_KEY|service_role|sb_secret_/u);
 
   assert.match(home, /data-home-static-fallback-count/u);
-  assert.match(homeFeed, /data-home-feed-limit="30"/u);
-  assert.match(homeFeed, /<EventCard\b/u);
+  assert.match(homeFeed, /<AdaptiveEventCardGrid/u);
+  assert.match(homeFeed, /mode="flow"/u);
+  assert.match(homeFeed, /limit=\{30\}/u);
+  assert.match(homeFeed, /'data-home-feed-limit'\s*:\s*'30'/u);
+  assert.match(homeFeed, /itemRoots=\{itemRoots\}/u);
+  assert.doesNotMatch(homeFeed, /<EventCard\b/u);
   assert.doesNotMatch(homeFeed, /\bfetch\s*\(/u);
   assert.doesNotMatch(homeFeed, /\brpc\s*\(|LLM|provider/iu);
 
