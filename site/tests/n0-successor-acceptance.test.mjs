@@ -17,18 +17,25 @@ const PRECURSOR = '0d73428dfafff2fd5450b74fd68e7bb40e92d2c5';
 const SUCCESSOR_BASE = '9152994b026b34d60d21d68bfa2a4d7d8dc20f3e';
 const PIPELINE_PARENT = '0d92654b9637e31753fed5bd4bf6a4a66763c079';
 const M0_INTEGRATED_PARENT = '1d145d5efd2a332eff29e69b6afcf43414769906';
+const F0_FROZEN = 'de92dabd4551e117ca1af1be7915ff223321cc32';
+const M0_FROZEN = '4c83fc7769b1dec2d92469373e3b15154af437f4';
+const A0_FROZEN = 'ec926580fa2cc003318006f4c1d671fc459ea26c';
 const M0_INVALID = 'e620e69fd8fb4641415320beaa3ea9c1003beee8';
 const A0_REJECTED_REMOVAL = '5e466d65bc2b71a814c26c063f90aa07709de08f';
 const A0_RESTORE = '84399b51b77701be714fdc84429318a9a28f93fd';
 const GOLDEN_SHA = '84504f30eebc334deba46e94365601c3d572c5c0';
+const V0_COMMENT = 5527892153;
+const A0_BATCH_COMMENT = 5527907602;
 
 const gate = (id) => manifest.gate_graph.find((item) => item.id === id);
 
 test('N0 authority separates programme, precursor, source successor and runtime evidence', () => {
   assert.equal(manifest.schema_version, 'kenigevents.n0-successor-acceptance.v1');
   assert.equal(manifest.contract_version, '1.9.0');
-  assert.equal(manifest.pm0_version, '2.2.0');
+  assert.equal(manifest.pm0_version, '2.3.0');
   assert.equal(manifest.owner, 'N0');
+  assert.equal(manifest.evidence_cutoff.issue_comment, A0_BATCH_COMMENT);
+
   assert.equal(manifest.authority.legacy_combined_candidate.head, PRECURSOR);
   assert.equal(
     manifest.authority.legacy_combined_candidate.decision,
@@ -43,6 +50,7 @@ test('N0 authority separates programme, precursor, source successor and runtime 
   assert.equal(successor.public_url, null);
   assert.ok(successor.included_scope.includes('one canonical real/golden Kaggle pipeline'));
   assert.ok(successor.included_scope.includes('coherent AdaptiveEventCardGrid input/source/rendered diagnostics'));
+
   assert.equal(manifest.authority.n0_branch.resolve_remote_head_at_merge, true);
   assert.equal(
     manifest.authority.n0_branch.decision,
@@ -50,7 +58,7 @@ test('N0 authority separates programme, precursor, source successor and runtime 
   );
 });
 
-test('published Golden transaction closes only exact Golden evidence', () => {
+test('published Golden transaction remains exact Golden evidence and now carries independent DRIFT', () => {
   const golden = manifest.accepted_golden_transaction;
   assert.equal(golden.decision, 'ACCEPTED_AS_GOLDEN_KAGGLE_PIPELINE_AND_CORPUS_EVIDENCE_ONLY');
   assert.equal(golden.issue_comment, 5527249164);
@@ -64,9 +72,11 @@ test('published Golden transaction closes only exact Golden evidence', () => {
   assert.equal(golden.artifact.stable_ics_mutation, false);
   assert.equal(golden.verification.document_http_200, 36);
   assert.equal(golden.verification.document_horizontal_overflow_cases, 0);
-  assert.equal(golden.verification.v0_independent_verdict, 'PENDING');
+  assert.equal(golden.verification.v0_independent_verdict, 'DRIFT');
+  assert.equal(golden.verification.v0_issue_comment, V0_COMMENT);
   assert.equal(golden.checklist_evidence['4'], 'DONE_FULL_GOLDEN_KAGGLE_REVIEW_PREVIEW');
-  assert.equal(golden.checklist_evidence['9'], 'PARTIAL_PUBLISHED_STRESS_MATRIX_V0_VISUAL_VERDICT_PENDING');
+  assert.equal(golden.checklist_evidence['9'], 'PARTIAL_PUBLISHED_STRESS_MATRIX_V0_DRIFT');
+
   for (const boundary of [
     'PM0 item 3 fresh-real full Kaggle Review Preview',
     'voice-review readiness gate',
@@ -76,7 +86,7 @@ test('published Golden transaction closes only exact Golden evidence', () => {
   ]) assert.ok(golden.does_not_close.includes(boundary), `missing non-claim: ${boundary}`);
 });
 
-test('unpublished exact-SHA retry remains diagnostic-only', () => {
+test('unpublished exact-SHA Kaggle retry remains diagnostic-only', () => {
   const diagnostic = manifest.pipeline_diagnostics;
   assert.equal(diagnostic.exact_sha, PIPELINE_PARENT);
   assert.equal(diagnostic.issue_comment, 5527345279);
@@ -88,22 +98,59 @@ test('unpublished exact-SHA retry remains diagnostic-only', () => {
   assert.notEqual(diagnostic.exact_sha, manifest.accepted_golden_transaction.repo_sha);
 });
 
-test('F0 source progress is accepted without false actual-consumer convergence', () => {
-  const f0 = manifest.role_outputs.F0;
-  assert.equal(f0.decision, 'SELECTIVE_SOURCE_ACCEPTED_NOT_END_TO_END_COMPLETE');
-  assert.equal(f0.accepted_functional_commits.at(-1), f0.head);
-  assert.ok(f0.accepted_functional_commits.includes('fd47202484da3abb2eff0fac70c6123a0cebba4b'));
-  assert.ok(f0.accepted_functional_commits.includes('11de3f042de2bd9205e7a594f78813566d5be5d6'));
-  assert.equal(f0.remaining_source_evidence.consumer_files_with_raw_lengths, 84);
-  assert.ok(f0.remaining_source_evidence.direct_font_family_consumers.includes('site/src/layouts/EventLayout.astro'));
-  assert.ok(f0.remaining_source_evidence.transitional_local_icon_alias_consumers.includes(
-    'site/src/components/InterestClubCard.astro',
-  ));
-  assert.equal(f0.runtime_status, 'NOT_RUN_ON_CURRENT_SUCCESSOR');
+test('N0 classifies the three Golden V0 findings without manufacturing source work', () => {
+  const verdict = manifest.v0_golden_verdict;
+  assert.equal(verdict.issue_comment, V0_COMMENT);
+  assert.equal(verdict.verdict, 'DRIFT');
+  assert.equal(verdict.release_acceptance, false);
+  assert.equal(verdict.target.repo_sha, GOLDEN_SHA);
+  assert.deepEqual(verdict.matrix.viewports, [375, 620, 1024, 1440]);
+  assert.equal(verdict.matrix.document_http_200, 40);
+  assert.equal(verdict.matrix.document_total, 40);
+  assert.equal(verdict.matrix.free_collection_visible_cards_at_375, 6);
+  assert.equal(verdict.matrix.free_collection_horizontal_overflow_observed, false);
+
+  const target = verdict.findings.event_card_auxiliary_target_height;
+  assert.equal(target.classification, 'ACCEPTED_PRODUCT_DRIFT');
+  assert.equal(target.owner, 'A0');
+  assert.equal(target.source_path, 'site/src/layouts/EventLayout.astro');
+  assert.equal(target.observed_height_px, 36.28);
+  assert.equal(target.minimum_height_px, 44);
+  assert.equal(target.blocks_first_real_candidate, true);
+
+  const anchors = verdict.findings.stable_dom_anchors;
+  assert.equal(anchors.classification, 'REJECTED_AS_V0_SELECTOR_CONTRACT_DRIFT');
+  assert.equal(anchors.source_change_required, false);
+  assert.deepEqual(anchors.canonical_identity, [
+    'data-ds-family',
+    'data-ds-version',
+    'data-ds-variant',
+    'data-ds-state',
+  ]);
+  assert.match(anchors.forbidden_resolution, /data-ui/u);
+
+  const blank = verdict.findings.target_blank;
+  assert.equal(blank.classification, 'REJECTED_AS_OVERBROAD_V0_NEGATIVE_GATE');
+  assert.equal(blank.source_change_required, false);
+  assert.deepEqual(blank.required_rel_tokens, ['noopener', 'noreferrer']);
+  assert.deepEqual(blank.replacement_negative_selectors, [
+    '[target="_blank"]:not([rel~="noopener"])',
+    '[target="_blank"]:not([rel~="noreferrer"])',
+  ]);
 });
 
-test('current M0 tip is source-accepted with coherent diagnostics and ten explicit integration commits', () => {
+test('F0 and M0 frozen inputs are source-accepted without false runtime completion', () => {
+  const f0 = manifest.role_outputs.F0;
+  assert.equal(f0.latest_reviewed_head, F0_FROZEN);
+  assert.equal(f0.decision, 'SOURCE_ACCEPTED_NOT_END_TO_END_COMPLETE');
+  assert.equal(f0.accepted_functional_commits.at(-1), F0_FROZEN);
+  assert.equal(f0.typography_authority.owner_approval_claimed, false);
+  assert.equal(f0.typography_authority.font_binary_authority, false);
+  assert.equal(f0.typography_authority.pm0_item_11, 'PARTIAL');
+  assert.equal(f0.runtime_status, 'NOT_RUN_ON_CURRENT_SUCCESSOR');
+
   const m0 = manifest.role_outputs.M0;
+  assert.equal(m0.latest_reviewed_head, M0_FROZEN);
   assert.equal(m0.invalid_result_sha_rejected, M0_INVALID);
   assert.equal(m0.integrated_parent, M0_INTEGRATED_PARENT);
   assert.equal(m0.integrated_by, SUCCESSOR_BASE);
@@ -111,57 +158,67 @@ test('current M0 tip is source-accepted with coherent diagnostics and ten explic
   assert.equal(m0.resolved_drift.code, 'ADAPTIVE_SOURCE_COUNT_ORDER_CARDINALITY');
   assert.equal(m0.resolved_drift.diagnostics_owner, 'AdaptiveEventCardGrid');
   assert.equal(m0.resolved_drift.diagnostics_contract, 'input-source-rendered-v1');
-  assert.equal(m0.accepted_pending_integration_commits.length, 10);
-  assert.equal(m0.accepted_pending_integration_commits.at(-1), m0.head);
-  for (const commit of [
-    '1401b21d9ec68fe38f879de86028f468b515a8d0',
-    '5ce956f7f87a9f002dfe0e31f9256067b5b864e2',
-    'c63070e8a1c840dc12cc66c4b12762844dcf8191',
-    'db21c7195fa1a2fe116f94dcd68445676cc5031d',
-  ]) assert.ok(m0.accepted_pending_integration_commits.includes(commit), `missing accepted M0 commit ${commit}`);
-  assert.ok(m0.pending_scope.includes('fail-closed ListingEventCard broken-media fallback state'));
-  assert.ok(m0.pending_scope.includes('empty-card social-proof placement none state'));
-  assert.ok(m0.pending_scope.includes('flex-only EventCard placement without inert grid row/column'));
+  assert.equal(m0.accepted_pending_integration_commits.length, 18);
+  assert.equal(m0.accepted_pending_integration_commits.at(-1), M0_FROZEN);
+  assert.ok(m0.accepted_scope.includes('canonical EventCard, ListingEventCard and MobileListingRailRow icon roles'));
   assert.equal(m0.runtime_status, 'NOT_RUN_ON_FULL_M0_TIP');
 });
 
-test('A0 whole-tip merge remains held and accepted user-facing behavior is preserved', () => {
+test('A0 net consumer diff and mechanical batch are accepted while whole-branch replay is forbidden', () => {
   const a0 = manifest.role_outputs.A0;
-  assert.equal(a0.decision, 'HOLD_WHOLESALE_TIP_FOR_A0_COMPLETION_OR_SELECTIVE_PATCH');
+  assert.equal(a0.latest_reviewed_head, A0_FROZEN);
+  assert.equal(a0.decision, 'NET_CONSUMER_DIFF_AND_MECHANICAL_BATCH_ACCEPTED_WHOLE_BRANCH_MERGE_FORBIDDEN');
   assert.equal(a0.standalone_build_target, false);
-  assert.equal(a0.route_family_fraction, '5/9');
   assert.equal(a0.product_removal_rejected_commit, A0_REJECTED_REMOVAL);
   assert.equal(a0.product_behavior_restore_commit, A0_RESTORE);
-  assert.equal(a0.restore_decision, 'ACCEPTED_CORRECTION');
-  assert.equal(a0.writer_blocked_paths.length, 5);
-  assert.ok(a0.open_drift.some((item) => item.includes('hidden donor layouts')));
-  for (const behavior of [
-    'visible Large/Compact choice',
-    'localStorage restoration',
-    'keyboard radio behavior',
-    'pinch behavior',
-    'visible-event anchor preservation',
-  ]) assert.ok(a0.must_preserve_without_owner_decision.includes(behavior));
+  assert.equal(a0.popular_density_decision, 'RESOLVED_PRESERVED_AND_BOUND_TO_VISIBLE_REPRESENTATIONS');
+
+  const batch = a0.materialization_batch;
+  assert.equal(batch.issue_comment, A0_BATCH_COMMENT);
+  assert.equal(batch.status, 'N0_ACCEPTED_WITH_44PX_AMENDMENT');
+  assert.deepEqual(batch.frozen_dependencies, {
+    F0: F0_FROZEN,
+    M0: M0_FROZEN,
+    A0: A0_FROZEN,
+  });
+  assert.equal(Object.keys(batch.clusters).length, 5);
+  assert.ok(batch.exclude_m0_roots.includes('site/src/components/AdaptiveEventCardGrid.astro'));
+  assert.ok(batch.exclude_m0_roots.includes('site/src/components/OptimizedEventCardGrid.astro'));
+  assert.ok(batch.n0_amendments.some((item) => item.includes('computed target is at least 44px')));
+  assert.ok(batch.n0_amendments.some((item) => item.includes('do not add data-ui aliases')));
+  assert.ok(batch.n0_amendments.some((item) => item.includes('rel noopener and noreferrer')));
+  assert.equal(batch.semantic_decisions_complete, true);
+  assert.equal(batch.source_checkpoint_tests_executed_by_A0, false);
+  assert.equal(batch.candidate_integrated, false);
+  assert.equal(batch.browser_verdict_claimed, false);
 });
 
-test('nearest real candidate is bounded and does not wait for unrelated A0 completion', () => {
+test('nearest full-real candidate is exact and blocked by one real source fix plus integration', () => {
   const candidate = manifest.candidate_plan.nearest_full_real_candidate;
-  const m0 = manifest.role_outputs.M0;
   assert.equal(candidate.base, SUCCESSOR_BASE);
-  assert.equal(candidate.status, 'PARTIAL_INTEGRATION_REQUIRED');
-  assert.equal(candidate.include.length, 3);
-  assert.equal(candidate.include[0].source, 'work/ui-normalization-n0-checklist-20260903');
-  assert.equal(candidate.include[1].selection, 'POST_bbbc9b_SOURCE_PATHS_THROUGH_77c0833');
-  assert.equal(candidate.include[2].selection, 'TEN_COMMITS_AFTER_1d145d5_THROUGH_c5f208');
-  assert.equal(candidate.include[2].source, m0.branch);
-  assert.equal(m0.accepted_pending_integration_commits.at(-1), m0.head);
-  assert.equal(candidate.hold_for_next_successor[0].source, 'work/ui-normalization-a0-wave-3-20260903');
+  assert.equal(candidate.status, 'BLOCKED_BY_V0_TARGET_HEIGHT_FIX_AND_PARTIAL_INTEGRATION');
+  assert.equal(candidate.include.length, 4);
+  assert.match(candidate.include[0].selection, /CURRENT_REMOTE_HEAD/u);
+  assert.match(candidate.include[1].selection, new RegExp(F0_FROZEN, 'u'));
+  assert.match(candidate.include[2].selection, new RegExp(M0_FROZEN, 'u'));
+  assert.match(candidate.include[3].selection, new RegExp(A0_FROZEN, 'u'));
+  assert.equal(candidate.blocking_source_fixes.length, 1);
+  assert.deepEqual(candidate.blocking_source_fixes[0], {
+    code: 'EVENT_CARD_AUXILIARY_TARGET_HEIGHT_BELOW_44PX',
+    owner: 'A0',
+    path: 'site/src/layouts/EventLayout.astro',
+    required: 'specific not-interested target min-height absent or >=44px',
+    verification: 'N0_REQUIRE_V0_GOLDEN_DRIFT_FIXED=1 npm run test:n0-v0-golden-drift',
+  });
   assert.ok(candidate.preserve.includes('Popular Large/Compact user-facing behavior'));
-  assert.ok(candidate.reject.some((item) => item.includes(M0_INVALID)));
   assert.ok(candidate.reject.includes('whole-current-A0-tip merge'));
+  assert.ok(candidate.reject.includes('A0 replay of M0-owned roots'));
+  assert.ok(candidate.reject.includes('parallel data-ui identity aliases'));
+  assert.ok(candidate.reject.includes('blanket target=_blank ban'));
+  assert.ok(candidate.reject.some((item) => item.includes(M0_INVALID)));
 });
 
-test('gate graph orders executable, browser, thin-S, Penpot and release boundaries', () => {
+test('gate graph orders source, real Kaggle, V0, Astro, thin-S, Penpot and release boundaries', () => {
   assert.deepEqual(manifest.gate_graph.map((item) => item.id), [
     'CURRENT_SOURCE_CANDIDATE',
     'FULL_REAL_KAGGLE_REVIEW_PREVIEW',
@@ -171,7 +228,7 @@ test('gate graph orders executable, browser, thin-S, Penpot and release boundari
     'PENPOT_NATIVE_MATERIALIZATION_READY',
     'RELEASE_CANDIDATE_READY',
   ]);
-  assert.equal(gate('CURRENT_SOURCE_CANDIDATE').status, 'PARTIAL');
+  assert.equal(gate('CURRENT_SOURCE_CANDIDATE').status, 'BLOCKED_BY_ONE_A0_SOURCE_FIX_AND_INTEGRATION');
   assert.equal(gate('FULL_REAL_KAGGLE_REVIEW_PREVIEW').status, 'BLOCKED_BY_CURRENT_SOURCE_CANDIDATE');
   assert.ok(gate('FULL_REAL_KAGGLE_REVIEW_PREVIEW').requires.includes('--preview-data-mode real'));
   assert.ok(gate('FULL_REAL_KAGGLE_REVIEW_PREVIEW').requires.includes('--page-class all'));
@@ -181,17 +238,11 @@ test('gate graph orders executable, browser, thin-S, Penpot and release boundari
   assert.equal(gate('RELEASE_CANDIDATE_READY').status, 'BLOCKED_BY_GOLDEN_A_S_P_PASS');
 });
 
-test('PM0 delta mode observes live role refs without inflating readiness', () => {
+test('PM0 delta mode observes live branches without inflating readiness', () => {
   const delta = manifest.pm0_delta_reporting;
   assert.equal(delta.owner_correction_comment, 5527668536);
   assert.equal(delta.effective_immediately, true);
-  for (const branch of [
-    'r0/ui-normalization-current-candidate-20260903',
-    'work/ui-normalization-n0-checklist-20260903',
-    'work/ui-normalization-f0-wave-3-20260903',
-    'work/ui-normalization-m0-continuity-20260903',
-    'work/ui-normalization-a0-wave-3-20260903',
-  ]) assert.ok(delta.fresh_read_heads.includes(branch), `missing PM0 live ref ${branch}`);
+  assert.equal(delta.current_spec_version, '2.3.0');
   assert.deepEqual(delta.required_output_blocks, [
     'checkbox_transitions',
     'progress_inside_partial',
@@ -204,12 +255,12 @@ test('PM0 delta mode observes live role refs without inflating readiness', () =>
   assert.equal(delta.branch_progress_may_not_create_done_without_full_item_acceptance, true);
 });
 
-test('V0 trigger is published without an N0 browser claim', () => {
+test('V0 trigger is DRIFT, not an N0 browser PASS', () => {
   const golden = manifest.v0_triggers.golden;
-  assert.equal(golden.status, 'READY_REQUIRES_PROPER_BROWSER_ACTIVATION');
+  assert.equal(golden.status, 'AUDITED_DRIFT');
   assert.equal(golden.url, 'https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/');
-  assert.equal(golden.latest_v0_comment, 5527356024);
-  assert.equal(golden.v0_observations, 0);
+  assert.equal(golden.latest_v0_comment, V0_COMMENT);
+  assert.equal(golden.v0_document_loads, 40);
   assert.equal(golden.v0_pass, false);
   assert.equal(manifest.v0_triggers.fresh_real.status, 'PENDING');
 });
@@ -218,6 +269,7 @@ test('N0 source exposes no local full-preview publication path', () => {
   assert.equal(packageJson.scripts['deploy:preview'], undefined);
   assert.equal(packageJson.scripts['deploy:golden-preview'], undefined);
   assert.equal(packageJson.scripts['test:golden-deploy-contract'], undefined);
+  assert.equal(packageJson.scripts['test:n0-v0-golden-drift'], 'node --test tests/n0-v0-golden-drift-acceptance.test.mjs');
   assert.equal(existsSync(join(siteDir, 'scripts', 'deploy-golden-preview.mjs')), false);
   assert.equal(existsSync(join(siteDir, 'tests', 'golden-review-deploy-contract.test.mjs')), false);
   assert.match(goldenContract, /Contract: `kenigevents\.launch-normalized-ui\.v1@1\.9\.0`/u);
@@ -225,7 +277,6 @@ test('N0 source exposes no local full-preview publication path', () => {
   assert.match(goldenContract, /Local diagnostic/u);
   assert.doesNotMatch(goldenContract, /npm run deploy:golden-preview/u);
   assert.ok(manifest.prohibitions.includes('do not use deploy:preview or deploy:golden-preview as a launch path'));
-  assert.ok(manifest.prohibitions.includes(
-    'do not open thin-S or Penpot materialization before accepted executable Astro and required V0 evidence',
-  ));
+  assert.ok(manifest.prohibitions.includes('do not add a parallel data-ui identity system'));
+  assert.ok(manifest.prohibitions.includes('do not treat safe external target=_blank links as product drift'));
 });
