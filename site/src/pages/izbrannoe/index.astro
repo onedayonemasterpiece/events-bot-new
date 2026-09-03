@@ -15,7 +15,30 @@ const description = 'Личная noindex-страница будущих соб
   mobileSection="personal"
   noindex
 >
-  <main id="main" data-favorites-page>
+  <main
+    id="main"
+    data-ds-family="FavoritesRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="saved-future-events"
+    data-ds-state="runtime-pending"
+    data-favorites-page
+  >
     <FavoritesSurface />
   </main>
+  <script>
+    const page = document.querySelector('[data-favorites-page]');
+    const surface = page?.querySelector('[data-favorites-surface]');
+    if (page instanceof HTMLElement && surface instanceof HTMLElement) {
+      const sync = () => {
+        const localState = surface.dataset.favoritesState || 'loading';
+        const cloudState = surface.dataset.favoritesCloudState || 'idle';
+        page.dataset.dsState = `${localState.replaceAll('_', '-')} cloud-${cloudState.replaceAll('_', '-')}`;
+      };
+      new MutationObserver(sync).observe(surface, {
+        attributes:true,
+        attributeFilter:['data-favorites-state', 'data-favorites-cloud-state'],
+      });
+      sync();
+    }
+  </script>
 </EventLayout>

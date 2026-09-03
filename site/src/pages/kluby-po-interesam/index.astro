@@ -33,7 +33,13 @@ const structuredData = [
 ];
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={structuredData} headerCurrent="clubs">
-  <main id="main">
+  <main
+    id="main"
+    data-ds-family="InterestClubsIndexRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="verified-directory"
+    data-ds-state={clubs.length ? 'populated' : 'empty'}
+  >
     <div class="page-shell club-page" data-club-catalog>
       <div class="club-mobile-shelf" data-club-mobile-shelf aria-label="Текущий раздел">
         <strong>Клубы по интересам</strong>

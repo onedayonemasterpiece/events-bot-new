@@ -1,5 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import Button from '../../components/design-system/Button.astro';
 import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 
 const canonicalUrl = absoluteUrl('/partnerstvo/');
@@ -7,7 +8,13 @@ const title = `Стать партнёром | ${SITE_NAME}`;
 const description = 'Партнёрство с Полюбить Калининград Анонсы: как организаторам, площадкам и городским проектам помогать событиям быть понятнее и заметнее.';
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main">
+  <main
+    id="main"
+    data-ds-family="PartnershipRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="organizer-information"
+    data-ds-state="available"
+  >
     <div class="page-shell">
       <section class="section-card">
         <div class="section-card__inner">
@@ -15,14 +22,14 @@ const description = 'Партнёрство с Полюбить Калининг
           <h1>Стать партнёром</h1>
           <p class="lead">Помогаем событию быть понятным: собираем корректную страницу, похожие события, удобные CTA и полезные справочные блоки для маршрута, билетов и календаря.</p>
           <div class="source-links">
-            <a class="cta-button" href="mailto:info@kenigevents.ru?subject=Партнёрство">Написать на info@kenigevents.ru</a>
+            <Button variant="primary" size="large" href="mailto:info@kenigevents.ru?subject=Партнёрство">Написать на info@kenigevents.ru</Button>
             <a href={withBase('/populyarnoe/')}>Популярное</a>
             <a href={withBase('/poisk/')}>Поиск</a>
           </div>
         </div>
       </section>
 
-      <section class="section-card partnership-principles" style="margin-top: 1rem;">
+      <section class="section-card partnership-principles">
         <div class="section-card__inner">
           <p class="eyebrow">Что можно улучшить вместе</p>
           <h2>Полезная страница вместо рекламной плашки</h2>
@@ -38,3 +45,7 @@ const description = 'Партнёрство с Полюбить Калининг
     </div>
   </main>
 </EventLayout>
+
+<style>
+  .partnership-principles { margin-top:1rem; }
+</style>

@@ -1,10 +1,24 @@
 ---
 import type { PopularListingGroup } from '../../lib/listingPresentation';
 import { cityKey } from '../../lib/listingPresentation';
-import EventCard from '../EventCard.astro';
+import AdaptiveEventCardGrid, { type AdaptiveEventCardItemRoot } from '../AdaptiveEventCardGrid.astro';
 
 interface Props { groups: PopularListingGroup[]; }
 const { groups } = Astro.props;
+const itemRootsFor = (events: PopularListingGroup['events']): Record<string, AdaptiveEventCardItemRoot> => Object.fromEntries(
+  events.map((event, index) => [
+    `${event.id}:${index}`,
+    {
+      className:'ke-popular-mobile-card-slot',
+      attributes:{
+        'data-listing-item':'',
+        'data-event-id':event.id,
+        'data-listing-city':cityKey(event.city),
+        'data-listing-event-type':cityKey(event.event_type || 'other'),
+      },
+    },
+  ]),
+);
 ---
 <div
   class="ke-popular-behavior ke-popular-behavior--mobile"
@@ -27,19 +41,15 @@ const { groups } = Astro.props;
           <span data-popular-group-count>{group.events.length}</span>
         </div>
       </header>
-      <div class="ke-popular-behavior__row">
-        {group.events.map((event) => (
-          <div
-            class="ke-popular-mobile-card-slot"
-            data-listing-item
-            data-event-id={event.id}
-            data-listing-city={cityKey(event.city)}
-            data-listing-event-type={cityKey(event.event_type || 'other')}
-          >
-            <EventCard event={event} variant="split-actions" />
-          </div>
-        ))}
-      </div>
+      <AdaptiveEventCardGrid
+        events={group.events}
+        mode="flow"
+        rowSize={1}
+        responsive="fixed"
+        mobileFlowMedia={false}
+        className="ke-popular-behavior__row"
+        itemRoots={itemRootsFor(group.events)}
+      />
     </section>
   ))}
 </div>

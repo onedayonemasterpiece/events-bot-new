@@ -1,12 +1,40 @@
 ---
-import EventCard from './EventCard.astro';
+import AdaptiveEventCardGrid, { type AdaptiveEventCardItemRoot } from './AdaptiveEventCardGrid.astro';
 import type { UnusualFeed } from '../lib/unusualEvents';
 
 interface Props { feed: UnusualFeed; }
 const { feed } = Astro.props;
 const approvedItems = feed.approved ? feed.items : [];
+const approvedEvents = approvedItems.map((item) => item.event);
+const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
+  approvedItems.map((item, index) => [
+    `${item.event.id}:${index}`,
+    {
+      className:'unusual-page__card',
+      attributes:{
+        'data-unusual-card':'',
+        'data-unusual-event-id':item.event.id,
+        'data-unusual-concept-id':item.conceptId,
+        'data-unusual-tier':item.tier,
+        'data-unusual-notify-eligible':item.notifyEligible ? 'true' : 'false',
+      },
+    },
+  ]),
+);
+const surfaceState = feed.approved
+  ? (approvedItems.length ? 'ready populated' : 'empty')
+  : `withheld ${feed.status}`;
 ---
-<main id="main" class="unusual-page" data-unusual-page data-unusual-feed-status={feed.status}>
+<main
+  id="main"
+  class="unusual-page"
+  data-ds-family="UnusualListingSurface"
+  data-ds-version="1"
+  data-ds-variant="one-event-per-concept"
+  data-ds-state={surfaceState}
+  data-unusual-page
+  data-unusual-feed-status={feed.status}
+>
   <div class="page-shell unusual-page__shell">
     <header class="unusual-page__hero">
       <p class="eyebrow">Редакционно-калиброванная подборка</p>
@@ -23,20 +51,15 @@ const approvedItems = feed.approved ? feed.items : [];
           <h2 id="unusual-feed-title">{approvedItems.length} необычных событий</h2>
           <span>Не больше одного события на замысел</span>
         </div>
-        <div class="cards-grid" data-unusual-event-cards>
-          {approvedItems.map((item) => (
-            <div
-              class="unusual-page__card"
-              data-unusual-card
-              data-unusual-event-id={item.event.id}
-              data-unusual-concept-id={item.conceptId}
-              data-unusual-tier={item.tier}
-              data-unusual-notify-eligible={item.notifyEligible ? 'true' : 'false'}
-            >
-              <EventCard event={item.event} mobileFlowMedia />
-            </div>
-          ))}
-        </div>
+        <AdaptiveEventCardGrid
+          events={approvedEvents}
+          mode="flow"
+          rowSize={3}
+          responsive="progressive"
+          mobileFlowMedia
+          rootAttributes={{ 'data-unusual-event-cards':'' }}
+          itemRoots={itemRoots}
+        />
       </section>
     ) : (
       <section class="unusual-page__empty" aria-labelledby="unusual-empty-title" data-unusual-feed="empty" data-unusual-feed-empty>
@@ -58,7 +81,6 @@ const approvedItems = feed.approved ? feed.items : [];
   .unusual-page__feed-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; }
   .unusual-page__feed-head h2,.unusual-page__empty h2 { margin:0; font-size:clamp(1.6rem,3.5vw,2.8rem); line-height:1; }
   .unusual-page__feed-head span { color:#6d6259; font-size:.82rem; }
-  .unusual-page__card { min-width:0; }
   .unusual-page__card[data-unusual-card-viewed="true"] { --unusual-viewed:1; }
   .unusual-page__empty p { max-width:62ch; color:#6d6259; }
   @media(max-width:759px) {
@@ -68,7 +90,6 @@ const approvedItems = feed.approved ? feed.items : [];
     .unusual-page__hero h1 { font-size:clamp(3rem,12vw,5.7rem); overflow-wrap:normal; word-break:normal; hyphens:none; }
     .unusual-page__feed,.unusual-page__empty { padding:20px 12px; border-radius:20px; }
     .unusual-page__feed-head { display:grid; gap:7px; }
-    .unusual-page__feed .cards-grid { grid-template-columns:minmax(0,1fr); }
   }
 </style>
 

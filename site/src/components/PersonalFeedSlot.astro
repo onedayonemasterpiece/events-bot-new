@@ -1,4 +1,5 @@
 ---
+import AdaptiveEventCardGrid from './AdaptiveEventCardGrid.astro';
 import { siteHomeHref, withBase } from '../lib/events';
 
 interface Props {
@@ -17,6 +18,10 @@ const headingId = `personal-feed-${context}-title`;
 ---
 <section
   class:list={['section-card', 'personal-feed-section', 'ke-personal-feed-slot', { 'personal-feed-section--event-detail': isEventDetail }]}
+  data-ds-family="PersonalFeedSlot"
+  data-ds-version="1"
+  data-ds-variant={context}
+  data-ds-state={isEventDetail ? 'pending' : 'dormant'}
   data-personal-feed-section
   data-personal-feed-src={withBase('/data/personal-feed.json')}
   data-personal-feed-related-src={relatedSrc ? withBase(relatedSrc) : undefined}
@@ -32,18 +37,56 @@ const headingId = `personal-feed-${context}-title`;
     <h2 id={headingId} data-personal-feed-title>{heading}</h2>
     <p class="muted-note personal-feed-section__explanation" data-personal-feed-explanation>{explanation}</p>
     <p class="muted-note personal-feed-section__status" data-personal-feed-status role="status" aria-live="polite">Подбираем события…</p>
-    <div
-      class="cards-grid cards-grid--personal-feed personal-feed-section__feed"
-      data-personal-feed-slot
-      data-feed-card-variant="split-actions"
-      data-listing-context={context}
-      aria-live="polite"
-    ></div>
+    <div class="personal-feed-section__live-region" aria-live="polite">
+      <AdaptiveEventCardGrid
+        events={[]}
+        mode="packed"
+        rowSize={3}
+        responsive="progressive"
+        personalFeed
+        className="cards-grid--personal-feed personal-feed-section__feed"
+        rootAttributes={{
+          'data-personal-feed-slot':'',
+          'data-feed-card-variant':'split-actions',
+          'data-listing-context':context,
+          'data-personal-feed-runtime-host':'adaptive-v1',
+        }}
+      />
+    </div>
     {!isEventDetail && <button type="button" class="secondary-button personal-feed-section__load-more" data-personal-feed-load-more hidden>Показать ещё</button>}
     <button type="button" class="secondary-button personal-feed-section__refresh" data-personal-feed-refresh hidden>Обновить ленту</button>
     {isEventDetail && <a class="secondary-button personal-feed-section__all-events" data-personal-feed-all-events href={siteHomeHref()}>Все анонсы</a>}
   </div>
 </section>
+
+<script>
+  const PERSONAL_FEED_ROW_SIZE = 3;
+  document.querySelectorAll('[data-personal-feed-section]').forEach((section) => {
+    if (!(section instanceof HTMLElement) || section.dataset.personalFeedDiagnosticsBound === 'true') return;
+    const slot = section.querySelector('[data-personal-feed-slot][data-adaptive-event-card-grid]');
+    if (!(slot instanceof HTMLElement)) return;
+    section.dataset.personalFeedDiagnosticsBound = 'true';
+    const syncDiagnostics = () => {
+      const cards = Array.from(slot.querySelectorAll(':scope > [data-event-card]'))
+        .filter((card) => card instanceof HTMLElement);
+      const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
+      const count = cards.length;
+      slot.dataset.adaptiveGridSourceCount = String(count);
+      slot.dataset.adaptiveGridRenderedCount = String(count);
+      slot.dataset.adaptiveGridSourceOrder = order;
+      slot.dataset.adaptiveGridRenderedOrder = order;
+      slot.dataset.adaptiveGridRemainderCount = String(count % PERSONAL_FEED_ROW_SIZE);
+      const mode = section.dataset.personalFeedMode || (section.hidden ? 'dormant' : 'pending');
+      section.dataset.dsState = `${mode.replaceAll('_', '-')} ${count ? 'populated' : 'empty'}`;
+    };
+    new MutationObserver(syncDiagnostics).observe(slot, { childList:true });
+    new MutationObserver(syncDiagnostics).observe(section, {
+      attributes:true,
+      attributeFilter:['hidden', 'data-personal-feed-mode'],
+    });
+    syncDiagnostics();
+  });
+</script>
 
 <style>
   .personal-feed-section[hidden] {
@@ -81,61 +124,8 @@ const headingId = `personal-feed-${context}-title`;
     margin-top: -0.35rem;
   }
 
-  .personal-feed-section__feed {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: clamp(0.75rem, 1.8vw, 1.25rem);
-    align-items: stretch;
-  }
-
-  @media (min-width: 1024px) {
-    .personal-feed-section :global([data-lab-related-card]) {
-      height: 100%;
-      grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
-    }
-
-    .personal-feed-section :global([data-lab-related-card] .event-card__media-link) {
-      display: block;
-    }
-
-    .personal-feed-section :global([data-lab-related-card] .event-card__media-shell) {
-      position: relative;
-      isolation: isolate;
-      width: 100%;
-      height: auto !important;
-      aspect-ratio: var(--lab-row-media-ratio) !important;
-      overflow: hidden;
-      background: #d2c5b7;
-    }
-
-    .personal-feed-section :global([data-lab-related-card] .event-card__media) {
-      position: absolute !important;
-      z-index: 2;
-      inset: 0;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* Keep row-local intrinsic chrome identical to the server-rendered rail.
-       The card stretches only to the tallest real content in its own row. */
-    .personal-feed-section :global([data-lab-related-card] .event-card__body) {
-      min-height: 0;
-      align-content: start;
-    }
-
-    .personal-feed-section :global([data-lab-related-card] .event-card__utility-row) {
-      min-height: 58px;
-    }
-
-    .personal-feed-section :global([data-lab-related-card] .event-card__feedback--under) {
-      min-height: 56px;
-    }
-
-    /* EventCard/relatedCardLayout own the exact fit on every desktop personal
-       feed. The section may style contain bands, never change fit. */
-    .personal-feed-section :global([data-card-authoritative-fit="contain"]) {
-      background: #15110f;
-    }
+  .personal-feed-section__live-region {
+    min-width: 0;
   }
 
   .personal-feed-section__load-more,
@@ -157,12 +147,6 @@ const headingId = `personal-feed-${context}-title`;
     margin-left: 0.5rem;
   }
 
-  @media (max-width: 960px) {
-    .personal-feed-section__feed {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
   @media (max-width: 1023px) {
     .personal-feed-section--event-detail[data-personal-feed-mode="pending"],
     .personal-feed-section--event-detail[data-personal-feed-mode="personal"],
@@ -177,11 +161,6 @@ const headingId = `personal-feed-${context}-title`;
       margin-top: 1rem;
       padding: 1.15rem 1rem 1.35rem;
       border-radius: 24px;
-    }
-
-    .personal-feed-section__feed {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 0.85rem;
     }
 
     .personal-feed-section__load-more,

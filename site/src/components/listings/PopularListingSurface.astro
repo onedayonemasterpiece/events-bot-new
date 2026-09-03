@@ -44,7 +44,17 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V26" data-desktop-popular-version="V28" data-mobile-card-density="large">
+<div
+  class="ke-listing-shell ke-popular-listing"
+  data-ds-family="PopularListingSurface"
+  data-ds-version="1"
+  data-ds-variant="social-signal-groups"
+  data-ds-state={visibleEvents.length ? 'populated' : 'empty'}
+  data-date-listing="popular"
+  data-listing-variant="POPULAR-V26"
+  data-desktop-popular-version="V28"
+  data-mobile-card-density="large"
+>
   <script is:inline>
     try {
       const surface = document.currentScript.closest('[data-date-listing="popular"]');

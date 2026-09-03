@@ -37,7 +37,14 @@ const structuredData = [
 ];
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={structuredData} headerCurrent="clubs">
-  <main id="main">
+  <main
+    id="main"
+    data-ds-family="InterestClubDetailRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="verified-club"
+    data-ds-state={club.future_meetings.length ? 'future-meetings' : 'history-only'}
+    data-interest-club-id={club.id}
+  >
     <article class="page-shell club-detail">
       <Breadcrumbs
         parents={[

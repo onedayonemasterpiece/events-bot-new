@@ -1,5 +1,5 @@
 ---
-import EventCard from '../../../components/EventCard.astro';
+import AdaptiveEventCardGrid from '../../../components/AdaptiveEventCardGrid.astro';
 import Breadcrumbs from '../../../components/Breadcrumbs.astro';
 import FreeCollectionSurface from '../../../components/FreeCollectionSurface.astro';
 import EventLayout from '../../../layouts/EventLayout.astro';
@@ -70,9 +70,14 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
         <div class="section-card__inner">
           <h2 id="collection-results-title">{events.length ? `${events.length} событий` : 'Подходящих событий пока нет'}</h2>
           {events.length ? (
-            <div class="cards-grid" data-search-collection-results>
-              {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
-            </div>
+            <AdaptiveEventCardGrid
+              events={events}
+              mode="flow"
+              rowSize={3}
+              responsive="progressive"
+              mobileFlowMedia
+              rootAttributes={{ 'data-search-collection-results':'' }}
+            />
           ) : (
             <>
               {collectionDateRange && (
@@ -92,9 +97,14 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
             <p class="eyebrow">После этих выходных</p>
             <h2 id="collection-fallback-title">Ближайшие события с джазом в названии</h2>
             <p class="muted-note">Это не совпадения подборки выше, а следующие подтверждённые события из той же актуальной выгрузки.</p>
-            <div class="cards-grid">
-              {fallbackEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
-            </div>
+            <AdaptiveEventCardGrid
+              events={fallbackEvents}
+              mode="flow"
+              rowSize={3}
+              responsive="progressive"
+              mobileFlowMedia
+              rootAttributes={{ 'data-search-collection-fallback-results':'' }}
+            />
           </div>
         </section>
       )}
@@ -106,7 +116,4 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
 <style>
   .collection-results { margin-top: 1rem; }
   .collection-criteria { max-width: 64ch; }
-  @media (max-width: 759px) {
-    .page-shell--search-collection .cards-grid { grid-template-columns: minmax(0, 1fr); }
-  }
 </style>

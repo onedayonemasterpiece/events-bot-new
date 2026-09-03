@@ -9,10 +9,32 @@ const title = `Умный поиск событий | ${SITE_NAME}`;
 const description = 'Векторный поиск по событиям Калининграда после входа через Яндекс: результаты выдаются карточками с лайками, календарём и поделиться.';
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search">
-  <main id="main">
+  <main
+    id="main"
+    data-ds-family="SearchRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="authorized-vector-search"
+    data-ds-state="runtime-pending"
+  >
     <div class="page-shell page-shell--search">
       <AuthorizedEventSearch standalone headingLevel="h1" />
       <SearchCollectionLinks />
     </div>
   </main>
+  <script>
+    const page = document.querySelector('[data-ds-family="SearchRouteComposition"]');
+    const search = page?.querySelector('[data-authorized-search]');
+    if (page instanceof HTMLElement && search instanceof HTMLElement) {
+      const sync = () => {
+        const lifecycle = search.dataset.searchState || 'idle';
+        const capability = search.dataset.searchEnabled === 'true' ? 'enabled' : 'disabled';
+        page.dataset.dsState = `${capability} ${lifecycle.replaceAll('_', '-')}`;
+      };
+      new MutationObserver(sync).observe(search, {
+        attributes:true,
+        attributeFilter:['data-search-state', 'data-search-enabled'],
+      });
+      sync();
+    }
+  </script>
 </EventLayout>

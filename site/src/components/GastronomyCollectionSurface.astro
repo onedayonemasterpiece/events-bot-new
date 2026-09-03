@@ -1,6 +1,6 @@
 ---
+import AdaptiveEventCardGrid, { type AdaptiveEventCardItemRoot } from './AdaptiveEventCardGrid.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
-import EventCard from './EventCard.astro';
 import type { ResolvedGastronomyCollection } from '../lib/staticCollections';
 import { siteHomeHref, withBase } from '../lib/events';
 
@@ -28,9 +28,27 @@ const stateCopy = collection.lifecycle === 'blocked'
         : collection.lifecycle === 'last_good'
           ? 'Показываем последнюю успешно проверенную версию, пока обновление данных восстанавливается.'
           : null;
+type GastronomyItem = (typeof collection.future)[number];
+const gridEvents = (items: GastronomyItem[]) => items.map(({ event }) => event);
+const gridItemRoots = (items: GastronomyItem[]): Record<string, AdaptiveEventCardItemRoot> => Object.fromEntries(
+  items.map(({ event, familyId }, index) => [
+    `${event.id}:${index}`,
+    {
+      attributes:{
+        'data-collection-event':'',
+        'data-event-id':event.id,
+        'data-family-id':familyId,
+      },
+    },
+  ]),
+);
 ---
 <main
   id="main"
+  data-ds-family="GastronomyCollectionSurface"
+  data-ds-version="1"
+  data-ds-variant="future-and-recent"
+  data-ds-state={collectionState}
   data-static-collection-page
   data-collection-label="gastronomy"
   data-publication-status={publicationStatus}
@@ -51,13 +69,18 @@ const stateCopy = collection.lifecycle === 'blocked'
       <section class="section-card collection-month" aria-labelledby={`month-${key}`}>
         <div class="section-card__inner">
           <h2 id={`month-${key}`}>{months.format(new Date(`${key}-01T00:00:00Z`))}</h2>
-          <div class="cards-grid">
-            {items.map(({ event, familyId }) => (
-              <div data-collection-event data-event-id={event.id} data-family-id={familyId}>
-                <EventCard event={event} mobileFlowMedia />
-              </div>
-            ))}
-          </div>
+          <AdaptiveEventCardGrid
+            events={gridEvents(items)}
+            mode="flow"
+            rowSize={3}
+            responsive="progressive"
+            mobileFlowMedia
+            rootAttributes={{
+              'data-gastronomy-grid':'future',
+              'data-gastronomy-month':key,
+            }}
+            itemRoots={gridItemRoots(items)}
+          />
         </div>
       </section>
     ))}
@@ -67,13 +90,15 @@ const stateCopy = collection.lifecycle === 'blocked'
         <div class="section-card__inner">
           <p class="eyebrow">Недавно прошло</p>
           <h2 id="recent-gastronomy">Недавние гастрономические события</h2>
-          <div class="cards-grid">
-            {collection.recent.map(({ event, familyId }) => (
-              <div data-collection-event data-event-id={event.id} data-family-id={familyId}>
-                <EventCard event={event} mobileFlowMedia />
-              </div>
-            ))}
-          </div>
+          <AdaptiveEventCardGrid
+            events={gridEvents(collection.recent)}
+            mode="flow"
+            rowSize={3}
+            responsive="progressive"
+            mobileFlowMedia
+            rootAttributes={{ 'data-gastronomy-grid':'recent' }}
+            itemRoots={gridItemRoots(collection.recent)}
+          />
         </div>
       </section>
     )}
@@ -84,6 +109,4 @@ const stateCopy = collection.lifecycle === 'blocked'
   .page-shell--gastronomy { display:grid; gap:1rem; }
   .collection-state { max-width:64ch; padding:.85rem 1rem; border-radius:1rem; background:var(--color-surface-soft, #f4f1ea); }
   .collection-month h2 { text-transform:capitalize; }
-  [data-collection-event] { min-width:0; }
-  @media (max-width:759px) { .page-shell--gastronomy .cards-grid { grid-template-columns:minmax(0, 1fr); } }
 </style>

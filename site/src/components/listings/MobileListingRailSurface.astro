@@ -2,8 +2,10 @@
 import type { PreviewEvent } from '../../lib/types';
 import type { WeatherRouteKind } from '../../lib/weatherCalendar';
 import WeatherDateContext from '../WeatherDateContext.astro';
+import SemanticIcon from '../design-system/SemanticIcon.astro';
 import MobileListingRailRow from './MobileListingRailRow.astro';
 import MobileDateAccessory from './MobileDateAccessory.astro';
+import './mobile-listing-foundation-bindings.css';
 
 interface WeatherContext { date: string; dateLabel: string; routeKind: WeatherRouteKind; }
 interface Section { id: string; title?: string; subtitle?: string; events: PreviewEvent[]; weather?: WeatherContext; }
@@ -43,6 +45,10 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 ---
 <div
   class="ke-mobile-listing-rails ke-mobile-listing-rails--v23"
+  data-ds-family="MobileListingRailSurface"
+  data-ds-version="1"
+  data-ds-variant={current}
+  data-ds-state={total > 0 ? 'populated' : 'empty'}
   data-mobile-listing-rails
   data-mobile-v23-page={current}
   data-mobile-listing-date={calendarDate || undefined}
@@ -75,7 +81,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
           <header class="group-head">
             <div class="group-head__copy">
               <span class="group-head__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M3 17.5 8.7 12l3.8 3.4L20.8 7v4H23V3h-8v2.2h4.2l-6.8 6.9-3.8-3.4L1.5 15.8 3 17.5Z" /></svg>
+                <SemanticIcon name="trend-up" role="control" />
               </span>
               <div><h2 id={`mobile-rail-${section.id}`}>{section.title}</h2>{section.subtitle && <p>{section.subtitle}</p>}</div>
             </div>

@@ -1,13 +1,38 @@
 ---
-import EventCard from './EventCard.astro';
+import AdaptiveEventCardGrid, { type AdaptiveEventCardItemRoot } from './AdaptiveEventCardGrid.astro';
 import type { PreviewEvent } from '../lib/types';
 import { eventCategory, eventTags } from '../lib/events';
 
 interface Props { events: PreviewEvent[]; }
 const { events } = Astro.props;
+const visibleEvents = events.slice(0, 30);
+const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
+  visibleEvents.map((event, index) => [
+    `${event.id}:${index}`,
+    {
+      className:'home-feed__item',
+      attributes:{
+        'data-home-feed-item':'',
+        'data-event-id':event.id,
+        'data-home-base-rank':index,
+        'data-home-category':eventCategory(event),
+        'data-home-tags':JSON.stringify(eventTags(event)),
+      },
+    },
+  ]),
+);
 ---
 
-<section class="home-feed" data-home-cold-start-feed aria-labelledby="home-feed-title">
+<section
+  class="home-feed"
+  data-ds-family="HomeColdStartFeed"
+  data-ds-version="1"
+  data-ds-variant="local-profile-rerank"
+  data-ds-state={`static-fallback ${visibleEvents.length ? 'populated' : 'empty'}`}
+  data-home-cold-start-feed
+  data-home-feed-mode="static_fallback"
+  aria-labelledby="home-feed-title"
+>
   <header class="home-feed__head">
     <div>
       <p class="eyebrow">Общее главное</p>
@@ -15,20 +40,20 @@ const { events } = Astro.props;
     </div>
     <p data-home-feed-status role="status" aria-live="polite">Разнообразная общая подборка — вход и внешние сервисы не нужны.</p>
   </header>
-  <div class="home-feed__grid" data-home-feed-grid data-home-feed-limit="30">
-    {events.slice(0, 30).map((event, index) => (
-      <div
-        class="home-feed__item"
-        data-home-feed-item
-        data-event-id={event.id}
-        data-home-base-rank={index}
-        data-home-category={eventCategory(event)}
-        data-home-tags={JSON.stringify(eventTags(event))}
-      >
-        <EventCard event={event} variant="split-actions" mobileFlowMedia />
-      </div>
-    ))}
-  </div>
+  <AdaptiveEventCardGrid
+    events={visibleEvents}
+    mode="flow"
+    limit={30}
+    rowSize={3}
+    responsive="progressive"
+    mobileFlowMedia
+    className="home-feed__grid"
+    rootAttributes={{
+      'data-home-feed-grid':'',
+      'data-home-feed-limit':'30',
+    }}
+    itemRoots={itemRoots}
+  />
 </section>
 
 <script>
@@ -72,13 +97,18 @@ const { events } = Astro.props;
         item.element.dataset.homeFeedScore = Number(item.score || 0).toFixed(3);
         grid.appendChild(item.element);
       }
+      grid.dataset.adaptiveGridRenderedOrder = ranked.map((item) => String(item.id)).join(',');
+      grid.dataset.adaptiveGridRenderedCount = String(ranked.length);
+      grid.dataset.adaptiveGridRemainderCount = String(ranked.length % 3);
       const signals = homeProfileSignalCount(profile);
       if (status) {
         status.textContent = signals > 0
           ? `Порядок уточнён по локальным оценкам: ${signals}. В ленте не больше 30 событий.`
           : 'Разнообразная общая подборка — вход и внешние сервисы не нужны.';
       }
-      root.dataset.homeFeedMode = signals > 0 ? 'local_rerank' : 'static_fallback';
+      const mode = signals > 0 ? 'local_rerank' : 'static_fallback';
+      root.dataset.homeFeedMode = mode;
+      root.dataset.dsState = `${mode.replace('_', '-')} ${ranked.length ? 'populated' : 'empty'}`;
     };
 
     rerank();
@@ -121,19 +151,9 @@ const { events } = Astro.props;
     font-weight: 720;
     text-align: right;
   }
-  .home-feed__grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: clamp(.85rem, 1.6vw, 1.25rem);
-    align-items: stretch;
-  }
-  .home-feed__item { min-width: 0; }
-  .home-feed__item :global(.event-card) { height: 100%; }
-  @media (max-width: 960px) { .home-feed__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 620px) {
     .home-feed { padding: .7rem; }
     .home-feed__head { display: grid; align-items: start; padding: .35rem; }
     .home-feed__head > p { text-align: left; }
-    .home-feed__grid { grid-template-columns: minmax(0, 1fr); }
   }
 </style>

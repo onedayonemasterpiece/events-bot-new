@@ -1,5 +1,6 @@
 ---
 import PersonalizationRuntime from '../../components/personalization/PersonalizationRuntime.astro';
+import Button from '../../components/design-system/Button.astro';
 import FocusLabBadge from '../../components/FocusLabBadge.astro';
 import FocusGroupThankYou from '../../components/FocusGroupThankYou.astro';
 import FocusGroupInviteShare from '../../components/FocusGroupInviteShare.astro';
@@ -28,7 +29,14 @@ const robots = IS_SECRET_CANDIDATE
   <body>
     <PersonalizationRuntime />
     <a class="focus-programme__skip" href="#main">К основному содержанию</a>
-    <main id="main" class="focus-programme">
+    <main
+      id="main"
+      class="focus-programme"
+      data-ds-family="FocusGroupProgrammeSurface"
+      data-ds-version="1"
+      data-ds-variant="research-programme"
+      data-ds-state="available"
+    >
       <nav class="focus-programme__nav" aria-label="Навигация фокус-группы">
         <a href={withBase('/')} class="focus-programme__back">← Стартовый экран</a>
         <FocusLabBadge label="Фокус-группа" detail="Программа · прототип" />
@@ -83,8 +91,8 @@ const robots = IS_SECRET_CANDIDATE
           <p>Ссылка и QR выше ведут в сценарий вступления. После него можно выйти из аккаунта, не удаляя участие, и повторить вход.</p>
         </div>
         <div class="focus-programme__cta-actions">
-          <a class="ke-button ke-button--primary ke-button--large" href="#focus-invite-share">Ссылка и QR для приглашения</a>
-          <a class="ke-button ke-button--secondary" href={withBase('/fokus-gruppa/zavershenie/')}>Посмотреть завершение программы</a>
+          <Button variant="primary" size="large" href="#focus-invite-share">Ссылка и QR для приглашения</Button>
+          <Button variant="secondary" href={withBase('/fokus-gruppa/zavershenie/')}>Посмотреть завершение программы</Button>
         </div>
       </section>
 

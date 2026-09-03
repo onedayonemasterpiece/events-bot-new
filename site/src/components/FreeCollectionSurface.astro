@@ -1,6 +1,7 @@
 ---
-import EventCard from './EventCard.astro';
+import AdaptiveEventCardGrid from './AdaptiveEventCardGrid.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
+import './design-system/foundations.css';
 import type { PreviewEvent } from '../lib/types';
 import { siteHomeHref, withBase } from '../lib/events';
 
@@ -17,8 +18,19 @@ const isExhibition = (event: PreviewEvent) => (event.event_type || '').trim().to
   || event.topics.includes('EXHIBITIONS');
 const exhibitionEvents = events.filter(isExhibition);
 const regularEvents = events.filter((event) => !isExhibition(event));
+const surfaceState = events.length
+  ? [regularEvents.length ? 'timed' : null, exhibitionEvents.length ? 'exhibitions' : null, 'populated'].filter(Boolean).join(' ')
+  : 'empty';
 ---
-<main id="main" class="free-collection" data-free-collection-surface>
+<main
+  id="main"
+  class="free-collection"
+  data-ds-family="FreeCollectionSurface"
+  data-ds-version="1"
+  data-ds-variant="timed-and-exhibitions"
+  data-ds-state={surfaceState}
+  data-free-collection-surface
+>
   <div class="page-shell free-collection__shell">
     <Breadcrumbs
       parents={[
@@ -54,9 +66,17 @@ const regularEvents = events.filter((event) => !isExhibition(event));
       </h2>
       {events.length ? (
         regularEvents.length ? (
-          <div class="cards-grid" data-search-collection-results>
-            {regularEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
-          </div>
+          <AdaptiveEventCardGrid
+            events={regularEvents}
+            mode="flow"
+            rowSize={3}
+            responsive="progressive"
+            mobileFlowMedia
+            rootAttributes={{
+              'data-search-collection-results':'',
+              'data-free-collection-grid':'events',
+            }}
+          />
         ) : (
           <p class="free-collection__empty">Сейчас все актуальные варианты этой подборки — продолжающиеся выставки. Они собраны отдельно ниже.</p>
         )
@@ -70,9 +90,17 @@ const regularEvents = events.filter((event) => !isExhibition(event));
         <p class="eyebrow">Можно посетить в течение дня</p>
         <h2 id="free-collection-exhibitions-title">Бесплатные выставки · {exhibitionEvents.length}</h2>
         <p class="free-collection__group-note">Продолжающиеся выставки отделены от событий с конкретным временем, чтобы их было проще просматривать.</p>
-        <div class="cards-grid" data-search-collection-exhibitions>
-          {exhibitionEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
-        </div>
+        <AdaptiveEventCardGrid
+          events={exhibitionEvents}
+          mode="flow"
+          rowSize={3}
+          responsive="progressive"
+          mobileFlowMedia
+          rootAttributes={{
+            'data-search-collection-exhibitions':'',
+            'data-free-collection-grid':'exhibitions',
+          }}
+        />
       </section>
     )}
   </div>
@@ -94,49 +122,48 @@ const regularEvents = events.filter((event) => !isExhibition(event));
 </script>
 
 <style>
-  .free-collection { --free-green:#2f7d32; padding: 0 0 4rem; }
+  .free-collection { --free-green:var(--ke-color-free-identity); padding:0 0 4rem; }
   .free-collection__shell { display:grid; gap:1rem; }
   .free-collection__hero {
     min-height:clamp(280px,34vw,430px); display:grid; grid-template-columns:minmax(0,1fr) clamp(180px,23vw,300px);
-    align-items:center; gap:clamp(1.5rem,4vw,4rem); padding:clamp(2rem,5vw,5rem);
-    border:1px solid rgba(47,125,50,.16); border-radius:32px;
-    background:radial-gradient(circle at 84% 42%,rgba(104,168,83,.18),transparent 28%),linear-gradient(135deg,#fffdf8,#f1f6e9);
-    box-shadow:0 18px 45px rgba(72,45,25,.08); overflow:hidden;
+    align-items:center; gap:var(--ke-free-hero-gap); padding:var(--ke-free-hero-padding);
+    border:var(--ke-shape-border-hairline) solid var(--ke-color-free-border); border-radius:var(--ke-free-hero-radius);
+    background:radial-gradient(circle at 84% 42%,color-mix(in srgb,var(--ke-color-free-hero-glow) 18%,transparent),transparent 28%),linear-gradient(135deg,var(--ke-color-background-surface),var(--ke-color-free-hero-surface));
+    box-shadow:var(--ke-elevation-free-hero); overflow:hidden;
   }
   .free-collection__copy { min-width:0; }
   .free-collection__copy h1 { max-width:12ch; margin:.15rem 0 1rem; font-size:clamp(2.8rem,6vw,5.8rem); line-height:.9; letter-spacing:-.06em; }
   .free-collection__copy .lead { max-width:58ch; }
   .free-collection__medallion { display:grid; place-items:center; flex:none; }
   .free-collection__medallion img { width:100%; height:100%; object-fit:contain; }
-  .free-collection__medallion--hero { justify-self:end; width:clamp(180px,23vw,300px); height:clamp(180px,23vw,300px); filter:drop-shadow(0 22px 30px rgba(38,83,34,.18)); }
+  .free-collection__medallion--hero { justify-self:end; width:clamp(180px,23vw,300px); height:clamp(180px,23vw,300px); filter:drop-shadow(0 22px 30px var(--ke-color-free-medallion-shadow)); }
   .free-collection__sticky-identity {
-    position:sticky; z-index:48; top:57px; height:0; display:flex; justify-content:flex-end;
+    position:sticky; z-index:var(--ke-layer-floating); top:57px; height:0; display:flex; justify-content:flex-end;
     padding-right:clamp(8px,1.6vw,18px); pointer-events:none;
   }
   .free-collection__medallion--compact {
     width:58px; height:58px; opacity:0; transform:translateY(-10px) scale(.82);
-    filter:drop-shadow(0 10px 17px rgba(38,83,34,.22));
+    filter:drop-shadow(0 10px 17px var(--ke-color-free-medallion-shadow-strong));
     transition:opacity .18s ease,transform .22s ease;
   }
   .free-collection__sticky-identity[data-compact-visible] .free-collection__medallion--compact { opacity:1; transform:none; }
-  .free-collection__results { scroll-margin-top:142px; padding:clamp(1.5rem,4vw,3rem); border:1px solid rgba(121,48,20,.11); border-radius:26px; background:#fffdf8; }
+  .free-collection__results { scroll-margin-top:142px; padding:var(--ke-free-panel-padding); border:var(--ke-shape-border-hairline) solid var(--ke-color-free-panel-border); border-radius:26px; background:var(--ke-color-background-surface); }
   .free-collection__results h2 { margin:0 0 1.25rem; font-size:clamp(1.5rem,3vw,2.4rem); }
   .free-collection__results--exhibitions { margin-top:.25rem; }
   .free-collection__results--exhibitions .eyebrow { margin-bottom:.35rem; }
-  .free-collection__group-note { max-width:64ch; margin:-.65rem 0 1.25rem; color:#6d6259; }
-  .free-collection__empty { max-width:62ch; color:#6d6259; }
+  .free-collection__group-note { max-width:64ch; margin:-.65rem 0 1.25rem; color:var(--ke-color-text-muted); }
+  .free-collection__empty { max-width:62ch; color:var(--ke-color-text-muted); }
   @media(max-width:759px) {
     .free-collection { padding-bottom:calc(5rem + env(safe-area-inset-bottom)); }
     .free-collection__shell { width:min(100% - 24px,1120px); }
-    .free-collection__hero { min-height:268px; grid-template-columns:minmax(0,1fr) 96px; gap:6px; padding:26px 18px 24px; border-radius:24px; }
+    .free-collection__hero { min-height:268px; grid-template-columns:minmax(0,1fr) 96px; gap:6px; padding:26px 18px 24px; border-radius:var(--ke-free-hero-radius-compact); }
     .free-collection__copy h1 { font-size:clamp(2.15rem,9vw,3rem); letter-spacing:-.045em; overflow-wrap:normal; word-break:normal; hyphens:none; }
     .free-collection__copy .lead { font-size:.95rem; }
     .free-collection__copy .collection-criteria,.free-collection__copy .muted-note { font-size:.76rem; line-height:1.35; }
     .free-collection__medallion--hero { width:96px; height:96px; align-self:start; margin-top:44px; }
     .free-collection__sticky-identity { top:64px; z-index:35; padding-right:6px; }
     .free-collection__medallion--compact { width:50px; height:50px; }
-    .free-collection__results { padding:20px 12px; border-radius:20px; }
-    .free-collection__results .cards-grid { grid-template-columns:minmax(0,1fr); }
+    .free-collection__results { padding:20px 12px; border-radius:var(--ke-shape-radius-card); }
   }
   @media(prefers-reduced-motion:reduce) {
     .free-collection__medallion--compact { transition:none; }

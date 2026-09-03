@@ -35,6 +35,7 @@ const rangeLinks = ranges.slice(Math.max(0, index), Math.min(ranges.length, Math
 <EventLayout title={`События на выходные в Калининграде | ${SITE_NAME}`} description={`События на ближайшие выходные ${weekend.label}, по дням и точному времени начала.`} canonicalUrl={absoluteUrl('/vyhodnye/')} structuredData={[]} headerCurrent="weekend">
   <main id="main" class="ke-listing-page">
     <WeekendListingSurface
+      routeVariant="current"
       events={events}
       start={weekend.start}
       end={weekend.end}

@@ -1,6 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import EventCard from '../../components/EventCard.astro';
+import AdaptiveEventCardGrid from '../../components/AdaptiveEventCardGrid.astro';
 import { materializedSearchCollections } from '../../data/searchCollections';
 import { collapseOccurrenceCards } from '../../lib/eventOccurrences';
 import {
@@ -133,9 +133,14 @@ specimens.sort((a, b) => {
           <h2 id="prototype-specimens-title">События для сквозной проверки</h2>
           <p>Карточка ведёт на полноценную страницу события; с неё можно вернуться в листинги общей навигацией.</p>
         </header>
-        <div class="cards-grid" data-prototype-specimen-grid>
-          {specimens.map((event) => <EventCard event={event} mobileFlowMedia />)}
-        </div>
+        <AdaptiveEventCardGrid
+          events={specimens}
+          mode="flow"
+          rowSize={3}
+          responsive="progressive"
+          mobileFlowMedia
+          rootAttributes={{ 'data-prototype-specimen-grid':'' }}
+        />
       </section>
     </div>
   </main>
@@ -169,13 +174,11 @@ specimens.sort((a, b) => {
   .prototype-group small { color: var(--muted, #74685f); line-height: 1.25; }
   .prototype-specimens { margin-top: 1rem; padding: clamp(1rem, 2.5vw, 2rem); }
   .prototype-specimens > header { max-width: 60ch; margin-bottom: 1rem; }
-  .prototype-specimens .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (max-width: 760px) {
     .prototype-hub { padding-top: .5rem; }
     .prototype-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .prototype-warning { grid-template-columns: 1fr; }
     .prototype-directory { grid-template-columns: 1fr; }
     .prototype-group header { min-height: 0; }
-    .prototype-specimens .cards-grid { grid-template-columns: 1fr; }
   }
 </style>

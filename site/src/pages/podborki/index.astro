@@ -8,9 +8,17 @@ const title = `Подборки событий | ${SITE_NAME}`;
 const description = 'Тематические подборки событий Калининграда и области с проверенным статусом публикации.';
 const statusLabel = { public:'Готово', repair:'Обновляется', deferred:'Скоро' } as const;
 const collectionCatalogEntries = getCollectionCatalogEntries(resolveGastronomyCollection(getEvents()).lifecycle);
+const availableCount = collectionCatalogEntries.filter((entry) => Boolean(entry.path)).length;
 ---
 <EventLayout title={title} description={description} canonicalUrl={absoluteUrl('/podborki/')} structuredData={[]} mobileSection="search">
-  <main id="main" data-static-collection-catalog>
+  <main
+    id="main"
+    data-ds-family="CollectionCatalogRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="publication-status-catalog"
+    data-ds-state={`${availableCount ? 'available' : 'empty'} ${collectionCatalogEntries.length - availableCount ? 'deferred-items' : 'all-public'}`}
+    data-static-collection-catalog
+  >
     <div class="page-shell page-shell--collection-catalog">
       <Breadcrumbs parents={[{ label:'Афиша', href:siteHomeHref() }]} current="Подборки" />
       <section class="section-card"><div class="section-card__inner">
@@ -21,12 +29,29 @@ const collectionCatalogEntries = getCollectionCatalogEntries(resolveGastronomyCo
       <nav class="collection-grid" data-static-collection-nav aria-label="Подборки событий">
         {collectionCatalogEntries.map((entry) => (
           entry.path ? (
-            <a class="collection-card" href={withBase(entry.path)} data-collection-key={entry.key} data-collection-status={entry.status}>
+            <a
+              class="collection-card"
+              href={withBase(entry.path)}
+              data-ds-family="CollectionCatalogItem"
+              data-ds-version="1"
+              data-ds-variant="link"
+              data-ds-state={entry.status}
+              data-collection-key={entry.key}
+              data-collection-status={entry.status}
+            >
               <span class="collection-card__status">{statusLabel[entry.status as keyof typeof statusLabel]}</span>
               <strong>{entry.title}</strong><span>{entry.description}</span>
             </a>
           ) : (
-            <article class="collection-card collection-card--disabled" data-collection-key={entry.key} data-collection-status={entry.status}>
+            <article
+              class="collection-card collection-card--disabled"
+              data-ds-family="CollectionCatalogItem"
+              data-ds-version="1"
+              data-ds-variant="disabled"
+              data-ds-state={entry.status}
+              data-collection-key={entry.key}
+              data-collection-status={entry.status}
+            >
               <span class="collection-card__status">{statusLabel[entry.status as keyof typeof statusLabel]}</span>
               <strong>{entry.title}</strong><span>{entry.description}</span>
             </article>

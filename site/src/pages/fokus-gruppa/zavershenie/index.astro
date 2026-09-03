@@ -2,6 +2,7 @@
 import PersonalizationRuntime from '../../../components/personalization/PersonalizationRuntime.astro';
 import FocusGroupThankYou from '../../../components/FocusGroupThankYou.astro';
 import FocusLabBadge from '../../../components/FocusLabBadge.astro';
+import Button from '../../../components/design-system/Button.astro';
 import { absoluteUrl, IS_SECRET_CANDIDATE, withBase } from '../../../lib/events';
 import '../../../styles/design-system.css';
 
@@ -49,7 +50,15 @@ const robots = IS_SECRET_CANDIDATE
   </head>
   <body>
     <PersonalizationRuntime />
-    <main class="focus-end" data-focus-end data-root-href={withBase('/')}>
+    <main
+      class="focus-end"
+      data-ds-family="FocusGroupCompletionSurface"
+      data-ds-version="1"
+      data-ds-variant="continuity"
+      data-ds-state="time-elapsed"
+      data-focus-end
+      data-root-href={withBase('/')}
+    >
       <nav class="focus-end__nav" aria-label="Навигация">
         <a href={withBase('/fokus-gruppa/')}>← О программе</a>
         <FocusLabBadge label="Лаборатория сайта" detail="Завершение · прототип" />
@@ -83,8 +92,8 @@ const robots = IS_SECRET_CANDIDATE
         </dl>
 
         <div class="focus-end__actions">
-          <a class="ke-button ke-button--primary ke-button--large" href={withBase('/segodnya/')}>Открыть обычную афишу</a>
-          <a class="ke-button ke-button--secondary ke-button--large" href={withBase('/dlya-menya/')}>Настроить «Для меня»</a>
+          <Button variant="primary" size="large" href={withBase('/segodnya/')}>Открыть обычную афишу</Button>
+          <Button variant="secondary" size="large" href={withBase('/dlya-menya/')}>Настроить «Для меня»</Button>
           <button class="ke-button ke-button--secondary" type="button" data-end-clear>Завершить участие на этом устройстве</button>
         </div>
         <p class="focus-end__status" data-end-status role="status" aria-live="polite"></p>
@@ -117,15 +126,18 @@ const robots = IS_SECRET_CANDIDATE
         states.forEach((state) => {
           state.hidden = state.dataset.endState !== button.dataset.endSelect;
         });
+        root.dataset.dsState = String(button.dataset.endSelect || '').replaceAll('_', '-');
       });
     });
 
     root.querySelector<HTMLButtonElement>('[data-end-clear]')?.addEventListener('click', () => {
       try {
         clearFocusParticipationMarker(window.localStorage);
+        root.dataset.dsState = 'participation-cleared';
         const status = root.querySelector<HTMLElement>('[data-end-status]');
         if (status) status.textContent = 'Участие на этом устройстве завершено. Локальные настройки «Для меня» сохранены.';
       } catch {
+        root.dataset.dsState = 'storage-error';
         const status = root.querySelector<HTMLElement>('[data-end-status]');
         if (status) status.textContent = 'Браузер не дал изменить localStorage. Обычные страницы по-прежнему доступны.';
       }
