@@ -23,6 +23,12 @@
   height: 100%;
 }
 
+/* EventMediaRail owns the external button radius, while MediaFrame remains the
+ * only node that clips the image/fallback inside that surface. */
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"] {
+  border-radius: inherit;
+}
+
 [data-media-frame][data-media-frame-contract="v1"] > [data-media-frame-image] {
   display: block;
   max-width: 100%;
