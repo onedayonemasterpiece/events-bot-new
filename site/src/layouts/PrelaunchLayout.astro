@@ -15,6 +15,7 @@ const canonicalUrl = `${SITE_ORIGIN}${withBase('/')}`;
 const robots = IS_PRODUCTION
   ? 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1'
   : 'noindex,nofollow,noarchive,nosnippet';
+const prelaunchState = IS_SECRET_CANDIDATE ? 'secret-candidate' : IS_PRODUCTION ? 'production' : 'preview';
 const shareImage = `${SITE_ORIGIN}${withBase('/assets/pwa/announcements-brand-v2-512.png')}`;
 const logoImage = `${SITE_ORIGIN}${withBase('/assets/pwa/announcements-brand-v2-512.png')}`;
 const organizationId = `${SITE_ORIGIN}/#organization`;
@@ -187,7 +188,12 @@ const structuredData = {
       .prelaunch-skip:focus { transform: translateY(0); }
     </style>
   </head>
-  <body>
+  <body
+    data-ds-family="PrelaunchLayout"
+    data-ds-version="1"
+    data-ds-variant="standalone"
+    data-ds-state={prelaunchState}
+  >
     <a class="prelaunch-skip" href="#main">К содержанию</a>
     <slot />
   </body>

@@ -108,7 +108,14 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive" noindex={archivedDetail}>
   <MobileEventProductionStyles />
-  <div id="main">
+  <div
+    id="main"
+    data-ds-family="EventDetailRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="responsive-pair"
+    data-ds-state={archivedDetail ? 'archived' : 'active'}
+    data-event-detail-id={event.id}
+  >
   <DesktopEventPage
     event={desktopEvent}
     related={desktopDiscoveryFeed}
@@ -138,6 +145,10 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
   />
   <main
     class="mobile-event-production"
+    data-ds-family="MobileEventDetailSurface"
+    data-ds-version="1"
+    data-ds-variant="accepted-v8"
+    data-ds-state={archivedDetail ? 'archived' : 'active'}
     data-production-mobile-event
     data-mobile-event-production
     data-mobile-review-variant="accepted-v8"
@@ -157,7 +168,7 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
         <div class="mobile-event-production__medallions"><EventTokenMedallions event={event} /></div>
         <EventParticipants event={event} surface="mobile" />
 
-        <section class="section-card section-card--quiet section-card--event-details mobile-event-production__details" style="margin-top: 1rem;">
+        <section class="section-card section-card--quiet section-card--event-details mobile-event-production__details">
           <div class="section-card__inner mobile-event-production__prose">
             <h2>Описание</h2>
             <div class="prose" set:html={event.description_html} />
