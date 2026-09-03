@@ -1,0 +1,116 @@
+{
+  "schema": "kenigevents.f0-end-to-end-n0-acceptance-followthrough.v1",
+  "version": "1.0.0",
+  "status": "F0_SOURCE_ACCEPTED_EXTERNAL_MATERIALIZATION_RUNTIME_AND_BROWSER_ONLY",
+  "role": "F0",
+  "contract_version": "1.9.0",
+  "pm0_version": "2.3.0",
+  "supersedes_external_trigger_in": {
+    "issue_comment": 5529571393,
+    "machine_record": "site/src/components/design-system/f0-end-to-end-current-ref-correction.v1.json",
+    "reason": "N0 advanced after that correction and accepted the complete F0 source boundary"
+  },
+  "current_acceptance": {
+    "N0": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "head": "7ac5d4396740af654ff5e51061cc4018160d7fcb",
+      "decision": "SOURCE_ACCEPTED_A0_CONSUMPTION_PENDING",
+      "accepted_f0_source_head": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "accepted_f0_reporting_checkpoint": "dbb1914f5a5c15f5cb1c9e8464374248a9b2a046",
+      "reporting_checkpoint_required_for_runtime": false
+    },
+    "source_successor": {
+      "branch": "agent/static-site-single-kaggle-contract",
+      "head": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "decision": "SOURCE_ACCEPTED_INTERMEDIATE_CURRENT_SUCCESSOR",
+      "runtime_acceptance": false,
+      "public_url": null
+    },
+    "thin_sot": {
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "branch": "integration/launch-normalized-sot-penpot-20260902",
+      "head": "f6a71df53eafe0763af5a606591372d952e9d371",
+      "contains_f0_binding_checkpoint": "70f8f162897168c8f1c2300f9c2b4b9a9a4665ec"
+    },
+    "M0": {
+      "source_head": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+      "downstream_head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133"
+    },
+    "A0": {
+      "head": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+      "whole_branch_merge_allowed": false
+    }
+  },
+  "accepted_f0_clusters": [
+    {
+      "id": "F0-ROUTE-THEME-BINDINGS",
+      "source_checkpoint": "f2b9927e25ac0566d35577f69c574cedadab27d7",
+      "consumers": [
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+      ],
+      "consumer_owner": "A0",
+      "materialization_owner": "R0",
+      "strict_command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs"
+    },
+    {
+      "id": "F0-INTEREST-CLUB-CARD-RESIDUAL",
+      "source_checkpoint": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "consumer": "site/src/components/InterestClubCard.astro",
+      "consumer_owner": "A0",
+      "materialization_owner": "R0",
+      "required": "four exact decorative-alpha substitutions without route/card palette collapse",
+      "strict_command": "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs"
+    }
+  ],
+  "nearest_candidate": {
+    "base": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "status": "BLOCKED_BY_F0_CONSUMPTION_M0_CURRENT_A0_MECH_06_AND_EXECUTABLE_TESTS",
+    "include": [
+      "current N0 descendant containing acceptance contract 7ac5d4396740af654ff5e51061cc4018160d7fcb",
+      "F0-owned source through 0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "exact A0 consumption of the two accepted F0 clusters",
+      "M0 source c71351decdcee02941acb26c5e2fbaf88faf0378",
+      "M0 downstream head 5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+      "A0-MECH-06 focus collection and closed-hub route identities",
+      "festival external-link safety commit 1bc6d9cb4c122046f4782532381de953727c1da6",
+      "current accepted A0 downstream and rollback records without whole-branch replay"
+    ],
+    "preserve": [
+      "festival rel tokens noopener and noreferrer",
+      "one canonical Kaggle builder and immutable-prefix publisher",
+      "Date and Weekend as distinct compositions",
+      "Popular Large/Compact behavior",
+      "production root and stable ICS keys",
+      "all F0 no-wholesale-merge and rollback boundaries"
+    ]
+  },
+  "a_to_f_recensus_after_n0_acceptance": {
+    "A_source_and_actual_consumers": "No new F0 source item. F0 source is accepted; all remaining consumer mutations are exact A0/R0-mechanical consumption.",
+    "B_current_candidate_and_cross_role_bindings": "N0 acceptance is complete. Candidate construction, merge repair and exact ancestry materialization are R0-owned.",
+    "C_published_previews_and_v0": "No successor preview exists. Fresh-real 4536847f remains the older baseline and V0 remains unexecuted because of the tool-surface blocker.",
+    "D_regression_negative_and_rollback": "All F0 contracts are authored and accepted as candidate inputs. Execution against the integrated SHA is R0-owned.",
+    "E_thin_s_and_penpot_ready_bindings": "Current SoT f6a71df contains the accepted F0 specs. Binding promotion and native Penpot materialization remain downstream of Astro/V0 gates.",
+    "F_next_product_gate": "R0 must construct and test the accepted candidate, publish the exact fresh-real full Kaggle preview, and hand that URL to V0."
+  },
+  "f0_backlog_effect": {
+    "new_f0_source_item": false,
+    "new_f0_decision_item": false,
+    "new_f0_regression_authoring_item": false,
+    "new_f0_downstream_spec_item": false,
+    "reason": "N0 accepted exactly the already-authored F0 source and gates; it did not reject, narrow or request a new F0 binding."
+  },
+  "claims_not_made": [
+    "accepted F0 source is integrated into the successor",
+    "strict F0 commands passed on a combined SHA",
+    "a successor fresh-real preview exists",
+    "V0 browser PASS or factual successor DRIFT exists",
+    "thin S is promoted to CURRENT",
+    "Penpot variables or masters are materialized"
+  ],
+  "exit": {
+    "ready_owned_items": 0,
+    "remaining_external_trigger": "R0 RESULT publishing one exact tested source-successor SHA descended from 1bc6d9cb4c122046f4782532381de953727c1da6 and containing accepted F0 source 0fb2938344cf96b05be0df09dfb9e69525b3717d, exact F0 consumer consumption, current accepted M0/A0/N0 inputs and passing strict F0 gates; then an exact HTTP-200 fresh-real /<buildId>/__preview/ with matching preview-build.json, explicit ancestry and fresh snapshot identity, followed by an independent V0 DOM/computed-style verdict on that URL"
+  }
+}
