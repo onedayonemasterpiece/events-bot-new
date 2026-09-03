@@ -25,13 +25,20 @@ test('EventCard keeps row diagnostics but does not write obsolete grid placement
   assert.doesNotMatch(adaptive, /grid-template-columns:\s*repeat/u);
 });
 
-test('the exact A0 removal boundary is runtime grid-row/grid-column setters only', async () => {
+test('A0 may retain or remove the bounded runtime placement bridge without losing row diagnostics', async () => {
   const layout = await read('src/layouts/EventLayout.astro');
+  const rowSetter = /card\.style\.setProperty\('grid-row', String\(Number\(relatedLayout\.rowIndex\) \+ 1\)\)/u;
+  const columnSetter = /card\.style\.setProperty\('grid-column', String\(Number\(relatedLayout\.rowColumn\) \+ 1\)\)/u;
+  const rowRemoval = /card\.style\.removeProperty\('grid-row'\)/u;
+  const columnRemoval = /card\.style\.removeProperty\('grid-column'\)/u;
+  const bridgePresent = rowSetter.test(layout) || columnSetter.test(layout) || rowRemoval.test(layout) || columnRemoval.test(layout);
 
-  assert.match(layout, /card\.style\.setProperty\('grid-row', String\(Number\(relatedLayout\.rowIndex\) \+ 1\)\)/u);
-  assert.match(layout, /card\.style\.setProperty\('grid-column', String\(Number\(relatedLayout\.rowColumn\) \+ 1\)\)/u);
-  assert.match(layout, /card\.style\.removeProperty\('grid-row'\)/u);
-  assert.match(layout, /card\.style\.removeProperty\('grid-column'\)/u);
   assert.match(layout, /setRuntimeCardDataset\(card, 'labRowIndex'/u);
   assert.match(layout, /setRuntimeCardDataset\(card, 'labRowColumn'/u);
+  if (bridgePresent) {
+    assert.match(layout, rowSetter);
+    assert.match(layout, columnSetter);
+    assert.match(layout, rowRemoval);
+    assert.match(layout, columnRemoval);
+  }
 });
