@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { applyGoldenActionFixtures, goldenActionContract, goldenActionHref } from '../scripts/golden-review-actions.mjs';
+import {
+  applyGoldenActionFixtures,
+  goldenActionContract,
+  goldenActionHref,
+  goldenExpectedActionLabel,
+  goldenExpectedAdmissionLabel,
+} from '../scripts/golden-review-actions.mjs';
 import { loadGoldenCorpus, materializeGoldenPreviewData } from '../scripts/golden-review-corpus.mjs';
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +34,8 @@ test('Golden action hrefs are deterministic, inert and cover all admission kinds
     const spec = corpus.events.find((event) => event.id === item.event_id);
     assert.ok(spec);
     assert.equal(item.href, goldenActionHref(spec));
+    assert.equal(item.expected_action_label, goldenExpectedActionLabel(spec));
+    assert.equal(item.expected_admission_label, goldenExpectedAdmissionLabel(spec));
     if (item.lifecycle_status === 'cancelled' || item.kind === 'free') {
       assert.equal(item.href, null);
     } else if (item.kind === 'phone') {
@@ -36,6 +44,11 @@ test('Golden action hrefs are deterministic, inert and cover all admission kinds
       assert.match(item.href, /^https:\/\/example\.invalid\/kenigevents-golden\/(ticket|registration|source)\/9700\d{2}$/u);
     }
   }
+
+  assert.ok(contract.some((item) => item.kind === 'registration' && item.href?.startsWith('https://example.invalid/')));
+  assert.ok(contract.some((item) => item.kind === 'registration' && item.expected_action_label === 'Зарегистрироваться'));
+  assert.ok(contract.some((item) => item.kind === 'source' && item.expected_action_label === 'Открыть пост организатора'));
+  assert.ok(contract.some((item) => item.kind === 'free' && item.expected_admission_label === 'Бесплатно · вход свободный'));
 });
 
 test('Golden materialization exposes CTA hrefs without changing real canaries', () => {
@@ -55,10 +68,10 @@ test('Golden materialization exposes CTA hrefs without changing real canaries', 
     }
   }
 
-  const realIds = new Set(corpus.events.map((event) => Number(event.id)));
+  const goldenIds = new Set(corpus.events.map((event) => Number(event.id)));
   const sourceBase = JSON.parse(readFileSync(join(siteDir, 'src', 'data', 'preview-events.json'), 'utf8'));
   const sourceById = new Map(sourceBase.events.map((event) => [Number(event.id), event]));
-  for (const event of data.events.filter((item) => !realIds.has(Number(item.id)))) {
+  for (const event of data.events.filter((item) => !goldenIds.has(Number(item.id)))) {
     const original = sourceById.get(Number(event.id));
     assert.ok(original);
     assert.deepEqual(event.ticket, original.ticket, `real canary ${event.id} ticket mutated`);
