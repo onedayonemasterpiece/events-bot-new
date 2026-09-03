@@ -43,6 +43,12 @@ function extractLiteralUnion(source, propertyName) {
   return uniqueSorted([...match[1].matchAll(/['"]([^'"]+)['"]/gu)].map((item) => item[1]));
 }
 
+function extractLiteralArray(source, constantName) {
+  const match = source.match(new RegExp(`(?:export\\s+)?const\\s+${constantName}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s+as\\s+const`, 'u'));
+  if (!match) return [];
+  return uniqueSorted([...match[1].matchAll(/['"]([^'"]+)['"]/gu)].map((item) => item[1]));
+}
+
 function staticComponentNames(source, tagName) {
   const names = [];
   const dynamic = [];
@@ -92,7 +98,12 @@ const socialSourcePath = path.join(SITE_ROOT, socialContract?.source?.replace(/^
 const uiSource = await readFile(uiSourcePath, 'utf8');
 const socialSource = await readFile(socialSourcePath, 'utf8');
 const uiNames = extractLiteralUnion(uiSource, 'name');
-const socialNames = extractLiteralUnion(socialSource, 'name');
+let socialNames = extractLiteralUnion(socialSource, 'name');
+if (socialNames.length === 0 && /\bname\s*:\s*SocialIconName\s*;/u.test(socialSource)) {
+  const foundationsPath = path.join(SITE_ROOT, 'src/components/design-system/foundations.ts');
+  const foundationsSource = await readFile(foundationsPath, 'utf8');
+  socialNames = extractLiteralArray(foundationsSource, 'SOCIAL_ICON_NAMES');
+}
 const expectedUiNames = uniqueSorted(uiContract?.names || []);
 const expectedSocialNames = uniqueSorted(socialContract?.names || []);
 
