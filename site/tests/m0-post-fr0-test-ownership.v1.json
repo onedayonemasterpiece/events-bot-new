@@ -47,8 +47,7 @@
     {
       "domain": "relatedCardLayout numeric normalization, document crop budget, deterministic packing and row occupancy",
       "tests": [
-        "site/tests/related-card-packer-inputs.test.mjs",
-        "site/tests/related-card-layout-input-hardening.test.mjs"
+        "site/tests/related-card-packer-inputs.test.mjs"
       ]
     }
   ],
