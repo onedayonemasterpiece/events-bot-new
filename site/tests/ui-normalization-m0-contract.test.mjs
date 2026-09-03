@@ -98,8 +98,9 @@ test('AdaptiveEventCardGrid owns compatibility, live-region, filtered runtime an
   assert.match(source, /data-adaptive-grid-runtime-visible-only=\{runtimeManagedGrid && runtimeVisibleOnly \? 'true' : undefined\}/u);
   assert.match(source, /data-adaptive-grid-runtime-source-policy=\{runtimeManagedGrid \? runtimeSourcePolicy : undefined\}/u);
   assert.match(source, /data-adaptive-grid-item-root-contract=\{hasItemRoots/u);
-  assert.match(source, /rootClassName=\{itemRootFor\(item\)\?\.className\}/u);
-  assert.match(source, /rootAttributes=\{itemRootFor\(item\)\?\.attributes\}/u);
+  assert.match(source, /const itemRoot = itemRootFor\(item, resolvedSourceIndexes\[renderedIndex\] \?\? -1\);/u);
+  assert.match(source, /rootClassName=\{itemRoot\?\.className\}/u);
+  assert.match(source, /rootAttributes=\{itemRoot\?\.attributes\}/u);
   assert.match(source, /!ADAPTIVE_ROOT_RESERVED_ATTRIBUTES\.has\(name\)/u);
   assert.match(source, /function bindAdaptiveEventCardGridRuntime\(root = document\)/u);
   assert.match(source, /const cards = visibleOnly \? directCards\.filter\(\(card\) => !card\.hidden\) : directCards;/u);
