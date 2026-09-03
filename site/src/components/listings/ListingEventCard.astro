@@ -6,6 +6,7 @@ import { eventImageUrl } from '../../lib/assets';
 import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
+import '../media-frame.css';
 
 export type ListingEventCardRootAttributeValue = string | number | boolean | null | undefined;
 export type ListingEventCardRootAttributes = Record<string, ListingEventCardRootAttributeValue>;
@@ -236,9 +237,11 @@ const socialProofLabel = [
       class="ke-listing-card__media-frame"
       data-media-frame
       data-media-frame-contract="v1"
+      data-media-frame-style-owner="media-frame.css"
       data-media-frame-surface="listing-card"
       data-media-frame-kind={mediaFrameKind}
       data-media-frame-fit={mediaFrameFit}
+      data-media-frame-fill="true"
       data-media-frame-ratio={mediaFrameRatio}
       data-media-frame-object-position={mediaFrameObjectPosition}
       data-media-frame-crop-reason={mediaFrameCropReason}
@@ -247,7 +250,6 @@ const socialProofLabel = [
       data-media-frame-loading={priority ? 'eager' : 'lazy'}
       data-media-frame-priority={priority ? 'true' : undefined}
       data-media-frame-interaction-owner="caller"
-      style="display:block;width:100%;height:100%;overflow:hidden"
     >
       {imageUrl ? (
         <img
