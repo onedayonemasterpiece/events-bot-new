@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../../layouts/EventLayout.astro';
 import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import SemanticIcon from '../../../components/design-system/SemanticIcon.astro';
 import { siteHomeAbsoluteUrl, siteHomeHref, absoluteUrl, displayDateValue, SITE_NAME, withBase } from '../../../lib/events';
 import { getInterestClubBySlug, getInterestClubs, interestClubAbsoluteUrl, interestClubMeetingHref } from '../../../lib/clubs';
 
@@ -106,31 +107,31 @@ const structuredData = [
         <strong>Почему клуб здесь</strong>
         <p>Связь основана на подтверждённых событиях в разные даты. Фестивали, повторы одной программы и неподтверждённые связи не показываются.</p>
       </aside>
-      <p><a class="club-detail__back" href={withBase('/kluby-po-interesam/')}><span aria-hidden="true">←</span> Все клубы</a></p>
+      <p><a class="club-detail__back" href={withBase('/kluby-po-interesam/')}><SemanticIcon name="arrow-left" role="inline" /> Все клубы</a></p>
     </article>
   </main>
 </EventLayout>
 
 <style>
-  .club-detail { display:grid; gap:1rem; }
-  .club-detail__hero { background:linear-gradient(135deg, #fffdf8, rgba(215,240,236,.7)); }
-  .club-detail__hero h1 { max-width:19ch; font-size:clamp(2.2rem, 6vw, 4.8rem); line-height:.98; }
-  .club-detail__facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; margin:1.3rem 0 0; }
-  .club-detail__facts div { padding:.8rem; border:1px solid rgba(121,48,20,.11); border-radius:16px; background:rgba(255,255,255,.72); }
-  dt { color:var(--muted); font-size:.84rem; }
-  dd { margin:.15rem 0 0; font-weight:850; overflow-wrap:anywhere; }
-  .meeting-list { display:grid; gap:.7rem; margin:1rem 0 0; padding:0; list-style:none; }
-  .meeting-list li { display:grid; grid-template-columns:minmax(7rem, 10rem) minmax(0,1fr); gap:1rem; padding:1rem 0; border-top:1px solid rgba(121,48,20,.12); }
+  .club-detail { display:grid; gap:var(--ke-club-detail-gap); }
+  .club-detail__hero { background:linear-gradient(135deg, var(--ke-color-club-detail-hero-start), var(--ke-color-club-detail-hero-end)); }
+  .club-detail__hero h1 { max-width:var(--ke-club-detail-hero-heading-max); font-size:var(--ke-club-detail-hero-heading-size); line-height:var(--ke-club-detail-hero-heading-line); }
+  .club-detail__facts { display:grid; grid-template-columns:var(--ke-club-detail-facts-columns); gap:var(--ke-club-detail-facts-gap); margin:var(--ke-club-detail-facts-margin-top) 0 0; }
+  .club-detail__facts div { padding:var(--ke-club-detail-fact-padding); border:1px solid var(--ke-color-club-detail-fact-border); border-radius:var(--ke-club-detail-fact-radius); background:var(--ke-color-club-detail-fact-surface); }
+  dt { color:var(--muted); font-size:var(--ke-club-detail-term-size); }
+  dd { margin:.15rem 0 0; font-weight:var(--ke-club-detail-value-weight); overflow-wrap:anywhere; }
+  .meeting-list { display:grid; gap:var(--ke-club-detail-meeting-gap); margin:1rem 0 0; padding:0; list-style:none; }
+  .meeting-list li { display:grid; grid-template-columns:var(--ke-club-detail-meeting-columns); gap:var(--ke-club-detail-meeting-column-gap); padding:var(--ke-club-detail-meeting-padding-block) 0; border-top:1px solid var(--ke-color-club-detail-meeting-border); }
   .meeting-list__date { display:grid; align-content:start; gap:.1rem; color:var(--primary-strong); font-weight:900; }
   .meeting-list__date span { color:var(--muted); font-size:.88rem; }
-  .meeting-list h3 { margin:0; font-size:1.2rem; }
-  .meeting-list h3 a { min-height:44px; display:inline-flex; align-items:center; color:var(--primary-strong); }
+  .meeting-list h3 { margin:0; font-size:var(--ke-club-detail-meeting-title-size); }
+  .meeting-list h3 a { min-height:var(--ke-club-detail-action-min); display:inline-flex; align-items:center; color:var(--primary-strong); }
   .meeting-list p { margin:.3rem 0 0; color:var(--muted); }
-  .meeting-empty { padding:1rem; border-radius:18px; background:#fff8ed; }
+  .meeting-empty { padding:var(--ke-club-detail-empty-padding); border-radius:var(--ke-club-detail-empty-radius); background:var(--ke-color-club-detail-empty-surface); }
   .meeting-empty h3, .meeting-empty p { margin:.15rem 0; }
-  .club-detail__note { padding:1rem 1.15rem; border-left:4px solid var(--accent); border-radius:0 16px 16px 0; background:rgba(215,240,236,.58); }
+  .club-detail__note { padding:var(--ke-club-detail-note-padding-block) var(--ke-club-detail-note-padding-inline); border-left:var(--ke-club-detail-note-border) solid var(--ke-color-club-detail-note-border); border-radius:var(--ke-club-detail-note-radius); background:var(--ke-color-club-detail-note-surface); }
   .club-detail__note p { margin:.2rem 0 0; color:var(--muted); }
-  .club-detail__back { min-height:44px; display:inline-flex; align-items:center; gap:.4rem; color:var(--primary-strong); font-weight:900; }
+  .club-detail__back { min-height:var(--ke-club-detail-action-min); display:inline-flex; align-items:center; gap:.4rem; color:var(--primary-strong); font-weight:900; }
   @media (max-width: 620px) {
     .club-detail__facts { grid-template-columns:1fr; }
     .meeting-list li { grid-template-columns:1fr; gap:.35rem; }

@@ -1,6 +1,5 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import Icon from '../../components/Icon.astro';
 import SemanticIcon from '../../components/design-system/SemanticIcon.astro';
 import festivalProjection from '../../data/festival-timeline.json';
 import {
@@ -248,7 +247,7 @@ const structuredData = [{
 
     <section class="festival-guide" aria-label="Как пользоваться календарём">
       <div class="festival-guide__item">
-        <span class="festival-guide__icon festival-guide__icon--heart" aria-hidden="true"><Icon name="heart" /></span>
+        <span class="festival-guide__icon festival-guide__icon--heart" aria-hidden="true"><SemanticIcon name="heart" role="control" /></span>
         <p><strong>Отметьте интересное</strong><span>Нажмите сердце — фестиваль сохранится в этом браузере.</span></p>
       </div>
       <div class="festival-guide__item">
@@ -381,7 +380,7 @@ const structuredData = [{
                         aria-label={`Отметить как понравившийся фестиваль: ${item.title}`}
                         title="Отметить как понравившийся"
                       >
-                        <Icon name="heart" />
+                        <SemanticIcon name="heart" role="control" />
                       </button>
                     </article>
                   );
@@ -469,7 +468,7 @@ const structuredData = [{
 
 <style>
   .festival-page {
-    width: min(1240px, calc(100% - 2rem));
+    width: min(var(--ke-festival-page-max), calc(100% - (2 * var(--ke-festival-page-gutter))));
     margin: 0 auto;
     padding: clamp(0.85rem, 1.7vw, 1.65rem) 0 clamp(5.5rem, 8vw, 7rem);
     font-family: var(--ke-font-sans);
@@ -485,7 +484,7 @@ const structuredData = [{
     padding: clamp(1.35rem, 2.15vw, 2rem);
     overflow: hidden;
     border: 1px solid rgba(121, 48, 20, 0.13);
-    border-radius: clamp(24px, 3vw, 36px);
+    border-radius: var(--ke-festival-hero-radius);
     background:
       radial-gradient(circle at 82% 22%, rgba(15, 118, 110, 0.16), transparent 19rem),
       linear-gradient(135deg, #fffdf8, #f0e3d2);
@@ -619,8 +618,8 @@ const structuredData = [{
   .festival-guide__item:first-child { border-left: 0; }
   .festival-guide__icon {
     display: grid;
-    width: 1.9rem;
-    height: 1.9rem;
+    width: var(--ke-festival-guide-icon-container-size);
+    height: var(--ke-festival-guide-icon-container-size);
     place-items: center;
     border-radius: 50%;
     background: rgba(15, 118, 110, 0.09);
@@ -632,7 +631,7 @@ const structuredData = [{
     background: rgba(165, 72, 33, 0.1);
     color: var(--primary);
   }
-  .festival-guide__icon :global(svg) { width: 0.95rem; height: 0.95rem; fill: currentColor; }
+  .festival-guide__icon :global(svg) { width: var(--ke-festival-guide-icon-size); height: var(--ke-festival-guide-icon-size); fill: currentColor; }
   .festival-guide__item p { min-width: 0; margin: 0; line-height: 1.25; }
   .festival-guide__item strong {
     display: block;
@@ -806,8 +805,8 @@ const structuredData = [{
     bottom: clamp(0.58rem, 0.88vw, 0.76rem);
     z-index: 4;
     display: grid;
-    width: clamp(2rem, 2.35vw, 2.2rem);
-    height: clamp(2rem, 2.35vw, 2.2rem);
+    width: var(--ke-festival-like-target-min);
+    height: var(--ke-festival-like-target-min);
     padding: 0;
     place-items: center;
     border: 1px solid rgba(255, 255, 255, 0.34);
@@ -828,7 +827,7 @@ const structuredData = [{
     outline: 3px solid rgba(255, 255, 255, 0.96);
     outline-offset: 2px;
   }
-  .festival-card__like :global(svg) { width: 1.12rem; height: 1.12rem; fill: currentColor; }
+  .festival-card__like :global(svg) { width: var(--ke-festival-like-icon-size); height: var(--ke-festival-like-icon-size); fill: currentColor; }
   .festival-card__like[aria-pressed="true"] {
     border-color: rgba(255, 255, 255, 0.86);
     background: #fff;
@@ -1130,7 +1129,7 @@ const structuredData = [{
     .festival-card__topline { top: 0.65rem; right: 0.65rem; left: 0.65rem; }
     .festival-card__date,
     .festival-card__status { min-height: 1.28rem; padding: 0.19rem 0.34rem; font-size: 0.56rem; }
-    .festival-card__like { top: auto; right: 0.65rem; bottom: 0.65rem; width: 1.8rem; height: 1.8rem; }
+    .festival-card__like { top: auto; right: 0.65rem; bottom: 0.65rem; width: var(--ke-festival-like-target-min); height: var(--ke-festival-like-target-min); }
     .festival-card__caption { right: 0.5rem; bottom: 0.5rem; left: 0.5rem; padding: 0.58rem; }
     .festival-card__caption h3,
     .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.9rem, 4.15vw, 1.08rem); }
