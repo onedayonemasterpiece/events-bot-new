@@ -1,4 +1,5 @@
 ---
+import './design-system/product-contour-foundations.css';
 import { withBase } from '../lib/events';
 
 interface Props {
@@ -8,7 +9,15 @@ interface Props {
 const { compact = false } = Astro.props;
 ---
 
-<aside class:list={['focus-thanks', compact && 'focus-thanks--compact']} aria-labelledby="focus-thanks-title">
+<aside
+  class:list={['focus-thanks', compact && 'focus-thanks--compact']}
+  data-ds-family="FocusGroupThankYou"
+  data-ds-version="1"
+  data-ds-variant={compact ? 'compact' : 'default'}
+  data-ds-state="informational"
+  data-ke-foundation-consumer="focus-thank-you"
+  aria-labelledby="focus-thanks-title"
+>
   <div class="focus-thanks__partner">
     <p class="focus-thanks__eyebrow">Партнёр благодарности</p>
     <picture>
@@ -43,29 +52,29 @@ const { compact = false } = Astro.props;
 <style>
   .focus-thanks {
     display: grid;
-    grid-template-columns: minmax(180px, .42fr) minmax(0, 1fr);
-    gap: clamp(1.25rem, 4vw, 3rem);
+    grid-template-columns: var(--ke-focus-thanks-partner-column) minmax(0, 1fr);
+    gap: var(--ke-focus-thanks-gap);
     align-items: center;
-    border: 1px solid color-mix(in srgb, var(--ke-color-brand-600, #a54821) 24%, transparent);
-    border-radius: 1.6rem;
-    padding: clamp(1.15rem, 3vw, 2rem);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-focus-thanks-border);
+    border-radius: var(--ke-focus-thanks-radius);
+    padding: var(--ke-focus-thanks-padding);
     background:
-      radial-gradient(circle at 0 0, rgb(255 193 13 / 17%), transparent 42%),
-      var(--ke-color-surface-strong, #fff);
-    color: var(--ke-color-copy, #44362d);
-    box-shadow: var(--ke-shadow-1, 0 8px 22px rgb(72 45 25 / 8%));
-    font-family: var(--ke-font-sans, system-ui, sans-serif);
+      radial-gradient(circle at 0 0, var(--ke-color-focus-thanks-marker-glow), transparent var(--ke-focus-thanks-marker-fade)),
+      var(--ke-color-focus-thanks-surface);
+    color: var(--ke-color-focus-thanks-text);
+    box-shadow: var(--ke-elevation-focus-thanks);
+    font-family: var(--ke-font-family-sans);
   }
 
   .focus-thanks__partner {
     min-width: 0;
     display: grid;
-    gap: .7rem;
+    gap: var(--ke-focus-thanks-partner-gap);
     justify-items: start;
   }
 
   .focus-thanks picture {
-    width: min(100%, 260px);
+    width: min(100%, var(--ke-focus-thanks-logo-max));
     display: block;
   }
 
@@ -78,37 +87,37 @@ const { compact = false } = Astro.props;
 
   .focus-thanks__eyebrow {
     margin: 0;
-    color: var(--ke-color-brand-700, #98401f);
-    font-size: .72rem;
-    font-weight: 900;
-    letter-spacing: .11em;
+    color: var(--ke-color-action-primary-hover);
+    font-size: var(--ke-focus-thanks-eyebrow-size);
+    font-weight: var(--ke-focus-thanks-eyebrow-weight);
+    letter-spacing: var(--ke-focus-thanks-eyebrow-letter);
     text-transform: uppercase;
   }
 
   .focus-thanks h2 {
-    margin: .35rem 0 .75rem;
-    color: var(--ke-color-ink, #221a14);
-    font-size: clamp(1.35rem, 3vw, 2.15rem);
-    line-height: 1.05;
-    letter-spacing: -.035em;
+    margin: var(--ke-focus-thanks-heading-margin);
+    color: var(--ke-color-text-primary);
+    font-size: var(--ke-focus-thanks-heading-size);
+    line-height: var(--ke-focus-thanks-heading-line);
+    letter-spacing: var(--ke-focus-thanks-heading-letter);
   }
 
   .focus-thanks p:not(.focus-thanks__eyebrow) {
-    max-width: 66ch;
+    max-width: var(--ke-focus-thanks-copy-max);
     margin: 0;
-    line-height: 1.58;
+    line-height: var(--ke-focus-thanks-copy-line);
   }
 
   .focus-thanks__notice {
-    margin-top: .75rem !important;
-    border-left: 3px solid #ffc10d;
-    padding-left: .8rem;
-    color: var(--ke-color-muted, #6d6259);
-    font-size: .86rem;
+    margin-top: var(--ke-focus-thanks-notice-margin-top) !important;
+    border-left: var(--ke-focus-thanks-notice-border) solid var(--ke-color-focus-thanks-marker);
+    padding-left: var(--ke-focus-thanks-notice-padding-left);
+    color: var(--ke-color-text-muted);
+    font-size: var(--ke-focus-thanks-notice-size);
   }
 
   .focus-thanks--compact {
-    grid-template-columns: 150px minmax(0, 1fr);
+    grid-template-columns: var(--ke-focus-thanks-compact-partner-column) minmax(0, 1fr);
   }
 
   @media (max-width: 680px) {
@@ -117,6 +126,8 @@ const { compact = false } = Astro.props;
       grid-template-columns: 1fr;
     }
 
-    .focus-thanks picture { width: min(70vw, 230px); }
+    .focus-thanks picture {
+      width: min(var(--ke-focus-thanks-mobile-logo-viewport), var(--ke-focus-thanks-mobile-logo-max));
+    }
   }
 </style>
