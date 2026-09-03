@@ -4,8 +4,8 @@
   "contract_version": "1.9.0",
   "pm0_version": "2.2.0",
   "evidence_cutoff": {
-    "issue_comment": 5527356024,
-    "timestamp": "2026-09-03T14:44:36Z"
+    "issue_comment": 5527668536,
+    "timestamp": "2026-09-03T14:58:52Z"
   },
   "owner": "N0",
   "authority": {
@@ -42,7 +42,7 @@
     },
     "n0_branch": {
       "branch": "work/ui-normalization-n0-checklist-20260903",
-      "minimum_reviewed_commit": "41c9e1200f10e25c3631b71ff84c7546c24e140b",
+      "minimum_reviewed_commit": "2c8e998ab3f537a6daf6eaeb919f11636e141e97",
       "resolve_remote_head_at_merge": true,
       "decision": "SOURCE_ACCEPTED_PENDING_R0_INTEGRATION_AND_EXECUTABLE_TESTS"
     },
@@ -67,7 +67,9 @@
       "84504f30eebc334deba46e94365601c3d572c5c0"
     ],
     "data_mode": "golden",
-    "page_classes": ["all"],
+    "page_classes": [
+      "all"
+    ],
     "golden_corpus_id": "golden-review-20260903-v1",
     "golden_corpus_sha256": "f90561691baa6744804b6cba36b0a8580eac8e9607dcdb97483511ad32e7ce00",
     "kaggle": {
@@ -124,7 +126,9 @@
       "reason": "golden_preview_frozen_clock"
     },
     "events": 288,
-    "page_classes": ["all"],
+    "page_classes": [
+      "all"
+    ],
     "publication": "INTENTIONALLY_NOT_PUBLISHED",
     "accepted_as": "PIPELINE_SOURCE_AND_FROZEN_CLOCK_DIAGNOSTIC_ONLY"
   },
@@ -168,7 +172,7 @@
     },
     "M0": {
       "branch": "work/ui-normalization-m0-continuity-20260903",
-      "head": "0bf25ff6c17e1b649b1a64919502103ba60b0d43",
+      "head": "c5f208c3bf9dc3177c025b6d354b7e54bcf3b0a1",
       "invalid_result_sha_rejected": "e620e69fd8fb4641415320beaa3ea9c1003beee8",
       "integrated_parent": "1d145d5efd2a332eff29e69b6afcf43414769906",
       "integrated_by": "9152994b026b34d60d21d68bfa2a4d7d8dc20f3e",
@@ -183,13 +187,23 @@
         "da089b95817ed3a3a6c0c5b37adfd16a686235fb",
         "07bc9c21fc67e24bd26a9268c0df6e459aff004e",
         "1401b21d9ec68fe38f879de86028f468b515a8d0",
-        "0bf25ff6c17e1b649b1a64919502103ba60b0d43"
+        "0bf25ff6c17e1b649b1a64919502103ba60b0d43",
+        "5ce956f7f87a9f002dfe0e31f9256067b5b864e2",
+        "fb2bd8033ba1f833e99691a341fcf7bdf43c678b",
+        "c63070e8a1c840dc12cc66c4b12762844dcf8191",
+        "879a4be610206a5a6791447af8650b1010cbfff2",
+        "db21c7195fa1a2fe116f94dcd68445676cc5031d",
+        "c5f208c3bf9dc3177c025b6d354b7e54bcf3b0a1"
       ],
       "pending_scope": [
         "diagnostics ownership negative regression",
         "desktop rail migration/removal boundary",
         "fail-closed ListingEventCard broken-media fallback state",
-        "ListingEventCard fallback regression"
+        "ListingEventCard fallback regression",
+        "empty-card social-proof placement none state",
+        "flex-only EventCard placement without inert grid row/column",
+        "A0 removal boundary for obsolete runtime placement",
+        "owner-local listing proof regression"
       ],
       "runtime_status": "NOT_RUN_ON_FULL_M0_TIP",
       "browser_status": "V0_OWNED_NOT_CLAIMED"
@@ -244,8 +258,8 @@
         },
         {
           "source": "work/ui-normalization-m0-continuity-20260903",
-          "selection": "FOUR_COMMITS_AFTER_1d145d5_THROUGH_0bf25ff",
-          "reason": "fail-closed broken-media state and exact negative/removal contracts"
+          "selection": "TEN_COMMITS_AFTER_1d145d5_THROUGH_c5f208",
+          "reason": "complete reviewed M0 delta: coherent diagnostics, fail-closed media/proof states and flex-only placement boundaries"
         }
       ],
       "hold_for_next_successor": [
@@ -363,6 +377,30 @@
       "output": "owner-reviewable release candidate"
     }
   ],
+  "pm0_delta_reporting": {
+    "owner_correction_comment": 5527668536,
+    "effective_immediately": true,
+    "fresh_read_heads": [
+      "r0/ui-normalization-current-candidate-20260903",
+      "integration/ui-normalization-launch-20260902",
+      "work/ui-normalization-n0-checklist-20260903",
+      "work/ui-normalization-f0-wave-3-20260903",
+      "work/ui-normalization-m0-continuity-20260903",
+      "work/ui-normalization-a0-wave-3-20260903",
+      "agent/static-site-single-kaggle-contract",
+      "lovekgd-design-system/integration/launch-normalized-sot-penpot-20260902"
+    ],
+    "required_output_blocks": [
+      "checkbox_transitions",
+      "progress_inside_partial",
+      "not_in_candidate",
+      "new_owner_visible_result"
+    ],
+    "zero_changes_allowed_only_when": "all relevant heads and preview/V0/Penpot evidence are unchanged",
+    "v0_recheck_claim_requires": "a new factual V0 browser verdict",
+    "branch_progress_may_change_partial_detail_without_changing_symbol": true,
+    "branch_progress_may_not_create_done_without_full_item_acceptance": true
+  },
   "v0_triggers": {
     "golden": {
       "status": "READY_REQUIRES_PROPER_BROWSER_ACTIVATION",
@@ -383,7 +421,7 @@
     "cd site && npm run check:preview",
     "cd site && npm run check:design-system-production-surfaces",
     "cd site && npm run check:design-system-iconography",
-    "cd site && node --test tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/listing-event-card-media-fallback.test.mjs"
+    "cd site && node --test tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/listing-event-card-media-fallback.test.mjs tests/event-card-flex-placement.test.mjs"
   ],
   "prohibitions": [
     "do not publish a full or focused owner preview outside the canonical Kaggle pipeline",
