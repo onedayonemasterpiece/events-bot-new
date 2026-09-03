@@ -8,6 +8,7 @@ import {
   CANONICAL_A0_V0_MATRIX,
   CONTRACT_VERSION,
   OWNERS,
+  PUBLISHED_TARGETS,
   SELECTORS,
   auditContract,
   classifyObservation,
@@ -65,6 +66,13 @@ test('the executable overlay references rather than replaces the canonical A0-V0
   assert.equal(auditContract.executionBoundary.existingLocalReleaseGate, 'site/scripts/check-browser-release-gate.mjs');
   assert.equal(auditContract.flowControl.fr0CutoverRequiredBeforeFramingWrites, true);
   assert.equal(auditContract.flowControl.fr0MustNotDelayAlreadyReadySuccessor, true);
+});
+
+test('published target pointer follows the newest exact R0 HTTP-200 real preview without erasing history', () => {
+  assert.equal(PUBLISHED_TARGETS.real.url, 'https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/');
+  assert.equal(PUBLISHED_TARGETS.real.sourceSha, AUTHORED_AGAINST_SOURCE);
+  assert.equal(PUBLISHED_TARGETS.real.supersedes, 'https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/');
+  assert.match(PUBLISHED_TARGETS.real.status, /UNAUDITED_BY_V0/u);
 });
 
 test('authored source is evidence, not a hard gate for a newer or older exact preview target', () => {
@@ -270,6 +278,9 @@ test('machine-readable overlay aligns with executable seams and canonical PM0-37
   assert.equal(matrix.authority.relationship, 'EXECUTABLE_OVERLAY_NOT_REPLACEMENT');
   assert.equal(matrix.authority.canonical_a0_v0_matrix.path, CANONICAL_A0_V0_MATRIX.path);
   assert.equal(matrix.authority.canonical_a0_v0_matrix.blob_sha, CANONICAL_A0_V0_MATRIX.blobSha);
+  assert.equal(matrix.authority.canonical_a0_v0_matrix.ref, CANONICAL_A0_V0_MATRIX.ref);
+  assert.equal(matrix.published_targets.real.url, PUBLISHED_TARGETS.real.url);
+  assert.equal(matrix.published_targets.real.source_sha, PUBLISHED_TARGETS.real.sourceSha);
   assert.deepEqual(matrix.viewports.map((item) => item.width), auditContract.viewports.map((item) => item.width));
   assert.deepEqual(matrix.viewports.map((item) => item.id), auditContract.viewports.map((item) => item.id));
   assert.equal(matrix.viewports.length, 19);
