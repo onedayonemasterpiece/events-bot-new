@@ -1,0 +1,197 @@
+{
+  "schema": "kenigevents.n0-runtime-eventcard-mediaframe-drift.v1",
+  "version": "1.0.0",
+  "role": "N0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "contract_version": "1.10.0",
+  "finding": {
+    "source_comment": 5532284724,
+    "source_role": "FR0",
+    "candidate_sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "classification": "ACCEPTED_A0_RUNTIME_CONSUMER_DRIFT",
+    "severity": "BLOCKS_FR0_MEDIAFRAME_DELIVERY_PASS_NOT_CURRENT_PUBLICATION",
+    "source_writer": "A0",
+    "protocol_acceptance_owner": "FR0",
+    "candidate_acceptance_owner": "N0",
+    "mechanical_integration_and_execution_owner": "R0"
+  },
+  "source_evidence": {
+    "path": "site/src/layouts/EventLayout.astro",
+    "blob": "85ffdf1ecfb8abe0fe8487d0570957c98199ff9e",
+    "runtime_entrypoints": [
+      "applyRuntimeRelatedLayout",
+      "createEventCardElement",
+      "KenigEventsCreateEventCard",
+      "KenigEventsRenderEventCard"
+    ],
+    "confirmed_defects": [
+      {
+        "code": "RUNTIME_FRAME_VARIABLES_CLEARED",
+        "evidence": "mediaShell.style.cssText = '' clears the cloned template's authoritative --media-frame-* variables before incomplete rebinding"
+      },
+      {
+        "code": "RUNTIME_PROTOCOL_NOT_REBOUND",
+        "evidence": "runtime writes legacy mediaRole and layout variables but not the complete actual-item role/kind/fit/crop/ratio/source/focal/resource-state/root-fallback protocol"
+      },
+      {
+        "code": "DUPLICATE_RUNTIME_FIT_OWNER",
+        "evidence": "applyRuntimeRelatedLayout and createEventCardElement assign image.style.objectFit and image.style.objectPosition directly"
+      },
+      {
+        "code": "LEGACY_LOAD_TRANSITION",
+        "evidence": "serialized onload changes classes and aria-busy but does not publish resource-state=loaded or remove canonical root fallback state"
+      },
+      {
+        "code": "MISSING_SOURCE_INCOMPLETE_FALLBACK",
+        "evidence": "the no-image branch removes src/width/height and alt only; it does not publish fallback kind/fit/crop reason/resource state or clear stale favicon metadata"
+      },
+      {
+        "code": "BROKEN_RESOURCE_CAN_RETAIN_TEMPLATE_STATE",
+        "evidence": "no canonical broken transition prevents stale visual/cover/pending/favicon dimensions and role from surviving a failed runtime resource"
+      }
+    ]
+  },
+  "preserved_acceptance": {
+    "static_EventCard_source": {
+      "path": "site/src/components/EventCard.astro",
+      "blob": "7bc689ac9b6f823955828706ea4f5ecb23acb58a",
+      "status": "ACCEPTED_UNCHANGED"
+    },
+    "static_ListingEventCard_source": {
+      "path": "site/src/components/listings/ListingEventCard.astro",
+      "blob": "b8a218b9a0accb9f64b51be332a4e797b4aac2b7",
+      "status": "ACCEPTED_UNCHANGED"
+    },
+    "M0_batch": "ACCEPTED_UNCHANGED",
+    "F0_batch": "ACCEPTED_UNCHANGED",
+    "exhibitions_vertical_slice_source": "ACCEPTED_UNCHANGED",
+    "cebeafee_publication": "ACCEPTED_UNCHANGED"
+  },
+  "delivery_semantics": {
+    "publish_3ca6_exact_full_real_preview": true,
+    "reason": "the exact source-bound preview is required as a factual DRIFT specimen and for independently acceptable unaffected vertical slices",
+    "may_label_3ca6_FR0_MediaFrame_PASS": false,
+    "known_drift_must_be_disclosed_in_V0_trigger": true,
+    "defect_isolated_from_unrelated_domains": true,
+    "does_not_delay_current_3ca6_Kaggle_transaction": true,
+    "next_correction_candidate_required_after_publication": true
+  },
+  "correction_contract": {
+    "allowed_source": [
+      "site/src/layouts/EventLayout.astro",
+      "one bounded A0 runtime-clone regression file"
+    ],
+    "forbidden_source": [
+      "site/src/components/EventCard.astro",
+      "site/src/components/listings/ListingEventCard.astro",
+      "site/src/components/media-frame.css",
+      "site/src/components/EventMediaRail.astro",
+      "site/src/components/EventHero.astro",
+      "a second runtime card renderer",
+      "a second MediaFrame implementation"
+    ],
+    "implementation_shape": "one local EventLayout runtime binding helper reused by createEventCardElement and applyRuntimeRelatedLayout",
+    "required_structural_protocol": {
+      "contract": "v1",
+      "style_owner": "media-frame.css",
+      "surface": "event-card",
+      "interaction_owner": "caller",
+      "clip_radius_fill": "preserve current canonical structural values"
+    },
+    "required_authoritative_rebinding": [
+      "role from actual item media evidence",
+      "kind from actual item media evidence",
+      "fit from resolved related/mobile/document decision",
+      "crop permission and exact crop reason",
+      "frame ratio from current presentation decision",
+      "source width, height and ratio only when actual dimensions are known",
+      "object and focal position from the accepted decision",
+      "clear all stale template source dimensions, role, kind, ratio, fit, crop and state before rebinding"
+    ],
+    "required_resource_transitions": {
+      "url_present_initial": "pending",
+      "successful_load": "loaded; remove root fallback marker; hide direct fallback; preserve authoritative semantic and crop evidence",
+      "network_error_or_unusable_decode": "broken + kind=fallback + fit=contain + crop-permission=forbidden + crop-reason=resource_load_error + centered position + root fallback + visible direct fallback + failed src/srcset removed",
+      "no_usable_source": "fallback + kind=fallback + fit=contain + crop-permission=forbidden + crop-reason=runtime_event_card_fallback + centered position + root fallback + visible direct fallback"
+    },
+    "remove_duplicate_ownership": [
+      "no runtime image.style.objectFit assignment",
+      "no runtime image.style.objectPosition assignment",
+      "fit is applied through data-media-frame-fit and media-frame.css",
+      "position is applied through --media-frame-object-position and media-frame.css"
+    ],
+    "preserve_behavior": [
+      "EventCard DOM, typography, actions and metadata",
+      "personal-feed, related-continuation and authorized-search identity and order",
+      "related ranking and packing",
+      "links, calendar, share and feedback hooks",
+      "natural-aspect reconciliation when explicitly requested",
+      "existing public runtime factory names"
+    ]
+  },
+  "regression_acceptance": {
+    "suggested_path": "site/tests/a0-runtime-event-card-media-frame-binding.test.mjs",
+    "required": [
+      "no runtime style.objectFit or style.objectPosition assignment remains",
+      "visual, document, unknown, missing and broken cloned cards publish the complete actual-item protocol",
+      "URL-present clone begins pending and successful load becomes loaded",
+      "missing source becomes fallback with direct visible fallback anatomy",
+      "failure becomes broken, fallback, contain, forbidden, resource_load_error and removes the failed resource",
+      "no stale favicon role, source dimensions, ratio, fit, crop reason or pending state survives rebinding",
+      "canonical clone, personal-feed, related-layout and authorized-search regressions remain green"
+    ]
+  },
+  "v0_acceptance": {
+    "required_runtime_consumers": [
+      "at least one client-created personal-feed or authorized-search EventCard",
+      "at least one client-created related-continuation EventCard"
+    ],
+    "required_viewport_classes": [
+      "mobile",
+      "desktop"
+    ],
+    "record": [
+      "actual MediaFrame role, kind, fit, crop permission and crop reason",
+      "frame/source ratio and source dimensions",
+      "computed object-fit and object-position owner",
+      "resource state after hydration and after successful or failed resource transition",
+      "root fallback marker and direct fallback visibility",
+      "absence of stale favicon template metadata"
+    ],
+    "3ca6_expected_result": "DRIFT_OR_INCOMPLETE_NOT_PASS",
+    "corrected_successor_expected_result": "PERSONAL_V0_VERDICT_REQUIRED"
+  },
+  "queue_and_candidate_rule": {
+    "FR0_source_batch": null,
+    "FR0_parallel_product_write": false,
+    "new_A0_batch_now_authorized_by_factual_FR0_drift": true,
+    "maximum_A0_batches_outside_current_successor": 1,
+    "broken_batch_excluded_separately": true,
+    "N0_auto_pull_on_A0_result": true,
+    "candidate_lag_minutes_max": 30,
+    "next_full_real_preview_max_minutes_after_correction_intake": 60
+  },
+  "rollback": {
+    "unit": "A0-RUNTIME-EVENTCARD-MEDIAFRAME-REBIND",
+    "revert_only": [
+      "EventLayout runtime helper and call-site rebinding",
+      "its bounded regression file"
+    ],
+    "do_not_revert": [
+      "static EventCard or ListingEventCard source",
+      "FR0 canonical media-frame.css",
+      "F0 route themes",
+      "exhibitions or festivals source",
+      "cebeafee or 3ca6 immutable preview prefixes"
+    ]
+  },
+  "N0_decision": {
+    "finding": "ACCEPTED",
+    "3ca6_source_acceptance": "PRESERVED_WITH_KNOWN_A0_RUNTIME_DRIFT",
+    "3ca6_executable_acceptance": "PRESERVED",
+    "3ca6_publication": "MUST_CONTINUE",
+    "FR0_MediaFrame_delivery": "NOT_ACCEPTED_ON_3CA6",
+    "exhibitions_vertical_slice": "STILL_INDEPENDENTLY_ACCEPTABLE_IF_V0_SECTIONS_PASS",
+    "next_source_action_owner": "A0"
+  }
+}
