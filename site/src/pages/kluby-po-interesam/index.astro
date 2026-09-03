@@ -2,6 +2,8 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import InterestClubCard from '../../components/InterestClubCard.astro';
 import ClubCatalogKeyboard from '../../components/ClubCatalogKeyboard.astro';
+import SemanticIcon from '../../components/design-system/SemanticIcon.astro';
+import '../../components/design-system/product-contour-foundations.css';
 import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 import { getInterestClubs, interestClubAbsoluteUrl } from '../../lib/clubs';
 
@@ -39,6 +41,7 @@ const structuredData = [
     data-ds-version="1"
     data-ds-variant="verified-directory"
     data-ds-state={clubs.length ? 'populated' : 'empty'}
+    data-ke-foundation-consumer="interest-clubs-index-route"
   >
     <div class="page-shell club-page" data-club-catalog>
       <div class="club-mobile-shelf" data-club-mobile-shelf aria-label="Текущий раздел">
@@ -51,7 +54,8 @@ const structuredData = [
           <h1>Клубы по интересам</h1>
           <p class="lead">Публичные сообщества Калининградской области, у которых подтверждено несколько встреч в разные даты. Площадка или похожее название сами по себе клубом не считаются.</p>
           <p class="club-intro__count" aria-live="polite">
-            <span aria-hidden="true">▥</span>{clubs.length ? `В каталоге: ${clubs.length}` : 'Подтверждённых клубов пока нет'}
+            <span class="club-intro__count-icon" aria-hidden="true"><SemanticIcon name="catalog-grid" role="inline" /></span>
+            {clubs.length ? `В каталоге: ${clubs.length}` : 'Подтверждённых клубов пока нет'}
           </p>
         </div>
       </header>
@@ -82,65 +86,109 @@ const structuredData = [
 </EventLayout>
 
 <style>
-  .club-page { display:grid; gap:clamp(1rem,2.6vw,2rem); }
+  .club-page { display:grid; gap:var(--ke-clubs-page-gap); }
   .club-mobile-shelf { display:none; }
   .club-intro {
     overflow:hidden;
-    border-color:rgba(255,255,255,.78);
+    border-color:var(--ke-color-clubs-intro-border);
     background:
-      radial-gradient(circle at 78% 18%,rgba(151,212,255,.42),transparent 31%),
-      radial-gradient(circle at 18% 82%,rgba(240,198,132,.23),transparent 30%),
-      linear-gradient(135deg,rgba(255,253,248,.98),rgba(221,239,242,.9));
-    box-shadow:0 24px 52px rgba(64,57,49,.14);
+      radial-gradient(circle at 78% 18%,var(--ke-color-clubs-intro-sky-glow),transparent var(--ke-clubs-intro-sky-stop)),
+      radial-gradient(circle at 18% 82%,var(--ke-color-clubs-intro-gold-glow),transparent var(--ke-clubs-intro-gold-stop)),
+      linear-gradient(135deg,var(--ke-color-clubs-intro-surface-start),var(--ke-color-clubs-intro-surface-end));
+    box-shadow:var(--ke-elevation-clubs-intro);
   }
-  .club-intro .section-card__inner { display:grid; justify-items:center; padding:clamp(2.25rem,6vw,4.6rem) clamp(1rem,5vw,4rem); text-align:center; }
-  .club-intro h1 { max-width:22ch; margin:.1rem 0 .8rem; font-size:clamp(2rem,4.4vw,3.65rem); line-height:1.05; letter-spacing:-.035em; text-wrap:balance; }
-  .club-intro .lead { max-width:66ch; margin:0; color:#3d3935; font-size:clamp(1rem,1.6vw,1.18rem); line-height:1.55; }
-  .club-intro__count { width:max-content; max-width:100%; display:inline-flex; align-items:center; gap:.45rem; margin:1.35rem 0 0; padding:.48rem .85rem; border:1px solid rgba(255,255,255,.88); border-radius:999px; background:rgba(255,255,255,.62); color:#263f43; box-shadow:0 10px 26px rgba(51,67,68,.13); font-weight:850; }
-  .club-intro__count span { color:#6b7e80; }
-  .club-list { display:grid; grid-template-columns:repeat(var(--club-columns),minmax(0,1fr)); gap:clamp(1rem,2.2vw,1.65rem); min-width:0; }
+  .club-intro .section-card__inner {
+    display:grid;
+    justify-items:center;
+    padding:var(--ke-clubs-intro-padding-block) var(--ke-clubs-intro-padding-inline);
+    text-align:center;
+  }
+  .club-intro h1 {
+    max-width:var(--ke-clubs-intro-heading-max);
+    margin:var(--ke-clubs-intro-heading-margin);
+    font-size:var(--ke-clubs-intro-heading-size);
+    line-height:var(--ke-clubs-intro-heading-line);
+    letter-spacing:var(--ke-clubs-intro-heading-letter);
+    text-wrap:balance;
+  }
+  .club-intro .lead {
+    max-width:var(--ke-clubs-intro-lead-max);
+    margin:0;
+    color:var(--ke-color-clubs-intro-lead);
+    font-size:var(--ke-clubs-intro-lead-size);
+    line-height:var(--ke-clubs-intro-lead-line);
+  }
+  .club-intro__count {
+    width:max-content;
+    max-width:100%;
+    display:inline-flex;
+    align-items:center;
+    gap:var(--ke-clubs-count-gap);
+    margin:var(--ke-clubs-count-margin);
+    padding:var(--ke-clubs-count-padding-block) var(--ke-clubs-count-padding-inline);
+    border:var(--ke-clubs-count-border) solid var(--ke-color-clubs-count-border);
+    border-radius:var(--ke-clubs-count-radius);
+    background:var(--ke-color-clubs-count-surface);
+    color:var(--ke-color-clubs-count-text);
+    box-shadow:var(--ke-elevation-clubs-count);
+    font-weight:var(--ke-clubs-count-weight);
+  }
+  .club-intro__count-icon { display:inline-flex; color:var(--ke-color-clubs-count-icon); }
+  .club-list {
+    display:grid;
+    grid-template-columns:repeat(var(--club-columns),minmax(0,1fr));
+    gap:var(--ke-clubs-list-gap);
+    min-width:0;
+  }
   .club-empty { text-align:center; }
-  .club-empty .secondary-button { margin-top:.7rem; }
+  .club-empty .secondary-button { margin-top:var(--ke-clubs-empty-action-margin-top); }
   .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
   @media (max-width: 760px) {
-    .club-page { gap:1rem; }
+    .club-page { gap:var(--ke-clubs-page-gap-compact); }
     .club-mobile-shelf {
       position:sticky;
-      z-index:48;
-      top:var(--ke-site-header-bar-height);
-      min-height:52px;
-      margin:-1.2rem -12px 0;
-      padding:.55rem 12px;
+      z-index:var(--ke-clubs-mobile-shelf-layer);
+      top:var(--ke-clubs-mobile-shelf-top);
+      min-height:var(--ke-clubs-mobile-shelf-min-height);
+      margin:var(--ke-clubs-mobile-shelf-margin);
+      padding:var(--ke-clubs-mobile-shelf-padding-block) var(--ke-clubs-mobile-shelf-padding-inline);
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap:.75rem;
-      border-block:1px solid rgba(121,48,20,.14);
-      background:rgba(255,250,242,.97);
-      color:#221a14;
-      box-shadow:0 7px 16px rgba(72,45,25,.07);
-      backdrop-filter:blur(12px);
+      gap:var(--ke-clubs-mobile-shelf-gap);
+      border-block:var(--ke-clubs-mobile-shelf-border) solid var(--ke-color-clubs-mobile-shelf-border);
+      background:var(--ke-color-clubs-mobile-shelf-surface);
+      color:var(--ke-color-clubs-mobile-shelf-text);
+      box-shadow:var(--ke-elevation-clubs-mobile-shelf);
+      backdrop-filter:blur(var(--ke-clubs-mobile-shelf-blur));
     }
     .club-mobile-shelf strong {
       min-width:0;
       overflow:hidden;
-      font-size:1rem;
-      font-weight:900;
-      letter-spacing:-.025em;
-      line-height:1.1;
+      font-size:var(--ke-clubs-mobile-title-size);
+      font-weight:var(--ke-clubs-mobile-title-weight);
+      letter-spacing:var(--ke-clubs-mobile-title-letter);
+      line-height:var(--ke-clubs-mobile-title-line);
       text-overflow:ellipsis;
       white-space:nowrap;
     }
     .club-mobile-shelf span {
       flex:none;
-      color:#793014;
-      font-size:.72rem;
-      font-weight:850;
+      color:var(--ke-color-clubs-mobile-shelf-meta);
+      font-size:var(--ke-clubs-mobile-meta-size);
+      font-weight:var(--ke-clubs-mobile-meta-weight);
       white-space:nowrap;
     }
-    .club-intro .section-card__inner { justify-items:start; padding:1.3rem 1rem; text-align:left; }
-    .club-intro h1 { max-width:15ch; font-size:clamp(1.85rem,9vw,2.55rem); }
-    .club-intro .lead { font-size:1rem; }
+    .club-intro .section-card__inner {
+      justify-items:start;
+      padding:var(--ke-clubs-mobile-intro-padding-block) var(--ke-clubs-mobile-intro-padding-inline);
+      text-align:left;
+    }
+    .club-intro h1 {
+      max-width:var(--ke-clubs-mobile-heading-max);
+      font-size:var(--ke-clubs-mobile-heading-size);
+    }
+    .club-intro .lead { font-size:var(--ke-clubs-mobile-lead-size); }
     .club-list { grid-template-columns:1fr; }
   }
 </style>
