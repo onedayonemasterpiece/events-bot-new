@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   normalizeStaticSitePageClasses,
@@ -14,6 +15,15 @@ test('page classes are normalized and all cannot be combined', () => {
   assert.deepEqual(STATIC_SITE_PAGE_CLASSES, [
     'event', 'date', 'weekend', 'collection', 'personal', 'focus', 'partner', 'lab',
   ]);
+});
+
+test('the selector reads the one versioned page-class contract', () => {
+  const contract = JSON.parse(readFileSync(
+    new URL('./static-site-page-classes.v1.json', import.meta.url),
+    'utf8',
+  ));
+  assert.equal(contract.schema_version, 'kenigevents_static_site_page_classes_v1');
+  assert.deepEqual(STATIC_SITE_PAGE_CLASSES, Object.keys(contract.classes));
 });
 
 test('actual Astro route owners map to stable page classes', () => {

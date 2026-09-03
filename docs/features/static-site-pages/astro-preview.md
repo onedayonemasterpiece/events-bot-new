@@ -25,14 +25,21 @@ no-op or artifact-only run preserves the previous immutable target; an
 incomplete receipt resolves to unavailable. Production `/`, `current.json` and
 stable `/ics/*` stay untouched.
 
-For a cross-surface product review, build the real-data tree and run both
-generated gates against the same immutable id:
+For a local focused diagnostic, build the selected real-data route family and
+run its generated gates against the same immutable id:
 
 ```bash
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run build:preview
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:preview
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototype
 ```
+
+That local output is not a Review Preview and must not be published. A complete
+or owner-facing Review Preview always invokes
+`scripts/run_static_site_builder_kaggle.py`, which builds and checks on Kaggle,
+downloads the hash-bound artifact and publishes only that checked artifact.
+Optional focused publication uses the same page-class selector whose sole
+allowlist is `site/scripts/static-site-page-classes.v1.json`.
 
 `check:preview` treats a date listing without mobile event rows as valid only
 when the generated page retains the mobile rail shell and renders the explicit

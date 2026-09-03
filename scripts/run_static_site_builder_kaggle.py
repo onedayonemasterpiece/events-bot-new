@@ -33,6 +33,7 @@ if str(ROOT) not in sys.path:
 from runtime_disk import runtime_scratch_health, writable_disk_health
 from static_site_release import (
     STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA,
+    STATIC_SITE_PREVIEW_PAGE_CLASSES,
     STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
     resolve_build_clock,
     publish_preview_archive,
@@ -73,9 +74,7 @@ ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
 BUILD_ID_RE = re.compile(r'(?:preview|production)-[A-Za-z0-9][A-Za-z0-9._-]{0,191}')
 SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-[A-Za-z0-9_-]+')
 SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
-STATIC_SITE_PAGE_CLASSES = frozenset({
-    'event', 'date', 'weekend', 'collection', 'personal', 'focus', 'partner', 'lab',
-})
+STATIC_SITE_PAGE_CLASSES = STATIC_SITE_PREVIEW_PAGE_CLASSES - {'all'}
 DEFAULT_DURABLE_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
 

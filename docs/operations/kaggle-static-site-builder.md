@@ -52,7 +52,12 @@ build prefix.
 
 `preview` accepts repeatable `--page-class` (or
 `STATIC_SITE_PAGE_CLASSES=event,date`). `all` is the default and cannot be
-combined with named classes. The stable classes are:
+combined with named classes. The one machine-readable allowlist and route-owner
+mapping is
+`site/scripts/static-site-page-classes.v1.json`. Astro, the local invocation
+path, Kaggle and the checked host publisher all consume that same contract;
+`my-data-hub` may pass a class name but must not copy this list. The stable
+classes are:
 
 | Class | Route family |
 |---|---|

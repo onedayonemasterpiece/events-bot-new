@@ -13,6 +13,8 @@ Use this skill only in `/home/dev/projects/events-bot-new`.
 - Kaggle kernel: `kaggle/StaticSiteBuilder/static_site_builder.py`
 - Kernel metadata: `kaggle/StaticSiteBuilder/kernel-metadata.json`
 - Data export: `site/scripts/export-production-preview-data.py`
+- Page-class contract: `site/scripts/static-site-page-classes.v1.json`
+- Page-class Astro adapter: `site/scripts/page-class-build-filter.mjs`
 - Astro site: `site/`
 - Outbox handoff: `models.py` `JobTask.static_site_build`, `main.py` `job_static_site_build_kaggle`
 - Docs: `docs/features/static-site-pages/astro-preview.md`
@@ -30,6 +32,8 @@ Reuse the existing events-bot Kaggle infrastructure:
    `--publish-preview`; never upload a locally generated `site/dist` tree.
 7. Use repeatable preview-only `--page-class` values for focused runs. A
    production candidate must remain `all`/full-catalog.
+8. Read page-class names from the versioned contract; do not duplicate the
+   allowlist in a caller, MCP facade or second runner.
 
 ## Known Kaggle pitfalls already solved
 

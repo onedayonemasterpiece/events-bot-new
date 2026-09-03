@@ -1,52 +1,22 @@
-const PAGE_CLASS_COMPONENTS = Object.freeze({
-  event: [
-    'src/pages/sobytiya/',
-    'src/pages/data/discovery/',
-  ],
-  date: [
-    'src/pages/index.astro',
-    'src/pages/segodnya/',
-    'src/pages/zavtra/',
-    'src/pages/date-[date].astro',
-    'src/pages/data/event-dates.json.ts',
-  ],
-  weekend: [
-    'src/pages/vyhodnye/',
-  ],
-  collection: [
-    'src/pages/artefakty/',
-    'src/pages/festivali/',
-    'src/pages/kluby-po-interesam/',
-    'src/pages/neobychnoe/',
-    'src/pages/podborki/',
-    'src/pages/populyarnoe/',
-    'src/pages/vystavki/',
-  ],
-  personal: [
-    'src/pages/data/personal-feed.json.ts',
-    'src/pages/dlya-menya/',
-    'src/pages/izbrannoe/',
-    'src/pages/manifest.webmanifest.ts',
-    'src/pages/poisk/',
-    'src/pages/pwa-sw.js.ts',
-    'src/pages/zakrytaya-afisha/',
-  ],
-  focus: [
-    'src/pages/fokus-gruppa/',
-  ],
-  partner: [
-    'src/pages/partners/',
-    'src/pages/partnerstvo/',
-  ],
-  lab: [
-    'src/pages/lab/',
-  ],
-});
+import { readFileSync } from 'node:fs';
 
-const ALWAYS_PREVIEW_COMPONENTS = Object.freeze([
-  'src/pages/[preview]/index.astro',
-  'src/pages/robots.txt.ts',
-]);
+const PAGE_CLASS_CONTRACT = JSON.parse(readFileSync(
+  new URL('./static-site-page-classes.v1.json', import.meta.url),
+  'utf8',
+));
+
+if (
+  PAGE_CLASS_CONTRACT?.schema_version !== 'kenigevents_static_site_page_classes_v1'
+  || !PAGE_CLASS_CONTRACT.classes
+  || typeof PAGE_CLASS_CONTRACT.classes !== 'object'
+  || Array.isArray(PAGE_CLASS_CONTRACT.classes)
+  || !Array.isArray(PAGE_CLASS_CONTRACT.always_preview_components)
+) {
+  throw new Error('Invalid static-site page-class contract');
+}
+
+const PAGE_CLASS_COMPONENTS = Object.freeze(PAGE_CLASS_CONTRACT.classes);
+const ALWAYS_PREVIEW_COMPONENTS = Object.freeze(PAGE_CLASS_CONTRACT.always_preview_components);
 
 export const STATIC_SITE_PAGE_CLASSES = Object.freeze(Object.keys(PAGE_CLASS_COMPONENTS));
 

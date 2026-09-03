@@ -44,9 +44,35 @@ SECRET_CANDIDATE_MANIFEST_SCHEMA = "static_secret_candidate_manifest_v1"
 SECRET_CANDIDATE_TOKEN_RE = r"[A-Za-z0-9_-]{43}"
 STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA = "static_site_image_source_manifest_v1"
 STATIC_SITE_SOURCE_IDENTITY_SCHEMA = "static_site_source_identity_v1"
-STATIC_SITE_PREVIEW_PAGE_CLASSES = frozenset({
-    "all", "event", "date", "weekend", "collection", "personal", "focus", "partner", "lab",
-})
+STATIC_SITE_PAGE_CLASS_CONTRACT_SCHEMA = "kenigevents_static_site_page_classes_v1"
+
+
+def _load_static_site_preview_page_classes() -> frozenset[str]:
+    path = Path(__file__).resolve().parent / "site" / "scripts" / "static-site-page-classes.v1.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"static-site page-class contract unreadable: {path}") from exc
+    if not isinstance(payload, Mapping):
+        raise RuntimeError("static-site page-class contract invalid")
+    classes = payload.get("classes")
+    if (
+        payload.get("schema_version") != STATIC_SITE_PAGE_CLASS_CONTRACT_SCHEMA
+        or not isinstance(classes, Mapping)
+        or not classes
+        or any(not isinstance(key, str) or not key for key in classes)
+        or any(
+            not isinstance(patterns, list)
+            or not patterns
+            or any(not isinstance(pattern, str) or not pattern for pattern in patterns)
+            for patterns in classes.values()
+        )
+    ):
+        raise RuntimeError("static-site page-class contract invalid")
+    return frozenset({"all", *classes.keys()})
+
+
+STATIC_SITE_PREVIEW_PAGE_CLASSES = _load_static_site_preview_page_classes()
 STATIC_SITE_TIME_ZONE_NAME = "Europe/Kaliningrad"
 STATIC_SITE_TIME_ZONE = ZoneInfo(STATIC_SITE_TIME_ZONE_NAME)
 STATIC_SITE_FINGERPRINT_SCHEMA = "static_site_input_fingerprint_v1"

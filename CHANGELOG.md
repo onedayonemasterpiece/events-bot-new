@@ -8,7 +8,9 @@
   Preview runs can select stable route families with repeatable
   `--page-class`, publish create-only below `/<buildId>/`, and verify the exact
   `/<buildId>/__preview/` URL. Production candidates remain full-catalog and
-  reject page-class slicing.
+  reject page-class slicing. The Astro filter, Python runner and checked
+  publisher now validate against one versioned page-class contract instead of
+  maintaining independent allowlists.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK
