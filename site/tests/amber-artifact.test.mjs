@@ -7,6 +7,7 @@ const assembler = await read('../../scripts/assemble_mobile_search_calendar_prev
 const search = await read('../src/components/AuthorizedEventSearch.astro');
 const layout = await read('../src/layouts/EventLayout.astro');
 const learning = await read('../src/components/SearchCollectionLinks.astro');
+const artifactPage = await read('../src/pages/artefakty/index.astro');
 
 test('standalone Search restores the accepted flat large textarea without replacing runtime hooks', () => {
   assert.match(search, /standalone \? \(\s*<textarea[^>]*rows="3"[^>]*data-search-input/u);
@@ -18,6 +19,16 @@ test('standalone Search restores the accepted flat large textarea without replac
   assert.match(layout, /\.authorized-search--standalone \.authorized-search__submit::before \{[\s\S]*?background:\s*#98401f/u);
   assert.match(layout, /@keyframes authorized-search-submit-indeterminate \{\s*from \{ transform: translateX\(-70%\); \}\s*to \{ transform: translateX\(180%\); \}/u);
   assert.match(learning, /input instanceof HTMLInputElement \|\| input instanceof HTMLTextAreaElement/u);
+});
+
+test('artifact route keeps one normalized research composition and central unavailable text role', () => {
+  assert.match(artifactPage, /import '\.\.\/\.\.\/components\/design-system\/product-contour-foundations\.css'/u);
+  assert.match(artifactPage, /data-ds-family="ArtifactCollectionRouteComposition"/u);
+  assert.match(artifactPage, /data-ds-version="1"/u);
+  assert.match(artifactPage, /data-ds-variant="research-collection"/u);
+  assert.match(artifactPage, /data-ds-state=\{artifactResearchEnabled \? 'enabled' : 'unavailable'\}/u);
+  assert.match(artifactPage, /color:var\(--ke-color-text-muted\)/u);
+  assert.doesNotMatch(artifactPage, /color:\s*#76645a/u);
 });
 
 test('amber prototype builds two isolated placements without nesting a button inside the event link', () => {
