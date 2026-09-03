@@ -92,9 +92,10 @@ const description = 'Локальный прототип персонализа�
     const syncPageState = () => {
       const signedInNode = page.querySelector<HTMLElement>('[data-static-auth-signed-in]');
       const focusTools = page.querySelector<HTMLElement>('[data-focus-personal-tools]');
-      const profile = page.querySelector<HTMLElement>('[data-interest-profile]');
+      const profile = page.querySelector<HTMLElement>('[data-focus-product]');
+      const workspace = profile?.querySelector<HTMLElement>('[data-focus-workspace]');
       const signedIn = Boolean(signedInNode && !signedInNode.hidden);
-      const personalized = Boolean(profile?.dataset.interestProfileState && profile.dataset.interestProfileState !== 'empty');
+      const personalized = Boolean(workspace && !workspace.hidden);
       page.dataset.dsState = [
         signedIn ? 'authorized' : 'anonymous',
         personalized ? 'profiled' : 'cold-start',
@@ -104,7 +105,7 @@ const description = 'Локальный прототип персонализа�
     new MutationObserver(syncPageState).observe(page, {
       subtree:true,
       attributes:true,
-      attributeFilter:['hidden', 'data-interest-profile-state'],
+      attributeFilter:['hidden'],
     });
     syncPageState();
   }
