@@ -23,4 +23,6 @@ test('preview gate verifies MediaFrame v1 diagnostics instead of retired rail va
   assert.doesNotMatch(gate, /--focus-[xy]:/u);
   assert.match(gate, /Current generated catalog has no visual-only 140x112 cover rail canary/u);
   assert.match(gate, /More vnutri 4211 OCR media must remain fail-closed/u);
+  assert.match(gate, /isMobileRailDeclaredEmpty/u);
+  assert.match(gate, /data-ds-state="empty"/u);
 });

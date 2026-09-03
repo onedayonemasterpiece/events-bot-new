@@ -91,6 +91,8 @@ test('Wave 2 responsive strategies and legacy adapter mapping remain explicit', 
   assert.match(adaptive, /@media \(max-width: 1023px\)[\s\S]*adaptive-event-card-grid--responsive-stack/u);
   assert.match(adaptive, /@media \(max-width: 960px\)[\s\S]*adaptive-event-card-grid--responsive-progressive/u);
   assert.match(adaptive, /@media \(max-width: 620px\)[\s\S]*adaptive-event-card-grid--responsive-progressive/u);
+  assert.match(adaptive, /adaptive-event-card-grid--responsive-stack\[data-adaptive-grid-row-size\] > :global\(\.event-card\)/u);
+  assert.match(adaptive, /adaptive-event-card-grid--responsive-progressive\[data-adaptive-grid-row-size\] > :global\(\.event-card\)/u);
   assert.match(legacy, /responsive=\{responsiveMobile \? 'stack' : 'fixed'\}/u);
   assert.doesNotMatch(legacy, /<style>|packRelatedCardRows|<EventCard\b/u);
 });
