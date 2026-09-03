@@ -2,6 +2,7 @@
 import AdaptiveEventCardGrid from '../../../components/AdaptiveEventCardGrid.astro';
 import Breadcrumbs from '../../../components/Breadcrumbs.astro';
 import FreeCollectionSurface from '../../../components/FreeCollectionSurface.astro';
+import '../../../components/design-system/product-contour-foundations.css';
 import EventLayout from '../../../layouts/EventLayout.astro';
 import {
   getMaterializedSearchCollection,
@@ -27,6 +28,7 @@ const canonicalUrl = absoluteUrl(`/podborki/${collection.slug}/`);
 const title = `${collection.title} | ${SITE_NAME}`;
 const updatedDate = getPreviewBuild().current_date;
 const referenceDate = getMaterializedSearchCollectionReferenceDate();
+const routeState = events.length ? 'populated' : fallbackEvents.length ? 'empty-with-fallback' : 'empty';
 ---
 <EventLayout
   title={title}
@@ -46,7 +48,14 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
       events={events}
     />
   ) : (
-  <main id="main">
+  <main
+    id="main"
+    data-ds-family="MaterializedCollectionRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="editorial-search-collection"
+    data-ds-state={routeState}
+    data-materialized-collection-route={collection.slug}
+  >
     <div class="page-shell page-shell--search-collection">
       <Breadcrumbs
         parents={[

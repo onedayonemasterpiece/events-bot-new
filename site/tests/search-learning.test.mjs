@@ -20,6 +20,13 @@ test('materialized collections are real static links and examples are fill-only 
   assert.doesNotMatch(learning, /form\.requestSubmit|form\.submit|window\.location|fetch\(/u);
   assert.match(learning, /пример/u);
   assert.match(learning, /Личные сохранённые запросы[\s\S]*только после входа/u);
+  assert.match(learning, /import '\.\/design-system\/product-contour-foundations\.css'/u);
+  assert.match(learning, /data-ds-family="SearchCollectionLinks"/u);
+  assert.match(learning, /data-ds-version="1"/u);
+  assert.match(learning, /data-ds-variant="materialized-and-fill-only"/u);
+  assert.match(learning, /--ke-color-border-brand-soft/u);
+  assert.match(learning, /--ke-color-border-brand-quiet/u);
+  assert.doesNotMatch(learning, /rgba\(121,\s*48,\s*20,\s*0\.(?:11|13)\)/u);
 });
 
 test('technical seed-tag copy is removed from the Search page', () => {
@@ -51,12 +58,17 @@ test('configured Search accepts a draft before auth and resumes it after Yandex 
   assert.match(donor, /removeJsonStorage\(searchDraftKey\);\s*if \(input\) input\.value = draft\.query;\s*await runSearch/u);
 });
 
-test('materialized collection routes use canonical large EventCard without bespoke result rows', () => {
-  assert.match(collectionPage, /import EventCard from/u);
-  assert.match(collectionPage, /events\.map\(\(event\) => <EventCard event=\{event\} mobileFlowMedia \/>\)/u);
-  assert.match(collectionPage, /data-search-collection-results/u);
+test('materialized collection routes use canonical adaptive EventCard grids without bespoke result rows', () => {
+  assert.match(collectionPage, /import AdaptiveEventCardGrid from/u);
+  assert.match(collectionPage, /data-ds-family="MaterializedCollectionRouteComposition"/u);
+  assert.match(collectionPage, /data-ds-version="1"/u);
+  assert.match(collectionPage, /data-ds-variant="editorial-search-collection"/u);
+  assert.match(collectionPage, /<AdaptiveEventCardGrid[\s\S]*events=\{events\}[\s\S]*mode="flow"[\s\S]*rowSize=\{3\}[\s\S]*responsive="progressive"/u);
+  assert.match(collectionPage, /'data-search-collection-results'\s*:\s*''/u);
+  assert.match(collectionPage, /<AdaptiveEventCardGrid[\s\S]*events=\{fallbackEvents\}[\s\S]*'data-search-collection-fallback-results'\s*:\s*''/u);
   assert.match(collectionPage, /noindex/u);
   assert.doesNotMatch(collectionPage, /EventListItem|authorized-search__vector-card|search-result-row/u);
+  assert.doesNotMatch(collectionPage, /events\.map\([^\n]*<EventCard/u);
   assert.match(collections, /collapseOccurrenceCards\(matches, 'per-family'\)/u);
 });
 

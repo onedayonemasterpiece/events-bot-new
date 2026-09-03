@@ -1,5 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import '../../components/design-system/product-contour-foundations.css';
 import { INFO_PARTNERS } from '../../data/info-partners';
 import type { InfoPartner } from '../../data/info-partners';
 import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
@@ -11,7 +12,15 @@ const webpSource = (partner: InfoPartner) => Boolean(partner.logoUrl?.endsWith('
 const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.webp') ? (partner.logoFallbackUrl || partner.logoUrl) : partner.logoUrl;
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="partners-page">
+  <main
+    id="main"
+    class="partners-page"
+    data-ds-family="PartnersRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="official-logo-board"
+    data-ds-state={INFO_PARTNERS.length ? 'populated' : 'empty'}
+    data-partners-route
+  >
     <div class="page-shell page-shell--compact">
       <header class="partners-heading">
         <p class="eyebrow">Партнёры</p>
@@ -67,7 +76,7 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
     letter-spacing: -0.065em;
     line-height: 0.98;
   }
-  .partners-heading p { margin: 0; max-width: 36rem; color: var(--muted); }
+  .partners-heading p { margin: 0; max-width: 36rem; color: var(--ke-color-text-muted); }
 
   .partners-grid {
     --cell-h: 76px;
@@ -94,11 +103,11 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
     justify-items: center;
     gap: 0;
     padding: 0;
-    color: var(--text);
+    color: var(--ke-color-text-primary);
     text-decoration: none;
   }
   .partner-tile:hover .partner-tile__meta span,
-  .partner-tile:focus-visible .partner-tile__meta span { color: var(--ink); }
+  .partner-tile:focus-visible .partner-tile__meta span { color: var(--ke-color-text-primary); }
   .partner-tile:hover .partner-tile__logo-img,
   .partner-tile:focus-visible .partner-tile__logo-img,
   .partner-tile:hover .partner-tile__text-logo,
@@ -168,7 +177,7 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
   .partner-tile__meta span {
     max-width: min(100%, 18rem);
     overflow-wrap: anywhere;
-    color: var(--muted);
+    color: var(--ke-color-text-muted);
     font-size: clamp(0.66rem, 1.08vw, 0.76rem);
     font-weight: 650;
     letter-spacing: -0.015em;

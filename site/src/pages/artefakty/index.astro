@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import ArtifactCollection from '../../components/artifacts/ArtifactCollection.astro';
+import '../../components/design-system/product-contour-foundations.css';
 import { absoluteUrl, SITE_MODE, SITE_NAME } from '../../lib/events';
 import { isAmberArtifactResearchEnabled } from '../../lib/artifacts.mjs';
 
@@ -34,5 +35,5 @@ const artifactResearchEnabled = isAmberArtifactResearchEnabled(
 </EventLayout>
 
 <style>
-  .artifact-unavailable{width:min(760px,calc(100% - 24px));margin:0 auto;padding:80px 0;color:#76645a}
+  .artifact-unavailable{width:min(760px,calc(100% - 24px));margin:0 auto;padding:80px 0;color:var(--ke-color-text-muted)}
 </style>

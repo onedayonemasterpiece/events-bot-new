@@ -1,8 +1,18 @@
 ---
+import './design-system/product-contour-foundations.css';
 import { searchLearningItems } from '../data/searchCollections';
 import { withBase } from '../lib/events';
 ---
-<section class="search-collections" aria-labelledby="search-collections-title" data-search-collections data-nosnippet>
+<section
+  class="search-collections"
+  data-ds-family="SearchCollectionLinks"
+  data-ds-version="1"
+  data-ds-variant="materialized-and-fill-only"
+  data-ds-state={searchLearningItems.length ? 'populated' : 'empty'}
+  aria-labelledby="search-collections-title"
+  data-search-collections
+  data-nosnippet
+>
   <p class="eyebrow">Можно начать отсюда</p>
   <h2 id="search-collections-title">Готовые подборки</h2>
   <p class="search-collections__intro">Фразы показывают, как можно описывать желание целиком — не только выбирать один жанр.</p>
@@ -65,11 +75,11 @@ import { withBase } from '../lib/events';
   .search-collections {
     margin-top: 1.1rem;
     padding: clamp(1rem, 3.5vw, 1.5rem) clamp(.15rem, 2vw, .75rem) 0;
-    border-top: 1px solid rgba(121, 48, 20, 0.13);
+    border-top: var(--ke-shape-border-hairline) solid var(--ke-color-border-brand-soft);
   }
   .search-collections h2 { margin-bottom: .35rem; }
   .search-collections__intro,
-  .search-collections__note { margin: 0; color: var(--muted); }
+  .search-collections__note { margin: 0; color: var(--ke-color-text-muted); }
   .search-collections__intro { max-width: 58ch; }
   .search-collections__list {
     display: grid;
@@ -87,10 +97,10 @@ import { withBase } from '../lib/events';
     gap: .8rem;
     padding: .72rem 0;
     border: 0;
-    border-bottom: 1px solid rgba(121, 48, 20, 0.11);
+    border-bottom: var(--ke-shape-border-hairline) solid var(--ke-color-border-brand-quiet);
     border-radius: 0;
     background: transparent;
-    color: var(--text);
+    color: var(--ke-color-text-primary);
     font: inherit;
     font-weight: 720;
     line-height: 1.3;
@@ -98,10 +108,10 @@ import { withBase } from '../lib/events';
     text-decoration: none;
     cursor: pointer;
   }
-  .search-collections__item:hover { color: var(--primary-strong); }
-  .search-collections__arrow { color: var(--primary); font-size: 1.35rem; line-height: 1; }
+  .search-collections__item:hover { color: var(--ke-color-action-primary-strong); }
+  .search-collections__arrow { color: var(--ke-color-action-primary); font-size: 1.35rem; line-height: 1; }
   .search-collections__example-label {
-    color: var(--muted);
+    color: var(--ke-color-text-muted);
     font-size: .72rem;
     font-weight: 650;
     text-transform: lowercase;
