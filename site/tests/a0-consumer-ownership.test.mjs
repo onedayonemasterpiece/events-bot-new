@@ -4,21 +4,34 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('Popular owns one mobile rail and no hidden density-era representations', async () => {
-  const source = await read('src/components/listings/PopularListingSurface.astro');
+test('Popular preserves the accepted density choice alongside the canonical rail', async () => {
+  const [surface, density] = await Promise.all([
+    read('src/components/listings/PopularListingSurface.astro'),
+    read('src/components/listings/ListingMobileDensitySwitch.astro'),
+  ]);
 
-  assert.match(source, /import MobileListingRailSurface from/u);
-  assert.equal((source.match(/<MobileListingRailSurface\b/gu) || []).length, 1);
-  assert.match(source, /<PopularBehaviorRows[\s\S]*<PopularPersonalizedRow/u);
-  for (const obsolete of [
-    'PopularMobileBehaviorRows',
-    'PopularMobileAdaptiveRows',
-    'PopularMobileGroupContext',
-    'ListingMobileDensitySwitch',
-    'ke-popular-mobile-existing',
-    'data-mobile-card-density',
-    'ke_popular_mobile_density_v1',
-  ]) assert.ok(!source.includes(obsolete), `Popular retains obsolete owner ${obsolete}`);
+  assert.match(surface, /import MobileListingRailSurface from/u);
+  assert.equal((surface.match(/<MobileListingRailSurface\b/gu) || []).length, 1);
+  assert.match(surface, /<PopularBehaviorRows[\s\S]*<PopularPersonalizedRow/u);
+  assert.match(surface, /import PopularMobileBehaviorRows from/u);
+  assert.match(surface, /import PopularMobileAdaptiveRows from/u);
+  assert.match(surface, /import ListingMobileDensitySwitch from/u);
+  assert.match(surface, /data-mobile-card-density="large"/u);
+  assert.match(surface, /ke_listing_density_v2/u);
+  assert.match(surface, /<PopularMobileBehaviorRows groups=\{groups\} \/>/u);
+  assert.match(surface, /<PopularMobileAdaptiveRows groups=\{groups\} \/>/u);
+  assert.match(surface, /<ListingMobileDensitySwitch \/>/u);
+
+  assert.match(density, /role="radiogroup" aria-label="Размер карточек"/u);
+  assert.match(density, />\s*Крупно\s*<\/button>/u);
+  assert.match(density, />\s*Компактно\s*<\/button>/u);
+  assert.match(density, /const DENSITY_STORAGE_KEY = 'ke_listing_density_v2'/u);
+  assert.match(density, /representationFor/u);
+  assert.match(density, /visibleAnchor/u);
+  assert.match(density, /ArrowLeft|ArrowRight/u);
+  assert.match(density, /pinchDistance/u);
+  assert.match(density, /touchmove/u);
+  assert.match(density, /listing:density-change/u);
 });
 
 test('collection route delegates item markup and styles to one canonical catalog root', async () => {
