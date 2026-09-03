@@ -1,0 +1,65 @@
+{
+  "schema_version": "kenigevents.n0-current-ref-overlay.v1",
+  "version": "1.0.0",
+  "contract_version": "1.9.0",
+  "role": "N0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "observed_at": "2026-09-03T17:45:00Z",
+  "supersedes": {
+    "file": "site/scripts/n0-successor-acceptance.v1.json",
+    "scope": "current_refs_and_evidence_cutoff_only",
+    "acceptance_semantics_changed": false
+  },
+  "latest_meaningful_comment": {
+    "id": 5529571393,
+    "classification": "F0_CURRENT_REF_AND_N0_ACCEPTANCE_CORRECTION"
+  },
+  "refs": {
+    "programme": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
+    "legacy_combined_candidate": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+    "source_successor": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "N0_before_this_overlay": "394587f1a97021a80995465722c3c019704a0900",
+    "F0_source_boundary": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+    "F0_current_reporting_head": "0246d5bc1cd606bf5e71d4d3419892d63c54216e",
+    "M0_source_boundary": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+    "M0_current_downstream_head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "A0": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+    "thin_sot": "de6dbfc3b7b920a9a829923cc7eca3150f526079"
+  },
+  "classification": {
+    "source_successor": "SOURCE_ACCEPTED_INTERMEDIATE_CURRENT_SUCCESSOR",
+    "F0_source": "ACCEPTED_REQUIRED_A0_CONSUMPTION_PENDING",
+    "F0_reporting": "REVIEW_EVIDENCE_NOT_RUNTIME_INPUT",
+    "M0_source_and_downstream": "ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD",
+    "A0": "PARTIAL_17_OF_19_WHOLE_BRANCH_MERGE_FORBIDDEN",
+    "thin_sot": "CURRENT_MACHINE_BINDINGS_NOT_NATIVE_PENPOT"
+  },
+  "build_critical_refs": [
+    "source_successor",
+    "F0_source_boundary",
+    "M0_source_boundary",
+    "M0_current_downstream_head",
+    "A0",
+    "current N0 descendant at materialization"
+  ],
+  "non_build_critical_refs": [
+    "F0_current_reporting_head",
+    "thin_sot current descendant after the accepted machine-binding checkpoint"
+  ],
+  "remaining_source_clusters": [
+    "F0_ROUTE_THEME_CONSUMPTION",
+    "F0_INTEREST_CLUB_CARD_RESIDUAL",
+    "A0_FOCUS_ROUTE_IDENTITIES"
+  ],
+  "v0": {
+    "fresh_real_baseline_repo_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+    "platform_blocker_comment": 5529063082,
+    "browser_verdict": "NOT_EXECUTED"
+  },
+  "truth_boundary": {
+    "reporting_head_is_not_runtime_source": true,
+    "source_acceptance_is_not_executable_pass": true,
+    "published_baseline_is_not_current_successor_pass": true,
+    "penpot_spec_is_not_penpot_materialization": true
+  }
+}
