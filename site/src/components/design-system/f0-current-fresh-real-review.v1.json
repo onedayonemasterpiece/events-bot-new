@@ -1,0 +1,154 @@
+{
+  "schema": "kenigevents.f0-current-fresh-real-review.v1",
+  "version": "1.0.0",
+  "status": "VALID_CURRENT_PUBLIC_PRE_F0_BASELINE_NOT_F0_CONSUMED_SUCCESSOR",
+  "role": "F0",
+  "contract_version": "1.10.0",
+  "pm0_version": "2.3.0",
+  "issue_result": 5529740140,
+  "preview": {
+    "url": "https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/",
+    "manifest": "https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/preview-build.json",
+    "source_sha": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "build_id": "preview-real-1bc6d9cb-normalized-20260903-v1",
+    "snapshot_id": "issue621-real-9152994b-20260903T144827Z",
+    "kaggle_status": "COMPLETE",
+    "owner_http_status": 200,
+    "manifest_http_status": 200,
+    "root_mutation": false,
+    "stable_ics_mutation": false
+  },
+  "accepted_evidence": {
+    "canonical_single_kaggle_pipeline": true,
+    "matching_manifest_source_sha": true,
+    "explicit_pre_f0_ancestry": true,
+    "festival_external_links_safe": true,
+    "r0_isolated_browser_matrix": {
+      "cases": 176,
+      "http_failures": 0,
+      "document_overflow_cases": 0,
+      "console_error_cases": 0,
+      "request_failure_cases": 0
+    },
+    "r0_focused_matrix": {
+      "cases": 77,
+      "negative_targets_under_44": 0,
+      "unsafe_external_targets": 0,
+      "data_ds_identity_missing": 0,
+      "media_fit_mismatches": 0,
+      "media_frame_escapes": 0,
+      "nested_interactive": 0
+    },
+    "boundary": "R0 technical/browser evidence is accepted as source-bound product evidence but is not an independent V0 verdict"
+  },
+  "f0_ancestry": {
+    "present_ancestor": "de92dabd4551e117ca1af1be7915ff223321cc32",
+    "accepted_route_theme_source_missing": "f2b9927e25ac0566d35577f69c574cedadab27d7",
+    "accepted_club_theme_source_missing": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+    "classification": "BUILD_PRECEDES_CURRENT_ACCEPTED_F0_SOURCE"
+  },
+  "missing_f0_contract_files_on_build_sha": [
+    "site/src/components/design-system/route-theme-foundations.css",
+    "site/src/components/design-system/f0-route-theme-bindings.v1.json",
+    "site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "site/src/components/design-system/interest-club-card-continuity-foundations.css",
+    "site/src/components/design-system/f0-interest-club-theme-decision.v1.json",
+    "site/src/components/design-system/check-f0-interest-club-theme-decision.mjs"
+  ],
+  "source_bound_findings": [
+    {
+      "id": "F0-PREVIEW-EXHIBITIONS-PRIVATE-OWNER",
+      "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "finding": "the exact build source retains the private --ex-* palette and motion owner plus raw theme values",
+      "existing_resolution": "F0-ROUTE-THEME-CONSUMPTION",
+      "owner": "A0_R0_MECHANICAL",
+      "new_f0_work_required": false
+    },
+    {
+      "id": "F0-PREVIEW-FESTIVAL-ICON-AND-TARGET",
+      "path": "site/src/pages/festivali/index.astro",
+      "finding": "the exact build source retains Icon heart, a 0.95rem local SVG override and clamp(2rem,2.35vw,2.2rem) favorite target",
+      "existing_resolution": "F0-ROUTE-FESTIVALS binding and strict route-theme gate",
+      "owner": "A0_R0_MECHANICAL",
+      "new_f0_work_required": false
+    },
+    {
+      "id": "F0-PREVIEW-CLUB-DETAIL-LOCAL-THEME",
+      "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "finding": "the exact build source retains raw warm/mint route values and the text back-arrow glyph",
+      "existing_resolution": "F0-ROUTE-CLUB-DETAIL binding and strict route-theme gate",
+      "owner": "A0_R0_MECHANICAL",
+      "new_f0_work_required": false
+    },
+    {
+      "id": "F0-PREVIEW-CLUB-CARD-RAW-ALPHAS",
+      "path": "site/src/components/InterestClubCard.astro",
+      "finding": "the exact build source retains the four decorative alpha literals accepted for semantic substitution",
+      "existing_resolution": "F0-INTEREST-CLUB-CARD-RESIDUAL and strict club-theme gate",
+      "owner": "A0_R0_MECHANICAL",
+      "new_f0_work_required": false
+    }
+  ],
+  "strict_gate_review": {
+    "route_theme_command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "club_theme_command": "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+    "files_exist_on_build_sha": false,
+    "commands_listed_in_r0_result": false,
+    "commands_could_have_passed_on_build_sha": false,
+    "classification": "NOT_EXECUTED_NOT_APPLICABLE_TO_PRE_F0_SHA"
+  },
+  "n0_current_decision": {
+    "head": "fac1a2434ee550b37c9630c3502130574be53ecc",
+    "F0_source": "SOURCE_ACCEPTED_A0_CONSUMPTION_PENDING",
+    "preview_source": "SOURCE_ACCEPTED_INTERMEDIATE_CURRENT_SUCCESSOR_RUNTIME_RESULT_NOW_AVAILABLE",
+    "effect": "the R0 preview satisfies the public current-baseline trigger but does not satisfy N0's later required F0 consumption transaction"
+  },
+  "v0_boundary": {
+    "latest_independent_result": 5529063082,
+    "current_preview_independent_verdict": "NOT_EXECUTED",
+    "current_preview_should_be_audited": true,
+    "possible_v0_pass_scope": "source-bound 1bc6d9cb only",
+    "cannot_validate": [
+      "accepted F0 f2b9927 route-theme source",
+      "accepted F0 0fb2938 club-theme source",
+      "strict F0 post-consumption state"
+    ]
+  },
+  "f0_verdict": {
+    "accept_as_latest_public_fresh_real_baseline": true,
+    "accept_as_f0_integrated_successor": false,
+    "accept_as_f0_strict_gate_pass": false,
+    "accept_as_v0_pass": false,
+    "new_f0_implementation_item": false,
+    "reason": "all observed F0 gaps already have accepted source, exact consumer substitutions, strict gates and rollback boundaries; only downstream integration and verification remain"
+  },
+  "next_gate": {
+    "source_base": "1bc6d9cb4c122046f4782532381de953727c1da6 or current descendant",
+    "must_include": [
+      "F0 source through 0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "exact F0 route-theme consumer consumption",
+      "four exact InterestClubCard substitutions",
+      "current accepted M0/A0/N0 descendants"
+    ],
+    "must_pass": [
+      "strict F0 route-theme gate",
+      "strict F0 club-theme gate",
+      "current N0 successor suite",
+      "current production surface and iconography checks"
+    ],
+    "published_output": "a new canonical full fresh-real Kaggle preview for the exact post-F0 SHA",
+    "browser_output": "independent V0 DOM/computed-style verdict on that exact post-F0 URL"
+  },
+  "claims_not_made": [
+    "R0 preview contains accepted current F0 source",
+    "strict F0 gates passed",
+    "V0 inspected the current preview",
+    "ASTRO_NORMALIZATION_PASS",
+    "bound thin S",
+    "native Penpot materialization"
+  ],
+  "exit": {
+    "ready_owned_items": 0,
+    "remaining_external_trigger": "R0 RESULT with a new exact tested integrated successor descended from 1bc6d9cb4c122046f4782532381de953727c1da6 and containing F0 0fb2938344cf96b05be0df09dfb9e69525b3717d plus exact consumer consumption and passing both strict F0 gates; then its canonical full fresh-real Kaggle URL and an independent V0 verdict on that post-F0 URL. Independently, V0 may audit the current 1bc6d9cb URL now, but that verdict is source-bound and cannot validate later F0 source."
+  }
+}

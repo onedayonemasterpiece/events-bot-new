@@ -77,6 +77,88 @@
   --ke-color-exhibitions-medallion-fallback-surface: #17191b;
   --ke-color-exhibitions-medallion-fallback-ring: #697178;
 
+  /* Remaining visible exhibitions states. F0 owns their palette/elevation
+     identity; A0 owns selector migration and FR0 owns frame/crop/fit anatomy. */
+  --ke-color-exhibitions-title-hover: #ffffff;
+  --ke-color-exhibitions-timeline-brand-faint: rgba(84, 172, 247, 0.1);
+  --ke-color-exhibitions-timeline-brand-fainter: rgba(84, 172, 247, 0.045);
+  --ke-color-exhibitions-timeline-white-faint: rgba(255, 255, 255, 0.05);
+  --ke-color-exhibitions-timeline-mobile-mid: #6d767d;
+  --ke-color-exhibitions-timeline-mobile-end: #555e64;
+  --ke-color-exhibitions-timeline-mobile-white: rgba(255, 255, 255, 0.08);
+  --ke-elevation-exhibitions-timeline: 0 0 8px var(--ke-color-exhibitions-timeline-white-faint), 0 0 14px var(--ke-color-exhibitions-timeline-brand-fainter);
+  --ke-elevation-exhibitions-timeline-mobile: 0 0 9px var(--ke-color-exhibitions-timeline-mobile-white), 0 0 16px var(--ke-color-exhibitions-timeline-brand-faint);
+
+  --ke-color-exhibitions-row-halo-strong: rgba(84, 172, 247, 0.18);
+  --ke-color-exhibitions-row-halo-soft: rgba(84, 172, 247, 0.05);
+  --ke-color-exhibitions-row-edge-line: rgba(255, 255, 255, 0.46);
+  --ke-color-exhibitions-row-edge-brand: rgba(84, 172, 247, 0.58);
+  --ke-elevation-exhibitions-row-edge-hover: drop-shadow(0 0 9px rgba(84, 172, 247, 0.28));
+  --ke-elevation-exhibitions-row-edge-keyboard: drop-shadow(0 0 10px rgba(84, 172, 247, 0.34));
+  --ke-color-exhibitions-rail-dot-border: var(--ke-color-exhibitions-background);
+  --ke-elevation-exhibitions-rail-dot: 0 0 0 1px color-mix(in srgb, var(--ex-rail-color), white 10%), 0 0 15px color-mix(in srgb, var(--ex-rail-color), transparent 16%);
+  --ke-elevation-exhibitions-rail-dot-mobile: 0 0 0 1px var(--ex-rail-color), 0 0 16px color-mix(in srgb, var(--ex-rail-color), transparent 10%), 0 0 28px color-mix(in srgb, var(--ex-rail-color), transparent 52%);
+
+  /* Frame-state colours are supplied to the FR0 consumer contract. These
+     variables do not grant F0 ownership of dimensions, fit, crop or stacking. */
+  --ke-color-exhibitions-deck-frame-line: rgba(220, 229, 236, 0.62);
+  --ke-color-exhibitions-deck-frame-surface: #0b0d0e;
+  --ke-elevation-exhibitions-deck-frame: inset -1px 0 0 rgba(255, 255, 255, 0.14), 4px 0 12px -3px rgba(0, 0, 0, 0.82), 0 6px 18px rgba(0, 0, 0, 0.3);
+  --ke-elevation-exhibitions-deck-overlay: inset -1px 0 0 rgba(255, 255, 255, 0.22), inset 1px 0 0 rgba(255, 255, 255, 0.08);
+  --ke-color-exhibitions-deck-stack-line: rgba(230, 238, 244, 0.8);
+  --ke-elevation-exhibitions-deck-stack: inset -1px 0 0 rgba(255, 255, 255, 0.22), calc(7px - var(--deck-depth, 1) * 0.8px) 0 calc(18px - var(--deck-depth, 1) * 1.6px) -2px rgba(0, 0, 0, 0.94), 0 8px 20px rgba(0, 0, 0, 0.42);
+  --ke-color-exhibitions-skeleton-start: #171a1d;
+  --ke-color-exhibitions-skeleton-mid: #252a2e;
+  --ke-color-exhibitions-depth-start: #343a3f;
+  --ke-color-exhibitions-depth-mid: #202428;
+  --ke-color-exhibitions-depth-end: #15181a;
+  --ke-color-exhibitions-depth-line: rgba(202, 211, 218, 0.36);
+  --ke-color-exhibitions-depth-surface: #23272b;
+  --ke-elevation-exhibitions-depth-overlay: inset -1px 0 rgba(255, 255, 255, 0.13), inset 1px 0 rgba(255, 255, 255, 0.05);
+  --ke-elevation-exhibitions-medallion: 0 4px 12px rgba(0, 0, 0, 0.48), 0 0 0 2px rgba(8, 10, 11, 0.6);
+  --ke-color-exhibitions-deck-frame-line-hover: rgba(235, 244, 250, 0.84);
+  --ke-elevation-exhibitions-deck-frame-hover: inset -1px 0 0 rgba(255, 255, 255, 0.2), 5px 0 14px -3px rgba(0, 0, 0, 0.88), 0 6px 18px rgba(0, 0, 0, 0.36);
+  --ke-elevation-exhibitions-deck-stack-hover: inset -1px 0 0 rgba(255, 255, 255, 0.3), 7px 0 18px -2px rgba(0, 0, 0, 0.96), 0 8px 22px rgba(0, 0, 0, 0.46);
+  --ke-elevation-exhibitions-deck-filter-hover: drop-shadow(0 0 11px rgba(84, 172, 247, 0.12));
+
+  --ke-color-exhibitions-deck-count-line: rgba(255, 255, 255, 0.42);
+  --ke-color-exhibitions-deck-count-surface: rgba(7, 9, 10, 0.9);
+  --ke-color-exhibitions-deck-count-text: #f4f7f8;
+  --ke-elevation-exhibitions-deck-count: 0 4px 14px rgba(0, 0, 0, 0.78), 0 0 0 4px rgba(7, 9, 10, 0.42), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 22px rgba(84, 172, 247, 0.16);
+
+  --ke-color-exhibitions-reason-surface: #20262c;
+  --ke-color-exhibitions-reason-new-surface: #3c1d20;
+  --ke-color-exhibitions-reason-new-text: #ff8e98;
+  --ke-color-exhibitions-tag-surface: #211c2b;
+  --ke-color-exhibitions-tag-text: #c2a6fa;
+  --ke-color-exhibitions-action-surface: #121416;
+  --ke-color-exhibitions-action-hover-line: rgba(187, 222, 249, 0.72);
+  --ke-elevation-exhibitions-action-hover: 0 0 14px rgba(84, 172, 247, 0.13);
+  --ke-color-exhibitions-like-selected-line: #d86273;
+  --ke-color-exhibitions-like-selected-surface: #32171d;
+  --ke-color-exhibitions-like-selected-text: #ff788c;
+  --ke-color-exhibitions-reject-selected-line: #72777b;
+  --ke-color-exhibitions-reject-selected-surface: #2b2e30;
+  --ke-color-exhibitions-reject-selected-text: #e0e2e4;
+  --ke-color-exhibitions-rejected-row-surface: #17191a;
+  --ke-color-exhibitions-hidden-control-line: #565b5f;
+  --ke-color-exhibitions-hidden-control-surface: #232629;
+  --ke-color-exhibitions-tail-line: #292d30;
+  --ke-color-exhibitions-empty-line: #4c5257;
+
+  --ke-color-exhibitions-gallery-line: #4b5156;
+  --ke-color-exhibitions-gallery-surface: #0c0e0f;
+  --ke-elevation-exhibitions-gallery: 0 28px 100px rgba(0, 0, 0, 0.72);
+  --ke-color-exhibitions-gallery-backdrop: rgba(0, 0, 0, 0.84);
+  --ke-color-exhibitions-gallery-control-surface: #17191b;
+  --ke-color-exhibitions-gallery-stage-surface: #070809;
+  --ke-color-exhibitions-gallery-navigation-surface: #111416;
+  --ke-color-exhibitions-live-line: #4d5358;
+  --ke-color-exhibitions-live-surface: #191c1e;
+  --ke-elevation-exhibitions-live: 0 12px 34px rgba(0, 0, 0, 0.45);
+  --ke-color-exhibitions-live-undo-line: #656c72;
+  --ke-color-exhibitions-live-undo-surface: #272b2e;
+
   /* Focus connectivity diagnostic. This warm receipt family is operational UI,
      not a new brand palette. */
   --ke-color-connectivity-text: #33261e;
@@ -111,5 +193,7 @@
      - personalization gold is confidence evidence, not warning/keyboard focus;
      - the exhibitions palette is a complete dark visual language and remains
        isolated from warm product primitives;
+     - exhibitions gallery/deck/live blacks stay distinct because they mark
+       modal stage, framed media depth and transient receipt hierarchy;
      - connectivity success/error are probe outcomes, not generic form badges. */
 }

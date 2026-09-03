@@ -1,0 +1,105 @@
+{
+  "schema": "kenigevents.f0-end-to-end-current-ref-correction.v1",
+  "version": "1.0.0",
+  "status": "CURRENT_REF_RECENSUS_NO_NEW_F0_ITEM",
+  "role": "F0",
+  "contract_version": "1.9.0",
+  "pm0_version": "2.3.0",
+  "supersedes": {
+    "report": "site/src/components/design-system/f0-end-to-end-result.v1.json",
+    "reporting_commit": "dbb1914f5a5c15f5cb1c9e8464374248a9b2a046",
+    "issue_comment": 5529506348,
+    "fields": [
+      "current_refs_at_exit_recensus.source_successor",
+      "current_refs_at_exit_recensus.thin_sot",
+      "source_delivery.divergence_at_exit",
+      "tiers.B_current_candidate_and_cross_role_bindings",
+      "tiers.F_next_product_gate",
+      "exit.remaining_external_trigger"
+    ]
+  },
+  "current_refs": {
+    "source_successor": {
+      "branch": "agent/static-site-single-kaggle-contract",
+      "head": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "parent": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
+      "runtime_acceptance": false,
+      "public_url": null
+    },
+    "F0": {
+      "branch": "work/ui-normalization-f0-wave-3-20260903",
+      "source_integration_boundary": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "previous_reporting_head": "dbb1914f5a5c15f5cb1c9e8464374248a9b2a046"
+    },
+    "N0": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "head": "3f78a27a8dfc701d68a8e1bfcf33b63d7a3eb095",
+      "accepted_f0_boundary": "f2b9927e25ac0566d35577f69c574cedadab27d7",
+      "F0_0fb_status": "NOT_YET_REVIEWED"
+    },
+    "M0": {
+      "branch": "work/ui-normalization-m0-continuity-20260903",
+      "head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133"
+    },
+    "A0": {
+      "branch": "work/ui-normalization-a0-wave-3-20260903",
+      "head": "61d340a3ca291f074289d2292b33f56b2bad8a22"
+    },
+    "thin_sot": {
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "branch": "integration/launch-normalized-sot-penpot-20260902",
+      "head": "f6a71df53eafe0763af5a606591372d952e9d371",
+      "f0_binding_ancestor": "70f8f162897168c8f1c2300f9c2b4b9a9a4665ec",
+      "commits_after_f0_binding": 2,
+      "f0_bindings_preserved": true
+    }
+  },
+  "successor_delta": {
+    "commit": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "message": "fix(site): secure festival external targets",
+    "paths": [
+      "CHANGELOG.md",
+      "docs/features/static-site-pages/design-system/launch-normalization-48h.md",
+      "site/src/pages/festivali/index.astro",
+      "site/tests/festival-external-link-safety.test.mjs"
+    ],
+    "source_change": "festival external rel changes from noreferrer to noopener noreferrer",
+    "classification": "A0_ROUTE_LOCAL_SAFETY_FIX_NO_F0_TOKEN_THEME_ICON_OR_GEOMETRY_SCOPE_CHANGE",
+    "f0_backlog_effect": "NONE",
+    "compatibility_with_f0_bindings": "PRESERVE_THE_NEW_REL_VALUE_WHILE_APPLYING_ONLY_THE_DECLARED_FESTIVAL_THEME_ICON_AND_TARGET_SUBSTITUTIONS",
+    "preserve": [
+      "noopener and noreferrer on every festival external blank target",
+      "festival URL and aria-label",
+      "festival composition and navigation behavior",
+      "the source regression test introduced by 1bc6d9c"
+    ]
+  },
+  "divergence": {
+    "merge_base": "de92dabd4551e117ca1af1be7915ff223321cc32",
+    "f0_source_commits_ahead": 2,
+    "f0_source_boundary_behind_successor": 261,
+    "whole_f0_branch_merge": "FORBIDDEN",
+    "integration_rule": "apply F0-owned files from 0fb2938 and exact accepted consumer substitutions onto a fresh descendant of 1bc6d9c"
+  },
+  "tiers_affected": {
+    "A_source_and_actual_consumers": "No new F0 authority or token item. The successor delta touches the festival consumer only for link safety and must be preserved during A0/R0 mechanical consumption.",
+    "B_current_candidate_and_cross_role_bindings": "The source-successor baseline advances from 2e8f4dd to 1bc6d9c. F0 0fb2938 remains unintegrated and requires N0 review against this newer baseline.",
+    "C_published_previews_and_v0": "No new preview URL or independent V0 verdict appeared. Fresh-real 4536847f and Golden 84504f30 remain older immutable evidence.",
+    "D_regression_negative_and_rollback": "Existing F0 strict gates remain valid. The festival consumer integration must additionally retain the new festival-external-link-safety regression.",
+    "E_thin_s_and_penpot_ready_bindings": "Current SoT advances to f6a71df as a two-commit descendant of the F0 binding checkpoint 70f8f16; all F0 machine-readable specs remain present and spec-only.",
+    "F_next_product_gate": "N0 acceptance and R0 materialization must use successor 1bc6d9c or its current descendant, not 2e8f4dd."
+  },
+  "claims_not_made": [
+    "1bc6d9c contains F0 0fb2938",
+    "F0 0fb2938 is accepted by current N0",
+    "strict checks passed on an integrated successor",
+    "a new fresh-real preview exists",
+    "V0 executed a browser audit",
+    "thin S is promoted to CURRENT",
+    "Penpot is materialized"
+  ],
+  "exit": {
+    "ready_owned_items": 0,
+    "remaining_external_trigger": "N0 RESULT accepting current source successor 1bc6d9cb4c122046f4782532381de953727c1da6 or its exact descendant together with F0 source boundary 0fb2938344cf96b05be0df09dfb9e69525b3717d and current thin-SoT f6a71df53eafe0763af5a606591372d952e9d371; then R0 publishes the first exact HTTP-200 fresh-real /<buildId>/__preview/ whose explicit ancestry contains 0fb2938 and preserves 1bc6d9c, followed by an independent V0 DOM/computed-style verdict on that exact URL"
+  }
+}

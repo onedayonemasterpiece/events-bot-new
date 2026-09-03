@@ -8,6 +8,9 @@ const read = (path) => readFileSync(resolve(repoRoot, path), 'utf8');
 
 const legacyCss = read('site/src/styles/design-system.css');
 const componentCss = read('site/src/components/design-system/component-foundations.css');
+const foundationsCss = read('site/src/components/design-system/foundations.css');
+const shellCss = read('site/src/components/design-system/shell-foundations.css');
+const continuityCss = read('site/src/components/design-system/continuity-aliases.css');
 const foundationsTs = read('site/src/components/design-system/foundations.ts');
 const badge = read('site/src/components/design-system/Badge.astro');
 const field = read('site/src/components/design-system/Field.astro');
@@ -93,4 +96,29 @@ for (const action of [
   assert.ok(canonicalSvgBlock.includes(`'${action}'`), `canonical SVG registry misses ${action}`);
 }
 
-console.log('F0 normalization negative probes passed: duplicate primitive owners removed; compatibility anchors retained; physical consumers use exactly four icon roles; canonical SVG registry intact.');
+const declarations = (source) => [...source.matchAll(/^\s*(--ke-[a-z0-9-]+)\s*:/gimu)].map((match) => match[1]);
+assert.deepEqual(
+  declarations(continuityCss),
+  ['--ke-focus-intake-spinner-size'],
+  'continuity-aliases.css must not repeat aliases that already have a semantic owner',
+);
+
+const registrySources = new Map([
+  ['site/src/components/design-system/foundations.css', foundationsCss],
+  ['site/src/components/design-system/shell-foundations.css', shellCss],
+  ['site/src/components/design-system/continuity-aliases.css', continuityCss],
+]);
+for (const [token, expectedOwner] of [
+  ['--ke-color-background-inverse-raised', 'site/src/components/design-system/foundations.css'],
+  ['--ke-service-share-icon-size', 'site/src/components/design-system/shell-foundations.css'],
+  ['--ke-elevation-service-share-shortcut', 'site/src/components/design-system/shell-foundations.css'],
+  ['--ke-footer-social-icon-size', 'site/src/components/design-system/shell-foundations.css'],
+  ['--ke-focus-intake-spinner-size', 'site/src/components/design-system/continuity-aliases.css'],
+]) {
+  const owners = [...registrySources.entries()]
+    .filter(([, source]) => declarations(source).includes(token))
+    .map(([path]) => path);
+  assert.deepEqual(owners, [expectedOwner], `${token} must have exactly one F0 declaration owner`);
+}
+
+console.log('F0 normalization negative probes passed: duplicate primitive and alias owners removed; compatibility anchors retained; physical consumers use exactly four icon roles; canonical SVG registry intact.');

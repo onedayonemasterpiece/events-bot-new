@@ -83,6 +83,7 @@
   --ke-color-festival-guide-icon-surface: rgba(15, 118, 110, 0.09);
   --ke-color-festival-guide-icon: #0f766e;
   --ke-color-festival-guide-like-surface: rgba(165, 72, 33, 0.1);
+  --ke-color-festival-category-surface: rgba(165, 72, 33, 0.1);
   --ke-festival-live-layer: var(--ke-layer-header);
   --ke-festival-live-radius: 12px;
   --ke-elevation-festival-live: 0 14px 40px rgba(36, 24, 16, 0.2);
@@ -155,6 +156,8 @@
   /* Retained distinctions:
    * - exhibitions remains a complete dark product language;
    * - festival green/yellow pills communicate publication state, not form state;
+   * - festival guide-like cue and category taxonomy container remain separate
+   *   semantic variables even while their current values are equal;
    * - festival category masks are editorial identity assets, not UI-action icons;
    * - club mint surfaces identify the club route and are not generic info cards.
    */
