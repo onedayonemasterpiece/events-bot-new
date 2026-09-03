@@ -151,8 +151,83 @@ const festivalSemanticState = guideUsesGuideRole && categoryUsesCategoryRole
     ? 'SEMANTIC_ROLE_CONFLATION'
     : 'PRE_MIGRATION_OR_PARTIAL';
 
+const exhibitionsPath = 'site/src/components/ExhibitionsPersonalSurface.astro';
+const exhibitions = readRepo(exhibitionsPath);
+const exhibitionsStyles = styleSource(exhibitions);
+const exhibitionsPrivateThemeAliases = [
+  '--ex-bg',
+  '--ex-surface',
+  '--ex-raised',
+  '--ex-border',
+  '--ex-text',
+  '--ex-muted',
+  '--ex-blue',
+  '--ex-orange',
+  '--ex-red',
+  '--ex-gray',
+  '--ex-yellow',
+  '--ex-purple',
+  '--ex-green',
+  '--ex-ease-cinematic',
+  '--ex-ease-emphasis',
+  '--ex-motion-fast',
+  '--ex-motion-base',
+];
+const exhibitionsLocalRuntimeVariables = [
+  '--ex-media-column',
+  '--ex-row-gap',
+  '--ex-surface-start',
+  '--ex-rail-color',
+];
+const exhibitionsPrivateThemeHits = exhibitionsPrivateThemeAliases.filter((token) => (
+  exhibitions.includes(`${token}:`) || exhibitions.includes(`var(${token})`)
+));
+const exhibitionsRuntimeVariablesPresent = exhibitionsLocalRuntimeVariables.filter((token) => exhibitions.includes(token));
+const exhibitionsLocalIconSelectors = [
+  '.ex-discussed svg',
+  '.ex-signal svg',
+  '.ex-action svg',
+  '.ex-action--like svg',
+  '.ex-action--reject svg',
+];
+const exhibitionsRawIconBlocks = exhibitionsLocalIconSelectors
+  .map((selector) => ({ selector, block: selectorBlock(exhibitionsStyles, selector) }))
+  .filter(({ block }) => /(?:width|height)\s*:\s*\d+(?:px|rem|em)/u.test(block));
+const exhibitionsCanonicalGalleryNavigation = {
+  previous: exhibitions.includes('<SemanticIcon name="arrow-left" role="control" />'),
+  next: exhibitions.includes('<SemanticIcon name="arrow-right" role="control" />'),
+};
+const exhibitionsTextGalleryNavigation = {
+  previous: exhibitions.includes('<span aria-hidden="true">←</span>'),
+  next: exhibitions.includes('<span aria-hidden="true">→</span>'),
+};
+const exhibitionsExistingCentralBindings = [
+  '--ke-color-exhibitions-kbd-line',
+  '--ke-color-exhibitions-kbd-line-strong',
+  '--ke-color-exhibitions-kbd-surface',
+  '--ke-color-exhibitions-kbd-text',
+  '--ke-color-exhibitions-kbd-shadow',
+  '--ke-color-exhibitions-mode-surface',
+  '--ke-color-exhibitions-mode-selected-line',
+  '--ke-color-exhibitions-sticky-surface',
+  '--ke-color-exhibitions-blue-glow',
+  '--ke-color-exhibitions-orange-glow',
+  '--ke-color-exhibitions-timeline-mid',
+  '--ke-color-exhibitions-timeline-end',
+  '--ke-color-exhibitions-row-start',
+  '--ke-color-exhibitions-row-end',
+  '--ke-elevation-exhibitions-row',
+  '--ke-elevation-exhibitions-row-hover',
+  '--ke-elevation-exhibitions-row-keyboard',
+  '--ke-exhibitions-signal-icon-size',
+  '--ke-exhibitions-action-icon-size',
+  '--ke-exhibitions-gallery-arrow-icon-size',
+];
+const exhibitionsExistingCentralBindingsUsed = exhibitionsExistingCentralBindings.filter((token) => exhibitions.includes(`var(${token})`));
+
 const closureScriptPath = 'site/scripts/apply-a0-current-successor-consumer-closure.mjs';
 let closureScriptState = 'ABSENT';
+let exhibitionsClosureScriptState = 'ABSENT';
 if (existsSync(resolve(repoRoot, closureScriptPath))) {
   const closureScript = readRepo(closureScriptPath);
   const unsafeGlobalReplacement = closureScript.includes(
@@ -164,6 +239,24 @@ if (existsSync(resolve(repoRoot, closureScriptPath))) {
     : namesBothRoles
       ? 'CONTEXT_SCOPED_SEMANTIC_REPLACEMENTS'
       : 'NO_FESTIVAL_SEPARATION_IMPLEMENTATION';
+
+  const blanketExAliasAssertion = closureScript.includes("assert.ok(!source.includes('--ex-')");
+  const namesExRuntimeVariables = exhibitionsLocalRuntimeVariables.some((token) => closureScript.includes(token));
+  const namesExCentralIconRoles = [
+    '--ke-exhibitions-signal-icon-size',
+    '--ke-exhibitions-action-icon-size',
+    '--ke-exhibitions-gallery-arrow-icon-size',
+  ].every((token) => closureScript.includes(token));
+  const namesExCanonicalNavigation = closureScript.includes('<SemanticIcon name="arrow-left" role="control" />')
+    && closureScript.includes('<SemanticIcon name="arrow-right" role="control" />');
+  exhibitionsClosureScriptState = blanketExAliasAssertion && exhibitionsRuntimeVariablesPresent.length > 0
+    ? 'SELF_CONTRADICTORY_BLANKET_EX_ALIAS_POSTCONDITION'
+    : !namesExCentralIconRoles || !namesExCanonicalNavigation
+      ? 'INCOMPLETE_F0_ICON_AND_SVG_CONSUMPTION'
+      : namesExRuntimeVariables
+        ? 'EXPLICIT_RUNTIME_VARIABLE_PRESERVATION'
+        : 'NO_EXHIBITIONS_RUNTIME_VARIABLE_CLASSIFICATION';
+
   if (strict) {
     assert.equal(
       unsafeGlobalReplacement,
@@ -171,6 +264,14 @@ if (existsSync(resolve(repoRoot, closureScriptPath))) {
       'A0 closure script globally maps the shared raw festival value to the guide role',
     );
     assert.equal(namesBothRoles, true, 'A0 closure script must name both distinct festival surface roles');
+    assert.equal(
+      blanketExAliasAssertion,
+      false,
+      'A0 exhibitions postcondition rejects every --ex-* token although the source intentionally retains local runtime layout variables',
+    );
+    assert.equal(namesExRuntimeVariables, true, 'A0 closure script must classify the retained exhibitions runtime layout variables');
+    assert.equal(namesExCentralIconRoles, true, 'A0 closure script must bind exhibition glyphs to the four central icon roles');
+    assert.equal(namesExCanonicalNavigation, true, 'A0 closure script must replace gallery text arrows with canonical SemanticIcon navigation');
   }
 }
 
@@ -178,6 +279,28 @@ if (strict) {
   assert.equal(festivalSemanticState, 'SEMANTICALLY_SEPARATED');
   assert.equal(guideUsesCategoryRole, false, 'guide-like cue is bound to the category role');
   assert.equal(categoryUsesGuideRole, false, 'category container is bound to the guide-like role');
+  assert.deepEqual(exhibitionsPrivateThemeHits, [], 'exhibitions retains private theme/motion aliases');
+  assert.deepEqual(
+    exhibitionsRuntimeVariablesPresent.sort(),
+    [...exhibitionsLocalRuntimeVariables].sort(),
+    'exhibitions runtime layout variables were removed or silently reclassified',
+  );
+  assert.deepEqual(exhibitionsRawIconBlocks, [], 'exhibitions retains raw local UI icon dimensions');
+  assert.deepEqual(
+    exhibitionsCanonicalGalleryNavigation,
+    { previous: true, next: true },
+    'exhibitions gallery navigation must use canonical SemanticIcon identities',
+  );
+  assert.deepEqual(
+    exhibitionsTextGalleryNavigation,
+    { previous: false, next: false },
+    'exhibitions gallery retains text-arrow glyph duplicates',
+  );
+  assert.deepEqual(
+    exhibitionsExistingCentralBindingsUsed.sort(),
+    [...exhibitionsExistingCentralBindings].sort(),
+    'exhibitions does not consume every already-published F0 palette/elevation/icon binding',
+  );
 }
 
 const walk = (root) => readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
@@ -230,6 +353,16 @@ console.log(JSON.stringify({
     category_token: categorySurfaceToken,
     equal_current_values: guideSurfaceValue === categorySurfaceValue,
     closure_script_state: closureScriptState,
+  },
+  exhibitions_closure: {
+    private_theme_hits: exhibitionsPrivateThemeHits,
+    retained_runtime_variables: exhibitionsRuntimeVariablesPresent,
+    raw_local_icon_blocks: exhibitionsRawIconBlocks,
+    canonical_gallery_navigation: exhibitionsCanonicalGalleryNavigation,
+    text_gallery_navigation: exhibitionsTextGalleryNavigation,
+    existing_central_binding_count: exhibitionsExistingCentralBindings.length,
+    existing_central_bindings_used: exhibitionsExistingCentralBindingsUsed,
+    closure_script_state: exhibitionsClosureScriptState,
   },
   clusters: clusterReadback,
   rollback_units: [
