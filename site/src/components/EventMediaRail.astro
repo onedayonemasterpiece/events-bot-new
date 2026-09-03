@@ -10,7 +10,8 @@ interface Props {
 }
 
 const { assets, galleryId, eventTitle, maxVisible = 6 } = Astro.props;
-const visibleLimit = Math.max(2, maxVisible);
+const numericMaxVisible = Number(maxVisible);
+const visibleLimit = Math.max(2, Math.floor(Number.isFinite(numericMaxVisible) ? numericMaxVisible : 6));
 const visibleAssets = assets.slice(0, visibleLimit);
 const hiddenCount = Math.max(0, assets.length - visibleAssets.length);
 
@@ -36,7 +37,7 @@ const mediaFrameCropReason = (asset: EventImageAsset) => {
   if (asset.image_text_mode === 'ocr_text') return 'gallery_document_contain';
   return 'gallery_unknown_contain';
 };
-const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.height > 0
+const mediaFrameSourceRatio = (asset: EventImageAsset) => asset.width > 0 && asset.height > 0
   ? asset.width / asset.height
   : undefined;
 ---
@@ -50,6 +51,9 @@ const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.hei
     data-ds-version="1"
     data-ds-variant="gallery-thumbnails"
     data-ds-state={hiddenCount > 0 ? 'overflow' : 'complete'}
+    data-event-media-rail-total={assets.length}
+    data-event-media-rail-visible={visibleAssets.length}
+    data-event-media-rail-hidden={hiddenCount}
     aria-label={`Фотографии события «${eventTitle}»`}
     style={`--rail-count:${visibleAssets.length + (hiddenCount > 0 ? 1 : 0)}`}
   >
@@ -57,33 +61,42 @@ const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.hei
       <button
         type="button"
         class="event-media-rail__item"
-        data-media-frame
-        data-media-frame-contract="v1"
-        data-media-frame-surface="media-rail"
-        data-media-frame-kind={mediaFrameKind(asset)}
-        data-media-frame-fit={mediaFrameFit(asset)}
-        data-media-frame-crop-reason={mediaFrameCropReason(asset)}
-        data-media-frame-source-width={asset.width || undefined}
-        data-media-frame-source-height={asset.height || undefined}
-        data-media-frame-loading="eager"
-        data-media-frame-priority="true"
         data-hero-gallery-open={galleryId}
         data-hero-gallery-index={index}
-        style={mediaFrameRatio(asset) ? `--media-frame-source-ratio:${mediaFrameRatio(asset)}` : undefined}
         aria-label={`Открыть изображение ${index + 1} события «${eventTitle}»`}
       >
-        <img
-          src={thumbnail(asset)}
-          srcset={srcset(asset) || undefined}
-          sizes="(min-width: 1024px) 92px, 1px"
-          width={asset.thumbnail_sources?.[0]?.width || asset.width}
-          height={asset.thumbnail_sources?.[0]?.height || asset.height}
-          alt=""
-          loading="eager"
-          decoding="async"
-          style={`object-fit:${mediaFrameFit(asset)}`}
-          data-media-frame-image
-        />
+        <span
+          class="event-media-rail__frame"
+          data-media-frame
+          data-media-frame-contract="v1"
+          data-media-frame-surface="media-rail"
+          data-media-frame-kind={mediaFrameKind(asset)}
+          data-media-frame-fit={mediaFrameFit(asset)}
+          data-media-frame-object-position="50% 50%"
+          data-media-frame-crop-reason={mediaFrameCropReason(asset)}
+          data-media-frame-source-width={asset.width || undefined}
+          data-media-frame-source-height={asset.height || undefined}
+          data-media-frame-source-ratio={mediaFrameSourceRatio(asset)?.toFixed(5)}
+          data-media-frame-loading="eager"
+          data-media-frame-priority="true"
+          data-media-frame-interaction-owner="caller"
+          style={mediaFrameSourceRatio(asset)
+            ? `display:block;width:100%;height:100%;overflow:hidden;--media-frame-source-ratio:${mediaFrameSourceRatio(asset)}`
+            : 'display:block;width:100%;height:100%;overflow:hidden'}
+        >
+          <img
+            src={thumbnail(asset)}
+            srcset={srcset(asset) || undefined}
+            sizes="(min-width: 1024px) 92px, 1px"
+            width={asset.thumbnail_sources?.[0]?.width || asset.width}
+            height={asset.thumbnail_sources?.[0]?.height || asset.height}
+            alt=""
+            loading="eager"
+            decoding="async"
+            style={`object-fit:${mediaFrameFit(asset)};object-position:50% 50%`}
+            data-media-frame-image
+          />
+        </span>
       </button>
     ))}
     {hiddenCount > 0 && (
