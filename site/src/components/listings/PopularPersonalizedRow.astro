@@ -19,16 +19,20 @@ const { events } = Astro.props;
   </header>
   <div class="ke-popular-behavior__row" data-popular-personalized-candidates>
     {events.map((event) => (
-      <div
-        data-popular-personalized-candidate
-        data-event-id={event.id}
-        data-category={eventCategory(event)}
-        data-tags={JSON.stringify(eventTags(event))}
-        data-base-score={eventPopularityScore(event)}
+      <ListingEventCard
+        event={event}
+        density="popular"
+        temporalLabel={popularDesktopTemporalLabel(event)}
+        familyKey={listingEventFamilyKey(event)}
+        supplemental
         hidden
-      >
-        <ListingEventCard event={event} density="popular" temporalLabel={popularDesktopTemporalLabel(event)} familyKey={listingEventFamilyKey(event)} supplemental />
-      </div>
+        rootAttributes={{
+          'data-popular-personalized-candidate':'',
+          'data-category':eventCategory(event),
+          'data-tags':JSON.stringify(eventTags(event)),
+          'data-base-score':eventPopularityScore(event),
+        }}
+      />
     ))}
   </div>
 </section>
