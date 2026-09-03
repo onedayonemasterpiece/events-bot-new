@@ -107,6 +107,11 @@ const gridItemRoots = (items: GastronomyItem[]): Record<string, AdaptiveEventCar
 
 <style>
   .page-shell--gastronomy { display:grid; gap:1rem; }
-  .collection-state { max-width:64ch; padding:.85rem 1rem; border-radius:1rem; background:var(--color-surface-soft, #f4f1ea); }
+  .collection-state {
+    max-width:64ch;
+    padding:var(--ke-collection-state-padding-block) var(--ke-collection-state-padding-inline);
+    border-radius:var(--ke-collection-state-radius);
+    background:var(--ke-color-collection-state-surface);
+  }
   .collection-month h2 { text-transform:capitalize; }
 </style>
