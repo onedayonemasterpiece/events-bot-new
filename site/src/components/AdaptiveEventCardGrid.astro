@@ -6,6 +6,7 @@ import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
 type GridMode = 'flow' | 'packed';
 type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
 type ResponsiveStrategy = 'fixed' | 'progressive' | 'stack';
+type AdaptiveGridLive = 'off' | 'polite' | 'assertive';
 
 export interface AdaptiveEventCardItemRoot {
   className?: string;
@@ -32,6 +33,11 @@ interface Props {
   legacyOptimizedContract?: boolean;
   rootAttributes?: EventCardRootAttributes;
   itemRoots?: Record<string, AdaptiveEventCardItemRoot>;
+  ariaLive?: AdaptiveGridLive;
+  ariaAtomic?: boolean;
+  ariaBusy?: boolean;
+  ariaLabel?: string;
+  ariaLabelledby?: string;
 }
 
 const {
@@ -53,6 +59,11 @@ const {
   legacyOptimizedContract = false,
   rootAttributes = {},
   itemRoots = {},
+  ariaLive,
+  ariaAtomic,
+  ariaBusy,
+  ariaLabel,
+  ariaLabelledby,
 } = Astro.props;
 
 const numericRowSize = Number(requestedRowSize);
@@ -95,6 +106,7 @@ const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
   'data-adaptive-grid-source-order',
   'data-adaptive-grid-rendered-order',
   'data-adaptive-grid-item-root-contract',
+  'data-adaptive-grid-live',
   'data-row-normalize',
   'data-optimized-event-card-grid',
   'data-lab-row-normalize',
@@ -158,6 +170,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-adaptive-grid-source-order={sourceOrder}
   data-adaptive-grid-rendered-order={renderedOrder}
   data-adaptive-grid-item-root-contract={hasItemRoots ? 'event-id-or-event-id-source-index' : undefined}
+  data-adaptive-grid-live={ariaLive}
   data-row-normalize={mode === 'packed' ? '' : undefined}
   data-optimized-event-card-grid={legacyOptimizedContract ? '' : undefined}
   data-lab-row-normalize={mode === 'packed' ? '' : undefined}
@@ -168,6 +181,11 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-current-event-id={currentEventId}
   data-discovery-src={discoverySrc}
   data-feed-card-variant="split-actions"
+  aria-live={ariaLive}
+  aria-atomic={ariaAtomic === undefined ? undefined : String(ariaAtomic)}
+  aria-busy={ariaBusy === undefined ? undefined : String(ariaBusy)}
+  aria-label={ariaLabel}
+  aria-labelledby={ariaLabelledby}
 >
   {resolved.map(({ item, layout }) => (
     <EventCard
