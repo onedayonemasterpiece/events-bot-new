@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Changed: integrated the accepted F0 route-theme and interest-club residual
+  foundations plus the current M0 source/downstream ancestry. Exhibitions,
+  festivals, interest-club detail and `InterestClubCard` now consume their
+  canonical tokens without changing the established route compositions;
+  festival favorite targets are at least 44px and visible glyphs use the four
+  canonical semantic-icon roles. The two remaining focus routes now publish
+  and synchronize their accepted composition identities, bringing the grouped
+  source census to `9/9` and the PM0 route-identity source census to `19/19`.
+  Browser credit remains owned by V0.
+
 - Fixed: external festival timeline links now carry both `noopener` and
   `noreferrer`, matching the accepted N0/V0 safe-blank-target contract. This is
   a route-local safety correction only; festival composition and navigation

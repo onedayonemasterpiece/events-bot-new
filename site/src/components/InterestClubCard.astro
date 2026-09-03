@@ -128,13 +128,13 @@ const titleId = `club-card-title-${club.id}`;
     top:1rem;
     border:1px solid var(--ke-color-club-card-fact-line-compact);
     border-radius:50%;
-    box-shadow:0 0 0 2.5rem rgba(255,255,255,.035), 0 0 0 5rem rgba(255,255,255,.025);
+    box-shadow:0 0 0 2.5rem var(--ke-color-club-card-fallback-orbit-ring-inner), 0 0 0 5rem var(--ke-color-club-card-fallback-orbit-ring-outer);
   }
   .club-card__fallback span {
     position:absolute;
     width:5rem;
     height:5rem;
-    border:1px solid rgba(255,255,255,.3);
+    border:1px solid var(--ke-color-club-card-fallback-orbit-line);
     border-radius:20px;
     transform:rotate(45deg);
   }
@@ -199,7 +199,7 @@ const titleId = `club-card-title-${club.id}`;
   .club-card__description { max-width:55ch; margin:0; color:var(--ke-color-club-card-copy); line-height:1.48; }
   .club-card__facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:.15rem 0 0; border-top:var(--ke-shape-border-hairline) solid var(--ke-color-club-card-fact-line); }
   .club-card__facts div { min-width:0; padding:.6rem .65rem 0 0; }
-  .club-card__facts div + div { padding-left:.65rem; border-left:var(--ke-shape-border-hairline) solid rgba(255,255,255,.24); }
+  .club-card__facts div + div { padding-left:.65rem; border-left:var(--ke-shape-border-hairline) solid var(--ke-color-club-card-fact-divider); }
   dt { color:var(--ke-color-club-card-fact-label); font-size:.76rem; }
   dd { min-width:0; margin:.1rem 0 0; overflow-wrap:anywhere; font-size:.88rem; font-weight:760; line-height:1.35; }
   .club-card__footer { display:flex; align-items:center; justify-content:space-between; gap:.75rem; min-height:var(--ke-size-touch-target); }

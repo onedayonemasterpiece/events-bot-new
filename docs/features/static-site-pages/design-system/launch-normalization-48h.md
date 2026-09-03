@@ -585,3 +585,41 @@ M0 расширен от ранее принятого `4c83fc77...` до при
 Festival timeline ранее генерировал только `noreferrer`; route-local binding
 исправлен без изменения URL, композиции или поведения карточек. Source-test и
 публичный browser probe проверяют оба токена.
+
+## 18. Post-preview F0/M0/A0 successor cycle (2026-09-03)
+
+После публикации immutable fresh-real preview для `1bc6d9cb...` backlog был
+пересчитан по актуальным role refs и `launch-normalized-ui.v1@1.10.0`. Этот
+preview остаётся валидным pre-F0 baseline, но не получает credit за более
+поздний source.
+
+Следующий reversible integration transaction включает:
+
+```text
+source base:       1bc6d9cb4c122046f4782532381de953727c1da6
+F0 source:         0fb2938344cf96b05be0df09dfb9e69525b3717d
+M0 source:         c71351decdcee02941acb26c5e2fbaf88faf0378
+M0 downstream:     5eeaba09b5ec432a77ff899ce98fb8b9f492c133
+contract:          launch-normalized-ui.v1@1.10.0
+```
+
+Consumer migration сохраняет актуальный интерфейс и поведение:
+
+- `ExhibitionsPersonalSurface` удаляет только private `--ex-*` authority и
+  ссылается на эквивалентные F0 tokens;
+- festival route сохраняет timeline и link-safety, но получает canonical
+  geometry tokens, semantic heart и минимум 44px для favorite target;
+- interest-club detail/card заменяют только перечисленные raw values и text
+  arrow на canonical tokens/SemanticIcon;
+- `FocusEggCollectionRouteComposition@1/collection-prototype` синхронизирует
+  `found-N-of-M`, а `ClosedFocusHubRouteComposition@1/participant-hub` —
+  `checking/locked/available` внутри уже существующих runtime paths;
+- consumer-local sizing `.ke-icon-role` удалён: размер задаёт один из четырёх
+  canonical roles.
+
+Строгие F0 gates проходят, focused F0/M0/A0 packet проходит `111/111`.
+Grouped family source census становится `9/9`, PM0 route identity source
+census — `19/19`. Это только source-level convergence: V0 browser credit и
+Penpot materialization не заявляются. Новый exact SHA замораживается только
+после N0 integration и полного test/build checkpoint; затем тот же canonical
+Kaggle runner публикует новый full `real/all` immutable preview.

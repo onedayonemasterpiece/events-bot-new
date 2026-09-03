@@ -1,10 +1,10 @@
 {
   "schema_version": "a0-route-family-normalization-v1",
-  "contract_version": "1.9.0",
+  "contract_version": "1.10.0",
   "source_contract": "site/src/data/design-system-production-surface-contract.v1.json",
   "denominator": 9,
-  "source_converged": 6,
-  "fraction": "6/9",
+  "source_converged": 9,
+  "fraction": "9/9",
   "browser_verdict_owner": "V0",
   "families": [
     {
@@ -17,24 +17,26 @@
         "site/src/components/GastronomyCollectionSurface.astro",
         "site/src/components/UnusualListingSurface.astro"
       ],
-      "remaining": "V0 route and viewport verdict"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "festivals",
-      "status": "partial",
+      "status": "source_converged",
       "evidence": [
-        "site/src/pages/festivali/index.astro"
+        "site/src/pages/festivali/index.astro",
+        "site/src/components/design-system/route-theme-foundations.css"
       ],
-      "remaining": "A0 atomic source patch for route family identity and canonical visible guide icons; F0 review of remaining festival-specific theme literals; V0 verdict"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "exhibitions",
-      "status": "partial",
+      "status": "source_converged",
       "evidence": [
         "site/src/pages/vystavki/index.astro",
-        "site/src/components/ExhibitionsPersonalSurface.astro"
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/components/design-system/route-theme-foundations.css"
       ],
-      "remaining": "A0 migration from local --ex-* visible palette/geometry ownership to the published exhibition theme cluster; V0 verdict"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "for_me",
@@ -44,7 +46,7 @@
         "site/src/components/InterestProfile.astro",
         "site/tests/interest-profile-normalization.test.mjs"
       ],
-      "remaining": "V0 route and state verdict"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "focus_group",
@@ -58,9 +60,11 @@
         "site/src/components/FocusConnectivityDiagnostic.astro",
         "site/src/components/FocusEggArtifact.astro",
         "site/src/components/FocusEggCollectionCard.astro",
-        "site/src/components/FocusEggSavedListDemo.astro"
+        "site/src/components/FocusEggSavedListDemo.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
       ],
-      "remaining": "V0 route and state verdict; product/server membership gates remain outside UI normalization"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "artifacts",
@@ -70,7 +74,7 @@
         "site/src/components/artifacts/ArtifactCollection.astro",
         "site/tests/a0-consumer-ownership.test.mjs"
       ],
-      "remaining": "V0 route and dialog-state verdict"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "event_detail",
@@ -81,16 +85,18 @@
         "site/src/components/EventHero.astro",
         "site/src/layouts/EventLayout.astro"
       ],
-      "remaining": "V0 route, viewport, gallery and dialog-state verdict"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "interest_clubs",
-      "status": "partial",
+      "status": "source_converged",
       "evidence": [
         "site/src/pages/kluby-po-interesam/index.astro",
-        "site/src/components/InterestClubCard.astro"
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/components/InterestClubCard.astro",
+        "site/src/components/design-system/interest-club-card-continuity-foundations.css"
       ],
-      "remaining": "A0/F0 review of route-local club hero/deck theme ownership; V0 catalog/detail verdict"
+      "remaining": "V0 route, viewport and state verdict"
     },
     {
       "id": "information_pages",
@@ -100,7 +106,7 @@
         "site/src/pages/partnerstvo/index.astro",
         "site/tests/a0-consumer-ownership.test.mjs"
       ],
-      "remaining": "V0 route and viewport verdict"
+      "remaining": "V0 route, viewport and state verdict"
     }
   ]
 }

@@ -32,7 +32,10 @@ test('EventMediaRail exposes one canonical three-variant family and preserves ca
   assert.match(source, /data-ds-family="EventMediaRail"/u);
   assert.match(source, /data-event-media-rail-contract=\{usesResolvedItems \? 'resolved-items-v1' : 'asset-input-v1'\}/u);
   assert.match(source, /data-event-media-rail-source-owner=\{usesResolvedItems \? 'caller' : 'EventMediaRail'\}/u);
-  assert.match(source, /item\.fit === 'cover' && kind === 'visual' \? 'cover' : 'contain'/u);
+  assert.match(source, /const contradictoryVisualKind = requestedKind === 'visual' && imageTextMode !== 'visual_only';/u);
+  assert.match(source, /const fit: EventMediaRailFrameFit = requestedCover && kind === 'visual' && imageTextMode === 'visual_only'/u);
+  assert.match(source, /'resolved_visual_kind_mismatch_fail_closed'/u);
+  assert.doesNotMatch(source, /item\.fit === 'cover' && kind === 'visual' \? 'cover' : 'contain'/u);
   assert.match(source, /const mediaFrameCropPermission = \(fit: EventMediaRailFrameFit\) => fit === 'cover' \? 'allowed' : 'forbidden';/u);
 
   for (const hook of [

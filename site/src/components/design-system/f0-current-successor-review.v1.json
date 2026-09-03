@@ -1,0 +1,92 @@
+{
+  "schema": "kenigevents.f0-current-successor-review.v1",
+  "version": "1.0.0",
+  "status": "F0_REVIEW_COMPLETE_NEW_BINDINGS_READY",
+  "reviewed_at": "2026-09-03",
+  "role": "F0",
+  "contract_version": "1.9.0",
+  "refs": {
+    "f0_predecessor": "de92dabd4551e117ca1af1be7915ff223321cc32",
+    "current_successor": "d0ad17088e13d5dab3d992326f393e2616246c5d",
+    "current_successor_branch": "agent/static-site-single-kaggle-contract",
+    "n0": "74252469c545193f8ec57624bd018fc00c87e9e6",
+    "m0": "f4e89ea1cd0d9e66266be224e28ec2cd979bebce",
+    "a0": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+    "legacy_combined_candidate": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5"
+  },
+  "ancestry": {
+    "f0_predecessor_is_ancestor_of_current_successor": true,
+    "ahead_by_commits_at_review": 259,
+    "classification": "F0_DE92_INTEGRATED_CURRENT_SUCCESSOR_HAS_LATER_CROSS_ROLE_CHANGES"
+  },
+  "published_evidence": {
+    "fresh_real": {
+      "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+      "source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+      "classification": "MANDATORY_FRESH_REAL_INPUT_BUT_PRE_D0AD_SUCCESSOR"
+    },
+    "golden": {
+      "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+      "source_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+      "v0_verdict": "DRIFT",
+      "v0_comment": 5527892153
+    }
+  },
+  "n0_v0_classification": {
+    "accepted_drift": {
+      "id": "A0-EVENTCARD-AUX-TARGET-36PX",
+      "owner": "A0",
+      "f0_action": "none beyond preserving the canonical 44px size role"
+    },
+    "rejected_demands": [
+      "parallel data-ui identity protocol",
+      "blank-target rejection when rel contains both noopener and noreferrer"
+    ],
+    "f0_owned_v0_drift_after_classification": []
+  },
+  "new_source_findings": [
+    {
+      "id": "F0-SOURCE-FESTIVAL-GUIDE-ICON-SIZE",
+      "owner": "F0_BINDING_PLUS_A0_CONSUMPTION",
+      "path": "site/src/pages/festivali/index.astro",
+      "finding": "control-role SemanticIcon descendants are locally forced to 0.95rem instead of the central 20px control role",
+      "resolution": "bind to --ke-festival-guide-icon-size and remove the local SVG width/height owner"
+    },
+    {
+      "id": "F0-SOURCE-FESTIVAL-FAVORITE-TARGET",
+      "owner": "F0_BINDING_PLUS_A0_CONSUMPTION",
+      "path": "site/src/pages/festivali/index.astro",
+      "finding": "interactive favorite target is clamp(2rem,2.35vw,2.2rem), below the 44px launch minimum",
+      "resolution": "bind both dimensions/minimum to --ke-festival-like-target-min while preserving placement and state"
+    },
+    {
+      "id": "F0-SOURCE-EXHIBITIONS-PRIVATE-THEME",
+      "owner": "F0_BINDING_PLUS_A0_CONSUMPTION",
+      "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "finding": "private --ex-* palette/motion owner remains in the actual consumer",
+      "resolution": "use the exact mapping in f0-route-theme-bindings.v1.json and remove the local declaration block"
+    },
+    {
+      "id": "F0-SOURCE-CLUB-DETAIL-TEXT-GLYPH",
+      "owner": "F0_BINDING_PLUS_A0_CONSUMPTION",
+      "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "finding": "the back action retains a text arrow instead of the canonical arrow-left SVG identity",
+      "resolution": "use SemanticIcon arrow-left with the inline role"
+    }
+  ],
+  "delivered_in_next_f0_commit": [
+    "token-only route-theme-foundations.css",
+    "machine-readable exhibition/festival/club-detail consumer bindings",
+    "strict executable post-integration negative gate",
+    "explicit rollback units and browser expectations"
+  ],
+  "not_claimed": [
+    "consumer migration complete",
+    "strict gate executed",
+    "new Kaggle preview published",
+    "fresh-real V0 verdict",
+    "thin-S materialized against an accepted exact successor",
+    "Penpot masters or linked instances exist"
+  ],
+  "next_gate": "integrate the new F0 batch into a descendant of d0ad1708, apply the exact A0 consumer bindings, run the strict F0 gate, publish a fresh-real full Kaggle successor, then obtain an independent V0 DOM/computed-style verdict"
+}
