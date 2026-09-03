@@ -1,12 +1,8 @@
 /*
- * Exact cross-registry aliases discovered by the current-head token-reference
- * census. These forward existing primitives; they do not add palette or icon
- * roles.
+ * One remaining cross-registry alias discovered by the current-head
+ * actual-consumer census. The shell and semantic aliases that already have a
+ * canonical owner must not be repeated here.
  */
 :root {
-  --ke-color-background-inverse-raised: var(--ke-color-surface-inverse-raised);
-  --ke-service-share-icon-size: var(--ke-icon-size-control);
-  --ke-elevation-service-share-shortcut: 0 1px 0 rgba(0, 0, 0, 0.16);
-  --ke-footer-social-icon-size: var(--ke-icon-size-control);
   --ke-focus-intake-spinner-size: var(--ke-icon-size-feature);
 }
