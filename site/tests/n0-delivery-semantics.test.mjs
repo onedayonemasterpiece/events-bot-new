@@ -9,12 +9,13 @@ const receipt = JSON.parse(await readFile(
 
 const FROZEN = 'cebeafeee08251a327145ee973ee035cced65204';
 const F0 = 'ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b';
-const M0 = '8b0c6709beca1f7b0bef81b27464f786df1d7806';
+const M0 = '105bac16be6c73916a25f3e78b02116869ed5e1e';
 const A0 = '3ef253980bdfe0731158f5b8b4b47965fa153ce9';
 const FR0 = '2231e1d668f896d634e5663b59520bc710d5fea6';
 
 test('delivery correction changes no topology, ownership, branch, contract, T0 or generation path', () => {
   assert.equal(receipt.schema, 'kenigevents.n0-delivery-semantics.v1');
+  assert.equal(receipt.version, '1.1.0');
   assert.equal(receipt.contract_reference.version, '1.10.0');
   assert.equal(receipt.contract_reference.mutation_by_this_receipt, false);
   assert.equal(receipt.correction_scope.kind, 'DELIVERY_SEMANTICS_ONLY');
@@ -50,15 +51,17 @@ test('cebeafee remains the immutable publication transaction despite later role 
 test('F0 rejection is narrowed to vocabulary/checker and preserves accepted source slices', () => {
   const result = receipt.f0_result_classification;
   assert.equal(result.comment, 5531682890);
+  assert.equal(result.delivery_confirmation_comment, 5531902859);
   assert.equal(result.frozen_transaction_verdict, 'ACCEPTED_WITH_NONBLOCKING_VOCABULARY_CHECKER_DELTA');
   assert.equal(result.festivals, 'ACCEPTED_SOURCE');
   assert.equal(result.exhibitions, 'ACCEPTED_SOURCE');
   assert.equal(result.fr0_batch_4, 'ACCEPTED_SOURCE');
   assert.equal(result.duplicate_f0_token_or_style_owner, 'NOT_FOUND');
   assert.equal(result.vocabulary_checker_correction.sha, F0);
-  assert.equal(result.vocabulary_checker_correction.classification, 'NEXT_CANDIDATE_ONLY');
+  assert.equal(result.vocabulary_checker_correction.classification, 'THE_ONE_F0_NEXT_CANDIDATE_BATCH');
   assert.equal(result.vocabulary_checker_correction.product_consumer_change, false);
   assert.equal(result.vocabulary_checker_correction.blocks_frozen_publication, false);
+  assert.equal(result.vocabulary_checker_correction.whole_branch_merge_allowed, false);
 });
 
 test('exactly one next-successor batch is selected from F0, M0 and A0', () => {
@@ -83,18 +86,41 @@ test('exactly one next-successor batch is selected from F0, M0 and A0', () => {
 test('the current M0 head is one coherent batch and no speculative FR0 batch is admitted', () => {
   const m0 = receipt.current_pull_integrator_refs.M0;
   assert.equal(m0.result_comment, 5531788718);
+  assert.equal(m0.FR0_delivery_review_comment, 5531918584);
   assert.equal(m0.published_merge_ready_head, '7e879210f68f7a7e4a53755f2e9431c61f445569');
   assert.equal(m0.current_head, M0);
-  assert.equal(m0.changed_product_source_after_published_merge_ready_head, false);
-  assert.deepEqual(m0.compatibility_tail, [
-    '1828bde1c869150b25a292a65e8b20a646a5d611',
-    M0,
+  assert.equal(m0.current_is_descendant_of_published_merge_ready_head, true);
+  assert.equal(m0.tail_commit_count, 6);
+  assert.equal(m0.tail_changed_product_source, false);
+  assert.deepEqual(m0.tail_changed_paths, [
+    'site/src/data/m0-downstream-bindings.v1.json',
+    'site/tests/m0-card-icon-role-contract.test.mjs',
+    'site/tests/event-card-control-target.test.mjs',
+    'site/tests/m0-post-fr0-test-ownership.test.mjs',
+    'site/tests/m0-post-fr0-test-ownership.v1.json',
   ]);
+  assert.equal(m0.FR0_card_source_review, 'ACCEPTED_SOURCE');
   assert.equal(m0.decision, 'CURRENT_HEAD_ACCEPTED_AS_THE_ONE_M0_NEXT_SUCCESSOR_BATCH');
 
   assert.equal(receipt.current_pull_integrator_refs.FR0.head, FR0);
   assert.equal(receipt.next_successor_intake.FR0_source_batch, null);
   assert.equal(receipt.next_successor_intake.FR0_admission_rule, 'ONLY_AFTER_FACTUAL_FR0_DRIFT');
+});
+
+test('mobile rail is isolated outside the current three-batch intake', () => {
+  const unit = receipt.deferred_independent_unit;
+  assert.equal(unit.id, 'MOBILE_LISTING_RAIL_RESOURCE_STATE_BINDING');
+  assert.equal(unit.FR0_delivery_review_comment, 5531918584);
+  assert.equal(unit.source_writer, 'A0_CONSUMER_LINE');
+  assert.deepEqual(unit.affected_paths, [
+    'site/src/components/listings/MobileListingRailRow.astro',
+    'site/src/components/listings/MobileListingRailSurface.astro',
+  ]);
+  assert.equal(unit.classification, 'SMALLEST_OWNER_REJECTION_DEFERRED_OUTSIDE_CURRENT_THREE_BATCH_INTAKE');
+  assert.equal(unit.blocks_frozen_cebeafee_publication, false);
+  assert.equal(unit.blocks_F0_M0_A0_next_candidate_intake, false);
+  assert.equal(unit.creates_FR0_source_batch, false);
+  assert.equal(unit.may_enter_later_candidate_only_as_separately_accepted_A0_consumer_batch, true);
 });
 
 test('publication opens an exact V0 trigger and an independently acceptable exhibitions slice', () => {
