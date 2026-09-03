@@ -1,0 +1,88 @@
+/* Public footer continuity roles from the current actual consumer. */
+:root {
+  --ke-footer-padding-top: clamp(6rem, 7vw, 7rem);
+  --ke-footer-padding-bottom: 2rem;
+  --ke-footer-stack-gap: clamp(2rem, 4vw, 3.5rem);
+
+  --ke-footer-share-min-height: 84px;
+  --ke-footer-share-gap: clamp(1.25rem, 3vw, 2.5rem);
+  --ke-footer-share-padding-top: 0.9rem;
+  --ke-footer-share-padding-right: 1.15rem;
+  --ke-footer-share-padding-bottom: 0.9rem;
+  --ke-footer-share-padding-left: 1.45rem;
+  --ke-footer-share-border-left: 5px;
+  --ke-footer-share-radius: var(--ke-shape-radius-focus-panel-compact);
+  --ke-color-footer-share-shell-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 18%, transparent);
+  --ke-footer-share-heading-gap: 0.28em;
+  --ke-footer-share-heading-size: clamp(1.05rem, 1.35vw, 1.28rem);
+  --ke-footer-share-heading-line: 1;
+  --ke-footer-share-heading-letter: -0.02em;
+  --ke-footer-share-heading-weight: 620;
+  --ke-footer-share-strong-weight: 780;
+  --ke-footer-share-wordmark-height: 1.05em;
+  --ke-footer-share-actions-max: 39rem;
+  --ke-footer-share-action-basis: 12.5rem;
+  --ke-footer-share-action-min-height: var(--ke-size-control-comfortable);
+  --ke-footer-share-action-padding-inline: var(--ke-space-lg);
+
+  --ke-footer-main-brand-min: 16rem;
+  --ke-footer-main-brand-fr: 1.5fr;
+  --ke-footer-main-column-min: 9rem;
+  --ke-footer-main-gap: clamp(1.75rem, 3vw, 3.5rem);
+  --ke-footer-brand-gap: var(--ke-space-lg);
+  --ke-footer-brand-link-max: 240px;
+  --ke-footer-lockup-gap: 0.32rem;
+  --ke-footer-endorsement-size: 0.68rem;
+  --ke-footer-endorsement-weight: 760;
+  --ke-footer-endorsement-letter: 0.09em;
+  --ke-footer-wordmark-max: 220px;
+  --ke-footer-brand-copy-max: 35ch;
+  --ke-footer-brand-copy-size: 0.9rem;
+  --ke-footer-brand-copy-line: 1.55;
+  --ke-footer-contact-weight: 760;
+
+  --ke-footer-column-gap: 0.56rem;
+  --ke-footer-column-heading-margin-bottom: 0.45rem;
+  --ke-footer-column-heading-size: 0.72rem;
+  --ke-footer-column-heading-weight: 850;
+  --ke-footer-column-heading-letter: 0.11em;
+  --ke-footer-column-link-size: 0.9rem;
+  --ke-footer-column-link-weight: 650;
+  --ke-footer-column-link-line: 1.35;
+  --ke-footer-link-underline-offset: 0.24em;
+  --ke-footer-notification-size: 7px;
+  --ke-footer-notification-margin-left: 5px;
+  --ke-footer-notification-ring-size: 3px;
+
+  --ke-footer-document-gap: 0.15rem;
+  --ke-footer-document-note-size: 0.68rem;
+  --ke-footer-document-note-weight: 760;
+  --ke-footer-document-copy-margin: 0.2rem 0 0;
+  --ke-footer-document-copy-size: 0.72rem;
+  --ke-footer-document-copy-line: 1.45;
+
+  --ke-footer-bottom-gap: 1.25rem;
+  --ke-footer-bottom-padding-top: 1.35rem;
+  --ke-footer-social-gap: 0.55rem;
+  --ke-footer-social-control-gap: 0.45rem;
+  --ke-footer-social-padding-block: 0.48rem;
+  --ke-footer-social-padding-inline: 0.72rem;
+  --ke-footer-social-label-size: 0.84rem;
+  --ke-footer-social-label-weight: 720;
+  --ke-footer-social-meta-size: 0.68rem;
+  --ke-footer-utility-gap: 0.5rem;
+  --ke-footer-utility-size: 0.76rem;
+  --ke-color-footer-reset-line: rgba(255, 255, 255, 0.22);
+
+  --ke-footer-tablet-share-gap: 0.85rem;
+  --ke-footer-mobile-padding-top: 6.25rem;
+  --ke-footer-mobile-padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+  --ke-footer-mobile-stack-gap: 2rem;
+  --ke-footer-mobile-share-padding: var(--ke-space-lg);
+  --ke-footer-mobile-share-border-left: 4px;
+  --ke-footer-mobile-share-radius: 18px;
+  --ke-footer-mobile-share-heading-size: 1rem;
+  --ke-footer-mobile-share-wordmark-height: 1.1em;
+  --ke-footer-mobile-main-row-gap: 2rem;
+  --ke-footer-mobile-main-column-gap: 1.25rem;
+}
