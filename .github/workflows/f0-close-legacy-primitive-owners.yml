@@ -1,0 +1,73 @@
+name: F0 close legacy primitive owners
+
+on:
+  push:
+    branches:
+      - work/ui-normalization-f0-wave-3-20260903
+    paths:
+      - .github/workflows/f0-close-legacy-primitive-owners.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: f0-close-legacy-primitive-owners
+  cancel-in-progress: false
+
+jobs:
+  close-owner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact F0 branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/ui-normalization-f0-wave-3-20260903
+          fetch-depth: 0
+
+      - name: Remove only the obsolete primitive selector block
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('site/src/styles/design-system.css')
+          source = path.read_text(encoding='utf-8')
+          start_marker = '\n.ke-badge {\n'
+          end_marker = '\n/* Shared date-listing system: Today, Tomorrow and Weekend use this exact\n'
+
+          if source.count(start_marker) != 1:
+              raise SystemExit(f'expected one legacy Badge owner, found {source.count(start_marker)}')
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          removed = source[start:end]
+
+          for required in ('.ke-badge', '.ke-field', '.ke-state-panel'):
+              if required not in removed:
+                  raise SystemExit(f'bounded legacy block does not contain {required}')
+
+          replacement = (
+              '\n\n/* Badge, Field and StatePanel visual ownership moved to\n'
+              '   site/src/components/design-system/component-foundations.css. */\n'
+          )
+          updated = source[:start] + replacement + source[end:]
+          path.write_text(updated, encoding='utf-8')
+          PY
+
+      - name: Run F0 ownership and design-system source checks
+        shell: bash
+        run: |
+          node site/src/components/design-system/f0-normalization-negative-probes.mjs
+          node site/scripts/check-design-system.mjs
+
+      - name: Commit the exact bounded change
+        shell: bash
+        run: |
+          if git diff --quiet -- site/src/styles/design-system.css; then
+            echo 'No cleanup change was required.'
+            exit 0
+          fi
+          git config user.name 'f0-normalization-bot'
+          git config user.email 'f0-normalization-bot@users.noreply.github.com'
+          git add site/src/styles/design-system.css
+          git commit -m 'refactor(ui): remove legacy primitive style owners'
+          git push origin HEAD:work/ui-normalization-f0-wave-3-20260903
