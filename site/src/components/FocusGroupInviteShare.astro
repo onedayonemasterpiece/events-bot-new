@@ -1,4 +1,5 @@
 ---
+import './design-system/product-contour-foundations.css';
 import { withBase } from '../lib/events';
 
 const invitePath = withBase('/fokus-gruppa/priglashenie/');
@@ -183,24 +184,23 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
     gap: 1rem 2rem;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
-    border-radius: 1.5rem;
-    padding: clamp(1.15rem, 3vw, 2rem);
-    background: var(--ke-color-surface-strong, #fff);
-    box-shadow: var(--ke-shadow-1, 0 8px 22px rgb(72 45 25 / 8%));
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+    border-radius: var(--ke-focus-panel-radius);
+    padding: var(--ke-space-focus-panel-padding);
+    background: var(--ke-color-focus-panel-surface);
+    box-shadow: var(--ke-elevation-focus-panel);
   }
 
   .focus-share__eyebrow {
     margin: 0 0 .35rem;
-    color: var(--ke-color-brand-700, #98401f);
-    font-size: .72rem;
-    font-weight: 900;
-    letter-spacing: .11em;
+    color: var(--ke-color-action-primary-hover);
+    font: var(--ke-type-eyebrow);
+    letter-spacing: var(--ke-type-eyebrow-letter);
     text-transform: uppercase;
   }
 
-  .focus-share h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 2rem); line-height: 1.08; }
-  .focus-share h2 + p { margin: .75rem 0 0; color: var(--ke-color-muted, #6d6259); line-height: 1.55; }
+  .focus-share h2 { margin: 0; font: var(--ke-type-focus-heading); }
+  .focus-share h2 + p { margin: .75rem 0 0; color: var(--ke-color-text-muted); line-height: 1.55; }
   .focus-share__actions { min-width: 0; display: grid; gap: .7rem; align-content: start; }
   .focus-share__actions > .ke-button { justify-self: start; }
   .focus-share__result { min-width: 0; display: grid; gap: .5rem; }
@@ -210,25 +210,25 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     box-sizing: border-box;
     width: 100%;
     min-height: 46px;
-    border: 1px solid #cdbfad;
-    border-radius: .8rem;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-input);
+    border-radius: var(--ke-focus-input-radius);
     padding: .65rem .75rem;
-    background: #fffdf8;
-    color: #44362d;
+    background: var(--ke-color-focus-sheet-surface);
+    color: var(--ke-color-text-secondary);
     font: .78rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
   }
   .focus-share__result input:focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 55%, transparent);
+    outline: 3px solid var(--ke-color-focus-ring-accent-medium);
     outline-offset: 2px;
   }
   .focus-share__url {
     overflow-wrap: anywhere;
-    color: var(--ke-color-brand-700, #98401f);
+    color: var(--ke-color-action-primary-hover);
     font: 700 .74rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
   }
   .focus-share__url:focus-visible,
   .focus-share__qr-copy a:focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 55%, transparent);
+    outline: 3px solid var(--ke-color-focus-ring-accent-medium);
     outline-offset: 3px;
   }
   .focus-share__qr {
@@ -236,16 +236,16 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     grid-template-columns: minmax(148px, 180px) minmax(0, 1fr);
     gap: .8rem;
     align-items: center;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
-    border-radius: 1rem;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+    border-radius: var(--ke-focus-input-radius);
     padding: .75rem;
-    background: #fffdf8;
+    background: var(--ke-color-focus-sheet-surface);
   }
   .focus-share__qr-image {
     overflow: hidden;
     aspect-ratio: 1;
     border-radius: .65rem;
-    background: #fff;
+    background: var(--ke-color-focus-control-surface);
   }
   .focus-share__qr-image :global(svg) {
     display: block;
@@ -255,20 +255,20 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
   .focus-share__qr-copy { display: grid; gap: .45rem; align-content: center; }
   .focus-share__qr-copy strong { font-size: .86rem; }
   .focus-share__qr-copy span {
-    color: var(--ke-color-muted, #6d6259);
+    color: var(--ke-color-text-muted);
     font-size: .74rem;
     line-height: 1.42;
   }
   .focus-share__qr-copy .ke-button { justify-self: start; }
-  .focus-share__buttons { display: flex; flex-wrap: wrap; gap: .55rem; }
-  .focus-share__status { min-height: 2.5em; margin: 0; color: var(--ke-color-muted, #6d6259); font-size: .78rem; line-height: 1.35; }
+  .focus-share__buttons { display: flex; flex-wrap: wrap; gap: var(--ke-space-focus-control-gap); }
+  .focus-share__status { min-height: 2.5em; margin: 0; color: var(--ke-color-text-muted); font-size: .78rem; line-height: 1.35; }
   .focus-share__boundary {
     grid-column: 1 / -1;
     margin: .25rem 0 0;
-    border-radius: 1rem;
-    padding: .85rem 1rem;
-    background: var(--ke-color-warning-50, #fff8db);
-    color: var(--ke-color-warning-800, #5a3b06);
+    border-radius: var(--ke-focus-boundary-radius);
+    padding: .85rem var(--ke-space-focus-boundary-inline);
+    background: var(--ke-color-status-warning-background);
+    color: var(--ke-color-status-warning-foreground);
     font-size: .82rem;
     line-height: 1.48;
   }
