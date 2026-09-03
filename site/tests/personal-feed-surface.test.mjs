@@ -27,7 +27,7 @@ async function readBuilt(relativePath) {
   return readFile(path.join(buildRoot, relativePath), 'utf8');
 }
 
-test('personal feed keeps listing hydration hidden and exposes a bounded event-detail continuation', async () => {
+test('personal feed keeps listing hydration hidden and exposes a bounded canonical event-detail continuation', async () => {
   const source = await read('src/components/PersonalFeedSlot.astro');
   assert.match(source, /'ke-personal-feed-slot'/u, 'mobile rail selector matches the generic personal-feed section');
   assert.match(source, /data-personal-feed-section/u);
@@ -38,19 +38,26 @@ test('personal feed keeps listing hydration hidden and exposes a bounded event-d
   assert.match(source, /data-personal-feed-status/u);
   assert.match(source, /!isEventDetail && <button[^>]*data-personal-feed-load-more/u);
   assert.match(source, /data-personal-feed-mode=\{isEventDetail \? 'pending' : undefined\}/u);
-  assert.match(source, /aria-live="polite"/u);
   assert.match(source, /hidden=\{!isEventDetail\}/u);
   assert.match(source, /Шесть разных событий без бесконечной ленты/u);
   assert.match(source, /data-personal-feed-all-events[^>]*href=\{siteHomeHref\(\)\}>Все анонсы/u);
   assert.match(source, /data-personal-feed-mode="pending"/u);
   assert.match(source, /data-personal-feed-mode="popular_fallback"/u);
   assert.match(source, /data-personal-feed-mode="unavailable"/u);
-  assert.match(source, /repeat\(3, minmax\(0, 1fr\)\)/u);
-  assert.match(source, /repeat\(2, minmax\(0, 1fr\)\)/u);
-  assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/u);
+  assert.match(source, /<AdaptiveEventCardGrid/u);
+  assert.match(source, /mode="packed"/u);
+  assert.match(source, /rowSize=\{3\}/u);
+  assert.match(source, /responsive="progressive"/u);
+  assert.match(source, /ariaLive="polite"/u);
+  assert.match(source, /ariaAtomic=\{false\}/u);
+  assert.match(source, /ariaLabelledby=\{headingId\}/u);
+  assert.match(source, /'data-personal-feed-runtime-host':'adaptive-v1'/u);
+  assert.doesNotMatch(source, /personal-feed-section__live-region/u, 'canonical adaptive root owns the live region without an intermediary wrapper');
+  assert.doesNotMatch(source, /repeat\(3, minmax\(0, 1fr\)\)|repeat\(2, minmax\(0, 1fr\)\)|grid-template-columns: minmax\(0, 1fr\)/u,
+    'PersonalFeedSlot must not own a second card-grid layout');
 });
 
-test('personal feed uses contiguous desktop row packing and independent mobile media decisions', async () => {
+test('personal feed uses canonical adaptive packing while runtime keeps contiguous desktop rows and mobile media decisions', async () => {
   const [slot, layout] = await Promise.all([
     read('src/components/PersonalFeedSlot.astro'),
     read('src/layouts/EventLayout.astro'),
@@ -67,10 +74,13 @@ test('personal feed uses contiguous desktop row packing and independent mobile m
   assert.match(layout, /appendEventCard\(slot, item, slot\.dataset\.feedCardVariant \|\| 'split-actions', layout\)/u, 'both flows pass their resolved layout into the canonical card');
   assert.doesNotMatch(layout, /chunk\.map\(\(item\) => \(\{ item, layout: null \}\)\)/u, 'mobile never falls back to unresolved desktop-template media');
 
-  assert.match(slot, /@media \(min-width: 1024px\) \{[\s\S]*\.personal-feed-section :global\(\[data-lab-related-card\]\)/u);
-  assert.match(slot, /\.personal-feed-section :global\(\[data-lab-related-card\] \.event-card__media-shell\)[\s\S]*aspect-ratio: var\(--lab-row-media-ratio\)/u);
-  assert.match(slot, /\.personal-feed-section :global\(\[data-lab-related-card\] \.event-card__body\)[\s\S]*min-height: 0/u);
-  assert.doesNotMatch(slot, /\.personal-feed-section--event-detail :global\(\[data-lab-related-card\]/u, 'desktop normalization covers every personal-feed context');
+  assert.match(slot, /<AdaptiveEventCardGrid[\s\S]*mode="packed"[\s\S]*rowSize=\{3\}[\s\S]*responsive="progressive"/u);
+  assert.match(slot, /'data-personal-feed-slot':''/u);
+  assert.match(slot, /'data-personal-feed-runtime-host':'adaptive-v1'/u);
+  assert.doesNotMatch(slot, /\.personal-feed-section(?:--event-detail)? :global\(\[data-lab-related-card/u,
+    'consumer no longer owns packed-card geometry');
+  assert.doesNotMatch(slot, /event-card__media-shell|event-card__body|event-card__utility-row|event-card__feedback--under/u,
+    'consumer no longer owns canonical card media or equal-height anatomy');
 });
 
 test('event-detail continuation uses six diverse cards with an honest non-personal fallback', async () => {

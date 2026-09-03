@@ -11,7 +11,15 @@ const items = [
 ];
 ---
 
-<nav class="home-quick-nav" data-home-quick-nav aria-label="Быстрый выбор событий">
+<nav
+  class="home-quick-nav"
+  data-ds-family="HomeQuickNav"
+  data-ds-version="1"
+  data-ds-variant="six-route-grid"
+  data-ds-state="populated"
+  data-home-quick-nav
+  aria-label="Быстрый выбор событий"
+>
   {items.map((item, index) => (
     <a href={withBase(item.href)} data-home-quick-nav-item={index + 1}>
       <strong>{item.label}</strong>
@@ -29,25 +37,25 @@ const items = [
   }
   .home-quick-nav a {
     min-width: 0;
-    min-height: 92px;
+    min-height: var(--ke-size-home-nav-item);
     display: grid;
     align-content: center;
     gap: .15rem;
     padding: .85rem .9rem;
-    border: 1px solid rgba(121,48,20,.13);
+    border: 1px solid var(--ke-color-border-brand-soft);
     border-radius: 20px;
-    background: #fffaf3;
+    background: var(--ke-color-home-card-surface);
     color: var(--text);
     text-decoration: none;
     transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
   }
-  .home-quick-nav a:hover { transform: translateY(-2px); border-color: rgba(121,48,20,.28); background: #fff; }
-  .home-quick-nav a:focus-visible { outline: 3px solid rgba(165,72,33,.25); outline-offset: 2px; }
+  .home-quick-nav a:hover { transform: translateY(-2px); border-color: var(--ke-color-border-brand-hover); background: var(--ke-color-home-card-hover-surface); }
+  .home-quick-nav a:focus-visible { outline: 3px solid var(--ke-color-focus-ring-brand-subtle); outline-offset: 2px; }
   .home-quick-nav strong { font-size: 1.02rem; line-height: 1.08; }
   .home-quick-nav span { color: var(--muted); font-size: .75rem; font-weight: 680; line-height: 1.2; }
   @media (max-width: 1020px) { .home-quick-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (max-width: 560px) {
     .home-quick-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
-    .home-quick-nav a { min-height: 82px; padding: .72rem; }
+    .home-quick-nav a { min-height: var(--ke-size-home-nav-item-compact); padding: .72rem; }
   }
 </style>
