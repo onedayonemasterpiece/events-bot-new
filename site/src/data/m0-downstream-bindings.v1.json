@@ -1,0 +1,376 @@
+{
+  "schema": "kenigevents.m0.downstream-bindings.v1",
+  "version": "1.0.0",
+  "contract_version": "1.9.0",
+  "role": "M0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "instruction_comment": 5526326906,
+  "authority": {
+    "executable_repository": "onedayonemasterpiece/events-bot-new",
+    "role_branch": "work/ui-normalization-m0-continuity-20260903",
+    "source_checkpoint_before_binding_commit": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+    "current_successor_branch": "agent/static-site-single-kaggle-contract",
+    "current_successor_sha_at_review": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
+    "thin_s_repository": "onedayonemasterpiece/lovekgd-design-system",
+    "thin_s_branch": "integration/launch-normalized-sot-penpot-20260902",
+    "candidate_acceptance_owner": "N0",
+    "browser_verdict_owner": "V0",
+    "runtime_kaggle_owner": "R0",
+    "penpot_writer": "R0.PENPOT"
+  },
+  "truth_boundary": {
+    "source_implemented_does_not_mean_candidate_integrated": true,
+    "candidate_integrated_does_not_mean_browser_passed": true,
+    "spec_only_does_not_mean_penpot_materialized": true,
+    "local_test_execution_claimed": false,
+    "browser_pass_claimed": false,
+    "penpot_materialization_claimed": false
+  },
+  "published_evidence": {
+    "fresh_real": {
+      "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+      "source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+      "classification": "HTTP_200_CANONICAL_KAGGLE_OLDER_M0_TRANSACTION_UNAUDITED_BY_CURRENT_V0",
+      "current_m0_credit": false
+    },
+    "golden": {
+      "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+      "source_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+      "v0_comment": 5527892153,
+      "verdict": "DRIFT",
+      "accepted_m0_relevant_finding": "EventCard auxiliary not-interested target measured approximately 36.28px; current M0 canonical minimum is 44px but requires successor browser retest"
+    },
+    "current_v0_blocker": {
+      "comment": 5529063082,
+      "status": "NOT_EXECUTED",
+      "reason": "my-browser-bridge actions absent from that V0 activation",
+      "browser_pass_claimed": false
+    }
+  },
+  "families": [
+    {
+      "id": "m0.media-frame",
+      "astro_family": "MediaFrame",
+      "version": 1,
+      "source_roots": [
+        "site/src/components/media-frame.css"
+      ],
+      "variants": [
+        "event-card",
+        "listing-card",
+        "media-rail",
+        "event-hero"
+      ],
+      "states": [
+        "visual-cover",
+        "document-contain",
+        "unknown-contain",
+        "fallback"
+      ],
+      "protocol": [
+        "role",
+        "kind",
+        "ratio",
+        "fit",
+        "crop-permission",
+        "object-position",
+        "focal-position",
+        "clip",
+        "radius",
+        "loading",
+        "priority",
+        "fallback",
+        "interaction-owner"
+      ],
+      "penpot_master_target": "M0 / MediaFrame"
+    },
+    {
+      "id": "m0.event-card",
+      "astro_family": "EventCard",
+      "version": 2,
+      "source_roots": [
+        "site/src/components/EventCard.astro",
+        "site/src/components/event-card.css"
+      ],
+      "variants": [
+        "split-actions",
+        "overlay-controls"
+      ],
+      "states": [
+        "runtime-template",
+        "packed-row",
+        "mobile-flow",
+        "calendar-eligible",
+        "media-visual",
+        "media-document",
+        "media-unknown",
+        "media-fallback",
+        "consumer-metadata"
+      ],
+      "canonical_children": [
+        "MediaFrame",
+        "SemanticIcon",
+        "EventOccurrenceLabel"
+      ],
+      "penpot_master_target": "M0 / EventCard"
+    },
+    {
+      "id": "m0.listing-event-card",
+      "astro_family": "ListingEventCard",
+      "version": 9,
+      "source_roots": [
+        "site/src/components/listings/ListingEventCard.astro"
+      ],
+      "variants": [
+        "regular",
+        "weekend",
+        "popular"
+      ],
+      "states": [
+        "priority",
+        "supplemental",
+        "temporal-label",
+        "social-proof",
+        "identity",
+        "free-admission",
+        "adaptive-crop",
+        "media-visual",
+        "media-document",
+        "media-unknown",
+        "media-fallback",
+        "consumer-metadata"
+      ],
+      "canonical_children": [
+        "MediaFrame",
+        "SemanticIcon"
+      ],
+      "penpot_master_target": "M0 / ListingEventCard"
+    },
+    {
+      "id": "m0.adaptive-event-card-grid",
+      "astro_family": "AdaptiveEventCardGrid",
+      "version": 1,
+      "source_roots": [
+        "site/src/components/AdaptiveEventCardGrid.astro"
+      ],
+      "variants": [
+        "flow-1-column",
+        "flow-2-column",
+        "flow-3-column",
+        "packed-1-column",
+        "packed-2-column",
+        "packed-3-column"
+      ],
+      "states": [
+        "responsive-fixed",
+        "responsive-progressive",
+        "responsive-stack",
+        "remainder-complete",
+        "remainder-stretch-r-of-n",
+        "runtime-managed",
+        "populated",
+        "empty"
+      ],
+      "diagnostics_contract": "input-source-rendered-v1",
+      "layout_engine": "flex-lines",
+      "penpot_master_target": "M0 / AdaptiveEventCardGrid"
+    },
+    {
+      "id": "m0.event-media-rail",
+      "astro_family": "EventMediaRail",
+      "version": 1,
+      "source_roots": [
+        "site/src/components/EventMediaRail.astro"
+      ],
+      "variants": [
+        "gallery-thumbnails",
+        "hero-selector",
+        "poster-strip"
+      ],
+      "states": [
+        "complete",
+        "overflow",
+        "responsive-pending"
+      ],
+      "input_contracts": [
+        "asset-input-v1",
+        "resolved-items-v1"
+      ],
+      "semantic_gate": "cover requires kind=visual and imageTextMode=visual_only; contradictory resolved input fails closed to contain",
+      "penpot_master_target": "M0 / EventMediaRail"
+    },
+    {
+      "id": "m0.event-hero",
+      "astro_family": "EventHero",
+      "version": 1,
+      "source_roots": [
+        "site/src/components/EventHero.astro"
+      ],
+      "variants": [
+        "poster-billboard",
+        "poster-attached-card",
+        "photo-cinematic-sheet",
+        "photo-parallax-sheet",
+        "compact-ticketing"
+      ],
+      "states": [
+        "poster-stage",
+        "photo-cover",
+        "fallback-art",
+        "gallery",
+        "fallback"
+      ],
+      "canonical_children": [
+        "MediaFrame"
+      ],
+      "interaction_boundary": "existing event-hero visual button owns gallery opening; inner MediaFrame is non-interactive",
+      "internal_composition": "full-screen hero-gallery viewer preserves per-slide protected crop and is not a second primary-frame family root",
+      "penpot_master_target": "M0 / EventHero"
+    }
+  ],
+  "compatibility_adapters": [
+    {
+      "path": "site/src/components/OptimizedEventCardGrid.astro",
+      "target": "AdaptiveEventCardGrid",
+      "status": "adapter_only",
+      "penpot_master": false,
+      "forbidden_owners": [
+        "EventCard DOM",
+        "packRelatedCardRows",
+        "layout CSS",
+        "runtime diagnostics"
+      ]
+    }
+  ],
+  "actual_consumer_census": [
+    {
+      "family": "EventCard",
+      "current_successor_consumers": [
+        "AdaptiveEventCardGrid",
+        "EventLayout runtime-card templates",
+        "collection and discovery compositions"
+      ],
+      "migration_owner": "A0",
+      "m0_status": "root_and_metadata_bridge_ready"
+    },
+    {
+      "family": "ListingEventCard",
+      "current_successor_consumers": [
+        "date listings",
+        "weekend listings",
+        "popular desktop and adaptive rows"
+      ],
+      "migration_owner": "A0",
+      "m0_status": "root_and_metadata_bridge_ready"
+    },
+    {
+      "family": "AdaptiveEventCardGrid",
+      "current_successor_consumers": [
+        "OptimizedEventCardGrid adapter",
+        "HomeColdStartFeed",
+        "PersonalFeedSlot",
+        "FavoritesSurface",
+        "collection and discovery feeds"
+      ],
+      "migration_owner": "A0",
+      "m0_status": "public API covers current consumers"
+    },
+    {
+      "family": "EventMediaRail",
+      "current_successor_consumers": [
+        "DesktopEventPage hero-selector",
+        "DesktopEventPage poster-strip",
+        "design-system gallery-thumbnails specimen"
+      ],
+      "migration_owner": "A0",
+      "m0_status": "all three APIs and runtime hooks covered"
+    },
+    {
+      "family": "EventHero",
+      "current_successor_consumers": [
+        "event-detail mobile and shared event hero routes"
+      ],
+      "migration_owner": "A0",
+      "m0_status": "MediaFrame adapter accepted"
+    }
+  ],
+  "candidate_review": {
+    "current_successor_sha": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
+    "embedded_m0_checkpoint": "c808c75dd975a9851e148ccf993c32787d2b6886",
+    "classification": "PARTIAL_M0_INCLUDED_CURRENT_TAIL_MISSING",
+    "already_preserved_in_successor": [
+      "AdaptiveEventCardGrid responsive seam specificity",
+      "EventHero family identity and primary MediaFrame adapter",
+      "DesktopEventPage EventMediaRail consumer migration",
+      "EventLayout 36px auxiliary override removal"
+    ],
+    "missing_current_m0_source": [
+      {
+        "path": "site/src/components/EventMediaRail.astro",
+        "candidate_blob": "4609fac9046204cd5f1df5546958378ec5e37bf7",
+        "required_m0_blob": "1e49e4b765488ef7703473693b6f619d185acfde",
+        "reason": "candidate cover gate ignores imageTextMode and accepts contradictory resolved visual input"
+      },
+      {
+        "path": "site/tests/event-media-rail-hardening.test.mjs",
+        "reason": "candidate lacks contradictory-kind/imageTextMode fail-closed regression"
+      },
+      {
+        "path": "site/tests/ui-normalization-m0-contract.test.mjs",
+        "reason": "candidate expects the superseded unsafe rail-fit expression"
+      },
+      {
+        "path": "site/tests/m0-event-hero-media-frame-contract.test.mjs",
+        "reason": "candidate source has the adapter but lacks the M0 positive family/interaction regression"
+      }
+    ],
+    "rejected_replay": [
+      "the obsolete A0 EventHero temporary MediaFrame exception registry and its negative exception test",
+      "any A0 historical copy of an M0 canonical root",
+      "a parallel data-ui identity protocol",
+      "blanket rejection of safe target=_blank links"
+    ]
+  },
+  "regression_contracts": [
+    "site/tests/ui-normalization-m0-contract.test.mjs",
+    "site/tests/adaptive-event-card-grid.test.mjs",
+    "site/tests/adaptive-grid-diagnostic-cardinality.test.mjs",
+    "site/tests/event-media-rail-hardening.test.mjs",
+    "site/tests/media-frame-style-owner.test.mjs",
+    "site/tests/check-preview-media-frame-contract.test.mjs",
+    "site/tests/m0-media-frame-gallery-fallback-coverage.test.mjs",
+    "site/tests/listing-event-card-media-fallback.test.mjs",
+    "site/tests/event-card-flex-placement.test.mjs",
+    "site/tests/event-card-control-target.test.mjs",
+    "site/tests/m0-card-icon-role-contract.test.mjs",
+    "site/tests/related-card-packer-inputs.test.mjs",
+    "site/tests/m0-event-hero-media-frame-contract.test.mjs",
+    "site/tests/m0-downstream-contracts.test.mjs"
+  ],
+  "downstream_targets": {
+    "thin_s": "catalog/normalization/m0-family-thin-s-bindings.v1.json",
+    "penpot_ready": "penpot/candidate/m0-family-master-spec.v1.json",
+    "v0_matrix": "catalog/normalization/evidence/m0-v0-acceptance-matrix.v1.json",
+    "integration_rollback": "docs/launch-normalization/m0-source-integration-and-rollback.v1.json"
+  },
+  "pm0_items": {
+    "20": "SOURCE_DONE",
+    "21": "SOURCE_DONE",
+    "22": "SOURCE_DONE",
+    "23": "A0_MIGRATION_AND_V0_REQUIRED",
+    "24": "SOURCE_AND_NEGATIVE_CONTRACTS_DONE_EXECUTION_REQUIRED",
+    "25": "M0_BINDINGS_READY_AFTER_DOWNSTREAM_COMMIT",
+    "26": "SOURCE_DONE_CURRENT_SUCCESSOR_TAIL_AND_V0_REQUIRED",
+    "27": "V0_REQUIRED_ON_CURRENT_M0_SUCCESSOR",
+    "28": "ROOTS_DONE_A0_CONSUMER_ACCEPTANCE_REQUIRED",
+    "29": "SOURCE_DONE_V0_44PX_REQUIRED",
+    "30": "SOURCE_DONE_V0_FINAL_LINE_AND_REMAINDER_REQUIRED",
+    "31": "V0_REQUIRED_ON_CURRENT_M0_SUCCESSOR"
+  },
+  "next_product_gate": {
+    "required_source": "N0-accepted successor containing current M0 rail semantic tail and current cross-role roots",
+    "required_runtime": "one full fresh-real Kaggle build with matching preview-build.json, immutable snapshot and explicit ancestry",
+    "required_browser": "independent V0 route/viewport verdict when my-browser-bridge is callable",
+    "after_pass": "bind exact accepted source and V0 cases to native Penpot masters and linked route instances, then run Golden A=S=P"
+  }
+}
