@@ -219,3 +219,14 @@ research lanes changed no files.
 | M0 | R02-R05 | `work/ui-normalization-m0-continuity-20260903` | merged | `00ef7b689cc5d040bd0099962576cadcd88270f7` | merge | pending current-candidate checks |
 | A0 | R02-R05 | `work/ui-normalization-a0-wave-3-20260903` | merged | `f4fb2247c35d4578cdfefed1b6c410f9fd665f7d` | merge | pending current-candidate checks |
 | R0 integration | R01-R08 | `r0/ui-normalization-current-candidate-20260903` | in progress | pending | serial integration | `.codex/lanes/r0-current-candidate/RESULTS.md` |
+
+### Successor role checkpoint (2026-09-03T11:10Z)
+
+- M0 successor `4f11448caf21582d4004d4052f0812e96a95ff99` merged without conflict.
+- A0 successor `32e215b5b698bf7b4c494b1d4bb44c3db9f304a2` (including `787218746` and `f9bfd7658`) merged without conflict.
+- Source-only combined contract run: 12/14 PASS. The two residuals are non-source-product blockers: one requires the still-running frozen `dist`; the other is an A0-owned regex assertion that does not allow Astro object-property whitespace (`'data-personal-feed-slot':''`) even though the attribute is present in the canonical `rootAttributes` host. Recheck against built output remains pending.
+- `local_runtime_work_completed`: fresh production export and frozen build active under PID+log-tail; no blind sleep.
+- `role_outputs_integrated_or_verified`: yes, latest fetched M0/A0 successors integrated; F0 unchanged.
+- `Codex_only_implementation_and_why_it_was_not_economical_for_a_role_window`: none; R0 performed only integration/runtime/evidence work.
+- `blind_wait_seconds: 0`
+- `duplicated_specialist_work: 0`
