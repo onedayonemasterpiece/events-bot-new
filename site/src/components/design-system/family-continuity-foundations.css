@@ -1,0 +1,61 @@
+/*
+ * F0 continuity foundations for the latest canonical M0 family heads.
+ *
+ * Token-only registry: component anatomy and selectors stay in M0 roots. These
+ * roles preserve the current pixels while allowing those roots to remove local
+ * literals without creating a second style owner.
+ */
+:root {
+  /* AdaptiveEventCardGrid packed/flow family. */
+  --ke-adaptive-card-grid-gap: var(--ke-space-home-grid-gap);
+  --ke-color-adaptive-card-media-placeholder: var(--ke-color-surface-media-placeholder);
+  --ke-color-adaptive-card-media-visual-start: #e4ddd2;
+  --ke-color-adaptive-card-media-visual-end: #d4c7b9;
+  --ke-color-adaptive-card-media-contain: var(--ke-color-surface-media-contain);
+  --ke-adaptive-card-packed-utility-min-height: 58px;
+  --ke-adaptive-card-packed-feedback-min-height: 56px;
+
+  /* EventMediaRail shared dark media chrome. Gallery and resolved rails retain
+     their current alpha/ink differences because they serve different viewing
+     density and do not form an accidental duplicate state. */
+  --ke-color-media-rail-gallery-surface: rgba(31, 27, 24, 0.92);
+  --ke-color-media-rail-resolved-surface: rgba(31, 27, 24, 0.9);
+  --ke-color-media-rail-gallery-item-surface: #2d2926;
+  --ke-color-media-rail-resolved-item-surface: #2b2724;
+  --ke-color-media-rail-inverse-text: var(--ke-color-surface-warm);
+  --ke-color-media-rail-current-border: var(--ke-color-background-surface-strong);
+  --ke-color-media-rail-shell-border: rgba(255, 255, 255, 0.12);
+  --ke-color-media-rail-item-border: rgba(255, 255, 255, 0.16);
+  --ke-color-media-rail-control-border: rgba(255, 255, 255, 0.2);
+  --ke-color-media-rail-role-surface: rgba(0, 0, 0, 0.72);
+  --ke-color-media-rail-role-text: var(--ke-color-text-inverse);
+  --ke-color-media-rail-more-label: var(--ke-color-event-detail-muted-warm);
+  --ke-elevation-media-rail-gallery: 0 14px 36px rgba(24, 18, 14, 0.2);
+
+  --ke-media-rail-gallery-gap: 0.42rem;
+  --ke-media-rail-gallery-padding: 0.44rem;
+  --ke-media-rail-gallery-radius: 18px;
+  --ke-media-rail-gallery-item-height: 54px;
+  --ke-media-rail-gallery-item-radius: 11px;
+
+  --ke-media-rail-resolved-gap: 0.35rem;
+  --ke-media-rail-resolved-padding: 0.45rem;
+  --ke-media-rail-resolved-radius: 16px;
+  --ke-media-rail-resolved-item-radius: 10px;
+  --ke-media-rail-hero-item-min-width: var(--ke-size-touch-target);
+  --ke-media-rail-hero-item-max-width: 68px;
+  --ke-media-rail-hero-item-height: var(--ke-size-control-comfortable);
+  --ke-media-rail-hero-more-count-size: 1.05rem;
+  --ke-media-rail-resolved-more-label-size: 0.58rem;
+  --ke-media-rail-role-radius: 6px;
+  --ke-media-rail-role-size: 0.62rem;
+
+  --ke-media-rail-poster-thumb-height: clamp(104px, 13svh, 148px);
+  --ke-media-rail-poster-shell-extra-height: 20px;
+  --ke-media-rail-poster-gap: 0.5rem;
+  --ke-media-rail-poster-padding: 0.65rem;
+  --ke-media-rail-poster-item-width: 112px;
+  --ke-media-rail-poster-item-min-width: 88px;
+  --ke-media-rail-poster-item-max-width: 196px;
+  --ke-media-rail-poster-more-width: 104px;
+}
