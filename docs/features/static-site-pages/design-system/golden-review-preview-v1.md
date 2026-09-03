@@ -1,6 +1,6 @@
 # Golden Review Preview v1 — N0 acceptance and transition contract
 
-Status: `GOLDEN_KAGGLE_ACCEPTED_V0_PENDING`  
+Status: `GOLDEN_KAGGLE_ACCEPTED_V0_DRIFT`  
 Coordination: `onedayonemasterpiece/events-bot-new#621`  
 Owner: `N0`  
 Contract: `kenigevents.launch-normalized-ui.v1@1.9.0`
@@ -129,7 +129,7 @@ PM0-4  full Golden Kaggle build/check/publication path
 PM0-6  frozen Europe/Kaliningrad clock and Friday/Saturday/Sunday dates
 PM0-7  exact 5/6/5 density
 PM0-8  exact Weekend occurrence reuse
-PM0-9  published stress matrix; independent visual verdict still pending
+PM0-9  published stress matrix; independent V0 verdict is DRIFT
 PM0-10 pinned corpus/assets; append-only stability window still active
 ```
 
@@ -146,23 +146,104 @@ thin S or Penpot equality
 
 R0 browser smoke is useful defect evidence but is not an independent V0 verdict.
 
-## 6. Current V0 trigger and drift routing
+## 6. Independent V0 verdict
 
-V0 may immediately audit the exact accepted Golden URL above. The audit must
-inspect actual DOM and computed styles across the Golden route/viewport matrix,
-including MediaFrame cover/contain/fallback/error states, Adaptive grid
-occupancy, long-copy containment, admission/calendar/lifecycle states and the
-internally scrollable Today date rail.
+V0 personally audited the exact Golden URL and reported `[DRIFT]` in issue
+comment `5527892153`.
 
-Any `[DRIFT]` is routed to its existing owner. N0 does not issue a browser PASS
-and does not infer one from 36/36 document responses.
+```yaml
+viewports: [375, 620, 1024, 1440]
+routes_per_viewport: 10
+document_http_200: 40/40
+free_collection_visible_cards_at_375: 6
+free_collection_horizontal_overflow: false
+verdict: DRIFT
+release_acceptance: false
+```
 
-## 7. Next common product gate
+N0 accepts one product defect and rejects two overbroad harness/source demands:
+
+### Accepted product drift — auxiliary action below 44px
+
+The six `Не интересно` controls were observed at approximately `36.28px` high.
+Current source traces this to the specific EventLayout override:
+
+```css
+.event-card--split-actions .event-card__utility-row .feedback-button--negative {
+  min-height: 36px;
+}
+```
+
+A0 owns the source fix. The first fresh-real candidate remains closed until the
+specific override is removed or raised so the computed target is at least 44px,
+with the existing action behavior preserved. The strict N0 source probe is:
+
+```bash
+N0_REQUIRE_V0_GOLDEN_DRIFT_FIXED=1 npm run test:n0-v0-golden-drift
+```
+
+### Rejected source demand — parallel `data-ui-*` identity
+
+The current accepted identity protocol is:
+
+```text
+data-ds-family
+data-ds-version
+data-ds-variant
+data-ds-state
++ existing family-specific hooks
+```
+
+`FreeCollectionSurface`, `AdaptiveEventCardGrid` and `EventCard` already expose
+that protocol. N0 rejects adding a second `data-ui-root/data-ui-role` identity
+layer merely to satisfy stale selectors. V0 must update the harness to the
+canonical `data-ds-*` contract.
+
+### Rejected negative gate — blanket `target="_blank"` ban
+
+External social or action links may intentionally open a new browsing context.
+They are accepted when safely isolated by both `noopener` and `noreferrer`.
+The correct negative probes are:
+
+```css
+[target="_blank"]:not([rel~="noopener"])
+[target="_blank"]:not([rel~="noreferrer"])
+```
+
+A safe footer link such as
+`target="_blank" rel="me noopener noreferrer"` is not product drift.
+
+## 7. A0 materialization acceptance
+
+N0 accepts A0 comment `5527907602` as the bounded current-successor materialization
+batch, with one amendment: `A0-MECH-04` must close the accepted 44px defect above.
+
+Frozen source dependencies for that batch are:
+
+```yaml
+F0: de92dabd4551e117ca1af1be7915ff223321cc32
+M0: 4c83fc7769b1dec2d92469373e3b15154af437f4
+A0: ec926580fa2cc003318006f4c1d671fc459ea26c
+```
+
+R0 must integrate F0, then M0, then apply the net A0 consumer diff and bounded
+A0-MECH-01..05 against that tree. A0 copies of M0 roots are excluded; the A0
+branch may not be merged wholesale. The materialization must preserve Popular
+Large/Compact choice, persistence, keyboard/pinch behavior and visible anchor.
+
+The other two N0 amendments are:
+
+- retain canonical `data-ds-*` identity; do not add `data-ui-*` aliases;
+- retain safe `_blank` external links; reject only missing `noopener` or
+  `noreferrer`.
+
+## 8. Next common product gate
 
 The nearest common gate remains:
 
 ```text
-one current integrated successor SHA
+one exact integrated successor SHA with the 44px fix
++ source/regression/check PASS
 + fresh immutable production snapshot with source time/count/hash
 + full events-bot-new Kaggle build using preview-data-mode=real and page-class=all
 + checked artifact and create-only immutable-prefix publication
@@ -174,7 +255,7 @@ one current integrated successor SHA
 Golden cannot substitute for the fresh-real preview or turn the voice-review
 gate green.
 
-## 8. Rollback and prohibitions
+## 9. Rollback and prohibitions
 
 - Never publish a full/focused owner preview outside the canonical Kaggle rail.
 - Never use `deploy:preview` or `deploy:golden-preview` as a launch path.
@@ -182,5 +263,7 @@ gate green.
   prefix.
 - Never reuse a successful build verdict for another SHA.
 - Never treat source tests, local diagnostic output or R0 smoke as V0 PASS.
+- Never add a parallel `data-ui-*` identity protocol.
+- Never treat safe external `_blank` links as product drift.
 - A failed successor or Golden gate leaves the previous immutable result intact
   and rejects only the new prefix.
