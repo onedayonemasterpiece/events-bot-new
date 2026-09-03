@@ -14,7 +14,12 @@
   overflow: hidden;
 }
 
-[data-media-frame][data-media-frame-contract="v1"][data-media-frame-fill="true"] {
+/* Only these two anatomies require the frame root to fill a sized parent.
+ * EventCard and mobile-listing-rail roots own their external block height. */
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-fill="true"]:is(
+  [data-media-frame-surface="listing-card"],
+  [data-media-frame-surface="media-rail"]
+) {
   height: 100%;
 }
 
