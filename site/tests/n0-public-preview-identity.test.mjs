@@ -186,13 +186,13 @@ test('build identity remains full-SHA and N0 publication policy is Kaggle-only',
   assert.equal(packageJson.scripts['deploy:golden-preview'], undefined);
 
   const acceptance = JSON.parse(acceptanceSource);
-  const realGate = acceptance.gate_graph.find((item) => item.id === 'FULL_REAL_KAGGLE_REVIEW_PREVIEW');
+  const realGate = acceptance.gate_graph.find((item) => item.id === 'FULL_REAL_KAGGLE_PREVIEW');
   assert.ok(realGate, 'full-real Kaggle gate is missing');
   assert.equal(realGate.owner, 'R0');
-  assert.equal(realGate.status, 'BLOCKED_BY_CURRENT_SOURCE_CANDIDATE');
-  assert.ok(realGate.requires.includes('canonical events-bot-new Kaggle StaticSiteBuilder'));
+  assert.equal(realGate.status, 'BLOCKED_BY_SOURCE_CANDIDATE');
+  assert.ok(realGate.requires.includes('canonical events-bot-new StaticSiteBuilder'));
   assert.ok(realGate.requires.includes('--preview-data-mode real'));
   assert.ok(realGate.requires.includes('--page-class all'));
   assert.ok(realGate.requires.includes('matching preview-build.json and Kaggle operation/artifact identity'));
-  assert.ok(acceptance.prohibitions.includes('do not use deploy:preview or deploy:golden-preview as a launch path'));
+  assert.ok(acceptance.prohibitions.includes('local deploy:preview or deploy:golden-preview launch path'));
 });

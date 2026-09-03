@@ -148,7 +148,7 @@ test('Golden local generation is diagnostic-only and full publication is the can
   assert.match(builder, /PREVIEW_DATA_MODE:'golden'/u);
   assert.match(builder, /STATIC_SITE_CURRENT_DATE:corpus\.frozen_clock\.current_date/u);
   assert.match(builder, /PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE:corpus\.frozen_clock\.current_date/u);
-  assert.match(builder, /finally \{[\s\S]*writeFileSync\(eventsPath, originalRaw\)[\s\S]*rmSync\(lockPath/u);
+  assert.match(builder, /finally \{[\s\S]*atomicWrite\(eventsPath, originalRaw\)[\s\S]*rmSync\(lockPath/u);
   assert.match(builder, /restoredDigest !== originalDigest/u);
   assert.match(previewBuilder, /dataMode: previewDataMode/u);
   assert.match(previewBuilder, /goldenCorpusDigest/u);
@@ -159,13 +159,13 @@ test('Golden local generation is diagnostic-only and full publication is the can
   assert.match(actionChecker, /goldenActionContract/u);
   assert.match(actionChecker, /free_and_cancelled_external_actions:false/u);
 
-  const realGate = acceptance.gate_graph.find((item) => item.id === 'FULL_REAL_KAGGLE_REVIEW_PREVIEW');
+  const realGate = acceptance.gate_graph.find((item) => item.id === 'FULL_REAL_KAGGLE_PREVIEW');
   assert.ok(realGate, 'full-real Kaggle gate is missing');
-  assert.ok(realGate.requires.includes('canonical events-bot-new Kaggle StaticSiteBuilder'));
+  assert.ok(realGate.requires.includes('canonical events-bot-new StaticSiteBuilder'));
   assert.ok(realGate.requires.includes('--preview-data-mode real'));
   assert.ok(realGate.requires.includes('--page-class all'));
   assert.ok(realGate.requires.includes('create-only immutable-prefix publication'));
-  assert.ok(acceptance.prohibitions.includes('do not publish a full or focused owner preview outside the canonical Kaggle pipeline'));
+  assert.ok(acceptance.prohibitions.includes('full or published preview outside the canonical Kaggle pipeline'));
 
   assert.match(goldenDoc, /same Kaggle runner/u);
   assert.match(goldenDoc, /Local diagnostic/u);

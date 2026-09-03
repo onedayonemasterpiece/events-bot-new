@@ -45,3 +45,10 @@ done
 for width in 961 1022 1023 1024 1440; do
   check_route populyarnoe "$width" 900
 done
+
+# The desktop Weekend board begins immediately above the 720px mobile
+# boundary. Its fixed time lane and two day summaries must shrink internally;
+# long day/count labels may never widen the document at that seam.
+for width in 721 800; do
+  check_route vyhodnye "$width" 900
+done

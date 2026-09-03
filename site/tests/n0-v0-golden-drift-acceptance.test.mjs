@@ -20,18 +20,16 @@ test('N0 records the exact independent Golden V0 verdict without granting PASS',
   assert.equal(verdict.issue_comment, 5527892153);
   assert.equal(verdict.verdict, 'DRIFT');
   assert.equal(verdict.release_acceptance, false);
-  assert.equal(verdict.target.repo_sha, '84504f30eebc334deba46e94365601c3d572c5c0');
-  assert.equal(verdict.target.data_mode, 'golden');
-  assert.equal(verdict.matrix.document_http_200, 40);
-  assert.equal(verdict.matrix.document_total, 40);
+  assert.equal(verdict.target_repo_sha, '84504f30eebc334deba46e94365601c3d572c5c0');
+  assert.equal(verdict.matrix.document_http_200, '40/40');
   assert.equal(verdict.matrix.free_collection_visible_cards_at_375, 6);
-  assert.equal(acceptance.accepted_golden_transaction.verification.v0_independent_verdict, 'DRIFT');
-  assert.equal(acceptance.v0_triggers.golden.status, 'AUDITED_DRIFT');
-  assert.equal(acceptance.v0_triggers.golden.v0_pass, false);
+  assert.equal(acceptance.accepted_golden_transaction.data_mode, 'golden');
+  assert.equal(acceptance.accepted_golden_transaction.pm0['9'], 'PARTIAL_V0_DRIFT');
+  assert.ok(acceptance.accepted_golden_transaction.does_not_close.includes('V0 PASS'));
 });
 
 test('the 44px auxiliary target finding is a real A0 source blocker', async () => {
-  const finding = acceptance.v0_golden_verdict.findings.event_card_auxiliary_target_height;
+  const finding = acceptance.v0_golden_verdict.findings.EVENT_CARD_AUXILIARY_TARGET_HEIGHT;
   assert.equal(finding.classification, 'ACCEPTED_PRODUCT_DRIFT');
   assert.equal(finding.owner, 'A0');
   assert.equal(finding.blocks_first_real_candidate, true);
@@ -54,8 +52,8 @@ test('the 44px auxiliary target finding is a real A0 source blocker', async () =
 });
 
 test('data-ds identity is canonical and duplicate data-ui anchors are not required', async () => {
-  const finding = acceptance.v0_golden_verdict.findings.stable_dom_anchors;
-  assert.equal(finding.classification, 'REJECTED_AS_V0_SELECTOR_CONTRACT_DRIFT');
+  const finding = acceptance.v0_golden_verdict.findings.DATA_UI_ANCHORS;
+  assert.equal(finding.classification, 'REJECTED_SELECTOR_CONTRACT_DRIFT');
   assert.equal(finding.source_change_required, false);
   assert.deepEqual(finding.canonical_identity, [
     'data-ds-family',
@@ -63,7 +61,7 @@ test('data-ds identity is canonical and duplicate data-ui anchors are not requir
     'data-ds-variant',
     'data-ds-state',
   ]);
-  assert.ok(finding.forbidden_resolution.includes('data-ui-*'));
+  assert.ok(finding.forbidden_resolution.includes('data-ui'));
 
   const [surface, grid] = await Promise.all([
     read('src/components/FreeCollectionSurface.astro'),
@@ -86,11 +84,11 @@ test('data-ds identity is canonical and duplicate data-ui anchors are not requir
 });
 
 test('Golden external links are allowed when every blank target is safely isolated', async () => {
-  const finding = acceptance.v0_golden_verdict.findings.target_blank;
-  assert.equal(finding.classification, 'REJECTED_AS_OVERBROAD_V0_NEGATIVE_GATE');
+  const finding = acceptance.v0_golden_verdict.findings.TARGET_BLANK;
+  assert.equal(finding.classification, 'REJECTED_OVERBROAD_NEGATIVE_GATE');
   assert.equal(finding.source_change_required, false);
   assert.deepEqual(finding.required_rel_tokens, ['noopener', 'noreferrer']);
-  assert.deepEqual(finding.replacement_negative_selectors, [
+  assert.deepEqual(finding.negative_selectors, [
     '[target="_blank"]:not([rel~="noopener"])',
     '[target="_blank"]:not([rel~="noreferrer"])',
   ]);
@@ -101,8 +99,8 @@ test('Golden external links are allowed when every blank target is safely isolat
 });
 
 test('first-real candidate remains closed until the accepted source fix and integration pass', () => {
-  const candidate = acceptance.candidate_plan.nearest_full_real_candidate;
-  assert.equal(candidate.status, 'BLOCKED_BY_V0_TARGET_HEIGHT_FIX_AND_PARTIAL_INTEGRATION');
+  const candidate = acceptance.nearest_full_real_candidate;
+  assert.equal(candidate.status, 'BLOCKED_BY_ONE_A0_SOURCE_FIX_INTEGRATION_AND_TESTS');
   assert.equal(candidate.blocking_source_fixes.length, 1);
   assert.equal(candidate.blocking_source_fixes[0].code, 'EVENT_CARD_AUXILIARY_TARGET_HEIGHT_BELOW_44PX');
   assert.equal(candidate.blocking_source_fixes[0].owner, 'A0');

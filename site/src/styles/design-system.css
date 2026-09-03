@@ -526,11 +526,12 @@
 }
 .ke-weekend-heads__time { background: var(--ke-color-canvas); }
 .ke-weekend-day__head { padding: 12px 18px; }
-.ke-weekend-day__head-main { display: flex; align-items: center; gap: 10px; }
+.ke-weekend-day__head-main { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 10px; }
+.ke-weekend-day__head-main > div { min-width: 0; }
 .ke-weekend-weekday-chip { min-width: 44px; min-height: 32px; display: grid; place-items: center; border-radius: 9px; background: var(--ke-color-brand-700); color: #fffaf2; font-size: .78rem; font-weight: 950; letter-spacing: .07em; text-transform: uppercase; }
 .ke-weekend-day__head--sun .ke-weekend-weekday-chip { background: var(--ke-color-accent-700); }
-.ke-weekend-day__head .ke-weekend-day__label { font-size: 1.55rem; }
-.ke-weekend-day__count { display: inline; min-width: 0; min-height: 0; border-radius: 0; background: transparent; }
+.ke-weekend-day__head .ke-weekend-day__label { display: block; overflow: hidden; font-size: 1.55rem; text-overflow: ellipsis; white-space: nowrap; }
+.ke-weekend-day__count { flex: 0 0 auto; min-width: 0; min-height: 0; display: inline; overflow: hidden; border-radius: 0; background: transparent; text-overflow: ellipsis; white-space: nowrap; }
 .ke-weekend-timeline { padding-top: 0; background: none; }
 .ke-weekend-timeline::before,
 .ke-weekend-timeline::after { display: block; }
@@ -973,7 +974,8 @@
 }
 .ke-weekend-heads__time { background: var(--ke-color-canvas); }
 .ke-weekend-day__head { padding: 8px 18px; }
-.ke-weekend-day__head-main { display: flex; align-items: center; gap: 10px; }
+.ke-weekend-day__head-main { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 10px; }
+.ke-weekend-day__head-main > div { min-width: 0; }
 .ke-weekend-weekday-chip {
   min-width: 44px;
   min-height: 32px;
@@ -989,8 +991,8 @@
   box-shadow: none;
 }
 .ke-weekend-day__head--sun .ke-weekend-weekday-chip { background: color-mix(in srgb, var(--ke-color-ink) 9%, var(--ke-color-canvas)); color: color-mix(in srgb, var(--ke-color-ink) 76%, var(--ke-color-canvas)); }
-.ke-weekend-day__head .ke-weekend-day__label { font-size: 1.55rem; }
-.ke-weekend-day__count { display: inline; min-width: 0; min-height: 0; border-radius: 0; background: transparent; }
+.ke-weekend-day__head .ke-weekend-day__label { display: block; overflow: hidden; font-size: 1.55rem; text-overflow: ellipsis; white-space: nowrap; }
+.ke-weekend-day__count { flex: 0 0 auto; min-width: 0; min-height: 0; display: inline; overflow: hidden; border-radius: 0; background: transparent; text-overflow: ellipsis; white-space: nowrap; }
 .ke-weekend-timeline { position: relative; isolation: isolate; padding-top: 0; background: none; }
 .ke-weekend-timeline::before,
 .ke-weekend-timeline::after {

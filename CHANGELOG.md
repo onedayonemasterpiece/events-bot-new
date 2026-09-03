@@ -17,6 +17,14 @@
   roots without requiring a disconnected third mobile rail and permits
   truthfully omitted evidence shelves while preserving survivor order.
 
+- Fixed: the exact N0 successor gate now runs against its compact acceptance
+  manifest, and the F0 icon checker distinguishes contextual role dispatch from
+  token ownership. The accepted M0 delta through `c808c75d` is integrated;
+  WeatherDateContext consumes the canonical typography family, duplicate shell
+  icon aliases are removed, and Weekend's 721px desktop seam shrinks its label
+  descendants instead of widening the document. The July presentation
+  composition and its primary desktop/mobile viewports are unchanged.
+
 - Changed: static-site previews and production candidates now share one
   Kaggle-to-checked-artifact-to-host-publisher rail targeting the same
   `kenigevents.ru` bucket; direct local-dist preview publication is retired.

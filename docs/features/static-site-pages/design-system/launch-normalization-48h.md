@@ -533,8 +533,9 @@ worktree, commit без role review, test без output, 404 route и empty Penp
 ```text
 R0 base: 4536847f9fbdaa27326ebb3ec9ec1c825736e107
 F0:      de92dabd4551e117ca1af1be7915ff223321cc32
-M0:      4c83fc7769b1dec2d92469373e3b15154af437f4
+M0:      c808c75dd975a9851e148ccf993c32787d2b6886
 A0:      net projection through ec926580fa2cc003318006f4c1d671fc459ea26c
+N0:      74252469c545193f8ec57624bd018fc00c87e9e6
 ```
 
 После проекции A0 механически завершены принятые `A0-MECH-01..05`:
@@ -562,3 +563,18 @@ fraction — `6/9`. Это не V0 PASS: gallery, dialog, route и viewport по
 catalog содержит более широкую комбинацию 16:9 карточек и recognition rails и
 тем самым проявил старую data-dependent щель. Это исправление containment, а
 не восстановление древнего интерфейса и не redesign.
+
+Тот же fresh-real browser census выявил отдельную щель ровно над mobile
+boundary: при `721..~899px` две Weekend day-summary колонки не позволяли
+длинным русским day/count labels сжиматься и расширяли документ. Это латентный
+seam июльской композиции (основные presentation viewports остаются без
+изменений), а не возврат к более старой версии. Weekend сохраняет time axis,
+обе day lanes, weekday chip, дату и count; только текстовые flex descendants
+получают `min-width: 0` и локальное ellipsis вместо document overflow. Browser
+geometry gate теперь явно включает `721` и `800px`.
+
+После fresh-read N0 интегрирован точный текущий descendant `74252469...`, а
+M0 расширен от ранее принятого `4c83fc77...` до принятого N0 exact head
+`c808c75d...`. Несовпавшие тесты N0 приведены к compact manifest schema без
+изменения gate graph; F0 checker отличает contextual `--ke-icon-size` dispatch
+от token authority и проверяет aliases, заканчивающиеся canonical role suffix.

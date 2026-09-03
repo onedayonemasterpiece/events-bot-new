@@ -39,6 +39,9 @@ const declarations = new Map();
 for (const { name, source } of cssFiles) {
   for (const match of source.matchAll(/(--ke-[a-z0-9-]*icon-size)\s*:\s*([^;]+);/giu)) {
     const [, token, value] = match;
+    // This is the contextual dispatch property written by each canonical
+    // role selector, not a token authority or compatibility alias.
+    if (token === '--ke-icon-size') continue;
     assert.ok(!declarations.has(token), `duplicate icon-size token owner: ${token}`);
     declarations.set(token, { value: value.trim(), file: name });
   }
@@ -50,7 +53,7 @@ const resolveRole = (token, trail = []) => {
   if (canonicalTokens.has(token)) return token.replace('--ke-icon-size-', '');
   const declaration = declarations.get(token);
   assert.ok(declaration, `undefined icon-size alias: ${token}`);
-  const alias = declaration.value.match(/^var\((--ke-[a-z0-9-]*icon-size)\)$/iu)?.[1];
+  const alias = declaration.value.match(/^var\((--ke-[a-z0-9-]*icon-size(?:-[a-z0-9-]+)?)\)$/iu)?.[1];
   assert.ok(
     alias,
     `${token} in ${declaration.file} introduces non-role geometry: ${declaration.value}`,
