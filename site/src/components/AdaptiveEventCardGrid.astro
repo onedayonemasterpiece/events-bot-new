@@ -331,7 +331,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px; }
 
   @media (max-width: 1023px) {
-    .adaptive-event-card-grid--responsive-stack > :global(.event-card) {
+    .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size] > :global(.event-card) {
       flex-basis: 100%;
     }
   }
@@ -348,7 +348,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   }
 
   @media (max-width: 620px) {
-    .adaptive-event-card-grid--responsive-progressive > :global(.event-card) {
+    .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size] > :global(.event-card) {
       flex-basis: 100%;
     }
   }

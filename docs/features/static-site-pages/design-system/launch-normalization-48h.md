@@ -254,6 +254,11 @@ Contract:
 - no compact/mobile overflow;
 - source/focus order сохраняется.
 
+Responsive override обязан иметь specificity не ниже базового selector с
+`data-adaptive-grid-row-size`; иначе Astro-scoped CSS оставляет две колонки на
+viewport `<=620px`, хотя strategy объявляет mobile stack, и дочерняя карточка
+растягивает документ по горизонтали.
+
 `relatedCardLayout.mjs` и `OptimizedEventCardGrid.astro` — donors. Новый
 `AdaptiveEventCardGrid` является эволюцией существующего решения, не второй
 сеткой.

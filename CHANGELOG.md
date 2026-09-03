@@ -35,6 +35,11 @@
   non-empty canonical media set yields zero VK attachments. Regression contract:
   `INC-2026-09-01-yandex-storage-cdn-media-outage`.
 
+- Fixed: `AdaptiveEventCardGrid` responsive stack selectors now match the
+  specificity of row-size selectors, so progressive grids actually collapse
+  to one card at 620px and below instead of retaining two undersized columns
+  whose card content caused horizontal document overflow.
+
 - Fixed: durable Telegram provider bindings no longer consume a new encrypted
   SQLite row every time the same target, message, scheduled item or provider
   media is read. Secret-bound stable refs now upsert the latest detached
