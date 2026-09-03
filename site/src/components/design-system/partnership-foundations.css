@@ -1,0 +1,85 @@
+/* Partnership routes and partner-logo grid foundation roles. */
+:root {
+  --ke-partnership-section-gap: var(--ke-space-lg);
+
+  --ke-partners-page-padding-bottom: clamp(2.25rem, 6vw, 4.25rem);
+  --ke-partners-container: 1100px;
+  --ke-partners-heading-margin-top: 0.35rem;
+  --ke-partners-heading-margin-bottom: clamp(0.95rem, 2.6vw, 1.45rem);
+  --ke-partners-heading-gap: 0.16rem;
+  --ke-partners-heading-max: 58rem;
+  --ke-partners-heading-size: clamp(1.8rem, 4.6vw, 2.9rem);
+  --ke-partners-heading-letter: -0.065em;
+  --ke-partners-heading-line: 0.98;
+  --ke-partners-copy-max: 36rem;
+
+  --ke-partners-grid-columns-mobile: 4;
+  --ke-partners-grid-columns-wide: 8;
+  --ke-partners-grid-row-height: 76px;
+  --ke-partners-grid-row-height-wide: 88px;
+  --ke-partners-grid-column-gap: clamp(0.8rem, 2.2vw, 1.55rem);
+  --ke-partners-grid-row-gap: clamp(0.74rem, 1.9vw, 1.08rem);
+
+  --ke-partner-focus-width: 2px;
+  --ke-partner-focus-alpha: 34%;
+  --ke-partner-focus-offset: 5px;
+  --ke-partner-focus-radius: 10px;
+  --ke-partner-hover-offset: -1px;
+  --ke-partner-motion: var(--ke-duration-fast) ease;
+
+  --ke-partner-logo-height: 48px;
+  --ke-partner-logo-height-wide: 50px;
+  --ke-partner-logo-height-wide-desktop: 56px;
+  --ke-partner-logo-width-wide: 240px;
+  --ke-partner-logo-height-compact: 46px;
+  --ke-partner-logo-width-compact: 86px;
+  --ke-partner-logo-height-tall: 106px;
+  --ke-partner-logo-width-tall: 150px;
+  --ke-partner-logo-height-tall-desktop: 112px;
+  --ke-partner-logo-width-tall-desktop: 154px;
+
+  --ke-partner-caption-height: 26px;
+  --ke-partner-caption-height-wide: 30px;
+  --ke-partner-caption-height-tall: 40px;
+  --ke-partner-caption-height-tall-desktop: 44px;
+  --ke-partner-caption-gap: 0.14rem;
+  --ke-partner-text-logo-size: clamp(1.35rem, 2.9vw, 2.05rem);
+  --ke-partner-text-logo-weight: 900;
+  --ke-partner-text-logo-letter: -0.075em;
+  --ke-partner-text-logo-line: 0.92;
+  --ke-partner-meta-gap: 0.05rem;
+  --ke-partner-meta-line: 1.05;
+  --ke-partner-meta-max: 18rem;
+  --ke-partner-meta-size: clamp(0.66rem, 1.08vw, 0.76rem);
+  --ke-partner-meta-weight: 650;
+  --ke-partner-meta-letter: -0.015em;
+
+  --ke-partners-mobile-padding-bottom: 3rem;
+  --ke-partners-mobile-container-padding: 0.8rem;
+  --ke-partners-mobile-crumbs-margin-bottom: 0.4rem;
+  --ke-partners-mobile-heading-margin-bottom: 0.9rem;
+  --ke-partners-mobile-heading-size: clamp(1.55rem, 8.2vw, 2.25rem);
+  --ke-partners-mobile-copy-size: 0.9rem;
+  --ke-partners-mobile-column-gap: 0.62rem;
+  --ke-partners-mobile-row-gap: 0.78rem;
+  --ke-partner-mobile-logo-height: 42px;
+  --ke-partner-mobile-logo-height-wide: 44px;
+  --ke-partner-mobile-logo-height-compact: 44px;
+  --ke-partner-mobile-logo-width-compact: 70px;
+  --ke-partner-mobile-logo-height-tall: 104px;
+  --ke-partner-mobile-logo-width-tall: 148px;
+  --ke-partner-mobile-caption-height-wide: 30px;
+  --ke-partner-mobile-caption-height-compact: 28px;
+  --ke-partner-mobile-caption-height-tall: 42px;
+  --ke-partner-mobile-meta-max: 9.6rem;
+  --ke-partner-mobile-meta-viewport-max: 44vw;
+  --ke-partner-mobile-text-logo-size: 1.55rem;
+  --ke-partner-mobile-meta-size: 0.65rem;
+
+  --ke-partners-narrow-row-height: 70px;
+  --ke-partners-narrow-column-gap: 0.46rem;
+  --ke-partners-narrow-row-gap: 0.66rem;
+  --ke-partner-narrow-logo-height-tall: 94px;
+  --ke-partner-narrow-caption-height-tall: 38px;
+  --ke-partner-narrow-meta-size: 0.58rem;
+}
