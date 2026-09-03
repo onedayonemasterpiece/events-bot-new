@@ -7,244 +7,134 @@ import { fileURLToPath } from 'node:url';
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => readFile(path.join(siteRoot, relativePath), 'utf8');
 const occurrences = (source, token) => source.split(token).length - 1;
+const DIRECT_FRAMING_DECLARATION = /(?:^|[;{])\s*object-(?:fit|position)\s*:/mu;
 
-const MEDIA_FRAME_FIELDS = [
-  'data-media-frame-style-owner="media-frame.css"',
-  'data-media-frame-role=',
-  'data-media-frame-kind=',
-  'data-media-frame-fit=',
-  'data-media-frame-crop-permission=',
-  'data-media-frame-ratio=',
-  'data-media-frame-object-position=',
-  'data-media-frame-focal-position=',
-  'data-media-frame-crop-reason=',
-  'data-media-frame-clip="frame"',
-  'data-media-frame-radius="surface"',
-  'data-media-frame-loading=',
-  'data-media-frame-interaction-owner="caller"',
+const M0_SOURCE_FILES = [
+  'src/lib/relatedCardLayout.mjs',
+  'src/components/OptimizedEventCardGrid.astro',
+  'src/components/AdaptiveEventCardGrid.astro',
+  'src/components/EventCard.astro',
+  'src/components/listings/ListingEventCard.astro',
 ];
 
-test('EventMediaRail exposes one canonical three-variant family and preserves caller media decisions', async () => {
-  const source = await read('src/components/EventMediaRail.astro');
-
-  assert.match(source, /import '\.\/media-frame\.css';/u);
-  assert.match(source, /export type EventMediaRailVariant = 'gallery-thumbnails' \| 'hero-selector' \| 'poster-strip';/u);
-  assert.match(source, /data-ds-family="EventMediaRail"/u);
-  assert.match(source, /data-event-media-rail-contract=\{usesResolvedItems \? 'resolved-items-v1' : 'asset-input-v1'\}/u);
-  assert.match(source, /data-event-media-rail-source-owner=\{usesResolvedItems \? 'caller' : 'EventMediaRail'\}/u);
-  assert.match(source, /const contradictoryVisualKind = requestedKind === 'visual' && imageTextMode !== 'visual_only';/u);
-  assert.match(source, /const fit: EventMediaRailFrameFit = requestedCover && kind === 'visual' && imageTextMode === 'visual_only'/u);
-  assert.match(source, /'resolved_visual_kind_mismatch_fail_closed'/u);
-  assert.doesNotMatch(source, /item\.fit === 'cover' && kind === 'visual' \? 'cover' : 'contain'/u);
-  assert.match(source, /const mediaFrameCropPermission = \(fit: EventMediaRailFrameFit\) => fit === 'cover' \? 'allowed' : 'forbidden';/u);
-
-  for (const hook of [
-    'data-responsive-rail',
-    'data-responsive-rail-item',
-    'data-responsive-rail-more',
-    'data-responsive-split-rail',
-    'data-responsive-split-item',
-    'data-responsive-split-more',
-    'data-efficient-viewer-start',
-    'data-rail-thumbnail',
-    'data-thumbnail-src',
-  ]) {
-    assert.ok(source.includes(hook), `missing production rail hook: ${hook}`);
-  }
-
-  for (const field of MEDIA_FRAME_FIELDS) {
-    assert.ok(source.includes(field), `missing rail MediaFrame field: ${field}`);
-  }
-  assert.ok(occurrences(source, 'data-media-frame-contract="v1"') >= 2,
-    'gallery and resolved rail anatomies must both publish MediaFrame v1');
-  assert.ok(occurrences(source, 'data-media-frame-style-owner="media-frame.css"') >= 2,
-    'every rail anatomy must name the canonical CSS owner');
-  assert.match(source, /data-media-frame-fill="true"/u);
-  assert.match(source, /data-media-frame-source-ratio=\{sourceRatio\?\.toFixed\(5\)\}/u);
-  assert.match(source, /attributeFilter:\['data-rail-visible-count', 'data-rail-hidden-count', 'data-rail-complete'\]/u);
-  assert.doesNotMatch(source, /style=\{`object-fit:/u);
-  assert.doesNotMatch(source, /\.event-media-rail__frame\s*\{/u);
-});
-
-test('AdaptiveEventCardGrid owns compatibility, live-region, filtered runtime and named remainder contracts', async () => {
-  const source = await read('src/components/AdaptiveEventCardGrid.astro');
-  const optimized = await read('src/components/OptimizedEventCardGrid.astro');
-
-  for (const prop of [
-    'runtimeManaged?',
-    'runtimeVisibleOnly?',
-    'runtimeSourcePolicy?',
-    'ariaLive?',
-    'ariaAtomic?',
-    'ariaBusy?',
-    'ariaLabel?',
-    'ariaLabelledby?',
-  ]) {
-    assert.ok(source.includes(prop), `missing adaptive runtime/live-region API: ${prop}`);
-  }
-  assert.ok(source.includes("type AdaptiveGridRemainderVariant = 'complete' | `stretch-${number}-of-${number}`;"));
-  assert.match(source, /const remainderVariantFor = \(count: number, size: number\): AdaptiveGridRemainderVariant/u);
-  assert.match(source, /const initialRemainderVariant = remainderVariantFor\(resolved\.length, rowSize\);/u);
-  assert.match(source, /const gridState = \[gridBaseState, `remainder-\$\{initialRemainderVariant\}`, initialRuntimeState\]/u);
-  assert.match(source, /type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' \| 'all-direct' \| 'initial';/u);
-  assert.match(source, /const runtimeManagedGrid = runtimeManaged \?\? \(personalFeed \|\| discoveryFeed\);/u);
-  assert.match(source, /const runtimeVisibleOnly = requestedRuntimeVisibleOnly \?\? discoveryFeed;/u);
-  assert.match(source, /requestedRuntimeSourcePolicy === 'all-direct'/u);
-  assert.match(source, /discoveryFeed \? 'all-direct' : 'mirror-rendered'/u);
-  assert.match(source, /aria-live=\{ariaLive\}/u);
-  assert.match(source, /aria-atomic=\{ariaAtomic === undefined \? undefined : String\(ariaAtomic\)\}/u);
-  assert.match(source, /aria-busy=\{ariaBusy === undefined \? undefined : String\(ariaBusy\)\}/u);
-  assert.match(source, /aria-labelledby=\{ariaLabelledby\}/u);
-  assert.match(source, /'data-adaptive-grid-remainder-variant'/u);
-  assert.match(source, /data-adaptive-grid-remainder-variant=\{initialRemainderVariant\}/u);
-  assert.match(source, /data-adaptive-grid-runtime-managed=\{runtimeManagedGrid \? 'true' : undefined\}/u);
-  assert.match(source, /data-adaptive-grid-runtime-visible-only=\{runtimeManagedGrid && runtimeVisibleOnly \? 'true' : undefined\}/u);
-  assert.match(source, /data-adaptive-grid-runtime-source-policy=\{runtimeManagedGrid \? runtimeSourcePolicy : undefined\}/u);
-  assert.match(source, /data-adaptive-grid-item-root-contract=\{hasItemRoots/u);
-  assert.match(source, /const itemRoot = itemRootFor\(item, resolvedSourceIndexes\[renderedIndex\] \?\? -1\);/u);
-  assert.match(source, /rootClassName=\{itemRoot\?\.className\}/u);
-  assert.match(source, /rootAttributes=\{itemRoot\?\.attributes\}/u);
-  assert.match(source, /!ADAPTIVE_ROOT_RESERVED_ATTRIBUTES\.has\(name\)/u);
-  assert.match(source, /function bindAdaptiveEventCardGridRuntime\(root = document\)/u);
-  assert.match(source, /const cards = visibleOnly \? directCards\.filter\(\(card\) => !card\.hidden\) : directCards;/u);
-  assert.match(source, /else if \(sourcePolicy === 'all-direct'\) \{/u);
-  assert.match(source, /grid\.dataset\.adaptiveGridSourceCount = String\(directCards\.length\)/u);
-  assert.match(source, /const runtimeRemainderVariant = runtimeRemainderCount === 0/u);
-  assert.match(source, /grid\.dataset\.adaptiveGridRemainderCount = String\(runtimeRemainderCount\)/u);
-  assert.match(source, /grid\.dataset\.adaptiveGridRemainderVariant = runtimeRemainderVariant/u);
-  assert.match(source, /`remainder-\$\{runtimeRemainderVariant\}`/u);
-  assert.match(source, /\{ childList:true, subtree:true, attributes:true, attributeFilter:\['hidden'\] \}/u);
-
-  assert.match(optimized, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro';/u);
-  assert.match(optimized, /legacyOptimizedContract/u);
-  assert.doesNotMatch(optimized, /import EventCard/u);
-  assert.doesNotMatch(optimized, /packRelatedCardRows/u);
-});
-
-test('EventCard and ListingEventCard use one MediaFrame protocol and one structural CSS owner', async () => {
-  const eventCard = await read('src/components/EventCard.astro');
-  const listingCard = await read('src/components/listings/ListingEventCard.astro');
-  const mediaFrame = await read('src/components/media-frame.css');
-
-  for (const source of [eventCard, listingCard]) {
-    assert.match(source, /rootClassName\?: string/u);
-    assert.match(source, /rootAttributes\?:/u);
-    assert.match(source, /\.\.\.safeRootAttributes/u);
-    assert.match(source, /data-media-frame-contract="v1"/u);
-    for (const field of MEDIA_FRAME_FIELDS) {
-      assert.ok(source.includes(field), `missing card MediaFrame field: ${field}`);
-    }
-  }
-
-  assert.match(eventCard, /import '\.\/media-frame\.css';/u);
-  assert.match(eventCard, /const mediaFrameCropPermission = mediaFrameFit === 'contain'/u);
-  assert.match(eventCard, /!EVENT_CARD_RESERVED_ROOT_ATTRIBUTES\.has\(name\)/u);
-  assert.match(eventCard, /const cardClass = \['event-card', `event-card--\$\{variant\}`, rootClassName\]/u);
-  assert.doesNotMatch(eventCard, /const cardImageStyle/u);
-  assert.doesNotMatch(eventCard, /style=\{cardImageStyle\}/u);
-
-  assert.match(listingCard, /import '\.\.\/media-frame\.css';/u);
-  assert.match(listingCard, /const mediaFrameCropPermission = mediaFrameFit === 'cover'/u);
-  assert.match(listingCard, /hidden\?: boolean/u);
-  assert.match(listingCard, /hidden=\{hidden\}/u);
-  assert.match(listingCard, /!LISTING_EVENT_CARD_RESERVED_ROOT_ATTRIBUTES\.has\(name\)/u);
-  assert.match(listingCard, /const cardClass = \['ke-listing-card', rootClassName\]/u);
-  assert.doesNotMatch(listingCard, /style="display:block;width:100%;height:100%;overflow:hidden"/u);
-
-  assert.match(mediaFrame, /Canonical MediaFrame v1 structural and fit owner/u);
-  assert.match(mediaFrame, /\[data-media-frame\]\[data-media-frame-contract="v1"\]/u);
-  assert.match(mediaFrame, /\[data-media-frame-fill="true"\]/u);
-  assert.match(mediaFrame, /\[data-media-frame-fit="cover"\]/u);
-  assert.match(mediaFrame, /\[data-media-frame-fit="contain"\]/u);
-  assert.match(mediaFrame, /object-position: var\(--media-frame-object-position, 50% 50%\)/u);
-});
-
-test('current DesktopEventPage rail consumers are either migrated or fully covered by EventMediaRail API', async () => {
-  const rail = await read('src/components/EventMediaRail.astro');
-  const desktop = await read('src/components/DesktopEventPage.astro');
-  const requiredItemFields = [
-    'src:',
-    'thumbnailSrc:',
-    'thumbnailSrcset?',
-    'thumbnailWidth?',
-    'thumbnailHeight?',
-    'width?',
-    'height?',
-    'alt?',
-    'galleryIndex:',
-    'sourceIndex?',
-    'imageTextMode:',
-    'mediaRole:',
-    'kind:',
-    'fit:',
-    'objectPosition?',
-    'cropReason:',
-    'roleLabel?',
-    'actionLabel:',
-    'rotationEligible?',
-    'railAspect?',
-    'railRatio?',
-    'slotWidth?',
-  ];
-  for (const field of requiredItemFields) assert.ok(rail.includes(field), `rail item API gap for current consumer: ${field}`);
-
-  const requiredHooks = [
-    'data-clean-hero-thumb',
-    'data-responsive-rail-item',
-    'data-responsive-rail-more',
-    'data-responsive-split-item',
-    'data-responsive-split-more',
-    'data-rotation-eligible',
-    'data-efficient-viewer-open',
-    'data-efficient-viewer-start',
-    'data-hero-gallery-open',
-    'data-hero-gallery-index',
-    'data-rail-thumbnail',
-    'data-thumbnail-src',
-    'data-thumbnail-srcset',
-    'data-image-text-mode',
-    'data-media-role',
-    'data-source-index',
-    'data-rail-aspect',
-  ];
-  for (const hook of requiredHooks) assert.ok(rail.includes(hook), `rail API gap for current consumer: ${hook}`);
-
-  for (const preservedClass of [
-    'desktop-prototype__media-rail',
-    'desktop-prototype__media-rail--hero',
-    'desktop-prototype__media-rail--poster',
-    'desktop-prototype__media-rail-more',
-  ]) assert.ok(rail.includes(preservedClass), `rail migration must preserve runtime/CSS class: ${preservedClass}`);
-
-  assert.match(rail, /variant === 'hero-selector' && index === 0 && 'is-current'/u);
-  assert.match(rail, /aria-pressed=\{variant === 'hero-selector' \? \(index === 0 \? 'true' : 'false'\) : undefined\}/u);
-  assert.match(rail, /data-src=\{variant === 'hero-selector' \? item\.src : undefined\}/u);
-  assert.match(rail, /data-crop-fit=\{variant === 'hero-selector' \? item\.fit : undefined\}/u);
-  assert.match(rail, /data-crop-reason=\{variant === 'hero-selector' \? item\.cropReason : undefined\}/u);
-  assert.match(rail, /data-efficient-viewer-start=\{variant === 'poster-strip' && splitPortraitViewer \? viewerStart : undefined\}/u);
-  assert.match(rail, /data-hero-gallery-open=\{variant === 'poster-strip' && splitPortraitViewer \? undefined : galleryId\}/u);
-  assert.match(rail, /data-thumbnail-src=\{item\.thumbnailSrc\}/u);
-  assert.match(rail, /data-thumbnail-srcset=\{item\.thumbnailSrcset\}/u);
-
-  const migrated = /import EventMediaRail(?:,| from)/u.test(desktop) && /<EventMediaRail/u.test(desktop);
-  if (!migrated) {
-    assert.match(desktop, /desktop-prototype__media-rail--hero/u);
-    assert.match(desktop, /desktop-prototype__media-rail--poster/u);
-    for (const hook of requiredHooks) assert.ok(desktop.includes(hook), `unexpected pre-migration consumer drift: ${hook}`);
-  }
-});
-
-test('M0 source and regression surfaces match contract v1.9.0 assignments', async () => {
-  const files = [
+test('post-FR0 M0 contract reads only card, grid and row-layout sources', async () => {
+  const sources = await Promise.all(M0_SOURCE_FILES.map(read));
+  assert.equal(sources.length, M0_SOURCE_FILES.length);
+  assert.deepEqual(M0_SOURCE_FILES, [
     'src/lib/relatedCardLayout.mjs',
     'src/components/OptimizedEventCardGrid.astro',
     'src/components/AdaptiveEventCardGrid.astro',
     'src/components/EventCard.astro',
     'src/components/listings/ListingEventCard.astro',
-    'src/components/listings/MobileListingRailRow.astro',
-    'src/components/EventMediaRail.astro',
-    'src/components/media-frame.css',
-    'scripts/check-preview.mjs',
-  ];
-  await Promise.all(files.map(read));
+  ]);
+});
+
+test('AdaptiveEventCardGrid is the sole card-grid diagnostics and remainder owner', async () => {
+  const source = await read('src/components/AdaptiveEventCardGrid.astro');
+
+  assert.match(source, /data-ds-component="AdaptiveEventCardGrid"/u);
+  assert.match(source, /data-ds-family="AdaptiveEventCardGrid"/u);
+  assert.match(source, /data-ds-version="1"/u);
+  assert.match(source, /data-adaptive-grid-layout-engine="flex-lines"/u);
+  assert.equal(occurrences(source, 'data-adaptive-grid-diagnostics-owner='), 1,
+    'AdaptiveEventCardGrid must publish one diagnostics writer declaration');
+  assert.match(source, /data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"/u);
+  assert.match(source, /data-adaptive-grid-diagnostics-contract="input-source-rendered-v1"/u);
+
+  for (const field of [
+    'data-adaptive-grid-input-count',
+    'data-adaptive-grid-input-order',
+    'data-adaptive-grid-source-count',
+    'data-adaptive-grid-source-order',
+    'data-adaptive-grid-rendered-count',
+    'data-adaptive-grid-rendered-order',
+  ]) assert.ok(source.includes(field), `missing grid population field: ${field}`);
+
+  assert.match(source, /const sourceIndexesByItem = new Map<PreviewEvent, number\[\]>/u);
+  assert.match(source, /const sourceIndexesByEventId = new Map<string, number\[\]>/u);
+  assert.match(source, /const claimedSourceIndexes = new Set<number>\(\)/u);
+  assert.match(source, /const itemRootFor = \(item: PreviewEvent, sourceIndex: number\)[\s\S]*itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\]/u);
+  assert.match(source, /data-adaptive-grid-item-root-contract=\{hasItemRoots \? 'event-id-or-event-id-source-index'/u);
+
+  assert.ok(source.includes("type AdaptiveGridRemainderVariant = 'complete' | `stretch-${number}-of-${number}`;"));
+  assert.match(source, /const remainderVariantFor = \(count: number, size: number\): AdaptiveGridRemainderVariant/u);
+  assert.match(source, /return remainder === 0 \? 'complete' : `stretch-\$\{remainder\}-of-\$\{size\}`;/u);
+  assert.match(source, /grid\.dataset\.adaptiveGridRemainderVariant = runtimeRemainderVariant/u);
+  assert.match(source, /grid\.dataset\.adaptiveGridRenderedCount = String\(count\)/u);
+  assert.match(source, /grid\.dataset\.adaptiveGridRenderedOrder = order/u);
+
+  assert.match(source, /display: flex;/u);
+  assert.match(source, /flex-wrap: wrap;/u);
+  assert.doesNotMatch(source, /grid-template-columns\s*:/u,
+    'canonical adaptive rows must not reintroduce phantom CSS-grid tracks');
+  assert.match(source, /adaptive-event-card-grid--responsive-stack\[data-adaptive-grid-row-size\]/u);
+  assert.match(source, /adaptive-event-card-grid--responsive-progressive\[data-adaptive-grid-row-size\]/u);
+});
+
+test('OptimizedEventCardGrid remains a compatibility adapter only', async () => {
+  const source = await read('src/components/OptimizedEventCardGrid.astro');
+
+  assert.equal(occurrences(source, '<AdaptiveEventCardGrid'), 1);
+  assert.match(source, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro';/u);
+  assert.match(source, /legacyOptimizedContract/u);
+  assert.match(source, /responsive=\{responsiveMobile \? 'stack' : 'fixed'\}/u);
+  assert.doesNotMatch(source, /import EventCard/u);
+  assert.doesNotMatch(source, /packRelatedCardRows/u);
+  assert.doesNotMatch(source, /data-adaptive-grid-(?:input|source|rendered|remainder)/u);
+  assert.doesNotMatch(source, /<style\b/u);
+});
+
+test('EventCard and ListingEventCard keep one root, canonical actions and metadata', async () => {
+  const [eventCard, listingCard, actionCss] = await Promise.all([
+    read('src/components/EventCard.astro'),
+    read('src/components/listings/ListingEventCard.astro'),
+    read('src/components/event-card.css'),
+  ]);
+
+  assert.equal(occurrences(eventCard, '<article'), 1, 'EventCard must expose one root');
+  assert.equal(occurrences(listingCard, '<article'), 1, 'ListingEventCard must expose one root');
+
+  for (const [source, family] of [[eventCard, 'EventCard'], [listingCard, 'ListingEventCard']]) {
+    assert.ok(source.includes(`data-ds-family="${family}"`));
+    assert.match(source, /data-ds-version=/u);
+    assert.match(source, /data-ds-variant=/u);
+    assert.match(source, /data-ds-state=/u);
+    assert.match(source, /data-media-frame-resource-state=/u);
+    assert.doesNotMatch(source, /data-media-frame-state|dataset\.mediaFrameState/u);
+    assert.doesNotMatch(source, DIRECT_FRAMING_DECLARATION,
+      `${family} must publish framing inputs without owning object-fit/object-position paint`);
+  }
+
+  for (const action of ['not_interested', 'like']) {
+    assert.ok(eventCard.includes(`data-feedback-action="${action}"`), `missing EventCard action: ${action}`);
+  }
+  assert.match(eventCard, /data-native-share/u);
+  assert.match(eventCard, /data-calendar-action/u);
+  assert.match(eventCard, /<SemanticIcon name="dislike" role="action" \/>/u);
+  assert.match(eventCard, /<SemanticIcon name="share" role="action" \/>/u);
+  assert.match(eventCard, /<SemanticIcon name="heart" role="action" \/>/u);
+  assert.match(actionCss, /\[data-ds-component="EventCard"\]\.event-card--split-actions[\s\S]*\.feedback-button--negative[\s\S]*min-height: var\(--ke-control-min, 44px\);/u);
+
+  assert.match(eventCard, /data-card-type/u);
+  assert.match(eventCard, /<EventOccurrenceLabel presentation=\{occurrencePresentation\} \/>/u);
+  assert.match(eventCard, /data-card-status/u);
+  assert.match(listingCard, /data-listing-event-type=/u);
+  assert.match(listingCard, /showFree && 'free-admission'/u);
+  assert.match(listingCard, /data-listing-proof-placement=\{hasSocialProof \? \(proofInside \? 'inside' : 'rail'\) : 'none'\}/u);
+  assert.match(listingCard, /const tailWidth = splitIdentityProofRail \? 96 : hasSideRail \? \(visibleIdentityCount === 0 \? 40 : 64\) : 0;/u);
+});
+
+test('relatedCardLayout owns numeric normalization, crop budget and deterministic occupancy', async () => {
+  const source = await read('src/lib/relatedCardLayout.mjs');
+
+  assert.match(source, /const MAX_DOCUMENT_CROP = 0\.2;/u);
+  assert.match(source, /const normalizedTargetAspect = finiteRatio\(targetAspect, mediaRatio\);/u);
+  assert.match(source, /const potentialCoverCrop = cropFraction\(mediaRatio, normalizedTargetAspect\);/u);
+  assert.match(source, /if \(potentialCoverCrop > MAX_DOCUMENT_CROP \+ EPSILON\)/u);
+  assert.match(source, /cropReason:'document_crop_budget_exceeded'/u);
+  assert.match(source, /const limit = Math\.max\(0, Math\.floor\(Number\.isFinite\(requestedLimit\) \? requestedLimit : items\.length\)\);/u);
+  assert.match(source, /const rowSize = Math\.max\(1, Math\.min\(6, Math\.floor\(Number\.isFinite\(requestedRowSize\) \? requestedRowSize : 3\)\)\);/u);
+  assert.match(source, /return left\.signature\.localeCompare\(right\.signature\);/u);
+  assert.match(source, /rowColumn:index/u);
+  assert.match(source, /return rows\.flatMap\(\(row, rowIndex\) => materializeRow\(row, rowIndex, presentation\)\);/u);
 });
