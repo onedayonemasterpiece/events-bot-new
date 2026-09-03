@@ -1,6 +1,6 @@
 {
   "schema": "kenigevents.v0-browser-audit-matrix.v1",
-  "version": 4,
+  "version": 5,
   "contract_version": "1.10.0",
   "authored_against_source": "1bc6d9cb4c122046f4782532381de953727c1da6",
   "checkpoint_semantics": "NON_GATING",
@@ -10,7 +10,7 @@
     "relationship": "EXECUTABLE_OVERLAY_NOT_REPLACEMENT",
     "canonical_a0_v0_matrix": {
       "repository": "onedayonemasterpiece/lovekgd-design-system",
-      "ref": "b3395b944f8255defed20c69338d775a94b3ad02",
+      "ref": "a59c8745ca21a39ef085bb912bbd611d6394f1a1",
       "path": "catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json",
       "blob_sha": "e81a75a77a62c2f2efc2b9f0c72625f56c1fc38b",
       "schema": "kenigevents.a0-v0-acceptance-matrix.v1"
@@ -47,14 +47,15 @@
     "N0": "fac1a2434ee550b37c9630c3502130574be53ecc",
     "F0_source": "d3e36f84de0fa58cb72d494d00cea5c67d54bdff",
     "F0_report": "b75de3157adda44d79da1e28a1876f39c8f4a550",
-    "FR0": "NOT_MATERIALIZED_CUTOVER_BASE_REQUIRED",
+    "FR0": "c71351decdcee02941acb26c5e2fbaf88faf0378",
     "M0_source": "c71351decdcee02941acb26c5e2fbaf88faf0378",
     "M0_report": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
     "A0": "6357b6d31f145e8b16f8a40f172970d73cf79051",
-    "thin_sot": "b3395b944f8255defed20c69338d775a94b3ad02",
+    "thin_sot": "a59c8745ca21a39ef085bb912bbd611d6394f1a1",
     "published_real_source": "1bc6d9cb4c122046f4782532381de953727c1da6",
     "A0_closure_status": "PARTIAL_ACCEPT_CLUB_PATCHES_ONLY_FESTIVALS_EXHIBITIONS_BLOCKED",
-    "A0_closure_review_comment": 5530123952
+    "A0_closure_review_comment": 5530123952,
+    "FR0_status": "MATERIALIZED_EVENTHERO_MEDIAFRAME_CUTOVER"
   },
   "viewports": [
     {
@@ -439,7 +440,8 @@
     "fr0_cutover_required_before_framing_writes": true,
     "fr0_must_not_delay_ready_successor": true,
     "post_f0_preview_blocked_by_a0_festival_exhibitions_correction": true,
-    "current_1bc6_preview_independently_auditable_now": true
+    "current_1bc6_preview_independently_auditable_now": true,
+    "fr0_cutover_satisfied": true
   },
   "thin_s_penpot": {
     "route_binding_authority": "catalog/normalization/a0-thin-s-bindings.v1.json",
