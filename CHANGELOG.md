@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed: cold hydration of a packed event-detail discovery grid now reruns the
+  canonical row packer before moving ranked DOM nodes and reapplies each
+  MediaFrame row decision. Runtime ranking can no longer detach card order
+  from its serialized row ratio, while reaction reranks retain the established
+  no-jump viewport-prefix path.
+
+- Fixed: integrated FR0's current exhibitions MediaFrame bridge so native
+  rows expose canonical frame diagnostics while preserving their established
+  deck geometry.
+
 - Changed: completed the current F0 exhibitions residual transaction in the
   existing A0 consumer-closure runner. The route now consumes all required A0
   state/elevation and FR0 frame/depth/gallery bindings without changing the

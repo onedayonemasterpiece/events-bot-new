@@ -15,6 +15,21 @@ test('#780 reaction rerank leaves the clicked viewport prefix attached', async (
   assert.doesNotMatch(reorder, /const frozen|\.{3}frozen/u);
 });
 
+test('cold packed discovery rerank preserves canonical row geometry', async () => {
+  const source = await read('src/layouts/EventLayout.astro');
+  const start = source.indexOf('function reorderExistingCards');
+  const end = source.indexOf('function appendDiscoveryEvents', start);
+  const reorder = source.slice(start, end);
+
+  assert.match(reorder, /anchorEventId == null[\s\S]*adaptiveGridMode === 'packed'/u);
+  assert.match(reorder, /window\.KenigEventsPackRelatedCardRows\(existingRanked/u);
+  assert.match(reorder, /applyRuntimeRelatedLayout\(card, layout\)[\s\S]*feed\.appendChild\(card\)/u);
+  assert.ok(
+    reorder.indexOf("anchorEventId == null") < reorder.indexOf('if (anchorEventId != null)'),
+    'cold packed repack must run before the established reaction-anchor path',
+  );
+});
+
 test('#787 local favorites become ready before cloud reconciliation settles', async () => {
   const source = await read('src/components/FavoritesSurface.astro');
   const localRender = source.indexOf('await renderJoined({ catalog, local, snapshot })');

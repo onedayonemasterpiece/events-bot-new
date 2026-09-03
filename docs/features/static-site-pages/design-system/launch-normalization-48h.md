@@ -686,3 +686,13 @@ tip была опечатка в имени `AUTHORED_AGAINST_SOURCE`, из-за
 browser behavior tests можно запустить с `--executable-path <chromium>` либо
 `PLAYWRIGHT_EXECUTABLE_PATH=<chromium>`: это меняет только способ выбора уже
 установленного браузера, не сам gate и не его browser evidence.
+
+FR0 exhibitions MediaFrame bridge `00e95e5ba...` + geometry correction
+`321f2482e...` интегрированы через точный ancestry merge `2231e1d66...`.
+Отдельно canonical browser gate обнаружил integration seam между июньским
+client rerank и новым packed-row optimizer: hydration возвращал DOM в ranking
+order, но оставлял row ratio от optimized order. Cold hydration теперь повторно
+вызывает тот же `KenigEventsPackRelatedCardRows` и применяет его MediaFrame
+решения перед DOM move; reaction path с зафиксированным viewport-prefix из
+`#780` не изменён. Это механическое восстановление уже заявленного row
+контракта, не редизайн июльской композиции.
