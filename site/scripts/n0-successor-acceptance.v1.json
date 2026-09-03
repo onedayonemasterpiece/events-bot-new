@@ -1,1 +1,488 @@
-{"schema_version":"kenigevents.n0-successor-acceptance.v1","coordination_issue":"onedayonemasterpiece/events-bot-new#621","contract_version":"1.9.0","pm0_version":"2.3.0","owner":"N0","observed_at":"2026-09-03T17:12:00Z","evidence_cutoff":{"instruction_comment":5526326906,"golden_v0_comment":5527892153,"fresh_real_result_comment":5528274698,"previous_n0_result_comment":5528519655,"v0_fresh_real_blocker_comment":5529063082},"current_refs":{"programme":{"branch":"integration/ui-normalization-launch-20260902","head":"ce59cc2fda4e61c8af37f980a5e440c093bd2da8"},"legacy_combined_candidate":{"branch":"r0/ui-normalization-current-candidate-20260903","head":"0d73428dfafff2fd5450b74fd68e7bb40e92d2c5","classification":"ACCEPTED_PRECURSOR_NOT_CURRENT_SUCCESSOR"},"published_fresh_real_source":{"branch":"agent/static-site-single-kaggle-contract","head":"4536847f9fbdaa27326ebb3ec9ec1c825736e107","classification":"EXACT_PUBLISHED_FRESH_REAL_BASELINE"},"source_successor":{"branch":"agent/static-site-single-kaggle-contract","head":"2e8f4dd2393ce0c5100f8b610aae3f01380aad8c","accepted_source_parent":"d0ad17088e13d5dab3d992326f393e2616246c5d","previous_published_source":"4536847f9fbdaa27326ebb3ec9ec1c825736e107","classification":"SOURCE_ACCEPTED_INTERMEDIATE_CURRENT_SUCCESSOR","runtime_acceptance":false,"public_url":null},"N0":{"branch":"work/ui-normalization-n0-checklist-20260903","reviewed_head_before_this_update":"ecf57e67fb50e0f20a8dfed9d087ee9274618b18","resolve_current_descendant_at_materialization":true},"F0":{"branch":"work/ui-normalization-f0-wave-3-20260903","integrated_head":"de92dabd4551e117ca1af1be7915ff223321cc32","current_head":"f2b9927e25ac0566d35577f69c574cedadab27d7","decision":"SOURCE_ACCEPTED_REQUIRED_FOR_NEXT_SUCCESSOR"},"M0":{"branch":"work/ui-normalization-m0-continuity-20260903","integrated_head":"c808c75dd975a9851e148ccf993c32787d2b6886","current_source_head":"c71351decdcee02941acb26c5e2fbaf88faf0378","current_head":"a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c","source_delta_commits":["70267e80e9b3b5b41a47c0c610dfdfec5a26f923","773ecca36882903fa052be9afc00b0134d6dfcd8","f4e89ea1cd0d9e66266be224e28ec2cd979bebce","fc24d7f21bf27b50a9da476700db547635d0b66a","c71351decdcee02941acb26c5e2fbaf88faf0378"],"downstream_contract_commit":"a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c","decision":"SOURCE_AND_DOWNSTREAM_CONTRACTS_ACCEPTED_REQUIRED_FOR_NEXT_SUCCESSOR"},"A0":{"branch":"work/ui-normalization-a0-wave-3-20260903","integrated_semantic_source_checkpoint":"ec926580fa2cc003318006f4c1d671fc459ea26c","current_head":"61d340a3ca291f074289d2292b33f56b2bad8a22","safe_source_delta_commit":"137c619c1abbb8b1d4e2c9c95c4a772741894a1d","safe_source_delta_already_present_in_successor":true,"whole_branch_merge_allowed":false,"completion_claim":"HELD_UNTIL_ROUTE_THEME_CONSUMPTION_A0_MECH_06_AND_V0"},"thin_sot":{"repository":"onedayonemasterpiece/lovekgd-design-system","branch":"integration/launch-normalized-sot-penpot-20260902","head":"77f72cf71ee52c10598c2129dae1d961507825a4","resolve_current_descendant_at_materialization":true}},"accepted_fresh_real_transaction":{"decision":"ACCEPTED_AS_PM0_3_FULL_REAL_PIPELINE_AND_FRESH_DATA_BASELINE","issue_comment":5528274698,"url":"https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/","manifest_url":"https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/preview-build.json","build_id":"preview-real-4536847f-fresh-20260903-v1","repo_sha":"4536847f9fbdaa27326ebb3ec9ec1c825736e107","explicit_ancestry":["ce59cc2fda4e61c8af37f980a5e440c093bd2da8","1d145d5efd2a332eff29e69b6afcf43414769906","4536847f9fbdaa27326ebb3ec9ec1c825736e107"],"data_mode":"real","page_classes":["all"],"snapshot":{"id":"issue621-real-9152994b-20260903T144827Z","sha256":"1a084d7e321771e5acb7681d61589962c8d48cc68f37d6c7799180bf13573b5e","size_bytes":80764928,"created_at":"2026-09-03T14:48:30Z","source_latest_effect_at":"2026-09-03T14:48:27Z"},"build":{"current_date":"2026-09-03","event_count":300},"kaggle":{"dataset":"zigomaro/static-site-builder-input-20260903152929-3705b4","kernel":"zigomaro/kenigevents-static-site-builder","status":"COMPLETE"},"artifact":{"result_sha256":"83a74e13a56d1dcd25477c23335904517d8871ed00d8a45569e80289cf1a24a3","archive_sha256":"9ffcca468332b3ea5ddd75125394ae14bcee2307093a6331929beffe14b5a899","published_objects":1418,"published_bytes":261210454,"verified_at":"2026-09-03T15:35:36Z","root_mutation":false,"stable_ics_mutation":false},"technical_verification":{"owner_url_http":200,"manifest_http":200,"r0_document_http_200":"126/126","r0_console_errors":0,"r0_adaptive_grid_diagnostic_drift":0,"r0_retired_media_fit_owner_drift":0,"independent_v0_verdict":"PENDING"},"known_drift":{"popular_desktop_shelf_overflow":{"published_artifact_status":"OBSERVED_BY_R0","current_source_status":"CLOSED_IN_D0AD1708_PENDING_V0"}},"pm0":{"2":"DONE","3":"DONE"},"does_not_close":["runtime acceptance of the current source successor","voice-review readiness","independent V0 PASS","ASTRO_NORMALIZATION_PASS","bound thin S","native Penpot","release candidate"]},"accepted_golden_transaction":{"decision":"ACCEPTED_AS_GOLDEN_PIPELINE_AND_CORPUS_EVIDENCE_ONLY","issue_comment":5527249164,"url":"https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/","build_id":"preview-golden-84504f30-20270604-v1","repo_sha":"84504f30eebc334deba46e94365601c3d572c5c0","data_mode":"golden","page_classes":["all"],"corpus_id":"golden-review-20260903-v1","corpus_sha256":"f90561691baa6744804b6cba36b0a8580eac8e9607dcdb97483511ad32e7ce00","kaggle":{"dataset":"zigomaro/static-site-builder-input-20260903141925-94f0f2","kernel":"zigomaro/kenigevents-static-site-builder","status":"COMPLETE"},"artifact":{"published_objects":1450,"root_mutation":false,"stable_ics_mutation":false},"verification":{"owner_url_http":200,"document_http_200":"36/36","v0_independent_verdict":"DRIFT","v0_issue_comment":5527892153},"pm0":{"4":"DONE","6":"DONE","7":"DONE","8":"DONE","9":"PARTIAL_V0_DRIFT","10":"DONE"},"does_not_close":["fresh-real current-successor normalization","voice-review readiness","V0 PASS","ASTRO_NORMALIZATION_PASS","native Penpot","release candidate"]},"v0_golden_verdict":{"issue_comment":5527892153,"verdict":"DRIFT","release_acceptance":false,"target":{"url":"https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/","repo_sha":"84504f30eebc334deba46e94365601c3d572c5c0","data_mode":"golden","contract_version":"1.9.0"},"matrix":{"viewports":[375,620,1024,1440],"routes_per_viewport":10,"document_http_200":40,"document_total":40,"free_collection_visible_cards_at_375":6,"free_collection_horizontal_overflow":false},"findings":{"event_card_auxiliary_target_height":{"classification":"ACCEPTED_PRODUCT_DRIFT","owner":"A0","source_path":"site/src/layouts/EventLayout.astro","observed_height_px":36.28,"minimum_height_px":44,"published_golden_status":"DRIFT","current_source_status":"CLOSED_IN_D0AD1708_PENDING_V0_RECHECK","current_source_blocker":false},"stable_dom_anchors":{"classification":"REJECTED_AS_V0_SELECTOR_CONTRACT_DRIFT","source_change_required":false,"canonical_identity":["data-ds-family","data-ds-version","data-ds-variant","data-ds-state"],"forbidden_resolution":"do not add a parallel data-ui-* identity layer"},"target_blank":{"classification":"REJECTED_AS_OVERBROAD_V0_NEGATIVE_GATE","source_change_required":false,"required_rel_tokens":["noopener","noreferrer"],"replacement_negative_selectors":["[target=\"_blank\"]:not([rel~=\"noopener\"])","[target=\"_blank\"]:not([rel~=\"noreferrer\"])"]}}},"source_successor_review":{"candidate":{"branch":"agent/static-site-single-kaggle-contract","sha":"2e8f4dd2393ce0c5100f8b610aae3f01380aad8c","accepted_source_parent":"d0ad17088e13d5dab3d992326f393e2616246c5d","decision":"SOURCE_ACCEPTED_INTERMEDIATE_CURRENT_SUCCESSOR","runtime_tests_accepted":false,"published_preview_inherited":false},"included_lineage":{"published_fresh_real_base":"4536847f9fbdaa27326ebb3ec9ec1c825736e107","F0":"de92dabd4551e117ca1af1be7915ff223321cc32","M0":"c808c75dd975a9851e148ccf993c32787d2b6886","N0":"74252469c545193f8ec57624bd018fc00c87e9e6","A0_selective_through":"ec926580fa2cc003318006f4c1d671fc459ea26c"},"accepted_source_closures":["EventLayout auxiliary Not-interested target is 44px and no 36px rule remains","Popular desktop shelf owns overflow-x:auto instead of widening the document","Weekend 721px seam labels shrink internally without document widening","the latest pipeline harness isolates the Weekend seam as an overflow-only probe","A0-MECH-01 through A0-MECH-05 are materialized against accepted F0/M0 roots","collection route imports product-contour foundations directly","one canonical Kaggle builder and immutable-prefix publisher remain"],"required_current_deltas":[{"id":"F0-ROUTE-THEME-BINDINGS","owner":"F0_PLUS_A0_CONSUMPTION","head":"f2b9927e25ac0566d35577f69c574cedadab27d7","clusters":["exhibitions private --ex-* theme owner","festival local 0.95rem icon owner and sub-44px favorite target","club-detail route theme and text-arrow glyph"],"strict_command":"F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs","decision":"ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD"},{"id":"M0-CURRENT-FAMILY-DELTA","owner":"M0","source_head":"c71351decdcee02941acb26c5e2fbaf88faf0378","head":"a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c","commits":["70267e80e9b3b5b41a47c0c610dfdfec5a26f923","773ecca36882903fa052be9afc00b0134d6dfcd8","f4e89ea1cd0d9e66266be224e28ec2cd979bebce","fc24d7f21bf27b50a9da476700db547635d0b66a","c71351decdcee02941acb26c5e2fbaf88faf0378","a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c"],"accepted_scope":["resolved rail media contradictions fail closed","responsive stack/progressive seam remains source-addressable","EventHero primary opener delegates fit/focal ownership to one non-interactive MediaFrame","EventHero keeps caller interaction and full-screen viewer behavior","machine-readable M0 family/consumer/V0/Penpot lineage and regression contracts"],"decision":"SOURCE_AND_DOWNSTREAM_CONTRACTS_ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD"},{"id":"A0-MECH-06-FOCUS-ROUTE-IDENTITIES","owner":"A0_R0_MECHANICAL","paths":["site/src/pages/fokus-gruppa/kollektsiya/index.astro","site/src/pages/zakrytaya-afisha/index.astro"],"required_families":["FocusEggCollectionRouteComposition","ClosedFocusHubRouteComposition"],"required_states":["found-N-of-M","checking","locked","available"],"decision":"REQUIRED_BEFORE_FULL_ROUTE_V0_MATRIX"}],"a0_current_delta":{"head":"61d340a3ca291f074289d2292b33f56b2bad8a22","source_import_commit":"137c619c1abbb8b1d4e2c9c95c4a772741894a1d","source_import_already_present_in_candidate":true,"downstream_and_rollback_specs":"SOURCE_ACCEPTED_AS_PREPARATION","whole_branch_merge":"REJECTED","end_to_end_completion_claim":"HELD_UNTIL_ROUTE_THEME_CONSUMPTION_A0_MECH_06_AND_V0"}},"role_acceptance":{"F0":{"decision":"CURRENT_BATCH_SOURCE_ACCEPTED_A0_CONSUMPTION_PENDING","integrated_head":"de92dabd4551e117ca1af1be7915ff223321cc32","current_head":"f2b9927e25ac0566d35577f69c574cedadab27d7","accepted":["token-only route-theme foundations","exact exhibitions/festivals/club-detail bindings","strict consumer negative gate and rollback boundaries"],"pm0_item_11":"PARTIAL","runtime_status":"NOT_RUN_ON_CURRENT_HEAD"},"M0":{"decision":"CURRENT_SOURCE_AND_DOWNSTREAM_CONTRACTS_ACCEPTED_REQUIRED_FOR_NEXT_SUCCESSOR","integrated_head":"c808c75dd975a9851e148ccf993c32787d2b6886","source_head":"c71351decdcee02941acb26c5e2fbaf88faf0378","current_head":"a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c","accepted":["fail-closed resolved rail semantics","adaptive responsive seam reconciliation","EventHero MediaFrame adapter and positive regression contract","machine-readable family, actual-consumer, V0 and Penpot-ready bindings"],"runtime_status":"NOT_RUN_ON_CURRENT_SOURCE_HEAD","browser_status":"NO_CURRENT_SUCCESSOR_VERDICT"},"A0":{"decision":"PARTIAL_MATERIALIZATION_DOWNSTREAM_SPECS_ACCEPTED_COMPLETION_HELD","integrated_source_checkpoint":"ec926580fa2cc003318006f4c1d671fc459ea26c","current_head":"61d340a3ca291f074289d2292b33f56b2bad8a22","source_identity_fraction_on_current_successor":"17/19","missing_source_identities":["FocusEggCollectionRouteComposition","ClosedFocusHubRouteComposition"],"route_theme_consumption_pending":["exhibitions","festivals","interest-club detail"],"whole_branch_merge_allowed":false,"browser_pass":false}},"downstream_bindings":{"thin_s":{"repository":"onedayonemasterpiece/lovekgd-design-system","branch":"integration/launch-normalized-sot-penpot-20260902","head":"77f72cf71ee52c10598c2129dae1d961507825a4","route_bindings":"bindings/launch-normalization/a0-route-family-bindings.v1.json","source_identity":"17/19_CURRENT_SUCCESSOR","current_build_verified":"0/19","browser_observed":"0/19","classification":"PM0_25_PARTIAL_CURRENT_SOURCE_NOT_YET_BOUND_TO_BUILD"},"penpot":{"path":"bindings/launch-normalization/a0-penpot-ready-spec.v1.json","declared_status":"SPEC_ONLY_NOT_MATERIALIZED","classification":"PM0_39_NOT_DONE"},"v0_matrix":{"path":"bindings/launch-normalization/a0-v0-acceptance-matrix.v1.json","published_real_baseline":"READY_FOR_V0_AT_4536847F","current_successor_build_verified":"0/19","browser_observed_current_successor":"0/19","classification":"MATRIX_READY_NO_CURRENT_SUCCESSOR_PASS"},"rollback":{"path":"bindings/launch-normalization/a0-coverage-rollback.v1.json","production_mutation":false,"classification":"NAMED_ROLLBACK_UNITS_READY"}},"pm0_current_evidence":{"done":[2,3,4,6,7,8,10],"partial":[9,11,13,15,16,18,19,25,37],"item_37_source_identity":"17/19","voice_review":"NOT_READY","voice_review_missing":["current integrated successor full Kaggle preview","independent V0 no-critical-structural-drift verdict","two remaining PM0-37 route identities","three F0 route-theme consumer migrations","independent V0 baseline audit is blocked by missing my-browser-bridge actions"]},"v0_triggers":{"published_fresh_real_baseline":{"status":"READY_BUT_V0_BLOCKED_BY_TOOL_SURFACE","url":"https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/","repo_sha":"4536847f9fbdaa27326ebb3ec9ec1c825736e107","expected_use":"factual fresh-real before-baseline; not current-successor PASS","blocker_comment":5529063082,"browser_verdict":"NOT_EXECUTED"},"current_successor":{"status":"PENDING_BUILD","required_source":["2e8f4dd2393ce0c5100f8b610aae3f01380aad8c","f2b9927e25ac0566d35577f69c574cedadab27d7","c71351decdcee02941acb26c5e2fbaf88faf0378","a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c","A0 route-theme consumption","A0-MECH-06","current N0 acceptance contract"]},"golden":{"status":"AUDITED_DRIFT","url":"https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/","v0_pass":false}},"nearest_full_real_candidate":{"base":"2e8f4dd2393ce0c5100f8b610aae3f01380aad8c","status":"BLOCKED_BY_F0_CONSUMPTION_M0_DELTA_A0_MECH_06_AND_EXECUTABLE_TESTS","include":["current N0 descendant of work/ui-normalization-n0-checklist-20260903","F0 f2b9927e25ac0566d35577f69c574cedadab27d7 plus exact A0 consumer substitutions","M0 source c808c75dd975a9851e148ccf993c32787d2b6886 through c71351decdcee02941acb26c5e2fbaf88faf0378","M0 downstream contract a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c","A0-MECH-06 exact focus collection and closed hub identities","selected current A0 downstream/rollback contracts; never the whole A0 branch"],"blocking_source_fixes":[{"code":"F0_ROUTE_THEME_CONSUMPTION_PENDING","owner":"A0_R0_MECHANICAL","paths":["site/src/components/ExhibitionsPersonalSurface.astro","site/src/pages/festivali/index.astro","site/src/pages/kluby-po-interesam/[slug]/index.astro"],"verification":"F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs"},{"code":"A0_FOCUS_ROUTE_IDENTITIES_MISSING","owner":"A0_R0_MECHANICAL","paths":["site/src/pages/fokus-gruppa/kollektsiya/index.astro","site/src/pages/zakrytaya-afisha/index.astro"],"verification":"N0_REQUIRE_CURRENT_SUCCESSOR=1 npm run test:n0-v0-golden-drift"}],"blocking_integration":["current F0 f2b9927e25ac0566d35577f69c574cedadab27d7","current M0 source c71351decdcee02941acb26c5e2fbaf88faf0378 and downstream a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c","exact source/test/check execution on the resulting SHA"],"preserve":["one Kaggle builder and one Object Storage publisher","DateListingSurface and WeekendListingSurface as distinct compositions","Popular Large/Compact behavior","safe target=_blank links with noopener and noreferrer","production root and stable ICS keys"],"reject":["whole A0 branch merge","A0 replay of M0 roots","parallel data-ui identity aliases","blanket target=_blank ban","local full-preview publication","runtime inheritance from an earlier SHA","treating 4536847f V0 evidence as current-successor PASS"]},"candidate_plan":{"nearest_full_real_candidate":{"status":"BLOCKED_BY_F0_CONSUMPTION_M0_DELTA_A0_MECH_06_AND_EXECUTABLE_TESTS","blocking_source_fixes":[{"code":"F0_ROUTE_THEME_CONSUMPTION_PENDING"},{"code":"A0_FOCUS_ROUTE_IDENTITIES_MISSING"}]}},"gate_graph":[{"id":"SOURCE_CANDIDATE","owner":"R0","status":"BLOCKED_BY_F0_CONSUMPTION_M0_DELTA_A0_MECH_06_AND_TESTS","output":"one exact tested current successor SHA"},{"id":"FULL_REAL_KAGGLE_PREVIEW","owner":"R0","status":"PM0_3_BASELINE_DONE_CURRENT_SUCCESSOR_REBUILD_PENDING","requires":["fresh immutable production snapshot with source time/count/hash","canonical events-bot-new StaticSiteBuilder","--preview-data-mode real","--page-class all","checked artifact","create-only immutable-prefix publication","HTTP-200 exact owner URL","matching preview-build.json and Kaggle operation/artifact identity"]},{"id":"FULL_REAL_KAGGLE_REVIEW_PREVIEW","owner":"R0","status":"BLOCKED_BY_CURRENT_SOURCE_CANDIDATE","alias_of":"FULL_REAL_KAGGLE_PREVIEW","requires":["canonical events-bot-new Kaggle StaticSiteBuilder","--preview-data-mode real","--page-class all","matching preview-build.json and Kaggle operation/artifact identity"]},{"id":"V0_REAL_AUDIT","owner":"V0","status":"BASELINE_4536847F_READY_CURRENT_SUCCESSOR_PENDING","output":"independent PASS or factual DRIFT"},{"id":"ASTRO_NORMALIZATION_PASS","owner":"N0","status":"BLOCKED_BY_CURRENT_SUCCESSOR_V0_AND_SOURCE_CLOSURE"},{"id":"THIN_S_BOUND","owner":"N0","status":"BLOCKED_BY_ASTRO_NORMALIZATION_PASS"},{"id":"PENPOT_NATIVE","owner":"R0.PENPOT","status":"BLOCKED_BY_THIN_S_BOUND"},{"id":"RELEASE_CANDIDATE","owner":"N0","status":"BLOCKED_BY_GOLDEN_A_S_P_PASS"}],"required_source_commands":["npm run test:n0-successor-acceptance","npm run test:n0-v0-golden-drift","N0_REQUIRE_CURRENT_SUCCESSOR=1 npm run test:n0-v0-golden-drift","F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs","npm run test:golden-preview-contract","npm run check:preview","npm run check:design-system-production-surfaces","npm run check:design-system-iconography","node --test tests/popular-desktop-overflow-contract.test.mjs tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/event-media-rail-hardening.test.mjs tests/m0-event-hero-media-frame-contract.test.mjs tests/m0-downstream-contracts.test.mjs tests/a0-route-family-normalization.test.mjs"],"pm0_delta_reporting":{"owner_correction_comment":5527668536,"required_blocks":["checkbox_transitions","progress_inside_partial","not_in_candidate","new_owner_visible_result"],"zero_changes_only_when_all_refs_and_evidence_unchanged":true,"new_v0_claim_requires_new_browser_verdict":true},"prohibitions":["full or published preview outside the canonical Kaggle pipeline","do not publish a full or focused owner preview outside the canonical Kaggle pipeline","local deploy:preview or deploy:golden-preview launch path","do not use deploy:preview or deploy:golden-preview as a launch path","runtime inheritance from an earlier SHA","whole A0 branch merge","A0 replay of M0 roots","parallel data-ui identity system","treating safe target=_blank links as drift","R0 smoke represented as V0 PASS","Golden represented as fresh-real evidence","4536847f baseline represented as current-successor PASS","thin-S or Penpot materialization before accepted Astro and V0 gates","V0 platform blocker represented as browser PASS or DRIFT"],"v0_platform_blocker":{"issue_comment":5529063082,"classification":"ACTUAL_TOOL_SURFACE_BOUNDARY","target_url":"https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/","target_repo_sha":"4536847f9fbdaa27326ebb3ec9ec1c825736e107","verdict":"NOT_EXECUTED","browser_pass_claimed":false,"browser_drift_claimed":false,"reason":"explicitly attached V0 activation exposed no callable my-browser-bridge namespace or actions","n0_decision":"ACCEPTED_PLATFORM_BLOCKER_BASELINE_REMAINS_UNAUDITED","remaining_trigger":"callable my-browser-bridge actions in an explicitly attached V0 activation"}}
+{
+  "schema_version": "kenigevents.n0-successor-acceptance.v1",
+  "contract_version": "1.9.0",
+  "pm0_version": "2.3.0",
+  "role": "N0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "observed_at": "2026-09-03T17:30:00Z",
+  "evidence_cutoff": {
+    "instruction_comment": 5526326906,
+    "golden_v0_comment": 5527892153,
+    "fresh_real_result_comment": 5528274698,
+    "previous_n0_result_comment": 5528519655,
+    "fresh_real_v0_platform_blocker_comment": 5529063082
+  },
+  "current_refs": {
+    "programme": {
+      "branch": "integration/ui-normalization-launch-20260902",
+      "head": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8"
+    },
+    "legacy_combined_candidate": {
+      "branch": "r0/ui-normalization-current-candidate-20260903",
+      "head": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+      "classification": "ACCEPTED_PRECURSOR_NOT_CURRENT_SUCCESSOR"
+    },
+    "source_successor": {
+      "branch": "agent/static-site-single-kaggle-contract",
+      "head": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "accepted_normalization_parent": "d0ad17088e13d5dab3d992326f393e2616246c5d",
+      "previous_harness_checkpoint": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
+      "classification": "SOURCE_ACCEPTED_INTERMEDIATE_CURRENT_SUCCESSOR",
+      "runtime_acceptance": false,
+      "public_url": null
+    },
+    "N0": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "minimum_reviewed_head": "3f78a27a8dfc701d68a8e1bfcf33b63d7a3eb095",
+      "resolve_current_descendant_at_materialization": true
+    },
+    "F0": {
+      "branch": "work/ui-normalization-f0-wave-3-20260903",
+      "integrated_ancestor": "de92dabd4551e117ca1af1be7915ff223321cc32",
+      "route_theme_checkpoint": "f2b9927e25ac0566d35577f69c574cedadab27d7",
+      "source_head": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "reporting_head": "dbb1914f5a5c15f5cb1c9e8464374248a9b2a046",
+      "reporting_head_required_for_runtime": false
+    },
+    "M0": {
+      "branch": "work/ui-normalization-m0-continuity-20260903",
+      "integrated_ancestor": "c808c75dd975a9851e148ccf993c32787d2b6886",
+      "source_head": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+      "downstream_head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133"
+    },
+    "A0": {
+      "branch": "work/ui-normalization-a0-wave-3-20260903",
+      "integrated_semantic_checkpoint": "ec926580fa2cc003318006f4c1d671fc459ea26c",
+      "current_head": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+      "whole_branch_merge_allowed": false
+    },
+    "thin_sot": {
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "branch": "integration/launch-normalized-sot-penpot-20260902",
+      "head": "f6a71df53eafe0763af5a606591372d952e9d371",
+      "n0_transaction_commit": "23b8b70ae0ad5b5cf59c19a7f1e94fec230c6de8"
+    }
+  },
+  "accepted_fresh_real_transaction": {
+    "decision": "ACCEPTED_AS_PM0_2_AND_3_PIPELINE_AND_FRESH_DATA_BASELINE",
+    "issue_comment": 5528274698,
+    "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+    "manifest_url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/preview-build.json",
+    "build_id": "preview-real-4536847f-fresh-20260903-v1",
+    "repo_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+    "explicit_ancestry": [
+      "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
+      "1d145d5efd2a332eff29e69b6afcf43414769906",
+      "4536847f9fbdaa27326ebb3ec9ec1c825736e107"
+    ],
+    "data_mode": "real",
+    "page_classes": ["all"],
+    "snapshot": {
+      "id": "issue621-real-9152994b-20260903T144827Z",
+      "sha256": "1a084d7e321771e5acb7681d61589962c8d48cc68f37d6c7799180bf13573b5e",
+      "size_bytes": 80764928,
+      "created_at": "2026-09-03T14:48:30Z",
+      "source_latest_effect_at": "2026-09-03T14:48:27Z"
+    },
+    "event_count": 300,
+    "kaggle": {
+      "dataset": "zigomaro/static-site-builder-input-20260903152929-3705b4",
+      "kernel": "zigomaro/kenigevents-static-site-builder",
+      "status": "COMPLETE"
+    },
+    "artifact": {
+      "result_sha256": "83a74e13a56d1dcd25477c23335904517d8871ed00d8a45569e80289cf1a24a3",
+      "archive_sha256": "9ffcca468332b3ea5ddd75125394ae14bcee2307093a6331929beffe14b5a899",
+      "published_objects": 1418,
+      "published_bytes": 261210454,
+      "root_mutation": false,
+      "stable_ics_mutation": false
+    },
+    "technical_verification": {
+      "owner_url_http": 200,
+      "manifest_http": 200,
+      "r0_document_http_200": "126/126",
+      "r0_console_errors": 0,
+      "r0_adaptive_grid_diagnostic_drift": 0,
+      "r0_retired_media_fit_owner_drift": 0,
+      "independent_v0_verdict": "NOT_EXECUTED"
+    },
+    "known_published_drift": {
+      "popular_desktop_shelf_document_overflow": true,
+      "current_source_resolution": "CLOSED_AFTER_THIS_IMMUTABLE_SHA_PENDING_NEW_BUILD_AND_V0"
+    },
+    "pm0": {
+      "2": "DONE",
+      "3": "DONE"
+    },
+    "does_not_close": [
+      "runtime acceptance of the current source successor",
+      "voice-review readiness",
+      "independent V0 PASS",
+      "ASTRO_NORMALIZATION_PASS",
+      "bound thin S",
+      "native Penpot",
+      "release candidate"
+    ]
+  },
+  "accepted_golden_transaction": {
+    "decision": "ACCEPTED_AS_GOLDEN_PIPELINE_AND_CORPUS_EVIDENCE_WITH_V0_DRIFT",
+    "issue_comment": 5527249164,
+    "v0_issue_comment": 5527892153,
+    "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+    "build_id": "preview-golden-84504f30-20270604-v1",
+    "repo_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+    "data_mode": "golden",
+    "page_classes": ["all"],
+    "corpus_id": "golden-review-20260903-v1",
+    "corpus_sha256": "f90561691baa6744804b6cba36b0a8580eac8e9607dcdb97483511ad32e7ce00",
+    "kaggle_status": "COMPLETE",
+    "v0_verdict": "DRIFT",
+    "v0_document_http_200": "40/40",
+    "pm0": {
+      "4": "DONE",
+      "6": "DONE",
+      "7": "DONE",
+      "8": "DONE",
+      "9": "PARTIAL_V0_DRIFT",
+      "10": "DONE"
+    }
+  },
+  "v0_golden_verdict": {
+    "issue_comment": 5527892153,
+    "verdict": "DRIFT",
+    "release_acceptance": false,
+    "target": {
+      "repo_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+      "data_mode": "golden"
+    },
+    "matrix": {
+      "document_http_200": 40,
+      "document_total": 40,
+      "free_collection_visible_cards_at_375": 6
+    },
+    "findings": {
+      "event_card_auxiliary_target_height": {
+        "classification": "ACCEPTED_PRODUCT_DRIFT",
+        "owner": "A0",
+        "observed_height_px": 36.28,
+        "minimum_height_px": 44,
+        "current_source_status": "CLOSED_IN_D0AD1708_PENDING_V0_RECHECK",
+        "current_source_blocker": false
+      },
+      "stable_dom_anchors": {
+        "classification": "REJECTED_AS_V0_SELECTOR_CONTRACT_DRIFT",
+        "source_change_required": false,
+        "canonical_identity": [
+          "data-ds-family",
+          "data-ds-version",
+          "data-ds-variant",
+          "data-ds-state"
+        ],
+        "forbidden_resolution": "parallel data-ui identity layer"
+      },
+      "target_blank": {
+        "classification": "REJECTED_AS_OVERBROAD_V0_NEGATIVE_GATE",
+        "source_change_required": false,
+        "required_rel_tokens": ["noopener", "noreferrer"],
+        "replacement_negative_selectors": [
+          "[target=\"_blank\"]:not([rel~=\"noopener\"])",
+          "[target=\"_blank\"]:not([rel~=\"noreferrer\"])"
+        ]
+      }
+    }
+  },
+  "v0_platform_blocker": {
+    "issue_comment": 5529063082,
+    "classification": "ACTUAL_TOOL_SURFACE_BOUNDARY",
+    "target_url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+    "target_repo_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+    "verdict": "NOT_EXECUTED",
+    "browser_pass_claimed": false,
+    "browser_drift_claimed": false,
+    "reason": "explicit V0 activation exposed no callable my-browser-bridge actions",
+    "remaining_trigger": "callable my-browser-bridge actions in an explicitly attached V0 activation"
+  },
+  "source_successor_review": {
+    "candidate": {
+      "sha": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "decision": "SOURCE_ACCEPTED_INTERMEDIATE_CURRENT_SUCCESSOR",
+      "runtime_tests_accepted": false,
+      "published_preview_inherited": false
+    },
+    "accepted_source_closures": [
+      "EventLayout auxiliary Not-interested target is >=44px and the 36px duplicate owner is absent",
+      "Popular desktop shelves own internal overflow-x:auto without document widening",
+      "Weekend 721px labels shrink internally and the harness isolates document overflow",
+      "A0-MECH-01 through A0-MECH-05 are materialized",
+      "festival external targets carry both noopener and noreferrer",
+      "one canonical Kaggle builder and immutable-prefix publisher remain"
+    ],
+    "required_current_deltas": [
+      {
+        "id": "F0-ROUTE-THEME-BINDINGS",
+        "source_head": "f2b9927e25ac0566d35577f69c574cedadab27d7",
+        "consumer_owner": "A0",
+        "paths": [
+          "site/src/components/ExhibitionsPersonalSurface.astro",
+          "site/src/pages/festivali/index.astro",
+          "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        ],
+        "strict_command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+        "decision": "ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD"
+      },
+      {
+        "id": "F0-INTEREST-CLUB-CARD-RESIDUAL",
+        "source_head": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+        "reporting_head": "dbb1914f5a5c15f5cb1c9e8464374248a9b2a046",
+        "consumer_owner": "A0",
+        "path": "site/src/components/InterestClubCard.astro",
+        "required": "four exact decorative alpha substitutions without changing the intentional route or photographic card identities",
+        "strict_command": "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+        "decision": "SOURCE_ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD"
+      },
+      {
+        "id": "M0-CURRENT-SOURCE-AND-DOWNSTREAM",
+        "source_head": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+        "downstream_head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+        "accepted_scope": [
+          "contradictory resolved EventMediaRail inputs fail closed",
+          "responsive stack/progressive seam remains source-addressable",
+          "EventHero uses one non-interactive primary MediaFrame and caller-owned interaction",
+          "M0 family, V0, Penpot and rollback targets use canonical SoT paths"
+        ],
+        "decision": "SOURCE_AND_DOWNSTREAM_ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD"
+      },
+      {
+        "id": "A0-MECH-06-FOCUS-ROUTE-IDENTITIES",
+        "paths": [
+          "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+          "site/src/pages/zakrytaya-afisha/index.astro"
+        ],
+        "required_families": [
+          "FocusEggCollectionRouteComposition",
+          "ClosedFocusHubRouteComposition"
+        ],
+        "required_states": ["found-N-of-M", "checking", "locked", "available"],
+        "decision": "REQUIRED_BEFORE_FULL_ROUTE_V0_MATRIX"
+      }
+    ]
+  },
+  "role_acceptance": {
+    "F0": {
+      "decision": "SOURCE_ACCEPTED_A0_CONSUMPTION_PENDING",
+      "source_head": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "reporting_head": "dbb1914f5a5c15f5cb1c9e8464374248a9b2a046",
+      "runtime_status": "NOT_RUN_ON_CURRENT_SOURCE_HEAD"
+    },
+    "M0": {
+      "decision": "SOURCE_AND_DOWNSTREAM_ACCEPTED_REQUIRED_FOR_NEXT_SUCCESSOR",
+      "source_head": "c71351decdcee02941acb26c5e2fbaf88faf0378",
+      "downstream_head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+      "runtime_status": "NOT_RUN_ON_CURRENT_SOURCE_HEAD",
+      "browser_status": "NO_CURRENT_SUCCESSOR_VERDICT"
+    },
+    "A0": {
+      "decision": "PARTIAL_MATERIALIZATION_DOWNSTREAM_SPECS_ACCEPTED_COMPLETION_HELD",
+      "current_head": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+      "source_identity_fraction": "17/19",
+      "missing_source_identities": [
+        "FocusEggCollectionRouteComposition",
+        "ClosedFocusHubRouteComposition"
+      ],
+      "route_theme_consumption_pending": [
+        "exhibitions",
+        "festivals",
+        "interest-club detail",
+        "InterestClubCard residual palette"
+      ],
+      "whole_branch_merge_allowed": false,
+      "browser_pass": false
+    }
+  },
+  "downstream_bindings": {
+    "N0": {
+      "transaction": "docs/launch-normalization/n0-current-successor-acceptance.v1.json",
+      "commit": "23b8b70ae0ad5b5cf59c19a7f1e94fec230c6de8"
+    },
+    "F0": {
+      "thin_s": [
+        "catalog/normalization/f0-foundation-thin-s-bindings.v1.json",
+        "catalog/normalization/f0-interest-club-theme-extension.v1.json"
+      ],
+      "penpot_ready": [
+        "penpot/candidate/f0-foundation-variable-spec.v1.json",
+        "penpot/candidate/f0-interest-club-theme-extension.v1.json"
+      ],
+      "classification": "SOURCE_SPECS_READY_INTEGRATION_AND_V0_PENDING"
+    },
+    "M0": {
+      "source_index": "site/src/data/m0-downstream-bindings.v1.json",
+      "canonical_targets": {
+        "thin_s": "catalog/normalization/m0-family-thin-s-bindings.v1.json",
+        "penpot_ready": "penpot/candidate/m0-family-master-spec.v1.json",
+        "v0_matrix": "catalog/normalization/evidence/m0-v0-acceptance-matrix.v1.json",
+        "integration_rollback": "docs/launch-normalization/m0-source-integration-and-rollback.v1.json"
+      },
+      "classification": "SOURCE_INDEX_READY_SOT_FILES_PENDING"
+    },
+    "A0": {
+      "source_identity": "17/19",
+      "current_build_verified": "0/19",
+      "browser_observed": "0/19",
+      "penpot": "SPEC_ONLY_NOT_MATERIALIZED"
+    }
+  },
+  "nearest_full_real_candidate": {
+    "base": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "status": "BLOCKED_BY_F0_CONSUMPTION_M0_CURRENT_A0_MECH_06_AND_EXECUTABLE_TESTS",
+    "include": [
+      "current N0 descendant",
+      "F0 source through 0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "M0 source through c71351decdcee02941acb26c5e2fbaf88faf0378",
+      "M0 downstream through 5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+      "exact A0 F0-theme and InterestClubCard substitutions",
+      "A0-MECH-06 focus collection and closed hub identities",
+      "selected A0 downstream and rollback records"
+    ],
+    "blocking_source_fixes": [
+      "F0_ROUTE_THEME_CONSUMPTION",
+      "F0_INTEREST_CLUB_CARD_RESIDUAL",
+      "A0_FOCUS_ROUTE_IDENTITIES"
+    ],
+    "preserve": [
+      "one Kaggle builder and one Object Storage publisher",
+      "DateListingSurface and WeekendListingSurface remain distinct",
+      "Popular Large/Compact behavior",
+      "safe target=_blank links with noopener and noreferrer",
+      "production root and stable ICS keys"
+    ],
+    "reject": [
+      "whole A0 branch merge",
+      "A0 replay of M0 roots",
+      "parallel data-ui identity aliases",
+      "blanket target=_blank ban",
+      "local full-preview publication",
+      "runtime inheritance from an earlier SHA",
+      "treating 4536847f as current-successor browser acceptance"
+    ]
+  },
+  "candidate_plan": {
+    "nearest_full_real_candidate": {
+      "status": "BLOCKED_BY_F0_CONSUMPTION_M0_CURRENT_A0_MECH_06_AND_EXECUTABLE_TESTS",
+      "blocking_source_fixes": [
+        {"code": "F0_ROUTE_THEME_CONSUMPTION"},
+        {"code": "F0_INTEREST_CLUB_CARD_RESIDUAL"},
+        {"code": "A0_FOCUS_ROUTE_IDENTITIES"}
+      ]
+    }
+  },
+  "v0_triggers": {
+    "published_fresh_real_baseline": {
+      "status": "READY_BUT_V0_BLOCKED_BY_TOOL_SURFACE",
+      "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+      "repo_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+      "blocker_comment": 5529063082,
+      "browser_verdict": "NOT_EXECUTED"
+    },
+    "current_successor": {
+      "status": "PENDING_SOURCE_INTEGRATION_TESTS_AND_BUILD"
+    },
+    "golden": {
+      "status": "AUDITED_DRIFT",
+      "v0_pass": false
+    }
+  },
+  "pm0_current_evidence": {
+    "done": [2, 3, 4, 6, 7, 8, 10],
+    "partial_with_current_progress": [9, 11, 13, 15, 16, 17, 18, 19, 25, 37],
+    "voice_review": "NOT_READY"
+  },
+  "gate_graph": [
+    {
+      "id": "SOURCE_CANDIDATE",
+      "owner": "R0",
+      "status": "BLOCKED_BY_F0_CONSUMPTION_M0_CURRENT_A0_MECH_06_AND_TESTS"
+    },
+    {
+      "id": "FULL_REAL_KAGGLE_PREVIEW",
+      "owner": "R0",
+      "status": "PM0_3_BASELINE_DONE_CURRENT_SUCCESSOR_REBUILD_PENDING",
+      "requires": [
+        "fresh immutable production snapshot with source time/count/hash",
+        "canonical events-bot-new StaticSiteBuilder",
+        "--preview-data-mode real",
+        "--page-class all",
+        "checked artifact",
+        "create-only immutable-prefix publication",
+        "HTTP-200 exact owner URL",
+        "matching preview-build.json and Kaggle operation/artifact identity"
+      ]
+    },
+    {
+      "id": "FULL_REAL_KAGGLE_REVIEW_PREVIEW",
+      "owner": "R0",
+      "status": "BLOCKED_BY_CURRENT_SOURCE_CANDIDATE",
+      "alias_of": "FULL_REAL_KAGGLE_PREVIEW",
+      "requires": [
+        "canonical events-bot-new Kaggle StaticSiteBuilder",
+        "--preview-data-mode real",
+        "--page-class all",
+        "create-only immutable-prefix publication",
+        "matching preview-build.json and Kaggle operation/artifact identity"
+      ]
+    },
+    {
+      "id": "V0_REAL_AUDIT",
+      "owner": "V0",
+      "status": "BASELINE_BLOCKED_BY_TOOL_SURFACE_CURRENT_SUCCESSOR_PENDING"
+    },
+    {
+      "id": "ASTRO_NORMALIZATION_PASS",
+      "owner": "N0",
+      "status": "BLOCKED_BY_CURRENT_SUCCESSOR_AND_V0"
+    },
+    {
+      "id": "THIN_S_BOUND",
+      "owner": "N0",
+      "status": "BLOCKED_BY_ASTRO_NORMALIZATION_PASS"
+    },
+    {
+      "id": "PENPOT_NATIVE",
+      "owner": "R0.PENPOT",
+      "status": "BLOCKED_BY_THIN_S_BOUND"
+    },
+    {
+      "id": "RELEASE_CANDIDATE",
+      "owner": "N0",
+      "status": "BLOCKED_BY_GOLDEN_A_S_P_PASS"
+    }
+  ],
+  "required_source_commands": [
+    "npm run test:n0-successor-acceptance",
+    "N0_REQUIRE_CURRENT_SUCCESSOR=1 npm run test:n0-v0-golden-drift",
+    "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+    "npm run test:golden-preview-contract",
+    "npm run check:preview",
+    "npm run check:design-system-production-surfaces",
+    "npm run check:design-system-iconography",
+    "node --test tests/popular-desktop-overflow-contract.test.mjs tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/event-media-rail-hardening.test.mjs tests/m0-event-hero-media-frame-contract.test.mjs tests/m0-downstream-contracts.test.mjs tests/a0-route-family-normalization.test.mjs"
+  ],
+  "prohibitions": [
+    "full or published preview outside the canonical Kaggle pipeline",
+    "do not publish a full or focused owner preview outside the canonical Kaggle pipeline",
+    "local deploy:preview or deploy:golden-preview launch path",
+    "do not use deploy:preview or deploy:golden-preview as a launch path",
+    "runtime inheritance from an earlier SHA",
+    "whole A0 branch merge",
+    "A0 replay of M0 roots",
+    "parallel data-ui identity system",
+    "treating safe target=_blank links as drift",
+    "R0 smoke represented as V0 PASS",
+    "Golden represented as fresh-real evidence",
+    "4536847f baseline represented as current-successor PASS",
+    "V0 platform blocker represented as browser PASS or DRIFT",
+    "thin-S or Penpot materialization before accepted Astro and V0 gates"
+  ]
+}
