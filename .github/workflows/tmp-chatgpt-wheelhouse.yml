@@ -1,0 +1,28 @@
+name: tmp-chatgpt-wheelhouse
+
+on:
+  push:
+    branches:
+      - tmp-probe
+
+permissions:
+  contents: read
+
+jobs:
+  build-wheelhouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Download Python dependencies for isolated local verification
+        run: |
+          python -m pip install --upgrade pip
+          mkdir -p wheelhouse
+          python -m pip download --dest wheelhouse -r requirements.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: events-bot-new-wheelhouse-py313
+          path: wheelhouse
+          retention-days: 1
