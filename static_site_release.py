@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import calendar
+from concurrent.futures import ThreadPoolExecutor
 import json
 import mimetypes
 import os
@@ -45,6 +46,7 @@ SECRET_CANDIDATE_TOKEN_RE = r"[A-Za-z0-9_-]{43}"
 STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA = "static_site_image_source_manifest_v1"
 STATIC_SITE_SOURCE_IDENTITY_SCHEMA = "static_site_source_identity_v1"
 STATIC_SITE_PAGE_CLASS_CONTRACT_SCHEMA = "kenigevents_static_site_page_classes_v1"
+PREVIEW_PUBLICATION_MAX_WORKERS = 8
 
 
 def _load_static_site_preview_page_classes() -> frozenset[str]:
@@ -2888,6 +2890,10 @@ def publish_preview_archive(
             "content_type": content_type,
             "cache_control": cache_control,
         }
+        objects.append(item)
+
+    def upload(item: Mapping[str, Any]) -> None:
+        path = Path(item["path"])
         try:
             with path.open("rb") as handle:
                 s3_client.put_object(
@@ -2895,15 +2901,15 @@ def publish_preview_archive(
                     Key=item["key"],
                     Body=handle,
                     IfNoneMatch="*",
-                    ContentType=content_type,
-                    CacheControl=cache_control,
-                    Metadata={"sha256": digest},
+                    ContentType=item["content_type"],
+                    CacheControl=item["cache_control"],
+                    Metadata={"sha256": item["sha256"]},
                 )
         except Exception as exc:
             if not is_create_conflict(exc):
                 raise
-        objects.append(item)
-    for item in objects:
+
+    def verify(item: Mapping[str, Any]) -> None:
         response = s3_client.get_object(Bucket=bucket, Key=item["key"])
         body = response["Body"].read()
         if len(body) != item["size"] or hashlib.sha256(body).hexdigest() != item["sha256"]:
@@ -2914,6 +2920,21 @@ def publish_preview_archive(
             raise StaticSiteRetryableError(
                 f"preview_publish_uploaded_mime_mismatch:{item['key']}"
             )
+
+    # Boto3 low-level clients are thread-safe. Keep the pool deliberately
+    # bounded: immutable create-only writes make partial failure retry-safe,
+    # while parallel object I/O avoids serial round trips for full previews.
+    workers = min(PREVIEW_PUBLICATION_MAX_WORKERS, len(objects))
+    with ThreadPoolExecutor(
+        max_workers=workers,
+        thread_name_prefix="static-preview-upload",
+    ) as executor:
+        list(executor.map(upload, objects))
+    with ThreadPoolExecutor(
+        max_workers=workers,
+        thread_name_prefix="static-preview-verify",
+    ) as executor:
+        list(executor.map(verify, objects))
     public_url = f"{public_base_url.rstrip('/')}/{build_id}/__preview/"
     if public_probe is not None:
         public_probe(public_url)

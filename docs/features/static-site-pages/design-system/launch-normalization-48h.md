@@ -129,6 +129,20 @@ N0 не читает runtime SQLite. Build/export output должен возвр
 output identity. Read-only SQLite fallback допустим только native R0, если
 конкретная generation task доказывает его необходимость.
 
+Preview и production используют один production rail: exporter, page-class
+selector, Kaggle `StaticSiteBuilder`, artifact checks, Object Storage publisher
+и retention принадлежат `events-bot-new`. `my-data-hub` только разрешает
+`source_ref`, выбирает/reuses snapshot или corpus, ведёт MCP operation и вызывает
+этот runner; второй builder/exporter/publisher там запрещён. Локальная сборка —
+диагностика, а не альтернативный deploy path.
+
+Publisher загружает и затем независимо перечитывает каждый объект immutable
+`/<buildId>/` prefix. Оба сетевых этапа выполняются bounded pool из максимум
+восьми workers; create-only `IfNoneMatch=*`, SHA-256, MIME verification,
+root/stable-ICS isolation и retry-safe adoption существующих byte-identical
+objects сохраняются. Ограниченная конкурентность устраняет последовательные
+round trips полного preview, не меняя generation/publication semantics.
+
 ## 5. Owner review
 
 Existing entry point:

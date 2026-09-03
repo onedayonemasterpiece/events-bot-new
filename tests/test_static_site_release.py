@@ -6,6 +6,7 @@ import io
 import sqlite3
 import tarfile
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
@@ -752,6 +753,48 @@ class _MemoryS3:
         return {**stored, "Body": io.BytesIO(stored["Body"])}
 
 
+class _ConcurrentMemoryS3(_MemoryS3):
+    def __init__(self) -> None:
+        super().__init__()
+        self._lock = threading.Lock()
+        self._put_barrier = threading.Barrier(2)
+        self._get_barrier = threading.Barrier(2)
+        self._put_calls = 0
+        self._get_calls = 0
+        self.active_puts = 0
+        self.active_gets = 0
+        self.max_active_puts = 0
+        self.max_active_gets = 0
+
+    def put_object(self, **kwargs):
+        with self._lock:
+            self._put_calls += 1
+            call = self._put_calls
+            self.active_puts += 1
+            self.max_active_puts = max(self.max_active_puts, self.active_puts)
+        try:
+            if call <= 2:
+                self._put_barrier.wait(timeout=2)
+            return super().put_object(**kwargs)
+        finally:
+            with self._lock:
+                self.active_puts -= 1
+
+    def get_object(self, **kwargs):
+        with self._lock:
+            self._get_calls += 1
+            call = self._get_calls
+            self.active_gets += 1
+            self.max_active_gets = max(self.max_active_gets, self.active_gets)
+        try:
+            if call <= 2:
+                self._get_barrier.wait(timeout=2)
+            return super().get_object(**kwargs)
+        finally:
+            with self._lock:
+                self.active_gets -= 1
+
+
 def test_add_build_01_payload_union_is_bounded_and_keeps_latest_effect() -> None:
     old = make_request_payload(
         reason="smart_update",
@@ -1359,6 +1402,51 @@ def test_kaggle_preview_publish_is_create_only_and_build_prefix_isolated(tmp_pat
     )
     assert adopted.artifact_sha256 == receipt.artifact_sha256
     assert adopted.public_url == receipt.public_url
+
+
+def test_kaggle_preview_publish_bounds_parallel_object_io(tmp_path) -> None:
+    build_id = "preview-parallel-object-io"
+    preview = tmp_path / "preview" / build_id
+    (preview / "__preview").mkdir(parents=True)
+    (preview / "__preview" / "index.html").write_text("<!doctype html>", encoding="utf-8")
+    (preview / "one.txt").write_text("one", encoding="utf-8")
+    (preview / "two.txt").write_text("two", encoding="utf-8")
+    (preview / "preview-build.json").write_text(json.dumps({
+        "buildId": build_id,
+        "repo_sha": "c" * 40,
+        "basePath": f"/{build_id}",
+        "pageClasses": ["date"],
+    }), encoding="utf-8")
+    archive = tmp_path / f"{build_id}.tar.gz"
+    with tarfile.open(archive, "w:gz") as bundle:
+        bundle.add(preview, arcname=build_id)
+    result = {
+        "profile": "preview",
+        "build_id": build_id,
+        "page_classes": ["date"],
+        "artifacts": [{
+            "kind": "preview",
+            "filename": archive.name,
+            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+            "size": archive.stat().st_size,
+        }],
+    }
+    client = _ConcurrentMemoryS3()
+    receipt = publish_preview_archive(
+        archive,
+        build_result=result,
+        extraction_root=tmp_path / "extract",
+        bucket="bucket",
+        endpoint="https://storage.invalid",
+        region="ru-central1",
+        access_key_id="test",
+        secret_access_key="test",
+        s3_client=client,
+        public_probe=lambda url: url.endswith(f"/{build_id}/__preview/"),
+    )
+    assert receipt.object_count == 4
+    assert client.max_active_puts >= 2
+    assert client.max_active_gets >= 2
 
 
 def test_kaggle_golden_preview_publish_binds_corpus_evidence(tmp_path) -> None:

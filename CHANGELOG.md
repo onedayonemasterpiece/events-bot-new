@@ -19,6 +19,9 @@
   create-only publisher, requires a full-page build and records its corpus ID
   and digest in the build result and publication receipt. The previously
   proposed local Golden deploy wrapper is intentionally not part of the rail.
+  Preview object upload and independent read-back verification now use a
+  bounded eight-worker pool while preserving conditional create-only writes,
+  per-object SHA-256/MIME checks and retry-safe immutable-prefix adoption.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK
