@@ -7,8 +7,32 @@ import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
 
-interface Props { event: PreviewEvent; density?: 'regular' | 'weekend' | 'popular'; priority?: boolean; temporalLabel?: string; familyKey?: string; supplemental?: boolean }
-const { event, density = 'regular', priority = false, temporalLabel, familyKey, supplemental = false } = Astro.props;
+export type ListingEventCardRootAttributeValue = string | number | boolean | null | undefined;
+export type ListingEventCardRootAttributes = Record<string, ListingEventCardRootAttributeValue>;
+
+interface Props {
+  event: PreviewEvent;
+  density?: 'regular' | 'weekend' | 'popular';
+  priority?: boolean;
+  temporalLabel?: string;
+  familyKey?: string;
+  supplemental?: boolean;
+  rootClassName?: string;
+  rootAttributes?: ListingEventCardRootAttributes;
+  hidden?: boolean;
+}
+
+const {
+  event,
+  density = 'regular',
+  priority = false,
+  temporalLabel,
+  familyKey,
+  supplemental = false,
+  rootClassName = '',
+  rootAttributes = {},
+  hidden = false,
+} = Astro.props;
 const href = eventHref(event);
 const targetRatio = density === 'weekend' ? 1.2 : density === 'popular' ? 1.25 : 1.35;
 const image = selectListingImage(event, targetRatio);
@@ -82,6 +106,50 @@ const hasSideRail = visibleIdentityCount > 0 || hasRailProof;
 const splitIdentityProofRail = hasRailProof && visibleIdentityCount === 3 && density !== 'regular';
 const tailWidth = splitIdentityProofRail ? 96 : hasSideRail ? (visibleIdentityCount === 0 ? 40 : 64) : 0;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
+const LISTING_EVENT_CARD_RESERVED_ROOT_ATTRIBUTES = new Set([
+  'data-ds-component',
+  'data-ds-family',
+  'data-ds-version',
+  'data-ds-variant',
+  'data-ds-state',
+  'data-feedback-scope',
+  'data-listing-item',
+  'data-listing-supplemental',
+  'data-event-id',
+  'data-listing-family-key',
+  'data-event-title',
+  'data-linked-event-ids',
+  'data-listing-city',
+  'data-listing-event-type',
+  'data-listing-image-mode',
+  'data-listing-crop-adaptive',
+  'data-listing-crop-evidence',
+  'data-listing-source-width',
+  'data-listing-source-height',
+  'data-listing-media-role',
+  'data-listing-vertical-retention',
+  'data-listing-low-resolution',
+  'data-listing-density',
+  'data-image-text-mode',
+  'data-venue-medallion',
+  'data-listing-has-social-proof',
+  'data-listing-proof-placement',
+  'data-listing-proof-rows',
+  'data-listing-identity-count',
+  'data-listing-side-identity-count',
+  'data-listing-tail-layout',
+  'data-listing-overlay-kind',
+  'data-event-end-at',
+  'data-event-start-at',
+]);
+const safeRootAttributes = Object.fromEntries(
+  Object.entries(rootAttributes).filter(([name, value]) => (
+    value !== undefined
+    && value !== null
+    && /^data-[a-z0-9_.:-]+$/u.test(name)
+    && !LISTING_EVENT_CARD_RESERVED_ROOT_ATTRIBUTES.has(name)
+  )),
+);
 const cardState = [
   priority && 'priority',
   supplemental && 'supplemental',
@@ -91,6 +159,7 @@ const cardState = [
   showFree && 'free-admission',
   image.adaptiveCrop && 'adaptive-crop',
   `media-${mediaFrameKind}`,
+  Object.keys(safeRootAttributes).length > 0 && 'consumer-metadata',
 ].filter(Boolean).join(' ') || undefined;
 const mediaFrameRatio = image.ratio.toFixed(5);
 const mediaFrameObjectPosition = image.objectPosition;
@@ -103,6 +172,7 @@ const style = [
   image.asset ? `--ke-listing-source-width:${image.asset.width}px` : '',
   image.asset ? `--ke-listing-source-height:${image.asset.height}px` : '',
 ].filter(Boolean).join(';');
+const cardClass = ['ke-listing-card', rootClassName].filter(Boolean).join(' ');
 const medallionStyle = (medallion: typeof overlayMedallion) => medallion
   ? [medallion.background ? `--venue-medallion-bg:${medallion.background}` : '', medallion.ring ? `--venue-medallion-ring:${medallion.ring}` : ''].filter(Boolean).join(';')
   : undefined;
@@ -115,8 +185,10 @@ const socialProofLabel = [
 ].filter(Boolean).join(', ');
 ---
 <article
-  class="ke-listing-card"
+  {...safeRootAttributes}
+  class={cardClass}
   style={style}
+  hidden={hidden}
   data-ds-component="ListingEventCard"
   data-ds-family="ListingEventCard"
   data-ds-version="9"
