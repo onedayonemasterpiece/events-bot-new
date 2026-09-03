@@ -37,8 +37,8 @@ export const SELECTORS = freeze({
   mediaFrames: '[data-media-frame][data-media-frame-contract="v1"]',
   adaptiveGrid: '[data-adaptive-event-card-grid][data-ds-family="AdaptiveEventCardGrid"]',
   adaptiveGridCards: '[data-adaptive-event-card-grid] > [data-event-card]',
-  desktopNavigation: 'nav[aria-label="ÐžÑÐ½Ð¾Ð²Ð½Ð°Ñ Ð½Ð°Ð²Ð¸Ð³Ð°Ñ†Ð¸Ñ"]',
-  mobileNavigation: 'details summary[aria-label="ÐžÑ‚ÐºÑ€Ñ‹Ñ‚ÑŒ Ð½Ð°Ð²Ð¸Ð³Ð°Ñ†Ð¸ÑŽ Ð°Ñ„Ð¸ÑˆÐ¸"]',
+  desktopNavigation: '.site-header nav[aria-label]',
+  mobileNavigation: '.site-header details > summary[aria-label]',
   skipLink: '.skip-link',
 });
 
@@ -96,4 +96,88 @@ export function classifyObservation(observation = {}) {
     for (const link of document.externalTargets || []) if (lower(link.target) === '_blank') {
       const tokens = new Set(lower(link.rel).split(/\s+/u).filter(Boolean));
       const missing = ['noopener','noreferrer'].filter((token) => !tokens.has(token));
-      if (missing.length)²È="25Ù•Èœ€˜˜€…l…±±½Ý•œ°É•Ù¥•Ý•œ°É•Ù¥•Ý•µ‰½Õ¹‘•t¹¥¹±Õ‘•Ì¡Á•Éµ¥ÍÍ¥½¸¤¤…‘¡‘½Õµ•¹Ð°€5%}I5}=YI}AI5%MM%=9}5%MM%9œ°=]9IL¹™É…µ¥¹œ°M1Q=IL¹µ•‘¥…É…µ•Ì°ìÍÕÉ™…”é™É…µ”¹ÍÕÉ™…”°Á•Éµ¥ÍÍ¥½¸ô¤ì(€€€€€¥˜€¡½µÁÕÑ•€˜˜™¥Ð€˜˜½µÁÕÑ•€„ôô™¥Ð¤…‘¡‘½Õµ•¹Ð°€5%}I5}=5AUQ}%Q}5%M5Q œ°=]9IL¹™É…µ¥¹œ°M1Q=IL¹µ•‘¥…É…µ•Ì°ìÍÕÉ™…”é™É…µ”¹ÍÕÉ™…”°™¥Ð°½µÁÕÑ•ô¤ì(€€€€€¥˜€¡•Í…Á•Ì¡™É…µ”¹™É…µ•	½à°™É…µ”¹¥µ…•	½à¤¤…‘¡‘½Õµ•¹Ð°€5%}I5}%5}MAM}I5œ°=]9IL¹™É…µ¥¹œ°M1Q=IL¹µ•‘¥…É…µ•Ì°ìÍÕÉ™…”é™É…µ”¹ÍÕÉ™…”°™É…µ•	½àé™É…µ”¹™É…µ•	½à°¥µ…•	½àé™É…µ”¹¥µ…•	½àô¤ì(€€€€€¥˜€¡l„œ°‰ÕÑÑ½¸t¹¥¹±Õ‘•Ì¡±½Ý•È¡™É…µ”¹™É…µ•Q…œ¤¤ñð±½Ý•È¡™É…µ”¹¥¹Ñ•É…Ñ¥½¹=Ý¹•È¤€„ôô€…±±•Èœ¤…‘¡‘½Õµ•¹Ð°€5%}I5}%9QIQ%=9}=]9I}Y%=1Q%=8œ°=]9IL¹™É…µ¥¹œ°M1Q=IL¹µ•‘¥…É…µ•Ì°ìÍÕÉ™…”é™É…µ”¹ÍÕÉ™…”°™É…µ•Q…œé™É…µ”¹™É…µ•Q…œ°¥¹Ñ•É…Ñ¥½¹=Ý¹•Èé™É…µ”¹¥¹Ñ•É…Ñ¥½¹=Ý¹•Èô¤ì(€€€ô((€€€™½È€¡½¹ÍÐÉ¥½˜‘½Õµ•¹Ð¹…‘…ÁÑ¥Ù•É¥‘Ìñðmt¤¥˜€¡Ù¥Í¥‰±”¡É¥¤¤ì(€€€€€½¹ÍÐ•áÁ•Ñ•€ôÉ•µ…¥¹‘•È¡É¥¹É•¹‘•É•‘½Õ¹Ð°É¥¹É½ÝM¥é”¤ì(€€€€€¥˜€¡±½Ý•È¡É¥¹±…å½ÕÑ¹¥¹”¤€„ôô€™±•àµ±¥¹•Ìœñð±½Ý•È¡É¥¹‘¥ÍÁ±…ä¤€„ôô€™±•àœñð±½Ý•È¡É¥¹™±•á]É…À¤€„ôô€ÝÉ…Àœ¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}1e=UQ}9%9}I%Pœ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥°ì±…å½ÕÑ¹¥¹”éÉ¥¹±…å½ÕÑ¹¥¹”°‘¥ÍÁ±…äéÉ¥¹‘¥ÍÁ±…ä°™±•á]É…ÀéÉ¥¹™±•á]É…Àô¤ì(€€€€€¥˜€¡É¥¹…±±¡¥±‘É•¹…¹½¹¥…°€ôôô™…±Í”ñð¹Õµ‰•È¡É¥¹É•¹‘•É•‘½Õ¹Ð¤€„ôô¹Õµ‰•È¡É¥¹‘¥É•ÑY¥Í¥‰±•¡¥±‘½Õ¹Ð¤¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}!%1}I%91%Qe}I%Pœ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥‘…É‘Ì°ìÉ•¹‘•É•‘½Õ¹Ðé¹Õµ‰•È¡É¥¹É•¹‘•É•‘½Õ¹Ð¤°‘¥É•ÑY¥Í¥‰±•¡¥±‘½Õ¹Ðé¹Õµ‰•È¡É¥¹‘¥É•ÑY¥Í¥‰±•¡¥±‘½Õ¹Ð¤°…±±¡¥±‘É•¹…¹½¹¥…°éÉ¥¹…±±¡¥±‘É•¹…¹½¹¥…°ô¤ì(€€€€€¥˜€¡¹Õµ‰•È¡É¥¹É•µ…¥¹‘•É½Õ¹Ð¤€„ôô•áÁ•Ñ•¹½Õ¹ÐñðÉ¥¹É•µ…¥¹‘•ÉY…É¥…¹Ð€„ôô•áÁ•Ñ•¹Ù…É¥…¹Ðñð±½Ý•È¡É¥¹É•µ…¥¹‘•ÉA½±¥ä¤€„ôô€ÍÑÉ•Ñ œ¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}I5%9I}I%Pœ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥°ì•áÁ•Ñ•°…ÑÕ…°éì½Õ¹Ðé¹Õµ‰•È¡É¥¹É•µ…¥¹‘•É½Õ¹Ð¤°Ù…É¥…¹ÐéÉ¥¹É•µ…¥¹‘•ÉY…É¥…¹Ð°Á½±¥äéÉ¥¹É•µ…¥¹‘•ÉA½±¥äôô¤ì(€€€€€¥˜€¡9Õµ‰•È¹¥Í¥¹¥Ñ”¡9Õµ‰•È¡É¥¹™¥¹…±1¥¹•]¥‘Ñ¡MÕ´¤¤€˜˜5…Ñ ¹…‰Ì¡¹Õµ‰•È¡É¥¹™¥¹…±1¥¹•]¥‘Ñ¡MÕ´¤€´¹Õµ‰•È¡É¥¹É½½Ñ½¹Ñ•¹Ñ]¥‘Ñ ¤¤€ø€Ä¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}%91}1%9}=UA9e}I%Pœ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥°ì™¥¹…±1¥¹•]¥‘Ñ¡MÕ´é¹Õµ‰•È¡É¥¹™¥¹…±1¥¹•]¥‘Ñ¡MÕ´¤°É½½Ñ½¹Ñ•¹Ñ]¥‘Ñ é¹Õµ‰•È¡É¥¹É½½Ñ½¹Ñ•¹Ñ]¥‘Ñ ¤ô¤ì(€€€€€¥˜€¡¹Õµ‰•È¡É¥¹‘½Õµ•¹Ñ=Ù•É™±½Ü¤€ø€Ä¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}=U59Q}=YI1=\œ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥°ì‘½Õµ•¹Ñ=Ù•É™±½Üé¹Õµ‰•È¡É¥¹‘½Õµ•¹Ñ=Ù•É™±½Ü¤ô¤ì(€€€€€¥˜€¡É¥¹•ÅÕ…±!•¥¡ÑÁÁ±¥•Ì€ôôôÑÉÕ”€˜˜¹Õµ‰•È¡É¥¹•ÅÕ…±!•¥¡Ñ•±Ñ„¤€ø€Ä¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}EU1}!%!Q}I%Pœ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥‘…É‘Ì°ì•ÅÕ…±!•¥¡Ñ•±Ñ„é¹Õµ‰•È¡É¥¹•ÅÕ…±!•¥¡Ñ•±Ñ„¤ô¤ì(€€€€€¥˜€¡É¥¹µ½‘”€ôôô€™±½Üœ€˜˜É¥¹™±½Ý=É‘•È€„ôôÉ¥¹Í½ÕÉ•=É‘•È¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}1=]}=II}I%Pœ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥°ì™±½Ý=É‘•ÈéÉ¥¹™±½Ý=É‘•È°Í½ÕÉ•=É‘•ÈéÉ¥¹Í½ÕÉ•=É‘•Èô¤ì(€€€€€¥˜€¡É¥¹µ½‘”€ôôô€Á…­•œ€˜˜É¥¹Á…­•‘•Ñ•Éµ¥¹¥ÍÑ¥Œ€ôôô™…±Í”¤…‘¡‘½Õµ•¹Ð°€AQ%Y}I%}A-}=II}9=9QI5%9%MQ%œ°=]9IL¹½µÁ½¹•¹ÑÌ°M1Q=IL¹…‘…ÁÑ¥Ù•É¥¤ì(€€€€€¥˜€¡¹Õµ‰•È¡É¥¹½¹ÍÕµ•É]É…ÁÁ•É½Õ¹Ð¤€ø€À¤…‘¡‘½Õµ•¹Ð°€I=UQ}1=1}I%}]IAAI}AIM9Pœ°=]9IL¹É½ÕÑ•Ì°M1Q=IL¹…‘…ÁÑ¥Ù•É¥°ì½¹ÍÕµ•É]É…ÁÁ•É½Õ¹Ðé¹Õµ‰•È¡É¥¹½¹ÍÕµ•É]É…ÁÁ•É½Õ¹Ð¤ô¤ì(€€€ô((€€€¥˜€¡‘½Õµ•¹Ð¹­•å‰½…É¤ì(€€€€€½¹ÍÐ­•å‰½…É€ô‘½Õµ•¹Ð¹­•å‰½…Éì(€€€€€¥˜€¡­•å‰½…É¹Í­¥Á1¥¹­Y¥Í¥‰±•=¹½ÕÌ€ôôô™…±Í”ñð­•å‰½…É¹Í­¥Á1¥¹­	•™½É•!•…‘•È€ôôô™…±Í”¤…‘¡‘½Õµ•¹Ð°€M-%A}1%9-}=UM}=II}I%Pœ°=]9IL¹É½ÕÑ•Ì°M1Q=IL¹Í­¥Á1¥¹¬°­•å‰½…É¤ì(€€€€€¥˜€¡¹Õµ‰•È¡­•å‰½…É¹¡¥‘‘•¹½ÕÍ…‰±•½Õ¹Ð¤€ø€À¤…‘¡‘½Õµ•¹Ð°€!%9}=UM	1M}AIM9Pœ°=]9IL¹É½ÕÑ•Ì°€œé™½ÕÍ…‰±”œ°ì½Õ¹Ðé¹Õµ‰•È¡­•å‰½…É¹¡¥‘‘•¹½ÕÍ…‰±•½Õ¹Ð¤ô¤ì(€€€€€¥˜€¡¹Õµ‰•È¡­•å‰½…É¹¹•ÍÑ•‘%¹Ñ•É…Ñ¥Ù•½Õ¹Ð¤€ø€À¤…‘¡‘½Õµ•¹Ð°€9MQ}%9QIQ%Y}=9QI=1Lœ°­•å‰½…É¹¹•ÍÑ•‘%¹Ñ•É…Ñ¥Ù•=Ý¹•Èñð=]9IL¹É½ÕÑ•Ì°€œé¥Ì¡„±‰ÕÑÑ½¸¤€é¥Ì¡„±‰ÕÑÑ½¸¤œ°ì½Õ¹Ðé¹Õµ‰•È¡­•å‰½…É¹¹•ÍÑ•‘%¹Ñ•É…Ñ¥Ù•½Õ¹Ð¤ô¤ì(€€€€€¥˜€¡¹Õµ‰•È¡­•å‰½…É¹Õ¹¹…µ•‘5•‘¥…I…¥±	ÕÑÑ½¹½Õ¹Ð¤€ø€Àñð­•å‰½…É¹¡•É½AÉ•ÍÍ•‘½¡•É•¹Ð€ôôô™…±Í”¤…‘¡‘½Õµ•¹Ð°€5%}I%1}MM%	%1%Qe}I%Pœ°=]9IL¹™É…µ¥¹œ°€m‘…Ñ„µ•Ù•¹Ðµµ•‘¥„µÉ…¥±t‰ÕÑÑ½¸œ°ìÕ¹¹…µ•é¹Õµ‰•È¡­•å‰½…É¹Õ¹¹…µ•‘5•‘¥…I…¥±	ÕÑÑ½¹½Õ¹Ð¤°¡•É½AÉ•ÍÍ•‘½¡•É•¹Ðé­•å‰½…É¹¡•É½AÉ•ÍÍ•‘½¡•É•¹Ðô¤ì(€€€€€¥˜€¡­•å‰½…É¹™½ÕÍ%¹‘¥…Ñ½ÉY¥Í¥‰±”€ôôô™…±Í”¤…‘¡‘½Õµ•¹Ð°€=UM}%9%Q=I}=U9Q%=9}I%Pœ°=]9IL¹™½Õ¹‘…Ñ¥½¹Ì°€œé™½ÕÌµÙ¥Í¥‰±”œ¤ì(€€€ô(€ô((€¥˜€¡½‰Í•ÉÙ…Ñ¥½¸¹½µÁ±•Ñ”€ôôôÑÉÕ”¤ì(€€€½¹ÍÐ•áÁ•Ñ•‘A…¥ÉÌ€ôÉÉ…ä¹¥ÍÉÉ…ä¡½‰Í•ÉÙ…Ñ¥½¸¹•áÁ•Ñ•‘A…¥ÉÌ¤€ü½‰Í•ÉÙ…Ñ¥½¸¹•áÁ•Ñ•‘A…¥ÉÌ€èmtì(€€€¥˜€ …•áÁ•Ñ•‘A…¥ÉÌ¹±•¹Ñ ¤…Õ‘¥Ñ…ÁÌ¹ÁÕÍ ¡ì½‘”èaAQ}A%IM}IEU%Iœ°…ÕÑ¡½É¥Ñäé9=9%1}Á}XÁ}5QI%`¹Á…Ñ ô¤ì(€€€½¹ÍÐÁÉ•Í•¹Ð€ô¹•ÜM•Ð¡‘½Õµ•¹ÑÌ¹µ…À ¡‘½Õµ•¹Ð¤€ôø­•ä¡‘½Õµ•¹Ð¹…Í•%ñð‘½Õµ•¹Ð¹É½ÕÑ•-•ä°‘½Õµ•¹Ð¹Ý¥‘Ñ ¤¤¤ì(€€€™½È€¡½¹ÍÐÁ…¥È½˜•áÁ•Ñ•‘A…¥ÉÌ¤¥˜€ …ÁÉ•Í•¹Ð¹¡…Ì¡­•ä¡Á…¥È¹…Í•%ñðÁ…¥È¹É½ÕÑ•-•ä°Á…¥È¹Ý¥‘Ñ ¤¤¤…Õ‘¥Ñ…ÁÌ¹ÁÕÍ ¡ì½‘”èI=UQ}Y%]A=IQ}A%I}5%MM%9œ°…Í•%éÁ…¥È¹…Í•%°É½ÕÑ•-•äéÁ…¥È¹É½ÕÑ•-•ä°Ý¥‘Ñ éÁ…¥È¹Ý¥‘Ñ ô¤ì(€ô((€É•ÑÕÉ¸ì(€€€Í¡•µ„éM!5°(€€€½¹ÑÉ…ÑY•ÉÍ¥½¸é=9QIQ}YIM%=8°(€€€…ÕÑ¡½É•‘…¥¹ÍÑM½ÕÉ”éUQ!=I}%9MQ}M=UI°(€€€¡•­Á½¥¹ÑM•µ…¹Ñ¥Ìè9=9}Q%9œ°(€€€Ñ…É•Ð°(€€€Ù•É‘¥Ðé…Õ‘¥Ñ…ÁÌ¹±•¹Ñ €ü€%9=5A1Qœ€è‘•™•ÑÌ¹±•¹Ñ €ü€I%Pœ€è€AMLœ°(€€€‘•™•ÑÌ°(€€€…Õ‘¥Ñ…ÁÌ°(€€€ÍÕµµ…Éäéì‘½Õµ•¹ÑÍ=‰Í•ÉÙ•é‘½Õµ•¹ÑÌ¹±•¹Ñ °‘•™•Ñ½Õ¹Ðé‘•™•ÑÌ¹±•¹Ñ °…Õ‘¥Ñ…Á½Õ¹Ðé…Õ‘¥Ñ…ÁÌ¹±•¹Ñ °‘•™•ÑÍ	å=Ý¹•Èé‘•™•ÑÌ¹É•‘Õ” ¡½ÕÐ°¥Ñ•´¤€ôø€¡ì€¸¸¹½ÕÐ°m¥Ñ•´¹½Ý¹•Étè¡½ÕÑm¥Ñ•´¹½Ý¹•Étñð€À¤€¬€Äô¤°íô¤ô°(€ôì)ô()•áÁ½ÉÐ½¹ÍÐ…Õ‘¥Ñ½¹ÑÉ…Ð€ô™É••é”¡ì(€Í¡•µ„éM!5°(€½¹ÑÉ…ÑY•ÉÍ¥½¸é=9QIQ}YIM%=8°(€…ÕÑ¡½É•‘…¥¹ÍÑM½ÕÉ”éUQ!=I}%9MQ}M=UI°(€¡•­Á½¥¹ÑM•µ…¹Ñ¥Ìè9=9}Q%9œ°(€…¹½¹¥…±ÁXÁ5…ÑÉ¥àé9=9%1}Á}XÁ}5QI%`°(€½Ý¹•ÉÌé=]9IL°(€ÁÕ‰±¥Í¡•‘Q…É•ÑÌéAU	1%M!}QIQL°(€Ù¥•ÝÁ½ÉÑÌéY%]A=IQL°(€Í•±•Ñ½ÉÌéM1Q=IL°(€•á•ÕÑ¥½¹	½Õ¹‘…Éäé™É••é”¡ìÍÑ…ÉÑÍ	É½ÝÍ•Èé™…±Í”°‰É½ÝÍ•Éá•ÕÑ½Èèµäµ‰É½ÝÍ•Èµ‰É¥‘”µ½Èµ•á¥ÍÑ¥¹œµÉ•±•…Í”µ…Ñ”œ°•á¥ÍÑ¥¹1½…±I•±•…Í•…Ñ”èÍ¥Ñ”½ÍÉ¥ÁÑÌ½¡•¬µ‰É½ÝÍ•ÈµÉ•±•…Í”µ…Ñ”¹µ©Ìœ°É•Á±…•Íá¥ÍÑ¥¹I•±•…Í•…Ñ”é™…±Í”°É•Á±…•Í…¹½¹¥…±ÁXÁ5…ÑÉ¥àé™…±Í”ô¤°(€™±½Ý½¹ÑÉ½°é™É••é”¡ì™ÈÁÕÑ½Ù•ÉI•ÅÕ¥É•‘	•™½É•É…µ¥¹]É¥Ñ•ÌéÑÉÕ”°™ÈÁ5ÕÍÑ9½Ñ•±…å±É•…‘åI•…‘åMÕ•ÍÍ½ÈéÑÉÕ”ô¤°(€…Ñ•Ìé™É••é”¡ì‘½Õµ•¹Ñ=Ù•É™±½ÝQ½±•É…¹•AàèÄ°½¹ÑÉ½±5¥¹¥µÕµAàèÐÐ°•ÅÕ…±!•¥¡ÑQ½±•É…¹•AàèÄ°™¥¹…±1¥¹•=ÕÁ…¹åQ½±•É…¹•AàèÄ°‘•Í­Ñ½Á9…Ù¥…Ñ¥½¹	É•…­Á½¥¹ÑAàèäàÄ°Í…™•	±…¹­I•±Q½­•¹Ìé™É••é”¡l¹½½Á•¹•Èœ°¹½É•™•ÉÉ•Èt¤°…¹½¹¥…±%‘•¹Ñ¥ÑåÑÑÉ¥‰ÕÑ•Ìé™É••é”¡l‘…Ñ„µ‘Ìµ™…µ¥±äœ°‘…Ñ„µ‘ÌµÙ•ÉÍ¥½¸œ°‘…Ñ„µ‘ÌµÙ…É¥…¹Ðœ°‘…Ñ„µ‘ÌµÍÑ…Ñ”t¤°µ•‘¥…É…µ•½¹ÑÉ…ÐèØÄœ°…‘…ÁÑ¥Ù•É¥‘1…å½ÕÑ¹¥¹”è™±•àµ±¥¹•Ìœ°…‘…ÁÑ¥Ù•É¥‘I•µ…¥¹‘•ÉA½±¥äèÍÑÉ•Ñ œô¤°)ô¤ì()½¹ÍÐ±…ÍÍ¥™å%¹‘•à€ôÁÉ½•ÍÌ¹…ÉØ¹¥¹‘•á=˜ œ´µ±…ÍÍ¥™äœ¤ì)¥˜€¡±…ÍÍ¥™å%¹‘•à€øô€À¤ì(€½¹ÍÐ¥¹ÁÕÑA…Ñ €ôÁÉ½•ÍÌ¹…ÉÙm±…ÍÍ¥™å%¹‘•à€¬€Åtì(€¥˜€ …¥¹ÁÕÑA…Ñ ñð¥¹ÁÕÑA…Ñ ¹ÍÑ…ÉÑÍ]¥Ñ  œ´´œ¤¤Ñ¡É½Ü¹•ÜÉÉ½È UÍ…”è¹½‘”ØÀµ‰É½ÝÍ•Èµ…Õ‘¥Ðµ½¹ÑÉ…Ð¹µ©Ì€´µ±…ÍÍ¥™ä€ñ½‰Í•ÉÙ…Ñ¥½¸¹©Í½¹ð´øœ¤ì(€½¹ÍÐÉ•ÍÕ±Ð€ô±…ÍÍ¥™å=‰Í•ÉÙ…Ñ¥½¸¡)M=8¹Á…ÉÍ”¡¥¹ÁÕÑA…Ñ €ôôô€œ´œ€üÉ•…‘¥±•Må¹Œ À°€ÕÑ˜àœ¤€èÉ•…‘¥±•Må¹Œ¡¥¹ÁÕÑA…Ñ °€ÕÑ˜àœ¤¤¤ì(€ÁÉ½•ÍÌ¹ÍÑ‘½ÕÐ¹ÝÉ¥Ñ”¡€‘í)M=8¹ÍÑÉ¥¹¥™ä¡É•ÍÕ±Ð°¹Õ±°°€È¥õq¹€¤ì(€ÁÉ½•ÍÌ¹•á¥Ñ½‘”€ôÉ•ÍÕ±Ð¹Ù•É‘¥Ð€ôôô€I%Pœ€ü€Ä€èÉ•ÍÕ±Ð¹Ù•É‘¥Ð€ôôô€%9=5A1Qœ€ü€È€è€Àì)ô•±Í”¥˜€¡ÁÉ½•ÍÌ¹…ÉØ¹¥¹±Õ‘•Ì œ´µ©Í½¸œ¤¤ÁÉ½•ÍÌ¹ÍÑ‘½ÕÐ¹ÝÉ¥Ñ”¡€‘í)M=8¹ÍÑÉ¥¹¥™ä¡…Õ‘¥Ñ½¹ÑÉ…Ð°¹Õ±°°€È¥õq¹€¤ì(
+      if (missing.length) add(document, 'UNSAFE_BLANK_TARGET', OWNERS.routes, SELECTORS.externalTargets, { href:link.href, accessibleName:link.accessibleName, rel:[...tokens].sort(), missing });
+    }
+
+    for (const row of document.popularRows || []) if (visible(row)) {
+      const internalOverflow = number(row.scrollWidth) > number(row.clientWidth) + 1;
+      if (lower(row.flexWrap) !== 'nowrap') add(document, 'POPULAR_ROW_NOT_NOWRAP', OWNERS.routes, SELECTORS.popularRows, { flexWrap:row.flexWrap });
+      if (internalOverflow && !['auto','scroll'].includes(lower(row.overflowX))) add(document, 'POPULAR_ROW_OVERFLOW_ESCAPES_OWNER', OWNERS.routes, SELECTORS.popularRows, { clientWidth:number(row.clientWidth), scrollWidth:number(row.scrollWidth), overflowX:row.overflowX, fifthCardRight:row.fifthCardRight });
+      if (number(row.documentOverflow) > 1) add(document, 'POPULAR_DOCUMENT_OVERFLOW', OWNERS.routes, SELECTORS.popularRows, { documentOverflow:number(row.documentOverflow), overflowX:row.overflowX });
+    }
+
+    for (const frame of document.mediaFrames || []) if (visible(frame)) {
+      const kind = lower(frame.kind); const fit = lower(frame.fit); const permission = lower(frame.cropPermission); const computed = lower(frame.computedObjectFit);
+      if (['document','unknown','fallback'].includes(kind) && (fit !== 'contain' || permission !== 'forbidden')) add(document, 'MEDIA_FRAME_FAIL_CLOSED_VIOLATION', OWNERS.framing, SELECTORS.mediaFrames, { surface:frame.surface, kind, fit, permission, cropReason:frame.cropReason });
+      if (kind === 'visual' && fit === 'cover' && !['allowed','reviewed','reviewed-bounded'].includes(permission)) add(document, 'MEDIA_FRAME_COVER_PERMISSION_MISSING', OWNERS.framing, SELECTORS.mediaFrames, { surface:frame.surface, permission });
+      if (computed && fit && computed !== fit) add(document, 'MEDIA_FRAME_COMPUTED_FIT_MISMATCH', OWNERS.framing, SELECTORS.mediaFrames, { surface:frame.surface, fit, computed });
+      if (escapes(frame.frameBox, frame.imageBox)) add(document, 'MEDIA_FRAME_IMAGE_ESCAPES_FRAME', OWNERS.framing, SELECTORS.mediaFrames, { surface:frame.surface, frameBox:frame.frameBox, imageBox:frame.imageBox });
+      if (['a','button'].includes(lower(frame.frameTag)) || lower(frame.interactionOwner) !== 'caller') add(document, 'MEDIA_FRAME_INTERACTION_OWNER_VIOLATION', OWNERS.framing, SELECTORS.mediaFrames, { surface:frame.surface, frameTag:frame.frameTag, interactionOwner:frame.interactionOwner });
+    }
+
+    for (const grid of document.adaptiveGrids || []) if (visible(grid)) {
+      const expected = remainder(grid.renderedCount, grid.rowSize);
+      if (lower(grid.layoutEngine) !== 'flex-lines' || lower(grid.display) !== 'flex' || lower(grid.flexWrap) !== 'wrap') add(document, 'ADAPTIVE_GRID_LAYOUT_ENGINE_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { layoutEngine:grid.layoutEngine, display:grid.display, flexWrap:grid.flexWrap });
+      if (grid.allChildrenCanonical === false || number(grid.renderedCount) !== number(grid.directVisibleChildCount)) add(document, 'ADAPTIVE_GRID_CHILD_CARDINALITY_DRIFT', OWNERS.components, SELECTORS.adaptiveGridCards, { renderedCount:number(grid.renderedCount), directVisibleChildCount:number(grid.directVisibleChildCount), allChildrenCanonical:grid.allChildrenCanonical });
+      if (number(grid.remainderCount) !== expected.count || grid.remainderVariant !== expected.variant || lower(grid.remainderPolicy) !== 'stretch') add(document, 'ADAPTIVE_GRID_REMAINDER_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { expected, actual:{ count:number(grid.remainderCount), variant:grid.actualVariant, policy:grid.actualPolicy } });
+      if (Number.isFinite(Number(grid.finalLineWidthSum)) && Math.abs(number(grid.finalLineWidthSum) - number(grid.rootContentWidth)) > 1) add(document, 'ADAPTIVE_GRID_FINAL_LINE_OCCUPANCY_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { finalLineWidthSum:number(grid.finalLineWidthSum), rootContentWidth:number(grid.rootContentWidth) });
+      if (number(grid.documentOverflow) > 1) add(document, 'ADAPTIVE_GRID_DOCUMENT_OVERFLOW', OWNERS.components, SELECTORS.adaptiveGrid, { documentOverflow:number(grid.documentOverflow) });
+      if (grid.equalHeightApplies === true && number(grid.equalHeightDelta) > 1) add(document, 'ADAPTIVE_GRID_EQUAL_HEIGHT_DRIFT', OWNERS.components, SELECTORS.adaptiveGridCards, { equalHeightDelta:number(grid.equalHeightDelta) });
+      if (grid.mode === 'flow' && grid.flowOrder !== grid.sourceOrder) add(document, 'ADAPTIVE_GRID_FLOW_ORDER_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { flowOrder:grid.flowOrder, sourceOrder:grid.sourceOrder });
+      if (grid.mode === 'packed' && grid.packedDeterministic === false) add(document, 'ADAPTIVE_GRID_PACKED_ORDER_NONDETERMINISTIC', OWNERS.components, SELECTORS.adaptiveGrid);
+      if (number(grid.consumerWrapperCount) > 0) add(document, 'ROUTE_LOCAL_GRID_WRAPPER_PRESENT', OWNERS.routes, SELECTORS.adaptiveGrid, { consumerWrapperCount:number(grid.consumerWrapperCount) });
+    }
+
+    if (document.keyboard) {
+      const keyboard = document.keyboard;
+      if (keyboard.skipLinkVisibleOnFocus === false || keyboard.skipLinkBeforeHeader === false) add(document, 'SKIP_LINK_FOCUS_ORDER_DRIFT', OWNERS.routes, SELECTORS.skipLink, keyboard);
+      if (number(keyboard.hiddenFocusableCount) > 0) add(document, 'HIDDEN_FOCUSABLES_PRESENT', OWNERS.routes, ':focusable', { count:number(keyboard.hiddenFocusableCount) });
+      if (number(keyboard.nestedInteractiveCount) > 0) add(document, 'NESTED_INTERACTIVE_CONTROLS', keyboard.nestedInteractiveOwner || OWNERS.routes, ':is(a,button) :is(a,button)', { count:number(keyboard.nestedInteractiveCount) });
+      if (number(keyboard.unnamedMediaRailButtonCount) > 0 || keyboard.heroPressedCoherent === false) add(document, 'MEDIA_RAIL_ACCESSIBILITY_DRIFT', OWNERS.framing, '[data-event-media-rail] button', { unnamed:number(keyboard.unnamedMediaRailButtonCount), heroPressedCoherent:keyboard.heroPressedCoherent });
+      if (keyboard.focusIndicatorVisible === false) add(document, 'FOCUS_INDICATOR_FOUNDATION_DRIFT', OWNERS.foundations, ':focus-visible');
+    }
+  }
+
+  if (observation.complete === true) {
+    const expectedPairs = Array.isArray(observation.expectedPairs) ? observation.expectedPairs : [];
+    if (!expectedPairs.length) auditGaps.push({ code:'EXPECTED_PAIRS_REQUIRED', authority:CANONICAL_A0_V0_MATRIX.path });
+    const present = new Set(documents.map((document) => key(document.caseId || document.routeKey, document.width)));
+    for (const pair of expectedPairs) if (!present.has(key(pair.caseId || pair.routeKey, pair.width))) auditGaps.push({ code:'ROUTE_VIEWPORT_PAIR_MISSING', caseId:pair.caseId, routeKey:pair.routeKey, width:pair.width });
+  }
+
+  return {
+    schema:SCHEMA,
+    contractVersion:CONTRACT_VERSION,
+    authoredAgainstSource:AUTHORED_AGAINST_SOURCE,
+    checkpointSemantics:'NON_GATING',
+    target,
+    verdict:auditGaps.length ? 'INCOMPLETE' : defects.length ? 'DRIFT' : 'PASS',
+    defects,
+    auditGaps,
+    summary:{ documentsObserved:documents.length, defectCount:defects.length, auditGapCount:auditGaps.length, defectsByOwner:defects.reduce((out, item) => ({ ...out, [item.owner]:(out[item.owner] || 0) + 1 }), {}) },
+  };
+}
+
+export const auditContract = freeze({
+  schema:SCHEMA,
+  contractVersion:CONTRACT_VERSION,
+  authoredAgainstSource:AUTHORED_AGAINCT_SOURCE,
+  checkpointSemantics:'NON_GATING',
+  canonicalA0V0Matrix:CANONICAL_A0_V0_MATRIX,
+  owners:OWNERS,
+  publishedTargets:PUBLISHED_TARGETS,
+  viewports:VIEWPORTS,
+  selectors:SELECTORS,
+  executionBoundary:freeze({ startsBrowser:false, browserExecutor:'my-browser-bridge-or-existing-release-gate', existingLocalReleaseGate:'site/scripts/check-browser-release-gate.mjs', replacesExistingReleaseGate:false, replacesCanonicalA0V0Matrix:false }),
+  flowControl:freeze({ fr0CutoverRequiredBeforeFramingWrites:true, fr0MustNotDelayAlreadyReadySuccessor:true }),
+  gates:freeze({ documentOverflowTolerancePx:1, controlMinimumPx:44, equalHeightTolerancePx:1, finalLineOccupancyTolerancePx:1, desktopNavigationBreakpointPx:981, safeBlankRelTokens:freeze(['noopener','noreferrer']), canonicalIdentityAttributes:freeze(['data-ds-family','data-ds-version','data-ds-variant','data-ds-state']), mediaFrameContract:'v1', adaptiveGridLayoutEngine:'flex-lines', adaptiveGridRemainderPolicy:'stretch' }),
+});
+
+const classifyIndex = process.argv.indexOf('--classify');
+if (classifyIndex >= 0) {
+  const inputPath = process.argv[classifyIndex + 1];
+  if (!inputPath || inputPath.startsWith('--')) throw new Error('Usage: node v0-browser-audit-contract.mjs --classify <observation.json|->');
+  const result = classifyObservation(JSON.parse(inputPath === '-' ? readFileSync(0, 'utf8') : readFileSync(inputPath, 'utf8')));
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.exitCode = result.verdict === 'DRIFT' ? 1 : result.verdict === 'INCOMPLETE' ? 2 : 0;
+} else if (process.argv.includes('--json')) process.stdout.write(`${JSON.stringify(auditContract, null, 2)}\n`);
