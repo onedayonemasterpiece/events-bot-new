@@ -653,3 +653,10 @@ F0/FR0/M0 roots. Идемпотентный check сообщает `changed:fals
 путей. Строгий route-theme gate подтверждает semantic separation festival
 guide/taxonomy, ровно четыре exhibitions runtime variables, 20 обязательных
 central bindings и canonical gallery arrows; club-theme gate также проходит.
+
+FR0 batches through `85d443046...` интегрированы отдельным ancestry merge.
+`EventMediaRail` теперь fail-closed переводит network-broken resource в
+`fallback/contain/crop-forbidden`, а настоящий fallback child принадлежит
+canonical MediaFrame. Clipping изображения и fallback также имеет одного
+владельца — внутренний MediaFrame; внешний rail button сохраняет только
+interaction, sizing и radius, без дублирующего `overflow:hidden`.

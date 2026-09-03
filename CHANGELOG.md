@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: integrated the FR0 EventMediaRail fallback and clip-ownership batches.
+  Broken rail resources now fail closed to the canonical non-interactive
+  fallback with `contain` and forbidden crop diagnostics, while the nested
+  MediaFrame is the sole image/fallback clipping owner; outer controls retain
+  interaction, sizing and radius behavior.
+
 - Changed: materialized the bounded A0 six-consumer closure against the exact
   accepted F0 route-theme boundary. Festival guide and taxonomy surfaces now
   have distinct semantic tokens; exhibitions retain only four runtime layout
