@@ -30,13 +30,16 @@ const localSemantic = name === 'trend-up'
   || name === 'arrow-left'
   || name === 'arrow-right'
   || name === 'chevron-down'
-  || name === 'link';
+  || name === 'link'
+  || name === 'catalog-grid';
 ---
 {localSemantic ? (
   <svg
     class={classes}
     data-ke-icon-name={name}
     data-ke-icon-role={role}
+    data-ke-icon-contract="four-role-v1"
+    data-ke-icon-size-owner="foundations.css"
     aria-hidden={labelled ? undefined : 'true'}
     role={labelled ? 'img' : undefined}
     viewBox="0 0 24 24"
@@ -61,6 +64,9 @@ const localSemantic = name === 'trend-up'
     )}
     {name === 'link' && (
       <path d="M9.5 14.5l5-5M8.25 15.75l-1.1 1.1a3.25 3.25 0 0 1-4.6-4.6l2.7-2.7a3.25 3.25 0 0 1 4.6 0l.65.65M15.75 8.25l1.1-1.1a3.25 3.25 0 0 1 4.6 4.6l-2.7 2.7a3.25 3.25 0 0 1-4.6 0l-.65-.65" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+    )}
+    {name === 'catalog-grid' && (
+      <path d="M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM13.5 13.5h6v6h-6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
     )}
   </svg>
 ) : (

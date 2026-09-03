@@ -1,0 +1,82 @@
+/*
+ * Canonical F0 tokens for the public interest-clubs index route.
+ *
+ * This file is token-only. A0 owns the route selectors and may replace its
+ * current literals with these roles without changing the accepted composition.
+ * Atmospheric blue/gold layers are editorial route identity, not status or
+ * generic action colours. The count glyph is an inline semantic icon and must
+ * use the existing four-role contract rather than a route-local size.
+ */
+:root {
+  --ke-clubs-page-gap: clamp(1rem, 2.6vw, 2rem);
+  --ke-clubs-page-gap-compact: var(--ke-space-lg);
+
+  --ke-color-clubs-intro-border: color-mix(in srgb, var(--ke-color-background-surface-strong) 78%, transparent);
+  --ke-color-clubs-intro-sky-glow: rgba(151, 212, 255, 0.42);
+  --ke-color-clubs-intro-gold-glow: rgba(240, 198, 132, 0.23);
+  --ke-color-clubs-intro-surface-start: color-mix(in srgb, var(--ke-color-background-surface) 98%, transparent);
+  --ke-color-clubs-intro-surface-end: rgba(221, 239, 242, 0.9);
+  --ke-elevation-clubs-intro: 0 24px 52px rgba(64, 57, 49, 0.14);
+  --ke-clubs-intro-sky-stop: 31%;
+  --ke-clubs-intro-gold-stop: 30%;
+  --ke-clubs-intro-padding-block: clamp(2.25rem, 6vw, 4.6rem);
+  --ke-clubs-intro-padding-inline: clamp(1rem, 5vw, 4rem);
+  --ke-clubs-intro-heading-max: 22ch;
+  --ke-clubs-intro-heading-margin: 0.1rem 0 0.8rem;
+  --ke-clubs-intro-heading-size: clamp(2rem, 4.4vw, 3.65rem);
+  --ke-clubs-intro-heading-line: 1.05;
+  --ke-clubs-intro-heading-letter: -0.035em;
+  --ke-clubs-intro-lead-max: 66ch;
+  --ke-color-clubs-intro-lead: #3d3935;
+  --ke-clubs-intro-lead-size: clamp(1rem, 1.6vw, 1.18rem);
+  --ke-clubs-intro-lead-line: 1.55;
+
+  --ke-clubs-count-gap: 0.45rem;
+  --ke-clubs-count-margin: 1.35rem 0 0;
+  --ke-clubs-count-padding-block: 0.48rem;
+  --ke-clubs-count-padding-inline: 0.85rem;
+  --ke-clubs-count-border: var(--ke-shape-border-hairline);
+  --ke-clubs-count-radius: var(--ke-shape-radius-pill);
+  --ke-color-clubs-count-border: color-mix(in srgb, var(--ke-color-background-surface-strong) 88%, transparent);
+  --ke-color-clubs-count-surface: color-mix(in srgb, var(--ke-color-background-surface-strong) 62%, transparent);
+  --ke-color-clubs-count-text: #263f43;
+  --ke-color-clubs-count-icon: #6b7e80;
+  --ke-elevation-clubs-count: 0 10px 26px rgba(51, 67, 68, 0.13);
+  --ke-clubs-count-weight: var(--ke-type-label-strong-weight);
+  --ke-clubs-catalog-icon-size: var(--ke-icon-size-inline);
+
+  --ke-clubs-list-gap: clamp(1rem, 2.2vw, 1.65rem);
+  --ke-clubs-empty-action-margin-top: 0.7rem;
+
+  --ke-clubs-mobile-shelf-layer: var(--ke-layer-floating);
+  --ke-clubs-mobile-shelf-top: var(--ke-site-header-bar-height);
+  --ke-clubs-mobile-shelf-min-height: var(--ke-size-control-large);
+  --ke-clubs-mobile-shelf-margin: -1.2rem calc(-1 * var(--ke-container-gutter-mobile)) 0;
+  --ke-clubs-mobile-shelf-padding-block: 0.55rem;
+  --ke-clubs-mobile-shelf-padding-inline: var(--ke-container-gutter-mobile);
+  --ke-clubs-mobile-shelf-gap: var(--ke-space-md);
+  --ke-clubs-mobile-shelf-border: var(--ke-shape-border-hairline);
+  --ke-color-clubs-mobile-shelf-border: var(--ke-color-border-brand-subtle);
+  --ke-color-clubs-mobile-shelf-surface: color-mix(in srgb, var(--ke-color-background-header) 97%, transparent);
+  --ke-color-clubs-mobile-shelf-text: var(--ke-color-text-primary);
+  --ke-color-clubs-mobile-shelf-meta: var(--ke-color-action-primary-strong);
+  --ke-elevation-clubs-mobile-shelf: 0 7px 16px rgba(72, 45, 25, 0.07);
+  --ke-clubs-mobile-shelf-blur: 12px;
+  --ke-clubs-mobile-title-size: var(--ke-type-body-size);
+  --ke-clubs-mobile-title-weight: var(--ke-type-h3-weight);
+  --ke-clubs-mobile-title-letter: -0.025em;
+  --ke-clubs-mobile-title-line: 1.1;
+  --ke-clubs-mobile-meta-size: 0.72rem;
+  --ke-clubs-mobile-meta-weight: var(--ke-type-label-strong-weight);
+  --ke-clubs-mobile-intro-padding-block: 1.3rem;
+  --ke-clubs-mobile-intro-padding-inline: var(--ke-space-lg);
+  --ke-clubs-mobile-heading-max: 15ch;
+  --ke-clubs-mobile-heading-size: clamp(1.85rem, 9vw, 2.55rem);
+  --ke-clubs-mobile-lead-size: var(--ke-type-body-size);
+
+  /* Retained close pairs:
+   * - blue/gold glows identify the club directory and are not info/warning;
+   * - count text/icon use a cool editorial pair, not generic muted metadata;
+   * - the mobile shelf is translucent header context, not a second site header.
+   */
+}
