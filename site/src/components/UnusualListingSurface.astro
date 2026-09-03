@@ -1,5 +1,6 @@
 ---
 import AdaptiveEventCardGrid, { type AdaptiveEventCardItemRoot } from './AdaptiveEventCardGrid.astro';
+import './design-system/product-contour-foundations.css';
 import type { UnusualFeed } from '../lib/unusualEvents';
 
 interface Props { feed: UnusualFeed; }
@@ -73,22 +74,40 @@ const surfaceState = feed.approved
 <style>
   .unusual-page { padding:0 0 5rem; }
   .unusual-page__shell { display:grid; gap:1rem; }
-  .unusual-page__hero { min-height:330px; display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-start; padding:clamp(2rem,6vw,5rem); border-radius:32px; background:radial-gradient(circle at 82% 24%,rgba(165,72,33,.22),transparent 24%),radial-gradient(circle at 72% 68%,rgba(15,118,110,.14),transparent 28%),linear-gradient(145deg,#fffaf2,#eee1d2); overflow:hidden; }
-  .unusual-page__hero h1 { margin:.1rem 0 .8rem; font-size:clamp(4rem,10vw,8.5rem); line-height:.78; letter-spacing:-.075em; }
+  .unusual-page__hero {
+    min-height:330px;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    align-items:flex-start;
+    padding:clamp(2rem,6vw,5rem);
+    border-radius:var(--ke-shape-radius-editorial-hero);
+    background:
+      radial-gradient(circle at 82% 24%,var(--ke-color-unusual-hero-brand-glow),transparent 24%),
+      radial-gradient(circle at 72% 68%,var(--ke-color-unusual-hero-accent-glow),transparent 28%),
+      linear-gradient(145deg,var(--ke-color-unusual-hero-start),var(--ke-color-unusual-hero-end));
+    overflow:hidden;
+  }
+  .unusual-page__hero h1 { margin:.1rem 0 .8rem; font:var(--ke-type-display-unusual); letter-spacing:var(--ke-type-display-unusual-letter); }
   .unusual-page__hero p:not(.eyebrow) { max-width:58ch; margin:.5rem 0 0; font-size:clamp(1rem,2vw,1.25rem); }
   .unusual-page__hero button { min-height:44px; margin-top:1.25rem; padding:0 16px; border:1px solid rgba(121,48,20,.2); border-radius:999px; background:#fffdf8; color:#793014; font:800 .82rem/1 inherit; cursor:pointer; }
-  .unusual-page__feed,.unusual-page__empty { padding:clamp(1.5rem,4vw,3rem); border:1px solid rgba(121,48,20,.11); border-radius:28px; background:#fffdf8; }
+  .unusual-page__feed,.unusual-page__empty {
+    padding:var(--ke-unusual-panel-padding);
+    border:1px solid var(--ke-color-unusual-panel-border);
+    border-radius:var(--ke-unusual-panel-radius);
+    background:var(--ke-color-unusual-panel-surface);
+  }
   .unusual-page__feed-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; }
   .unusual-page__feed-head h2,.unusual-page__empty h2 { margin:0; font-size:clamp(1.6rem,3.5vw,2.8rem); line-height:1; }
-  .unusual-page__feed-head span { color:#6d6259; font-size:.82rem; }
+  .unusual-page__feed-head span { color:var(--muted); font-size:.82rem; }
   .unusual-page__card[data-unusual-card-viewed="true"] { --unusual-viewed:1; }
-  .unusual-page__empty p { max-width:62ch; color:#6d6259; }
+  .unusual-page__empty p { max-width:62ch; color:var(--muted); }
   @media(max-width:759px) {
     .unusual-page { padding-bottom:calc(5rem + env(safe-area-inset-bottom)); }
     .unusual-page__shell { width:min(100% - 24px,1120px); }
-    .unusual-page__hero { min-height:270px; padding:28px 18px 24px; border-radius:24px; }
+    .unusual-page__hero { min-height:270px; padding:28px 18px 24px; border-radius:var(--ke-shape-radius-editorial-hero-compact); }
     .unusual-page__hero h1 { font-size:clamp(3rem,12vw,5.7rem); overflow-wrap:normal; word-break:normal; hyphens:none; }
-    .unusual-page__feed,.unusual-page__empty { padding:20px 12px; border-radius:20px; }
+    .unusual-page__feed,.unusual-page__empty { padding:20px 12px; border-radius:var(--ke-unusual-panel-radius-compact); }
     .unusual-page__feed-head { display:grid; gap:7px; }
   }
 </style>

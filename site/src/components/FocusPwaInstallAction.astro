@@ -1,4 +1,5 @@
 ---
+import './design-system/product-contour-foundations.css';
 import { withBase } from '../lib/events';
 
 const pwaInstallId = withBase('/fokus-gruppa/pwa');
@@ -61,18 +62,18 @@ const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: .8rem;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
-    border-radius: 1.5rem;
-    padding: clamp(1.1rem, 4vw, 2rem);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+    border-radius: var(--ke-focus-panel-radius);
+    padding: var(--ke-space-focus-card-padding);
     background:
-      radial-gradient(circle at 100% 0, rgb(15 118 110 / 13%), transparent 16rem),
-      #fff;
-    box-shadow: var(--ke-shadow-1, 0 8px 25px rgb(72 45 25 / 8%));
+      radial-gradient(circle at 100% 0, color-mix(in srgb, var(--ke-color-action-accent) 13%, transparent), transparent 16rem),
+      var(--ke-color-focus-panel-surface);
+    box-shadow: var(--ke-elevation-focus-pwa);
   }
   .focus-pwa__copy { display: grid; gap: .35rem; }
   .focus-pwa__copy p {
     margin: 0;
-    color: var(--ke-color-success-700, #166a64);
+    color: var(--ke-color-status-success-foreground);
     font-size: .7rem;
     font-weight: 900;
     letter-spacing: .1em;
@@ -80,14 +81,14 @@ const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
   }
   .focus-pwa__copy h2 {
     margin: 0;
-    color: var(--ke-color-ink, #221a14);
+    color: var(--ke-color-text-primary);
     font-size: clamp(1.45rem, 5vw, 2.4rem);
     line-height: 1;
     letter-spacing: -.035em;
   }
   .focus-pwa__copy span,
   .focus-pwa__after {
-    color: var(--ke-color-muted, #6d6259);
+    color: var(--ke-color-text-muted);
     line-height: 1.5;
   }
   .focus-pwa__button,
@@ -102,14 +103,14 @@ const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
     margin: 0;
     font-size: .84rem;
   }
-  .focus-pwa__status { color: var(--ke-color-brand-700, #98401f); font-weight: 750; }
+  .focus-pwa__status { color: var(--ke-color-action-primary-hover); font-weight: 750; }
   .focus-pwa__guidance {
     display: grid;
     gap: .3rem;
     border-radius: 1rem;
     padding: .85rem 1rem;
-    background: var(--ke-color-info-50, #e7f2f7);
-    color: var(--ke-color-info-700, #1f658d);
+    background: var(--ke-color-status-info-background);
+    color: var(--ke-color-status-info-foreground);
     font-size: .8rem;
     line-height: 1.45;
   }
@@ -117,7 +118,7 @@ const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
   @media (max-width: 620px) {
     .focus-pwa {
       grid-template-columns: 1fr;
-      border-radius: 1.25rem;
+      border-radius: var(--ke-focus-panel-radius-compact);
     }
     .focus-pwa__button,
     .focus-pwa__status,

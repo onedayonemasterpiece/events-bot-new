@@ -1,5 +1,6 @@
 ---
 import AdaptiveEventCardGrid, { type AdaptiveEventCardItemRoot } from './AdaptiveEventCardGrid.astro';
+import './design-system/product-contour-foundations.css';
 import type { PreviewEvent } from '../lib/types';
 import { eventCategory, eventTags } from '../lib/events';
 
@@ -125,10 +126,10 @@ const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
 <style>
   .home-feed {
     margin-top: 1rem;
-    padding: clamp(1rem, 3vw, 2rem);
-    border: 1px solid rgba(121,48,20,.13);
-    border-radius: clamp(24px, 4vw, 38px);
-    background: rgba(255,250,243,.84);
+    padding: var(--ke-space-home-feed-padding);
+    border: 1px solid var(--ke-color-border-brand-soft);
+    border-radius: var(--ke-shape-radius-home-feed);
+    background: var(--ke-color-home-feed-surface);
   }
   .home-feed__head {
     display: flex;
@@ -139,9 +140,8 @@ const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
   }
   .home-feed__head h2 {
     margin: .1rem 0 0;
-    font-size: clamp(2rem, 4vw, 4.2rem);
-    line-height: .92;
-    letter-spacing: -.06em;
+    font: var(--ke-type-feature-section);
+    letter-spacing: var(--ke-type-feature-section-letter);
   }
   .home-feed__head > p {
     max-width: 32rem;

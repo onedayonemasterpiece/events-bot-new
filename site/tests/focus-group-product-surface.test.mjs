@@ -129,11 +129,29 @@ test('account logout and explicit programme exit stay separate on focus surfaces
   assert.doesNotMatch(runtime, /clearFocusParticipationMarker|kenigevents:focus-participation/u);
 });
 
-test('feedback keeps overall NPS, usefulness, improvement and fact issue separate', async () => {
+test('feedback keeps semantic questions while canonical foundations own its close icon and styling', async () => {
   const source = await read('../src/components/FocusGroupFeedback.astro');
   assert.match(source, /Общий relationship NPS/u);
   assert.match(source, /это не общий NPS/u);
   assert.match(source, /Предложить улучшение/u);
   assert.match(source, /data-feedback-panel="event_issue"/u);
   assert.match(source, /не меняет событие автоматически/u);
+  assert.match(source, /import SemanticIcon from '\.\/design-system\/SemanticIcon\.astro'/u);
+  assert.match(source, /import '\.\/design-system\/product-contour-foundations\.css'/u);
+  assert.match(source, /<SemanticIcon name="close" role="control" \/>/u);
+  assert.doesNotMatch(source, />×</u, 'text close glyph must not return');
+  for (const token of [
+    '--ke-color-focus-panel-surface',
+    '--ke-focus-panel-radius',
+    '--ke-elevation-focus-panel',
+    '--ke-color-focus-dialog-backdrop',
+    '--ke-color-focus-control-selected-accent',
+    '--ke-color-focus-control-selected-brand',
+    '--ke-color-border-input',
+    '--ke-color-focus-ring-accent',
+  ]) {
+    assert.match(source, new RegExp(token, 'u'), `feedback consumes ${token}`);
+  }
+  assert.match(source, /data-ke-button-compat="runtime-hook" data-feedback-open/u,
+    'runtime-hook launchers retain the explicit compatibility boundary until Button exposes consumer attributes');
 });
