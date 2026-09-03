@@ -23,17 +23,17 @@ const description = 'Векторный поиск по событиям Кал�
   </main>
   <script>
     const page = document.querySelector('[data-ds-family="SearchRouteComposition"]');
-    if (page instanceof HTMLElement) {
+    const search = page?.querySelector('[data-authorized-search]');
+    if (page instanceof HTMLElement && search instanceof HTMLElement) {
       const sync = () => {
-        const signedInNode = page.querySelector('[data-static-auth-signed-in]');
-        const signedIn = signedInNode instanceof HTMLElement && !signedInNode.hidden;
-        const results = page.querySelectorAll('[data-search-result], [data-event-card], [data-listing-item]').length;
-        const loading = Boolean(page.querySelector('[aria-busy="true"], [data-search-skeletons]:not([hidden])'));
-        page.dataset.dsState = loading
-          ? 'loading'
-          : `${signedIn ? 'authorized' : 'anonymous'} ${results ? 'populated' : 'empty'}`;
+        const lifecycle = search.dataset.searchState || 'idle';
+        const capability = search.dataset.searchEnabled === 'true' ? 'enabled' : 'disabled';
+        page.dataset.dsState = `${capability} ${lifecycle.replaceAll('_', '-')}`;
       };
-      new MutationObserver(sync).observe(page, { subtree:true, childList:true, attributes:true, attributeFilter:['hidden', 'aria-busy'] });
+      new MutationObserver(sync).observe(search, {
+        attributes:true,
+        attributeFilter:['data-search-state', 'data-search-enabled'],
+      });
       sync();
     }
   </script>
