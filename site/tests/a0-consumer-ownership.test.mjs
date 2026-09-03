@@ -98,7 +98,28 @@ test('partners route consumes the complete partnership registry instead of ownin
   );
 });
 
-test('interest-club cards use one canonical collection palette and arrow identity', async () => {
+test('interest-club index consumes the F0 route foundation contract and canonical catalog icon', async () => {
+  const source = await read('src/pages/kluby-po-interesam/index.astro');
+
+  assert.match(source, /import SemanticIcon from '\.\.\/\.\.\/components\/design-system\/SemanticIcon\.astro'/u);
+  assert.match(source, /product-contour-foundations\.css/u);
+  assert.match(source, /data-ds-family="InterestClubsIndexRouteComposition"/u);
+  assert.match(source, /data-ke-foundation-consumer="interest-clubs-index-route"/u);
+  assert.match(source, /<SemanticIcon name="catalog-grid" role="inline" \/>/u);
+  for (const token of [
+    '--ke-clubs-page-gap',
+    '--ke-color-clubs-intro-sky-glow',
+    '--ke-elevation-clubs-intro',
+    '--ke-clubs-intro-heading-size',
+    '--ke-color-clubs-count-surface',
+    '--ke-clubs-list-gap',
+    '--ke-clubs-mobile-shelf-layer',
+    '--ke-color-clubs-mobile-shelf-surface',
+  ]) assert.match(source, new RegExp(token, 'u'));
+  assert.doesNotMatch(source, /▥|rgba\(151,212,255|#3d3935|z-index:48|font-size:1rem/u);
+});
+
+test('interest-club cards use one canonical collection palette and inline icon role', async () => {
   const source = await read('src/components/InterestClubCard.astro');
 
   assert.match(source, /import SemanticIcon from '\.\/design-system\/SemanticIcon\.astro'/u);
@@ -113,8 +134,8 @@ test('interest-club cards use one canonical collection palette and arrow identit
     '--ke-elevation-club-future',
     '--ke-elevation-club-card-focus',
     '--ke-club-card-radius-mobile',
-    '--ke-club-card-arrow-icon-size',
   ]) assert.match(source, new RegExp(token, 'u'));
+  assert.doesNotMatch(source, /\.club-card__link\s+:global\(\.ke-icon-role\)/u);
   assert.doesNotMatch(
     source,
     /background:\s*#17343a|color:\s*#e9fffd|color:\s*#a9ddff|outline:\s*3px solid #f4b942|box-shadow:\s*0 22px 48px/u,
@@ -122,7 +143,7 @@ test('interest-club cards use one canonical collection palette and arrow identit
   );
 });
 
-test('artifact collection uses canonical collection state, dialog and close identity', async () => {
+test('artifact collection uses canonical collection state, dialog and control icon role', async () => {
   const source = await read('src/components/artifacts/ArtifactCollection.astro');
 
   assert.match(source, /import SemanticIcon from '\.\.\/design-system\/SemanticIcon\.astro'/u);
@@ -139,9 +160,9 @@ test('artifact collection uses canonical collection state, dialog and close iden
     '--ke-elevation-amber-collection-media',
     '--ke-artifact-dialog-radius',
     '--ke-elevation-artifact-dialog',
-    '--ke-artifact-dialog-close-icon-size',
     '--ke-color-artifact-disabled-surface',
   ]) assert.match(source, new RegExp(token, 'u'));
+  assert.doesNotMatch(source, /\.artifact-detail__close\s+:global\(\.ke-icon-role\)/u);
   assert.doesNotMatch(
     source,
     />×<|color:#281d17|background:#fff6df|background:#fffaf2|box-shadow:0 12px 30px|box-shadow:0 24px 80px|background:#eee2d5/u,
