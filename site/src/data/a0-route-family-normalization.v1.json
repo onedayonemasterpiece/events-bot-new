@@ -1,56 +1,102 @@
 {
   "schema_version": "a0-route-family-normalization-v1",
+  "matrix_version": "1.1.0",
   "contract_version": "1.9.0",
   "source_contract": "site/src/data/design-system-production-surface-contract.v1.json",
-  "denominator": 9,
-  "source_converged": 5,
-  "fraction": "5/9",
+  "current_refs": {
+    "accepted_combined_precursor": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+    "f0_dependency": "de92dabd4551e117ca1af1be7915ff223321cc32",
+    "m0_dependency": "4c83fc7769b1dec2d92469373e3b15154af437f4",
+    "a0_checkpoint_before_matrix_update": "f9217d66711731a911543314d17e35fed9824a2a"
+  },
+  "grouped_family_scope": {
+    "denominator": 9,
+    "strict_source_converged": 3,
+    "strict_fraction": "3/9",
+    "substantive_source_implemented": 5,
+    "substantive_fraction": "5/9",
+    "correction": "The former 5/9 field mixed substantive implementation with strict convergence. For-me still has A0-MECH-01; focus-group still has A0-MECH-06; therefore only collections, artifacts and information pages are strict source-converged before mechanical materialization."
+  },
+  "pm0_item_37": {
+    "denominator": 19,
+    "source_identity_at_v0_recensus": "16/19",
+    "source_identity_after_mechanical_target": "19/19",
+    "current_full_kaggle_build_identity": "0/19",
+    "v0_browser_reviewed": "0/19",
+    "matrix": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json@952315ce0a4a5312e3f34c5afc7e8b05066c2147"
+  },
   "browser_verdict_owner": "V0",
+  "candidate_acceptance_owner": "N0",
+  "runtime_build_owner": "R0",
+  "mechanical_batch": {
+    "issue_comment": 5527907602,
+    "clusters": [
+      "A0-MECH-01",
+      "A0-MECH-02",
+      "A0-MECH-03",
+      "A0-MECH-04",
+      "A0-MECH-05",
+      "A0-MECH-06"
+    ]
+  },
+  "downstream_contracts": {
+    "local_pointer": "site/src/data/a0-downstream-contract.v1.json",
+    "thin_s": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/a0-thin-s-bindings.v1.json@a800f619b66cdf713e94f234382481bb8621dd22",
+    "penpot_ready": "onedayonemasterpiece/lovekgd-design-system/penpot/candidate/a0-route-instance-spec.v1.json@3d4e148b74594f6d0dda3adda0649441dc17bde7",
+    "v0_acceptance": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json@952315ce0a4a5312e3f34c5afc7e8b05066c2147",
+    "integration_rollback": "onedayonemasterpiece/lovekgd-design-system/docs/launch-normalization/a0-source-integration-and-rollback.v1.json@d0509f97e04fda3f24b026dd767262d2098f5463"
+  },
   "families": [
     {
       "id": "collections",
-      "status": "source_converged",
+      "status": "source_converged_unintegrated",
       "evidence": [
         "site/src/components/CollectionCatalog.astro",
         "site/src/pages/podborki/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
         "site/src/components/FreeCollectionSurface.astro",
         "site/src/components/GastronomyCollectionSurface.astro",
         "site/src/components/UnusualListingSurface.astro"
       ],
-      "remaining": "V0 route and viewport verdict"
+      "remaining": "R0 selective integration; N0 acceptance; current full Kaggle build; V0 route and viewport verdict"
     },
     {
       "id": "festivals",
-      "status": "partial",
+      "status": "partial_mechanical_and_foundation_pending",
       "evidence": [
-        "site/src/pages/festivali/index.astro"
+        "site/src/pages/festivali/index.astro",
+        "A0-MECH-05"
       ],
-      "remaining": "A0 atomic source patch for route family identity and canonical visible guide icons; F0 review of remaining festival-specific theme literals; V0 verdict"
+      "remaining": "R0 route identity and semantic guide-icon materialization; F0 exact festival-theme binding; V0 verdict"
     },
     {
       "id": "exhibitions",
-      "status": "partial",
+      "status": "partial_mechanical_and_foundation_pending",
       "evidence": [
         "site/src/pages/vystavki/index.astro",
-        "site/src/components/ExhibitionsPersonalSurface.astro"
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "A0-MECH-05"
       ],
-      "remaining": "A0 migration from local --ex-* visible palette/geometry ownership to the published exhibition theme cluster; V0 verdict"
+      "remaining": "R0 inner-family/state identity materialization; F0 exact exhibition-theme binding; A0 consumer application of that binding; V0 verdict"
     },
     {
       "id": "for_me",
-      "status": "source_converged",
+      "status": "substantive_icon_cleanup_pending",
       "evidence": [
         "site/src/pages/dlya-menya/index.astro",
         "site/src/components/InterestProfile.astro",
-        "site/tests/interest-profile-normalization.test.mjs"
+        "site/tests/interest-profile-normalization.test.mjs",
+        "A0-MECH-01"
       ],
-      "remaining": "V0 route and state verdict"
+      "remaining": "Remove the final consumer-local .ke-icon-role square; R0 integration; V0 route, state and 24px action-icon verdict"
     },
     {
       "id": "focus_group",
-      "status": "source_converged",
+      "status": "substantive_final_route_identity_pending",
       "evidence": [
         "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupFeedback.astro",
         "site/src/components/FocusGroupLabPanel.astro",
@@ -58,49 +104,62 @@
         "site/src/components/FocusConnectivityDiagnostic.astro",
         "site/src/components/FocusEggArtifact.astro",
         "site/src/components/FocusEggCollectionCard.astro",
-        "site/src/components/FocusEggSavedListDemo.astro"
+        "site/src/components/FocusEggSavedListDemo.astro",
+        "A0-MECH-06"
       ],
-      "remaining": "V0 route and state verdict; product/server membership gates remain outside UI normalization"
+      "remaining": "Materialize FocusEggCollectionRouteComposition and ClosedFocusHubRouteComposition runtime identity; R0 integration; V0 route and state verdict. Product/server membership remains outside UI normalization."
     },
     {
       "id": "artifacts",
-      "status": "source_converged",
+      "status": "source_converged_unintegrated",
       "evidence": [
         "site/src/pages/artefakty/index.astro",
         "site/src/components/artifacts/ArtifactCollection.astro",
         "site/tests/a0-consumer-ownership.test.mjs"
       ],
-      "remaining": "V0 route and dialog-state verdict"
+      "remaining": "R0 selective integration; N0 acceptance; V0 empty/found/dialog and control-icon verdict"
     },
     {
       "id": "event_detail",
-      "status": "partial",
+      "status": "partial_mechanical_pending",
       "evidence": [
         "site/src/pages/sobytiya/[slug].astro",
         "site/src/components/DesktopEventPage.astro",
         "site/src/components/EventHero.astro",
-        "site/src/layouts/EventLayout.astro"
+        "site/src/layouts/EventLayout.astro",
+        "site/src/components/MobileEventProductionStyles.astro",
+        "A0-MECH-03",
+        "A0-MECH-04"
       ],
-      "remaining": "A0 replace two DesktopEventPage handwritten rail anatomies with EventMediaRail; remove EventLayout orphan EventCard shell/media style owner; resolve EventHero temporary exception; V0 verdict"
+      "remaining": "Consume current M0 MediaFrame and EventMediaRail in actual consumers; remove duplicate EventLayout/mobile paint; replace EventHero exception with positive contract; V0 wide/narrow/no-image verdict"
     },
     {
       "id": "interest_clubs",
-      "status": "partial",
+      "status": "partial_index_done_detail_foundations_pending",
       "evidence": [
         "site/src/pages/kluby-po-interesam/index.astro",
-        "site/src/components/InterestClubCard.astro"
+        "site/src/components/InterestClubCard.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/tests/a0-consumer-ownership.test.mjs"
       ],
-      "remaining": "A0/F0 review of route-local club hero/deck theme ownership; V0 catalog/detail verdict"
+      "remaining": "F0 exact detail-route foundation binding; A0 application to detail consumer; R0 integration; V0 catalog/detail verdict"
     },
     {
       "id": "information_pages",
-      "status": "source_converged",
+      "status": "source_converged_unintegrated",
       "evidence": [
         "site/src/pages/partners/index.astro",
         "site/src/pages/partnerstvo/index.astro",
         "site/tests/a0-consumer-ownership.test.mjs"
       ],
-      "remaining": "V0 route and viewport verdict"
+      "remaining": "R0 selective integration; N0 acceptance; V0 route and viewport verdict"
     }
+  ],
+  "claims_not_made": [
+    "source tests executed",
+    "candidate integrated",
+    "current full Kaggle successor built",
+    "V0 browser acceptance",
+    "Penpot materialized"
   ]
 }
