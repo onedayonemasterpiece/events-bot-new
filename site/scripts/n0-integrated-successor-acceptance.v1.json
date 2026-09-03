@@ -1,6 +1,6 @@
 {
   "schema": "kenigevents.n0-integrated-successor-acceptance.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "role": "N0",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_version": "1.10.0",
@@ -11,13 +11,13 @@
   "successor": {
     "branch": "agent/static-site-single-kaggle-contract",
     "sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
-    "classification": "N0_ACCEPTED_INTEGRATED_SOURCE_RUNTIME_PENDING",
+    "classification": "N0_ACCEPTED_INTEGRATED_EXECUTABLE_KAGGLE_PENDING",
     "forward_only_from_base": true,
     "ahead_by": 25,
     "behind_by": 0,
     "merge_base": "cebeafeee08251a327145ee973ee035cced65204",
     "source_acceptance": true,
-    "executable_acceptance": false,
+    "executable_acceptance": true,
     "kaggle_publication_acceptance": false,
     "v0_acceptance": false
   },
@@ -72,6 +72,48 @@
     "new_FR0_source": false,
     "overwrites_accepted_FR0_owners": false
   },
+  "executable_acceptance": {
+    "decision": "N0_ACCEPTED_EXACT_EXECUTABLE_LAYER",
+    "r0_result_comment": 5532189529,
+    "fr0_delivery_review_comment": 5532197241,
+    "exact_sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "test_only_reconciliation": {
+      "classification": "ACCEPTED_NON_PRODUCT_INTEGRATION_REPAIR",
+      "first_failure_count": 2,
+      "targeted_rerun": "19/19 PASS",
+      "product_source_semantics_changed": false
+    },
+    "gates": {
+      "strict_F0_route_theme_1_10": "PASS",
+      "strict_F0_exhibitions_residual": "PASS",
+      "strict_F0_club_theme_and_icons": "PASS",
+      "M0_post_FR0_card_grid_packet": "52/52 PASS",
+      "A0_consumer_FR0_boundary_packet": "49/49 PASS",
+      "N0_successor_and_live_ref": "15/15 PASS",
+      "N0_golden_drift": "5/5 PASS",
+      "static_release": "18/18 PASS",
+      "page_class_selector": "3/3 PASS",
+      "production_surface_contract": "PASS",
+      "iconography_contract": "PASS",
+      "browser_gate_behavior": "15/15 PASS",
+      "git_diff_check": "PASS"
+    },
+    "local_diagnostic": {
+      "compiled_pages": 438,
+      "check_preview": "PASS",
+      "event_count": 288,
+      "canonical_browser_release_gate": "9/9 PASS",
+      "first_run_footer_timeout": "DISCLOSED_TRANSIENT",
+      "immediate_clean_full_rerun": "PASS",
+      "owner_or_V0_product_evidence": false
+    },
+    "does_not_accept": [
+      "full Kaggle publication",
+      "public preview identity",
+      "independent V0 verdict",
+      "vertical slice browser acceptance"
+    ]
+  },
   "role_queue_invariant": {
     "maximum_merge_ready_batches_outside_successor_per_role": 1,
     "F0_outside_successor": 0,
@@ -94,21 +136,20 @@
     "site/tests/fr0-exhibitions-media-frame-contract.test.mjs": "ff26615718b83134db9bb65e1a10831818381743"
   },
   "remaining_exact_gate": {
-    "owner": "R0",
+    "owner": "R0_THEN_V0",
     "required": [
-      "executable source/regression exits for exact SHA 3ca6a143e4286c165282c2d8ceef1759a41185b7 or an explicitly reviewed mechanical-only descendant",
-      "one canonical full-real Kaggle StaticSiteBuilder run",
+      "one canonical full-real/all Kaggle StaticSiteBuilder run bound to exact SHA 3ca6a143e4286c165282c2d8ceef1759a41185b7 or an explicitly reviewed mechanical-only descendant",
       "HTTP-200 immutable owner URL",
       "matching preview-build.json with exact delivery SHA",
       "fresh snapshot and Kaggle operation/artifact identity",
-      "no root or stable-ICS mutation"
+      "no root or stable-ICS mutation",
+      "independent V0 verdict on the exact public transaction"
     ],
-    "then": "N0_RUNTIME_ACCEPTANCE_AND_EXACT_V0_TRIGGER"
+    "then": "N0_PUBLICATION_ACCEPTANCE_AND_VERTICAL_SLICE_REVIEW"
   },
   "non_claims": [
-    "tests executed",
-    "runtime accepted",
     "successor Kaggle preview published",
+    "successor public identity accepted",
     "successor V0 verdict issued",
     "vertical slice browser accepted"
   ]
