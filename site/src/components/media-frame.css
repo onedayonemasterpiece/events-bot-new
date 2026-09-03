@@ -82,3 +82,23 @@
 [data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-resource-state="broken"] > [data-media-frame-fallback] {
   display: block;
 }
+
+/* A declared EventHero URL is only a pending resource. Network failure must
+ * fail closed inside the existing tinted hero surface without introducing a
+ * second image, interaction or route-owned framing implementation. */
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="event-hero"] > [data-media-frame-fallback] {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="event-hero"][data-media-frame-kind="fallback"] > [data-media-frame-image],
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="event-hero"][data-media-frame-resource-state="broken"] > [data-media-frame-image] {
+  visibility: hidden;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="event-hero"][data-media-frame-kind="fallback"] > [data-media-frame-fallback],
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="event-hero"][data-media-frame-resource-state="broken"] > [data-media-frame-fallback] {
+  display: block;
+}

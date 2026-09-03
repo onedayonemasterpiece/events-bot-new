@@ -222,6 +222,8 @@ const primaryMediaFrameStyle = [
   primaryLowResolutionPortrait && primaryImageAsset?.width ? `--hero-source-width:${primaryImageAsset.width}px` : '',
   primaryLowResolutionPortrait && primaryImageAsset?.height ? `--hero-source-height:${primaryImageAsset.height}px` : '',
 ].filter(Boolean).join(';');
+const primaryMediaFrameImageLoadHandler = `const frame=this.closest('[data-media-frame][data-media-frame-contract="v1"]');if(!frame||this.dataset.mediaFrameFailed==='true'||frame.dataset.mediaFrameKind==='fallback')return;frame.dataset.mediaFrameResourceState='loaded';`;
+const primaryMediaFrameImageErrorHandler = `const frame=this.closest('[data-media-frame][data-media-frame-contract="v1"]');if(!frame)return;this.dataset.mediaFrameFailed='true';frame.dataset.mediaFrameResourceState='broken';frame.dataset.mediaFrameKind='fallback';frame.dataset.mediaFrameFit='contain';frame.dataset.mediaFrameCropPermission='forbidden';frame.dataset.mediaFrameCropReason='resource_load_error';frame.setAttribute('data-media-frame-fallback','');`;
 ---
 <section class={heroClass} data-event-hero data-feedback-scope data-ds-family="EventHero" data-ds-version="1" data-ds-variant={heroComposition} data-ds-state={`${heroMode} ${hasGallery ? 'gallery' : 'fallback'}`} data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={primaryImageTextMode} data-hero-quality-hidden-count={mediaQualitySelection.hiddenSourceIndexes.length || undefined} data-hero-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined} data-hero-tint={tint} data-presentation-fallback={typedFallbackArt?.kind}>
   {hasGallery ? (
@@ -249,6 +251,7 @@ const primaryMediaFrameStyle = [
           data-media-frame-source-ratio={primaryMediaFrameRatio?.toFixed(5)}
           data-media-frame-loading="eager"
           data-media-frame-priority="true"
+          data-media-frame-resource-state="pending"
           data-media-frame-interaction-owner="caller"
           style={primaryMediaFrameStyle || undefined}
         >
@@ -263,7 +266,10 @@ const primaryMediaFrameStyle = [
             data-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined}
             data-protected-crop-fit={primaryMediaFrameFit}
             data-protected-crop-reason={primaryLowResolutionPortrait ? 'low_resolution_portrait_contain' : primaryHeroCrop.reason}
+            onload={primaryMediaFrameImageLoadHandler}
+            onerror={primaryMediaFrameImageErrorHandler}
           />
+          <span class="event-hero__media-fallback" data-media-frame-fallback aria-hidden="true"></span>
         </span>
       ) : (
         <div class="event-hero__fallback" aria-hidden="true">
