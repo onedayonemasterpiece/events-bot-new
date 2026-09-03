@@ -1,6 +1,11 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { goldenActionContract, goldenActionHref } from './golden-review-actions.mjs';
+import {
+  goldenActionContract,
+  goldenActionHref,
+  goldenExpectedActionLabel,
+  goldenExpectedAdmissionLabel,
+} from './golden-review-actions.mjs';
 import { loadGoldenCorpus } from './golden-review-corpus.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
@@ -25,26 +30,26 @@ for (const spec of corpus.events) {
   if (!existsSync(detailPath)) throw new Error(`Golden action detail page is missing for ${spec.id}`);
   const html = readFileSync(detailPath, 'utf8');
   const expectedHref = goldenActionHref(spec);
-  const fixturePrefix = `https://example.invalid/kenigevents-golden/`;
+  const expectedActionLabel = goldenExpectedActionLabel(spec);
+  const expectedAdmissionLabel = goldenExpectedAdmissionLabel(spec);
+  const fixturePrefix = 'https://example.invalid/kenigevents-golden/';
   const eventFixtureNeedle = `${fixturePrefix}${spec.admission.kind}/${spec.id}`;
 
   if (expectedHref) {
     if (!html.includes(expectedHref)) throw new Error(`Golden event ${spec.id} does not render its ${spec.admission.kind} action href`);
+    if (!html.includes(expectedActionLabel)) throw new Error(`Golden event ${spec.id} misses canonical action label: ${expectedActionLabel}`);
   } else if (html.includes(eventFixtureNeedle)) {
     throw new Error(`Golden event ${spec.id} unexpectedly renders an active external action`);
   }
 
+  if (!html.includes(expectedAdmissionLabel)) {
+    throw new Error(`Golden event ${spec.id} misses canonical admission label: ${expectedAdmissionLabel}`);
+  }
   if (spec.admission.kind === 'phone' && !html.includes('tel:+74012000000')) {
     throw new Error(`Golden phone event ${spec.id} misses its tel action`);
   }
-  if (spec.admission.kind === 'free' && !html.includes('Бесплатно')) {
-    throw new Error(`Golden free event ${spec.id} misses its free admission state`);
-  }
   if (spec.lifecycle_status === 'cancelled' && !html.includes('https://schema.org/EventCancelled')) {
     throw new Error(`Golden cancelled event ${spec.id} misses EventCancelled structured state`);
-  }
-  if (!html.includes(spec.admission.label)) {
-    throw new Error(`Golden event ${spec.id} misses admission label: ${spec.admission.label}`);
   }
 }
 
@@ -53,6 +58,8 @@ console.log(JSON.stringify({
   buildId,
   action_contract_entries:expectedContract.length,
   admission_kinds:[...new Set(expectedContract.map((item) => item.kind))].sort(),
+  canonical_action_labels:[...new Set(expectedContract.map((item) => item.expected_action_label))].sort(),
+  canonical_admission_labels:[...new Set(expectedContract.map((item) => item.expected_admission_label))].sort(),
   deterministic_external_origin:'https://example.invalid',
   phone_action:'tel:+74012000000',
   free_and_cancelled_external_actions:false,
