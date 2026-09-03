@@ -37,6 +37,7 @@ from static_site_release import (
     STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
     resolve_build_clock,
     publish_preview_archive,
+    prune_preview_objects,
     resolve_checked_static_site_artifact,
     static_site_artifact_root,
     static_site_output_root,
@@ -839,6 +840,22 @@ def publish_downloaded_preview(
         )
     payload = asdict(receipt)
     payload['page_classes'] = list(receipt.page_classes)
+    if args.apply_preview_retention:
+        protected = tuple(dict.fromkeys([
+            *args.preview_retention_protected_build_ids,
+            receipt.build_id,
+        ]))
+        payload['retention'] = prune_preview_objects(
+            bucket=required['bucket'],
+            protected_build_ids=protected,
+            retain_noncurrent=args.preview_retain_noncurrent,
+            min_age_hours=args.preview_retention_min_age_hours,
+            apply=True,
+            endpoint=required['endpoint'],
+            region=required['region'],
+            access_key_id=required['access_key_id'],
+            secret_access_key=required['secret_access_key'],
+        )
     print(
         '[static-site-kaggle] preview published '
         + json.dumps(payload, ensure_ascii=False, sort_keys=True),
@@ -1719,6 +1736,20 @@ def main() -> int:
         action='store_true',
         help='After checked Kaggle download, publish create-only to /<buildId>/ and verify /__preview/.',
     )
+    parser.add_argument(
+        '--apply-preview-retention',
+        action='store_true',
+        help='After verified preview publication, prune only safely superseded preview-* prefixes.',
+    )
+    parser.add_argument(
+        '--preview-retention-protected-build-id',
+        action='append',
+        dest='preview_retention_protected_build_ids',
+        default=[],
+        help='Current/previous preview build id to protect; repeat for every real/golden pointer.',
+    )
+    parser.add_argument('--preview-retain-noncurrent', type=int, default=2)
+    parser.add_argument('--preview-retention-min-age-hours', type=int, default=48)
     parser.add_argument('--adopt-existing', action='store_true', help='Download/reconcile the exact already-pushed kernel; never push')
     parser.add_argument('--expected-dataset-ref', default='', help='Durable input dataset identity required for adoption')
     parser.add_argument('--keep-staging', action='store_true')
@@ -1786,6 +1817,13 @@ def main() -> int:
     ):
         raise SystemExit(
             '--publish-preview requires a waited preview profile with --download-output'
+        )
+    if args.apply_preview_retention and (
+        not args.publish_preview or not args.preview_retention_protected_build_ids
+    ):
+        raise SystemExit(
+            '--apply-preview-retention requires --publish-preview and at least one '
+            '--preview-retention-protected-build-id'
         )
     args.snapshot_contract = load_snapshot_contract(args)
     args.image_source_contract = resolve_image_source_contract(args)

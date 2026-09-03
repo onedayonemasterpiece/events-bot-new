@@ -32,6 +32,7 @@ from static_site_release import (
     merge_request_payload,
     publish_secret_candidate_archive,
     publish_preview_archive,
+    prune_preview_objects,
     prune_secret_candidate_objects,
     prune_immutable_snapshots,
     prune_static_site_outputs,
@@ -1355,6 +1356,72 @@ def test_kaggle_preview_publish_is_create_only_and_build_prefix_isolated(tmp_pat
     )
     assert adopted.artifact_sha256 == receipt.artifact_sha256
     assert adopted.public_url == receipt.public_url
+
+
+def test_preview_prune_protects_pointer_builds_recent_and_rollback() -> None:
+    current = "preview-real-current"
+    previous = "preview-real-previous"
+    rollback = "preview-extra-rollback"
+    recent = "preview-extra-recent"
+    old = "preview-extra-old"
+    now = datetime(2026, 9, 3, 13, 0, tzinfo=timezone.utc)
+
+    class Client:
+        def __init__(self) -> None:
+            self.deleted: list[str] = []
+
+        def list_objects_v2(self, **kwargs):
+            assert kwargs["Prefix"] == "preview-"
+            return {
+                "IsTruncated": False,
+                "Contents": [
+                    {"Key": f"{current}/index.html", "Size": 10, "LastModified": now - timedelta(days=10)},
+                    {"Key": f"{previous}/index.html", "Size": 20, "LastModified": now - timedelta(days=8)},
+                    {"Key": f"{rollback}/index.html", "Size": 30, "LastModified": now - timedelta(days=3)},
+                    {"Key": f"{recent}/index.html", "Size": 40, "LastModified": now - timedelta(hours=12)},
+                    {"Key": f"{old}/index.html", "Size": 50, "LastModified": now - timedelta(days=20)},
+                    {"Key": f"{old}/asset.js", "Size": 60, "LastModified": now - timedelta(days=20)},
+                    {"Key": "preview-not-a-prefix", "Size": 70, "LastModified": now - timedelta(days=30)},
+                ],
+            }
+
+        def delete_objects(self, **kwargs):
+            self.deleted.extend(item["Key"] for item in kwargs["Delete"]["Objects"])
+            return {}
+
+    client = Client()
+    receipt = prune_preview_objects(
+        bucket="kenigevents.ru",
+        protected_build_ids=[current, previous, current],
+        retain_noncurrent=2,
+        min_age_hours=48,
+        now=now,
+        apply=True,
+        s3_client=client,
+    )
+
+    assert sorted(client.deleted) == [f"{old}/asset.js", f"{old}/index.html"]
+    assert receipt["protected_build_ids"] == [current, previous]
+    assert receipt["deleted_build_ids"] == [old]
+    assert receipt["deleted_object_count"] == 2
+    assert receipt["deleted_bytes"] == 110
+
+
+def test_preview_prune_refuses_missing_protected_prefix_before_delete() -> None:
+    class Client:
+        def list_objects_v2(self, **_kwargs):
+            return {"IsTruncated": False, "Contents": []}
+
+        def delete_objects(self, **_kwargs):
+            raise AssertionError("delete must not run without every protected prefix")
+
+    with pytest.raises(StaticSitePermanentError, match="protected_prefix_missing"):
+        prune_preview_objects(
+            bucket="kenigevents.ru",
+            protected_build_ids=["preview-real-current"],
+            apply=True,
+            s3_client=Client(),
+        )
 
 
 @pytest.mark.asyncio

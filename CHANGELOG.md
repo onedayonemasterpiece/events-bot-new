@@ -10,7 +10,10 @@
   `/<buildId>/__preview/` URL. Production candidates remain full-catalog and
   reject page-class slicing. The Astro filter, Python runner and checked
   publisher now validate against one versioned page-class contract instead of
-  maintaining independent allowlists.
+  maintaining independent allowlists. Preview retention is implemented by the
+  same events-bot release module: it accepts only whole protected build IDs,
+  fails closed when a protected prefix is missing, and preserves a bounded
+  rollback/grace cohort before deleting old immutable prefixes.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK

@@ -94,6 +94,17 @@ run. The host revalidates the artifact hash, safe archive containment,
 `preview-build.json` identity and every uploaded object before probing the
 exact HTTPS entry URL.
 
+Preview retention remains owned by this same release module, not by an MCP
+caller or a second storage service. After `my-data-hub` has resolved the exact
+current and previous build IDs for every real/Golden mode, it may pass all of
+them as repeatable `--preview-retention-protected-build-id` values and opt into
+`--apply-preview-retention`. The just-published build is protected
+automatically. `static_site_release.prune_preview_objects` then performs the
+bucket census and whole-prefix deletion; it fails closed if any supplied
+protected prefix is absent, retains two additional rollback prefixes, and
+keeps every noncurrent prefix younger than 48 hours. Without the explicit
+apply flag no preview deletion occurs.
+
 Kaggle is an accepted **batch executor** in this project because the repo already uses Kaggle for monitored parser/video/social jobs. For static pages it may build Astro HTML, related/discovery manifests, golden-facet manifests, share-card artifacts and offline evaluation reports.
 
 R15 unusual events reuse this executor, lease and immutable input dataset. The

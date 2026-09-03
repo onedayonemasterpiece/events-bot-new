@@ -2906,6 +2906,150 @@ def publish_preview_archive(
     )
 
 
+def prune_preview_objects(
+    *,
+    bucket: str,
+    protected_build_ids: Iterable[str],
+    retain_noncurrent: int = 2,
+    min_age_hours: int = 48,
+    now: datetime | None = None,
+    apply: bool = False,
+    endpoint: str = "https://storage.yandexcloud.net",
+    region: str = "ru-central1",
+    access_key_id: str = "",
+    secret_access_key: str = "",
+    s3_client: Any | None = None,
+) -> dict[str, Any]:
+    """Prune superseded public preview prefixes without owning current state.
+
+    The caller supplies the exact current/previous build identities for every
+    preview data mode.  This module owns the storage census and deletion
+    algorithm; callers cannot select individual object keys.  Missing protected
+    prefixes fail closed before any delete request.
+    """
+
+    protected = tuple(dict.fromkeys(str(item or "").strip() for item in protected_build_ids))
+    if (
+        not protected
+        or any(not re.fullmatch(r"preview-[A-Za-z0-9][A-Za-z0-9._-]{0,191}", item) for item in protected)
+    ):
+        raise StaticSitePermanentError("preview_prune_protected_build_ids_invalid")
+    keep_count = max(0, min(20, int(retain_noncurrent)))
+    grace_hours = max(1, min(24 * 30, int(min_age_hours)))
+    current_time = now or utc_now()
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    current_time = current_time.astimezone(timezone.utc)
+    if s3_client is None:
+        import boto3
+
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            region_name=region,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+        )
+
+    previews: dict[str, dict[str, Any]] = {}
+    continuation: str | None = None
+    while True:
+        kwargs: dict[str, Any] = {
+            "Bucket": bucket,
+            "Prefix": "preview-",
+            "MaxKeys": 1000,
+        }
+        if continuation:
+            kwargs["ContinuationToken"] = continuation
+        response = s3_client.list_objects_v2(**kwargs)
+        for item in response.get("Contents") or []:
+            key = str(item.get("Key") or "")
+            match = re.match(
+                r"^(preview-[A-Za-z0-9][A-Za-z0-9._-]{0,191})/", key
+            )
+            if not match:
+                continue
+            build_id = match.group(1)
+            modified = item.get("LastModified")
+            if not isinstance(modified, datetime):
+                raise StaticSiteRetryableError("preview_prune_last_modified_missing")
+            if modified.tzinfo is None:
+                modified = modified.replace(tzinfo=timezone.utc)
+            entry = previews.setdefault(
+                build_id,
+                {
+                    "keys": [],
+                    "bytes": 0,
+                    "last_modified": modified.astimezone(timezone.utc),
+                },
+            )
+            entry["keys"].append(key)
+            entry["bytes"] += int(item.get("Size") or 0)
+            entry["last_modified"] = max(
+                entry["last_modified"], modified.astimezone(timezone.utc)
+            )
+        if not response.get("IsTruncated"):
+            break
+        continuation = str(response.get("NextContinuationToken") or "")
+        if not continuation:
+            raise StaticSiteRetryableError("preview_prune_listing_token_missing")
+
+    missing = sorted(set(protected) - previews.keys())
+    if missing:
+        raise StaticSitePermanentError(
+            "preview_prune_protected_prefix_missing:" + ",".join(missing)
+        )
+    ordered_noncurrent = sorted(
+        (item for item in previews.items() if item[0] not in protected),
+        key=lambda item: item[1]["last_modified"],
+        reverse=True,
+    )
+    retained = set(protected)
+    retained.update(build_id for build_id, _entry in ordered_noncurrent[:keep_count])
+    cutoff = current_time - timedelta(hours=grace_hours)
+    retained.update(
+        build_id
+        for build_id, entry in ordered_noncurrent
+        if entry["last_modified"] >= cutoff
+    )
+    deleted_objects = 0
+    deleted_bytes = 0
+    deleted_build_ids: list[str] = []
+    for build_id, entry in ordered_noncurrent:
+        if build_id in retained:
+            continue
+        keys = list(entry["keys"])
+        if apply:
+            for start in range(0, len(keys), 1000):
+                response = s3_client.delete_objects(
+                    Bucket=bucket,
+                    Delete={
+                        "Objects": [
+                            {"Key": key} for key in keys[start : start + 1000]
+                        ],
+                        "Quiet": True,
+                    },
+                )
+                if response.get("Errors"):
+                    raise StaticSiteRetryableError("preview_prune_delete_failed")
+        deleted_objects += len(keys)
+        deleted_bytes += int(entry["bytes"])
+        deleted_build_ids.append(build_id)
+    return {
+        "schema_version": "static_site_preview_prune_v1",
+        "applied": bool(apply),
+        "preview_count": len(previews),
+        "protected_build_ids": list(protected),
+        "retained_preview_count": len(retained),
+        "deleted_preview_count": len(deleted_build_ids),
+        "deleted_object_count": deleted_objects,
+        "deleted_bytes": deleted_bytes,
+        "deleted_build_ids": deleted_build_ids,
+        "retain_noncurrent": keep_count,
+        "min_age_hours": grace_hours,
+    }
+
+
 def _safe_extract_candidate_archive(archive: Path, destination: Path, token: str) -> Path:
     prefix = f"_review/{token}/"
     if destination.exists():

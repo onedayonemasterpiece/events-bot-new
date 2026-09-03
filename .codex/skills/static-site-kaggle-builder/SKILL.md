@@ -34,6 +34,9 @@ Reuse the existing events-bot Kaggle infrastructure:
    production candidate must remain `all`/full-catalog.
 8. Read page-class names from the versioned contract; do not duplicate the
    allowlist in a caller, MCP facade or second runner.
+9. Preview retention is `static_site_release.prune_preview_objects`; callers
+   supply protected current/previous build IDs, never individual object keys.
+   Apply only after a checked publication and fail closed on a missing prefix.
 
 ## Known Kaggle pitfalls already solved
 
