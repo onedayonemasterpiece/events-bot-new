@@ -10,6 +10,10 @@ import {
 import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import PopularBehaviorRows from './PopularBehaviorRows.astro';
+import PopularMobileBehaviorRows from './PopularMobileBehaviorRows.astro';
+import PopularMobileAdaptiveRows from './PopularMobileAdaptiveRows.astro';
+import ListingMobileDensitySwitch from './ListingMobileDensitySwitch.astro';
+import PopularMobileGroupContext from './PopularMobileGroupContext.astro';
 import PopularPersonalizedRow from './PopularPersonalizedRow.astro';
 import MobileListingRailSurface from './MobileListingRailSurface.astro';
 import { collapseOccurrenceCards } from '../../lib/eventOccurrences';
@@ -49,7 +53,15 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   data-date-listing="popular"
   data-listing-variant="POPULAR-V26"
   data-desktop-popular-version="V28"
+  data-mobile-card-density="large"
 >
+  <script is:inline>
+    try {
+      const surface = document.currentScript.closest('[data-date-listing="popular"]');
+      const saved = window.localStorage.getItem('ke_listing_density_v2');
+      if (surface && (saved === 'large' || saved === 'adaptive')) surface.dataset.mobileCardDensity = saved;
+    } catch {}
+  </script>
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={visibleEvents.length} current="popular" />
   <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} />
   <div class="ke-popular-desktop" data-popular-representation="desktop">
@@ -72,7 +84,13 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
     current="popular"
     cities={cities}
   />
+  <div class="ke-popular-mobile-existing" aria-hidden="true" inert>
+    <PopularMobileBehaviorRows groups={groups} />
+    <PopularMobileAdaptiveRows groups={groups} />
+    <PopularMobileGroupContext />
+  </div>
   <div class="ke-listing-empty" data-listing-no-events hidden={visibleEvents.length > 0}>
     <strong>Пока нет событий с подтверждённой активностью</strong>
   </div>
+  <ListingMobileDensitySwitch />
 </div>
