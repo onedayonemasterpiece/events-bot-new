@@ -1,0 +1,22 @@
+{
+  "schema_version": "a0-media-frame-exceptions-v1",
+  "owner": "A0",
+  "contract_version": "1.9.0",
+  "exceptions": [
+    {
+      "id": "event-hero-editorial-fit-owner-v1",
+      "path": "site/src/components/EventHero.astro",
+      "selector": ".event-hero__image",
+      "status": "intentional_temporary_exception",
+      "reason": "EventHero is a non-interactive editorial hero whose contain/cover mode and focal point are derived from event.image_text_mode and event.focal_point. Its current source is a large shared event-detail root; changing the inner wrapper without an atomic patch primitive would risk unrelated hero anatomy and runtime hooks.",
+      "retained_owner": "EventHero",
+      "forbidden_expansion": [
+        "additional object-fit declarations outside .event-hero__image",
+        "additional object-position declarations outside .event-hero__image",
+        "new media-frame exception paths"
+      ],
+      "review_trigger": "first atomic patch-capable A0 writer or a direct M0 EventHeroMediaFrame adapter accepted by N0",
+      "acceptance_boundary": "The exception does not authorize EventLayout, DesktopEventPage, mobile rails, cards or galleries to retain duplicate media-fit ownership."
+    }
+  ]
+}
