@@ -1,0 +1,195 @@
+{
+  "schema": "kenigevents.a0.current-successor-consumer-closure.v1",
+  "version": "1.0.0",
+  "contract_version": "1.10.0",
+  "role": "A0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "instruction_comment": 5526326906,
+  "authority": {
+    "executable_repository": "onedayonemasterpiece/events-bot-new",
+    "role_branch": "work/ui-normalization-a0-wave-3-20260903",
+    "role_head_before_contract": "93acd4b8853d99dbd03b492c63d0cb2282a5fcc9",
+    "candidate_acceptance_owner": "N0",
+    "runtime_test_and_kaggle_owner": "R0",
+    "browser_verdict_owner": "V0",
+    "penpot_writer": "R0.PENPOT"
+  },
+  "fresh_census": {
+    "programme": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
+    "legacy_combined_candidate": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+    "current_successor": {
+      "branch": "agent/static-site-single-kaggle-contract",
+      "sha": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "classification": "CURRENT_FULL_FRESH_REAL_SUCCESSOR_AND_PRE_F0_ROUTE_THEME_BASELINE"
+    },
+    "n0_head": "fac1a2434ee550b37c9630c3502130574be53ecc",
+    "f0": {
+      "head": "1c4de6afdb0ab14e2d828946f9b34ce69ae3565e",
+      "semantic_source_floor": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "resolve_current_head_before_apply": true
+    },
+    "m0": {
+      "head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+      "resolve_current_head_before_apply": true,
+      "consumer_conflict_with_this_contract": false
+    },
+    "fr0": {
+      "branch_at_census": null,
+      "status": "ROLE_ADMITTED_CUTOVER_REF_NOT_YET_PUBLISHED",
+      "rule": "If FR0 publishes an accepted cutover before materialization, R0 resolves it first; the A0 transform still must not edit FR0 canonical roots."
+    },
+    "thin_s_head": "b3395b944f8255defed20c69338d775a94b3ad02"
+  },
+  "published_previews": {
+    "current_fresh_real": {
+      "url": "https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/",
+      "manifest": "https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/preview-build.json",
+      "source_sha": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "r0_comment": 5529740140,
+      "classification": "VALID_PUBLIC_PRE_F0_BASELINE",
+      "independent_v0_pass": false
+    },
+    "golden": {
+      "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+      "source_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+      "v0_comment": 5527892153,
+      "verdict": "DRIFT",
+      "relevant_finding": "EventCard auxiliary negative action measured below 44px on the older Golden source; R0 reports the current fresh-real successor clean, but independent current-successor V0 evidence is still absent."
+    }
+  },
+  "candidate_review": {
+    "decision": "ACCEPT_AS_INTEGRATION_BASE_NOT_AS_FINAL_A0_SUCCESSOR",
+    "accepted_properties": [
+      "canonical one-Kaggle pipeline and immutable fresh-real publication",
+      "current F0 through de92dabd and M0 through c808c75d integrated",
+      "A0 net projection through ec926580 without replaying M0-owned roots",
+      "176-case R0 isolated browser matrix with no document overflow",
+      "77-case R0 focused matrix with no sub-44 EventCard negative targets, unsafe external targets, missing DS identities, media mismatches or nested interactive roots"
+    ],
+    "missing_for_a0_completion": [
+      "accepted F0 route-theme and club-continuity source",
+      "festival, exhibitions and club-detail consumer token consumption",
+      "InterestClubCard four residual semantic substitutions",
+      "FocusEggCollectionRouteComposition runtime identity",
+      "ClosedFocusHubRouteComposition runtime identity",
+      "current accepted M0 or FR0 framing tail when N0 selects it",
+      "post-closure source tests, full fresh-real Kaggle build and independent V0 verdict"
+    ],
+    "whole_a0_branch_merge_allowed": false
+  },
+  "source_outputs": {
+    "accepted_direct_patches": [
+      {
+        "path": "site/src/components/InterestClubCard.astro",
+        "commit": "29538035d94a15adac9fd8ee7463ece87c8d1033",
+        "f0_acceptance_comment": 5529863067
+      },
+      {
+        "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "commit": "2aa70f2ff8819d83e58da1473a35435d22783578",
+        "f0_acceptance_comment": 5529948310
+      }
+    ],
+    "executable_transform": {
+      "path": "site/scripts/apply-a0-current-successor-consumer-closure.mjs",
+      "commit": "5e66444b20a0c4b90004a895345a5c8389ec8530",
+      "mode": "IDEMPOTENT_APPLY_OR_CHECK",
+      "target_paths": [
+        "site/src/components/InterestClubCard.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "forbidden_root_mutations": [
+        "site/src/components/design-system/**",
+        "site/src/components/media-frame.css",
+        "site/src/components/EventMediaRail.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventCard.astro",
+        "site/src/components/listings/ListingEventCard.astro",
+        "site/src/components/AdaptiveEventCardGrid.astro"
+      ]
+    },
+    "regression_contract": {
+      "path": "site/tests/a0-current-successor-consumer-closure.test.mjs",
+      "commit": "93acd4b8853d99dbd03b492c63d0cb2282a5fcc9"
+    }
+  },
+  "materialization_transaction": {
+    "ordered_steps": [
+      "Start from current accepted successor or its N0-accepted descendant.",
+      "Resolve and integrate the current accepted F0 source, with semantic floor 0fb2938344cf96b05be0df09dfb9e69525b3717d.",
+      "Resolve current M0 and any accepted FR0 cutover; integrate them without A0 edits to canonical roots.",
+      "Copy the A0 executable transform and regression test, or apply the accepted direct patches plus the remaining equivalent net consumer transformations.",
+      "Run the A0 transform once in apply mode and once in check mode.",
+      "Run the A0 regression contract and both strict F0 consumption gates.",
+      "Run the normal integrated focused source/test packet.",
+      "Publish one full fresh-real build through the canonical Kaggle StaticSiteBuilder.",
+      "N0 accepts the exact source/ancestry/publication transaction.",
+      "V0 independently audits the exact HTTP-200 URL.",
+      "Only after acceptance, update thin-S equality and materialize Penpot linked instances."
+    ],
+    "commands": [
+      "node site/scripts/apply-a0-current-successor-consumer-closure.mjs",
+      "node site/scripts/apply-a0-current-successor-consumer-closure.mjs --check",
+      "node --test site/tests/a0-current-successor-consumer-closure.test.mjs",
+      "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+      "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs"
+    ],
+    "ready_for_r0_comment": 5527907602,
+    "one_batch_only": true
+  },
+  "rollback": {
+    "policy": "Revert the smallest failing consumer unit. Preserve F0, FR0 and M0 canonical roots and immutable preview prefixes.",
+    "units": [
+      {
+        "id": "A0-RB-CLUB-CARD-CONTINUITY",
+        "path": "site/src/components/InterestClubCard.astro",
+        "trigger": "missing token, computed palette drift or strict club-theme gate failure"
+      },
+      {
+        "id": "A0-RB-CLUB-DETAIL-THEME",
+        "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "trigger": "route-theme strict gate failure or computed detail-route drift"
+      },
+      {
+        "id": "A0-RB-FESTIVAL-THEME",
+        "path": "site/src/pages/festivali/index.astro",
+        "trigger": "festival layout, target-size, icon, safety-rel or computed palette regression"
+      },
+      {
+        "id": "A0-RB-EXHIBITIONS-THEME",
+        "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+        "trigger": "private alias survives, strict route-theme gate failure or interaction/layout drift"
+      },
+      {
+        "id": "A0-RB-FOCUS-COLLECTION-IDENTITY",
+        "path": "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "trigger": "identity/state mismatch or collection behavior regression"
+      },
+      {
+        "id": "A0-RB-CLOSED-FOCUS-HUB-IDENTITY",
+        "path": "site/src/pages/zakrytaya-afisha/index.astro",
+        "trigger": "checking/locked/available identity mismatch or participation behavior regression"
+      }
+    ]
+  },
+  "pm0_and_product_gate": {
+    "item_37_denominator": 19,
+    "identity_target_after_materialization": "19/19",
+    "current_post_closure_full_kaggle_identity": "0/19",
+    "current_independent_v0_reviewed": "0/19",
+    "next_gate": "POST_F0_M0_OR_FR0_A0_FULL_FRESH_REAL_KAGGLE_SUCCESSOR_PLUS_INDEPENDENT_V0_VERDICT",
+    "after_pass": "ASTRO_NORMALIZATION_PASS -> bound thin-S/Penpot projection -> Golden A=S=P -> release candidate"
+  },
+  "truth_boundary": {
+    "source_decisions_complete": true,
+    "source_runtime_tests_executed_by_a0": false,
+    "current_successor_contains_closure": false,
+    "post_closure_kaggle_preview_exists": false,
+    "independent_v0_pass_exists": false,
+    "penpot_materialized": false
+  }
+}
