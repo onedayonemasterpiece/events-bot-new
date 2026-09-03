@@ -1,0 +1,51 @@
+name: StaticSiteBuilder one-shot diagnostics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/static-site-diagnostics-one-shot.yml
+
+permissions:
+  contents: write
+
+env:
+  FLY_API_TOKEN: ${{ secrets.UNUSUAL_EVENTS_FLY_SSH_TOKEN }}
+  FLY_APP_NAME: ${{ vars.UNUSUAL_EVENTS_FLY_APP_NAME }}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+      - name: Collect redacted StaticSiteBuilder diagnostics from Fly
+        run: |
+          set -euo pipefail
+          test -n "${FLY_APP_NAME:-}"
+          test -n "${FLY_API_TOKEN:-}"
+          NO_COLOR=1 flyctl ssh console --app "$FLY_APP_NAME" --pty=false \
+            --command "python3 scripts/static_site_build_diagnostics.py --db /data/db.sqlite --hours 24 --format json --limit 100" \
+            | tee static-site-diagnostics.json
+      - name: Upload redacted diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: static-site-diagnostics
+          path: static-site-diagnostics.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove one-shot workflow from main
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          git rebase origin/main
+          git rm .github/workflows/static-site-diagnostics-one-shot.yml
+          git commit -m 'ops: remove one-shot StaticSiteBuilder diagnostics'
+          git push origin HEAD:main
