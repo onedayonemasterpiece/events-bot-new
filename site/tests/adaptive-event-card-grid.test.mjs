@@ -63,9 +63,10 @@ test('Wave 2 keeps consumer metadata data-only and canonical diagnostics reserve
   assert.match(adaptive, /\^data-\[a-z0-9_\.:-\]\+\$/u);
   assert.match(adaptive, /!ADAPTIVE_ROOT_RESERVED_ATTRIBUTES\.has\(name\)/u);
   assert.match(adaptive, /'data-adaptive-grid-remainder-variant'/u);
-  assert.match(adaptive, /return itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\] \|\| itemRoots\[String\(item\.id\)\]/u);
-  assert.match(adaptive, /rootClassName=\{itemRootFor\(item\)\?\.className\}/u);
-  assert.match(adaptive, /rootAttributes=\{itemRootFor\(item\)\?\.attributes\}/u);
+  assert.match(adaptive, /itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\] \|\| itemRoots\[String\(item\.id\)\]/u);
+  assert.match(adaptive, /const itemRoot = itemRootFor\(item, resolvedSourceIndexes\[renderedIndex\] \?\? -1\);/u);
+  assert.match(adaptive, /rootClassName=\{itemRoot\?\.className\}/u);
+  assert.match(adaptive, /rootAttributes=\{itemRoot\?\.attributes\}/u);
   assert.equal((adaptive.match(/<EventCard\b/gu) || []).length, 1, 'metadata bridge must not add a wrapper or second card root');
 
   assert.match(card, /rootClassName\?: string/u);
