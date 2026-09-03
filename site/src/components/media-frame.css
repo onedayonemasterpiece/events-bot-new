@@ -3,15 +3,13 @@
  *
  * Callers retain semantic classification, crop selection, source dimensions,
  * loading priority and interaction. Surface families retain their external
- * size/radius tokens. This file alone owns frame clipping plus the published
- * fit and focal-position application.
+ * inline size, ratio and radius. This file alone owns frame clipping plus the
+ * published fit and focal-position application inside that surface box.
  */
 [data-media-frame][data-media-frame-contract="v1"] {
   position: relative;
   isolation: isolate;
   display: block;
-  width: 100%;
-  max-width: 100%;
   min-width: 0;
   overflow: hidden;
 }
