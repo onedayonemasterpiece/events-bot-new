@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
+  browserLaunchOptions,
   BROWSER_GATE_ACTION_TIMEOUT_MS,
   BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
   assertRecommendationGeometry,
@@ -18,6 +19,12 @@ import {
   staticSpecimenCandidates,
   startReleaseServer,
 } from './check-browser-release-gate.mjs';
+
+test('browser release gate can reuse an explicitly provisioned executable', () => {
+  assert.deepEqual(browserLaunchOptions(''), { headless:true });
+  assert.deepEqual(browserLaunchOptions('/bin/sh'), { headless:true, executablePath:'/bin/sh' });
+  assert.throws(() => browserLaunchOptions('/missing/browser'), /browser executable is missing/u);
+});
 
 test('mixed-input current-event Enter accepts both enabled and intentionally disabled primary actions', () => {
   assert.equal(currentEventPrimaryKeyboardContract(1, 0), 'activate');
@@ -52,7 +59,7 @@ test('sold-out current-event Enter stays inert and announces unavailability', as
     </script>`);
   const { chromium } = await import('playwright');
   const server = await startReleaseServer(root);
-  const browser = await chromium.launch({ headless:true });
+  const browser = await chromium.launch(browserLaunchOptions());
   try {
     const page = await browser.newPage({ viewport:{ width:1280, height:900 } });
     await page.goto(server.origin, { waitUntil:'domcontentloaded' });
@@ -278,7 +285,7 @@ test('R01 missing recommendation image uses its bounded fallback without a false
   const { chromium } = await import('playwright');
   let browser = null;
   try {
-    browser = await chromium.launch({ headless:true });
+    browser = await chromium.launch(browserLaunchOptions());
     const page = await browser.newPage({ viewport:{ width:800, height:600 } });
     await page.goto(server.origin, { waitUntil:'domcontentloaded' });
     const metrics = await assertRecommendationGeometry(page, '[data-event-card]', 1);

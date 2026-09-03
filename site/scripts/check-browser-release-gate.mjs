@@ -51,6 +51,14 @@ export function localReleaseAssetPath(value) {
   return marker >= 0 ? url.pathname.slice(marker) : null;
 }
 
+export function browserLaunchOptions(executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH || '') {
+  const configured = String(executablePath || '').trim();
+  if (!configured) return { headless:true };
+  const resolved = resolve(configured);
+  invariant(existsSync(resolved) && statSync(resolved).isFile(), `browser executable is missing: ${resolved}`);
+  return { headless:true, executablePath:resolved };
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -1054,7 +1062,7 @@ export async function main(argv = process.argv.slice(2)) {
   let server = null;
   let browser = null;
   try {
-    browser = await browserType.launch({ headless: true });
+    browser = await browserType.launch(browserLaunchOptions(args.executable_path || process.env.PLAYWRIGHT_EXECUTABLE_PATH || ''));
     server = await startReleaseServer(metadata.root, metadata.basePath);
     const artifactDir = args.artifact_dir ? resolve(args.artifact_dir) : '';
     if (artifactDir) mkdirSync(artifactDir, { recursive:true });
