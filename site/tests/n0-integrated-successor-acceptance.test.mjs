@@ -15,19 +15,20 @@ const A0 = '3ef253980bdfe0731158f5b8b4b47965fa153ce9';
 
 const batch = (role) => receipt.integrated_batches.find((item) => item.role === role);
 
-test('successor is one forward-only source-accepted transaction, not a runtime claim', () => {
+test('successor is one forward-only source and executable accepted transaction', () => {
   assert.equal(receipt.schema, 'kenigevents.n0-integrated-successor-acceptance.v1');
+  assert.equal(receipt.version, '1.1.0');
   assert.equal(receipt.contract_version, '1.10.0');
   assert.equal(receipt.base.sha, BASE);
   assert.equal(receipt.successor.sha, SUCCESSOR);
   assert.equal(receipt.successor.branch, 'agent/static-site-single-kaggle-contract');
-  assert.equal(receipt.successor.classification, 'N0_ACCEPTED_INTEGRATED_SOURCE_RUNTIME_PENDING');
+  assert.equal(receipt.successor.classification, 'N0_ACCEPTED_INTEGRATED_EXECUTABLE_KAGGLE_PENDING');
   assert.equal(receipt.successor.forward_only_from_base, true);
   assert.equal(receipt.successor.ahead_by, 25);
   assert.equal(receipt.successor.behind_by, 0);
   assert.equal(receipt.successor.merge_base, BASE);
   assert.equal(receipt.successor.source_acceptance, true);
-  assert.equal(receipt.successor.executable_acceptance, false);
+  assert.equal(receipt.successor.executable_acceptance, true);
   assert.equal(receipt.successor.kaggle_publication_acceptance, false);
   assert.equal(receipt.successor.v0_acceptance, false);
 });
@@ -78,6 +79,46 @@ test('reconciliation changes only documented integration gates and no FR0 source
   assert.equal(reconciliation.overwrites_accepted_FR0_owners, false);
 });
 
+test('R0 executable result is accepted exactly without publication inflation', () => {
+  const executable = receipt.executable_acceptance;
+  assert.equal(executable.decision, 'N0_ACCEPTED_EXACT_EXECUTABLE_LAYER');
+  assert.equal(executable.r0_result_comment, 5532189529);
+  assert.equal(executable.fr0_delivery_review_comment, 5532197241);
+  assert.equal(executable.exact_sha, SUCCESSOR);
+  assert.equal(executable.test_only_reconciliation.classification, 'ACCEPTED_NON_PRODUCT_INTEGRATION_REPAIR');
+  assert.equal(executable.test_only_reconciliation.first_failure_count, 2);
+  assert.equal(executable.test_only_reconciliation.targeted_rerun, '19/19 PASS');
+  assert.equal(executable.test_only_reconciliation.product_source_semantics_changed, false);
+  assert.deepEqual(executable.gates, {
+    strict_F0_route_theme_1_10: 'PASS',
+    strict_F0_exhibitions_residual: 'PASS',
+    strict_F0_club_theme_and_icons: 'PASS',
+    M0_post_FR0_card_grid_packet: '52/52 PASS',
+    A0_consumer_FR0_boundary_packet: '49/49 PASS',
+    N0_successor_and_live_ref: '15/15 PASS',
+    N0_golden_drift: '5/5 PASS',
+    static_release: '18/18 PASS',
+    page_class_selector: '3/3 PASS',
+    production_surface_contract: 'PASS',
+    iconography_contract: 'PASS',
+    browser_gate_behavior: '15/15 PASS',
+    git_diff_check: 'PASS',
+  });
+  assert.equal(executable.local_diagnostic.compiled_pages, 438);
+  assert.equal(executable.local_diagnostic.check_preview, 'PASS');
+  assert.equal(executable.local_diagnostic.event_count, 288);
+  assert.equal(executable.local_diagnostic.canonical_browser_release_gate, '9/9 PASS');
+  assert.equal(executable.local_diagnostic.first_run_footer_timeout, 'DISCLOSED_TRANSIENT');
+  assert.equal(executable.local_diagnostic.immediate_clean_full_rerun, 'PASS');
+  assert.equal(executable.local_diagnostic.owner_or_V0_product_evidence, false);
+  assert.deepEqual(executable.does_not_accept, [
+    'full Kaggle publication',
+    'public preview identity',
+    'independent V0 verdict',
+    'vertical slice browser acceptance',
+  ]);
+});
+
 test('there is no second role batch outside the successor', () => {
   const queue = receipt.role_queue_invariant;
   assert.equal(queue.maximum_merge_ready_batches_outside_successor_per_role, 1);
@@ -101,23 +142,23 @@ test('accepted exhibitions/FR0 source remains byte-stable in the successor', () 
   });
 });
 
-test('remaining gate is executable, full-real, immutable and source-bound', () => {
+test('remaining gate is full-real, immutable, source-bound and V0-owned', () => {
   const gate = receipt.remaining_exact_gate;
-  assert.equal(gate.owner, 'R0');
+  assert.equal(gate.owner, 'R0_THEN_V0');
   assert.ok(gate.required.some((item) => item.includes(SUCCESSOR)));
-  assert.ok(gate.required.includes('one canonical full-real Kaggle StaticSiteBuilder run'));
+  assert.ok(gate.required.some((item) => item.includes('canonical full-real/all Kaggle StaticSiteBuilder')));
   assert.ok(gate.required.includes('HTTP-200 immutable owner URL'));
   assert.ok(gate.required.includes('matching preview-build.json with exact delivery SHA'));
   assert.ok(gate.required.includes('fresh snapshot and Kaggle operation/artifact identity'));
   assert.ok(gate.required.includes('no root or stable-ICS mutation'));
-  assert.equal(gate.then, 'N0_RUNTIME_ACCEPTANCE_AND_EXACT_V0_TRIGGER');
+  assert.ok(gate.required.includes('independent V0 verdict on the exact public transaction'));
+  assert.equal(gate.then, 'N0_PUBLICATION_ACCEPTANCE_AND_VERTICAL_SLICE_REVIEW');
 });
 
-test('source acceptance does not prematurely claim downstream evidence', () => {
+test('executable acceptance does not prematurely claim downstream evidence', () => {
   assert.deepEqual(receipt.non_claims, [
-    'tests executed',
-    'runtime accepted',
     'successor Kaggle preview published',
+    'successor public identity accepted',
     'successor V0 verdict issued',
     'vertical slice browser accepted',
   ]);
