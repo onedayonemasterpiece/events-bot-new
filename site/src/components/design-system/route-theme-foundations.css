@@ -1,0 +1,161 @@
+/*
+ * F0 exact route-theme foundations for the remaining launch-critical
+ * exhibitions, festivals and interest-club-detail consumers.
+ *
+ * This file is token-only. A0 owns selector replacement and removal of local
+ * visual owners. Values preserve current source behavior; they do not redesign
+ * the palette or route compositions.
+ */
+:root {
+  /* ExhibitionsPersonalSurface: exact private-theme extraction. */
+  --ke-exhibitions-page-font-size: var(--ke-type-body-size);
+  --ke-exhibitions-page-line: 1.45;
+  --ke-exhibitions-focus-width: 3px;
+  --ke-exhibitions-focus-offset: 3px;
+  --ke-exhibitions-skip-layer: 100;
+  --ke-exhibitions-shell-max: var(--ke-exhibitions-container);
+  --ke-exhibitions-shell-gutter: clamp(2rem, 5vw, 6rem);
+  --ke-exhibitions-shell-padding-start: clamp(2rem, 5vw, 4.8rem);
+  --ke-exhibitions-shell-padding-end: 6rem;
+  --ke-exhibitions-controls-layer: var(--ke-layer-sticky);
+  --ke-exhibitions-controls-min-height: 76px;
+  --ke-exhibitions-summary-item-min-width: 118px;
+  --ke-exhibitions-row-min-height: 132px;
+  --ke-exhibitions-timeline-gutter: 22px;
+  --ke-exhibitions-timeline-line-width: 2px;
+  --ke-exhibitions-row-radius: 8px;
+  --ke-exhibitions-row-halo-radius: 18px;
+  --ke-color-exhibitions-category-selected-border: #697078;
+  --ke-color-exhibitions-category-selected-surface: #24272a;
+  --ke-color-exhibitions-keyboard-help-border: #3c4247;
+  --ke-color-exhibitions-keyboard-help-start: #15181a;
+  --ke-color-exhibitions-keyboard-help-end: #111315;
+  --ke-color-exhibitions-action-border: #52585d;
+  --ke-color-exhibitions-action-hover-surface: #131619;
+  --ke-color-exhibitions-action-underline: rgba(168, 173, 178, 0.35);
+  --ke-color-exhibitions-timeline-mid: #626a70;
+  --ke-color-exhibitions-timeline-end: #4d555b;
+  --ke-color-exhibitions-row-start: rgba(20, 23, 25, 0.98);
+  --ke-color-exhibitions-row-end: rgba(13, 15, 17, 0.98);
+  --ke-color-exhibitions-row-highlight: rgba(255, 255, 255, 0.34);
+  --ke-color-exhibitions-row-highlight-soft: rgba(102, 112, 121, 0.12);
+  --ke-color-exhibitions-row-highlight-brand: rgba(84, 172, 247, 0.34);
+  --ke-elevation-exhibitions-row: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 10px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.018);
+  --ke-elevation-exhibitions-row-hover: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 18px 52px rgba(0, 0, 0, 0.38), 0 0 34px rgba(84, 172, 247, 0.1), 0 0 0 1px rgba(84, 172, 247, 0.18);
+  --ke-elevation-exhibitions-row-keyboard: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 18px 52px rgba(0, 0, 0, 0.4), 0 0 34px rgba(84, 172, 247, 0.16), 0 0 0 2px rgba(84, 172, 247, 0.72);
+
+  /* FestivalsTimelineRouteComposition: warm editorial timeline. */
+  --ke-festival-page-max: 1240px;
+  --ke-festival-page-gutter: 1rem;
+  --ke-festival-page-padding-start: clamp(0.85rem, 1.7vw, 1.65rem);
+  --ke-festival-page-padding-end: clamp(5.5rem, 8vw, 7rem);
+  --ke-festival-hero-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+  --ke-festival-hero-gap: clamp(1.5rem, 3.5vw, 3.5rem);
+  --ke-festival-hero-padding: clamp(1.35rem, 2.15vw, 2rem);
+  --ke-festival-hero-radius: clamp(24px, 3vw, 36px);
+  --ke-color-festival-hero-border: rgba(121, 48, 20, 0.13);
+  --ke-color-festival-hero-glow: rgba(15, 118, 110, 0.16);
+  --ke-color-festival-hero-surface-start: #fffdf8;
+  --ke-color-festival-hero-surface-end: #f0e3d2;
+  --ke-elevation-festival-hero: 0 24px 64px rgba(72, 45, 25, 0.1);
+  --ke-color-festival-hero-orbit: rgba(165, 72, 33, 0.06);
+  --ke-festival-hero-orbit-size: 27rem;
+  --ke-festival-hero-orbit-border: 4.5rem;
+  --ke-festival-eyebrow-size: 0.68rem;
+  --ke-festival-eyebrow-weight: var(--ke-type-label-strong-weight);
+  --ke-festival-eyebrow-letter: 0.12em;
+  --ke-festival-heading-size: clamp(2.4rem, 3.25vw, 3.6rem);
+  --ke-festival-heading-weight: var(--ke-type-h4-weight);
+  --ke-festival-heading-line: 0.94;
+  --ke-festival-heading-letter: -0.055em;
+  --ke-festival-copy-size: clamp(0.88rem, 1.05vw, 0.98rem);
+  --ke-festival-copy-line: 1.42;
+  --ke-color-festival-hairline: rgba(121, 48, 20, 0.12);
+  --ke-color-festival-hairline-strong: rgba(121, 48, 20, 0.18);
+  --ke-color-festival-surface-translucent: rgba(255, 253, 248, 0.76);
+  --ke-color-festival-surface-raised: rgba(255, 253, 248, 0.97);
+  --ke-festival-month-nav-radius: var(--ke-shape-radius-pill);
+  --ke-elevation-festival-month-nav: 0 10px 28px rgba(72, 45, 25, 0.1);
+  --ke-festival-guide-radius: 18px;
+  --ke-elevation-festival-guide: 0 12px 34px rgba(72, 45, 25, 0.07);
+  --ke-festival-guide-icon-container-size: 1.9rem;
+  --ke-festival-guide-icon-size: var(--ke-icon-size-control);
+  --ke-color-festival-guide-icon-surface: rgba(15, 118, 110, 0.09);
+  --ke-color-festival-guide-icon: #0f766e;
+  --ke-color-festival-guide-like-surface: rgba(165, 72, 33, 0.1);
+  --ke-festival-live-layer: var(--ke-layer-header);
+  --ke-festival-live-radius: 12px;
+  --ke-elevation-festival-live: 0 14px 40px rgba(36, 24, 16, 0.2);
+  --ke-festival-month-rail-width: 132px;
+  --ke-festival-month-marker-size: 0.82rem;
+  --ke-festival-category-container-size: 28px;
+  --ke-festival-category-asset-size: 21px;
+  --ke-festival-row-gap: clamp(0.62rem, 1vw, 0.88rem);
+  --ke-color-festival-card-border: rgba(57, 39, 27, 0.08);
+  --ke-color-festival-card-border-hover: rgba(57, 39, 27, 0.16);
+  --ke-color-festival-card-surface: #31261f;
+  --ke-elevation-festival-card: 0 5px 16px rgba(52, 32, 18, 0.12);
+  --ke-elevation-festival-card-hover: 0 7px 20px rgba(52, 32, 18, 0.16);
+  --ke-festival-card-radius: clamp(8px, 0.78vw, 11px);
+  --ke-festival-like-target-min: var(--ke-size-touch-target);
+  --ke-festival-like-icon-size: var(--ke-icon-size-control);
+  --ke-color-festival-like-line: rgba(255, 255, 255, 0.34);
+  --ke-color-festival-like-line-hover: rgba(255, 255, 255, 0.72);
+  --ke-color-festival-like-line-selected: rgba(255, 255, 255, 0.86);
+  --ke-color-festival-like-surface: rgba(18, 14, 12, 0.58);
+  --ke-color-festival-like-surface-hover: rgba(18, 14, 12, 0.76);
+  --ke-elevation-festival-like: 0 3px 12px rgba(0, 0, 0, 0.22);
+  --ke-color-festival-card-caption: rgba(255, 255, 255, 0.94);
+  --ke-color-festival-card-theme-surface: rgba(15, 15, 15, 0.66);
+  --ke-color-festival-card-theme-text: rgba(255, 255, 255, 0.96);
+  --ke-color-festival-status-confirmed-surface: #e8f5e9;
+  --ke-color-festival-status-confirmed-text: #24743b;
+  --ke-color-festival-status-pending-surface: #fff1bd;
+  --ke-color-festival-status-pending-text: #76540a;
+  --ke-elevation-festival-status: 0 2px 7px rgba(34, 20, 12, 0.12);
+  --ke-elevation-festival-date: 0 2px 7px rgba(34, 20, 12, 0.18);
+  --ke-elevation-festival-caption-copy: 0 1px 8px rgba(0, 0, 0, 0.36);
+  --ke-elevation-festival-caption-heading: 0 2px 14px rgba(0, 0, 0, 0.4);
+  --ke-festival-motion-fast: 160ms ease;
+
+  /* InterestClubDetailRouteComposition: exact current warm/mint detail slice. */
+  --ke-club-detail-gap: var(--ke-space-lg);
+  --ke-club-detail-hero-heading-max: 19ch;
+  --ke-club-detail-hero-heading-size: clamp(2.2rem, 6vw, 4.8rem);
+  --ke-club-detail-hero-heading-line: 0.98;
+  --ke-color-club-detail-hero-start: #fffdf8;
+  --ke-color-club-detail-hero-end: rgba(215, 240, 236, 0.7);
+  --ke-club-detail-facts-columns: repeat(2, minmax(0, 1fr));
+  --ke-club-detail-facts-gap: 0.65rem;
+  --ke-club-detail-facts-margin-top: 1.3rem;
+  --ke-club-detail-fact-padding: 0.8rem;
+  --ke-club-detail-fact-radius: var(--ke-space-lg);
+  --ke-color-club-detail-fact-border: rgba(121, 48, 20, 0.11);
+  --ke-color-club-detail-fact-surface: rgba(255, 255, 255, 0.72);
+  --ke-club-detail-term-size: 0.84rem;
+  --ke-club-detail-value-weight: var(--ke-type-label-strong-weight);
+  --ke-club-detail-meeting-gap: 0.7rem;
+  --ke-club-detail-meeting-columns: minmax(7rem, 10rem) minmax(0, 1fr);
+  --ke-club-detail-meeting-column-gap: var(--ke-space-lg);
+  --ke-club-detail-meeting-padding-block: var(--ke-space-lg);
+  --ke-color-club-detail-meeting-border: rgba(121, 48, 20, 0.12);
+  --ke-club-detail-meeting-title-size: 1.2rem;
+  --ke-club-detail-action-min: var(--ke-size-touch-target);
+  --ke-club-detail-back-icon-size: var(--ke-icon-size-inline);
+  --ke-club-detail-empty-padding: var(--ke-space-lg);
+  --ke-club-detail-empty-radius: 18px;
+  --ke-color-club-detail-empty-surface: #fff8ed;
+  --ke-club-detail-note-padding-block: var(--ke-space-lg);
+  --ke-club-detail-note-padding-inline: 1.15rem;
+  --ke-club-detail-note-border: var(--ke-shape-border-ring);
+  --ke-club-detail-note-radius: 0 var(--ke-space-lg) var(--ke-space-lg) 0;
+  --ke-color-club-detail-note-border: var(--ke-color-action-accent);
+  --ke-color-club-detail-note-surface: rgba(215, 240, 236, 0.58);
+
+  /* Retained distinctions:
+   * - exhibitions remains a complete dark product language;
+   * - festival green/yellow pills communicate publication state, not form state;
+   * - festival category masks are editorial identity assets, not UI-action icons;
+   * - club mint surfaces identify the club route and are not generic info cards.
+   */
+}
