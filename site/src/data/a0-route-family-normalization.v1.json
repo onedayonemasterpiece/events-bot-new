@@ -1,13 +1,15 @@
 {
   "schema_version": "a0-route-family-normalization-v1",
-  "matrix_version": "1.1.0",
+  "matrix_version": "1.2.0",
   "contract_version": "1.9.0",
   "source_contract": "site/src/data/design-system-production-surface-contract.v1.json",
   "current_refs": {
     "accepted_combined_precursor": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
     "f0_dependency": "de92dabd4551e117ca1af1be7915ff223321cc32",
-    "m0_dependency": "4c83fc7769b1dec2d92469373e3b15154af437f4",
-    "a0_checkpoint_before_matrix_update": "f9217d66711731a911543314d17e35fed9824a2a"
+    "m0_dependency": "c808c75dd975a9851e148ccf993c32787d2b6886",
+    "m0_previous_checkpoint": "4c83fc7769b1dec2d92469373e3b15154af437f4",
+    "a0_semantic_source_checkpoint": "ec926580fa2cc003318006f4c1d671fc459ea26c",
+    "current_ref_overlay": "onedayonemasterpiece/lovekgd-design-system/docs/launch-normalization/a0-current-ref-overlay.v1.json@efad360ed112ed1ef20a8015285a3f804c8bf6d0"
   },
   "grouped_family_scope": {
     "denominator": 9,
@@ -42,9 +44,12 @@
   "downstream_contracts": {
     "local_pointer": "site/src/data/a0-downstream-contract.v1.json",
     "thin_s": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/a0-thin-s-bindings.v1.json@a800f619b66cdf713e94f234382481bb8621dd22",
+    "thin_s_focus_extension": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/a0-focus-route-bindings.v1.json@410c643cb24a529f211d7d88e609fb61f830cacf",
     "penpot_ready": "onedayonemasterpiece/lovekgd-design-system/penpot/candidate/a0-route-instance-spec.v1.json@3d4e148b74594f6d0dda3adda0649441dc17bde7",
+    "penpot_focus_extension": "onedayonemasterpiece/lovekgd-design-system/penpot/candidate/a0-focus-route-instance-spec.v1.json@0c9f781a524b05f99d275ae3cd77b06b146f32e5",
     "v0_acceptance": "onedayonemasterpiece/lovekgd-design-system/catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json@952315ce0a4a5312e3f34c5afc7e8b05066c2147",
-    "integration_rollback": "onedayonemasterpiece/lovekgd-design-system/docs/launch-normalization/a0-source-integration-and-rollback.v1.json@d0509f97e04fda3f24b026dd767262d2098f5463"
+    "integration_rollback": "onedayonemasterpiece/lovekgd-design-system/docs/launch-normalization/a0-source-integration-and-rollback.v1.json@d0509f97e04fda3f24b026dd767262d2098f5463",
+    "current_ref_overlay": "onedayonemasterpiece/lovekgd-design-system/docs/launch-normalization/a0-current-ref-overlay.v1.json@efad360ed112ed1ef20a8015285a3f804c8bf6d0"
   },
   "families": [
     {
@@ -97,6 +102,10 @@
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/priglashenie/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupFeedback.astro",
         "site/src/components/FocusGroupLabPanel.astro",
