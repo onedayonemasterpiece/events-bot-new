@@ -5,6 +5,7 @@ import type { PreviewEvent } from '../lib/types';
 import { displayDate, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOccurrencePresentation, isCalendarEligible, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { relatedCardPrimaryImageAsset, resolveMobileEventCardMedia, resolveRelatedCardMediaTreatment } from '../lib/relatedCardLayout.mjs';
+import './media-frame.css';
 
 type CardVariant = 'overlay-controls' | 'split-actions';
 export type EventCardRootAttributeValue = string | number | boolean | null | undefined;
@@ -110,9 +111,6 @@ const cardCrop = relatedMediaDecision || (documentMedia ? {
 const cardObjectPosition = cardCrop.fit === 'cover'
   ? normalizeObjectPosition(cardCrop.objectPosition)
   : null;
-const cardImageStyle = desktopRelatedCrop || mobileFlowMedia || !documentMedia
-  ? [`object-fit:${cardCrop.fit}`, `object-position:${cardObjectPosition || '50% 50%'}`].join(';')
-  : undefined;
 const focalY = event.focal_point ? Math.max(0, Math.min(1, event.focal_point.y)) : 0.5;
 const focalOffset = Math.max(-12, Math.min(12, (0.5 - focalY) * 24));
 const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
@@ -138,6 +136,13 @@ const mediaFrameKind = !imageUrl
       ? 'document'
       : 'unknown';
 const mediaFrameFit = imageUrl ? cardCrop.fit : 'contain';
+const mediaFrameRole = imageMediaRole || 'unknown_document';
+const mediaFrameFill = desktopRelatedCrop || mobileFlowMedia || !documentMedia;
+const mediaFrameCropPermission = mediaFrameFit === 'contain'
+  ? 'forbidden'
+  : cardCrop.mediaTreatment === 'document-safe-cover'
+    ? 'reviewed-bounded'
+    : 'allowed';
 const mediaFrameRatio = desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio;
 const mediaFrameObjectPosition = cardObjectPosition || '50% 50%';
 const mediaFrameStyle = [
@@ -223,15 +228,22 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
       <span
         class={mediaShellClass}
         data-card-media-shell
-        data-media-role={imageMediaRole}
+        data-media-role={mediaFrameRole}
         data-media-frame
         data-media-frame-contract="v1"
+        data-media-frame-style-owner="media-frame.css"
         data-media-frame-surface="event-card"
+        data-media-frame-role={mediaFrameRole}
         data-media-frame-kind={mediaFrameKind}
         data-media-frame-fit={mediaFrameFit}
+        data-media-frame-crop-permission={mediaFrameCropPermission}
         data-media-frame-ratio={fixedLayoutMetric(mediaFrameRatio, 5)}
         data-media-frame-object-position={mediaFrameObjectPosition}
+        data-media-frame-focal-position={mediaFrameObjectPosition}
         data-media-frame-crop-reason={cardCrop.cropReason}
+        data-media-frame-clip="frame"
+        data-media-frame-radius="surface"
+        data-media-frame-fill={mediaFrameFill ? 'true' : undefined}
         data-media-frame-source-width={primaryImageAsset?.width}
         data-media-frame-source-height={primaryImageAsset?.height}
         data-media-frame-loading="lazy"
@@ -258,7 +270,6 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
           data-protected-crop-fit={cardCrop.fit}
           data-protected-crop-reason={cardCrop.cropReason}
           data-card-media-review={primaryImageAsset?.listing_crop_evidence}
-          style={cardImageStyle}
           onload={imageLoadHandler}
           onerror={imageErrorHandler}
         />
@@ -269,12 +280,19 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
         data-card-media-shell
         data-media-frame
         data-media-frame-contract="v1"
+        data-media-frame-style-owner="media-frame.css"
         data-media-frame-surface="event-card"
+        data-media-frame-role="fallback"
         data-media-frame-kind="fallback"
         data-media-frame-fit="contain"
+        data-media-frame-crop-permission="forbidden"
         data-media-frame-ratio={fixedLayoutMetric(mediaFrameRatio, 5)}
         data-media-frame-object-position="50% 50%"
+        data-media-frame-focal-position="50% 50%"
         data-media-frame-crop-reason="event_card_fallback"
+        data-media-frame-clip="frame"
+        data-media-frame-radius="surface"
+        data-media-frame-fill="true"
         data-media-frame-loading="lazy"
         data-media-frame-interaction-owner="caller"
         data-media-frame-fallback
