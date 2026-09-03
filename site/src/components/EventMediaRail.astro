@@ -176,9 +176,10 @@ const hiddenCount = variant === 'gallery-thumbnails'
 const shouldRender = variant === 'gallery-thumbnails'
   ? normalizedItems.length > 1
   : normalizedItems.length > 0;
-const rootState = variant === 'gallery-thumbnails'
-  ? (hiddenCount > 0 ? 'overflow' : 'complete')
-  : 'responsive';
+const usesResolvedItems = variant !== 'gallery-thumbnails';
+const rootState = usesResolvedItems
+  ? 'responsive-pending'
+  : hiddenCount > 0 ? 'overflow' : 'complete';
 const resolvedAriaLabel = ariaLabel || (
   variant === 'hero-selector'
     ? 'Выбрать изображение'
@@ -189,13 +190,12 @@ const resolvedAriaLabel = ariaLabel || (
 const rootClass = [
   'event-media-rail',
   `event-media-rail--${variant}`,
-  variant !== 'gallery-thumbnails' && 'desktop-prototype__media-rail',
+  usesResolvedItems && 'desktop-prototype__media-rail',
   variant === 'hero-selector' && 'desktop-prototype__media-rail--hero',
   variant === 'poster-strip' && 'desktop-prototype__media-rail--poster',
   className,
 ].filter(Boolean).join(' ');
 const transparentRailPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-const usesResolvedItems = variant !== 'gallery-thumbnails';
 const rootStyle = variant === 'gallery-thumbnails'
   ? `--rail-count:${visibleItems.length + (hiddenCount > 0 ? 1 : 0)}`
   : undefined;
@@ -213,9 +213,10 @@ const rootStyle = variant === 'gallery-thumbnails'
     data-ds-variant={variant}
     data-ds-state={rootState}
     data-event-media-rail-total={normalizedItems.length}
-    data-event-media-rail-visible={visibleItems.length}
-    data-event-media-rail-hidden={hiddenCount}
+    data-event-media-rail-visible={usesResolvedItems ? 'pending' : visibleItems.length}
+    data-event-media-rail-hidden={usesResolvedItems ? 'pending' : hiddenCount}
     data-event-media-rail-source-owner={usesResolvedItems ? 'caller' : 'EventMediaRail'}
+    data-event-media-rail-thumbnail-contract={variant === 'gallery-thumbnails' ? '92px' : undefined}
     data-hero-rail={variant === 'hero-selector' ? '' : undefined}
     data-responsive-rail={variant === 'hero-selector' ? '' : undefined}
     data-split-media-rail={variant === 'poster-strip' ? '' : undefined}
@@ -230,14 +231,15 @@ const rootStyle = variant === 'gallery-thumbnails'
       const imageSizes = variant === 'hero-selector'
         ? '(min-width:1024px) 96px, 1px'
         : variant === 'poster-strip'
-          ? `${Math.round(item.slotWidth || 116)}px`
+          ? `(min-width:1024px) ${Math.round(item.slotWidth || 116)}px, 1px`
           : '(min-width: 1024px) 92px, 1px';
       const frameStyle = sourceRatio
         ? `--media-frame-source-ratio:${sourceRatio};--media-frame-object-position:${item.objectPosition}`
         : `--media-frame-object-position:${item.objectPosition}`;
       const itemStyle = variant === 'poster-strip' && item.railRatio
-        ? `--rail-ratio:${item.railRatio}`
+        ? `--rail-ratio:${item.railRatio.toFixed(4)};`
         : undefined;
+      const viewerStart = String(item.sourceIndex ?? `gallery-${item.galleryIndex}`);
       return (
         <button
           type="button"
@@ -262,7 +264,8 @@ const rootStyle = variant === 'gallery-thumbnails'
           data-image-text-mode={usesResolvedItems ? item.imageTextMode : undefined}
           data-media-role={usesResolvedItems ? item.mediaRole : undefined}
           data-source-index={usesResolvedItems ? item.sourceIndex : undefined}
-          data-efficient-viewer-start={variant === 'poster-strip' && splitPortraitViewer ? item.galleryIndex : undefined}
+          data-efficient-viewer-open={variant === 'poster-strip' && splitPortraitViewer ? '' : undefined}
+          data-efficient-viewer-start={variant === 'poster-strip' && splitPortraitViewer ? viewerStart : undefined}
           data-hero-gallery-open={variant === 'poster-strip' && splitPortraitViewer ? undefined : galleryId}
           data-hero-gallery-index={item.galleryIndex}
           style={itemStyle}
@@ -380,6 +383,28 @@ const rootStyle = variant === 'gallery-thumbnails'
   </nav>
 )}
 
+<script>
+  function bindEventMediaRailDiagnostics(root = document) {
+    root.querySelectorAll('[data-event-media-rail-contract="resolved-items-v1"]').forEach((rail) => {
+      if (!(rail instanceof HTMLElement) || rail.dataset.eventMediaRailDiagnosticsBound === 'true') return;
+      rail.dataset.eventMediaRailDiagnosticsBound = 'true';
+      const sync = () => {
+        const visible = rail.dataset.railVisibleCount;
+        const hidden = rail.dataset.railHiddenCount;
+        if (visible !== undefined) rail.dataset.eventMediaRailVisible = visible;
+        if (hidden !== undefined) rail.dataset.eventMediaRailHidden = hidden;
+        if (hidden !== undefined) rail.dataset.dsState = Number(hidden) > 0 ? 'overflow' : 'complete';
+      };
+      sync();
+      new MutationObserver(sync).observe(rail, {
+        attributes:true,
+        attributeFilter:['data-rail-visible-count', 'data-rail-hidden-count', 'data-rail-complete'],
+      });
+    });
+  }
+  bindEventMediaRailDiagnostics();
+</script>
+
 <style>
   .event-media-rail {
     min-width: 0;
@@ -398,11 +423,7 @@ const rootStyle = variant === 'gallery-thumbnails'
     height: 100%;
   }
 
-  .event-media-rail__frame[data-media-frame-fit="contain"] {
-    background: #181411;
-  }
-
-  .event-media-rail--gallery-thumbnails {
+  .event-media-rail.event-media-rail--gallery-thumbnails {
     display: grid;
     grid-template-columns: repeat(var(--rail-count, 1), minmax(0, 1fr));
     gap: 0.42rem;
@@ -430,33 +451,36 @@ const rootStyle = variant === 'gallery-thumbnails'
     display: grid;
     place-content: center;
     gap: 0.05rem;
-    background: #fffaf2;
-    color: #241c17;
+    background: var(--ke-color-media-rail-more-surface, #fffaf2);
+    color: var(--ke-color-media-rail-more-text, #241c17);
   }
 
   .event-media-rail--gallery-thumbnails > .event-media-rail__more strong {
-    font-size: 1rem;
+    font-size: var(--ke-media-rail-more-count-size, 1rem);
     line-height: 1;
   }
 
   .event-media-rail--gallery-thumbnails > .event-media-rail__more span {
-    font-size: 0.66rem;
+    font-size: var(--ke-media-rail-more-label-size, 0.66rem);
     font-weight: 850;
   }
 
-  .event-media-rail--hero-selector,
-  .event-media-rail--poster-strip {
+  .event-media-rail.event-media-rail--hero-selector,
+  .event-media-rail.event-media-rail--poster-strip {
     display: flex;
+    grid-template-columns: none;
     flex-wrap: nowrap;
     align-items: stretch;
     gap: 0.35rem;
     padding: 0.45rem;
     overflow: hidden;
+    border: 0;
     border-radius: 16px;
     background: rgba(31,27,24,0.9);
+    box-shadow: none;
   }
 
-  .event-media-rail--hero-selector {
+  .event-media-rail.event-media-rail--hero-selector {
     justify-content: flex-end;
   }
 
@@ -485,8 +509,8 @@ const rootStyle = variant === 'gallery-thumbnails'
     place-content: center;
     gap: 0.05rem;
     border: 1px solid rgba(255,255,255,0.2);
-    background: #fffaf2;
-    color: #241c17;
+    background: var(--ke-color-media-rail-more-surface, #fffaf2);
+    color: var(--ke-color-media-rail-more-text, #241c17);
     line-height: 1;
   }
 
@@ -503,7 +527,7 @@ const rootStyle = variant === 'gallery-thumbnails'
   }
 
   .event-media-rail--hero-selector > .event-media-rail__more strong {
-    font-size: 1.05rem;
+    font-size: var(--ke-media-rail-more-count-size, 1.05rem);
   }
 
   .event-media-rail--hero-selector > .event-media-rail__more span,
@@ -512,13 +536,14 @@ const rootStyle = variant === 'gallery-thumbnails'
     padding: 0;
     background: transparent;
     color: #6f6157;
-    font-size: 0.58rem;
+    font-size: var(--ke-media-rail-more-label-size, 0.58rem);
   }
 
-  .event-media-rail--poster-strip {
+  .event-media-rail.event-media-rail--poster-strip {
     --split-rail-thumb-height: clamp(104px,13svh,148px);
     width: 100%;
     min-height: calc(var(--split-rail-thumb-height) + 20px);
+    justify-content: flex-start;
     gap: 0.5rem;
     padding: 0.65rem;
     border-radius: 0;
