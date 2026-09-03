@@ -623,3 +623,25 @@ census — `19/19`. Это только source-level convergence: V0 browser cre
 Penpot materialization не заявляются. Новый exact SHA замораживается только
 после N0 integration и полного test/build checkpoint; затем тот же canonical
 Kaggle runner публикует новый full `real/all` immutable preview.
+
+## 19. Public successor smoke and focus badge registry closure (2026-09-03)
+
+Для source `7f4d04b7...` canonical Kaggle rail опубликовал immutable full
+`real/all` preview
+`/preview-real-7f4d04b7-normalized-20260903-v1/__preview/`. Публичные
+изолированные матрицы прошли `176/176` и `77/77`: HTTP, document overflow,
+console/request failures, MediaFrame fit/escape, nested interactive и targets
+ниже 44px не обнаружены на их 11 route-наборах.
+
+Дополнительный route-identity probe включил standalone focus routes, которых
+не было в этих 11 routes, и воспроизвёл overflow коллекции на 375px. Причина
+не относится к июльской композиции: недавняя нормализация `FocusLabBadge`
+заменила локальные размеры на roles из `surface-foundations.css`, но consumer
+импортировал только `product-contour-foundations.css`. Неразрешённые размеры
+оставляли intrinsic 800px SVG владельцем ширины.
+
+Механическое исправление сохраняет badge anatomy и palette: consumer теперь
+загружает также canonical `component-foundations.css`, который является
+публичным entry point для `surface-foundations.css`. Source regression требует
+оба registry imports; размер success icon в invite intake по-прежнему
+принадлежит canonical `feature` role, а не локальному selector.

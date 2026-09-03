@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: `FocusLabBadge` now loads the canonical component/surface token
+  registry alongside the product contour. This resolves an undefined-token
+  regression introduced during normalization that let the lab-flask SVG use
+  its 800px intrinsic width on the standalone focus collection route; badge
+  anatomy, palette and the July presentation composition are unchanged.
+
 - Changed: integrated the accepted F0 route-theme and interest-club residual
   foundations plus the current M0 source/downstream ancestry. Exhibitions,
   festivals, interest-club detail and `InterestClubCard` now consume their
