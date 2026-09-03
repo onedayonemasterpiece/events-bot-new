@@ -111,6 +111,21 @@ test('AdaptiveEventCardGrid flex lines fill complete and named final rows withou
   assert.doesNotMatch(adaptive, /grid-template-columns:\s*repeat/u);
 });
 
+test('packed grid keeps row geometry and layering but delegates MediaFrame anatomy', async () => {
+  const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
+  const shell = /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media-shell\) \{([\s\S]*?)\n  \}/u.exec(adaptive)?.[1] || '';
+  const image = /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media\) \{([\s\S]*?)\n  \}/u.exec(adaptive)?.[1] || '';
+
+  assert.match(shell, /height: auto !important/u);
+  assert.match(shell, /aspect-ratio: var\(--lab-row-media-ratio\) !important/u);
+  assert.match(shell, /background: #d2c5b7/u);
+  assert.doesNotMatch(shell, /\b(?:position|isolation|width|overflow)\s*:/u);
+  assert.match(image, /position: absolute !important/u);
+  assert.match(image, /z-index: 2/u);
+  assert.match(image, /inset: 0/u);
+  assert.doesNotMatch(image, /\b(?:width|height)\s*:/u);
+});
+
 test('normalized component families and MediaFrame diagnostics retain exact versions, roles and fits', async () => {
   const [adaptive, card, listing, rail, mediaFrame] = await Promise.all([
     read('src/components/AdaptiveEventCardGrid.astro'),
