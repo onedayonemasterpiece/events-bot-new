@@ -38,25 +38,72 @@ Actual routes:
 `WeekendListingSurface`. Разные композиции сохраняются, общие families
 централизуются.
 
-## 2. Порядок выполнения
+## 2. Continuous execution, не numbered micro-waves
 
-N0 сначала восстанавливает existing data export/build и создаёт technical
-fresh-data baseline. Параллельно F0/M0/A0 уже могут нормализовать current source.
+N0/F0/M0/A0 назначаются на полный owned product contour. Wave, branch, commit и
+`[RESULT]` — checkpoints, но не команда завершить turn.
 
 ```text
-fresh production snapshot + technical build baseline
-+ parallel F0/M0/A0 source normalization
-→ first integration wave
-→ V0 actual DOM/computed-style audit through my-browser-bridge
-→ critical drift repair
+fresh-read current state
+→ recompute unresolved role backlog
+→ select highest-value safe reversible item
+→ analyze/decide/implement/review
+→ publish checkpoint when useful
+→ fresh-read again
+→ continue next item
+→ end only when independent owned backlog is exhausted
+```
+
+Старое `finish with [RESULT]` означает «не возвращай plan-only status». Оно не
+означает `после result остановись`.
+
+Per-Wave owner resume запрещён. Допустимый standby требует одновременно:
+
+- independent owned backlog равен нулю;
+- exact resume trigger записан;
+- дальнейшая работа зависит от физически отсутствующего preview, cross-owner
+  API/path decision, integration output или V0 DRIFT.
+
+Нельзя завершаться на dispatch, branch/worktree creation, одном commit,
+rehearsal, baseline-only decision или ожидании dependency при наличии другой
+owned работы.
+
+## 3. Порядок выполнения
+
+```text
+N0: candidate review → same-data baseline → conditional promotion
+    → fresh generation → reachable preview → V0 trigger
++
+F0/M0/A0: saturation всех current owned consumers/invariants
++
+V0: complete harness → actual browser matrix when URL exists
++
+R0: persistent ready mechanical backlog
 → first owner-facing normalized /<buildId>/__preview/
-→ repeat waves
 ```
 
 Technical baseline нужен для before/after и не обязан быть owner checkpoint.
 Family не завершена без fresh-real-data build и V0 browser verdict.
 
-## 3. Existing generation paths
+N0 не дробит critical path на обязательные owner wake-ups, если acceptance
+criteria можно определить заранее. Он задаёт R0 conditional end-to-end branch:
+
+```text
+IF exact candidate build/tests/same-data baseline PASS
+  THEN promote exact candidate
+  AND run fresh-production generation
+  AND publish reachable preview
+ELSE
+  no promotion/deploy
+  continue safe diagnosis
+  publish factual defect
+```
+
+R0 после каждого result fresh-read-ит #621/current refs и продолжает следующую
+ready safe mechanical task. При ожидаемом N0 trigger R0 использует bounded watch
+60–120 seconds, maximum 30 minutes, а не немедленный exit.
+
+## 4. Existing generation paths
 
 Reuse, do not replace:
 
@@ -76,9 +123,13 @@ npm run check:secret-candidate
 ```
 
 Checked-in production catalogue исторический; fresh export обязателен. Нельзя
-считать новую документацию восстановлением generation.
+считать документацию восстановлением generation.
 
-## 4. Owner review
+N0 не читает runtime SQLite. Build/export output должен возвращать buildId и
+output identity. Read-only SQLite fallback допустим только native R0, если
+конкретная generation task доказывает его необходимость.
+
+## 5. Owner review
 
 Existing entry point:
 
@@ -86,10 +137,10 @@ Existing entry point:
 /<buildId>/__preview/
 ```
 
-Первый owner-facing link должен по возможности уже содержать первую
-normalization wave и V0 verdict. Владелец открывает реальные top-level pages и
-проверяет framing, spacing, typography, radii, colours, icons, adaptive rows,
-responsive composition и видимые anomalies.
+Первый owner-facing link содержит нормализованный candidate и V0 verdict.
+Владелец открывает реальные top-level pages и проверяет framing, spacing,
+typography, radii, colours, icons, adaptive rows, responsive composition и
+видимые anomalies.
 
 Запрещено:
 
@@ -99,7 +150,7 @@ responsive composition и видимые anomalies.
 
 `/lab/design-system/` остаётся внутренним regression harness.
 
-## 5. Единый component root
+## 6. Единый component root
 
 Визуально и поведенчески одинаковая сущность обязана иметь один canonical Astro
 root или variant family root. Разница допускается только как именованный
@@ -124,7 +175,7 @@ data-ds-state  # when applicable
 V0 сравнивает normalized DOM anatomy и invariant computed styles между actual
 consumers. Одинаковые pixels при разных roots не являются PASS.
 
-## 6. Foundations, colors, icons
+## 7. Foundations, colors, icons
 
 F0 нормализует:
 
@@ -134,19 +185,18 @@ F0 нормализует:
 - radii/borders/elevation/layering;
 - semantic color tokens;
 - canonical SVG/brand/medallions;
-- ровно четыре semantic icon-size roles.
+- ровно четыре semantic icon-size roles;
+- duplicate style-owner closure и доказанные compatibility boundaries.
 
-Все видимые UI colors должны происходить из token/semantic alias. Exact
-duplicates объединяются; near-duplicates кластеризуются и объединяются при
-одинаковом semantic role. Сохранённая близкая пара требует explicit
-semantic/contrast reason. Raw literals остаются только в token registry, media
-data и documented technical exception.
+Все видимые UI colors происходят из token/semantic alias. Exact duplicates
+объединяются; near-duplicates с одним semantic role объединяются. Сохранённая
+близкая пара требует explicit semantic/contrast reason. Raw literals остаются
+только в token registry, media data и documented technical exception.
 
 Concrete icon width/height хранится только в central tokens/utilities. Local
-component dimensions запрещены. Изменение role value должно менять всех
-consumers.
+component dimensions запрещены.
 
-## 7. MediaFrame/framing
+## 8. MediaFrame/framing
 
 Обязательные donors:
 
@@ -173,42 +223,47 @@ responsive resource selection
 может менять framing policy. Existing optimizer/contract расширяется; второй
 параллельный algorithm запрещён без доказанной невозможности reuse.
 
-## 8. AdaptiveEventCardGrid
+## 9. AdaptiveEventCardGrid
 
-Текущий optimized row path реализован не во всех multi-card surfaces. Простые
-`.cards-grid` используются, в частности, в free/search/unusual/gastronomy и
-preview surfaces. Они входят в census.
+Все применимые multi-card surfaces переходят на один family root либо получают
+доказанную intentional composition reason.
 
-Целевой общий family root:
+Contract:
 
-- занимает available width `100%`;
-- выбирает columns/card widths по container width и named density variant;
-- не оставляет phantom empty column;
-- final remainder использует явный one-/two-/three-up variant и заполняет row;
-- media и total card heights согласованы внутри строки;
+- available width `100%`;
+- named density/responsive strategy;
+- no phantom column;
+- named final remainder;
+- cards fill row;
+- equal media/total heights внутри строки;
 - framing остаётся у MediaFrame;
-- compact desktop/mobile transitions не дают overflow;
-- browser gate измеряет row/card bounds, gaps, occupancy, media ratio и
-  equal-height delta.
+- no compact/mobile overflow;
+- source/focus order сохраняется.
 
-`relatedCardLayout.mjs` и `OptimizedEventCardGrid.astro` — исходные donors.
-Новый `AdaptiveEventCardGrid` должен быть эволюцией/нормализацией существующего
-решения, а не второй независимой сеткой.
+`relatedCardLayout.mjs` и `OptimizedEventCardGrid.astro` — donors. Новый
+`AdaptiveEventCardGrid` является эволюцией существующего решения, не второй
+сеткой.
 
-## 9. Actual consumer migration
+## 10. Actual consumer migration
 
 A0 владеет shell, listings и routes. Он:
 
 - сохраняет различие DateListingSurface/WeekendListingSurface;
 - мигрирует actual pages на canonical roots;
+- применяет F0 tokens/icon roles;
+- применяет explicit M0 grid/media APIs;
 - удаляет local forks и internal overrides;
 - не копирует family markup в pages;
 - не создаёт новый route model.
 
-## 10. Browser/DOM audit
+После каждого consumer checkpoint A0 повторно строит census и продолжает
+следующий eligible consumer без отдельного owner prompt.
 
-V0 — отдельное read-only ChatGPT window с `my-browser-bridge` и GitHub.
-После каждого integrated preview проверяются минимум:
+## 11. Browser/DOM audit
+
+V0 — read-only ChatGPT window с `my-browser-bridge` и GitHub.
+
+Routes:
 
 ```text
 /
@@ -223,24 +278,24 @@ V0 — отдельное read-only ChatGPT window с `my-browser-bridge` и Git
 /sobytiya/<real-slug>/
 ```
 
-Viewport classes: desktop wide, desktop compact, mobile 390–430.
+Viewport classes: desktop wide, desktop compact, mobile 390–430 и required
+breakpoint seams.
 
 V0 проверяет component markers/anatomy, computed typography/spacing/colors/
 radii/borders/icon sizes, image bounds/object-fit/overflow/clip, adaptive row
 occupancy/equal heights, responsive transitions и horizontal overflow.
 
-Verdicts:
-
 ```text
 PASS
 DRIFT        → F0/M0/A0 immediately
 PRODUCT_GAP  → backlog after normalization gate
-BLOCKER
+BLOCKER      → only after all independent work and fallbacks are exhausted
 ```
 
-Source declaration или test без factual browser evidence не закрывает drift.
+После complete harness отсутствие preview допускает standby. После exact
+reachable URL один run покрывает весь browser matrix и DRIFT routing.
 
-## 11. Internal Golden A=S=P
+## 12. Internal Golden A=S=P
 
 Golden использует actual routes с frozen Friday clock:
 
@@ -257,21 +312,40 @@ review prerequisite. После завершения family thin S фиксир�
 `R0.PENPOT` создаёт native master/linked instances, V0 сравнивает Golden Astro
 и Penpot.
 
-## 12. Parallel ownership
+## 13. Parallel ownership
 
-- `N0`: generation, technical baseline, integration, status, preview, release;
-- `F0`: foundations, colors, type, spacing, four icon roles, SVG/brand;
+- `N0`: generation decision, conditional execution authority, integration,
+  status, preview, release;
+- `F0`: foundations, colors, type, spacing, four icon roles, SVG/brand,
+  duplicate style ownership;
 - `M0`: component roots, MediaFrame, EventCard/ListingEventCard,
   AdaptiveEventCardGrid;
 - `A0`: shell, listings, routes, consumer migration;
 - `V0`: my-browser-bridge audit; later Golden Penpot audit;
-- `K0`: consultant/prompt author;
-- `R0`: bounded Codex worktrees and sole Penpot writer.
+- `K0`: consultant/process repair;
+- `R0`: persistent bounded Codex execution and sole Penpot writer.
 
-Нет mandatory `MAT → QA → INTEGRATE → PUBLISH`. N0 интегрирует complete family
-waves; V0 проверяет собранный actual product.
+Нет mandatory `MAT → QA → INTEGRATE → PUBLISH`, нового orchestrator или
+per-Wave owner scheduler.
 
-## 13. ASTRO_NORMALIZATION_PASS
+## 14. Autonomous recovery
+
+Не являются terminal blocker:
+
+- missing field/heading;
+- combined `branch@sha`;
+- stale checkpoint той же программы;
+- missing formal handoff/packet;
+- recoverable ENOSPC/tooling/aged fixture;
+- dependent surface отсутствует, но другая owned работа существует.
+
+Агент выводит данные из issue/refs/repository/ownership, проверяет reversible
+scope, выбирает safest assumption и продолжает.
+
+`[BLOCKER]` допустим только при исчерпанной independent work и реальном product,
+external, writer-conflict или irreversible-risk boundary.
+
+## 15. ASTRO_NORMALIZATION_PASS
 
 Product UI-gap/change work открывается только после:
 
@@ -287,16 +361,17 @@ Product UI-gap/change work открывается только после:
 После gate можно менять palette и интерфейс. Release затронутой family требует
 обновлённый thin S и Penpot binding.
 
-## 14. Meaningful result
+## 16. Meaningful checkpoints
 
-Результат — это один из:
+Meaningful checkpoint:
 
 - technical fresh-data generation verdict;
-- normalized real-data preview link;
-- compact normalization report;
-- V0 browser PASS/DRIFT report;
+- normalized source convergence reviewed by role owner;
+- reachable normalized real-data preview;
+- V0 browser PASS/DRIFT;
 - native Penpot master + linked route board;
 - checked release candidate.
 
-Commit, test count, isolated specimen, empty Penpot page или hidden tree сами по
-себе не являются checkpoint.
+Checkpoint publication не завершает роль автоматически. Packet, dispatch,
+worktree, commit без role review, test без output, 404 route и empty Penpot page
+не являются product result.
