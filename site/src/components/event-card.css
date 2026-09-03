@@ -1,0 +1,12 @@
+/*
+ * Canonical EventCard control-size binding.
+ *
+ * Foundation tokens and visual paint remain F0-owned. EventCard owns which
+ * anatomy is an actionable target. The auxiliary negative action must consume
+ * the shared launch control minimum instead of a route-local compact override.
+ */
+[data-ds-component="EventCard"].event-card--split-actions
+  .event-card__utility-row
+  .feedback-button--negative {
+  min-height: var(--ke-control-min, 44px);
+}
