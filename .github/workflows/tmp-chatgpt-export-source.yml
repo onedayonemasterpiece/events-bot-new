@@ -14,10 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: feature/events-mcp-queue-observability-r0
           fetch-depth: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: events-bot-new-source
+          name: events-bot-new-r0-source
           path: |
             .
             !.git
