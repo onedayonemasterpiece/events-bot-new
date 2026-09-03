@@ -1,0 +1,171 @@
+{
+  "schema": "kenigevents.a0.candidate-acceptance-boundary.v1",
+  "version": "1.0.0",
+  "status": "SUCCESSOR_INCLUSION_REQUIRED",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "reviewed_refs": {
+    "candidate": "r0/ui-normalization-current-candidate-20260903",
+    "a0": "work/ui-normalization-a0-wave-3-20260903",
+    "f0": "work/ui-normalization-f0-wave-3-20260903",
+    "m0": "work/ui-normalization-m0-continuity-20260903",
+    "resolution_policy": "Resolve remote heads immediately before candidate construction."
+  },
+  "review_outcome": {
+    "branch_local_convergence_is_acceptance": false,
+    "source_binding_is_browser_acceptance": false,
+    "required_action": "Construct a successor candidate from current accepted F0 and M0 roots plus the net current A0 branch, then run the focused source packet and canonical Kaggle Review Preview."
+  },
+  "include_from_current_a0": [
+    {
+      "id": "A0-COLLECTION-CONSUMERS",
+      "paths": [
+        "site/src/components/CollectionCatalog.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/components/FreeCollectionSurface.astro",
+        "site/src/components/GastronomyCollectionSurface.astro"
+      ]
+    },
+    {
+      "id": "A0-PERSONAL-CONSUMERS",
+      "paths": [
+        "site/src/components/InterestProfile.astro",
+        "site/src/components/PersonalFeedSlot.astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/components/OptimizedEventCardGrid.astro"
+      ]
+    },
+    {
+      "id": "A0-FOCUS-AND-ARTIFACT-CONSUMERS",
+      "paths": [
+        "site/src/pages/fokus-gruppa/**",
+        "site/src/components/FocusGroup*.astro",
+        "site/src/components/FocusConnectivityDiagnostic.astro",
+        "site/src/components/FocusEgg*.astro",
+        "site/src/components/artifacts/ArtifactCollection.astro",
+        "site/src/pages/artefakty/index.astro"
+      ]
+    },
+    {
+      "id": "A0-INFORMATION-AND-CLUB-CARD-CONSUMERS",
+      "paths": [
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/components/InterestClubCard.astro"
+      ]
+    },
+    {
+      "id": "A0-POPULAR-BEHAVIOR-CORRECTION",
+      "paths": [
+        "site/src/components/listings/PopularListingSurface.astro",
+        "site/src/components/listings/ListingMobileDensitySwitch.astro",
+        "site/tests/a0-consumer-ownership.test.mjs"
+      ],
+      "required_net_effect": "Retain the current density switch, persisted selection, both target representations, keyboard/pinch behavior and anchor continuity."
+    },
+    {
+      "id": "A0-DOWNSTREAM-CONTRACTS",
+      "paths": [
+        "site/src/data/a0-route-family-normalization.v1.json",
+        "site/src/data/a0-downstream-bindings.v1.json",
+        "site/src/data/a0-r0-mechanical-batch.v1.json",
+        "site/src/data/a0-candidate-acceptance-boundary.v1.json",
+        "site/src/components/design-system/a0-media-frame-exceptions.v1.json",
+        "site/tests/a0-*.test.mjs",
+        "site/tests/optimized-grid-adapter.test.mjs",
+        "site/tests/event-hero-media-frame-exception.test.mjs",
+        "site/tests/focus-*.test.mjs",
+        "site/tests/interest-profile-normalization.test.mjs"
+      ]
+    }
+  ],
+  "must_not_select_as_final_net_effect": [
+    {
+      "historical_commit": "5e466d65bc2b71a814c26c063f90aa07709de08f",
+      "reason": "It removed the accepted user-facing Popular density model and was explicitly rejected by N0. A later restoration may remain in branch history; only the restored net tree is acceptable."
+    },
+    {
+      "pattern": "source test that asserts ListingMobileDensitySwitch, mobile-large, mobile-adaptive or ke_listing_density_v2 are obsolete",
+      "reason": "The assertion contradicts the accepted product behavior."
+    },
+    {
+      "pattern": "pre-M0 OptimizedEventCardGrid implementation that imports EventCard or packRelatedCardRows and owns grid/media CSS",
+      "reason": "The accepted form is a thin AdaptiveEventCardGrid compatibility adapter."
+    },
+    {
+      "pattern": "consumer-local object-fit/object-position or handwritten rail anatomy after the matching R0 mechanical unit is applied",
+      "reason": "MediaFrame and EventMediaRail are the accepted M0 owners."
+    }
+  ],
+  "integration_order": [
+    {
+      "step": 1,
+      "action": "Resolve current candidate/F0/M0/A0 heads and verify ancestry."
+    },
+    {
+      "step": 2,
+      "action": "Integrate current accepted F0 foundation files."
+    },
+    {
+      "step": 3,
+      "action": "Integrate current accepted M0 MediaFrame, EventMediaRail, EventCard and AdaptiveEventCardGrid roots plus M0 regression contracts."
+    },
+    {
+      "step": 4,
+      "action": "Integrate the current A0 net tree; on conflicts prefer accepted F0/M0 root APIs and reapply A0 consumer bindings without dropping product behavior."
+    },
+    {
+      "step": 5,
+      "action": "Apply site/src/data/a0-r0-mechanical-batch.v1.json as five isolated commits."
+    },
+    {
+      "step": 6,
+      "action": "Run the combined focused F0/M0/A0 source and regression packet."
+    },
+    {
+      "step": 7,
+      "action": "Invoke the one canonical Kaggle full Review Preview; verify exact identity and HTTP 200; trigger V0."
+    }
+  ],
+  "conflict_rules": [
+    {
+      "paths": ["site/src/components/OptimizedEventCardGrid.astro"],
+      "winner": "thin compatibility adapter over current M0 AdaptiveEventCardGrid",
+      "preserve": ["legacy DOM hooks", "caller-facing props"]
+    },
+    {
+      "paths": ["site/src/components/listings/PopularListingSurface.astro", "site/tests/a0-consumer-ownership.test.mjs"],
+      "winner": "A0 restored density behavior and positive regression contract",
+      "preserve": ["M0 MobileListingRailSurface consumption", "desktop behavior rows"]
+    },
+    {
+      "paths": ["site/src/components/listings/MobileListingRailRow.astro"],
+      "winner": "current M0 root",
+      "preserve": ["A0 caller behavior and route composition"],
+      "a0_edit_allowed": false
+    },
+    {
+      "paths": ["site/src/components/EventMediaRail.astro", "site/src/components/AdaptiveEventCardGrid.astro", "site/src/components/EventCard.astro", "site/src/components/media-frame.css"],
+      "winner": "current accepted M0 root",
+      "a0_edit_allowed": false
+    },
+    {
+      "paths": ["site/src/components/design-system/**", "site/src/styles/design-system.css"],
+      "winner": "current accepted F0 foundations",
+      "preserve": ["A0 consumer references that resolve to defined aliases"],
+      "a0_edit_allowed": false
+    }
+  ],
+  "focused_acceptance": [
+    "Every A0 var(--ke-*) reference resolves after combined integration.",
+    "Popular density behavior remains present and protected.",
+    "OptimizedEventCardGrid is only a compatibility adapter.",
+    "Mechanical units are each entirely pre-state or post-state; no partial migration.",
+    "All grouped route bindings still total nine and do not claim browser/Penpot completion.",
+    "No current F0/M0 canonical root is modified by A0 conflict resolution."
+  ],
+  "rollback": {
+    "source": "onedayonemasterpiece/lovekgd-design-system:bindings/launch-normalization/a0-coverage-rollback.v1.json",
+    "rule": "Revert the smallest failing A0 unit or R0 mechanical subunit. Do not revert canonical F0/M0 roots or accepted Popular behavior to resolve one consumer failure."
+  }
+}
