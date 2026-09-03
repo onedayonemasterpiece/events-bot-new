@@ -50,6 +50,10 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
 ---
 <div
   class="ke-listing-shell"
+  data-ds-family="DateListingSurface"
+  data-ds-version="1"
+  data-ds-variant={kind}
+  data-ds-state={events.length ? 'populated' : 'empty'}
   data-date-listing={kind}
   data-listing-date={date}
   data-listing-variant="DATE-LISTING-V19"
