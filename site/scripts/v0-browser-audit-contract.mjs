@@ -161,7 +161,7 @@ export function classifyObservation(observation = {}) {
 export const auditContract = freeze({
   schema:SCHEMA,
   contractVersion:CONTRACT_VERSION,
-  authoredAgainstSource:AUTHORED_AGAINCT_SOURCE,
+  authoredAgainstSource:AUTHORED_AGAINST_SOURCE,
   checkpointSemantics:'NON_GATING',
   canonicalA0V0Matrix:CANONICAL_A0_V0_MATRIX,
   owners:OWNERS,

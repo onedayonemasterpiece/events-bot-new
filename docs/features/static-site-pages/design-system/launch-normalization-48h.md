@@ -675,3 +675,9 @@ entrypoint, игнорирует только wildcard-префиксы из о�
 visible colors, canonical gallery arrows, A0 `46/46`, FR0 `20/20`. Closure
 идемпотентен (`changed:false` для всех шести consumers); browser credit всё ещё
 требует свежей сборки и независимого V0 verdict.
+
+Текущий V0 executable overlay `2e71e5521...` также интегрирован как
+non-gating classifier поверх канонического browser release gate. В исходном
+tip была опечатка в имени `AUTHORED_AGAINST_SOURCE`, из-за которой модуль не
+инициализировался; локальная коррекция покрыта собственным V0 test suite и не
+меняет matrix, owner routing или критерии вердикта.

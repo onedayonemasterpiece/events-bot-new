@@ -9,6 +9,10 @@
   its implementation library, accepts documented wildcard token families, and
   rejects any remaining raw visible color owner.
 
+- Fixed: integrated V0's current non-gating browser classifier and corrected
+  its authored-source constant reference so the independent observation
+  harness executes instead of failing during module initialization.
+
 - Fixed: integrated the FR0 EventMediaRail fallback and clip-ownership batches.
   Broken rail resources now fail closed to the canonical non-interactive
   fallback with `contain` and forbidden crop diagnostics, while the nested
