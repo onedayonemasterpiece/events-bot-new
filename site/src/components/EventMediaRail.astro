@@ -268,24 +268,24 @@ const rootStyle = variant === 'gallery-thumbnails'
           style={itemStyle}
           aria-label={item.actionLabel}
         >
-          <picture
-            class="event-media-rail__frame"
-            data-media-frame
-            data-media-frame-contract="v1"
-            data-media-frame-surface="media-rail"
-            data-media-frame-kind={item.kind}
-            data-media-frame-fit={item.fit}
-            data-media-frame-object-position={item.objectPosition}
-            data-media-frame-crop-reason={item.cropReason}
-            data-media-frame-source-width={item.width}
-            data-media-frame-source-height={item.height}
-            data-media-frame-source-ratio={sourceRatio?.toFixed(5)}
-            data-media-frame-loading={usesPlaceholder ? 'lazy' : 'eager'}
-            data-media-frame-priority={usesPlaceholder ? undefined : 'true'}
-            data-media-frame-interaction-owner="caller"
-            style={frameStyle}
-          >
-            {variant === 'gallery-thumbnails' && asset ? (
+          {variant === 'gallery-thumbnails' && asset ? (
+            <span
+              class="event-media-rail__frame"
+              data-media-frame
+              data-media-frame-contract="v1"
+              data-media-frame-surface="media-rail"
+              data-media-frame-kind={item.kind}
+              data-media-frame-fit={item.fit}
+              data-media-frame-object-position={item.objectPosition}
+              data-media-frame-crop-reason={item.cropReason}
+              data-media-frame-source-width={item.width}
+              data-media-frame-source-height={item.height}
+              data-media-frame-source-ratio={sourceRatio?.toFixed(5)}
+              data-media-frame-loading="eager"
+              data-media-frame-priority="true"
+              data-media-frame-interaction-owner="caller"
+              style={frameStyle}
+            >
               <img
                 src={item.thumbnailSrc}
                 srcset={item.thumbnailSrcset}
@@ -298,7 +298,24 @@ const rootStyle = variant === 'gallery-thumbnails'
                 style={`object-fit:${mediaFrameFit(asset)};object-position:50% 50%`}
                 data-media-frame-image
               />
-            ) : (
+            </span>
+          ) : (
+            <picture
+              class="event-media-rail__frame"
+              data-media-frame
+              data-media-frame-contract="v1"
+              data-media-frame-surface="media-rail"
+              data-media-frame-kind={item.kind}
+              data-media-frame-fit={item.fit}
+              data-media-frame-object-position={item.objectPosition}
+              data-media-frame-crop-reason={item.cropReason}
+              data-media-frame-source-width={item.width}
+              data-media-frame-source-height={item.height}
+              data-media-frame-source-ratio={sourceRatio?.toFixed(5)}
+              data-media-frame-loading="lazy"
+              data-media-frame-interaction-owner="caller"
+              style={frameStyle}
+            >
               <img
                 src={transparentRailPixel}
                 data-rail-thumbnail
@@ -314,8 +331,8 @@ const rootStyle = variant === 'gallery-thumbnails'
                 style={`object-fit:${item.fit};object-position:${item.objectPosition}`}
                 data-media-frame-image
               />
-            )}
-          </picture>
+            </picture>
+          )}
           {usesResolvedItems && item.roleLabel && <span class="event-media-rail__role">{item.roleLabel}</span>}
         </button>
       );
