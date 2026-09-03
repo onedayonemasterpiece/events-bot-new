@@ -204,6 +204,7 @@ const robots = IS_SECRET_CANDIDATE
     const marker = focusStorage ? readFocusParticipationMarker(focusStorage) : null;
 
     if (checking) checking.hidden = true;
+    root.dataset.dsState = marker?.status === 'active' ? 'available' : 'locked';
     if (marker?.status === 'active') {
       if (hub) hub.hidden = false;
       root.dataset.dsState = 'available';

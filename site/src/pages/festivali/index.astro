@@ -221,6 +221,7 @@ const structuredData = [{
     data-ds-version="1"
     data-ds-variant="annual-timeline"
     data-ds-state={resolvedItems.length > 0 ? 'populated' : 'empty'}
+    data-ke-foundation-consumer="festival-route"
     data-festival-timeline
     data-festival-count={resolvedItems.length}
   >
@@ -471,25 +472,25 @@ const structuredData = [{
   .festival-page {
     width: min(var(--ke-festival-page-max), calc(100% - (2 * var(--ke-festival-page-gutter))));
     margin: 0 auto;
-    padding: clamp(0.85rem, 1.7vw, 1.65rem) 0 clamp(5.5rem, 8vw, 7rem);
+    padding: var(--ke-festival-page-padding-start) 0 var(--ke-festival-page-padding-end);
     font-family: var(--ke-font-sans);
   }
 
   .festival-hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+    grid-template-columns: var(--ke-festival-hero-columns);
     align-items: center;
-    gap: clamp(1.5rem, 3.5vw, 3.5rem);
+    gap: var(--ke-festival-hero-gap);
     min-height: 0;
-    padding: clamp(1.35rem, 2.15vw, 2rem);
+    padding: var(--ke-festival-hero-padding);
     overflow: hidden;
-    border: 1px solid rgba(121, 48, 20, 0.13);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-hero-border);
     border-radius: var(--ke-festival-hero-radius);
     background:
-      radial-gradient(circle at 82% 22%, rgba(15, 118, 110, 0.16), transparent 19rem),
-      linear-gradient(135deg, #fffdf8, #f0e3d2);
-    box-shadow: 0 24px 64px rgba(72, 45, 25, 0.1);
+      radial-gradient(circle at 82% 22%, var(--ke-color-festival-hero-glow), transparent 19rem),
+      linear-gradient(135deg, var(--ke-color-festival-hero-surface-start), var(--ke-color-festival-hero-surface-end));
+    box-shadow: var(--ke-elevation-festival-hero);
   }
 
   .festival-hero::after {
@@ -497,9 +498,9 @@ const structuredData = [{
     position: absolute;
     right: -7rem;
     bottom: -13rem;
-    width: 27rem;
-    height: 27rem;
-    border: 4.5rem solid rgba(165, 72, 33, 0.06);
+    width: var(--ke-festival-hero-orbit-size);
+    height: var(--ke-festival-hero-orbit-size);
+    border: var(--ke-festival-hero-orbit-border) solid var(--ke-color-festival-hero-orbit);
     border-radius: 50%;
   }
 
@@ -509,19 +510,19 @@ const structuredData = [{
   .festival-eyebrow {
     margin: 0 0 0.45rem;
     color: var(--primary);
-    font-size: 0.68rem;
-    font-weight: 850;
-    letter-spacing: 0.12em;
+    font-size: var(--ke-festival-eyebrow-size);
+    font-weight: var(--ke-festival-eyebrow-weight);
+    letter-spacing: var(--ke-festival-eyebrow-letter);
     text-transform: uppercase;
   }
 
   .festival-hero h1 {
     margin: 0;
     font-family: var(--ke-font-sans);
-    font-size: clamp(2.4rem, 3.25vw, 3.6rem);
-    font-weight: 850;
-    letter-spacing: -0.055em;
-    line-height: 0.94;
+    font-size: var(--ke-festival-heading-size);
+    font-weight: var(--ke-festival-heading-weight);
+    letter-spacing: var(--ke-festival-heading-letter);
+    line-height: var(--ke-festival-heading-line);
   }
 
   .festival-hero h1 em {
@@ -535,8 +536,8 @@ const structuredData = [{
     max-width: 760px;
     margin: 0.78rem 0 0;
     color: var(--muted);
-    font-size: clamp(0.88rem, 1.05vw, 0.98rem);
-    line-height: 1.42;
+    font-size: var(--ke-festival-copy-size);
+    line-height: var(--ke-festival-copy-line);
   }
 
   .festival-hero__facts {
@@ -603,13 +604,13 @@ const structuredData = [{
     margin: 0 0 1.25rem;
     overflow: visible;
     border: 1px solid rgba(121, 48, 20, 0.12);
-    border-radius: 18px;
-    background: rgba(255, 253, 248, 0.76);
-    box-shadow: 0 12px 34px rgba(72, 45, 25, 0.07);
+    border-radius: var(--ke-festival-guide-radius);
+    background: var(--ke-color-festival-surface-translucent);
+    box-shadow: var(--ke-elevation-festival-guide);
   }
   .festival-guide__item {
     display: grid;
-    grid-template-columns: 1.9rem minmax(0, 1fr);
+    grid-template-columns: var(--ke-festival-guide-icon-container-size) minmax(0, 1fr);
     align-items: center;
     gap: 0.58rem;
     min-width: 0;
@@ -623,13 +624,13 @@ const structuredData = [{
     height: var(--ke-festival-guide-icon-container-size);
     place-items: center;
     border-radius: 50%;
-    background: rgba(15, 118, 110, 0.09);
-    color: #0f766e;
-    font-size: 0.95rem;
+    background: var(--ke-color-festival-guide-icon-surface);
+    color: var(--ke-color-festival-guide-icon);
+    font-size: var(--ke-festival-guide-icon-size);
     font-weight: 760;
   }
   .festival-guide__icon--heart {
-    background: rgba(165, 72, 33, 0.1);
+    background: var(--ke-color-festival-guide-like-surface);
     color: var(--primary);
   }
   .festival-guide__icon :global(svg) { width: var(--ke-festival-guide-icon-size); height: var(--ke-festival-guide-icon-size); fill: currentColor; }
@@ -650,13 +651,13 @@ const structuredData = [{
     position: fixed;
     right: 1.2rem;
     bottom: 1.2rem;
-    z-index: 60;
+    z-index: var(--ke-festival-live-layer);
     max-width: min(25rem, calc(100vw - 2rem));
     padding: 0.72rem 0.9rem;
     border: 1px solid rgba(121, 48, 20, 0.14);
-    border-radius: 12px;
-    background: rgba(255, 253, 248, 0.97);
-    box-shadow: 0 14px 40px rgba(36, 24, 16, 0.2);
+    border-radius: var(--ke-festival-live-radius);
+    background: var(--ke-color-festival-surface-raised);
+    box-shadow: var(--ke-elevation-festival-live);
     color: var(--text);
     font-size: 0.78rem;
     font-weight: 670;
@@ -669,7 +670,7 @@ const structuredData = [{
 
   .festival-month {
     display: grid;
-    grid-template-columns: 132px minmax(0, 1fr);
+    grid-template-columns: var(--ke-festival-month-rail-width) minmax(0, 1fr);
     scroll-margin-top: 9rem;
   }
 
@@ -699,8 +700,8 @@ const structuredData = [{
     top: 0.42rem;
     left: 0.22rem;
     z-index: 1;
-    width: 0.82rem;
-    height: 0.82rem;
+    width: var(--ke-festival-month-marker-size);
+    height: var(--ke-festival-month-marker-size);
     border: 3px solid var(--surface);
     border-radius: 50%;
     background: var(--primary);
@@ -737,18 +738,18 @@ const structuredData = [{
   }
   .festival-month__categories li {
     display: grid;
-    flex: 0 0 28px;
-    width: 28px;
-    height: 28px;
+    flex: 0 0 var(--ke-festival-category-container-size);
+    width: var(--ke-festival-category-container-size);
+    height: var(--ke-festival-category-container-size);
     place-items: center;
     border-radius: 8px;
-    background: rgba(165, 72, 33, 0.1);
+    background: var(--ke-color-festival-category-surface);
     color: var(--primary);
   }
   .festival-month__categories i {
     display: block;
-    width: 21px;
-    height: 21px;
+    width: var(--ke-festival-category-asset-size);
+    height: var(--ke-festival-category-asset-size);
     background: currentColor;
     -webkit-mask: var(--festival-category-icon) center / contain no-repeat;
     mask: var(--festival-category-icon) center / contain no-repeat;
@@ -771,26 +772,26 @@ const structuredData = [{
   .festival-row {
     display: grid;
     align-items: stretch;
-    gap: clamp(0.62rem, 1vw, 0.88rem);
+    gap: var(--ke-festival-row-gap);
     width: var(--festival-row-width);
   }
-  .festival-row + .festival-row { margin-top: clamp(0.62rem, 1vw, 0.88rem); }
+  .festival-row + .festival-row { margin-top: var(--ke-festival-row-gap); }
 
   .festival-card {
     position: relative;
     min-width: 0;
     aspect-ratio: calc(var(--festival-card-aspect) * 0.9);
     overflow: hidden;
-    border: 1px solid rgba(57, 39, 27, 0.08);
-    border-radius: clamp(8px, 0.78vw, 11px);
-    background: #31261f;
-    box-shadow: 0 5px 16px rgba(52, 32, 18, 0.12);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-card-border);
+    border-radius: var(--ke-festival-card-radius);
+    background: var(--ke-color-festival-card-surface);
+    box-shadow: var(--ke-elevation-festival-card);
     isolation: isolate;
-    transition: border-color 160ms ease, box-shadow 160ms ease;
+    transition: border-color var(--ke-festival-motion-fast), box-shadow var(--ke-festival-motion-fast);
   }
   .festival-card:hover {
-    border-color: rgba(57, 39, 27, 0.16);
-    box-shadow: 0 7px 20px rgba(52, 32, 18, 0.16);
+    border-color: var(--ke-color-festival-card-border-hover);
+    box-shadow: var(--ke-elevation-festival-card-hover);
   }
   .festival-card__link { display: block; width: 100%; height: 100%; color: #fff; text-decoration: none; }
   .festival-card__link:focus-visible {
@@ -810,10 +811,10 @@ const structuredData = [{
     height: var(--ke-festival-like-target-min);
     padding: 0;
     place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.34);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-like-line);
     border-radius: 50%;
-    background: rgba(18, 14, 12, 0.58);
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
+    background: var(--ke-color-festival-like-surface);
+    box-shadow: var(--ke-elevation-festival-like);
     color: #fff;
     cursor: pointer;
     -webkit-backdrop-filter: blur(7px);
@@ -821,8 +822,8 @@ const structuredData = [{
     transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
   }
   .festival-card__like:hover {
-    border-color: rgba(255, 255, 255, 0.72);
-    background: rgba(18, 14, 12, 0.76);
+    border-color: var(--ke-color-festival-like-line-hover);
+    background: var(--ke-color-festival-like-surface-hover);
   }
   .festival-card__like:focus-visible {
     outline: 3px solid rgba(255, 255, 255, 0.96);
@@ -830,7 +831,7 @@ const structuredData = [{
   }
   .festival-card__like :global(svg) { width: var(--ke-festival-like-icon-size); height: var(--ke-festival-like-icon-size); fill: currentColor; }
   .festival-card__like[aria-pressed="true"] {
-    border-color: rgba(255, 255, 255, 0.86);
+    border-color: var(--ke-color-festival-like-line-selected);
     background: #fff;
     color: var(--primary);
   }
@@ -899,14 +900,14 @@ const structuredData = [{
   .festival-card__status {
     flex: 0 0 auto;
     max-width: 100%;
-    background: #e8f5e9;
-    color: #24743b;
-    box-shadow: 0 2px 7px rgba(34, 20, 12, 0.12);
+    background: var(--ke-color-festival-status-confirmed-surface);
+    color: var(--ke-color-festival-status-confirmed-text);
+    box-shadow: var(--ke-elevation-festival-status);
   }
   .festival-card--program-pending .festival-card__status,
   .festival-card--date-pending .festival-card__status {
-    background: #fff1bd;
-    color: #76540a;
+    background: var(--ke-color-festival-status-pending-surface);
+    color: var(--ke-color-festival-status-pending-text);
   }
 
   .festival-card__caption {
@@ -925,12 +926,12 @@ const structuredData = [{
   }
   .festival-card__caption p {
     margin: 0.24rem 0 0;
-    color: rgba(255, 255, 255, 0.94);
+    color: var(--ke-color-festival-card-caption);
     overflow: hidden;
     font-size: clamp(12.6px, 1vw, 14.7px);
     font-weight: 510;
     line-height: 1.25;
-    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
+    text-shadow: var(--ke-elevation-festival-caption-copy);
     display: -webkit-box;
     white-space: normal;
     -webkit-box-orient: vertical;
@@ -947,7 +948,7 @@ const structuredData = [{
     font-weight: 760;
     letter-spacing: -0.03em;
     line-height: 1.06;
-    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+    text-shadow: var(--ke-elevation-festival-caption-heading);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
@@ -960,8 +961,8 @@ const structuredData = [{
     overflow: hidden;
     border: 0;
     border-radius: 5px;
-    background: rgba(15, 15, 15, 0.66);
-    color: rgba(255, 255, 255, 0.96);
+    background: var(--ke-color-festival-card-theme-surface);
+    color: var(--ke-color-festival-card-theme-text);
     font-size: clamp(11.1px, 0.89vw, 12.9px);
     font-weight: 580;
     line-height: 1;

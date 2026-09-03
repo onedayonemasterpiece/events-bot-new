@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Changed: materialized the bounded A0 six-consumer closure against the exact
+  accepted F0 route-theme boundary. Festival guide and taxonomy surfaces now
+  have distinct semantic tokens; exhibitions retain only four runtime layout
+  variables while consuming the complete central palette/elevation/icon set
+  and canonical gallery arrows. The transform is idempotent and does not write
+  F0, FR0 or M0 roots.
+
 - Fixed: `FocusLabBadge` now loads the canonical component/surface token
   registry alongside the product contour. This resolves an undefined-token
   regression introduced during normalization that let the lab-flask SVG use

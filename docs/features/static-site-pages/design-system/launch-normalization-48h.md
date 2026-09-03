@@ -645,3 +645,11 @@ console/request failures, MediaFrame fit/escape, nested interactive и targets
 публичным entry point для `surface-foundations.css`. Source regression требует
 оба registry imports; размер success icon в invite intake по-прежнему
 принадлежит canonical `feature` role, а не локальному selector.
+
+После следующего fresh-read интегрирована точная F0 source boundary
+`4709dc231...`, а A0 closure из tip `dc7b722ec...` применён только к шести
+заявленным consumer paths, без merge divergent A0 branch и без записи в
+F0/FR0/M0 roots. Идемпотентный check сообщает `changed:false` для всех шести
+путей. Строгий route-theme gate подтверждает semantic separation festival
+guide/taxonomy, ровно четыре exhibitions runtime variables, 20 обязательных
+central bindings и canonical gallery arrows; club-theme gate также проходит.
