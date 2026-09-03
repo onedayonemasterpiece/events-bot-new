@@ -72,27 +72,28 @@ owned работы.
 
 ```text
 N0: candidate review → same-data baseline → conditional promotion
-    → fresh generation → reachable preview → V0 trigger
+    → full Kaggle generation → reachable preview → V0 trigger
 +
 F0/M0/A0: saturation всех current owned consumers/invariants
 +
 V0: complete harness → actual browser matrix when URL exists
 +
-R0: persistent ready mechanical backlog
+R0: integration, local focused diagnostics and invocation/observation of the
+    shared Kaggle build
 → first owner-facing normalized /<buildId>/__preview/
 ```
 
 Technical baseline нужен для before/after и не обязан быть owner checkpoint.
-Family не завершена без fresh-real-data build и V0 browser verdict.
+Family не завершена без fresh-real-data Kaggle build и V0 browser verdict.
 
 N0 не дробит critical path на обязательные owner wake-ups, если acceptance
 criteria можно определить заранее. Он задаёт R0 conditional end-to-end branch:
 
 ```text
-IF exact candidate build/tests/same-data baseline PASS
+IF exact candidate focused diagnostics/tests/same-data checks PASS
   THEN promote exact candidate
-  AND run fresh-production generation
-  AND publish reachable preview
+  AND invoke the one shared Kaggle pipeline
+  AND publish reachable preview through its checked artifact
 ELSE
   no promotion/deploy
   continue safe diagnosis
@@ -103,7 +104,92 @@ R0 после каждого result fresh-read-ит #621/current refs и про�
 ready safe mechanical task. При ожидаемом N0 trigger R0 использует bounded watch
 60–120 seconds, maximum 30 minutes, а не немедленный exit.
 
-## 4. Existing generation paths
+## 4. Один build/publish contract
+
+### 4.1 Полные и опубликованные сборки
+
+Существует один canonical static-site build implementation в этом repository,
+один Kaggle StaticSiteBuilder и один текущий Yandex Object Storage bucket.
+
+Через Kaggle CPU всегда выполняются:
+
+```text
+real Review Preview
+Golden Review Preview
+Release Candidate
+production-form build
+```
+
+Они различаются только:
+
+- data mode (`real` или `golden`);
+- immutable root `slug/prefix`;
+- optional allowlisted page-class filter для тестового preview;
+- уровнем проверок и правом promotion.
+
+Focused preview, который публикуется по секретной ссылке, также проходит через
+тот же Kaggle pipeline. Он не является второй архитектурой и не использует
+второй publisher/bucket.
+
+Future/default-off two-root bucket/ALB design не входит в текущий launch path и
+не является prerequisite для review preview, RC или production-form artifact.
+
+### 4.2 Локальная диагностика
+
+Без Kaggle разрешено локально отрендерить один route либо один уже определённый
+page class, чтобы быстро найти syntax/import/build/layout defect.
+
+Локальная диагностика обязана использовать те же:
+
+- Astro route/component sources;
+- exact source SHA;
+- immutable real snapshot либо Golden corpus identity;
+- page-class selector, которым пользуется Kaggle.
+
+Она не:
+
+- загружает результат в Yandex Object Storage;
+- обновляет `preview.current`;
+- создаёт owner-facing secret URL;
+- считается Review Preview, RC, production build, V0 acceptance или A=S=P
+  evidence;
+- образует второй production/build path.
+
+Термины `local build`, `tests/build` и `local browser smoke` далее в этом
+документе означают только такую focused diagnostic работу. Любой полный или
+опубликованный результат означает запуск Kaggle.
+
+### 4.3 Page-class filter
+
+Page-class filter является одной allowlisted моделью в `events-bot-new` и
+используется одинаково локальной диагностикой и Kaggle. `my-data-hub` передаёт
+выбранное значение, но не реализует собственную классификацию страниц.
+
+Существующий `catalog-mode: slice|full` управляет объёмом event data и **не**
+является page-class filter. Эти два понятия нельзя смешивать.
+
+При отсутствующем фильтре строится весь review tree. Нельзя поддерживать два
+разных списка классов/маршрутов в локальном runner и MCP.
+
+### 4.4 My Data Hub
+
+`my-data-hub` — единственный MCP control plane для опубликованных review builds:
+
+```text
+kenigevents.preview.start
+kenigevents.preview.current
+operation.get
+```
+
+Он может разрешить ref в SHA, выбрать snapshot/corpus, поставить operation в
+очередь, вызвать runner и вернуть состояние/ссылку. Он не владеет вторыми
+копиями exporter, page-class selector, Astro builder, Object Storage publisher
+или retention logic.
+
+Любая уже начатая реализация этих MCP methods должна быть найдена и продолжена;
+параллельный второй implementation/worktree запрещён.
+
+### 4.5 Existing implementation paths
 
 Reuse, do not replace:
 
@@ -112,6 +198,7 @@ site/scripts/export-production-preview-data.py
 site/scripts/build-preview.mjs
 site/scripts/build-production.mjs
 scripts/run_static_site_builder_kaggle.py
+kaggle/StaticSiteBuilder/static_site_builder.py
 npm run build:preview
 npm run build:production
 npm run build:secret-candidate
@@ -128,6 +215,26 @@ Checked-in production catalogue исторический; fresh export обяз�
 N0 не читает runtime SQLite. Build/export output должен возвращать buildId и
 output identity. Read-only SQLite fallback допустим только native R0, если
 конкретная generation task доказывает его необходимость.
+
+Preview и production используют один production rail: exporter, page-class
+selector, Kaggle `StaticSiteBuilder`, artifact checks, Object Storage publisher
+и retention принадлежат `events-bot-new`. `my-data-hub` только разрешает
+`source_ref`, выбирает/reuses snapshot или corpus, ведёт MCP operation и вызывает
+этот runner; второй builder/exporter/publisher там запрещён. Локальная сборка —
+диагностика, а не альтернативный deploy path.
+
+Publisher загружает и затем независимо перечитывает каждый объект immutable
+`/<buildId>/` prefix. Оба сетевых этапа выполняются bounded pool из максимум
+восьми workers; create-only `IfNoneMatch=*`, SHA-256, MIME verification,
+root/stable-ICS isolation и retry-safe adoption существующих byte-identical
+objects сохраняются. Ограниченная конкурентность устраняет последовательные
+round trips полного preview, не меняя generation/publication semantics.
+Asset и Astro-asset origins принимают тот же `{buildId}` template: immutable
+preview поэтому ссылается на ассеты собственного опубликованного prefix, тогда
+как production без template сохраняет stable origin.
+Golden build не рендерит независимую daily service-share карточку из реального
+сегодняшнего каталога: её отсутствие не должно ломать frozen future corpus.
+Real preview и production-form build сохраняют обычный service-share этап.
 
 ## 5. Owner review
 
@@ -219,6 +326,12 @@ fallback/loading
 responsive resource selection
 ```
 
+Canonical style owner публикуется как `media-frame.css`; caller сохраняет
+interaction ownership и внешнюю геометрию surface, но не переопределяет
+`object-fit`, focal position, clip или radius semantics. EventCard,
+ListingEventCard, EventMediaRail и MobileListingRailRow обязаны использовать
+этот один protocol и публиковать его диагностические поля для browser audit.
+
 Изображение не может визуально выходить за frame. Page-local grid/card CSS не
 может менять framing policy. Existing optimizer/contract расширяется; второй
 параллельный algorithm запрещён без доказанной невозможности reuse.
@@ -240,6 +353,22 @@ Contract:
 - no compact/mobile overflow;
 - source/focus order сохраняется.
 
+Диагностика разделяет три популяции и не смешивает их cardinality:
+
+- `input-*` — полный вход до `limit`;
+- `source-*` — admitted input после `limit`;
+- `rendered-*` — фактически созданные direct EventCard roots.
+
+Каждая пара `*-count` / `*-order` описывает одну и ту же популяцию. Единственный
+writer этих полей объявляется через
+`data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"`; page/consumer
+не должен устанавливать второй observer для тех же полей.
+
+Responsive override обязан иметь specificity не ниже базового selector с
+`data-adaptive-grid-row-size`; иначе Astro-scoped CSS оставляет две колонки на
+viewport `<=620px`, хотя strategy объявляет mobile stack, и дочерняя карточка
+растягивает документ по горизонтали.
+
 `relatedCardLayout.mjs` и `OptimizedEventCardGrid.astro` — donors. Новый
 `AdaptiveEventCardGrid` является эволюцией существующего решения, не второй
 сеткой.
@@ -260,6 +389,21 @@ A0 владеет shell, listings и routes. Он:
 следующий eligible consumer без отдельного owner prompt.
 
 ## 11. Browser/DOM audit
+
+Real Review Preview gates select browser specimens from the generated active
+catalog. Historical event IDs may remain preferred canaries while present, but
+must have a structural data-driven fallback with the same multi-image and
+recommendation-journey contract; expiry of one historical event is not a build
+failure.
+
+An empty Date/Weekend listing is accepted only through an explicit canonical
+empty state: its mobile rail root must exist and publish
+`data-ds-state="empty"`. Absence of rows alone never converts a missing rail
+into a passing empty fixture. Popular is intentionally different: it owns the
+accepted Large/Compact representations and must not recreate a disconnected
+third `MobileListingRailSurface` merely to satisfy a generic preview check.
+Real data may omit any evidence shelf that has fewer than three honest
+candidates; the remaining shelves preserve canonical order and 3–5 cards.
 
 V0 — read-only ChatGPT window с `my-browser-bridge` и GitHub.
 
@@ -323,7 +467,9 @@ review prerequisite. После завершения family thin S фиксир�
 - `A0`: shell, listings, routes, consumer migration;
 - `V0`: my-browser-bridge audit; later Golden Penpot audit;
 - `K0`: consultant/process repair;
-- `R0`: persistent bounded Codex execution and sole Penpot writer.
+- `R0`: persistent bounded Codex execution, local focused diagnostics,
+  invocation/observation of the shared Kaggle pipeline and sole Penpot writer;
+- `my-data-hub`: sole MCP facade for published review-build operations.
 
 Нет mandatory `MAT → QA → INTEGRATE → PUBLISH`, нового orchestrator или
 per-Wave owner scheduler.
@@ -349,7 +495,7 @@ external, writer-conflict или irreversible-risk boundary.
 
 Product UI-gap/change work открывается только после:
 
-- reproducible fresh-data generation;
+- reproducible fresh-data full Kaggle generation;
 - tokenized foundations/colors;
 - four icon roles across all consumers;
 - single roots for same components;
@@ -365,13 +511,115 @@ Product UI-gap/change work открывается только после:
 
 Meaningful checkpoint:
 
-- technical fresh-data generation verdict;
+- technical fresh-data generation verdict from the shared Kaggle path;
 - normalized source convergence reviewed by role owner;
 - reachable normalized real-data preview;
 - V0 browser PASS/DRIFT;
 - native Penpot master + linked route board;
 - checked release candidate.
 
+Локальная focused diagnostic может подтвердить/найти дефект, но не закрывает
+preview/generation/owner/A=S=P checkpoint.
+
 Checkpoint publication не завершает роль автоматически. Packet, dispatch,
 worktree, commit без role review, test без output, 404 route и empty Penpot page
 не являются product result.
+
+## 17. Accepted source-integration checkpoint (2026-09-03)
+
+Текущая интеграция строится от точных принятых границ, а не от поздних tip
+роль-веток:
+
+```text
+R0 base: 4536847f9fbdaa27326ebb3ec9ec1c825736e107
+F0:      de92dabd4551e117ca1af1be7915ff223321cc32
+M0:      c808c75dd975a9851e148ccf993c32787d2b6886
+A0:      net projection through ec926580fa2cc003318006f4c1d671fc459ea26c
+N0:      74252469c545193f8ec57624bd018fc00c87e9e6
+```
+
+После проекции A0 механически завершены принятые `A0-MECH-01..05`:
+
+- InterestProfile больше не владеет размерами semantic icons;
+- AuthorizedEventSearch/SearchResults публикуют один ranked-phase-feed family
+  и точные lifecycle states;
+- MobileListingRailSurface оставляет MediaFrame framing/clip/focal ownership и
+  сохраняет только геометрию/gesture-контракт surface;
+- DesktopEventPage использует `EventMediaRail` для hero и split rails,
+  EventHero публикует MediaFrame diagnostics, а EventLayout больше не является
+  вторым EventCard framing owner;
+- festival/exhibitions routes публикуют route-family identity и используют
+  canonical semantic icons; отрицательная action target в EventLayout поднята
+  с 36px до минимальных 44px.
+
+Event-detail family поэтому имеет статус `source_converged`; grouped source
+fraction — `6/9`. Это не V0 PASS: gallery, dialog, route и viewport поведение
+проверяется на immutable fresh-real-data preview.
+
+Отдельный desktop Popular containment fix не меняет принятую композицию V28.
+Полки остаются однострочными, карточки сохраняют исходные размеры/ratio, а
+избыток ширины принадлежит самой полке через horizontal scroll, не документу.
+Презентационный snapshot 30 июля мог полностью помещаться; свежий сентябрьский
+catalog содержит более широкую комбинацию 16:9 карточек и recognition rails и
+тем самым проявил старую data-dependent щель. Это исправление containment, а
+не восстановление древнего интерфейса и не redesign.
+
+Тот же fresh-real browser census выявил отдельную щель ровно над mobile
+boundary: при `721..~899px` две Weekend day-summary колонки не позволяли
+длинным русским day/count labels сжиматься и расширяли документ. Это латентный
+seam июльской композиции (основные presentation viewports остаются без
+изменений), а не возврат к более старой версии. Weekend сохраняет time axis,
+обе day lanes, weekday chip, дату и count; только текстовые flex descendants
+получают `min-width: 0` и локальное ellipsis вместо document overflow. Browser
+geometry gate теперь явно включает `721` и `800px`.
+
+После fresh-read N0 интегрирован точный текущий descendant `74252469...`, а
+M0 расширен от ранее принятого `4c83fc77...` до принятого N0 exact head
+`c808c75d...`. Несовпавшие тесты N0 приведены к compact manifest schema без
+изменения gate graph; F0 checker отличает contextual `--ke-icon-size` dispatch
+от token authority и проверяет aliases, заканчивающиеся canonical role suffix.
+
+Публичный fresh-real browser census дополнительно применяет уточнённый N0
+контракт для внешних ссылок: `target="_blank"` сам по себе допустим, но каждая
+такая ссылка обязана содержать одновременно `noopener` и `noreferrer`.
+Festival timeline ранее генерировал только `noreferrer`; route-local binding
+исправлен без изменения URL, композиции или поведения карточек. Source-test и
+публичный browser probe проверяют оба токена.
+
+## 18. Post-preview F0/M0/A0 successor cycle (2026-09-03)
+
+После публикации immutable fresh-real preview для `1bc6d9cb...` backlog был
+пересчитан по актуальным role refs и `launch-normalized-ui.v1@1.10.0`. Этот
+preview остаётся валидным pre-F0 baseline, но не получает credit за более
+поздний source.
+
+Следующий reversible integration transaction включает:
+
+```text
+source base:       1bc6d9cb4c122046f4782532381de953727c1da6
+F0 source:         0fb2938344cf96b05be0df09dfb9e69525b3717d
+M0 source:         c71351decdcee02941acb26c5e2fbaf88faf0378
+M0 downstream:     5eeaba09b5ec432a77ff899ce98fb8b9f492c133
+contract:          launch-normalized-ui.v1@1.10.0
+```
+
+Consumer migration сохраняет актуальный интерфейс и поведение:
+
+- `ExhibitionsPersonalSurface` удаляет только private `--ex-*` authority и
+  ссылается на эквивалентные F0 tokens;
+- festival route сохраняет timeline и link-safety, но получает canonical
+  geometry tokens, semantic heart и минимум 44px для favorite target;
+- interest-club detail/card заменяют только перечисленные raw values и text
+  arrow на canonical tokens/SemanticIcon;
+- `FocusEggCollectionRouteComposition@1/collection-prototype` синхронизирует
+  `found-N-of-M`, а `ClosedFocusHubRouteComposition@1/participant-hub` —
+  `checking/locked/available` внутри уже существующих runtime paths;
+- consumer-local sizing `.ke-icon-role` удалён: размер задаёт один из четырёх
+  canonical roles.
+
+Строгие F0 gates проходят, focused F0/M0/A0 packet проходит `111/111`.
+Grouped family source census становится `9/9`, PM0 route identity source
+census — `19/19`. Это только source-level convergence: V0 browser credit и
+Penpot materialization не заявляются. Новый exact SHA замораживается только
+после N0 integration и полного test/build checkpoint; затем тот же canonical
+Kaggle runner публикует новый full `real/all` immutable preview.

@@ -992,6 +992,22 @@ def render_daily_service_share(config: dict, build_clock: dict) -> dict:
     }
 
 
+def materialize_service_share(
+    config: dict,
+    build_clock: dict,
+    *,
+    preview_data_mode: str,
+) -> dict:
+    """Keep a frozen Golden preview independent of today's real event set."""
+
+    if preview_data_mode == "golden":
+        return {
+            "status": "skipped",
+            "reason": "golden_preview_frozen_clock",
+        }
+    return render_daily_service_share(config, build_clock)
+
+
 def ensure_node22(env: dict[str, str]) -> dict[str, str]:
     current = subprocess.run(['node', '--version'], cwd=str(WORKING), env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     version = (current.stdout or '').strip()
@@ -1156,6 +1172,14 @@ def main() -> int:
         env['PUBLIC_SITE_ORIGIN'] = config.get('public_site_origin') or env.get('PUBLIC_SITE_ORIGIN') or 'https://kenigevents.ru'
         env['SITE_BASE_PATH'] = f'/{build_id}'
         env['PUBLIC_PREVIEW_BUILD_ID'] = build_id
+        preview_data_mode = str(config.get('preview_data_mode') or 'real').strip().lower()
+        if preview_data_mode not in {'real', 'golden'}:
+            raise ValueError('preview_data_mode must be real or golden')
+        env['PREVIEW_DATA_MODE'] = preview_data_mode
+        page_classes = [str(item) for item in (config.get('page_classes') or ['all'])]
+        if str(config.get('profile') or 'preview') == 'production-candidate' and page_classes != ['all']:
+            raise ValueError('production-candidate forbids page-class slicing')
+        env['STATIC_SITE_PAGE_CLASSES'] = ','.join(page_classes)
         if config.get('asset_base_url'):
             env['PUBLIC_ASSET_BASE_URL'] = str(config['asset_base_url'])
         if config.get('astro_asset_base_url'):
@@ -1168,7 +1192,11 @@ def main() -> int:
         export_preview_data_if_configured(config)
         related_retrieval = read_related_retrieval_receipt()
         collection_semantic = read_collection_semantic_receipt(config)
-        service_share_result = render_daily_service_share(config, build_clock)
+        service_share_result = materialize_service_share(
+            config,
+            build_clock,
+            preview_data_mode=preview_data_mode,
+        )
         semantic_result_path = SITE_DIR / 'src' / 'data' / 'static-semantic-build-result.json'
         if (
             config.get('collection_semantic_compute')
@@ -1344,13 +1372,30 @@ def main() -> int:
                 'service_share': service_share_result,
             }
         else:
-            status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 45, 'progress_label': 'Astro preview build'})
-            run(['npm', 'run', 'build:preview'], cwd=SITE_DIR, env=env)
+            if preview_data_mode == 'golden' and (
+                page_classes != ['all'] or not str(build_id).startswith('preview-golden-')
+            ):
+                raise ValueError('Golden preview requires page class all and preview-golden-* build id')
+            build_script = 'build:golden-preview' if preview_data_mode == 'golden' else 'build:preview'
+            status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 45, 'progress_label': f'Astro {preview_data_mode} preview build'})
+            run(['npm', 'run', build_script], cwd=SITE_DIR, env=env)
             status_event('alive', phase='check', status='alive', progress={'phase': 'check', 'progress_percent': 75, 'progress_label': 'проверка preview'})
-            run(['npm', 'run', 'check:preview'], cwd=SITE_DIR, env=env)
+            if preview_data_mode == 'golden':
+                # build:golden-preview runs check:preview with its isolated
+                # materialized-data sidecar before deleting that sidecar.
+                for check_script in ('check:golden-preview',):
+                    run(['npm', 'run', check_script], cwd=SITE_DIR, env=env)
+            else:
+                check_script = 'check:preview' if page_classes == ['all'] else 'check:preview-slice'
+                run(['npm', 'run', check_script], cwd=SITE_DIR, env=env)
             dist_dir = SITE_DIR / 'dist' / build_id
             if not dist_dir.exists():
                 raise FileNotFoundError(f"build output missing: {dist_dir}")
+            preview_manifest = json.loads(
+                (dist_dir / 'preview-build.json').read_text(encoding='utf-8')
+            )
+            if str(preview_manifest.get('dataMode') or 'real') != preview_data_mode:
+                raise RuntimeError('preview manifest data mode mismatch')
             archive_path = WORKING / f'{build_id}.tar.gz'
             with tarfile.open(archive_path, 'w:gz') as tar:
                 tar.add(dist_dir, arcname=build_id)
@@ -1360,6 +1405,9 @@ def main() -> int:
             result_details = {
                 'archive': archive_path.name,
                 'dist_root': str(dist_dir),
+                'data_mode': preview_data_mode,
+                'golden_corpus_id': preview_manifest.get('goldenCorpusId'),
+                'golden_corpus_digest': preview_manifest.get('goldenCorpusDigest'),
                 'semantic': semantic_result,
                 'related_retrieval': related_retrieval,
                 'service_share': service_share_result,
@@ -1368,6 +1416,7 @@ def main() -> int:
         result = {
             'schema_version': 'static_site_build_result_v2',
             'ok': True, 'profile': profile, 'build_id': build_id,
+            'page_classes': page_classes,
             'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
             'event_count': event_count, 'artifacts': artifacts, 'failure_class': None,
             'input_fingerprint': config.get('input_fingerprint'),

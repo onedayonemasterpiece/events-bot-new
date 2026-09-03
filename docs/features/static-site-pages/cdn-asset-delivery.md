@@ -74,8 +74,14 @@ PUBLIC_ASSET_BASE_URL='https://static.kenigevents.ru' \
 PUBLIC_ICS_BASE_URL='https://static.kenigevents.ru/ics' \
 npm --prefix site run check:preview
 
-PREVIEW_BUILD_ID=preview-YYYYMMDD-event-pages-vNN \
-npm --prefix site run deploy:preview
+python scripts/run_static_site_builder_kaggle.py \
+  --db <immutable-production-projection.sqlite> \
+  --repo-sha <exact-40-character-SHA> \
+  --profile preview --catalog-mode slice \
+  --build-id preview-YYYYMMDD-event-pages-vNN \
+  --asset-base-url https://static.kenigevents.ru \
+  --astro-asset-base-url 'https://static.kenigevents.ru/{buildId}' \
+  --download-output --publish-preview
 ```
 
 Give users the main-domain URL (`https://kenigevents.ru/<build_id>/...`) so canonical/SEO behavior is realistic. The HTML will load `_astro/*` from `https://static.kenigevents.ru/<build_id>/_astro/...`. Direct `static.kenigevents.ru/<build_id>/...` is only a CDN smoke URL.
@@ -88,7 +94,7 @@ Rationale:
 
 ## Cache policy
 
-The deploy script uploads preview files with default short cache and then re-uploads Astro code assets with immutable cache headers:
+The trusted host publisher uploads the checked Kaggle preview artifact with short default cache headers and immutable headers for content-hashed Astro assets:
 
 | Path | Cache-Control | Notes |
 | --- | --- | --- |
@@ -96,7 +102,7 @@ The deploy script uploads preview files with default short cache and then re-upl
 | `/<build_id>/_astro/*` | `public, max-age=31536000, immutable` | content-hashed and build-prefixed |
 | `/<build_id>/assets/*` | `public, max-age=31536000, immutable` | build-prefixed local visual assets, including listing-media derivatives |
 | `/<build_id>/event.ics` | `public, max-age=300` + `text/calendar` metadata | build-scoped fallback |
-| `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target; never written by `deploy:preview` |
+| `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target; never written by the preview publisher |
 | `/p/**` | object metadata, intended immutable for content-addressed keys | mirrored from legacy media bucket; safe for `PUBLIC_ASSET_BASE_URL` |
 | `/p/thumb/v1/**` | `public, max-age=31536000, immutable` | content-addressed 256/512 WebP derivatives used by rails/cards through `srcset` |
 

@@ -1,0 +1,14 @@
+/*
+ * Residual F0 palette ownership for the canonical InterestClubCard family.
+ *
+ * `collection-foundations.css` remains the primary family registry. This small
+ * continuity file owns only four previously consumer-local decorative alpha
+ * values discovered after the current successor recensus. It introduces no
+ * selector, component anatomy, icon role or product-palette decision.
+ */
+:root {
+  --ke-color-club-card-fallback-orbit-ring-inner: rgba(255, 255, 255, 0.035);
+  --ke-color-club-card-fallback-orbit-ring-outer: rgba(255, 255, 255, 0.025);
+  --ke-color-club-card-fallback-orbit-line: rgba(255, 255, 255, 0.3);
+  --ke-color-club-card-fact-divider: rgba(255, 255, 255, 0.24);
+}

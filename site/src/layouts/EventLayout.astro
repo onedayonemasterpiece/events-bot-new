@@ -722,11 +722,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .event-hero[data-hero-tint="deep"] .event-hero__visual { --hero-bg: #171b32; }
       .event-hero[data-hero-tint="cool"] .event-hero__visual { --hero-bg: #12302d; }
       .event-hero[data-hero-tint="neutral"] .event-hero__visual { --hero-bg: #1c1c1c; }
+      .event-hero__media-frame { width: 100%; height: 100%; align-self: stretch; }
       .event-hero__image { display: block; width: 100%; }
       .event-hero--poster-stage .event-hero__visual { min-height: 260px; max-height: min(45dvh, 410px); padding: 0.65rem; }
-      .event-hero--poster-stage .event-hero__image { max-height: calc(min(45dvh, 410px) - 1.3rem); width: 100%; height: auto; object-fit: contain; object-position: center; border-radius: 18px; box-shadow: 0 18px 40px rgba(0,0,0,0.30); }
+      .event-hero--poster-stage .event-hero__image { max-height: calc(min(45dvh, 410px) - 1.3rem); width: 100%; height: auto; border-radius: 18px; box-shadow: 0 18px 40px rgba(0,0,0,0.30); }
       .event-hero--photo-cover .event-hero__visual { aspect-ratio: 16 / 10; max-height: min(42dvh, 390px); }
-      .event-hero--photo-cover .event-hero__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+      .event-hero--photo-cover .event-hero__image { position: absolute; inset: 0; width: 100%; height: 100%; }
       .event-hero--fallback-art .event-hero__visual { min-height: 240px; max-height: min(40dvh, 360px); color: #fff; text-align: center; padding: 1.2rem; }
       .event-hero__fallback { display: grid; gap: 0.85rem; place-items: center; }
       .event-hero__fallback span { font-weight: 850; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.78; }
@@ -1414,21 +1415,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
       .event-card:hover { border-color: rgba(165,72,33,0.48); box-shadow: 0 18px 38px rgba(72,45,25,0.2); }
       .event-card__media-link { display: block; color: inherit; text-decoration: none; background: #15110f; }
-      .event-card__media-shell { position: relative; display: block; width: 100%; overflow: hidden; background: #15110f; }
+      .event-card__media-shell { position: relative; display: block; width: 100%; background: #15110f; }
       .event-card__media-shell--cover { position: relative; aspect-ratio: 4 / 5; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e); }
-      .event-card__media-shell--cover .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
       .event-card__media-shell--document { background: #15110f; }
-      .event-card__media-shell--document .event-card__media { display: block; width: 100%; height: auto; }
       .event-card__media-shell--dynamic {
         aspect-ratio: var(--dynamic-media-ratio, 4 / 5);
         min-height: 1px;
-      }
-      .event-card__media-shell--dynamic.event-card__media-shell--document .event-card__media {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
       }
       .event-card__media-shell--dynamic::after {
         content: "";
@@ -1508,7 +1500,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .event-card--split-actions .event-card__body { background: #15110f; color: #fff; border-left: 1px solid rgba(121,48,20,0.13); border-right: 1px solid rgba(121,48,20,0.13); padding-bottom: 0.7rem; }
       .event-card--split-actions .event-card__utility-row { display: flex; align-items: center; justify-content: flex-start; gap: 0.42rem; padding: 0 0.78rem 0.62rem; border: 1px solid rgba(121,48,20,0.13); border-top: 0; border-radius: 0 0 24px 24px; background: #15110f; }
       .event-card--split-actions .event-card__utility-row .feedback-button { min-height: 44px; box-shadow: none; }
-      .event-card--split-actions .event-card__utility-row .feedback-button--negative { margin-left: 0; min-height: 36px; padding-inline: 0.22rem; color: rgba(255,255,255,0.56); background: transparent; border-color: transparent; font-size: 0.74rem; }
+      .event-card--split-actions .event-card__utility-row .feedback-button--negative { margin-left: 0; min-height: 44px; padding-inline: 0.22rem; color: rgba(255,255,255,0.56); background: transparent; border-color: transparent; font-size: 0.74rem; }
       .event-card--split-actions .event-card__feedback { position: static; z-index: auto; display: flex; justify-content: flex-end; align-items: center; gap: 0.3rem; margin: 0.36rem 0.1rem 0; pointer-events: auto; }
       .event-card--split-actions .event-card__feedback .feedback-button { min-width: 44px; min-height: 44px; padding: 0 0.28rem; color: rgba(58,48,40,0.70); background: transparent; border-color: transparent; box-shadow: none; border-radius: 12px; }
       .event-card--split-actions .event-card__feedback .feedback-button:hover { color: #2b211a; background: rgba(121,48,20,0.07); }
@@ -2126,8 +2118,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           max-width: none;
           max-height: none;
           height: auto;
-          object-fit: contain;
-          object-position: center top;
           border-radius: 0;
           box-shadow: none;
           transform: none;
@@ -2165,8 +2155,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           min-width: 0;
           max-width: min(calc(100vw - 2rem), var(--hero-source-width));
           max-height: min(72svh, var(--hero-source-height));
-          object-fit: contain;
-          object-position: center;
           transform: none;
           will-change: auto;
         }
@@ -2274,8 +2262,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           width: 100%;
           height: calc(100% + 384px);
           max-height: none;
-          object-fit: cover;
-          object-position: center bottom;
           transform: translate3d(0, var(--desktop-continuous-parallax-y, 0), 0);
           will-change: transform;
         }
@@ -2374,28 +2360,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           position: relative;
           width: 100%;
           aspect-ratio: 1 / 1.04;
-          overflow: hidden;
           background: #d8cec1;
-        }
-        #discovery-feed .event-card__media-shell--cover .event-card__media {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        #discovery-feed .event-card__media-shell--document .event-card__media {
-          position: absolute;
-          z-index: 2;
-          left: 0;
-          top: 50%;
-          width: 100%;
-          max-width: none;
-          height: auto;
-          min-height: 0;
-          object-fit: initial;
-          transform: translateY(calc(-50% + var(--card-focal-offset, 0%)));
-          background: transparent;
         }
         #discovery-feed .event-card--split-actions .event-card__body,
         #discovery-feed .event-card--split-actions .event-card__utility-row {
@@ -2484,7 +2449,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
     </style>
   </head>
-  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="1" data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">

@@ -2,6 +2,74 @@
 
 ## [Unreleased]
 
+- Changed: integrated the accepted F0 route-theme and interest-club residual
+  foundations plus the current M0 source/downstream ancestry. Exhibitions,
+  festivals, interest-club detail and `InterestClubCard` now consume their
+  canonical tokens without changing the established route compositions;
+  festival favorite targets are at least 44px and visible glyphs use the four
+  canonical semantic-icon roles. The two remaining focus routes now publish
+  and synchronize their accepted composition identities, bringing the grouped
+  source census to `9/9` and the PM0 route-identity source census to `19/19`.
+  Browser credit remains owned by V0.
+
+- Fixed: external festival timeline links now carry both `noopener` and
+  `noreferrer`, matching the accepted N0/V0 safe-blank-target contract. This is
+  a route-local safety correction only; festival composition and navigation
+  behavior are unchanged.
+
+- Changed: integrated the accepted F0/M0/A0 UI-normalization checkpoints and
+  completed `A0-MECH-01..05`: search lifecycle, event-detail rails and
+  MediaFrame ownership, listing-rail framing ownership, route identities,
+  semantic icons and 44px action targets now converge on their canonical
+  roots. Event-detail advances the source-family census to `6/9`, pending the
+  independent V0 browser verdict.
+
+- Fixed: desktop Popular shelves now own their intrinsic one-row width excess
+  instead of widening the whole document. Cards, media ratios and shelf
+  composition are unchanged; the browser gate covers the 980px breakpoint
+  seams, the 1366px presentation contour and short real-data listing pages.
+  The generated-preview gate now validates Popular's accepted Large/Compact
+  roots without requiring a disconnected third mobile rail and permits
+  truthfully omitted evidence shelves while preserving survivor order.
+
+- Fixed: the exact N0 successor gate now runs against its compact acceptance
+  manifest, and the F0 icon checker distinguishes contextual role dispatch from
+  token ownership. The accepted M0 delta through `c808c75d` is integrated;
+  WeatherDateContext consumes the canonical typography family, duplicate shell
+  icon aliases are removed, and Weekend's 721px desktop seam shrinks its label
+  descendants instead of widening the document. The July presentation
+  composition and its primary desktop/mobile viewports are unchanged.
+
+- Changed: static-site previews and production candidates now share one
+  Kaggle-to-checked-artifact-to-host-publisher rail targeting the same
+  `kenigevents.ru` bucket; direct local-dist preview publication is retired.
+  Preview runs can select stable route families with repeatable
+  `--page-class`, publish create-only below `/<buildId>/`, and verify the exact
+  `/<buildId>/__preview/` URL. Production candidates remain full-catalog and
+  reject page-class slicing. The Astro filter, Python runner and checked
+  publisher now validate against one versioned page-class contract instead of
+  maintaining independent allowlists. Preview retention is implemented by the
+  same events-bot release module: it accepts only whole protected build IDs,
+  fails closed when a protected prefix is missing, and preserves a bounded
+  rollback/grace cohort before deleting old immutable prefixes. Real and
+  deterministic Golden Review previews are explicit data modes of that same
+  runner: Golden uses the same Kaggle kernel, artifact validation and
+  create-only publisher, requires a full-page build and records its corpus ID
+  and digest in the build result and publication receipt. The previously
+  proposed local Golden deploy wrapper is intentionally not part of the rail.
+  Preview object upload and independent read-back verification now use a
+  bounded eight-worker pool while preserving conditional create-only writes,
+  per-object SHA-256/MIME checks and retry-safe immutable-prefix adoption.
+  Both public asset and Astro-asset origins now resolve the same `{buildId}`
+  template, keeping preview media inside its exact immutable publication prefix.
+  Frozen Golden previews also skip the unrelated daily service-share render, so
+  an explicit future Golden clock cannot fail against today's real event set.
+  The accepted M0 successor is integrated on the same branch: EventCard,
+  ListingEventCard, EventMediaRail and MobileListingRailRow now share the
+  canonical `media-frame.css` protocol, while AdaptiveEventCardGrid publishes
+  separate input/admitted-source/rendered diagnostic populations with coherent
+  count/order cardinality and one explicit diagnostics owner.
+
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK
   posts fail closed when an accepted/pending poster exists but storage failed
@@ -13,6 +81,19 @@
   text-only posts also remain failed (rather than falsely repaired) when a
   non-empty canonical media set yields zero VK attachments. Regression contract:
   `INC-2026-09-01-yandex-storage-cdn-media-outage`.
+
+- Fixed: `AdaptiveEventCardGrid` responsive stack selectors now match the
+  specificity of row-size selectors, so progressive grids actually collapse
+  to one card at 620px and below instead of retaining two undersized columns
+  whose card content caused horizontal document overflow.
+
+- Fixed: the real Review Preview post-build gate now discovers a deterministic
+  multi-image recommendation journey from the generated active catalog. It
+  still prefers the historical `6408 -> 6407` canary when present, but no
+  longer rejects a fresh production slice merely because those expired events
+  have left it. Listing verification also accepts an explicitly empty canonical
+  mobile rail root, so a legitimate zero-event Weekend does not masquerade as
+  a missing rail implementation.
 
 - Fixed: durable Telegram provider bindings no longer consume a new encrypted
   SQLite row every time the same target, message, scheduled item or provider

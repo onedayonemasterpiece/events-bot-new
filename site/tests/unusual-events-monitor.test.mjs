@@ -166,7 +166,8 @@ test('the shipped surface exposes generic ready/empty feed markers and the Playw
   ]);
   assert.match(surface, /data-unusual-feed="ready"/u);
   assert.match(surface, /data-unusual-feed="empty"/u);
-  assert.match(surface, /data-unusual-event-id=\{item\.event\.id\}/u);
+  assert.match(surface, /'data-unusual-event-id':item\.event\.id/u);
+  assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*?itemRoots=\{itemRoots\}/u);
   assert.match(entrypoint, /UNUSUAL_EVENTS_HEALTH_FILE/u);
   assert.match(entrypoint, /runUnusualEventsBrowserMonitor/u);
 });

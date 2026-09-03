@@ -50,6 +50,8 @@ const catalogSrc = withBase('/data/personal-feed.json');
     mode="flow"
     rowSize={3}
     responsive="progressive"
+    runtimeManaged
+    runtimeSourcePolicy="mirror-rendered"
     ariaLive="polite"
     ariaAtomic={false}
     ariaLabelledby="favorites-title"
@@ -143,20 +145,6 @@ const catalogSrc = withBase('/data/personal-feed.json');
       }
     };
 
-    const syncAdaptiveDiagnostics = () => {
-      if (!(grid instanceof HTMLElement)) return 0;
-      const cards = Array.from(grid.querySelectorAll(':scope > [data-event-card]'))
-        .filter((card) => card instanceof HTMLElement);
-      const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
-      const count = cards.length;
-      grid.dataset.adaptiveGridSourceCount = String(count);
-      grid.dataset.adaptiveGridRenderedCount = String(count);
-      grid.dataset.adaptiveGridSourceOrder = order;
-      grid.dataset.adaptiveGridRenderedOrder = order;
-      grid.dataset.adaptiveGridRemainderCount = String(count % 3);
-      return count;
-    };
-
     const renderJoined = async ({ catalog, local, remoteRows = [], snapshot, remoteFailed = false, cloudSettled = false }) => {
       if (!(grid instanceof HTMLElement)) return 0;
       const refs = mergeSavedEventRefs({
@@ -166,14 +154,15 @@ const catalogSrc = withBase('/data/personal-feed.json');
       });
       const joined = joinFutureSavedEvents(catalog, refs, String(catalog?.current_date || ''));
       grid.replaceChildren();
+      let rendered = 0;
       for (const [index, entry] of joined.entries()) {
         const card = window.KenigEventsCreateEventCard?.(entry.item, 'split-actions');
         if (!card) continue;
         card.dataset.savedSource = entry.saved.source;
         card.dataset.savedRank = String(index);
         grid.appendChild(card);
+        rendered += 1;
       }
-      const rendered = syncAdaptiveDiagnostics();
       grid.hidden = rendered === 0;
       if (empty instanceof HTMLElement) empty.hidden = rendered !== 0;
       if (authRequired instanceof HTMLElement) {

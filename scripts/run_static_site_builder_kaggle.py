@@ -33,8 +33,12 @@ if str(ROOT) not in sys.path:
 from runtime_disk import runtime_scratch_health, writable_disk_health
 from static_site_release import (
     STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA,
+    STATIC_SITE_PREVIEW_PAGE_CLASSES,
     STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
     resolve_build_clock,
+    publish_preview_archive,
+    prune_preview_objects,
+    resolve_checked_static_site_artifact,
     static_site_artifact_root,
     static_site_output_root,
     static_site_scratch_root,
@@ -71,7 +75,30 @@ ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
 BUILD_ID_RE = re.compile(r'(?:preview|production)-[A-Za-z0-9][A-Za-z0-9._-]{0,191}')
 SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-[A-Za-z0-9_-]+')
 SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
+STATIC_SITE_PAGE_CLASSES = STATIC_SITE_PREVIEW_PAGE_CLASSES - {'all'}
 DEFAULT_DURABLE_CACHE_MAX_BYTES = 64 * 1024 * 1024
+
+
+def normalize_page_classes(values: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    selected: list[str] = []
+    for value in values or ():
+        for item in str(value or '').split(','):
+            normalized = item.strip().lower()
+            if normalized and normalized not in selected:
+                selected.append(normalized)
+    if not selected or 'all' in selected:
+        if len(selected) > 1:
+            raise ValueError('page class all cannot be combined with named classes')
+        return ('all',)
+    unknown = sorted(set(selected) - STATIC_SITE_PAGE_CLASSES)
+    if unknown:
+        raise ValueError(
+            'unknown static-site page classes: '
+            + ','.join(unknown)
+            + '; expected '
+            + ','.join(sorted(STATIC_SITE_PAGE_CLASSES))
+        )
+    return tuple(selected)
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
@@ -625,6 +652,30 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
     result = json.loads(result_path.read_text(encoding='utf-8'))
     if result.get('ok') is not True or result.get('build_id') != args.build_id:
         raise RuntimeError('Kaggle result build identity/status mismatch')
+    if result.get('profile') != args.profile:
+        raise RuntimeError('Kaggle result profile mismatch')
+    expected_data_mode = str(getattr(args, 'preview_data_mode', 'real') or 'real')
+    if str(result.get('data_mode') or 'real') != expected_data_mode:
+        raise RuntimeError('Kaggle result preview data-mode mismatch')
+    if expected_data_mode == 'golden' and (
+        not re.fullmatch(
+            r'golden-review-[a-z0-9-]+-v\d+',
+            str(result.get('golden_corpus_id') or ''),
+        )
+        or not re.fullmatch(
+            r'[0-9a-f]{64}', str(result.get('golden_corpus_digest') or '')
+        )
+    ):
+        raise RuntimeError('Kaggle result Golden corpus identity mismatch')
+    if expected_data_mode == 'real' and (
+        result.get('golden_corpus_id') is not None
+        or result.get('golden_corpus_digest') is not None
+    ):
+        raise RuntimeError('Kaggle real result contains Golden corpus identity')
+    expected_page_classes = tuple(getattr(args, 'page_classes', ('all',)))
+    result_page_classes = tuple(result.get('page_classes') or ('all',))
+    if result_page_classes != expected_page_classes:
+        raise RuntimeError('Kaggle result page-class selection mismatch')
     result_cache_mode = str(result.get('semantic_cache_mode') or 'warm').strip().lower()
     if result_cache_mode != semantic_cache_mode(args):
         raise RuntimeError('Kaggle result semantic cache mode mismatch')
@@ -750,7 +801,85 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         token = str(result.get('candidate', {}).get('token') or '')
         if token != args.candidate_token or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
             raise RuntimeError('Kaggle candidate token mismatch')
+    else:
+        artifacts = result.get('artifacts')
+        if not isinstance(artifacts, list) or len(artifacts) != 1 or artifacts[0].get('kind') != 'preview':
+            raise RuntimeError('preview result must contain exactly one preview artifact')
+        artifact = artifacts[0]
+        name = str(artifact.get('filename') or '')
+        path = out_dir / name
+        if (
+            name != f'{args.build_id}.tar.gz'
+            or not path.is_file()
+            or path.stat().st_size != int(artifact.get('size') or -1)
+            or sha256_file(path) != artifact.get('sha256')
+        ):
+            raise RuntimeError('preview artifact hash/size mismatch')
     return result
+
+
+def publish_downloaded_preview(
+    out_dir: Path, args: argparse.Namespace, result: dict[str, object]
+) -> dict[str, object]:
+    if args.profile != 'preview':
+        raise RuntimeError('preview publisher accepts only the preview profile')
+    artifact = resolve_checked_static_site_artifact(
+        result, output_dir=out_dir, kind='preview'
+    )
+    required = {
+        'bucket': (os.getenv('KENIGEVENTS_SITE_YC_BUCKET') or '').strip(),
+        'endpoint': (
+            os.getenv('KENIGEVENTS_SITE_YC_ENDPOINT')
+            or 'https://storage.yandexcloud.net'
+        ).strip(),
+        'region': (os.getenv('KENIGEVENTS_SITE_YC_REGION') or 'ru-central1').strip(),
+        'access_key_id': (
+            os.getenv('KENIGEVENTS_SITE_YC_ACCESS_KEY_ID') or ''
+        ).strip(),
+        'secret_access_key': (
+            os.getenv('KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY') or ''
+        ).strip(),
+    }
+    if not required['bucket'] or not required['access_key_id'] or not required['secret_access_key']:
+        raise RuntimeError('preview publisher credentials are missing')
+    with tempfile.TemporaryDirectory(
+        prefix='static-site-preview-publish-', dir=SCRATCH_ROOT
+    ) as extraction_root:
+        receipt = publish_preview_archive(
+            artifact,
+            build_result=result,
+            extraction_root=extraction_root,
+            public_base_url=(
+                os.getenv('KENIGEVENTS_SITE_PUBLIC_BASE_URL')
+                or args.public_site_origin
+                or 'https://kenigevents.ru'
+            ).strip(),
+            **required,
+        )
+    payload = asdict(receipt)
+    payload['page_classes'] = list(receipt.page_classes)
+    if args.apply_preview_retention:
+        protected = tuple(dict.fromkeys([
+            *args.preview_retention_protected_build_ids,
+            receipt.build_id,
+        ]))
+        payload['retention'] = prune_preview_objects(
+            bucket=required['bucket'],
+            protected_build_ids=protected,
+            retain_noncurrent=args.preview_retain_noncurrent,
+            min_age_hours=args.preview_retention_min_age_hours,
+            apply=True,
+            endpoint=required['endpoint'],
+            region=required['region'],
+            access_key_id=required['access_key_id'],
+            secret_access_key=required['secret_access_key'],
+        )
+    print(
+        '[static-site-kaggle] preview published '
+        + json.dumps(payload, ensure_ascii=False, sort_keys=True),
+        flush=True,
+    )
+    return payload
 
 
 def copy_tree(src: Path, dst: Path, *, ignore_extra: list[str] | None = None) -> None:
@@ -1257,6 +1386,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'build_id': build_id,
         'run_id': args.run_id or build_id,
         'profile': args.profile,
+        'preview_data_mode': str(getattr(args, 'preview_data_mode', 'real') or 'real'),
+        'page_classes': list(getattr(args, 'page_classes', ('all',))),
         'catalog_mode': args.catalog_mode,
         'repo_sha': args.repo_sha or None,
         'candidate_token': args.candidate_token or None,
@@ -1269,7 +1400,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'focus_date_to': args.focus_date_to or None,
         'limit': args.limit,
         'public_site_origin': args.public_site_origin,
-        'asset_base_url': args.asset_base_url or None,
+        'asset_base_url': resolve_build_template(args.asset_base_url, build_id),
         'astro_asset_base_url': resolve_build_template(args.astro_asset_base_url, build_id),
         'ics_base_url': args.ics_base_url or None,
         'public_personalization_supabase_url': args.public_personalization_supabase_url or None,
@@ -1457,6 +1588,8 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
     print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
     validated = validate_downloaded_result(out_dir, args)
+    if getattr(args, 'publish_preview', False):
+        publish_downloaded_preview(out_dir, args, validated)
     if getattr(args, 'export_in_kaggle', False) and (
         collection_semantic_compute_required(args)
         or getattr(args, 'related_mode', 'sparse') == 'bge'
@@ -1485,7 +1618,20 @@ def main() -> int:
     parser.add_argument('--expected-snapshot-sha256', default='')
     parser.add_argument('--expected-snapshot-size', type=int, default=0)
     parser.add_argument('--profile', choices=['preview', 'production-candidate'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
+    parser.add_argument(
+        '--preview-data-mode',
+        choices=['real', 'golden'],
+        default=os.getenv('STATIC_SITE_PREVIEW_DATA_MODE', 'real'),
+        help='Preview corpus mode. Both modes use this Kaggle runner and publisher.',
+    )
     parser.add_argument('--catalog-mode', choices=['slice', 'full'], default=os.getenv('STATIC_SITE_CATALOG_MODE', 'slice'))
+    parser.add_argument(
+        '--page-class',
+        action='append',
+        dest='page_classes',
+        default=None,
+        help='Preview-only route class; repeat or pass a comma list. Default: all.',
+    )
     parser.add_argument('--repo-sha', default=os.getenv('STATIC_SITE_REPO_SHA', ''))
     parser.add_argument(
         '--image-source-manifest',
@@ -1610,10 +1756,36 @@ def main() -> int:
     parser.add_argument('--status-callback-url', default=os.getenv('KAGGLE_STATUS_CALLBACK_URL', ''), help='Override callback URL for kaggle status events')
     parser.add_argument('--no-wait', action='store_true')
     parser.add_argument('--download-output', action='store_true')
+    parser.add_argument(
+        '--publish-preview',
+        action='store_true',
+        help='After checked Kaggle download, publish create-only to /<buildId>/ and verify /__preview/.',
+    )
+    parser.add_argument(
+        '--apply-preview-retention',
+        action='store_true',
+        help='After verified preview publication, prune only safely superseded preview-* prefixes.',
+    )
+    parser.add_argument(
+        '--preview-retention-protected-build-id',
+        action='append',
+        dest='preview_retention_protected_build_ids',
+        default=[],
+        help='Current/previous preview build id to protect; repeat for every real/golden pointer.',
+    )
+    parser.add_argument('--preview-retain-noncurrent', type=int, default=2)
+    parser.add_argument('--preview-retention-min-age-hours', type=int, default=48)
     parser.add_argument('--adopt-existing', action='store_true', help='Download/reconcile the exact already-pushed kernel; never push')
     parser.add_argument('--expected-dataset-ref', default='', help='Durable input dataset identity required for adoption')
     parser.add_argument('--keep-staging', action='store_true')
     args = parser.parse_args()
+    try:
+        args.page_classes = normalize_page_classes(
+            args.page_classes
+            or [os.getenv('STATIC_SITE_PAGE_CLASSES', 'all')]
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     args.repo_sha = resolve_repo_sha(args.repo_sha)
     clock = resolve_build_clock(
         current_date=args.current_date or None,
@@ -1661,8 +1833,33 @@ def main() -> int:
         if args.candidate_token and not re.fullmatch(r'[A-Za-z0-9_-]{43}', args.candidate_token):
             raise SystemExit('--candidate-token must be one 256-bit base64url value')
         args.candidate_token = args.candidate_token or secrets.token_urlsafe(32)
+        if args.page_classes != ('all',):
+            raise SystemExit('production-candidate forbids page-class slicing')
     elif args.catalog_mode != 'slice':
         raise SystemExit('preview profile requires --catalog-mode slice')
+    if args.preview_data_mode == 'golden' and (
+        args.profile != 'preview'
+        or args.page_classes != ('all',)
+        or not re.fullmatch(r'preview-golden-[A-Za-z0-9][A-Za-z0-9._-]{0,183}', args.build_id)
+    ):
+        raise SystemExit(
+            'golden preview requires the preview profile, page class all, and a preview-golden-* build id'
+        )
+    if args.profile != 'preview' and args.preview_data_mode != 'real':
+        raise SystemExit('production-candidate accepts only --preview-data-mode real')
+    if args.publish_preview and (
+        args.profile != 'preview' or not args.download_output or args.no_wait
+    ):
+        raise SystemExit(
+            '--publish-preview requires a waited preview profile with --download-output'
+        )
+    if args.apply_preview_retention and (
+        not args.publish_preview or not args.preview_retention_protected_build_ids
+    ):
+        raise SystemExit(
+            '--apply-preview-retention requires --publish-preview and at least one '
+            '--preview-retention-protected-build-id'
+        )
     args.snapshot_contract = load_snapshot_contract(args)
     args.image_source_contract = resolve_image_source_contract(args)
 
@@ -1752,6 +1949,8 @@ def main() -> int:
                                 f"build_id={validated.get('build_id')} result_sha256={sha256_file(out_dir / 'static_site_build_result.json')}",
                                 flush=True,
                             )
+                            if args.publish_preview:
+                                publish_downloaded_preview(out_dir, args, validated)
                             cache_out = out_dir / 'event_related_chain_cache.json'
                             if args.export_in_kaggle and args.related_cache and cache_out.exists():
                                 require_bounded_durable_cache(cache_out)

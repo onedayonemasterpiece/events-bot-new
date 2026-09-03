@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import io
 import sys
 import json
 import importlib.util
@@ -640,8 +642,8 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
         focus_date_to="",
         limit=50,
         public_site_origin="https://kenigevents.ru",
-        asset_base_url="",
-        astro_asset_base_url="",
+        asset_base_url="https://static.kenigevents.ru/{buildId}",
+        astro_asset_base_url="https://static.kenigevents.ru/{buildId}",
         ics_base_url="",
         public_personalization_supabase_url="",
         public_personalization_supabase_publishable_key="",
@@ -688,6 +690,8 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     )["catalog_revision"] == "a" * 64
     assert config["sync_pgvector_vectors"] is False
     assert config["public_personalization_supabase_relay_url"] == "https://relay.example.test"
+    assert config["asset_base_url"] == "https://static.kenigevents.ru/preview-revision"
+    assert config["astro_asset_base_url"] == "https://static.kenigevents.ru/preview-revision"
 
     builder_path = (
         Path(__file__).resolve().parents[1]
@@ -922,10 +926,27 @@ def test_runner_adopts_exact_complete_output_without_push(tmp_path: Path) -> Non
             return {"status": "COMPLETE"}
         def download_kernel_output(self, _kernel, *, path, force=True):
             output = Path(path)
+            archive = output / "preview-adopt.tar.gz"
+            with tarfile.open(archive, "w:gz") as bundle:
+                payload = b"checked preview"
+                info = tarfile.TarInfo(name="preview-adopt/__preview/index.html")
+                info.size = len(payload)
+                bundle.addfile(info, io.BytesIO(payload))
             (output / "static_site_build_result.json").write_text(
-                json.dumps({"ok": True, "build_id": "preview-adopt"}), encoding="utf-8"
+                json.dumps({
+                    "ok": True,
+                    "profile": "preview",
+                    "build_id": "preview-adopt",
+                    "page_classes": ["all"],
+                    "artifacts": [{
+                        "kind": "preview",
+                        "filename": archive.name,
+                        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                        "size": archive.stat().st_size,
+                    }],
+                }), encoding="utf-8"
             )
-            return ["static_site_build_result.json"]
+            return ["static_site_build_result.json", archive.name]
 
     args = SimpleNamespace(
         expected_dataset_ref="owner/exact-input",
@@ -1275,6 +1296,47 @@ def test_static_site_kernel_installs_chromium_with_linux_dependencies() -> None:
     )
 
 
+def test_static_site_golden_preview_skips_real_daily_service_share(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib.util
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_golden_share_test", kernel_path)
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+    calls: list[tuple[dict, dict]] = []
+    monkeypatch.setattr(
+        kernel,
+        "render_daily_service_share",
+        lambda config, clock: calls.append((config, clock)) or {"status": "ready"},
+    )
+
+    skipped = kernel.materialize_service_share(
+        {"profile": "preview"},
+        {"effective_date": "2027-06-04"},
+        preview_data_mode="golden",
+    )
+    assert skipped == {
+        "status": "skipped",
+        "reason": "golden_preview_frozen_clock",
+    }
+    assert calls == []
+
+    assert kernel.materialize_service_share(
+        {"profile": "preview"},
+        {"effective_date": "2026-09-03"},
+        preview_data_mode="real",
+    ) == {"status": "ready"}
+    assert len(calls) == 1
+
+
 def test_static_site_kernel_retains_loaded_media_and_keyboard_browser_evidence() -> None:
     kernel_path = (
         Path(__file__).resolve().parents[1]
@@ -1296,7 +1358,7 @@ def test_static_site_kernel_retains_loaded_media_and_keyboard_browser_evidence()
     assert "{'production_root', 'secret_candidate', 'browser_evidence'}" in runner_source
 
 
-def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
+def test_add_build_11_static_asset_template_resolves_to_exact_build() -> None:
     from scripts.run_static_site_builder_kaggle import resolve_build_template
 
     assert resolve_build_template(

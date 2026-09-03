@@ -3,6 +3,7 @@ import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
 import { selectedTransportFaultProfile } from './transport-fault-build-contract.mjs';
+import { normalizeStaticSitePageClasses } from './page-class-build-filter.mjs';
 
 function safeBuildId(value) {
   if (!value || !/^preview-[a-zA-Z0-9._-]+$/.test(value) || value.includes('/')) {
@@ -45,6 +46,20 @@ const effectiveCurrentDate = process.env.STATIC_SITE_CURRENT_DATE || dateInKalin
 const effectiveReferenceIso = process.env.STATIC_SITE_CURRENT_DATETIME || now.toISOString();
 const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').slice(0, 15).toLowerCase();
 const buildId = safeBuildId(process.env.PREVIEW_BUILD_ID || `preview-${stamp}-${gitShortSha()}`);
+const previewDataMode = String(process.env.PREVIEW_DATA_MODE || 'real').trim().toLowerCase();
+if (!['real', 'golden'].includes(previewDataMode)) {
+  throw new Error(`PREVIEW_DATA_MODE must be real or golden, received ${previewDataMode || '(empty)'}`);
+}
+const goldenCorpusId = String(process.env.GOLDEN_CORPUS_ID || '').trim();
+const goldenCorpusDigest = String(process.env.GOLDEN_CORPUS_DIGEST || '').trim().toLowerCase();
+if (previewDataMode === 'golden') {
+  if (!/^golden-review-[a-z0-9-]+-v\d+$/u.test(goldenCorpusId)) {
+    throw new Error('Golden preview requires a valid GOLDEN_CORPUS_ID');
+  }
+  if (!/^[0-9a-f]{64}$/u.test(goldenCorpusDigest)) {
+    throw new Error('Golden preview requires a SHA-256 GOLDEN_CORPUS_DIGEST');
+  }
+}
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
 const stagedDistDir = join(siteDir, `.preview-dist-${process.pid}`);
@@ -55,6 +70,7 @@ const astroAssetBaseUrl = (process.env.PUBLIC_ASTRO_ASSET_BASE_URL || '')
 const publicSearchConfig = loadPreviewPublicConfig(siteDir, process.env);
 requirePreviewAuthorizedSearch(publicSearchConfig, process.env);
 const transportFault = selectedTransportFaultProfile(process.env);
+const pageClasses = normalizeStaticSitePageClasses(process.env.STATIC_SITE_PAGE_CLASSES || 'all');
 
 rmSync(distDir, { recursive: true, force: true });
 const env = {
@@ -62,6 +78,7 @@ const env = {
   ...publicSearchConfig.values,
   SITE_BASE_PATH: `/${buildId}`,
   PUBLIC_PREVIEW_BUILD_ID: buildId,
+  PUBLIC_PREVIEW_DATA_MODE: previewDataMode,
   PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru',
   PUBLIC_STATIC_SITE_CURRENT_DATE: effectiveCurrentDate,
   PUBLIC_STATIC_SITE_REFERENCE_ISO: effectiveReferenceIso,
@@ -89,14 +106,19 @@ writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({
   repo_sha: gitFullSha(),
   generatedAt: now.toISOString(),
   basePath: `/${buildId}`,
+  dataMode: previewDataMode,
+  goldenCorpusId: previewDataMode === 'golden' ? goldenCorpusId : null,
+  goldenCorpusDigest: previewDataMode === 'golden' ? goldenCorpusDigest : null,
   astroAssetBaseUrl: astroAssetBaseUrl || null,
   authorizedSearchConfigured: publicSearchConfig.configured,
   currentDate: effectiveCurrentDate,
   referenceIso: effectiveReferenceIso,
   transportFaultProfile: transportFault.id,
   transportFaultRegistryDigest: transportFault.registry_digest,
+  pageClasses,
 }, null, 2));
 console.log(`Preview build ready: dist/${buildId}/`);
 console.log(`Preview URL: https://kenigevents.ru/${buildId}/__preview/`);
+console.log(`Preview data mode: ${previewDataMode}${previewDataMode === 'golden' ? ` (${goldenCorpusId})` : ''}`);
 if (astroAssetBaseUrl) console.log(`Astro asset CDN: ${astroAssetBaseUrl}/_astro/`);
 console.log(`Authorized Search: ${publicSearchConfig.configured ? 'configured with browser-safe public values' : 'disabled (public config unavailable)'}`);

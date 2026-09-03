@@ -37,7 +37,7 @@ test('EventLayout is the single mobile shell owner with canonical route mapping'
   assert.match(drawer, /data-service-share-root/u);
   assert.match(drawer, /hydrateServiceShareActions/u);
   assert.match(drawer, /Бесплатно[\s\S]*Подборки[\s\S]*Выставки[\s\S]*Фестивали[\s\S]*Популярное[\s\S]*О сервисе[\s\S]*Поиск[\s\S]*Для меня/u);
-  assert.match(drawer, /data-reference4-collections[\s\S]*Детям[\s\S]*Необычное[\s\S]*Бесплатно[\s\S]*Клубы по интересам/u);
+  assert.match(drawer, /data-reference4-collections[\s\S]*Все подборки[\s\S]*Необычное[\s\S]*Бесплатно[\s\S]*Гастрономия[\s\S]*Клубы по интересам/u);
 });
 
 test('shared bottom nav has one prop-owned current item and no scroll or :has ownership', async () => {

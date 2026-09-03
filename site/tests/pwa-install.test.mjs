@@ -182,14 +182,14 @@ test('presentation install never describes an Android shortcut as the installed 
 });
 
 test('site exposes a base-aware installable manifest and footer-owned controller', async () => {
-  const [manifest, action, footer, layout, home, release, deploy] = await Promise.all([
+  const [manifest, action, footer, layout, home, release, publisher] = await Promise.all([
     read('src/pages/manifest.webmanifest.ts'),
     read('src/components/PwaInstallAction.astro'),
     read('src/components/SiteFooter.astro'),
     read('src/layouts/EventLayout.astro'),
     read('src/pages/index.astro'),
     read('scripts/release-contract.mjs'),
-    read('scripts/deploy-preview-yc.mjs'),
+    read('../static_site_release.py'),
   ]);
 
   assert.match(manifest, /const scope = withBase\('\/'\)/u);
@@ -216,7 +216,7 @@ test('site exposes a base-aware installable manifest and footer-owned controller
   assert.doesNotMatch(home, /<PwaInstallAction \/>/u);
   assert.doesNotMatch(home, /<PwaTelemetry \/>/u);
   assert.match(release, /'\.webmanifest': 'application\/manifest\+json; charset=utf-8'/u);
-  assert.match(deploy, /manifest\.webmanifest[\s\S]*application\/manifest\+json; charset=utf-8/u);
+  assert.match(publisher, /"\.webmanifest": "application\/manifest\+json; charset=utf-8"/u);
 });
 
 test('brand and maskable launcher PNGs have the declared dimensions', async () => {

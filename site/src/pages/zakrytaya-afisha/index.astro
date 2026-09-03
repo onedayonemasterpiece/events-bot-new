@@ -39,7 +39,16 @@ const robots = IS_SECRET_CANDIDATE
   <body>
     <PersonalizationRuntime />
     <a class="focus-secret__skip" href="#main">К основному содержанию</a>
-    <main id="main" class="focus-secret" data-focus-secret data-root-href={withBase('/')}>
+    <main
+      id="main"
+      class="focus-secret"
+      data-ds-family="ClosedFocusHubRouteComposition"
+      data-ds-version="1"
+      data-ds-variant="participant-hub"
+      data-ds-state="checking"
+      data-focus-secret
+      data-root-href={withBase('/')}
+    >
       <section class="focus-secret__gate" data-secret-checking aria-live="polite">
         <span class="focus-secret__spinner" aria-hidden="true"></span>
         <h1>Проверяем участие на устройстве</h1>
@@ -197,8 +206,10 @@ const robots = IS_SECRET_CANDIDATE
     if (checking) checking.hidden = true;
     if (marker?.status === 'active') {
       if (hub) hub.hidden = false;
+      root.dataset.dsState = 'available';
     } else if (locked) {
       locked.hidden = false;
+      root.dataset.dsState = 'locked';
     }
 
     root.querySelector<HTMLButtonElement>('[data-secret-clear]')?.addEventListener('click', () => {

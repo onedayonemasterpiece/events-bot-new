@@ -586,7 +586,10 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-LISTING-04 — Breakpoint and desktop non-regression.** На `720px` видны
   только mobile family и dock, на `721px` — только desktop family без dock. На
   `1366/1536/1920px` геометрия десктопного Popular совпадает с V22 при одном
-  snapshot; режимы телефона не влияют на фильтры и их счётчики.
+  snapshot; режимы телефона не влияют на фильтры и их счётчики. На
+  `961/1022/1023/1024/1440px` каждая видимая desktop shelf сохраняет
+  `flex-wrap: nowrap`, intrinsic card/media width и владеет excess через
+  `overflow-x: auto`; `documentElement.scrollWidth` не превышает viewport.
 - **ADD-LISTING-08 — Mobile chrome uses one navigation hierarchy.** На
   `360/390/430px` обычная `.site-nav` скрыта только для mobile Popular, а общий
   `.mobile-discovery-menu` остаётся доступен. Четыре listing routes занимают

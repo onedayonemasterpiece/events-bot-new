@@ -1,0 +1,109 @@
+{
+  "schema": "kenigevents.f0-interest-club-theme-decision.v1",
+  "version": "1.0.0",
+  "contract_version": "1.9.0",
+  "status": "PRODUCT_CLASSIFICATION_CLOSED_RESIDUAL_CARD_BINDING_READY",
+  "role": "F0",
+  "decision": {
+    "club_index_intro_palette": "INTENTIONAL_EDITORIAL_ROUTE_IDENTITY",
+    "club_index_intro_owner": "site/src/components/design-system/interest-club-route-foundations.css",
+    "club_index_route_consumer_status": "CENTRALIZED_IN_CURRENT_SUCCESSOR",
+    "club_card_palette": "CANONICAL_REUSABLE_COMPONENT_FAMILY_NOT_ROUTE_LOCAL_DECK",
+    "club_card_palette_owner": "site/src/components/design-system/collection-foundations.css",
+    "residual_decorative_palette_owner": "site/src/components/design-system/interest-club-card-continuity-foundations.css",
+    "owner_product_decision_required": false,
+    "reason": "The current successor already binds the blue/gold index atmosphere and cool count pair through one F0 route token registry. The photographic deck is the reusable InterestClubCard family, not an alternate route palette. Four remaining white-alpha decorative literals are source normalization, not a product choice."
+  },
+  "observed_current_successor": {
+    "branch": "agent/static-site-single-kaggle-contract",
+    "sha": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
+    "route": "site/src/pages/kluby-po-interesam/index.astro",
+    "card": "site/src/components/InterestClubCard.astro",
+    "route_foundation": "site/src/components/design-system/interest-club-route-foundations.css",
+    "card_foundation": "site/src/components/design-system/collection-foundations.css"
+  },
+  "current_successor_evidence": {
+    "route_family": "InterestClubsIndexRouteComposition@1/verified-directory",
+    "route_imports_product_contour": true,
+    "route_intro_and_mobile_shelf_use_ke_tokens_only": true,
+    "route_count_glyph": "SemanticIcon/catalog-grid/inline",
+    "card_family": "InterestClubCard@1/photographic-catalog-card",
+    "card_primary_action_glyph": "SemanticIcon/arrow-right/inline",
+    "card_central_palette_present": true,
+    "card_residual_raw_color_count": 4
+  },
+  "residual_card_bindings": [
+    {
+      "selector": ".club-card__fallback::before",
+      "property": "box-shadow.inner-ring",
+      "current": "rgba(255,255,255,.035)",
+      "replacement": "var(--ke-color-club-card-fallback-orbit-ring-inner)"
+    },
+    {
+      "selector": ".club-card__fallback::before",
+      "property": "box-shadow.outer-ring",
+      "current": "rgba(255,255,255,.025)",
+      "replacement": "var(--ke-color-club-card-fallback-orbit-ring-outer)"
+    },
+    {
+      "selector": ".club-card__fallback span",
+      "property": "border-color",
+      "current": "rgba(255,255,255,.3)",
+      "replacement": "var(--ke-color-club-card-fallback-orbit-line)"
+    },
+    {
+      "selector": ".club-card__facts div + div",
+      "property": "border-left-color",
+      "current": "rgba(255,255,255,.24)",
+      "replacement": "var(--ke-color-club-card-fact-divider)"
+    }
+  ],
+  "consumer_boundary": {
+    "club_index_route_edit_required": false,
+    "club_card_edit_owner": "A0",
+    "club_card_edit_kind": "bounded deterministic substitution of four exact color literals",
+    "preserve": [
+      "all club projection and verification semantics",
+      "index hero composition and blue/gold atmosphere",
+      "card fallback ornament geometry",
+      "photographic veil, scheduled-activity orange and keyboard behavior",
+      "cover loading, links and responsive layout"
+    ],
+    "forbid": [
+      "mapping club identity colors to generic status roles",
+      "merging the route intro palette with the photographic card palette",
+      "changing card anatomy or event data",
+      "introducing another icon-size role"
+    ]
+  },
+  "strict_gate": {
+    "command": "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+    "required_after": "F0 source integration plus the four A0 substitutions",
+    "browser_expectations": [
+      "index intro and mobile shelf retain current computed colors and geometry",
+      "card fallback orbit and fact dividers are pixel-equivalent",
+      "catalog-grid and arrow-right glyphs remain 16px inline role icons",
+      "no new raw club palette owner appears"
+    ]
+  },
+  "rollback": {
+    "id": "F0-RB-INTEREST-CLUB-THEME-DECISION",
+    "source_unit": "interest-club-card-continuity-foundations.css plus this decision/check",
+    "consumer_unit": "the four exact InterestClubCard substitutions",
+    "trigger": "computed palette drift, missing semantic token, or change to card/index behavior",
+    "action": "revert only the consumer substitutions and/or this source unit; preserve the already-centralized current index route and immutable previews"
+  },
+  "runtime_boundary": {
+    "fresh_real_at_decision": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+    "fresh_real_source": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+    "classification": "historical valid transaction that predates the current centralized route and this residual binding",
+    "required_next": "fresh-real exact successor containing this F0 source and the A0 substitutions, followed by independent V0 computed-style review"
+  },
+  "not_claimed": [
+    "four card substitutions are integrated",
+    "strict gate has executed",
+    "current fresh-real preview contains this decision",
+    "V0 has accepted club index/card theme ownership",
+    "Penpot variables or instances are materialized"
+  ]
+}

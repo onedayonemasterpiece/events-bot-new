@@ -74,17 +74,17 @@ const iconBase = withBase('/assets/weather');
   .weather-date-context__location-copy { min-width: 0; display: grid; gap: 1px; }
   .weather-date-context__location-copy strong {
     overflow: hidden;
-    font: 800 0.82rem/1.1 Inter, ui-sans-serif, system-ui, sans-serif;
+    font: 800 0.82rem/1.1 var(--ke-font-family-sans);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .weather-date-context__condition {
     color: var(--ke-color-muted, #6d6259);
-    font: 650 0.72rem/1.1 Inter, ui-sans-serif, system-ui, sans-serif;
+    font: 650 0.72rem/1.1 var(--ke-font-family-sans);
   }
   .weather-date-context__temperature {
     margin-left: auto;
-    font: 850 0.95rem/1 Inter, ui-sans-serif, system-ui, sans-serif;
+    font: 850 0.95rem/1 var(--ke-font-family-sans);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -93,7 +93,7 @@ const iconBase = withBase('/assets/weather');
     align-items: center;
     gap: 3px;
     color: #276b73;
-    font: 760 0.72rem/1 Inter, ui-sans-serif, system-ui, sans-serif;
+    font: 760 0.72rem/1 var(--ke-font-family-sans);
     white-space: nowrap;
   }
   .weather-date-context__water .weather-date-context__icon { width: 15px; height: 15px; flex-basis: 15px; }
@@ -103,7 +103,7 @@ const iconBase = withBase('/assets/weather');
     gap: 6px;
     margin-top: 8px;
     color: var(--ke-color-muted, #6d6259);
-    font: 650 0.68rem/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+    font: 650 0.68rem/1.2 var(--ke-font-family-sans);
   }
   .weather-date-context__meta a { color: inherit; text-underline-offset: 2px; }
   .weather-date-context__meta a::before { content: "· "; text-decoration: none; }

@@ -1,0 +1,41 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: 0d73428dfafff2fd5450b74fd68e7bb40e92d2c5
+base_branch: r0/ui-normalization-current-candidate-20260903
+integration_branch: agent/static-site-single-kaggle-contract
+global_constraints:
+  - one Kaggle build-and-publish rail
+  - one kenigevents.ru Object Storage bucket
+  - no local-dist publication
+  - preview-only page-class slicing
+  - production candidates remain complete
+verification_owner: R0
+stop_conditions:
+  - documented contract and implementation agree
+  - focused build and publisher contracts pass
+lanes:
+  - id: static-site-single-kaggle-contract
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04]
+    target: unified Kaggle preview/production materialization contract
+    depends_on: []
+    execution_mode: serial
+    branch: agent/static-site-single-kaggle-contract
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-site-single-kaggle-contract
+    writable_files:
+      - scripts/run_static_site_builder_kaggle.py
+      - kaggle/StaticSiteBuilder/static_site_builder.py
+      - static_site_release.py
+      - site
+      - docs/features/static-site-pages
+      - docs/operations
+      - docs/routes.yml
+      - .env.example
+      - CHANGELOG.md
+    forbidden_files:
+      - production databases
+      - Object Storage objects
+      - Penpot
+    expected_output: checked page-class Kaggle artifact and create-only preview publisher contract
+    verification_scope: full_local
+    status: committed

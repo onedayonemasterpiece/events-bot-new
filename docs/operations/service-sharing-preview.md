@@ -129,40 +129,17 @@ and `1440×900`.
 
 ## Preview-only publish safety gate
 
-`site/scripts/deploy-preview-yc.mjs` теперь является prefix-only командой для
-этого preview: она отклоняет build id без `preview-`, пишет только под
-`s3://<bucket>/<PREVIEW_BUILD_ID>/`, не обновляет stable `/ics/`, production
-pointer или production service-share manifest. Перед реальной загрузкой обязателен
-просмотр object plan через dry-run:
+Direct publication of local `site/dist` is retired. Service-share previews use
+the canonical StaticSiteBuilder transaction: a checked Kaggle artifact is
+downloaded and the trusted host publishes it create-only under the exact
+`preview-*` build prefix with `--publish-preview`. This publisher cannot
+express stable `/ics/`, production root or another build prefix. The canonical
+command, page-class slicing and receipt requirements live in
+[`kaggle-static-site-builder.md`](kaggle-static-site-builder.md#single-build-and-publish-rail-decision-2026-09-03).
 
-```bash
-PREVIEW_BUILD_ID=<PREVIEW_BUILD_ID> \
-KENIGEVENTS_SITE_DEPLOY_DRY_RUN=1 \
-npm --prefix site run deploy:preview
-```
-
-Реальная публикация использует ту же команду без
-`KENIGEVENTS_SITE_DEPLOY_DRY_RUN`. Реализация обязана:
-
-1. requires a unique `preview-*` build id;
-2. allowlists every destination key under `<PREVIEW_BUILD_ID>/`;
-3. rejects `/ics/`, current/pointer/manifest promotion and any key outside prefix;
-4. supports a dry-run/object plan that is reviewed before upload;
-5. applies immutable cache metadata to content-addressed WebP/PNG and correct
-   `Content-Type` to WebP, PNG and JSON;
-6. records the exact command in evidence.
-
-Для проверенного preview команда была:
-
-```bash
-PREVIEW_BUILD_ID=preview-20260715t0752z-f18-service-share-footer \
-KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY=1 \
-npm --prefix site run deploy:preview
-```
-
-Если dry-run показывает хотя бы один key вне preview prefix, публикация
-**Blocked**. Строка о запрете stable ICS в stdout является обязательной частью
-evidence.
+For a focused service-sharing review, include every required surface class in
+the runner request (normally `event`, `date`, `personal` and `lab`) rather than
+building locally and uploading the resulting directory.
 
 ## Public verification
 

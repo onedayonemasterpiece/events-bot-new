@@ -58,7 +58,15 @@ const robots = IS_SECRET_CANDIDATE
   <body>
     <PersonalizationRuntime />
     <a class="focus-collection__skip" href="#main">К основному содержанию</a>
-    <main id="main" class="focus-collection" data-focus-collection>
+    <main
+      id="main"
+      class="focus-collection"
+      data-ds-family="FocusEggCollectionRouteComposition"
+      data-ds-version="1"
+      data-ds-variant="collection-prototype"
+      data-ds-state={`found-${collectionProgress.found}-of-${collectionProgress.eligible}`}
+      data-focus-collection
+    >
       <nav class="focus-collection__nav" aria-label="Навигация коллекции">
         <a href={withBase('/zakrytaya-afisha/')} class="focus-collection__back">← В закрытую афишу</a>
         <FocusLabBadge label="Лаборатория" detail="Коллекция · прототип" />
@@ -236,6 +244,7 @@ const robots = IS_SECRET_CANDIDATE
       const meter = root.querySelector<HTMLMeterElement>('[data-collection-meter]');
       if (foundOutput) foundOutput.textContent = String(found);
       if (eligibleOutput) eligibleOutput.textContent = String(eligible);
+      root.dataset.dsState = `found-${found}-of-${eligible}`;
       if (meter) {
         meter.max = eligible;
         meter.value = found;

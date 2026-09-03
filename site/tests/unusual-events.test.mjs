@@ -79,7 +79,8 @@ test('the route uses EventCard and device-local seen state clears only on a view
   ]);
   assert.match(page, /<UnusualListingSurface feed=\{feed\}/u);
   assert.match(page, /noindex/u);
-  assert.match(surface, /<EventCard event=\{item\.event\} mobileFlowMedia \/>/u);
+  assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*?events=\{approvedEvents\}[\s\S]*?mobileFlowMedia[\s\S]*?itemRoots=\{itemRoots\}/u);
+  assert.match(surface, /'data-unusual-event-id':item\.event\.id/u);
   assert.match(surface, /IntersectionObserver/u);
   assert.match(surface, /entry\.intersectionRatio >= \.6/u);
   assert.match(surface, /setTimeout\(\(\) => commitViewed\(card\), 900\)/u);

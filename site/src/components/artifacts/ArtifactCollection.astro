@@ -1,4 +1,6 @@
 ---
+import SemanticIcon from '../design-system/SemanticIcon.astro';
+import '../design-system/product-contour-foundations.css';
 import { withBase } from '../../lib/events';
 import {
   AMBER_ARTIFACT_ID,
@@ -10,6 +12,11 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
 <section
   class="artifact-collection"
   id="artefakty"
+  data-ds-family="ArtifactCollection"
+  data-ds-version="1"
+  data-ds-variant="local-browser-collection"
+  data-ds-state="empty"
+  data-ke-foundation-consumer="artifact-collection"
   aria-labelledby="artifact-collection-title"
   data-artifact-collection
   data-nosnippet
@@ -76,7 +83,9 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
     data-artifact-dialog
   >
     <div class="artifact-detail__panel">
-      <button class="artifact-detail__close" type="button" aria-label="Закрыть историю артефакта" data-artifact-close>×</button>
+      <button class="artifact-detail__close" type="button" aria-label="Закрыть историю артефакта" data-artifact-close>
+        <SemanticIcon name="close" role="control" />
+      </button>
       <p class="artifact-detail__eyebrow">Артефакт 01 · найдено</p>
       <img
         src={`${amberAsset}-2x.webp`}
@@ -101,40 +110,40 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
 </section>
 
 <style>
-  .artifact-collection{width:min(1120px,calc(100% - 24px));margin:0 auto;padding:clamp(24px,5vw,64px) 0 80px;color:#281d17}
+  .artifact-collection{width:min(var(--ke-artifact-container),calc(100% - 24px));margin:0 auto;padding:clamp(24px,5vw,64px) 0 80px;color:var(--ke-color-artifact-ink)}
   .artifact-collection [hidden]{display:none!important}
   .artifact-collection__head{max-width:760px}
-  .artifact-collection__eyebrow,.artifact-detail__eyebrow{margin:0 0 8px;color:#98401f;font-size:12px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}
+  .artifact-collection__eyebrow,.artifact-detail__eyebrow{margin:0 0 8px;color:var(--ke-color-artifact-eyebrow);font-size:12px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}
   .artifact-collection h1{max-width:15ch;margin:0;font-size:clamp(38px,7vw,76px);line-height:.92;letter-spacing:-.055em}
   .artifact-collection__head>p:not(.artifact-collection__eyebrow){max-width:65ch;font-size:clamp(16px,2vw,19px);line-height:1.55}
-  .artifact-collection__device-note{padding:13px 16px;border-left:4px solid #d08a31;background:#fff6df}
+  .artifact-collection__device-note{padding:13px 16px;border-left:4px solid var(--ke-color-artifact-device-border);background:var(--ke-color-artifact-device-surface)}
   .artifact-collection__progress{margin-top:20px!important;font-weight:750}
   .artifact-collection__slots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:28px 0 0;padding:0;list-style:none}
-  .artifact-slot{min-width:0;min-height:244px;border:1px solid rgba(74,48,35,.16);border-radius:22px;background:#fffaf2;box-shadow:0 12px 30px rgba(68,39,24,.07)}
+  .artifact-slot{min-width:0;min-height:var(--ke-artifact-slot-min-height);border:var(--ke-shape-border-hairline) solid var(--ke-color-artifact-slot-border);border-radius:var(--ke-artifact-slot-radius);background:var(--ke-color-artifact-slot-surface);box-shadow:var(--ke-elevation-artifact-slot)}
   .artifact-slot__empty{box-sizing:border-box;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center}
-  .artifact-slot__number{align-self:flex-start;color:#a68e7e;font:800 11px/1 system-ui}
-  .artifact-slot__mystery{width:72px;height:72px;display:grid;place-items:center;border:1px dashed rgba(121,48,20,.28);border-radius:50%;color:#9c806e;background:rgba(255,255,255,.55);font:800 32px/1 Georgia,serif}
+  .artifact-slot__number{align-self:flex-start;color:var(--ke-color-artifact-slot-number);font:800 11px/1 system-ui}
+  .artifact-slot__mystery{width:72px;height:72px;display:grid;place-items:center;border:var(--ke-shape-border-hairline) dashed var(--ke-color-artifact-slot-mystery-line);border-radius:50%;color:var(--ke-color-artifact-slot-mystery);background:var(--ke-color-artifact-slot-mystery-surface);font:800 32px/1 Georgia,serif}
   .artifact-slot__empty strong{font-size:14px}
-  .artifact-slot__empty>span:last-child{color:#76645a;font-size:12px;line-height:1.4}
-  .artifact-slot__found{box-sizing:border-box;width:100%;height:100%;min-height:244px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;border:0;border-radius:21px;background:radial-gradient(circle at 50% 42%,#fff4bd 0,#fff9e9 42%,#fffaf2 75%);color:inherit;font:inherit;text-align:center;cursor:pointer}
-  .artifact-slot__found img{width:74px;height:96px;object-fit:contain;filter:drop-shadow(0 6px 8px rgba(157,78,0,.23))}
+  .artifact-slot__empty>span:last-child{color:var(--ke-color-artifact-slot-copy);font-size:12px;line-height:1.4}
+  .artifact-slot__found{box-sizing:border-box;width:100%;height:100%;min-height:var(--ke-artifact-slot-min-height);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;border:0;border-radius:var(--ke-artifact-found-radius);background:radial-gradient(circle at 50% 42%,var(--ke-color-artifact-found-glow) 0,var(--ke-color-artifact-found-middle) 42%,var(--ke-color-artifact-found-end) 75%);color:inherit;font:inherit;text-align:center;cursor:pointer}
+  .artifact-slot__found img{width:var(--ke-amber-media-width);height:var(--ke-amber-media-height);object-fit:contain;filter:var(--ke-elevation-amber-collection-media)}
   .artifact-slot__found span{display:flex;flex-direction:column;gap:4px}
-  .artifact-slot__found small{color:#6f6b2e;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+  .artifact-slot__found small{color:var(--ke-color-artifact-found-label);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
   .artifact-slot__found strong{font-size:15px}
-  .artifact-slot__found em{color:#98401f;font-size:12px;font-style:normal;font-weight:800}
-  .artifact-slot__found:focus-visible,.artifact-detail button:focus-visible{outline:3px solid #0f766e;outline-offset:3px}
-  .artifact-detail{width:min(760px,calc(100% - 24px));max-width:none;padding:0;border:0;border-radius:26px;background:#fffaf2;color:#281d17;box-shadow:0 24px 80px rgba(31,18,12,.28)}
-  .artifact-detail::backdrop{background:rgba(34,26,20,.58)}
+  .artifact-slot__found em{color:var(--ke-color-artifact-eyebrow);font-size:12px;font-style:normal;font-weight:800}
+  .artifact-slot__found:focus-visible,.artifact-detail button:focus-visible{outline:3px solid var(--ke-color-focus-ring);outline-offset:3px}
+  .artifact-detail{width:min(760px,calc(100% - 24px));max-width:none;padding:0;border:0;border-radius:var(--ke-artifact-dialog-radius);background:var(--ke-color-artifact-slot-surface);color:var(--ke-color-artifact-ink);box-shadow:var(--ke-elevation-artifact-dialog)}
+  .artifact-detail::backdrop{background:var(--ke-color-focus-dialog-backdrop)}
   .artifact-detail__panel{position:relative;display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:center;padding:clamp(24px,5vw,46px)}
-  .artifact-detail__panel>img{width:149px;height:192px;object-fit:contain;filter:drop-shadow(0 10px 12px rgba(157,78,0,.24))}
-  .artifact-detail__close{position:absolute;top:14px;right:14px;width:44px;height:44px;border:0;border-radius:50%;background:#eee2d5;color:#4a3024;font:400 29px/1 system-ui;cursor:pointer}
+  .artifact-detail__panel>img{width:149px;height:192px;object-fit:contain;filter:var(--ke-elevation-amber-dialog-media)}
+  .artifact-detail__close{position:absolute;top:14px;right:14px;width:var(--ke-artifact-dialog-close-size);height:var(--ke-artifact-dialog-close-size);display:grid;place-items:center;border:0;border-radius:50%;background:var(--ke-color-artifact-dialog-control-surface);color:var(--ke-color-artifact-dialog-control-text);cursor:pointer}
   .artifact-detail h2{margin:0 0 12px;font-size:clamp(30px,5vw,50px);line-height:.95;letter-spacing:-.04em}
   .artifact-detail p{font-size:15px;line-height:1.55}
-  .artifact-detail__local{color:#76645a;font-size:12px!important}
-  .artifact-detail__share{min-height:44px;padding:10px 16px;border:1px solid rgba(74,48,35,.15);border-radius:999px;background:#e9e1d8;color:#776c65;font:800 13px/1.2 system-ui}
+  .artifact-detail__local{color:var(--ke-color-artifact-slot-copy);font-size:12px!important}
+  .artifact-detail__share{min-height:var(--ke-size-touch-target);padding:10px 16px;border:var(--ke-shape-border-hairline) solid var(--ke-color-artifact-disabled-border);border-radius:var(--ke-shape-radius-pill);background:var(--ke-color-artifact-disabled-surface);color:var(--ke-color-artifact-disabled-text);font:800 13px/1.2 system-ui}
   .artifact-detail__share:disabled{cursor:not-allowed;opacity:1}
   @media(max-width:850px){.artifact-collection__slots{grid-template-columns:repeat(2,minmax(0,1fr))}.artifact-slot:last-child{grid-column:1/-1}.artifact-detail__panel{grid-template-columns:1fr;justify-items:center;text-align:center}.artifact-detail__panel>div{display:flex;flex-direction:column;align-items:center}}
-  @media(max-width:430px){.artifact-collection__slots{grid-template-columns:1fr}.artifact-slot:last-child{grid-column:auto}.artifact-slot,.artifact-slot__found{min-height:190px}.artifact-slot__found{flex-direction:row;text-align:left}.artifact-detail{max-height:calc(100dvh - 24px);overflow:auto}.artifact-detail__panel{gap:8px;padding:58px 20px 24px}.artifact-detail__panel>img{width:112px;height:145px}}
+  @media(max-width:430px){.artifact-collection__slots{grid-template-columns:1fr}.artifact-slot:last-child{grid-column:auto}.artifact-slot,.artifact-slot__found{min-height:var(--ke-artifact-slot-min-height-mobile)}.artifact-slot__found{flex-direction:row;text-align:left}.artifact-detail{max-height:calc(100dvh - 24px);overflow:auto}.artifact-detail__panel{gap:8px;padding:58px 20px 24px}.artifact-detail__panel>img{width:112px;height:145px}}
   @media(prefers-reduced-motion:reduce){.artifact-collection *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 </style>
 
@@ -157,6 +166,7 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
 
     const render = () => {
       const found = hasAmberArtifact(readArtifactCollection());
+      root.dataset.dsState = found ? 'found' : 'empty';
       if (slot) slot.dataset.artifactState = found ? 'found' : 'empty';
       if (empty) empty.hidden = found;
       if (open) open.hidden = !found;

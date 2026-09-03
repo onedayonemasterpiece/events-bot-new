@@ -69,7 +69,7 @@ test('catalog markup keeps shortcut hints focus-scoped and desktop columns count
   assert.match(page, /grid-template-columns:repeat\(var\(--club-columns\),minmax\(0,1fr\)\)/u);
   assert.match(page, /@media \(max-width: 760px\)[\s\S]*grid-template-columns:1fr/u);
   assert.match(page, /data-club-mobile-shelf/u);
-  assert.match(page, /\.club-mobile-shelf \{[\s\S]*position:sticky;[\s\S]*top:var\(--ke-site-header-bar-height\);/u);
+  assert.match(page, /\.club-mobile-shelf \{[\s\S]*position:sticky;[\s\S]*top:var\(--ke-clubs-mobile-shelf-top\);/u);
   assert.match(page, /<strong>Клубы по интересам<\/strong>/u);
   assert.doesNotMatch(page, /class="crumbs"/u);
   assert.match(card, /\.club-card__keyboard-hint[\s\S]*visibility:hidden;[\s\S]*opacity:0;/u);
@@ -85,12 +85,12 @@ test('mobile club cards reuse the accepted desktop overlay and luminous corner b
   assert.match(card, /class="club-card__future club-card__future--desktop"[\s\S]*data-club-future-badge="desktop"/u);
   assert.match(card, /class="club-card__future club-card__future--mobile"[\s\S]*data-club-future-badge="mobile"/u);
   assert.match(card, /\.club-card__future--desktop \{[\s\S]*position:absolute;[\s\S]*top:1\.2rem;[\s\S]*right:1\.2rem;/u);
-  assert.match(card, /\.club-card__future--desktop \{[\s\S]*0 8px 11px rgba\(255,194,96,.58\),[\s\S]*0 18px 28px rgba\(244,145,37,.5\);/u);
-  assert.match(card, /\.club-card__future--desktop::after \{[\s\S]*top:calc\(100% - \.12rem\);[\s\S]*radial-gradient\(ellipse at top[\s\S]*mix-blend-mode:screen;/u);
+  assert.match(card, /\.club-card__future--desktop \{[\s\S]*box-shadow:var\(--ke-elevation-club-future\);/u);
+  assert.match(card, /\.club-card__future--desktop::after \{[\s\S]*top:calc\(100% - \.12rem\);[\s\S]*radial-gradient\(ellipse at top,var\(--ke-color-club-card-future-glow-start\),var\(--ke-color-club-card-future-glow-middle\) 34%,var\(--ke-color-club-card-future-glow-end\) 62%,transparent 80%\)[\s\S]*mix-blend-mode:screen;/u);
   assert.match(card, /\.club-card__future--mobile \{ display:none; \}/u);
   assert.doesNotMatch(card, /@media \(max-width: 760px\) \{[\s\S]*\.club-card__future--desktop \{ display:none; \}/u);
   assert.match(card, /@media \(max-width: 760px\) \{[\s\S]*\.club-card \{[\s\S]*min-height:28rem;/u);
   assert.match(card, /@media \(max-width: 430px\) \{[\s\S]*\.club-card__facts \{ grid-template-columns:repeat\(2,minmax\(0,1fr\)\); \}/u);
   assert.match(card, /\.club-card__media,[\s\S]*position:absolute; inset:0; width:100%; height:100%;/u);
-  assert.match(card, /\.club-card__veil \{[\s\S]*rgba\(8,13,17,.94\) 100%/u);
+  assert.match(card, /\.club-card__veil \{[\s\S]*var\(--ke-color-club-card-veil-bottom\) 100%/u);
 });

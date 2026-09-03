@@ -1,0 +1,409 @@
+{
+  "schema_version": "kenigevents.golden-review-corpus.v1",
+  "corpus_id": "golden-review-20260903-v1",
+  "purpose": "Deterministic A=S=P review data rendered through the ordinary KenigEvents Astro routes and canonical component roots.",
+  "frozen_clock": {
+    "timezone": "Europe/Kaliningrad",
+    "current_date": "2027-06-04",
+    "reference_iso": "2027-06-04T06:00:00.000Z",
+    "friday": "2027-06-04",
+    "saturday": "2027-06-05",
+    "sunday": "2027-06-06"
+  },
+  "density": {
+    "minimum": {
+      "friday": 4,
+      "saturday": 5,
+      "sunday": 4
+    },
+    "target": {
+      "friday": 5,
+      "saturday": 6,
+      "sunday": 5
+    }
+  },
+  "stability": {
+    "locked_at": "2026-09-03T12:00:00.000Z",
+    "append_only_until": "2026-09-17T12:00:00.000Z",
+    "policy": "Existing event ids, slugs, dates, source identities and pinned asset identities are immutable through the window; only new uniquely identified specimens may be appended."
+  },
+  "reserved_event_ids": {
+    "minimum": 970001,
+    "maximum": 970099
+  },
+  "pinned_assets": [
+    {
+      "id": "landscape-reviewed-cover",
+      "path": "/assets/card-media/goblin-battle-reviewed-5x4.webp",
+      "kind": "image",
+      "width": 1000,
+      "height": 800,
+      "git_blob_sha": "4713506d7c42cd349ac04138743fe659a9bdc36e",
+      "sha256": "e5511d8110ccdbe7b2daca6771833110129b1c7cfba3a6e481ca8278a49b7669"
+    },
+    {
+      "id": "portrait-document-contain",
+      "path": "/assets/transport/romanovo-holmogorye-route-portrait.png",
+      "kind": "image",
+      "width": 768,
+      "height": 1024,
+      "git_blob_sha": "17126ecedaf4426c031010e092b03daebb1bf9f7"
+    },
+    {
+      "id": "square-visual-cover",
+      "path": "/assets/transport/romanovo-holmogorye-route-square.png",
+      "kind": "image",
+      "width": 1024,
+      "height": 1024,
+      "git_blob_sha": "9753441a0b8626e831af546054f88356cb262b46"
+    },
+    {
+      "id": "concert-fallback",
+      "path": "/assets/event-fallbacks/concert-symphonic.webp",
+      "kind": "image",
+      "width": 1200,
+      "height": 800,
+      "git_blob_sha": "b66b18cb8e4a9083dcab052e32dd6b24e78d92c7"
+    },
+    {
+      "id": "lecture-fallback",
+      "path": "/assets/event-fallbacks/lecture-meeting.webp",
+      "kind": "image",
+      "width": 1200,
+      "height": 800,
+      "git_blob_sha": "050483bb6c94a94651d9c6bfb70a829c6783acb0"
+    },
+    {
+      "id": "festival-poster-contain",
+      "path": "/assets/festivals/timeline/city-jazz.webp",
+      "kind": "image",
+      "width": 1200,
+      "height": 1600,
+      "git_blob_sha": "d206071fb717b0c9c6ff350133e8318ec969ad9f"
+    },
+    {
+      "id": "free-medallion-svg",
+      "path": "/assets/badges/free-listing-medallion.svg",
+      "kind": "svg",
+      "git_blob_sha": "3f6f7aadf0dc818112ab310875d8ad270c563b45"
+    },
+    {
+      "id": "canonical-link-svg",
+      "path": "/assets/icons/link-minimalistic-svgrepo.svg",
+      "kind": "svg",
+      "git_blob_sha": "4f5a7ef4ae1044fc1818d41ef3dcabfb043ff846"
+    }
+  ],
+  "route_contract": {
+    "today": {
+      "path": "/segodnya/",
+      "date": "2027-06-04",
+      "event_ids": [970001, 970002, 970003, 970004, 970005]
+    },
+    "tomorrow": {
+      "path": "/zavtra/",
+      "date": "2027-06-05",
+      "event_ids": [970006, 970007, 970008, 970009, 970010, 970011]
+    },
+    "sunday": {
+      "path": "/date-2027-06-06/",
+      "date": "2027-06-06",
+      "event_ids": [970012, 970013, 970014, 970015, 970016]
+    },
+    "weekend": {
+      "path": "/vyhodnye/",
+      "dates": ["2027-06-05", "2027-06-06"],
+      "event_ids": [970006, 970007, 970008, 970009, 970010, 970011, 970012, 970013, 970014, 970015, 970016]
+    },
+    "dated_weekend": {
+      "path": "/vyhodnye/2027-06-05/",
+      "dates": ["2027-06-05", "2027-06-06"],
+      "event_ids": [970006, 970007, 970008, 970009, 970010, 970011, 970012, 970013, 970014, 970015, 970016]
+    },
+    "free_collection": {
+      "path": "/podborki/besplatnye-sobytiya/",
+      "event_ids": [970001, 970002, 970006, 970007, 970012, 970013]
+    }
+  },
+  "events": [
+    {
+      "id": 970001,
+      "slug": "golden-baltiyskiy-svet-970001",
+      "source_identity": "golden:n0:970001",
+      "title": "Утренний камерный концерт «Балтийский свет»",
+      "date": "2027-06-04",
+      "time": "10:00",
+      "end_time": "11:20",
+      "event_type": "Концерт",
+      "topics": ["CONCERTS"],
+      "city": "Калининград",
+      "venue": "Зал Golden Corpus",
+      "admission": {"kind": "free", "label": "Бесплатно", "is_free": true, "price_label": "Бесплатно"},
+      "media": {"asset_ids": ["landscape-reviewed-cover"], "image_text_mode": "visual_only", "media_role": "event_photo", "semantic_status": "classified", "fit": "cover", "safe_crop": true, "object_position": "50% 50%"},
+      "stress_tags": ["media-cover", "admission-free", "calendar-single"],
+      "summary": "Компактный бесплатный концерт с проверенной landscape-обложкой."
+    },
+    {
+      "id": 970002,
+      "slug": "golden-arhitektura-pamyati-970002",
+      "source_identity": "golden:n0:970002",
+      "title": "Лекция «Архитектура памяти: как читать город»",
+      "date": "2027-06-04",
+      "time": "12:30",
+      "end_time": "14:00",
+      "event_type": "Лекция",
+      "topics": ["KRAEVEDENIE_KALININGRAD_OBLAST"],
+      "city": "Калининград",
+      "venue": "Лекторий Golden Corpus",
+      "admission": {"kind": "registration", "label": "Бесплатная регистрация", "is_free": true, "price_label": "Бесплатно по регистрации"},
+      "media": {"asset_ids": ["portrait-document-contain"], "image_text_mode": "ocr_text", "media_role": "program_or_schedule", "semantic_status": "classified", "fit": "contain", "safe_crop": false, "object_position": "50% 50%"},
+      "stress_tags": ["media-contain", "admission-registration", "calendar-single"],
+      "summary": "Документальный постер проверяет contain framing без потери текста."
+    },
+    {
+      "id": 970003,
+      "slug": "golden-semeynaya-masterskaya-970003",
+      "source_identity": "golden:n0:970003",
+      "title": "Семейная мастерская «Карта ветров»",
+      "date": "2027-06-04",
+      "time": "15:00",
+      "end_time": "17:00",
+      "event_type": "Мастер-класс",
+      "topics": ["MASTERCLASS", "FAMILY", "HANDMADE"],
+      "city": "Светлогорск",
+      "venue": "Мастерская Golden Corpus",
+      "admission": {"kind": "ticket", "label": "Купить билет", "is_free": false, "price_label": "500 ₽"},
+      "media": {"asset_ids": ["square-visual-cover"], "image_text_mode": "visual_only", "media_role": "event_photo", "semantic_status": "classified", "fit": "cover", "safe_crop": true, "object_position": "50% 44%"},
+      "stress_tags": ["media-square", "admission-ticket", "calendar-single"],
+      "summary": "Семейная мастерская проверяет квадратное визуальное медиа и платный вход."
+    },
+    {
+      "id": 970004,
+      "slug": "golden-teatr-bez-afishi-970004",
+      "source_identity": "golden:n0:970004",
+      "title": "Экспериментальный спектакль без афиши",
+      "date": "2027-06-04",
+      "time": "18:30",
+      "end_time": "20:10",
+      "event_type": "Спектакль",
+      "topics": ["THEATRE"],
+      "city": "Зеленоградск",
+      "venue": "Камерная сцена Golden Corpus",
+      "admission": {"kind": "phone", "label": "Запись по телефону", "is_free": false, "price_label": "Стоимость по телефону"},
+      "media": null,
+      "stress_tags": ["media-missing", "admission-phone", "calendar-single"],
+      "summary": "Карточка без изображения проверяет честный fallback и телефонный сценарий."
+    },
+    {
+      "id": 970005,
+      "slug": "golden-ochen-dlinnyy-zagolovok-970005",
+      "source_identity": "golden:n0:970005",
+      "title": "Очень длинное название вечерней встречи о Балтийском море, городской памяти, музыке, путешествиях и неожиданных способах увидеть Калининградскую область заново",
+      "date": "2027-06-04",
+      "time": "20:00",
+      "end_time": "22:00",
+      "event_type": "Встреча",
+      "topics": ["KRAEVEDENIE_KALININGRAD_OBLAST", "MUSIC"],
+      "city": "Балтийск",
+      "venue": "Длинное название площадки Golden Corpus для проверки переноса строки без выхода за границы карточки",
+      "admission": {"kind": "source", "label": "Уточнить у организатора", "is_free": false, "price_label": "Условия у организатора"},
+      "media": {"asset_ids": ["concert-fallback", "lecture-fallback"], "image_text_mode": "visual_only", "media_role": "event_photo", "semantic_status": "classified", "fit": "cover", "safe_crop": true, "object_position": "50% 50%"},
+      "stress_tags": ["media-multiple", "long-copy", "admission-source", "calendar-single"],
+      "summary": "Длинный текст проверяет переносы, высоту карточки и сохранение действий без переполнения.",
+      "description_html": "<p>Это намеренно длинное описание для проверки устойчивости карточек, списков, rail-композиций и event detail. Оно содержит несколько предложений, уточняет площадку, порядок входа и редакционный контекст, но не меняет продуктовую семантику.</p><p>Вторая часть нужна для проверки вертикального ритма и того, что CTA, календарь и метаданные остаются доступными после длинного текста.</p>"
+    },
+    {
+      "id": 970006,
+      "slug": "golden-otkrytaya-repetitsiya-970006",
+      "source_identity": "golden:n0:970006",
+      "title": "Открытая репетиция городского оркестра",
+      "date": "2027-06-05",
+      "time": "09:30",
+      "end_time": "10:45",
+      "event_type": "Концерт",
+      "topics": ["CONCERTS", "FAMILY"],
+      "city": "Калининград",
+      "venue": "Музыкальный зал Golden Corpus",
+      "admission": {"kind": "free", "label": "Бесплатно", "is_free": true, "price_label": "Бесплатно"},
+      "media": null,
+      "stress_tags": ["media-none", "admission-free", "calendar-single"],
+      "summary": "Бесплатное событие без медиа на первой строке субботы."
+    },
+    {
+      "id": 970007,
+      "slug": "golden-posternaya-laboratoriya-970007",
+      "source_identity": "golden:n0:970007",
+      "title": "Постерная лаборатория «Текст нельзя обрезать»",
+      "date": "2027-06-05",
+      "time": "11:00",
+      "end_time": "13:00",
+      "event_type": "Мастер-класс",
+      "topics": ["MASTERCLASS", "HANDMADE"],
+      "city": "Советск",
+      "venue": "Лаборатория Golden Corpus",
+      "admission": {"kind": "registration", "label": "Бесплатная регистрация", "is_free": true, "price_label": "Бесплатно по регистрации"},
+      "media": {"asset_ids": ["festival-poster-contain"], "image_text_mode": "ocr_text", "media_role": "event_identity_poster", "semantic_status": "classified", "fit": "contain", "safe_crop": false, "object_position": "50% 50%"},
+      "stress_tags": ["media-contain", "admission-registration", "calendar-single"],
+      "summary": "Высокий постер закрепляет contain treatment и полный просмотр текста."
+    },
+    {
+      "id": 970008,
+      "slug": "golden-kinoklub-oshibka-media-970008",
+      "source_identity": "golden:n0:970008",
+      "title": "Городской киноклуб: медиа временно недоступно",
+      "date": "2027-06-05",
+      "time": "13:30",
+      "end_time": "15:20",
+      "event_type": "Кинопоказ",
+      "topics": ["CINEMA"],
+      "city": "Черняховск",
+      "venue": "Киноклуб Golden Corpus",
+      "admission": {"kind": "ticket", "label": "Купить билет", "is_free": false, "price_label": "350 ₽"},
+      "media": {"asset_paths": ["/assets/golden/intentional-missing-image.webp"], "intentional_missing": true, "width": 1000, "height": 1400, "image_text_mode": "unknown", "media_role": "unknown_document", "semantic_status": "error", "fit": "contain", "safe_crop": false, "object_position": "50% 50%"},
+      "stress_tags": ["media-error", "admission-ticket", "calendar-single"],
+      "summary": "Преднамеренно отсутствующий файл проверяет error diagnostics и fallback."
+    },
+    {
+      "id": 970009,
+      "slug": "golden-muzykalnyy-marshrut-970009",
+      "source_identity": "golden:n0:970009",
+      "title": "Музыкальный маршрут по набережной",
+      "date": "2027-06-05",
+      "time": "16:00",
+      "end_time": "18:00",
+      "event_type": "Прогулка",
+      "topics": ["OPEN_AIR", "CONCERTS"],
+      "city": "Калининград",
+      "venue": "Набережная Golden Corpus",
+      "admission": {"kind": "phone", "label": "Запись по телефону", "is_free": false, "price_label": "700 ₽"},
+      "media": {"asset_ids": ["square-visual-cover", "landscape-reviewed-cover"], "image_text_mode": "visual_only", "media_role": "event_photo", "semantic_status": "classified", "fit": "cover", "safe_crop": true, "object_position": "50% 46%"},
+      "stress_tags": ["media-multiple", "admission-phone", "calendar-single"],
+      "summary": "Два изображения проверяют rail и переключение hero без нового wrapper."
+    },
+    {
+      "id": 970010,
+      "slug": "golden-perenesennaya-vstrecha-970010",
+      "source_identity": "golden:n0:970010",
+      "title": "Встреча перенесена на новое время",
+      "date": "2027-06-05",
+      "time": "18:45",
+      "end_time": "20:00",
+      "event_type": "Встреча",
+      "topics": ["KRAEVEDENIE_KALININGRAD_OBLAST"],
+      "city": "Гусев",
+      "venue": "Гостиная Golden Corpus",
+      "status_label": "Перенесено",
+      "lifecycle_status": "active",
+      "admission": {"kind": "source", "label": "Проверить новое время", "is_free": false, "price_label": "Условия у организатора"},
+      "media": {"asset_ids": ["lecture-fallback"], "image_text_mode": "unknown", "media_role": "unknown_visual", "semantic_status": "stale", "fit": "contain", "safe_crop": false, "object_position": "50% 50%"},
+      "stress_tags": ["media-stale", "lifecycle-rescheduled", "admission-source", "calendar-single"],
+      "summary": "Перенос закрепляет видимый lifecycle status без изменения event identity."
+    },
+    {
+      "id": 970011,
+      "slug": "golden-nochnoy-festival-diapazon-970011",
+      "source_identity": "golden:n0:970011",
+      "title": "Ночной фестиваль с диапазоном дат",
+      "date": "2027-06-05",
+      "time": "21:00",
+      "end_date": "2027-06-06",
+      "end_time": "01:00",
+      "event_type": "Фестиваль",
+      "topics": ["FESTIVAL", "CONCERTS"],
+      "city": "Янтарный",
+      "venue": "Парк Golden Corpus",
+      "admission": {"kind": "ticket", "label": "Купить билет", "is_free": false, "price_label": "1200 ₽"},
+      "media": {"asset_ids": ["concert-fallback"], "image_text_mode": "visual_only", "media_role": "event_photo", "semantic_status": "classified", "fit": "cover", "safe_crop": true, "object_position": "50% 50%"},
+      "stress_tags": ["media-cover", "admission-ticket", "calendar-range"],
+      "summary": "Многочасовое событие проверяет диапазон дат и честную недоступность компактного quick-calendar."
+    },
+    {
+      "id": 970012,
+      "slug": "golden-voskresnyy-dzhaz-970012",
+      "source_identity": "golden:n0:970012",
+      "title": "Воскресный джаз у моря",
+      "date": "2027-06-06",
+      "time": "10:30",
+      "end_time": "12:00",
+      "event_type": "Концерт",
+      "topics": ["CONCERTS", "OPEN_AIR"],
+      "city": "Светлогорск",
+      "venue": "Променад Golden Corpus",
+      "admission": {"kind": "free", "label": "Бесплатно", "is_free": true, "price_label": "Бесплатно"},
+      "media": {"asset_ids": ["landscape-reviewed-cover"], "image_text_mode": "visual_only", "media_role": "event_photo", "semantic_status": "classified", "fit": "cover", "safe_crop": true, "object_position": "50% 50%"},
+      "stress_tags": ["media-cover", "admission-free", "calendar-single"],
+      "summary": "Джазовый canary одновременно проверяет воскресенье и weekend search collection."
+    },
+    {
+      "id": 970013,
+      "slug": "golden-detskaya-laboratoriya-970013",
+      "source_identity": "golden:n0:970013",
+      "title": "Детская лаборатория звука",
+      "date": "2027-06-06",
+      "time": "12:30",
+      "end_time": "14:00",
+      "event_type": "Мастер-класс",
+      "topics": ["KIDS_SCHOOL", "FAMILY", "MASTERCLASS"],
+      "city": "Зеленоградск",
+      "venue": "Детский центр Golden Corpus",
+      "admission": {"kind": "registration", "label": "Бесплатная регистрация", "is_free": true, "price_label": "Бесплатно по регистрации"},
+      "media": null,
+      "stress_tags": ["media-none", "admission-registration", "calendar-single"],
+      "summary": "Бесплатное семейное событие проверяет пустой MediaFrame и детскую подборку."
+    },
+    {
+      "id": 970014,
+      "slug": "golden-pushkinskaya-karta-970014",
+      "source_identity": "golden:n0:970014",
+      "title": "Концерт по Пушкинской карте",
+      "date": "2027-06-06",
+      "time": "15:00",
+      "end_time": "16:40",
+      "event_type": "Концерт",
+      "topics": ["CONCERTS"],
+      "city": "Калининград",
+      "venue": "Филармония Golden Corpus",
+      "pushkin_card": true,
+      "admission": {"kind": "ticket", "label": "Купить по Пушкинской карте", "is_free": false, "price_label": "от 600 ₽"},
+      "media": {"asset_ids": ["festival-poster-contain"], "image_text_mode": "ocr_text", "media_role": "event_identity_poster", "semantic_status": "classified", "fit": "contain", "safe_crop": false, "object_position": "50% 50%"},
+      "stress_tags": ["media-contain", "admission-ticket", "pushkin-card", "calendar-single"],
+      "summary": "Постер, платный вход и Пушкинская карта проверяют badge/action composition."
+    },
+    {
+      "id": 970015,
+      "slug": "golden-otmenennyy-pokaz-970015",
+      "source_identity": "golden:n0:970015",
+      "title": "Показ отменён организатором",
+      "date": "2027-06-06",
+      "time": "18:00",
+      "end_time": "19:30",
+      "event_type": "Кинопоказ",
+      "topics": ["CINEMA"],
+      "city": "Калининград",
+      "venue": "Кинотеатр Golden Corpus",
+      "status_label": "Отменено",
+      "lifecycle_status": "cancelled",
+      "admission": {"kind": "ticket", "label": "Продажа остановлена", "is_free": false, "price_label": "Возврат билетов"},
+      "media": {"asset_paths": ["/assets/golden/intentional-cancelled-image.webp"], "intentional_missing": true, "width": 900, "height": 1200, "image_text_mode": "unknown", "media_role": "unknown_document", "semantic_status": "error", "fit": "contain", "safe_crop": false, "object_position": "50% 50%"},
+      "stress_tags": ["media-error", "lifecycle-cancelled", "admission-ticket", "calendar-single"],
+      "summary": "Отменённое событие закрепляет lifecycle copy, disabled action и error media fallback."
+    },
+    {
+      "id": 970016,
+      "slug": "golden-zaklyuchitelnaya-vstrecha-970016",
+      "source_identity": "golden:n0:970016",
+      "title": "Заключительная встреча без объявленного времени",
+      "date": "2027-06-06",
+      "time": null,
+      "end_time": null,
+      "event_type": "Встреча",
+      "topics": ["KRAEVEDENIE_KALININGRAD_OBLAST"],
+      "city": "Балтийск",
+      "venue": "Площадка уточняется",
+      "admission": {"kind": "source", "label": "Следить за источником", "is_free": false, "price_label": "Условия уточняются"},
+      "media": {"asset_ids": ["square-visual-cover"], "image_text_mode": "visual_only", "media_role": "event_photo", "semantic_status": "pending", "fit": "cover", "safe_crop": true, "object_position": "50% 50%"},
+      "stress_tags": ["media-square", "media-pending", "admission-source", "untimed", "calendar-single"],
+      "summary": "Untimed event проверяет последнюю группу временной шкалы и pending diagnostics."
+    }
+  ]
+}

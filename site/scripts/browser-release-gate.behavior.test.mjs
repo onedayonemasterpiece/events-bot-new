@@ -246,6 +246,11 @@ test('R03 production specimen discovery is static, bounded and prefers the repor
     { route: `${basePath}/sobytiya/alpha-100/`, targetPath: `${basePath}/sobytiya/target-6407/` },
   ]);
   assert.deepEqual(assertRequiredPreviewBrowserJourney(candidates), candidates[0]);
+  assert.deepEqual(
+    assertRequiredPreviewBrowserJourney(candidates.slice(1)),
+    candidates[1],
+    'an active data-driven specimen must replace the preferred historical pair after it leaves the catalog',
+  );
 });
 
 test('R01 missing recommendation image uses its bounded fallback without a false shell-escape failure', { timeout: 30_000 }, async () => {

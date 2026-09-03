@@ -25,14 +25,21 @@ no-op or artifact-only run preserves the previous immutable target; an
 incomplete receipt resolves to unavailable. Production `/`, `current.json` and
 stable `/ics/*` stay untouched.
 
-For a cross-surface product review, build the real-data tree and run both
-generated gates against the same immutable id:
+For a local focused diagnostic, build the selected real-data route family and
+run its generated gates against the same immutable id:
 
 ```bash
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run build:preview
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:preview
 PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototype
 ```
+
+That local output is not a Review Preview and must not be published. A complete
+or owner-facing Review Preview always invokes
+`scripts/run_static_site_builder_kaggle.py`, which builds and checks on Kaggle,
+downloads the hash-bound artifact and publishes only that checked artifact.
+Optional focused publication uses the same page-class selector whose sole
+allowlist is `site/scripts/static-site-page-classes.v1.json`.
 
 `check:preview` treats a date listing without mobile event rows as valid only
 when the generated page retains the mobile rail shell and renders the explicit
@@ -345,7 +352,8 @@ site/
   tsconfig.json
   scripts/build-preview.mjs
   scripts/check-preview.mjs
-  scripts/deploy-preview-yc.mjs
+  scripts/page-class-build-filter.mjs
+  scripts/check-page-class-preview.mjs
   src/pages/[preview]/index.astro        # emits /__preview/
   src/pages/segodnya/index.astro
   src/pages/zavtra/index.astro
@@ -702,17 +710,20 @@ login/search, also set the public Supabase URL/key and `custom:yandex`; only the
 URL and publishable key are exposed to the browser. Full page rebuilds are for
 content/lifecycle changes, not every counter tick.
 
-## Build and deploy
+## Local diagnostics and canonical publication
 
 ```bash
 cd site
 npm install
 PREVIEW_BUILD_ID=preview-20260628-event-pages-v48-pgvector-gemma-kaggle PUBLIC_ASTRO_ASSET_BASE_URL='https://static.kenigevents.ru/{buildId}' npm run build:preview
 PREVIEW_BUILD_ID=preview-20260628-event-pages-v48-pgvector-gemma-kaggle PUBLIC_ASTRO_ASSET_BASE_URL='https://static.kenigevents.ru/{buildId}' npm run check:preview
-PREVIEW_BUILD_ID=preview-20260628-event-pages-v48-pgvector-gemma-kaggle npm run deploy:preview
 ```
 
-`deploy:preview` reads only the `KENIGEVENTS_SITE_YC_*` variables from the root `.env` and uploads `site/dist/<build-id>/` to the same prefix in the `kenigevents.ru` bucket. Calendar files are re-uploaded with `text/calendar; charset=utf-8` and `Content-Disposition: inline; filename="event.ics"` metadata so mobile clients can open the `.ics` instead of treating it only as a forced download.
+These local commands are diagnostics only. They cannot be published. Canonical
+preview generation/publication uses the Kaggle runner with
+`--download-output --publish-preview`; page-family speedups use repeatable
+`--page-class`. The single rail, exact slug mapping and command are maintained
+in [`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md#single-build-and-publish-rail-decision-2026-09-03).
 
 ## Visual review passes
 

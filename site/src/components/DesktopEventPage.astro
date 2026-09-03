@@ -1,6 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import OptimizedEventCardGrid from './OptimizedEventCardGrid.astro';
+import EventMediaRail, { type EventMediaRailItem } from './EventMediaRail.astro';
 import EventTokenMedallions from './EventTokenMedallions.astro';
 import EventParticipants from './EventParticipants.astro';
 import EventOccurrenceNav from './EventOccurrenceNav.astro';
@@ -286,6 +287,49 @@ const railThumbnailSrcset = (image: GalleryImage) => railThumbnailSources(image)
 const railThumbnailWidth = (image: GalleryImage) => railThumbnailSources(image)[0]?.width || image.width || 160;
 const railThumbnailHeight = (image: GalleryImage) => railThumbnailSources(image)[0]?.height || image.height || 100;
 const splitRailSlotWidth = (image: GalleryImage) => Math.round(Math.max(88, Math.min(196, 112 * railAspectValue(image))));
+const railFrameKind = (image: GalleryImage): EventMediaRailItem['kind'] => {
+  if (image.media_semantic_status === 'error') return 'unknown';
+  if (image.image_text_mode === 'visual_only') return 'visual';
+  if (image.image_text_mode === 'ocr_text') return 'document';
+  return 'unknown';
+};
+const toRailItem = (
+  { image, galleryIndex }: { image: GalleryImage; galleryIndex: number },
+  variant: 'hero-selector' | 'poster-strip',
+): EventMediaRailItem => {
+  const fit = desktopGalleryFit(image);
+  return {
+    src:image.src,
+    thumbnailSrc:railThumbnail(image),
+    thumbnailSrcset:railThumbnailSrcset(image) || undefined,
+    thumbnailWidth:railThumbnailWidth(image),
+    thumbnailHeight:railThumbnailHeight(image),
+    width:image.width,
+    height:image.height,
+    alt:image.alt,
+    galleryIndex,
+    sourceIndex:image.sourceIndex,
+    imageTextMode:image.image_text_mode,
+    mediaRole:image.media_role,
+    kind:railFrameKind(image),
+    fit,
+    objectPosition:image.position || '50% 50%',
+    cropReason:image.protected_crop_reason || (fit === 'cover' ? 'desktop_visual_cover' : 'desktop_document_contain'),
+    roleLabel:mediaRoleLabel(image.media_role),
+    actionLabel:variant === 'poster-strip'
+      ? (splitPortraitViewer
+          ? `Открыть быстрый просмотр с изображения ${galleryIndex + 1}`
+          : `${mediaRoleAction(image.media_role)}, изображение ${galleryIndex + 1}`)
+      : `${mediaRoleAction(image.media_role)} ${galleryIndex + 1} в полноэкранной галерее`,
+    rotationEligible:fit === 'cover' && image.image_text_mode === 'visual_only',
+    railAspect:railAspectBucket(image),
+    railRatio:railAspectValue(image),
+    slotWidth:splitRailSlotWidth(image),
+  };
+};
+const heroRailItems = editorialRailImages.map((item) => toRailItem(item, 'hero-selector'));
+const splitRailItems = splitRailCandidates.map((item) => toRailItem(item, 'poster-strip'));
+// Companion-board previews still lazy-swap their source outside EventMediaRail.
 const transparentRailPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const usesLongFlow = true;
 
@@ -304,6 +348,10 @@ const descriptionHtml = (event.description_html || '')
 <main
   class:list={['desktop-clean-event', `desktop-clean-event--${candidate}`, `desktop-clean-event--${mediaPolicy}`, selectedHeroIsOcr ? 'desktop-clean-event--hero-ocr' : 'desktop-clean-event--hero-photo']}
   data-desktop-clean-event
+  data-ds-family="DesktopEventDetailSurface"
+  data-ds-version="1"
+  data-ds-variant={candidate}
+  data-ds-state={`${mediaPolicy} ${photoCount > 0 ? 'media' : 'fallback'}`}
   data-event-template-contract={templateContract.contract_id}
   data-event-template-source={templateContract.accepted_source_sha}
   data-desktop-family={candidate}
@@ -358,40 +406,13 @@ const descriptionHtml = (event.description_html || '')
               ) : (
                 <div class="desktop-prototype__generic-fallback" aria-hidden="true"><span>{event.event_type || 'событие'}</span><strong>{event.title}</strong></div>
               )}
-              {splitRailCandidates.length > 0 && (
-                <div class="desktop-prototype__media-rail desktop-prototype__media-rail--poster" data-split-media-rail data-responsive-split-rail aria-label="Другие изображения события">
-                  {splitRailCandidates.map(({ image, galleryIndex }) => (
-                    <button
-                      type="button"
-                      data-responsive-split-item
-                      data-rail-aspect={railAspectBucket(image)}
-                      style={`--rail-ratio:${railAspectValue(image).toFixed(4)};`}
-                      data-image-text-mode={image.image_text_mode}
-                      data-media-role={image.media_role}
-                      data-source-index={image.sourceIndex}
-                      data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
-                      data-efficient-viewer-start={splitPortraitViewer ? String(image.sourceIndex ?? `gallery-${galleryIndex}`) : undefined}
-                      data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
-                      data-hero-gallery-index={galleryIndex}
-                      aria-label={splitPortraitViewer ? `Открыть быстрый просмотр с изображения ${galleryIndex + 1}` : `${mediaRoleAction(image.media_role)}, изображение ${galleryIndex + 1}`}
-                    >
-                      <img src={transparentRailPixel} data-rail-thumbnail data-thumbnail-src={railThumbnail(image)} data-thumbnail-srcset={railThumbnailSrcset(image) || undefined} sizes={`(min-width:1024px) ${splitRailSlotWidth(image)}px, 1px`} alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
-                      {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    class="desktop-prototype__media-rail-more"
-                    data-responsive-split-more
-                    data-efficient-viewer-open={splitPortraitViewer ? '' : undefined}
-                    data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
-                    hidden
-                    aria-label="Открыть остальные изображения"
-                  >
-                    <strong data-responsive-split-count></strong><span>фото</span>
-                  </button>
-                </div>
-              )}
+              <EventMediaRail
+                variant="poster-strip"
+                items={splitRailItems}
+                galleryId={galleryId}
+                eventTitle={event.title}
+                splitPortraitViewer={splitPortraitViewer}
+              />
             </div>
           </figure>
         ) : (
@@ -413,38 +434,12 @@ const descriptionHtml = (event.description_html || '')
         {candidate === 'editorial' && (
           <aside class="desktop-editorial-side" data-editorial-side data-companion-arrival={ocrCompanionLayout === 'arrival' ? 'true' : undefined}>
             {editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'arrival' && (
-              <div class="desktop-prototype__media-rail desktop-prototype__media-rail--hero" data-hero-rail data-responsive-rail aria-label="Выбрать изображение">
-                {editorialRailImages.map(({ image, galleryIndex }, index) => (
-                  <button
-                    type="button"
-                    class:list={[index === 0 && 'is-current']}
-                    aria-pressed={index === 0 ? 'true' : 'false'}
-                    data-clean-hero-thumb
-                    data-responsive-rail-item
-                    data-src={image.src}
-                    data-alt={image.alt}
-                    data-width={image.width}
-                    data-height={image.height}
-                    data-position={image.position || '50% 50%'}
-                    data-crop-fit={desktopGalleryFit(image)}
-                    data-crop-reason={image.protected_crop_reason}
-                    data-mode={image.image_text_mode}
-                    data-rotation-eligible={desktopGalleryFit(image) === 'cover' && image.image_text_mode === 'visual_only' ? 'true' : 'false'}
-                    data-image-text-mode={image.image_text_mode}
-                    data-media-role={image.media_role}
-                    data-source-index={image.sourceIndex}
-                    data-hero-gallery-open={galleryId}
-                    data-hero-gallery-index={galleryIndex}
-                    aria-label={`${mediaRoleAction(image.media_role)} ${galleryIndex + 1} в полноэкранной галерее`}
-                  >
-                    <img src={transparentRailPixel} data-rail-thumbnail data-thumbnail-src={railThumbnail(image)} data-thumbnail-srcset={railThumbnailSrcset(image) || undefined} sizes="(min-width:1024px) 96px, 1px" alt="" width={railThumbnailWidth(image)} height={railThumbnailHeight(image)} loading="lazy" decoding="async" fetchpriority="low" />
-                    {mediaRoleLabel(image.media_role) && <span>{mediaRoleLabel(image.media_role)}</span>}
-                  </button>
-                ))}
-                <button type="button" class="desktop-prototype__media-rail-more" data-responsive-rail-more hidden data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label="Открыть остальные фотографии">
-                  <strong data-responsive-rail-count></strong><span>фото</span>
-                </button>
-              </div>
+              <EventMediaRail
+                variant="hero-selector"
+                items={heroRailItems}
+                galleryId={galleryId}
+                eventTitle={event.title}
+              />
             )}
             <DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--side" family="editorial" />
             {ocrCompanion && ocrCompanionLayout === 'separate' && (

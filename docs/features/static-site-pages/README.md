@@ -5,6 +5,13 @@
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
+Generation and publication have one canonical rail: immutable production data
+→ Kaggle CPU → checked artifact → trusted host publisher → the
+`kenigevents.ru` bucket. Preview differs from production only by its final
+build-id slug and may request named page classes for a faster focused build.
+Direct local-dist publication is retired. Operational details:
+[`docs/operations/kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md#single-build-and-publish-rail-decision-2026-09-03).
+
 The read-only [Current UI Decoder v1 and Resource Graph v0 compatibility
 layer](current-ui-resource-graph.md) reconstructs the pinned candidate's
 source/runtime inventory and reviewed AS-IS evidence without changing Astro or
