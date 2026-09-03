@@ -108,6 +108,9 @@ const normalizedObjectPosition = (value: string | null | undefined) => {
   const raw = String(value || '').trim();
   return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '50% 50%';
 };
+const normalizedImageTextMode = (value: EventImageAsset['image_text_mode'] | null | undefined): EventImageAsset['image_text_mode'] => (
+  value === 'visual_only' || value === 'ocr_text' ? value : 'unknown'
+);
 const thumbnail = (asset: EventImageAsset) => (
   normalizedThumbnailSources(asset)[0]?.src || normalizedMediaUrl(asset.src)
 );
@@ -134,24 +137,39 @@ const mediaFrameSourceRatio = (width: number | null | undefined, height: number 
   finitePositive(width) && finitePositive(height) ? Number(width) / Number(height) : undefined
 );
 const normalizedResolvedItem = (item: EventMediaRailItem, index: number): NormalizedRailItem => {
-  const kind: EventMediaRailFrameKind = item.kind === 'visual'
+  const requestedKind: EventMediaRailFrameKind = item.kind === 'visual'
     || item.kind === 'document'
     || item.kind === 'fallback'
     || item.kind === 'unknown'
     ? item.kind
     : 'unknown';
-  const fit: EventMediaRailFrameFit = item.fit === 'cover' && kind === 'visual' ? 'cover' : 'contain';
+  const imageTextMode = normalizedImageTextMode(item.imageTextMode);
+  const contradictoryVisualKind = requestedKind === 'visual' && imageTextMode !== 'visual_only';
+  const kind: EventMediaRailFrameKind = contradictoryVisualKind
+    ? imageTextMode === 'ocr_text' ? 'document' : 'unknown'
+    : requestedKind;
+  const requestedCover = item.fit === 'cover';
+  const fit: EventMediaRailFrameFit = requestedCover && kind === 'visual' && imageTextMode === 'visual_only'
+    ? 'cover'
+    : 'contain';
   const width = finitePositive(item.width);
   const height = finitePositive(item.height);
   const sourceRatio = mediaFrameSourceRatio(width, height);
   const railRatio = finitePositive(item.railRatio) || sourceRatio;
   const src = normalizedMediaUrl(item.src);
   const thumbnailSrc = normalizedMediaUrl(item.thumbnailSrc) || src;
+  const failClosedCropReason = contradictoryVisualKind
+    ? 'resolved_visual_kind_mismatch_fail_closed'
+    : requestedCover && fit !== 'cover'
+      ? 'resolved_cover_request_fail_closed'
+      : null;
   return {
     ...item,
     src,
     thumbnailSrc,
     thumbnailSrcset: normalizedSrcset(item.thumbnailSrcset),
+    imageTextMode,
+    mediaRole: item.mediaRole || 'unknown_document',
     kind,
     fit,
     width,
@@ -161,7 +179,7 @@ const normalizedResolvedItem = (item: EventMediaRailItem, index: number): Normal
     galleryIndex: finiteIndex(item.galleryIndex, index),
     sourceIndex: item.sourceIndex === undefined ? undefined : finiteIndex(item.sourceIndex, index),
     objectPosition: normalizedObjectPosition(item.objectPosition),
-    cropReason: String(item.cropReason || 'resolved_media_fail_closed'),
+    cropReason: failClosedCropReason || String(item.cropReason || 'resolved_media_fail_closed'),
     actionLabel: String(item.actionLabel || `Открыть изображение ${index + 1} события «${eventTitle}»`),
     railRatio,
     slotWidth: finitePositive(item.slotWidth),
@@ -182,7 +200,7 @@ const normalizedGalleryItem = (asset: EventImageAsset, index: number): Normalize
     height,
     alt: asset.alt || '',
     galleryIndex: index,
-    imageTextMode: asset.image_text_mode,
+    imageTextMode: normalizedImageTextMode(asset.image_text_mode),
     mediaRole: asset.media_role || 'unknown_document',
     kind: mediaFrameKind(asset),
     fit: mediaFrameFit(asset),
