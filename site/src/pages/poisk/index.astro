@@ -9,10 +9,32 @@ const title = `Умный поиск событий | ${SITE_NAME}`;
 const description = 'Векторный поиск по событиям Калининграда после входа через Яндекс: результаты выдаются карточками с лайками, календарём и поделиться.';
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search">
-  <main id="main">
+  <main
+    id="main"
+    data-ds-family="SearchRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="authorized-vector-search"
+    data-ds-state="runtime-pending"
+  >
     <div class="page-shell page-shell--search">
       <AuthorizedEventSearch standalone headingLevel="h1" />
       <SearchCollectionLinks />
     </div>
   </main>
+  <script>
+    const page = document.querySelector('[data-ds-family="SearchRouteComposition"]');
+    if (page instanceof HTMLElement) {
+      const sync = () => {
+        const signedInNode = page.querySelector('[data-static-auth-signed-in]');
+        const signedIn = signedInNode instanceof HTMLElement && !signedInNode.hidden;
+        const results = page.querySelectorAll('[data-search-result], [data-event-card], [data-listing-item]').length;
+        const loading = Boolean(page.querySelector('[aria-busy="true"], [data-search-skeletons]:not([hidden])'));
+        page.dataset.dsState = loading
+          ? 'loading'
+          : `${signedIn ? 'authorized' : 'anonymous'} ${results ? 'populated' : 'empty'}`;
+      };
+      new MutationObserver(sync).observe(page, { subtree:true, childList:true, attributes:true, attributeFilter:['hidden', 'aria-busy'] });
+      sync();
+    }
+  </script>
 </EventLayout>

@@ -15,7 +15,30 @@ const description = 'Личная noindex-страница будущих соб
   mobileSection="personal"
   noindex
 >
-  <main id="main" data-favorites-page>
+  <main
+    id="main"
+    data-ds-family="FavoritesRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="saved-future-events"
+    data-ds-state="runtime-pending"
+    data-favorites-page
+  >
     <FavoritesSurface />
   </main>
+  <script>
+    const page = document.querySelector('[data-favorites-page]');
+    if (page instanceof HTMLElement) {
+      const sync = () => {
+        const signedInNode = page.querySelector('[data-static-auth-signed-in]');
+        const signedIn = signedInNode instanceof HTMLElement && !signedInNode.hidden;
+        const populated = Boolean(page.querySelector('[data-event-card], [data-listing-item], [data-favorite-event]'));
+        const loading = Boolean(page.querySelector('[aria-busy="true"], [data-loading]:not([hidden])'));
+        page.dataset.dsState = loading
+          ? 'loading'
+          : `${signedIn ? 'authorized' : 'anonymous'} ${populated ? 'populated' : 'empty'}`;
+      };
+      new MutationObserver(sync).observe(page, { subtree:true, childList:true, attributes:true, attributeFilter:['hidden', 'aria-busy'] });
+      sync();
+    }
+  </script>
 </EventLayout>

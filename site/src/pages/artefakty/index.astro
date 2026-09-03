@@ -18,7 +18,13 @@ const artifactResearchEnabled = isAmberArtifactResearchEnabled(
   structuredData={[]}
   noindex
 >
-  <main id="main">
+  <main
+    id="main"
+    data-ds-family="ArtifactCollectionRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="research-collection"
+    data-ds-state={artifactResearchEnabled ? 'enabled' : 'unavailable'}
+  >
     {artifactResearchEnabled ? <ArtifactCollection /> : (
       <section class="artifact-unavailable" data-artifact-collection-unavailable data-nosnippet>
         <p>Исследовательская коллекция недоступна в этой сборке.</p>
