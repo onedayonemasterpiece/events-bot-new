@@ -61,6 +61,8 @@ jobs:
                   '.ke-filter-chip__check { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline); }',
               '.ke-listing-card__free-medallion .icon { width: 24px; height: 24px; fill: currentColor; }':
                   '.ke-listing-card__free-medallion .icon { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action); fill: currentColor; }',
+              'grid-template-columns: 20px auto;':
+                  'grid-template-columns: var(--ke-icon-size-control) auto;',
               '.ke-listing-card__utility .icon { width: 20px; height: 20px; fill: currentColor; }':
                   '.ke-listing-card__utility .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); fill: currentColor; }',
               'grid-template-columns: 17px minmax(0, 1fr);':
@@ -76,10 +78,16 @@ jobs:
           }
 
           for old, new in replacements.items():
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f'expected one exact icon-role source, found {count}: {old[:80]}')
-              source = source.replace(old, new, 1)
+              old_count = source.count(old)
+              new_count = source.count(new)
+              if old_count == 1:
+                  source = source.replace(old, new, 1)
+              elif old_count == 0 and new_count >= 1:
+                  continue
+              else:
+                  raise SystemExit(
+                      f'expected one old source or an existing replacement; old={old_count}, new={new_count}: {old[:80]}'
+                  )
 
           path.write_text(source, encoding='utf-8')
           PY
@@ -103,15 +111,37 @@ jobs:
             echo 'Known non-F0 drift retained for A0/N0: stale direct-import assertion.'
           fi
 
-      - name: Commit the exact bounded changes
+      - name: Commit bounded source repair before census
         shell: bash
         run: |
-          if git diff --quiet -- site/src/styles/design-system.css; then
-            echo 'No F0 source change was required.'
-            exit 0
-          fi
           git config user.name 'f0-normalization-bot'
           git config user.email 'f0-normalization-bot@users.noreply.github.com'
-          git add site/src/styles/design-system.css
-          git commit -m 'refactor(ui): close legacy owners and bind icon roles'
+          if ! git diff --quiet -- site/src/styles/design-system.css; then
+            git add site/src/styles/design-system.css
+            git commit -m 'refactor(ui): finish physical icon-role binding'
+          fi
+
+      - name: Materialize F0 branch and current candidate checklist census
+        shell: bash
+        run: |
+          git fetch origin \
+            work/ui-normalization-f0-wave-3-20260903 \
+            r0/ui-normalization-current-candidate-20260903
+          node site/src/components/design-system/f0-candidate-consumer-census.mjs HEAD \
+            > site/src/components/design-system/f0-role-branch-census.v1.json
+          node site/src/components/design-system/f0-candidate-consumer-census.mjs origin/r0/ui-normalization-current-candidate-20260903 \
+            > site/src/components/design-system/f0-current-candidate-census.v1.json
+          node -e "for (const p of process.argv.slice(1)) { const x=require('./'+p); if (!x.resolved_ref || !x.checklist_evidence) throw new Error('invalid census '+p); console.log(p, x.resolved_ref); }" \
+            site/src/components/design-system/f0-role-branch-census.v1.json \
+            site/src/components/design-system/f0-current-candidate-census.v1.json
+
+      - name: Commit census evidence and push
+        shell: bash
+        run: |
+          git add \
+            site/src/components/design-system/f0-role-branch-census.v1.json \
+            site/src/components/design-system/f0-current-candidate-census.v1.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'test(ui): record F0 branch and candidate census'
+          fi
           git push origin HEAD:work/ui-normalization-f0-wave-3-20260903
