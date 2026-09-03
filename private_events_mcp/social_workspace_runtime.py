@@ -495,6 +495,36 @@ class SocialWorkspaceRuntime:
                 },
             )
 
+    def _scheduled_item_direct_authorized_on_conn(
+        self, conn: sqlite3.Connection, intent: SocialActionIntent,
+        principal: RuntimePrincipal,
+    ) -> bool:
+        """Allow explicit edits/deletes only for a bound scheduled queue item."""
+        if intent.action not in {SocialAction.EDIT, SocialAction.DELETE} or not intent.item_ref:
+            return False
+        client, subject, resource = self._binding(principal)
+        row = conn.execute(
+            """SELECT p.preview_json FROM social_workspace_ref AS r
+               JOIN social_workspace_ref_preview AS p ON p.ref_hash=r.ref_hash
+               WHERE r.ref_hash=? AND r.ref_kind='item' AND r.client_hash=?
+                 AND r.subject_hash=? AND r.resource_hash=? AND r.platform=?
+                 AND r.policy_version=? AND r.expires_at>?""",
+            (self._hash(intent.item_ref), client, subject, resource,
+             intent.platform.value, self.policy_version, self._now()),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            preview = json.loads(self._decrypt(str(row["preview_json"])))
+        except Exception:
+            return False
+        return (
+            isinstance(preview, dict)
+            and preview.get("item_ref") == intent.item_ref
+            and preview.get("queue") == "scheduled"
+            and preview.get("kind") in {"scheduled_post", "scheduled_message"}
+        )
+
     @staticmethod
     def _asset_refs(intent: SocialActionIntent) -> tuple[str, ...]:
         if intent.content is None:
@@ -2354,11 +2384,15 @@ class SocialWorkspaceRuntime:
         now = self._now()
         client, subject, resource = self._binding(principal)
         idem = self._hash(intent.idempotency_key)
+        direct_scheduled_item = False
         with self.store._lock, self.store._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 verified_assets = self._asset_metadata_for_intent(
                     intent, principal, conn=conn
+                )
+                direct_scheduled_item = self._scheduled_item_direct_authorized_on_conn(
+                    conn, intent, principal
                 )
                 digest = compute_action_digest(
                     intent, verified_assets=self._digest_assets(verified_assets) or None
@@ -2409,7 +2443,7 @@ class SocialWorkspaceRuntime:
                 }
                 status = (
                     SocialActionStatus.APPROVED.value
-                    if intent.action in DIRECT_USER_AUTHORIZED_ACTIONS
+                    if intent.action in DIRECT_USER_AUTHORIZED_ACTIONS or direct_scheduled_item
                     else SocialActionStatus.AWAITING_HUMAN_APPROVAL.value
                 )
                 conn.execute(
@@ -2440,7 +2474,7 @@ class SocialWorkspaceRuntime:
         assert digest is not None
         status = (
             SocialActionStatus.APPROVED.value
-            if intent.action in DIRECT_USER_AUTHORIZED_ACTIONS
+            if intent.action in DIRECT_USER_AUTHORIZED_ACTIONS or direct_scheduled_item
             else SocialActionStatus.AWAITING_HUMAN_APPROVAL.value
         )
         self._audit(principal, platform=platform, operation="prepare", outcome="succeeded",
@@ -2860,7 +2894,12 @@ class SocialWorkspaceRuntime:
                     direct_user_authorized = (
                         browser_approved
                         and prep["status"] == SocialActionStatus.APPROVED.value
-                        and intent.action in DIRECT_USER_AUTHORIZED_ACTIONS
+                        and (
+                            intent.action in DIRECT_USER_AUTHORIZED_ACTIONS
+                            or self._scheduled_item_direct_authorized_on_conn(
+                                conn, intent, principal
+                            )
+                        )
                     )
                     if not direct_user_authorized:
                         if approval is None:

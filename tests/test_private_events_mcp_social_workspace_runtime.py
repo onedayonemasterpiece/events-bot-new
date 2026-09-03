@@ -3519,3 +3519,31 @@ async def test_owned_schedule_pre_provider_commit_failures_do_not_spend_attempt_
     }, context())
     assert result["status"] == "succeeded"
     assert adapter.executions == 1
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["edit", "delete"])
+async def test_scheduled_queue_edit_delete_is_direct_but_published_still_requires_approval(runtime, action) -> None:
+    service, adapter, _store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "owned-vk-community", "vk", principal)
+    scheduled = service._mint_ref("item", "native-postponed-42", "vk", principal)
+    service._store_item_preview(scheduled, {
+        "item_ref": scheduled, "target_ref": target, "kind": "scheduled_post",
+        "queue": "scheduled", "scheduled_at": "2026-09-03T18:00:00Z",
+        "text": "queued",
+    })
+    payload = {"platform": "vk", "action": action,
+        "idempotency_key": f"scheduled-{action}-direct-0001", "item_ref": scheduled}
+    if action == "edit":
+        payload["content"] = {"text": "corrected", "entities": [], "media": []}
+    prepared = await service.prepare(validate_prepare_request(payload), context())
+    assert prepared["status"] == "approved"
+
+    published = service._mint_ref("item", "native-live-43", "vk", principal)
+    service._store_item_preview(published, {
+        "item_ref": published, "target_ref": target, "kind": "post",
+        "published_at": "2026-09-03T16:00:00Z", "text": "live",
+    })
+    live_payload = {**payload, "idempotency_key": f"live-{action}-approval-0001", "item_ref": published}
+    live = await service.prepare(validate_prepare_request(live_payload), context())
+    assert live["status"] == "awaiting_human_approval"

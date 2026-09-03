@@ -1309,3 +1309,5 @@ OAuth/social DB may remain on the volume. The media root contains only
 short-lived immutable files and may be drained by the bounded expiry cleanup
 after the feature is off; do not manually reuse its refs or copy it into the
 event database.
+
+Scheduled-queue edit/delete is direct only for an exact principal-bound scheduled/postponed item; published/live content still requires external approval.
