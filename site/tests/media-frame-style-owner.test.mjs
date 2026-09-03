@@ -55,7 +55,7 @@ test('MediaFrame owns inner anatomy without overriding surface inline sizing', a
   assert.match(naturalDocumentBlock, /height: auto/u);
   assert.doesNotMatch(
     mediaFrame,
-    /\[data-media-frame-fit="contain"\] > \[data-media-frame-image\] \{[^}]*width: 100%[^}]*height: auto/usu,
+    /(?:^|\n)\[data-media-frame\]\[data-media-frame-contract="v1"\]\[data-media-frame-fit="contain"\] > \[data-media-frame-image\] \{[^}]*width: 100%[^}]*height: auto/su,
     'natural-height width fill must remain scoped to non-fill EventCard documents',
   );
 
