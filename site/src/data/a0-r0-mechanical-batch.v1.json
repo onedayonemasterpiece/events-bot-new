@@ -1,0 +1,356 @@
+{
+  "schema": "kenigevents.a0.ready-for-r0-mechanical.v1",
+  "version": "1.0.0",
+  "status": "READY_FOR_R0_MECHANICAL",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "owner_role": "A0",
+  "executor_role": "R0",
+  "purpose": "Apply the remaining deterministic consumer migrations that require an atomic patch-capable writer or local merge context. No semantic recensus is required.",
+  "source_refs": {
+    "a0": "work/ui-normalization-a0-wave-3-20260903",
+    "f0": "work/ui-normalization-f0-wave-3-20260903",
+    "m0": "work/ui-normalization-m0-continuity-20260903",
+    "candidate": "r0/ui-normalization-current-candidate-20260903",
+    "integration": "integration/ui-normalization-launch-20260902"
+  },
+  "transaction_policy": {
+    "resolve_all_refs_immediately_before_apply": true,
+    "blob_guard": "For every path resolve the current blob SHA after F0/M0/A0 integration and use compare-and-swap. Abort that unit on any unexpected marker or blob drift.",
+    "commit_policy": "One commit per mechanical unit. Do not squash until V0 and focused tests have an attributable rollback boundary.",
+    "semantic_changes_allowed": false,
+    "product_behavior_changes_allowed": false,
+    "palette_redesign_allowed": false,
+    "duplicate_builder_or_preview_path_allowed": false
+  },
+  "preconditions": [
+    "Integrate the currently accepted F0 foundations and M0 MediaFrame/EventMediaRail/AdaptiveEventCardGrid roots before these consumer edits.",
+    "Retain the restored Popular Large/Compact density behavior and its regression contract.",
+    "Run each unit's source-marker preflight before editing; a failed marker blocks only that unit."
+  ],
+  "units": [
+    {
+      "id": "R0M-A0-FESTIVALS",
+      "rollback_unit": "RB-A0-FESTIVALS",
+      "path": "site/src/pages/festivali/index.astro",
+      "preflight_required_markers": [
+        "import Icon from '../../components/Icon.astro';",
+        "<main id=\"main\" class=\"festival-page\" data-festival-timeline",
+        "<span class=\"festival-guide__icon\" aria-hidden=\"true\">↗</span>",
+        "<span class=\"festival-guide__icon\" aria-hidden=\"true\">＋</span>"
+      ],
+      "operations": [
+        {
+          "kind": "insert_import",
+          "after": "import Icon from '../../components/Icon.astro';",
+          "content": "import SemanticIcon from '../../components/design-system/SemanticIcon.astro';"
+        },
+        {
+          "kind": "augment_root",
+          "selector_anchor": "<main id=\"main\" class=\"festival-page\" data-festival-timeline",
+          "add_attributes": {
+            "data-ds-family": "FestivalTimelineRouteComposition",
+            "data-ds-version": "1",
+            "data-ds-variant": "timeline-2026",
+            "data-ds-state": "{resolvedItems.length ? 'populated' : 'empty'}",
+            "data-ke-foundation-consumer": "festival-route"
+          }
+        },
+        {
+          "kind": "exact_replace",
+          "from": "<span class=\"festival-guide__icon\" aria-hidden=\"true\">↗</span>",
+          "to": "<span class=\"festival-guide__icon\" aria-hidden=\"true\"><SemanticIcon name=\"link\" role=\"action\" /></span>"
+        },
+        {
+          "kind": "exact_replace",
+          "from": "<span class=\"festival-guide__icon\" aria-hidden=\"true\">＋</span>",
+          "to": "<span class=\"festival-guide__icon\" aria-hidden=\"true\"><Icon name=\"spark\" className=\"ke-icon-role ke-icon-role--action\" /></span>"
+        }
+      ],
+      "preserve": [
+        "festivalProjection validation",
+        "resolvedItems ordering",
+        "month packing",
+        "category-to-SVG mapping",
+        "save interaction",
+        "source links",
+        "structured data",
+        "all timeline geometry"
+      ],
+      "negative_controls": [
+        "No visible ↗ or ＋ action glyph remains.",
+        "No festival category SVG is replaced or redrawn.",
+        "No event ordering or row packing code changes."
+      ],
+      "focused_tests": [
+        "existing festival timeline/layout/source tests",
+        "site/tests/a0-downstream-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "R0M-A0-EXHIBITIONS",
+      "rollback_unit": "RB-A0-EXHIBITIONS",
+      "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "preflight_required_markers": [
+        "<main id=\"main\" class=\"ex-page\" data-exhibitions-prototype>",
+        ":root {",
+        "--ex-bg:#0d0f10",
+        "--ex-text:#f4f4f2",
+        "--ex-blue:#54acf7",
+        "--ex-orange:#f18224"
+      ],
+      "operations": [
+        {
+          "kind": "insert_import",
+          "location": "frontmatter imports",
+          "content": "import './design-system/product-contour-foundations.css';"
+        },
+        {
+          "kind": "augment_root",
+          "selector_anchor": "<main id=\"main\" class=\"ex-page\" data-exhibitions-prototype>",
+          "add_attributes": {
+            "data-ds-family": "ExhibitionsPersonalSurface",
+            "data-ds-version": "1",
+            "data-ds-variant": "personal-priority-list",
+            "data-ds-state": "{items.length ? 'populated' : 'empty'}",
+            "data-ke-foundation-consumer": "exhibitions-personal-surface"
+          }
+        },
+        {
+          "kind": "token_alias_substitution",
+          "require_all_targets_defined_in_current_F0": true,
+          "mapping": {
+            "--ex-bg": "--ke-color-exhibition-canvas",
+            "--ex-surface": "--ke-color-exhibition-surface",
+            "--ex-raised": "--ke-color-exhibition-raised",
+            "--ex-border": "--ke-color-exhibition-border",
+            "--ex-text": "--ke-color-exhibition-text",
+            "--ex-muted": "--ke-color-exhibition-muted",
+            "--ex-blue": "--ke-color-exhibition-primary",
+            "--ex-orange": "--ke-color-exhibition-accent",
+            "--ex-red": "--ke-color-exhibition-status-ending",
+            "--ex-gray": "--ke-color-exhibition-status-neutral",
+            "--ex-yellow": "--ke-color-exhibition-status-popular",
+            "--ex-purple": "--ke-color-exhibition-status-special",
+            "--ex-green": "--ke-color-exhibition-status-positive",
+            "--ex-ease-cinematic": "--ke-motion-exhibition-cinematic",
+            "--ex-ease-emphasis": "--ke-motion-exhibition-emphasis",
+            "--ex-motion-fast": "--ke-motion-exhibition-fast",
+            "--ex-motion-base": "--ke-motion-exhibition-base"
+          },
+          "rule": "Replace every var(--ex-*) reference with its mapped --ke-* alias, then delete only the local :root declarations. If any target alias is absent from the integrated F0 source, abort this unit and report the missing alias list to F0; do not add fallback literals."
+        }
+      ],
+      "preserve": [
+        "personal/all radiogroup",
+        "category filters",
+        "new/priority/tail grouping",
+        "keyboard shortcuts",
+        "gallery",
+        "image loading/error states",
+        "feedback and undo runtime",
+        "all current text and ordering"
+      ],
+      "negative_controls": [
+        "No local --ex-* registry remains.",
+        "No raw fallback color is introduced.",
+        "No JavaScript or data projection code changes."
+      ],
+      "focused_tests": [
+        "existing exhibition projection, gallery and keyboard tests",
+        "site/tests/a0-downstream-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "R0M-A0-EVENT-RAILS",
+      "rollback_unit": "RB-A0-EVENT-RAILS",
+      "path": "site/src/components/DesktopEventPage.astro",
+      "preflight_required_markers": [
+        "import OptimizedEventCardGrid from './OptimizedEventCardGrid.astro';",
+        "data-hero-rail",
+        "data-responsive-rail-item",
+        "data-split-media-rail",
+        "data-responsive-split-item",
+        "editorialRailImages.map",
+        "splitRailCandidates.map"
+      ],
+      "operations": [
+        {
+          "kind": "insert_import",
+          "location": "frontmatter imports",
+          "content": "import EventMediaRail from './EventMediaRail.astro';"
+        },
+        {
+          "kind": "replace_anatomy",
+          "source_block": "the complete visible data-hero-rail block whose items are editorialRailImages.map(...) and whose overflow control uses data-responsive-rail-more",
+          "target": "one EventMediaRail variant=\"hero-selector\" using the current M0 resolved-items-v1 input contract",
+          "field_mapping": {
+            "items": "editorialRailImages",
+            "gallery_id": "galleryId",
+            "current_index": 0,
+            "item_hooks": ["data-clean-hero-thumb", "data-responsive-rail-item", "data-rotation-eligible", "data-hero-gallery-open", "data-hero-gallery-index", "data-rail-thumbnail", "data-thumbnail-src", "data-thumbnail-srcset"],
+            "overflow_hooks": ["data-responsive-rail-more", "data-responsive-rail-count"]
+          }
+        },
+        {
+          "kind": "replace_anatomy",
+          "source_block": "the complete visible data-split-media-rail block whose items are splitRailCandidates.map(...) and whose overflow control uses data-responsive-split-more",
+          "target": "one EventMediaRail variant=\"poster-strip\" using the current M0 resolved-items-v1 input contract",
+          "field_mapping": {
+            "items": "splitRailCandidates",
+            "gallery_id": "galleryId",
+            "efficient_viewer": "splitPortraitViewer",
+            "item_hooks": ["data-responsive-split-item", "data-efficient-viewer-open", "data-efficient-viewer-start", "data-hero-gallery-open", "data-hero-gallery-index", "data-rail-thumbnail", "data-thumbnail-src", "data-thumbnail-srcset"],
+            "overflow_hooks": ["data-responsive-split-more", "data-responsive-split-count"]
+          }
+        },
+        {
+          "kind": "remove_orphan_css",
+          "scope": "DesktopEventPage style block",
+          "rule": "Delete only selectors that style the removed handwritten hero-selector/poster-strip rail anatomy and are already owned by EventMediaRail. Retain selectors used by scripts for placement, editorial-side ordering, sticky travel, companion board and consumer-specific external dimensions."
+        }
+      ],
+      "preserve": [
+        "all existing data hooks listed in field_mapping",
+        "manual hero selection",
+        "auto-rotation eligibility and opt-out",
+        "responsive hidden/more counts",
+        "efficient viewer start identity",
+        "gallery index and focus behavior",
+        "OCR/document contain semantics",
+        "consumer-owned placement and external dimensions"
+      ],
+      "negative_controls": [
+        "Exactly one EventMediaRail hero-selector and one poster-strip are rendered when eligible.",
+        "No handwritten editorialRailImages.map or splitRailCandidates.map rail anatomy remains.",
+        "No EventMediaRail/M0 root source is edited in this unit.",
+        "No hook used by the existing DesktopEventPage script disappears."
+      ],
+      "focused_tests": [
+        "site/tests/ui-normalization-m0-contract.test.mjs",
+        "site/tests/event-media-rail-hardening.test.mjs",
+        "site/tests/keyboard-event-navigation-production.test.mjs",
+        "site/tests/visual-keyboard-regressions.test.mjs",
+        "site/tests/event-detail-runtime-regressions.test.mjs",
+        "site/tests/a0-downstream-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "R0M-A0-EVENT-LAYOUT-CSS",
+      "rollback_unit": "RB-A0-EVENT-LAYOUT-CSS",
+      "path": "site/src/layouts/EventLayout.astro",
+      "preflight_required_markers": [
+        "event-card__media",
+        "event-card__media-shell"
+      ],
+      "operations": [
+        {
+          "kind": "remove_duplicate_css_declarations",
+          "scope": "selectors in EventLayout that target canonical EventCard media anatomy",
+          "remove_properties_only": [
+            "position",
+            "inset",
+            "isolation",
+            "overflow",
+            "width",
+            "height",
+            "aspect-ratio",
+            "object-fit",
+            "object-position"
+          ],
+          "retain": [
+            "route shell spacing",
+            "section background and text inversion",
+            "route-specific card color treatment",
+            "selectors unrelated to EventCard media anatomy"
+          ],
+          "rule": "Remove a declaration only when current EventCard/MediaFrame owns the same structural responsibility. Delete an empty selector after declaration removal."
+        }
+      ],
+      "preserve": ["EventLayout metadata", "header/footer/runtime mounting", "route-specific theme and spacing"],
+      "negative_controls": [
+        "EventLayout contains no object-fit or object-position rule targeting EventCard media.",
+        "EventLayout contains no duplicate EventCard media frame geometry.",
+        "EventCard and media-frame.css are unchanged by this unit."
+      ],
+      "focused_tests": [
+        "site/tests/media-frame-style-owner.test.mjs",
+        "site/tests/event-detail-runtime-regressions.test.mjs",
+        "site/tests/a0-downstream-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "R0M-A0-MOBILE-RAIL-CSS",
+      "rollback_unit": "RB-A0-MOBILE-RAIL-CSS",
+      "path": "site/src/components/listings/MobileListingRailSurface.astro",
+      "preflight_required_markers": [
+        ".ke-mobile-listing-rails--v23 .event-media img",
+        "object-fit:var(--rail-media-fit)",
+        "object-position:var(--focus-x,50%) var(--focus-y,50%)"
+      ],
+      "operations": [
+        {
+          "kind": "delete_exact_declarations",
+          "selector": ".ke-mobile-listing-rails--v23 .event-media img",
+          "declarations": [
+            "object-fit:var(--rail-media-fit)",
+            "object-position:var(--focus-x,50%) var(--focus-y,50%)"
+          ],
+          "retain_declarations": [
+            "display:block",
+            "width:100%",
+            "height:100%",
+            "opacity:0",
+            "transition:opacity 180ms ease",
+            "pointer-events:none",
+            "user-select:none"
+          ]
+        }
+      ],
+      "preserve": [
+        "rail geometry",
+        "loading/error opacity and skeleton behavior",
+        "temporal muting",
+        "gesture runtime",
+        "city filters",
+        "date accessory",
+        "confirmation and undo"
+      ],
+      "negative_controls": [
+        "No object-fit or object-position declaration remains in MobileListingRailSurface for .event-media img.",
+        "MobileListingRailRow and media-frame.css remain the only fit/focal owners after M0 integration.",
+        "No gesture or runtime script changes."
+      ],
+      "focused_tests": [
+        "site/tests/mobile-listing-rail-media.test.mjs",
+        "site/tests/mobile-listing-rails.test.mjs",
+        "site/tests/mobile-listing-rail-row-state.test.mjs",
+        "site/tests/media-frame-style-owner.test.mjs",
+        "site/tests/a0-downstream-contracts.test.mjs"
+      ]
+    }
+  ],
+  "excluded_from_mechanical_batch": [
+    {
+      "id": "A0-CLUB-ROUTE-PALETTE",
+      "path": "site/src/pages/kluby-po-interesam/index.astro",
+      "reason": "The route-local hero/deck composition is an intentional visible product composition. Flattening or centralizing it requires an explicit F0/owner classification and is not deterministic mechanical work."
+    },
+    {
+      "id": "A0-EVENT-HERO-INNER-FRAME",
+      "path": "site/src/components/EventHero.astro",
+      "reason": "The interactive outer control and inner image framing boundary is recorded as a bounded exception. Replacing it requires M0 API or product acceptance, not mechanical deletion."
+    }
+  ],
+  "completion": {
+    "source_complete_when": [
+      "all five mechanical units applied or explicitly failed with exact preflight evidence",
+      "focused test packet passes",
+      "A0 source branch is integrated into a current candidate with explicit ancestry"
+    ],
+    "product_complete_when": [
+      "the same candidate is built by the canonical Kaggle pipeline",
+      "the exact preview URL returns HTTP 200",
+      "V0 executes the A0 acceptance matrix without critical drift"
+    ]
+  }
+}
