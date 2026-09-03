@@ -300,6 +300,9 @@ async def test_edited_packet_same_url_continues_real_update(tmp_path, monkeypatc
     db = Database(str(tmp_path / "edited-packet.sqlite"))
     await db.init()
     try:
+        # This fixed-date edited-source identity regression is independent of
+        # the production wall-clock past-event policy.
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
         monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
