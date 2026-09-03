@@ -1,6 +1,6 @@
 {
   "schema": "kenigevents.v0-browser-audit-matrix.v1",
-  "version": 3,
+  "version": 4,
   "contract_version": "1.10.0",
   "authored_against_source": "1bc6d9cb4c122046f4782532381de953727c1da6",
   "checkpoint_semantics": "NON_GATING",
@@ -45,35 +45,132 @@
     "integration": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
     "successor": "7f4d04b7de7003eb44980e4215871381686cb9b3",
     "N0": "fac1a2434ee550b37c9630c3502130574be53ecc",
-    "F0_source": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
-    "F0_report": "1c4de6afdb0ab14e2d828946f9b34ce69ae3565e",
+    "F0_source": "d3e36f84de0fa58cb72d494d00cea5c67d54bdff",
+    "F0_report": "b75de3157adda44d79da1e28a1876f39c8f4a550",
     "FR0": "NOT_MATERIALIZED_CUTOVER_BASE_REQUIRED",
     "M0_source": "c71351decdcee02941acb26c5e2fbaf88faf0378",
     "M0_report": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
     "A0": "6357b6d31f145e8b16f8a40f172970d73cf79051",
     "thin_sot": "b3395b944f8255defed20c69338d775a94b3ad02",
-    "published_real_source": "1bc6d9cb4c122046f4782532381de953727c1da6"
+    "published_real_source": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "A0_closure_status": "PARTIAL_ACCEPT_CLUB_PATCHES_ONLY_FESTIVALS_EXHIBITIONS_BLOCKED",
+    "A0_closure_review_comment": 5530123952
   },
   "viewports": [
-    { "id": "mobile-360x812", "width": 360, "height": 812, "class": "mobile" },
-    { "id": "mobile-375x812", "width": 375, "height": 812, "class": "mobile" },
-    { "id": "mobile-390x844", "width": 390, "height": 844, "class": "mobile" },
-    { "id": "mobile-canonical-430x932", "width": 430, "height": 932, "class": "mobile-canonical" },
-    { "id": "mobile-wide-620x900", "width": 620, "height": 900, "class": "mobile-wide" },
-    { "id": "mobile-seam-below-720x900", "width": 720, "height": 900, "class": "mobile-seam-below" },
-    { "id": "mobile-seam-above-721x900", "width": 721, "height": 900, "class": "mobile-seam-above" },
-    { "id": "tablet-768x1024", "width": 768, "height": 1024, "class": "tablet" },
-    { "id": "desktop-seam-below-980x900", "width": 980, "height": 900, "class": "desktop-seam-below" },
-    { "id": "desktop-seam-above-981x900", "width": 981, "height": 900, "class": "desktop-seam-above" },
-    { "id": "desktop-small-1024x768", "width": 1024, "height": 768, "class": "desktop-small" },
-    { "id": "content-seam-below-1180x900", "width": 1180, "height": 900, "class": "content-seam-below" },
-    { "id": "content-seam-above-1181x900", "width": 1181, "height": 900, "class": "content-seam-above" },
-    { "id": "desktop-canonical-1280x800", "width": 1280, "height": 800, "class": "desktop-canonical" },
-    { "id": "desktop-1366x768", "width": 1366, "height": 768, "class": "desktop" },
-    { "id": "desktop-1440x900", "width": 1440, "height": 900, "class": "desktop" },
-    { "id": "fhd-125-percent-1536x864", "width": 1536, "height": 864, "class": "fhd-125-percent" },
-    { "id": "desktop-wide-canonical-1728x900", "width": 1728, "height": 900, "class": "desktop-wide-canonical" },
-    { "id": "fhd-1920x1080", "width": 1920, "height": 1080, "class": "fhd" }
+    {
+      "id": "mobile-360x812",
+      "width": 360,
+      "height": 812,
+      "class": "mobile"
+    },
+    {
+      "id": "mobile-375x812",
+      "width": 375,
+      "height": 812,
+      "class": "mobile"
+    },
+    {
+      "id": "mobile-390x844",
+      "width": 390,
+      "height": 844,
+      "class": "mobile"
+    },
+    {
+      "id": "mobile-canonical-430x932",
+      "width": 430,
+      "height": 932,
+      "class": "mobile-canonical"
+    },
+    {
+      "id": "mobile-wide-620x900",
+      "width": 620,
+      "height": 900,
+      "class": "mobile-wide"
+    },
+    {
+      "id": "mobile-seam-below-720x900",
+      "width": 720,
+      "height": 900,
+      "class": "mobile-seam-below"
+    },
+    {
+      "id": "mobile-seam-above-721x900",
+      "width": 721,
+      "height": 900,
+      "class": "mobile-seam-above"
+    },
+    {
+      "id": "tablet-768x1024",
+      "width": 768,
+      "height": 1024,
+      "class": "tablet"
+    },
+    {
+      "id": "desktop-seam-below-980x900",
+      "width": 980,
+      "height": 900,
+      "class": "desktop-seam-below"
+    },
+    {
+      "id": "desktop-seam-above-981x900",
+      "width": 981,
+      "height": 900,
+      "class": "desktop-seam-above"
+    },
+    {
+      "id": "desktop-small-1024x768",
+      "width": 1024,
+      "height": 768,
+      "class": "desktop-small"
+    },
+    {
+      "id": "content-seam-below-1180x900",
+      "width": 1180,
+      "height": 900,
+      "class": "content-seam-below"
+    },
+    {
+      "id": "content-seam-above-1181x900",
+      "width": 1181,
+      "height": 900,
+      "class": "content-seam-above"
+    },
+    {
+      "id": "desktop-canonical-1280x800",
+      "width": 1280,
+      "height": 800,
+      "class": "desktop-canonical"
+    },
+    {
+      "id": "desktop-1366x768",
+      "width": 1366,
+      "height": 768,
+      "class": "desktop"
+    },
+    {
+      "id": "desktop-1440x900",
+      "width": 1440,
+      "height": 900,
+      "class": "desktop"
+    },
+    {
+      "id": "fhd-125-percent-1536x864",
+      "width": 1536,
+      "height": 864,
+      "class": "fhd-125-percent"
+    },
+    {
+      "id": "desktop-wide-canonical-1728x900",
+      "width": 1728,
+      "height": 900,
+      "class": "desktop-wide-canonical"
+    },
+    {
+      "id": "fhd-1920x1080",
+      "width": 1920,
+      "height": 1080,
+      "class": "fhd"
+    }
   ],
   "selectors": {
     "auxiliary_target": "[data-ds-family=\"EventCard\"] .event-card__utility-row .feedback-button--negative[data-feedback-action=\"not_interested\"]",
@@ -87,11 +184,23 @@
     "http_status": 200,
     "document_overflow_tolerance_px": 1,
     "control_minimum_px": 44,
-    "safe_blank_rel_tokens": ["noopener", "noreferrer"],
-    "canonical_identity_attributes": ["data-ds-family", "data-ds-version", "data-ds-variant", "data-ds-state"],
+    "safe_blank_rel_tokens": [
+      "noopener",
+      "noreferrer"
+    ],
+    "canonical_identity_attributes": [
+      "data-ds-family",
+      "data-ds-version",
+      "data-ds-variant",
+      "data-ds-state"
+    ],
     "media_frame_contract": "v1",
     "media_fail_closed": {
-      "kinds": ["document", "unknown", "fallback"],
+      "kinds": [
+        "document",
+        "unknown",
+        "fallback"
+      ],
       "fit": "contain",
       "crop_permission": "forbidden"
     },
@@ -114,34 +223,211 @@
     "authority": "canonical_a0_v0_matrix",
     "denominator": 19,
     "cases": [
-      { "id": "PM0-37-01", "route": "/podborki/", "family": "CollectionCatalogRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-02", "route": "/podborki/<materialized-search>/", "family": "MaterializedCollectionRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-03", "route": "/podborki/gastronomiya/", "family": "GastronomyCollectionRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-04", "route": "/podborki/besplatnye-sobytiya/", "family": "FreeCollectionSurface", "viewport_ids": ["mobile-390x844", "desktop-wide-canonical-1728x900"] },
-      { "id": "PM0-37-05", "route": "/vystavki/", "family": "ExhibitionsRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-06", "route": "/festivali/", "family": "FestivalsTimelineRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-wide-canonical-1728x900"] },
-      { "id": "PM0-37-07", "route": "/kluby-po-interesam/", "family": "InterestClubsIndexRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-08", "route": "/kluby-po-interesam/<club-slug>/", "family": "InterestClubDetailRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-09", "route": "/sobytiya/<wide|document|none>/", "family": "EventDetailRouteComposition", "viewport_ids": ["mobile-390x844", "tablet-768x1024", "desktop-wide-canonical-1728x900"] },
-      { "id": "PM0-37-10", "route": "/artefakty/", "family": "ArtifactCollectionRouteComposition", "viewport_ids": ["mobile-canonical-430x932", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-11", "route": "/partners/", "family": "PartnersRouteComposition", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-12", "route": "/partnerstvo/", "family": "PartnershipRouteComposition", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-13", "route": "/fokus-gruppa/", "family": "FocusGroupProgrammeSurface", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-14", "route": "/fokus-gruppa/priglashenie/", "family": "FocusGroupInviteRouteComposition", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-15", "route": "/fokus-gruppa/zavershenie/", "family": "FocusGroupCompletionRouteComposition", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-16", "route": "/fokus-gruppa/kollektsiya/", "family": "FocusEggCollectionRouteComposition", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-17", "route": "/fokus-gruppa/diagnostika/", "family": "FocusConnectivityDiagnostic", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-18", "route": "/fokus-gruppa/diagnostika-ustoychivost/", "family": "FocusConnectivityDiagnostic", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] },
-      { "id": "PM0-37-19", "route": "/zakrytaya-afisha/", "family": "ClosedFocusHubRouteComposition", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] }
+      {
+        "id": "PM0-37-01",
+        "route": "/podborki/",
+        "family": "CollectionCatalogRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-02",
+        "route": "/podborki/<materialized-search>/",
+        "family": "MaterializedCollectionRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-03",
+        "route": "/podborki/gastronomiya/",
+        "family": "GastronomyCollectionRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-04",
+        "route": "/podborki/besplatnye-sobytiya/",
+        "family": "FreeCollectionSurface",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-wide-canonical-1728x900"
+        ]
+      },
+      {
+        "id": "PM0-37-05",
+        "route": "/vystavki/",
+        "family": "ExhibitionsRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-06",
+        "route": "/festivali/",
+        "family": "FestivalsTimelineRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-wide-canonical-1728x900"
+        ]
+      },
+      {
+        "id": "PM0-37-07",
+        "route": "/kluby-po-interesam/",
+        "family": "InterestClubsIndexRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-08",
+        "route": "/kluby-po-interesam/<club-slug>/",
+        "family": "InterestClubDetailRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-09",
+        "route": "/sobytiya/<wide|document|none>/",
+        "family": "EventDetailRouteComposition",
+        "viewport_ids": [
+          "mobile-390x844",
+          "tablet-768x1024",
+          "desktop-wide-canonical-1728x900"
+        ]
+      },
+      {
+        "id": "PM0-37-10",
+        "route": "/artefakty/",
+        "family": "ArtifactCollectionRouteComposition",
+        "viewport_ids": [
+          "mobile-canonical-430x932",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-11",
+        "route": "/partners/",
+        "family": "PartnersRouteComposition",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-12",
+        "route": "/partnerstvo/",
+        "family": "PartnershipRouteComposition",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-13",
+        "route": "/fokus-gruppa/",
+        "family": "FocusGroupProgrammeSurface",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-14",
+        "route": "/fokus-gruppa/priglashenie/",
+        "family": "FocusGroupInviteRouteComposition",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-15",
+        "route": "/fokus-gruppa/zavershenie/",
+        "family": "FocusGroupCompletionRouteComposition",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-16",
+        "route": "/fokus-gruppa/kollektsiya/",
+        "family": "FocusEggCollectionRouteComposition",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-17",
+        "route": "/fokus-gruppa/diagnostika/",
+        "family": "FocusConnectivityDiagnostic",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-18",
+        "route": "/fokus-gruppa/diagnostika-ustoychivost/",
+        "family": "FocusConnectivityDiagnostic",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      },
+      {
+        "id": "PM0-37-19",
+        "route": "/zakrytaya-afisha/",
+        "family": "ClosedFocusHubRouteComposition",
+        "viewport_ids": [
+          "mobile-390x844",
+          "desktop-canonical-1280x800"
+        ]
+      }
     ]
   },
-  "focused_case_ids": ["V0-A0-HOME", "V0-A0-PERSONAL-FEED", "V0-A0-FAVORITES", "V0-A0-SEARCH", "V0-A0-EVENT-DETAIL"],
+  "focused_case_ids": [
+    "V0-A0-HOME",
+    "V0-A0-PERSONAL-FEED",
+    "V0-A0-FAVORITES",
+    "V0-A0-SEARCH",
+    "V0-A0-EVENT-DETAIL"
+  ],
   "observation_contract": {
-    "required": ["target.previewUrl", "target.sourceSha", "target.dataMode", "documents[]"],
-    "groups": ["shell", "auxiliaryTargets", "identityExpectations", "externalTargets", "popularRows", "mediaFrames", "adaptiveGrids", "keyboard"],
+    "required": [
+      "target.previewUrl",
+      "target.sourceSha",
+      "target.dataMode",
+      "documents[]"
+    ],
+    "groups": [
+      "shell",
+      "auxiliaryTargets",
+      "identityExpectations",
+      "externalTargets",
+      "popularRows",
+      "mediaFrames",
+      "adaptiveGrids",
+      "keyboard"
+    ],
     "complete_audit_requires": "expectedPairs derived from canonical case matrix",
     "cli": "node site/scripts/v0-browser-audit-contract.mjs --classify <observation.json|->",
-    "exit_codes": { "PASS": 0, "DRIFT": 1, "INCOMPLETE": 2 }
+    "exit_codes": {
+      "PASS": 0,
+      "DRIFT": 1,
+      "INCOMPLETE": 2
+    }
   },
   "execution_boundary": {
     "starts_browser": false,
@@ -151,7 +437,9 @@
   },
   "flow_control": {
     "fr0_cutover_required_before_framing_writes": true,
-    "fr0_must_not_delay_ready_successor": true
+    "fr0_must_not_delay_ready_successor": true,
+    "post_f0_preview_blocked_by_a0_festival_exhibitions_correction": true,
+    "current_1bc6_preview_independently_auditable_now": true
   },
   "thin_s_penpot": {
     "route_binding_authority": "catalog/normalization/a0-thin-s-bindings.v1.json",
@@ -170,5 +458,5 @@
     "product_behavior_effect": "none",
     "published_preview_effect": "none"
   },
-  "next_gate": "independent V0 audit of current HTTP-200 1bc6d9cb preview when my-browser-bridge is callable; any newer N0-accepted immutable full real/all Kaggle successor, including the post-F0 transaction, supersedes it as the next audit target"
+  "next_gate": "independent V0 audit of current HTTP-200 1bc6d9cb preview when my-browser-bridge is callable; in parallel A0 must correct festivals/exhibitions before a later post-F0 successor can supersede it; any newer N0-accepted immutable full real/all Kaggle URL becomes the next audit target"
 }
