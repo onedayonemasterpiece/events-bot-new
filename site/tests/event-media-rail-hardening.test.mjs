@@ -28,3 +28,28 @@ test('EventMediaRail normalizes displayable media, srcset candidates and rejecte
   assert.match(source, /data-event-media-rail-total=\{normalizedItems\.length\}/u);
   assert.match(source, /data-event-media-rail-rejected=\{rejectedCount \|\| undefined\}/u);
 });
+
+test('resolved rail media never upgrades contradictory or unknown semantics to cover', async () => {
+  const source = await read('src/components/EventMediaRail.astro');
+
+  assert.match(source, /const normalizedImageTextMode = [\s\S]*value === 'visual_only' \|\| value === 'ocr_text' \? value : 'unknown'/u);
+  assert.match(source, /const contradictoryVisualKind = requestedKind === 'visual' && imageTextMode !== 'visual_only';/u);
+  assert.match(source, /const kind: EventMediaRailFrameKind = contradictoryVisualKind[\s\S]*imageTextMode === 'ocr_text' \? 'document' : 'unknown'/u);
+  assert.match(source, /const fit: EventMediaRailFrameFit = requestedCover && kind === 'visual' && imageTextMode === 'visual_only'[\s\S]*\? 'cover'[\s\S]*: 'contain';/u);
+  assert.match(source, /contradictoryVisualKind[\s\S]*'resolved_visual_kind_mismatch_fail_closed'/u);
+  assert.match(source, /requestedCover && fit !== 'cover'[\s\S]*'resolved_cover_request_fail_closed'/u);
+  assert.doesNotMatch(source, /item\.fit === 'cover' && kind === 'visual' \? 'cover' : 'contain'/u,
+    'visual kind alone must not authorize crop when imageTextMode is OCR or unknown');
+});
+
+test('gallery and resolved items publish normalized image-text modes and conservative roles', async () => {
+  const source = await read('src/components/EventMediaRail.astro');
+
+  assert.match(source, /imageTextMode: normalizedImageTextMode\(asset\.image_text_mode\)/u);
+  assert.match(source, /imageTextMode,/u);
+  assert.match(source, /mediaRole: item\.mediaRole \|\| 'unknown_document'/u);
+  assert.match(source, /mediaRole: asset\.media_role \|\| 'unknown_document'/u);
+  assert.match(source, /data-image-text-mode=\{usesResolvedItems \? item\.imageTextMode : undefined\}/u);
+  assert.match(source, /data-media-frame-fit=\{item\.fit\}/u);
+  assert.match(source, /data-media-frame-crop-reason=\{item\.cropReason\}/u);
+});
