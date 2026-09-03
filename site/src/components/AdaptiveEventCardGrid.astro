@@ -33,6 +33,7 @@ interface Props {
   legacyOptimizedContract?: boolean;
   rootAttributes?: EventCardRootAttributes;
   itemRoots?: Record<string, AdaptiveEventCardItemRoot>;
+  runtimeManaged?: boolean;
   ariaLive?: AdaptiveGridLive;
   ariaAtomic?: boolean;
   ariaBusy?: boolean;
@@ -59,6 +60,7 @@ const {
   legacyOptimizedContract = false,
   rootAttributes = {},
   itemRoots = {},
+  runtimeManaged,
   ariaLive,
   ariaAtomic,
   ariaBusy,
@@ -74,16 +76,20 @@ const limit = Math.max(0, Math.floor(Number.isFinite(numericLimit) ? numericLimi
 const responsive: ResponsiveStrategy = requestedResponsive === 'progressive' || requestedResponsive === 'stack' || requestedResponsive === 'fixed'
   ? requestedResponsive
   : responsiveMobile ? 'stack' : 'fixed';
+const runtimeManagedGrid = runtimeManaged ?? personalFeed;
 const gridVariant = `${mode}-${rowSize}-column`;
-const gridState = [
+const gridBaseState = [
   responsive !== 'fixed' && `responsive-${responsive}`,
   legacyOptimizedContract && 'legacy-adapter',
   personalFeed && 'personal-feed',
   discoveryFeed && 'discovery-feed',
+  runtimeManagedGrid && 'runtime-managed',
 ].filter(Boolean).join(' ') || undefined;
 const resolved = mode === 'packed'
   ? packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
   : events.slice(0, limit).map((item) => ({ item, layout: undefined }));
+const initialRuntimeState = runtimeManagedGrid ? (resolved.length ? 'populated' : 'empty') : undefined;
+const gridState = [gridBaseState, initialRuntimeState].filter(Boolean).join(' ') || undefined;
 
 const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
   'data-ds-component',
@@ -107,6 +113,10 @@ const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
   'data-adaptive-grid-rendered-order',
   'data-adaptive-grid-item-root-contract',
   'data-adaptive-grid-live',
+  'data-adaptive-grid-runtime-managed',
+  'data-adaptive-grid-runtime-bound',
+  'data-adaptive-grid-runtime-state',
+  'data-adaptive-grid-base-state',
   'data-row-normalize',
   'data-optimized-event-card-grid',
   'data-lab-row-normalize',
@@ -171,6 +181,9 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-adaptive-grid-rendered-order={renderedOrder}
   data-adaptive-grid-item-root-contract={hasItemRoots ? 'event-id-or-event-id-source-index' : undefined}
   data-adaptive-grid-live={ariaLive}
+  data-adaptive-grid-runtime-managed={runtimeManagedGrid ? 'true' : undefined}
+  data-adaptive-grid-runtime-state={initialRuntimeState}
+  data-adaptive-grid-base-state={gridBaseState}
   data-row-normalize={mode === 'packed' ? '' : undefined}
   data-optimized-event-card-grid={legacyOptimizedContract ? '' : undefined}
   data-lab-row-normalize={mode === 'packed' ? '' : undefined}
@@ -199,6 +212,36 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
     />
   ))}
 </div>
+
+<script>
+  function bindAdaptiveEventCardGridRuntime(root = document) {
+    root.querySelectorAll('[data-adaptive-event-card-grid][data-adaptive-grid-runtime-managed="true"]').forEach((grid) => {
+      if (!(grid instanceof HTMLElement) || grid.dataset.adaptiveGridRuntimeBound === 'true') return;
+      grid.dataset.adaptiveGridRuntimeBound = 'true';
+      const sync = () => {
+        const cards = Array.from(grid.querySelectorAll(':scope > [data-event-card]'))
+          .filter((card) => card instanceof HTMLElement);
+        const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
+        const count = cards.length;
+        const parsedRowSize = Number.parseInt(grid.dataset.adaptiveGridRowSize || '1', 10);
+        const runtimeRowSize = Number.isFinite(parsedRowSize) && parsedRowSize > 0 ? parsedRowSize : 1;
+        const runtimeState = count ? 'populated' : 'empty';
+        grid.dataset.adaptiveGridSourceCount = String(count);
+        grid.dataset.adaptiveGridRenderedCount = String(count);
+        grid.dataset.adaptiveGridSourceOrder = order;
+        grid.dataset.adaptiveGridRenderedOrder = order;
+        grid.dataset.adaptiveGridRemainderCount = String(count % runtimeRowSize);
+        grid.dataset.adaptiveGridRuntimeState = runtimeState;
+        grid.dataset.dsState = [grid.dataset.adaptiveGridBaseState || '', runtimeState]
+          .filter(Boolean)
+          .join(' ');
+      };
+      new MutationObserver(sync).observe(grid, { childList:true });
+      sync();
+    });
+  }
+  bindAdaptiveEventCardGridRuntime();
+</script>
 
 <style>
   .cards-grid.adaptive-event-card-grid {
