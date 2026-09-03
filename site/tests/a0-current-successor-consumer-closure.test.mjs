@@ -5,6 +5,7 @@ import {
   A0_CONSUMER_CLOSURE_PATHS,
   EXHIBITIONS_PRIVATE_THEME_ALIASES,
   EXHIBITIONS_REQUIRED_CENTRAL_BINDINGS,
+  EXHIBITIONS_REQUIRED_FR0_BINDINGS,
   EXHIBITIONS_RUNTIME_VARIABLES,
   assertA0ConsumerPostconditions,
   transformA0Consumer,
@@ -72,6 +73,12 @@ test('canonical entrypoint exposes the exact F0 inspection vocabulary without im
   );
 });
 
+test('F0 residual checker follows the thin entrypoint into its canonical library', async () => {
+  const source = await read('site/src/components/design-system/check-f0-exhibitions-residual-contract.mjs');
+  assert.match(source, /a0-current-successor-consumer-closure-lib\.mjs/u);
+  assert.match(source, /filter\(\(value\) => !value\.endsWith\('-'\)\)/u);
+});
+
 test('festival transform preserves taxonomy assets and separates equal-color semantic owners', async () => {
   const source = transformA0Consumer(
     'site/src/pages/festivali/index.astro',
@@ -126,6 +133,20 @@ test('exhibitions transform consumes every strengthened F0 binding and central i
   for (const token of EXHIBITIONS_REQUIRED_CENTRAL_BINDINGS) {
     assert.match(source, new RegExp(`var\\(${token}\\)`, 'u'), `missing ${token}`);
   }
+  for (const token of EXHIBITIONS_REQUIRED_FR0_BINDINGS) {
+    assert.match(source, new RegExp(`var\\(${token}\\)`, 'u'), `missing ${token}`);
+  }
+  const styleSource = [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)]
+    .map((match) => match[1])
+    .join('\n')
+    .split(/\r?\n/u)
+    .filter((line) => !/(?:-webkit-)?mask\s*:/u.test(line))
+    .join('\n');
+  assert.doesNotMatch(
+    styleSource,
+    /#[0-9a-f]{3,8}\b|(?:rgba?|hsla?)\([^)]*\)/iu,
+    'exhibitions consumer retains a visible color outside the canonical registry',
+  );
   assert.match(source, /<SemanticIcon name="arrow-left" role="control" \/>/u);
   assert.match(source, /<SemanticIcon name="arrow-right" role="control" \/>/u);
   assert.doesNotMatch(source, /<span aria-hidden="true">←<\/span>/u);

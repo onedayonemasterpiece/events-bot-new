@@ -660,3 +660,18 @@ FR0 batches through `85d443046...` интегрированы отдельным
 canonical MediaFrame. Clipping изображения и fallback также имеет одного
 владельца — внутренний MediaFrame; внешний rail button сохраняет только
 interaction, sizing и radius, без дублирующего `overflow:hidden`.
+
+Текущие F0/FR0 heads `a4db631db...` и `a317188bd...` затем интегрированы с
+явной ancestry. Существующий шестипутевой closure runner расширен — второй
+exporter или route transform не создан — и теперь материализует все 46 A0 и
+20 FR0 bindings из residual exhibitions inventory. Подстановки сохраняют
+эффективные значения июльской композиции: timeline, row halo/edge, deck stack,
+skeleton/depth, medallion, actions, gallery и live receipt используют
+центральные tokens; четыре runtime-layout `--ex-*` остаются локальными.
+
+Strict residual gate теперь проверяет implementation library за thin
+entrypoint, игнорирует только wildcard-префиксы из описаний binding map и
+подтверждает: `143` token declarations с одним owner, `32` bindings, ноль raw
+visible colors, canonical gallery arrows, A0 `46/46`, FR0 `20/20`. Closure
+идемпотентен (`changed:false` для всех шести consumers); browser credit всё ещё
+требует свежей сборки и независимого V0 verdict.

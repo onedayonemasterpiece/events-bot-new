@@ -43,26 +43,75 @@ export const EXHIBITIONS_PRIVATE_THEME_ALIASES = [
 ];
 
 export const EXHIBITIONS_REQUIRED_CENTRAL_BINDINGS = [
+  '--ke-color-exhibitions-background',
+  '--ke-color-exhibitions-text',
+  '--ke-color-exhibitions-muted',
+  '--ke-color-exhibitions-blue',
+  '--ke-color-exhibitions-orange',
+  '--ke-color-exhibitions-red',
+  '--ke-color-exhibitions-gray',
+  '--ke-color-exhibitions-yellow',
+  '--ke-color-exhibitions-purple',
+  '--ke-color-exhibitions-green',
   '--ke-color-exhibitions-kbd-line',
-  '--ke-color-exhibitions-kbd-line-strong',
-  '--ke-color-exhibitions-kbd-surface',
-  '--ke-color-exhibitions-kbd-text',
-  '--ke-color-exhibitions-kbd-shadow',
   '--ke-color-exhibitions-mode-surface',
-  '--ke-color-exhibitions-mode-selected-line',
   '--ke-color-exhibitions-sticky-surface',
   '--ke-color-exhibitions-blue-glow',
   '--ke-color-exhibitions-orange-glow',
-  '--ke-color-exhibitions-timeline-mid',
-  '--ke-color-exhibitions-timeline-end',
-  '--ke-color-exhibitions-row-start',
-  '--ke-color-exhibitions-row-end',
+  '--ke-elevation-exhibitions-timeline',
+  '--ke-elevation-exhibitions-timeline-mobile',
   '--ke-elevation-exhibitions-row',
   '--ke-elevation-exhibitions-row-hover',
   '--ke-elevation-exhibitions-row-keyboard',
+  '--ke-color-exhibitions-row-halo-strong',
+  '--ke-color-exhibitions-row-edge-line',
+  '--ke-elevation-exhibitions-row-edge-hover',
+  '--ke-elevation-exhibitions-rail-dot',
+  '--ke-color-exhibitions-deck-count-surface',
+  '--ke-elevation-exhibitions-deck-count',
+  '--ke-color-exhibitions-reason-surface',
+  '--ke-color-exhibitions-tag-surface',
+  '--ke-color-exhibitions-action-surface',
+  '--ke-color-exhibitions-action-hover-line',
+  '--ke-color-exhibitions-like-selected-surface',
+  '--ke-color-exhibitions-reject-selected-surface',
+  '--ke-color-exhibitions-rejected-row-surface',
+  '--ke-color-exhibitions-hidden-control-surface',
+  '--ke-color-exhibitions-tail-line',
+  '--ke-color-exhibitions-empty-line',
+  '--ke-color-exhibitions-gallery-line',
+  '--ke-color-exhibitions-gallery-surface',
+  '--ke-color-exhibitions-gallery-backdrop',
+  '--ke-color-exhibitions-gallery-navigation-surface',
+  '--ke-color-exhibitions-live-line',
+  '--ke-color-exhibitions-live-surface',
+  '--ke-elevation-exhibitions-live',
   '--ke-exhibitions-signal-icon-size',
   '--ke-exhibitions-action-icon-size',
   '--ke-exhibitions-gallery-arrow-icon-size',
+];
+
+export const EXHIBITIONS_REQUIRED_FR0_BINDINGS = [
+  '--ke-color-exhibitions-deck-frame-line',
+  '--ke-color-exhibitions-deck-frame-surface',
+  '--ke-elevation-exhibitions-deck-frame',
+  '--ke-elevation-exhibitions-deck-overlay',
+  '--ke-color-exhibitions-deck-stack-line',
+  '--ke-elevation-exhibitions-deck-stack',
+  '--ke-color-exhibitions-skeleton-start',
+  '--ke-color-exhibitions-skeleton-mid',
+  '--ke-color-exhibitions-depth-start',
+  '--ke-color-exhibitions-depth-mid',
+  '--ke-color-exhibitions-depth-end',
+  '--ke-color-exhibitions-depth-line',
+  '--ke-color-exhibitions-depth-surface',
+  '--ke-elevation-exhibitions-depth-overlay',
+  '--ke-elevation-exhibitions-medallion',
+  '--ke-color-exhibitions-deck-frame-line-hover',
+  '--ke-elevation-exhibitions-deck-frame-hover',
+  '--ke-elevation-exhibitions-deck-stack-hover',
+  '--ke-elevation-exhibitions-deck-filter-hover',
+  '--ke-color-exhibitions-gallery-stage-surface',
 ];
 
 const count = (source, value) => source.split(value).length - 1;
@@ -365,6 +414,79 @@ const transformExhibitions = (input) => {
     ['min-height:132px;', 'min-height:var(--ke-exhibitions-row-min-height);'],
   ]) source = replaceAllIfPresent(source, from, to);
 
+  // F0's residual map freezes these as exact value-preserving substitutions.
+  // Keep them in the existing closure runner so local checks and Kaggle consume
+  // the same implementation rather than growing a second exhibitions exporter.
+  for (const [from, to] of [
+    ['outline:3px solid var(--ke-color-exhibitions-blue); outline-offset:3px;', 'outline:var(--ke-exhibitions-focus-width) solid var(--ke-color-exhibitions-blue); outline-offset:var(--ke-exhibitions-focus-offset);'],
+    ['z-index:100;', 'z-index:var(--ke-exhibitions-skip-layer);'],
+    ['padding:clamp(2rem,5vw,4.8rem) 0 6rem;', 'padding:var(--ke-exhibitions-shell-padding-start) 0 var(--ke-exhibitions-shell-padding-end);'],
+    ['min-width:118px;', 'min-width:var(--ke-exhibitions-summary-item-min-width);'],
+    ['gap:7px; padding-left:22px;', 'gap:7px; padding-left:var(--ke-exhibitions-timeline-gutter);'],
+    ['width:2px; border-radius:999px; background:linear-gradient(180deg,rgba(84,172,247,.1),var(--ke-color-exhibitions-timeline-mid) 7%,var(--ke-color-exhibitions-timeline-end) 93%,rgba(84,172,247,.1)); box-shadow:0 0 8px rgba(255,255,255,.05),0 0 14px rgba(84,172,247,.045);', 'width:var(--ke-exhibitions-timeline-line-width); border-radius:999px; background:linear-gradient(180deg,var(--ke-color-exhibitions-timeline-brand-faint),var(--ke-color-exhibitions-timeline-mid) 7%,var(--ke-color-exhibitions-timeline-end) 93%,var(--ke-color-exhibitions-timeline-brand-faint)); box-shadow:var(--ke-elevation-exhibitions-timeline);'],
+    ['border-radius:8px;\n    background:linear-gradient(92deg,var(--ke-color-exhibitions-row-start),var(--ke-color-exhibitions-row-end)) padding-box,linear-gradient(118deg,rgba(255,255,255,.34),rgba(102,112,121,.12) 40%,rgba(84,172,247,.34) 100%) border-box;', 'border-radius:var(--ke-exhibitions-row-radius);\n    background:linear-gradient(92deg,var(--ke-color-exhibitions-row-start),var(--ke-color-exhibitions-row-end)) padding-box,linear-gradient(118deg,var(--ke-color-exhibitions-row-highlight),var(--ke-color-exhibitions-row-highlight-soft) 40%,var(--ke-color-exhibitions-row-highlight-brand) 100%) border-box;'],
+    ['filter:drop-shadow(0 0 10px rgba(84,172,247,.34));', 'filter:var(--ke-elevation-exhibitions-row-edge-keyboard);'],
+    ['border-radius:18px;\n    background:radial-gradient(ellipse at 22% 54%,rgba(84,172,247,.18),rgba(84,172,247,.05) 38%,transparent 72%);', 'border-radius:var(--ke-exhibitions-row-halo-radius);\n    background:radial-gradient(ellipse at 22% 54%,var(--ke-color-exhibitions-row-halo-strong),var(--ke-color-exhibitions-row-halo-soft) 38%,transparent 72%);'],
+    ['background:linear-gradient(115deg,rgba(255,255,255,.46),transparent 24%,rgba(84,172,247,.58) 72%,transparent 96%) border-box;', 'background:linear-gradient(115deg,var(--ke-color-exhibitions-row-edge-line),transparent 24%,var(--ke-color-exhibitions-row-edge-brand) 72%,transparent 96%) border-box;'],
+    ['filter:drop-shadow(0 0 9px rgba(84,172,247,.28));', 'filter:var(--ke-elevation-exhibitions-row-edge-hover);'],
+    ['border:2px solid #0d0f10;', 'border:2px solid var(--ke-color-exhibitions-rail-dot-border);'],
+    ['box-shadow:0 0 0 1px color-mix(in srgb,var(--ex-rail-color),white 10%),0 0 15px color-mix(in srgb,var(--ex-rail-color),transparent 16%);', 'box-shadow:var(--ke-elevation-exhibitions-rail-dot);'],
+    ['filter:drop-shadow(0 0 11px rgba(84,172,247,.12));', 'filter:var(--ke-elevation-exhibitions-deck-filter-hover);'],
+    ['border:1px solid rgba(220,229,236,.62);', 'border:1px solid var(--ke-color-exhibitions-deck-frame-line);'],
+    ['background:#0b0d0e;', 'background:var(--ke-color-exhibitions-deck-frame-surface);'],
+    ['box-shadow:inset -1px 0 0 rgba(255,255,255,.14),4px 0 12px -3px rgba(0,0,0,.82),0 6px 18px rgba(0,0,0,.3);', 'box-shadow:var(--ke-elevation-exhibitions-deck-frame);'],
+    ['box-shadow:inset -1px 0 0 rgba(255,255,255,.22),inset 1px 0 0 rgba(255,255,255,.08);', 'box-shadow:var(--ke-elevation-exhibitions-deck-overlay);'],
+    ['border-color:color-mix(in srgb,rgba(230,238,244,.8),transparent calc(var(--deck-depth,1) * 8%));', 'border-color:color-mix(in srgb,var(--ke-color-exhibitions-deck-stack-line),transparent calc(var(--deck-depth,1) * 8%));'],
+    ['box-shadow:inset -1px 0 0 rgba(255,255,255,.22),calc(7px - var(--deck-depth,1) * .8px) 0 calc(18px - var(--deck-depth,1) * 1.6px) -2px rgba(0,0,0,.94),0 8px 20px rgba(0,0,0,.42);', 'box-shadow:var(--ke-elevation-exhibitions-deck-stack);'],
+    ['background:linear-gradient(105deg,#171a1d 18%,#252a2e 38%,#171a1d 58%);', 'background:linear-gradient(105deg,var(--ke-color-exhibitions-skeleton-start) 18%,var(--ke-color-exhibitions-skeleton-mid) 38%,var(--ke-color-exhibitions-skeleton-start) 58%);'],
+    ['background:linear-gradient(100deg,#343a3f,#202428 58%,#15181a);', 'background:linear-gradient(100deg,var(--ke-color-exhibitions-depth-start),var(--ke-color-exhibitions-depth-mid) 58%,var(--ke-color-exhibitions-depth-end));'],
+    ['border-color:rgba(202,211,218,.36); background:#23272b;', 'border-color:var(--ke-color-exhibitions-depth-line); background:var(--ke-color-exhibitions-depth-surface);'],
+    ['box-shadow:inset -1px 0 rgba(255,255,255,.13),inset 1px 0 rgba(255,255,255,.05);', 'box-shadow:var(--ke-elevation-exhibitions-depth-overlay);'],
+    ['var(--medallion-ring,#697178)', 'var(--medallion-ring,var(--ke-color-exhibitions-medallion-fallback-ring))'],
+    ['var(--medallion-bg,#17191b)', 'var(--medallion-bg,var(--ke-color-exhibitions-medallion-fallback-surface))'],
+    ['box-shadow:0 4px 12px rgba(0,0,0,.48),0 0 0 2px rgba(8,10,11,.6);', 'box-shadow:var(--ke-elevation-exhibitions-medallion);'],
+    ['border-color:rgba(235,244,250,.84);', 'border-color:var(--ke-color-exhibitions-deck-frame-line-hover);'],
+    ['box-shadow:inset -1px 0 0 rgba(255,255,255,.2),5px 0 14px -3px rgba(0,0,0,.88),0 6px 18px rgba(0,0,0,.36);', 'box-shadow:var(--ke-elevation-exhibitions-deck-frame-hover);'],
+    ['box-shadow:inset -1px 0 0 rgba(255,255,255,.3),7px 0 18px -2px rgba(0,0,0,.96),0 8px 22px rgba(0,0,0,.46);', 'box-shadow:var(--ke-elevation-exhibitions-deck-stack-hover);'],
+    ['border:1px solid rgba(255,255,255,.42);', 'border:1px solid var(--ke-color-exhibitions-deck-count-line);'],
+    ['background:rgba(7,9,10,.9);', 'background:var(--ke-color-exhibitions-deck-count-surface);'],
+    ['color:#f4f7f8;', 'color:var(--ke-color-exhibitions-deck-count-text);'],
+    ['box-shadow:0 4px 14px rgba(0,0,0,.78),0 0 0 4px rgba(7,9,10,.42),inset 0 0 0 1px rgba(255,255,255,.18),0 0 22px rgba(84,172,247,.16);', 'box-shadow:var(--ke-elevation-exhibitions-deck-count);'],
+    ['color:#fff;', 'color:var(--ke-color-exhibitions-title-hover);'],
+    ['background:#20262c;', 'background:var(--ke-color-exhibitions-reason-surface);'],
+    ['background:#3c1d20; color:#ff8e98;', 'background:var(--ke-color-exhibitions-reason-new-surface); color:var(--ke-color-exhibitions-reason-new-text);'],
+    ['background:#211c2b; color:#c2a6fa;', 'background:var(--ke-color-exhibitions-tag-surface); color:var(--ke-color-exhibitions-tag-text);'],
+    ['background:#121416;', 'background:var(--ke-color-exhibitions-action-surface);'],
+    ['border-color:rgba(187,222,249,.72);', 'border-color:var(--ke-color-exhibitions-action-hover-line);'],
+    ['box-shadow:0 0 14px rgba(84,172,247,.13);', 'box-shadow:var(--ke-elevation-exhibitions-action-hover);'],
+    ['border-color:#d86273; background:#32171d; color:#ff788c;', 'border-color:var(--ke-color-exhibitions-like-selected-line); background:var(--ke-color-exhibitions-like-selected-surface); color:var(--ke-color-exhibitions-like-selected-text);'],
+    ['border-color:#72777b; background:#2b2e30; color:#e0e2e4;', 'border-color:var(--ke-color-exhibitions-reject-selected-line); background:var(--ke-color-exhibitions-reject-selected-surface); color:var(--ke-color-exhibitions-reject-selected-text);'],
+    ['background:#17191a;', 'background:var(--ke-color-exhibitions-rejected-row-surface);'],
+    ['border:1px solid #565b5f;', 'border:1px solid var(--ke-color-exhibitions-hidden-control-line);'],
+    ['background:#232629;', 'background:var(--ke-color-exhibitions-hidden-control-surface);'],
+    ['border:1px solid #292d30;', 'border:1px solid var(--ke-color-exhibitions-tail-line);'],
+    ['background:#101214;', 'background:var(--ke-color-exhibitions-surface);'],
+    ['border:1px dashed #4c5257;', 'border:1px dashed var(--ke-color-exhibitions-empty-line);'],
+    ['border:1px solid #4b5156;', 'border:1px solid var(--ke-color-exhibitions-gallery-line);'],
+    ['background:#0c0e0f;', 'background:var(--ke-color-exhibitions-gallery-surface);'],
+    ['box-shadow:0 28px 100px rgba(0,0,0,.72);', 'box-shadow:var(--ke-elevation-exhibitions-gallery);'],
+    ['background:rgba(0,0,0,.84);', 'background:var(--ke-color-exhibitions-gallery-backdrop);'],
+    ['background:#17191b;', 'background:var(--ke-color-exhibitions-gallery-control-surface);'],
+    ['background:#070809;', 'background:var(--ke-color-exhibitions-gallery-stage-surface);'],
+    ['background:#111416;', 'background:var(--ke-color-exhibitions-gallery-navigation-surface);'],
+    ['border:1px solid #4d5358;', 'border:1px solid var(--ke-color-exhibitions-live-line);'],
+    ['background:#191c1e;', 'background:var(--ke-color-exhibitions-live-surface);'],
+    ['box-shadow:0 12px 34px rgba(0,0,0,.45);', 'box-shadow:var(--ke-elevation-exhibitions-live);'],
+    ['border:1px solid #656c72;', 'border:1px solid var(--ke-color-exhibitions-live-undo-line);'],
+    ['background:#272b2e;', 'background:var(--ke-color-exhibitions-live-undo-surface);'],
+    ['background:rgba(0,0,0,0);', 'background:transparent;'],
+    ['background:linear-gradient(180deg,rgba(84,172,247,.16),#6d767d 6%,#555e64 94%,rgba(84,172,247,.16)); box-shadow:0 0 9px rgba(255,255,255,.08),0 0 16px rgba(84,172,247,.1);', 'background:linear-gradient(180deg,var(--ke-color-exhibitions-row-highlight-brand),var(--ke-color-exhibitions-timeline-mobile-mid) 6%,var(--ke-color-exhibitions-timeline-mobile-end) 94%,var(--ke-color-exhibitions-row-highlight-brand)); box-shadow:var(--ke-elevation-exhibitions-timeline-mobile);'],
+    ['box-shadow:0 0 0 1px var(--ex-rail-color),0 0 16px color-mix(in srgb,var(--ex-rail-color),transparent 10%),0 0 28px color-mix(in srgb,var(--ex-rail-color),transparent 52%);', 'box-shadow:var(--ke-elevation-exhibitions-rail-dot-mobile);'],
+    ['border-color:#3c4247;', 'border-color:var(--ke-color-exhibitions-keyboard-help-border);'],
+    ['background:var(--ke-color-exhibitions-tag-surface); color:var(--ke-color-exhibitions-tag-text);', 'background:var(--ke-color-exhibitions-tag-surface); color:var(--ke-color-exhibitions-tag-text,var(--ke-color-exhibitions-purple));'],
+    ['background:var(--ke-color-exhibitions-live-surface); color:var(--ke-color-exhibitions-text);', 'background:var(--ke-color-exhibitions-live-surface); color:var(--ke-color-exhibitions-text,var(--ke-color-exhibitions-green));'],
+  ]) source = replaceAllIfPresent(source, from, to);
+
   return source;
 };
 
@@ -453,6 +575,18 @@ export function assertA0ConsumerPostconditions(path, source) {
       }
       assert.deepEqual(cssCustomPropertyNames(source), [...EXHIBITIONS_RUNTIME_VARIABLES].sort(), `${path} must retain exactly the four approved runtime-layout variables`);
       for (const token of EXHIBITIONS_REQUIRED_CENTRAL_BINDINGS) assert.ok(source.includes(`var(${token})`), `${path} misses central binding ${token}`);
+      for (const token of EXHIBITIONS_REQUIRED_FR0_BINDINGS) assert.ok(source.includes(`var(${token})`), `${path} misses FR0 binding ${token}`);
+      const visibleStyleSource = [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)]
+        .map((match) => match[1])
+        .join('\n')
+        .split(/\r?\n/u)
+        .filter((line) => !/(?:-webkit-)?mask\s*:/u.test(line))
+        .join('\n');
+      assert.doesNotMatch(
+        visibleStyleSource,
+        /#[0-9a-f]{3,8}\b|(?:rgba?|hsla?)\([^)]*\)/iu,
+        `${path} retains a visible color outside the canonical registry`,
+      );
       for (const rawBlock of [
         '.ex-discussed svg { width:14px; height:14px;',
         '.ex-signal svg { width:14px; height:14px;',

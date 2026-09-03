@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Changed: completed the current F0 exhibitions residual transaction in the
+  existing A0 consumer-closure runner. The route now consumes all required A0
+  state/elevation and FR0 frame/depth/gallery bindings without changing the
+  effective July composition; the strict gate follows the thin entrypoint into
+  its implementation library, accepts documented wildcard token families, and
+  rejects any remaining raw visible color owner.
+
 - Fixed: integrated the FR0 EventMediaRail fallback and clip-ownership batches.
   Broken rail resources now fail closed to the canonical non-interactive
   fallback with `contain` and forbidden crop diagnostics, while the nested

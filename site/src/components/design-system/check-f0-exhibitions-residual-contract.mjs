@@ -16,7 +16,11 @@ const foundationsTs = readRepo('site/src/components/design-system/foundations.ts
 const semanticIcon = readRepo('site/src/components/design-system/SemanticIcon.astro');
 const exhibitions = readRepo(bindings.consumer);
 const closureScriptPath = 'site/scripts/apply-a0-current-successor-consumer-closure.mjs';
-const closureScript = existsSync(resolve(repoRoot, closureScriptPath)) ? readRepo(closureScriptPath) : '';
+const closureLibraryPath = 'site/scripts/a0-current-successor-consumer-closure-lib.mjs';
+const closureScript = [closureScriptPath, closureLibraryPath]
+  .filter((path) => existsSync(resolve(repoRoot, path)))
+  .map(readRepo)
+  .join('\n');
 
 assert.equal(bindings.schema, 'kenigevents.f0-exhibitions-residual-bindings.v1');
 assert.equal(bindings.version, '1.0.0');
@@ -77,7 +81,7 @@ for (const binding of bindings.bindings) {
   assert.ok(binding.replacement, `${binding.id} misses replacement`);
   assert.ok(['A0', 'FR0'].includes(binding.consumer_owner), `${binding.id} has invalid consumer owner`);
   assert.ok(binding.browser_expectation, `${binding.id} misses browser expectation`);
-  for (const token of binding.replacement.match(/--ke-[a-z0-9-]+/giu) || []) {
+  for (const token of (binding.replacement.match(/--ke-[a-z0-9-]+/giu) || []).filter((value) => !value.endsWith('-'))) {
     assert.ok(declarations.has(token), `${binding.id} references undeclared token ${token}`);
   }
 }
