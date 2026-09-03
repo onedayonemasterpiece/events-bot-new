@@ -23,6 +23,12 @@
   height: 100%;
 }
 
+/* EventMediaRail owns the external button radius, while MediaFrame remains the
+ * only node that clips the image/fallback inside that surface. */
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"] {
+  border-radius: inherit;
+}
+
 [data-media-frame][data-media-frame-contract="v1"] > [data-media-frame-image] {
   display: block;
   max-width: 100%;
@@ -54,4 +60,25 @@
 [data-media-frame][data-media-frame-contract="v1"][data-media-frame-fill="true"] > [data-media-frame-fallback] {
   width: 100%;
   height: 100%;
+}
+
+/* EventMediaRail activates some thumbnail resources only after responsive
+ * layout. Its placeholder load is not success. A declared fallback or a
+ * broken activated resource must expose real fallback anatomy and must not
+ * leave a stale visual/cover image visible behind diagnostics. */
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"] > [data-media-frame-fallback] {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-kind="fallback"] > [data-media-frame-image],
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-resource-state="broken"] > [data-media-frame-image] {
+  visibility: hidden;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-kind="fallback"] > [data-media-frame-fallback],
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-resource-state="broken"] > [data-media-frame-fallback] {
+  display: block;
 }

@@ -248,6 +248,8 @@ const rootClass = [
   className,
 ].filter(Boolean).join(' ');
 const transparentRailPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+const mediaFrameImageLoadHandler = `const frame=this.closest('[data-media-frame][data-media-frame-contract="v1"]');if(!frame||this.dataset.mediaFrameFailed==='true'||frame.dataset.mediaFrameKind==='fallback')return;if(this.hasAttribute('data-rail-thumbnail')&&this.dataset.railThumbnailActivated!=='true')return;frame.dataset.mediaFrameResourceState='loaded';`;
+const mediaFrameImageErrorHandler = `const frame=this.closest('[data-media-frame][data-media-frame-contract="v1"]');if(!frame)return;this.dataset.mediaFrameFailed='true';this.removeAttribute('srcset');frame.dataset.mediaFrameResourceState='broken';frame.dataset.mediaFrameKind='fallback';frame.dataset.mediaFrameFit='contain';frame.dataset.mediaFrameCropPermission='forbidden';frame.dataset.mediaFrameCropReason='resource_load_error';frame.setAttribute('data-media-frame-fallback','');`;
 const rootStyle = variant === 'gallery-thumbnails'
   ? `--rail-count:${visibleItems.length + (hiddenCount > 0 ? 1 : 0)}`
   : undefined;
@@ -349,9 +351,11 @@ const rootStyle = variant === 'gallery-thumbnails'
               data-media-frame-loading="eager"
               data-media-frame-priority="true"
               data-media-frame-interaction-owner="caller"
+              data-media-frame-resource-state={item.kind === 'fallback' ? 'fallback' : 'pending'}
               data-media-frame-fallback={item.kind === 'fallback' ? '' : undefined}
               style={frameStyle}
             >
+              <span class="event-media-rail__fallback" data-media-frame-fallback aria-hidden="true"></span>
               <img
                 src={item.thumbnailSrc}
                 srcset={item.thumbnailSrcset}
@@ -362,6 +366,8 @@ const rootStyle = variant === 'gallery-thumbnails'
                 loading="eager"
                 decoding="async"
                 data-media-frame-image
+                onload={mediaFrameImageLoadHandler}
+                onerror={mediaFrameImageErrorHandler}
               />
             </span>
           ) : (
@@ -387,9 +393,11 @@ const rootStyle = variant === 'gallery-thumbnails'
               data-media-frame-source-ratio={sourceRatio?.toFixed(5)}
               data-media-frame-loading="lazy"
               data-media-frame-interaction-owner="caller"
+              data-media-frame-resource-state={item.kind === 'fallback' ? 'fallback' : 'pending'}
               data-media-frame-fallback={item.kind === 'fallback' ? '' : undefined}
               style={frameStyle}
             >
+              <span class="event-media-rail__fallback" data-media-frame-fallback aria-hidden="true"></span>
               <img
                 src={transparentRailPixel}
                 data-rail-thumbnail
@@ -403,6 +411,8 @@ const rootStyle = variant === 'gallery-thumbnails'
                 decoding="async"
                 fetchpriority="low"
                 data-media-frame-image
+                onload={mediaFrameImageLoadHandler}
+                onerror={mediaFrameImageErrorHandler}
               />
             </picture>
           )}
@@ -496,7 +506,6 @@ const rootStyle = variant === 'gallery-thumbnails'
     min-width: 0;
     height: 54px;
     padding: 0;
-    overflow: hidden;
     border: 1px solid rgba(255,255,255,0.16);
     border-radius: 11px;
     background: #2d2926;
@@ -508,6 +517,7 @@ const rootStyle = variant === 'gallery-thumbnails'
     display: grid;
     place-content: center;
     gap: 0.05rem;
+    overflow: hidden;
     background: var(--ke-color-media-rail-more-surface, #fffaf2);
     color: var(--ke-color-media-rail-more-text, #241c17);
   }
@@ -549,7 +559,6 @@ const rootStyle = variant === 'gallery-thumbnails'
     max-width: 68px;
     height: 48px;
     padding: 0;
-    overflow: hidden;
     border: 2px solid transparent;
     border-radius: 10px;
     background: #2b2724;
@@ -617,7 +626,6 @@ const rootStyle = variant === 'gallery-thumbnails'
     max-width: 196px;
     height: var(--split-rail-thumb-height);
     padding: 0;
-    overflow: hidden;
     border: 2px solid transparent;
     border-radius: 10px;
     background: #2b2724;
