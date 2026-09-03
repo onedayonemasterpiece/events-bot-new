@@ -1,4 +1,5 @@
 ---
+import './design-system/product-contour-foundations.css';
 import { withBase } from '../lib/events';
 
 interface Props {
@@ -15,7 +16,13 @@ const {
 const iconHref = withBase('/assets/icons/lab-flask-287837.svg');
 ---
 
-<span class:list={['focus-lab-badge', `focus-lab-badge--${size}`]}>
+<span
+  class:list={['focus-lab-badge', `focus-lab-badge--${size}`]}
+  data-ds-family="FocusLabBadge"
+  data-ds-version="1"
+  data-ds-variant={size}
+  data-ds-state="static"
+>
   <span class="focus-lab-badge__icon" aria-hidden="true">
     <img src={iconHref} width="32" height="32" alt="" />
   </span>
@@ -32,28 +39,28 @@ const iconHref = withBase('/assets/icons/lab-flask-287837.svg');
     display: inline-flex;
     align-items: center;
     gap: .55rem;
-    border: 1px solid color-mix(in srgb, var(--ke-color-brand-600, #a54821) 25%, transparent);
-    border-radius: 999px;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-focus-brand-marker-border);
+    border-radius: var(--ke-shape-radius-pill);
     padding: .35rem .7rem .35rem .4rem;
-    background: color-mix(in srgb, #ffc10d 13%, #fff);
-    color: var(--ke-color-ink, #221a14);
-    font-family: var(--ke-font-sans, system-ui, sans-serif);
-    box-shadow: 0 8px 22px rgb(72 45 25 / 8%);
+    background: var(--ke-color-focus-brand-marker-surface);
+    color: var(--ke-color-text-primary);
+    font-family: var(--ke-font-family-sans);
+    box-shadow: var(--ke-elevation-card);
   }
 
   .focus-lab-badge__icon {
-    width: 2rem;
-    height: 2rem;
+    width: var(--ke-focus-lab-icon-container-size);
+    height: var(--ke-focus-lab-icon-container-size);
     flex: 0 0 auto;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: #fff;
+    background: var(--ke-color-focus-control-surface);
   }
 
   .focus-lab-badge__icon img {
-    width: 1.55rem;
-    height: 1.55rem;
+    width: var(--ke-focus-lab-icon-size);
+    height: var(--ke-focus-lab-icon-size);
     display: block;
     object-fit: contain;
   }
@@ -72,7 +79,7 @@ const iconHref = withBase('/assets/icons/lab-flask-287837.svg');
   }
 
   .focus-lab-badge small {
-    color: var(--ke-color-muted, #6d6259);
+    color: var(--ke-color-text-muted);
     font-size: .67rem;
     font-weight: 750;
   }
@@ -83,13 +90,13 @@ const iconHref = withBase('/assets/icons/lab-flask-287837.svg');
   }
 
   .focus-lab-badge--hero .focus-lab-badge__icon {
-    width: 2.65rem;
-    height: 2.65rem;
+    width: var(--ke-focus-lab-icon-container-size-hero);
+    height: var(--ke-focus-lab-icon-container-size-hero);
   }
 
   .focus-lab-badge--hero .focus-lab-badge__icon img {
-    width: 2rem;
-    height: 2rem;
+    width: var(--ke-focus-lab-icon-size-hero);
+    height: var(--ke-focus-lab-icon-size-hero);
   }
 
   .focus-lab-badge--hero strong { font-size: .9rem; }
