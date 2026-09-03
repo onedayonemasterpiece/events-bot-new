@@ -1,6 +1,6 @@
 ---
 import SemanticIcon from './SemanticIcon.astro';
-import './foundations.css';
+import './component-foundations.css';
 
 interface Props {
   value: string;
@@ -32,6 +32,13 @@ const {
   data-copy-success-label={successLabel}
   data-copy-error-label={errorLabel}
   data-copy-reset-ms={Math.max(0, resetDelayMs)}
+  data-ds-component="CopyAction"
+  data-ds-family="CopyAction"
+  data-ds-version="2"
+  data-ds-variant={variant}
+  data-ds-state="default"
+  data-ke-foundation-consumer="copy-action"
+  data-ke-icon-role="control"
   aria-label={ariaLabel}
   title={ariaLabel}
 >
@@ -83,11 +90,13 @@ const {
       try {
         await copyPlainText(value);
         button.dataset.copyState = 'success';
+        button.dataset.dsState = 'success';
         button.setAttribute('aria-label', successLabel);
         button.title = successLabel;
         if (status) status.textContent = successLabel;
       } catch {
         button.dataset.copyState = 'error';
+        button.dataset.dsState = 'error';
         button.setAttribute('aria-label', errorLabel);
         button.title = errorLabel;
         if (status) status.textContent = errorLabel;
@@ -98,6 +107,7 @@ const {
       if (!Number.isFinite(delay) || delay <= 0) return;
       const timer = window.setTimeout(() => {
         delete button.dataset.copyState;
+        button.dataset.dsState = 'default';
         button.setAttribute('aria-label', defaultLabel);
         button.title = defaultLabel;
         if (status) status.textContent = '';
@@ -129,8 +139,8 @@ const {
     --ke-color-copy-action-background: var(--ke-color-copy-action-inverse-background);
   }
   .ke-copy-action:focus-visible {
-    outline: 3px solid var(--ke-color-focus-ring-warm);
-    outline-offset: 3px;
+    outline: var(--ke-border-width-focus) solid var(--ke-color-focus-ring-warm);
+    outline-offset: var(--ke-focus-outline-offset);
   }
   .ke-copy-action[data-copy-state="success"] {
     --ke-color-copy-action-background: var(--ke-color-copy-action-success-background);
@@ -138,7 +148,7 @@ const {
   }
   .ke-copy-action[data-copy-state="error"] {
     --ke-color-copy-action-border: var(--ke-color-copy-action-error-border);
-    box-shadow: 0 0 0 2px var(--ke-color-copy-action-error-ring);
+    box-shadow: 0 0 0 var(--ke-shape-border-strong) var(--ke-color-copy-action-error-ring);
   }
   .ke-copy-action__icon {
     grid-area: 1 / 1;

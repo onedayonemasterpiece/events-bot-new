@@ -1,4 +1,6 @@
 ---
+import './component-foundations.css';
+
 interface Props {
   variant?: 'primary' | 'secondary' | 'quiet' | 'inverse' | 'danger';
   size?: 'compact' | 'default' | 'large';
@@ -27,6 +29,15 @@ const className = [
   size !== 'default' ? `ke-button--${size}` : '',
   iconOnly ? 'ke-button--icon' : '',
 ].filter(Boolean).join(' ');
+const diagnostics = {
+  'data-ds-component': 'Button',
+  'data-ds-family': 'Button',
+  'data-ds-version': '2',
+  'data-ds-variant': `${variant}-${size}`,
+  'data-ds-state': state,
+  'data-ke-foundation-consumer': 'button',
+  'data-ke-icon-role': 'control',
+};
 ---
 {href ? (
   <a
@@ -39,8 +50,9 @@ const className = [
     aria-pressed={pressed}
     tabindex={disabled ? -1 : undefined}
     data-preview-state={state === 'default' ? undefined : state}
+    {...diagnostics}
   >
-    {state === 'loading' && <span class="ke-button__spinner" aria-hidden="true"></span>}
+    {state === 'loading' && <span class="ke-button__spinner" data-ke-icon-role="inline" aria-hidden="true"></span>}
     <slot />
   </a>
 ) : (
@@ -52,8 +64,9 @@ const className = [
     aria-pressed={pressed}
     disabled={disabled}
     data-preview-state={state === 'default' ? undefined : state}
+    {...diagnostics}
   >
-    {state === 'loading' && <span class="ke-button__spinner" aria-hidden="true"></span>}
+    {state === 'loading' && <span class="ke-button__spinner" data-ke-icon-role="inline" aria-hidden="true"></span>}
     <slot />
   </button>
 )}
