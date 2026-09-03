@@ -38,7 +38,7 @@ test('mixed historical suite now reads only M0 card-grid-row-layout sources', as
     'EventHero.astro',
     'DesktopEventPage.astro',
     'MobileListingRailRow.astro',
-  ]) assert.ok(!source.includes(transferred), `mixed M0 suite still owns FR0 domain: ${transferred}`);
+  ]) assert.ok(!source.includes(transferred), `mixed M0 suite still owns transferred domain: ${transferred}`);
 });
 
 test('FR0 equivalents existed before framing assertions left the mixed M0 suite', async () => {
@@ -58,6 +58,49 @@ test('FR0 equivalents existed before framing assertions left the mixed M0 suite'
   );
   assert.equal(manifest.coverage_policy.delete_pre_cutover_coverage, false);
   assert.equal(manifest.coverage_policy.fr0_equivalents_must_be_integrated_before_old_framing_suites_are_retired, true);
+});
+
+test('consumer-level assertions leave M0 tests only after equivalent coverage exists', async () => {
+  const [manifest, iconTest, targetTest, mobileRailTest] = await Promise.all([
+    read('tests/m0-post-fr0-test-ownership.v1.json').then(JSON.parse),
+    read('tests/m0-card-icon-role-contract.test.mjs'),
+    read('tests/event-card-control-target.test.mjs'),
+    read('tests/mobile-listing-rails.test.mjs'),
+  ]);
+
+  assert.deepEqual(
+    manifest.consumer_transferred_test_domains.map((entry) => entry.external_equivalent),
+    [
+      'site/tests/mobile-listing-rails.test.mjs',
+      'site/tests/n0-v0-golden-drift-acceptance.test.mjs',
+    ],
+  );
+  assert.ok(manifest.consumer_transferred_test_domains.every((entry) => entry.coverage_exists_before_transfer));
+
+  assert.doesNotMatch(iconTest, /MobileListingRailRow|foundations\.ts|semanticRoles\(mobile\)/u);
+  assert.match(mobileRailTest, /import SemanticIcon from '\.\.\/design-system\/SemanticIcon\.astro'/u);
+  for (const role of ['feature', 'inline', 'action']) {
+    assert.match(mobileRailTest, new RegExp(`<SemanticIcon name="heart" role="${role}" \\/>`, 'u'));
+  }
+
+  assert.doesNotMatch(targetTest, /EventLayout\.astro|styles\/design-system\.css|legacyCompactRule/u);
+  assert.match(targetTest, /var\(--ke-control-min,\\s\*44px\)/u);
+  assert.equal(manifest.coverage_policy.consumer_equivalents_must_exist_before_cross_role_assertions_leave_M0_tests, true);
+});
+
+test('the retained EventLayout bridge check is explicitly read-only integration evidence', async () => {
+  const [manifest, source] = await Promise.all([
+    read('tests/m0-post-fr0-test-ownership.v1.json').then(JSON.parse),
+    read('tests/event-card-flex-placement.test.mjs'),
+  ]);
+  const integration = manifest.cross_role_read_only_integration_contracts[0];
+
+  assert.equal(integration.path, 'site/tests/event-card-flex-placement.test.mjs');
+  assert.equal(integration.reads_external_path, 'site/src/layouts/EventLayout.astro');
+  assert.equal(integration.external_writer_owner, 'A0');
+  assert.equal(integration.m0_authority, 'READ_ONLY_NEGATIVE_INTEGRATION_CHECK');
+  assert.equal(integration.m0_source_mutation_authorized, false);
+  assert.match(source, /read\('src\/layouts\/EventLayout\.astro'\)/u);
 });
 
 test('M0 closes card requirements and leaves the mobile rail packet external', async () => {
