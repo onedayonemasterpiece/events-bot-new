@@ -9,7 +9,9 @@ const read = (relativePath) => readFile(path.join(siteRoot, relativePath), 'utf8
 const acceptance = JSON.parse(await read('scripts/n0-exhibitions-vertical-slice-acceptance.v1.json'));
 const strictSource = process.env.N0_REQUIRE_EXHIBITIONS_SLICE_SOURCE === '1';
 
-const FROZEN = 'cebeafeee08251a327145ee973ee035cced65204';
+const PREDECESSOR = 'cebeafeee08251a327145ee973ee035cced65204';
+const SUCCESSOR = '3ca6a143e4286c165282c2d8ceef1759a41185b7';
+const BUILD = 'preview-real-3ca6a143e-normalized-20260903-v1';
 const EXPECTED_BLOBS = Object.freeze({
   'site/src/components/ExhibitionsPersonalSurface.astro': '61d065efbc9b05254601ae807b7fcffec701bd04',
   'site/src/components/ExhibitionPrototypeRow.astro': 'ff94b32a288b079f27ca9e8c33d6975f52012478',
@@ -18,13 +20,18 @@ const EXPECTED_BLOBS = Object.freeze({
   'site/tests/fr0-exhibitions-media-frame-contract.test.mjs': 'ff26615718b83134db9bb65e1a10831818381743',
 });
 
-test('vertical slice is source-accepted on one frozen transaction without browser inflation', () => {
+test('vertical slice is source-accepted on the exact public successor without browser inflation', () => {
   assert.equal(acceptance.schema, 'kenigevents.n0-exhibitions-vertical-slice-acceptance.v1');
-  assert.equal(acceptance.version, '1.1.0');
+  assert.equal(acceptance.version, '1.2.0');
   assert.equal(acceptance.contract_version, '1.10.0');
-  assert.deepEqual(acceptance.v0_requirement_comments, [5531944339, 5531980502]);
-  assert.equal(acceptance.frozen_transaction.source_sha, FROZEN);
-  assert.equal(acceptance.frozen_transaction.build_id, 'preview-real-cebeafeee-normalized-20260903-v1');
+  assert.deepEqual(acceptance.v0_requirement_comments, [5531944339, 5531980502, 5532544488, 5532596307]);
+  assert.equal(acceptance.audit_transaction.source_sha, SUCCESSOR);
+  assert.equal(acceptance.audit_transaction.source_predecessor, PREDECESSOR);
+  assert.equal(acceptance.audit_transaction.accepted_source_blobs_unchanged_from_predecessor, true);
+  assert.equal(acceptance.audit_transaction.build_id, BUILD);
+  assert.equal(acceptance.audit_transaction.public_url, `https://kenigevents.ru/${BUILD}/__preview/`);
+  assert.equal(acceptance.audit_transaction.manifest_url, `https://kenigevents.ru/${BUILD}/preview-build.json`);
+  assert.equal(acceptance.audit_transaction.publication_state, 'N0_ACCEPTED');
   assert.equal(acceptance.slice.id, 'EXHIBITIONS_PERSONAL_ROW_FR0_MEDIAFRAME');
   assert.deepEqual(acceptance.slice.chain, [
     'ExhibitionsPersonalSurface',
@@ -36,10 +43,11 @@ test('vertical slice is source-accepted on one frozen transaction without browse
   assert.equal(acceptance.slice.browser_verdict, 'PENDING_V0');
   assert.equal(acceptance.slice.independent_acceptance, true);
   assert.equal(acceptance.slice.unrelated_route_drift_rejects_slice, false);
+  assert.equal(acceptance.slice.known_runtime_EventCard_drift_rejects_slice, false);
   assert.equal(acceptance.source_acceptance.runtime_or_browser_credit, false);
 });
 
-test('exact source blobs and ownership are pinned to cebeafee', () => {
+test('exact source blobs and ownership remain stable from cebeafee to 3ca6', () => {
   assert.equal(acceptance.exact_source.length, 5);
   assert.deepEqual(
     Object.fromEntries(acceptance.exact_source.map(({ path:sourcePath, blob }) => [sourcePath, blob])),
@@ -66,7 +74,17 @@ test('source acceptance preserves one framing owner and accepted medallion seman
   assert.equal(source.competing_route_local_attribute_scoped_MediaFrame_owner, 'NOT_FOUND_BY_SOURCE_REVIEW');
 });
 
-test('V0 matrix cannot omit route, resource-state, clipping, interaction or accessibility evidence', () => {
+test('canonical v1 roots and bare legacy markers are separated in the slice denominator', () => {
+  const scope = acceptance.root_scope;
+  assert.equal(scope.canonical_selector, '[data-media-frame][data-media-frame-contract="v1"]');
+  assert.equal(scope.legacy_selector, '[data-media-frame]:not([data-media-frame-contract])');
+  assert.equal(scope.legacy_classification, 'LEGACY_RESOURCE_MARKER_OUTSIDE_CURRENT_V1_DELIVERY');
+  assert.equal(scope.legacy_markers_are_malformed_v1, false);
+  assert.equal(scope.legacy_markers_receive_v1_credit, false);
+  assert.equal(scope.legacy_marker_presence_rejects_slice, false);
+});
+
+test('V0 matrix cannot omit route, protocol, resource-state, clipping, interaction or accessibility evidence', () => {
   const required = acceptance.v0_required_sections;
   assert.deepEqual(required.viewports, [375, 620, 1024, 1440]);
   for (const section of [
@@ -77,6 +95,8 @@ test('V0 matrix cannot omit route, resource-state, clipping, interaction or acce
     'interaction',
     'row_and_accessibility',
   ]) assert.ok(required[section].length > 0, `missing V0 section ${section}`);
+  assert.ok(required.frame_protocol.includes('enumerate canonical frames only through the v1 selector'));
+  assert.ok(required.frame_protocol.includes('report bare legacy frame markers separately without v1 credit'));
   assert.ok(required.resource_state_observation.includes('resource_state pending|loaded|fallback|broken'));
   assert.ok(required.interaction.includes('medallion is a non-interactive span with interaction-owner=none'));
   assert.ok(required.interaction.includes('missing/unknown interaction owner or MediaFrame-owned activation is DRIFT'));
@@ -102,11 +122,15 @@ test('V0 matrix cannot omit route, resource-state, clipping, interaction or acce
   assert.equal(required.clipping_classification.raw_image_box_containment_is_sufficient, false);
   assert.equal(acceptance.acceptance_rule.omitted_required_case, 'INCOMPLETE_NOT_PASS');
   assert.equal(acceptance.acceptance_rule.unrelated_route_drift, 'DOES_NOT_REJECT_THIS_SLICE');
+  assert.equal(acceptance.acceptance_rule.known_runtime_EventCard_drift, 'DOES_NOT_REJECT_THIS_SLICE');
   assert.equal(acceptance.acceptance_rule.N0_may_not_self_issue_browser_verdict, true);
 });
 
-test('rollback preserves the immutable prefix and isolates the smallest slice units', () => {
-  assert.equal(acceptance.rollback_boundary.preserve_frozen_immutable_prefix, true);
+test('rollback preserves both immutable prefixes and isolates the smallest slice units', () => {
+  assert.deepEqual(acceptance.rollback_boundary.preserve_immutable_prefixes, [
+    'preview-real-cebeafeee-normalized-20260903-v1',
+    'preview-real-3ca6a143e-normalized-20260903-v1',
+  ]);
   assert.deepEqual(acceptance.rollback_boundary.smallest_units, [
     'exhibitions consumer materialization',
     'ExhibitionPrototypeRow protocol binding',
@@ -138,6 +162,7 @@ test('strict integrated-source mode verifies the accepted chain without redefini
 
   for (const marker of [
     "import './media-frame.css';",
+    'data-media-frame-contract="v1"',
     'data-media-frame-surface="exhibitions-deck"',
     'data-media-frame-surface="exhibitions-medallion"',
     'data-media-frame-interaction-owner="caller"',
