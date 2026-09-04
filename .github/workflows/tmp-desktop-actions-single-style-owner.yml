@@ -1,0 +1,624 @@
+name: temporary desktop actions single style owner
+
+on:
+  push:
+    branches:
+      - work/ui-normalization-desktop-actions-single-style-owner-20260904
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e8ba758ed32ee4de74df4f2ce490423fbb8e1e74
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Apply bounded source implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import re
+          from pathlib import Path
+
+          ROOT = Path.cwd()
+          PAGE_PATH = ROOT / 'site/src/components/DesktopEventPage.astro'
+          PANEL_PATH = ROOT / 'site/src/components/DesktopEventActionPanel.astro'
+          TEST_PATH = ROOT / 'site/tests/desktop-event-actions-single-style-owner.test.mjs'
+          DOC_PATH = ROOT / 'docs/features/static-site-pages/event-page-product-design.md'
+          CHANGELOG_PATH = ROOT / 'CHANGELOG.md'
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected exactly one source match, found {count}')
+              return text.replace(old, new, 1)
+
+          def find_matching_brace(text: str, open_index: int) -> int:
+              depth = 1
+              index = open_index + 1
+              quote: str | None = None
+              while index < len(text):
+                  char = text[index]
+                  if quote:
+                      if char == '\\':
+                          index += 2
+                          continue
+                      if char == quote:
+                          quote = None
+                      index += 1
+                      continue
+                  if text.startswith('/*', index):
+                      end = text.find('*/', index + 2)
+                      if end < 0:
+                          raise RuntimeError('unterminated CSS comment')
+                      index = end + 2
+                      continue
+                  if char in {'"', "'"}:
+                      quote = char
+                  elif char == '{':
+                      depth += 1
+                  elif char == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return index
+                  index += 1
+              raise RuntimeError('unbalanced CSS block')
+
+          def find_statement_delimiter(text: str, start: int) -> tuple[int, str] | None:
+              index = start
+              quote: str | None = None
+              paren = 0
+              bracket = 0
+              while index < len(text):
+                  char = text[index]
+                  if quote:
+                      if char == '\\':
+                          index += 2
+                          continue
+                      if char == quote:
+                          quote = None
+                      index += 1
+                      continue
+                  if text.startswith('/*', index):
+                      end = text.find('*/', index + 2)
+                      if end < 0:
+                          raise RuntimeError('unterminated CSS comment')
+                      index = end + 2
+                      continue
+                  if char in {'"', "'"}:
+                      quote = char
+                  elif char == '(':
+                      paren += 1
+                  elif char == ')':
+                      paren = max(0, paren - 1)
+                  elif char == '[':
+                      bracket += 1
+                  elif char == ']':
+                      bracket = max(0, bracket - 1)
+                  elif paren == 0 and bracket == 0 and char in {'{', ';'}:
+                      return index, char
+                  index += 1
+              return None
+
+          def peel_trivia(text: str) -> tuple[str, str]:
+              index = 0
+              while index < len(text):
+                  whitespace = re.match(r'\s+', text[index:])
+                  if whitespace:
+                      index += whitespace.end()
+                      continue
+                  if text.startswith('/*', index):
+                      end = text.find('*/', index + 2)
+                      if end < 0:
+                          raise RuntimeError('unterminated CSS comment')
+                      index = end + 2
+                      continue
+                  break
+              return text[:index], text[index:]
+
+          def split_selector_list(selector: str) -> list[str]:
+              parts: list[str] = []
+              start = 0
+              index = 0
+              quote: str | None = None
+              paren = 0
+              bracket = 0
+              while index < len(selector):
+                  char = selector[index]
+                  if quote:
+                      if char == '\\':
+                          index += 2
+                          continue
+                      if char == quote:
+                          quote = None
+                      index += 1
+                      continue
+                  if text_starts_comment := selector.startswith('/*', index):
+                      end = selector.find('*/', index + 2)
+                      if end < 0:
+                          raise RuntimeError('unterminated selector comment')
+                      index = end + 2
+                      continue
+                  if char in {'"', "'"}:
+                      quote = char
+                  elif char == '(':
+                      paren += 1
+                  elif char == ')':
+                      paren = max(0, paren - 1)
+                  elif char == '[':
+                      bracket += 1
+                  elif char == ']':
+                      bracket = max(0, bracket - 1)
+                  elif char == ',' and paren == 0 and bracket == 0:
+                      parts.append(selector[start:index])
+                      start = index + 1
+                  index += 1
+              parts.append(selector[start:])
+              return parts
+
+          INTERNAL_SELECTOR_TOKENS = (
+              '.desktop-prototype__primary-action',
+              '.desktop-prototype__icon-action',
+              '.desktop-prototype__action-row',
+          )
+
+          BOUNDARY_REPLACEMENTS = (
+              ('.desktop-prototype__action--side', '[data-desktop-action-panel][data-action-variant="editorial-side"]'),
+              ('.desktop-prototype__action--inline', '[data-desktop-action-panel][data-action-variant="split-inline"]'),
+              ('.desktop-prototype__action--flow', '[data-desktop-action-panel][data-action-variant$="-flow"]'),
+          )
+
+          def replace_boundary_token(selector: str, old: str, new: str) -> str:
+              selector = selector.replace(f':global({old}', f':global({new}')
+              return selector.replace(old, f':global({new})')
+
+          def transform_selector(selector: str) -> str | None:
+              core = selector.strip()
+              if not core:
+                  return None
+              if any(token in core for token in INTERNAL_SELECTOR_TOKENS):
+                  return None
+              if '.desktop-prototype__action--media' in core:
+                  return None
+              if re.search(r'\.desktop-prototype__action\s*>\s*p(?:\b|\s|[.:#\[])', core):
+                  return None
+              if re.fullmatch(r'(?::global\()?\.desktop-prototype__action\)?', core):
+                  return None
+
+              for old, new in BOUNDARY_REPLACEMENTS:
+                  core = replace_boundary_token(core, old, new)
+
+              core = core.replace(
+                  ':global(.desktop-prototype__action)',
+                  ':global([data-desktop-action-panel])',
+              )
+              core = re.sub(
+                  r'\.desktop-prototype__action(?![-\w])',
+                  ':global([data-desktop-action-panel])',
+                  core,
+              )
+              if '[data-desktop-action-panel]' in core and '::before' in core:
+                  return None
+              return core
+
+          def split_declarations(body: str) -> list[str]:
+              parts: list[str] = []
+              start = 0
+              index = 0
+              quote: str | None = None
+              paren = 0
+              while index < len(body):
+                  char = body[index]
+                  if quote:
+                      if char == '\\':
+                          index += 2
+                          continue
+                      if char == quote:
+                          quote = None
+                      index += 1
+                      continue
+                  if body.startswith('/*', index):
+                      end = body.find('*/', index + 2)
+                      if end < 0:
+                          raise RuntimeError('unterminated declaration comment')
+                      index = end + 2
+                      continue
+                  if char in {'"', "'"}:
+                      quote = char
+                  elif char == '(':
+                      paren += 1
+                  elif char == ')':
+                      paren = max(0, paren - 1)
+                  elif char == ';' and paren == 0:
+                      parts.append(body[start:index + 1])
+                      start = index + 1
+                  index += 1
+              if start < len(body):
+                  parts.append(body[start:])
+              return parts
+
+          PLACEMENT_PROPERTIES = {
+              'position', 'inset', 'top', 'right', 'bottom', 'left', 'z-index',
+              'grid-column', 'grid-row', 'grid-area', 'align-self', 'justify-self',
+              'order', 'width', 'min-width', 'max-width', 'height', 'min-height',
+              'max-height', 'transform', 'transition', 'will-change', 'isolation',
+          }
+
+          def sanitize_boundary_body(body: str) -> str:
+              kept: list[str] = []
+              for segment in split_declarations(body):
+                  prefix, declaration = peel_trivia(segment)
+                  match = re.match(r'([\w-]+)\s*:\s*(.*?);?\s*$', declaration, re.S)
+                  if not match:
+                      if declaration.strip():
+                          kept.append(segment)
+                      else:
+                          kept.append(prefix)
+                      continue
+                  prop = match.group(1).lower()
+                  value = match.group(2).strip().rstrip(';').strip()
+                  allowed = (
+                      prop in PLACEMENT_PROPERTIES
+                      or prop.startswith('margin')
+                      or prop.startswith('inset-')
+                  )
+                  if prop == 'display':
+                      allowed = value == 'none'
+                  if allowed:
+                      kept.append(segment)
+              result = ''.join(kept)
+              return result if re.search(r'[\w-]+\s*:', result) else ''
+
+          def transform_selector_list(selector: str) -> tuple[str | None, bool]:
+              transformed: list[str] = []
+              boundary_flags: list[bool] = []
+              for part in split_selector_list(selector):
+                  leading = re.match(r'\s*', part).group(0)
+                  trailing = re.search(r'\s*$', part).group(0)
+                  core = part[len(leading):len(part) - len(trailing) if trailing else None]
+                  rewritten = transform_selector(core)
+                  if rewritten is None:
+                      continue
+                  transformed.append(f'{leading}{rewritten}{trailing}')
+                  boundary_flags.append('[data-desktop-action-panel]' in rewritten)
+              if not transformed:
+                  return None, False
+              if any(boundary_flags) and not all(boundary_flags):
+                  raise RuntimeError(f'mixed public-boundary/non-boundary selector list: {selector!r}')
+              return ','.join(transformed), all(boundary_flags)
+
+          def transform_css_block(block: str) -> str:
+              output: list[str] = []
+              position = 0
+              while position < len(block):
+                  delimiter = find_statement_delimiter(block, position)
+                  if delimiter is None:
+                      output.append(block[position:])
+                      break
+                  index, kind = delimiter
+                  prelude = block[position:index]
+                  if kind == ';':
+                      output.append(prelude + ';')
+                      position = index + 1
+                      continue
+
+                  close = find_matching_brace(block, index)
+                  body = block[index + 1:close]
+                  trivia, code = peel_trivia(prelude)
+                  if code.lstrip().startswith('@'):
+                      output.append(trivia + code + '{' + transform_css_block(body) + '}')
+                  else:
+                      selector, public_boundary = transform_selector_list(code)
+                      if selector is not None:
+                          rewritten_body = sanitize_boundary_body(body) if public_boundary else body
+                          if rewritten_body:
+                              output.append(trivia + selector + '{' + rewritten_body + '}')
+                      else:
+                          output.append(re.sub(r'/\*.*?\*/', '', trivia, flags=re.S))
+                  position = close + 1
+              return ''.join(output)
+
+          panel = PANEL_PATH.read_text(encoding='utf-8')
+          panel = replace_once(
+              panel,
+              "interface Props {\n  event: PreviewEvent;\n  shareImage?: string;\n  shareImageTextMode?: PreviewEvent['image_text_mode'];\n  className?: string;\n  family?: 'split' | 'editorial';\n}\n\nconst { event, shareImage = event.image_url || '', shareImageTextMode = event.image_text_mode || 'unknown', className = '', family = 'editorial' } = Astro.props;",
+              "type DesktopActionVariant = 'editorial-side' | 'split-inline' | 'editorial-flow' | 'split-flow';\ntype DesktopActionState = 'non-ocr' | 'ocr';\n\ninterface Props {\n  event: PreviewEvent;\n  shareImage?: string;\n  shareImageTextMode?: PreviewEvent['image_text_mode'];\n  variant: DesktopActionVariant;\n  state: DesktopActionState;\n}\n\nconst { event, shareImage = event.image_url || '', shareImageTextMode = event.image_text_mode || 'unknown', variant, state } = Astro.props;\nconst family = variant.startsWith('editorial') ? 'editorial' : 'split';\nconst placement = variant.endsWith('-side') ? 'side' : variant.endsWith('-inline') ? 'inline' : 'flow';",
+              'panel public props',
+          )
+          panel = replace_once(
+              panel,
+              "  class:list={['desktop-prototype__action', className]}\n  data-feedback-scope\n  data-desktop-action-panel\n  data-action-family={family}\n  data-action-layout={family === 'split' ? 'inline' : 'stacked'}",
+              "  class:list={['desktop-prototype__action', `desktop-prototype__action--${placement}`]}\n  data-feedback-scope\n  data-desktop-action-panel\n  data-action-variant={variant}\n  data-action-state={state}\n  data-action-family={family}\n  data-action-layout={family === 'split' ? 'inline' : 'stacked'}",
+              'panel root boundary',
+          )
+          panel = replace_once(
+              panel,
+              '  :global(.desktop-prototype__primary-action .icon) { width: 1.5rem; height: 1.5rem; }',
+              '  :global(.desktop-prototype__primary-action .icon) { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action); }',
+              'primary icon role',
+          )
+          panel = replace_once(
+              panel,
+              '  :global(.desktop-prototype__icon-action .icon) { width: 29px; height: 29px; }',
+              '  :global(.desktop-prototype__icon-action .icon) { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action); }',
+              'secondary icon role',
+          )
+          panel = panel.replace(
+              '  /* The success toast intentionally escapes the rounded CTA; a later page-level\n     primary-action rule otherwise clips it even though it does not affect layout. */',
+              '  /* The success toast intentionally escapes the rounded CTA; this component\n     owns both the action anatomy and the clipping exception. */',
+          )
+          panel_css_addition = '''
+  .desktop-prototype__action[data-action-variant] { border-radius: 22px; }
+
+  @media (min-width:1024px) {
+    .desktop-prototype__action-row { gap: .7rem; }
+    .desktop-prototype__action :global(.desktop-prototype__icon-action) {
+      min-width: 56px;
+      min-height: 56px;
+      padding: .45rem;
+    }
+    :global(.desktop-clean-event--split) .desktop-prototype__action[data-action-variant="split-inline"],
+    :global(.desktop-clean-event--reading) .desktop-prototype__action[data-action-variant="split-inline"],
+    :global(.desktop-clean-event--bento) .desktop-prototype__action[data-action-variant="split-inline"] {
+      isolation: isolate;
+      background: #292521;
+      box-shadow: 0 -.75rem 0 var(--clean-paper, #fffaf2), 0 16px 34px rgba(47,33,23,.24);
+    }
+    :global(.desktop-clean-event--split) .desktop-prototype__action[data-action-variant="split-inline"]::before,
+    :global(.desktop-clean-event--reading) .desktop-prototype__action[data-action-variant="split-inline"]::before,
+    :global(.desktop-clean-event--bento) .desktop-prototype__action[data-action-variant="split-inline"]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      height: .85rem;
+      background: var(--clean-paper, #fffaf2);
+      pointer-events: none;
+    }
+    :global(.desktop-clean-event--reading) .desktop-prototype__action[data-action-variant="split-inline"] {
+      border-radius: 24px;
+    }
+  }
+'''
+          panel = replace_once(panel, '\n</style>', panel_css_addition + '\n</style>', 'panel canonical CSS addition')
+          PANEL_PATH.write_text(panel, encoding='utf-8')
+
+          page = PAGE_PATH.read_text(encoding='utf-8')
+          page = replace_once(
+              page,
+              '<DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--side" family="editorial" />',
+              '<DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} variant="editorial-side" state={mediaPolicy} />',
+              'editorial action placement',
+          )
+          page = replace_once(
+              page,
+              '<DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--inline" family="split" />',
+              '<DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} variant="split-inline" state={mediaPolicy} />',
+              'split action placement',
+          )
+          page = replace_once(
+              page,
+              '<DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--flow" family={candidate} />',
+              '<DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} variant={candidate === \'editorial\' ? \'editorial-flow\' : \'split-flow\'} state={mediaPolicy} />',
+              'flow action placement',
+          )
+          page = replace_once(
+              page,
+              "const editorialAction = editorialSide?.querySelector<HTMLElement>(':scope > .desktop-prototype__action');",
+              "const editorialAction = editorialSide?.querySelector<HTMLElement>(':scope > [data-desktop-action-panel][data-action-variant=\"editorial-side\"]');",
+              'editorial action runtime query',
+          )
+
+          style_start = page.rfind('<style>')
+          style_end = page.rfind('</style>')
+          if style_start < 0 or style_end < style_start:
+              raise RuntimeError('DesktopEventPage style block not found')
+          page_style = page[style_start + len('<style>'):style_end]
+          page_style = transform_css_block(page_style)
+          if re.search(r'\.desktop-prototype__action(?:--|(?=[\s>.:#\[]))', page_style):
+              raise RuntimeError('consumer CSS still references DesktopEventActionPanel internal classes')
+          for forbidden in INTERNAL_SELECTOR_TOKENS:
+              if forbidden in page_style:
+                  raise RuntimeError(f'consumer CSS still owns {forbidden}')
+          if '[data-desktop-action-panel]' not in page_style:
+              raise RuntimeError('public action-panel placement boundary was not emitted')
+          page = page[:style_start + len('<style>')] + page_style + page[style_end:]
+          PAGE_PATH.write_text(page, encoding='utf-8')
+
+          test_source = r'''import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+async function read(relativePath) {
+  return readFile(path.join(siteRoot, relativePath), 'utf8');
+}
+
+function lastStyle(source) {
+  const start = source.lastIndexOf('<style>');
+  const end = source.lastIndexOf('</style>');
+  assert.ok(start >= 0 && end > start, 'expected a terminal style block');
+  return source.slice(start + '<style>'.length, end);
+}
+
+test('DesktopEventActionPanel is the single desktop action anatomy and CSS owner', async () => {
+  const page = await read('src/components/DesktopEventPage.astro');
+  const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const pageStyle = lastStyle(page);
+  const panelStyle = lastStyle(panel);
+
+  assert.equal((page.match(/<DesktopEventActionPanel\b/gu) || []).length, 3);
+  assert.equal((page.match(/state=\{mediaPolicy\}/gu) || []).length, 3);
+  assert.match(page, /variant="editorial-side" state=\{mediaPolicy\}/u);
+  assert.match(page, /variant="split-inline" state=\{mediaPolicy\}/u);
+  assert.match(page, /variant=\{candidate === 'editorial' \? 'editorial-flow' : 'split-flow'\} state=\{mediaPolicy\}/u);
+  assert.doesNotMatch(page, /className="desktop-prototype__action--/u);
+  assert.doesNotMatch(page, /<DesktopEventActionPanel[^>]+\bfamily=/u);
+
+  assert.match(panel, /type DesktopActionVariant = 'editorial-side' \| 'split-inline' \| 'editorial-flow' \| 'split-flow';/u);
+  assert.match(panel, /type DesktopActionState = 'non-ocr' \| 'ocr';/u);
+  assert.match(panel, /data-action-variant=\{variant\}/u);
+  assert.match(panel, /data-action-state=\{state\}/u);
+  assert.match(panel, /data-action-family=\{family\}/u);
+  assert.doesNotMatch(panel, /className\?: string/u);
+  assert.doesNotMatch(panel, /family\?: 'split' \| 'editorial'/u);
+
+  assert.doesNotMatch(pageStyle, /\.desktop-prototype__action(?:--|(?=[\s>.:#\[]))/u);
+  assert.doesNotMatch(pageStyle, /desktop-prototype__primary-action/u);
+  assert.doesNotMatch(pageStyle, /desktop-prototype__icon-action/u);
+  assert.doesNotMatch(pageStyle, /desktop-prototype__action-row/u);
+  assert.match(pageStyle, /\[data-desktop-action-panel\]/u);
+
+  assert.match(panelStyle, /\.desktop-prototype__action \{/u);
+  assert.match(panelStyle, /desktop-prototype__primary-action/u);
+  assert.match(panelStyle, /desktop-prototype__icon-action/u);
+  assert.match(panelStyle, /desktop-prototype__action-row/u);
+});
+
+test('desktop action controls keep accepted targets and central icon roles', async () => {
+  const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const panelStyle = lastStyle(panel);
+
+  assert.match(panelStyle, /:global\(\.desktop-prototype__primary-action\) \{[\s\S]*?min-height: 56px;/u);
+  assert.match(panelStyle, /:global\(\.desktop-prototype__icon-action\) \{[\s\S]*?min-width: 52px;[\s\S]*?min-height: 52px;/u);
+  assert.match(panelStyle, /min-width: 56px;[\s\S]*?min-height: 56px;/u);
+  assert.equal((panelStyle.match(/var\(--ke-icon-size-action\)/gu) || []).length, 4);
+  assert.doesNotMatch(panelStyle, /desktop-prototype__primary-action \.icon\) \{[^}]*1\.5rem/u);
+  assert.doesNotMatch(panelStyle, /desktop-prototype__icon-action \.icon\) \{[^}]*29px/u);
+});
+'''
+          TEST_PATH.write_text(test_source, encoding='utf-8')
+
+          doc = DOC_PATH.read_text(encoding='utf-8')
+          doc_marker = "- share/calendar/ticket clicks must attach `event_id`, `surface`, `viewport_class`, `layout_mode`, `served_list_id/hash` when applicable.\n\n## 6. Mobile layout"
+          doc_entry = """- share/calendar/ticket clicks must attach `event_id`, `surface`, `viewport_class`, `layout_mode`, `served_list_id/hash` when applicable.
+
+### Desktop action-panel ownership
+
+`DesktopEventActionPanel.astro` is the single anatomy and CSS owner for the
+primary CTA, calendar/share/like row, counters, control targets and icon sizing.
+`DesktopEventPage.astro` may position the component root only through the public
+`data-desktop-action-panel` boundary and must pass an explicit named pair:
+
+- `variant`: `editorial-side`, `split-inline`, `editorial-flow` or `split-flow`;
+- `state`: `non-ocr` or `ocr`.
+
+The page must not restyle `.desktop-prototype__primary-action`,
+`.desktop-prototype__icon-action`, `.desktop-prototype__action-row` or duplicate
+the component's root anatomy. Desktop targets remain at least 52px in the
+canonical component (therefore above the 44px floor), and action glyphs consume
+`--ke-icon-size-action`. Variant migration is structural only: existing palette,
+share/like/calendar behavior, phone reveal/copy lifecycle and responsive fit
+measurement remain unchanged.
+
+## 6. Mobile layout"""
+          doc = replace_once(doc, doc_marker, doc_entry, 'canonical desktop action owner doc entry')
+          DOC_PATH.write_text(doc, encoding='utf-8')
+
+          changelog = CHANGELOG_PATH.read_text(encoding='utf-8')
+          changelog_marker = '# Changelog\n\n## [Unreleased]\n\n'
+          changelog_entry = """# Changelog
+
+## [Unreleased]
+
+- Changed: `DesktopEventActionPanel` is now the sole desktop event-action
+  anatomy and CSS owner. `DesktopEventPage` passes explicit placement variants
+  and media states instead of duplicating primary/action-row selectors; the
+  accepted palette and interactions are preserved, control targets remain at
+  least 52px, and action glyphs use the central action icon role.
+
+"""
+          changelog = replace_once(changelog, changelog_marker, changelog_entry, 'changelog entry')
+          CHANGELOG_PATH.write_text(changelog, encoding='utf-8')
+          PY
+
+      - name: Run focused source and existing behavior checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test site/tests/desktop-event-actions-single-style-owner.test.mjs
+          node --test site/tests/event-share-wiring.test.mjs
+          node --test --test-name-pattern='desktop calendar label|desktop phone' site/tests/event-detail-runtime-regressions.test.mjs
+          node site/scripts/check-design-system-production-surface-contract.mjs
+          git diff --check
+
+      - name: Install pinned site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: Build and check the bounded preview
+        working-directory: site
+        env:
+          PREVIEW_BUILD_ID: preview-desktop-actions-single-style-owner
+        run: |
+          set -euo pipefail
+          npm run build:preview
+          npm run check:production-desktop
+
+      - name: Commit and force-push the clean product branch
+        shell: bash
+        env:
+          FINAL_BRANCH: work/ui-normalization-desktop-actions-single-style-owner-20260904
+          BASE_SHA: e8ba758ed32ee4de74df4f2ce490423fbb8e1e74
+        run: |
+          set -euo pipefail
+          git config user.name 'chatgpt-bounded-engineer'
+          git config user.email 'chatgpt-bounded-engineer@example.local'
+          mapfile -t changed < <(git status --short | awk '{print $2}' | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=(
+            CHANGELOG.md
+            docs/features/static-site-pages/event-page-product-design.md
+            site/src/components/DesktopEventActionPanel.astro
+            site/src/components/DesktopEventPage.astro
+            site/tests/desktop-event-actions-single-style-owner.test.mjs
+          )
+          if [[ "$(printf '%s\n' "${changed[@]}")" != "$(printf '%s\n' "${expected[@]}" | sort)" ]]; then
+            echo 'unexpected changed-path set' >&2
+            exit 1
+          fi
+          git switch -C "$FINAL_BRANCH" "$BASE_SHA"
+          git add -- "${expected[@]}"
+          git diff --cached --check
+          git commit -m 'refactor(site): centralize desktop action panel styles'
+          final_head="$(git rev-parse HEAD)"
+          git push --force origin "HEAD:refs/heads/$FINAL_BRANCH"
+          echo "FINAL_HEAD=$final_head" >> "$GITHUB_ENV"
+          {
+            echo '## Desktop actions single style owner'
+            echo
+            echo "- base: \`$BASE_SHA\`"
+            echo "- branch: \`$FINAL_BRANCH\`"
+            echo "- head: \`$final_head\`"
+            echo '- focused source tests: PASS'
+            echo '- existing share/runtime checks: PASS'
+            echo '- preview build + production desktop contract: PASS'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read back exact clean diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin work/ui-normalization-desktop-actions-single-style-owner-20260904
+          remote_head="$(git rev-parse origin/work/ui-normalization-desktop-actions-single-style-owner-20260904)"
+          test "$remote_head" = "$FINAL_HEAD"
+          git diff --name-only e8ba758ed32ee4de74df4f2ce490423fbb8e1e74 "$remote_head"
+          test "$(git diff --name-only e8ba758ed32ee4de74df4f2ce490423fbb8e1e74 "$remote_head" | wc -l)" -eq 5
