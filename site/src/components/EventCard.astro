@@ -146,9 +146,17 @@ const mediaFrameCropPermission = mediaFrameFit === 'contain'
     ? 'reviewed-bounded'
     : 'allowed';
 const mediaFrameRatio = desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio;
-const mediaFrameSourceRatio = primaryImageAsset?.width && primaryImageAsset?.height
-  ? primaryImageAsset.width / primaryImageAsset.height
-  : desktopRelatedLayout?.mediaRatio;
+const mediaFrameSourceWidth = Number(primaryImageAsset?.width);
+const mediaFrameSourceHeight = Number(primaryImageAsset?.height);
+const hasMediaFrameSourceDimensions = (
+  Number.isFinite(mediaFrameSourceWidth)
+  && mediaFrameSourceWidth > 0
+  && Number.isFinite(mediaFrameSourceHeight)
+  && mediaFrameSourceHeight > 0
+);
+const mediaFrameSourceRatio = hasMediaFrameSourceDimensions
+  ? mediaFrameSourceWidth / mediaFrameSourceHeight
+  : undefined;
 const mediaFrameObjectPosition = cardObjectPosition || '50% 50%';
 const mediaFrameStyle = [
   mediaShellStyle,
@@ -251,8 +259,8 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
         data-media-frame-clip="frame"
         data-media-frame-radius="surface"
         data-media-frame-fill={mediaFrameFill ? 'true' : undefined}
-        data-media-frame-source-width={primaryImageAsset?.width}
-        data-media-frame-source-height={primaryImageAsset?.height}
+        data-media-frame-source-width={hasMediaFrameSourceDimensions ? mediaFrameSourceWidth : undefined}
+        data-media-frame-source-height={hasMediaFrameSourceDimensions ? mediaFrameSourceHeight : undefined}
         data-media-frame-loading="lazy"
         data-media-frame-interaction-owner="caller"
         style={mediaFrameStyle || undefined}
@@ -271,8 +279,8 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
           alt={event.image_alt || `Афиша события «${event.title}»`}
           loading="lazy"
           decoding="async"
-          width={primaryImageAsset?.width}
-          height={primaryImageAsset?.height}
+          width={hasMediaFrameSourceDimensions ? mediaFrameSourceWidth : undefined}
+          height={hasMediaFrameSourceDimensions ? mediaFrameSourceHeight : undefined}
           data-card-authoritative-fit={cardCrop.fit}
           data-protected-crop-fit={cardCrop.fit}
           data-protected-crop-reason={cardCrop.cropReason}
@@ -283,7 +291,7 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
       </span>
     ) : (
       <span
-        class="event-card__media-shell event-card__media-shell--cover event-card__fallback"
+        class="event-card__media-shell event-card__media-shell--cover event-card__fallback is-image-missing"
         data-card-media-shell
         data-media-frame
         data-media-frame-contract="v1"
@@ -307,9 +315,11 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
         style={`--media-frame-ratio:${mediaFrameRatio};--media-frame-object-position:50% 50%`}
         aria-hidden="true"
       >
-        <span data-card-fallback-date>{dateLabel}</span>
-        <strong data-card-fallback-type>{event.event_type || 'событие'}</strong>
-        {event.city && <span data-card-fallback-city>{event.city}</span>}
+        <span class="event-card__image-fallback" data-card-image-fallback data-media-frame-fallback aria-hidden="true">
+          <span data-card-fallback-date>{dateLabel}</span>
+          <strong data-card-fallback-type>{event.event_type || 'событие'}</strong>
+          {event.city && <span data-card-fallback-city>{event.city}</span>}
+        </span>
       </span>
     )}
   </a>
