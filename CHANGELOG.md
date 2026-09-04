@@ -14,6 +14,13 @@
   derives coverage from the source registry and rejects missing, duplicate,
   misrouted or non-materialized representatives.
 
+- Fixed: the real/all Kaggle builder now executes the unified product gate
+  against its exact staged projection, and festival completeness follows the
+  exported projection instead of a stale hard-coded 21-card assumption.
+  Real Review Preview export also defaults the already-approved Clubs
+  projection/UI on when the flags are absent, while preserving explicit `0`
+  rollback, so a missing launcher variable cannot publish an empty catalogue.
+
 - Added: a minimal executable Astro family source of truth beside `site/src`:
   one canonical family registry, a generated reverse consumer/production-route
   graph, an impact query and a fail-closed drift checker wired into the standard

@@ -1004,6 +1004,22 @@ def run(cmd: list[str], cwd: Path = ROOT, env: dict[str, str] | None = None) -> 
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
 
 
+def preview_export_env(args: argparse.Namespace) -> dict[str, str]:
+    """Keep real Review Preview aligned with the public build wrappers.
+
+    The exporter runs before Astro and therefore cannot inherit the wrappers'
+    default-on confirmed-club flags.  Missing flags must not silently replace
+    the reviewed projection with an empty catalogue; an explicit ``0`` remains
+    the rollback and is preserved.
+    """
+
+    env = os.environ.copy()
+    if args.profile == 'preview' and args.preview_data_mode == 'real':
+        env.setdefault('ENABLE_INTEREST_CLUB_STATIC_PROJECTION', '1')
+        env.setdefault('PUBLIC_INTEREST_CLUBS_ENABLED', '1')
+    return env
+
+
 def resolve_build_template(value: str | None, build_id: str) -> str | None:
     if not value:
         return None
@@ -1168,7 +1184,7 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             '--gemma-related-key-env', args.gemma_related_key_env,
             '--gemma-related-max-anchors', str(args.gemma_related_max_anchors),
         ])
-        run(cmd)
+        run(cmd, env=preview_export_env(args))
     return staged_site
 
 

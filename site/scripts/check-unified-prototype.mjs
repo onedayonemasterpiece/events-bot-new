@@ -220,15 +220,28 @@ if (!exhibitions.includes('data-exhibitions-prototype') || !exhibitions.includes
 
 const festivals = html('festivali/index.html');
 const festivalsSource = readFileSync(join(siteDir, 'src/pages/festivali/index.astro'), 'utf8');
-if (!festivals.includes('data-festival-timeline') || !festivals.includes('data-festival-count="21"')) {
-  throw new Error('Festival calendar must render the complete 21-item timeline');
+const festivalProjection = JSON.parse(readFileSync(join(siteDir, 'src/data/festival-timeline.json'), 'utf8'));
+const projectedFestivals = Array.isArray(festivalProjection.festivals) ? festivalProjection.festivals : [];
+const expectedFestivalCount = projectedFestivals.length;
+const projectedFestivalMonths = new Set(projectedFestivals.map((festival) => festival?.monthKey).filter(Boolean));
+const expectedFestivalMonthCount = projectedFestivalMonths.size;
+if (festivalProjection.schema_version !== 'festival-timeline-static-v1' || expectedFestivalCount < 1) {
+  throw new Error('Festival calendar source projection is empty or unsupported');
 }
-if ((festivals.match(/data-festival-card=/gu) || []).length !== 21) {
+if (!festivals.includes('data-festival-timeline') || !festivals.includes(`data-festival-count="${expectedFestivalCount}"`)) {
+  throw new Error(`Festival calendar must render the complete ${expectedFestivalCount}-item source projection`);
+}
+if ((festivals.match(/data-festival-card=/gu) || []).length !== expectedFestivalCount) {
   throw new Error('Festival calendar card count does not match its curated source projection');
 }
-if ((festivals.match(/data-protected-crop-fit="cover"/gu) || []).length < 21
-  || (festivals.match(/data-media-source-kind=/gu) || []).length !== 21
-  || (festivals.match(/data-media-confidence=/gu) || []).length !== 21) {
+for (const festival of projectedFestivals) {
+  if (!festival?.slug || !festivals.includes(`data-festival-card="${festival.slug}"`)) {
+    throw new Error(`Festival calendar misses projected item: ${festival?.slug || '(missing slug)'}`);
+  }
+}
+if ((festivals.match(/data-protected-crop-fit="cover"/gu) || []).length < expectedFestivalCount
+  || (festivals.match(/data-media-source-kind=/gu) || []).length !== expectedFestivalCount
+  || (festivals.match(/data-media-confidence=/gu) || []).length !== expectedFestivalCount) {
   throw new Error('Festival cards must use reviewed, provenance-bound, full-cover media');
 }
 if (festivals.includes('afisha80let.visit-kaliningrad.ru')
@@ -239,10 +252,10 @@ if (festivals.includes('afisha80let.visit-kaliningrad.ru')
   || festivalsSource.includes('Все страницы прототипа')) {
   throw new Error('Festival page regressed to aggregator media, split cards, off-system type or public service copy');
 }
-if ((festivals.match(/festival-month__shelf/gu) || []).length < 6
+if ((festivals.match(/festival-month__shelf/gu) || []).length !== expectedFestivalMonthCount
   || !/\.festival-month__shelf\s*\{[\s\S]*?position:\s*sticky/gu.test(festivalsSource)
   || !festivalsSource.includes('font-family: var(--ke-font-sans)')) {
-  throw new Error('Festival calendar misses its desktop sticky month shelf or shared typography contract');
+  throw new Error('Festival calendar month shelves drifted from its projection or shared typography contract');
 }
 for (const row of festivals.matchAll(/<div[^>]*data-festival-row[^>]*>/gu)) {
   const remainder = /data-row-remainder="(true|false)"/u.exec(row[0])?.[1];
@@ -252,7 +265,7 @@ for (const row of festivals.matchAll(/<div[^>]*data-festival-row[^>]*>/gu)) {
     throw new Error(`Non-final festival row no longer fills 100%: ${width}`);
   }
 }
-for (const month of ['july', 'august', 'september', 'october', 'november', 'december']) {
+for (const month of projectedFestivalMonths) {
   if (!festivals.includes(`data-festival-month="${month}"`)) throw new Error(`Festival calendar misses ${month}`);
 }
 for (const marker of ['Точные даты уточняются', 'Предварительный период', 'data-festival-row']) {

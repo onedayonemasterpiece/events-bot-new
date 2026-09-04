@@ -356,6 +356,11 @@ Owner-facing registry также обязан давать отдельную с
 сгенерированную `/date-YYYY-MM-DD/`: Today/Tomorrow не подменяют произвольный
 `DateListingSurface` при проверке всех типов страниц.
 
+Для `real/all` Kaggle запускает не только общий `check:preview`, но и
+`check:unified-prototype` в той же staged source/data projection. Поэтому
+полнота фестивального календаря проверяется против фактического экспортированного
+`festival-timeline.json`, а не против устаревающего постоянного числа карточек.
+
 Сборка берёт только актуальную public projection из read-only production
 SQLite snapshot. Пустой clubs dataset показывается честным empty state, а не
 синтетическими карточками. `/dlya-menya/` существует в этом integration

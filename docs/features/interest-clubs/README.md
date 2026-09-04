@@ -150,6 +150,10 @@ an approval bypass: the exporter still publishes only confirmed identities and
 all data freshness/boundary checks still run. Operators can roll back the UI
 only with the explicit value `0`; absence of an environment variable is not a
 valid reason to replace the three current confirmed cards with an empty page.
+The real Review Preview runner applies the same default before its local
+exporter: both `ENABLE_INTEREST_CLUB_STATIC_PROJECTION` and
+`PUBLIC_INTEREST_CLUBS_ENABLED` become `1` only when absent. Explicit `0`
+continues to be the independent rollback for either stage.
 
 Команда bootstrap без публичного approval:
 

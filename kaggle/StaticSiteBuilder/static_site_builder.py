@@ -1388,6 +1388,8 @@ def main() -> int:
             else:
                 check_script = 'check:preview' if page_classes == ['all'] else 'check:preview-slice'
                 run(['npm', 'run', check_script], cwd=SITE_DIR, env=env)
+                if page_classes == ['all']:
+                    run(['npm', 'run', 'check:unified-prototype'], cwd=SITE_DIR, env=env)
             dist_dir = SITE_DIR / 'dist' / build_id
             if not dist_dir.exists():
                 raise FileNotFoundError(f"build output missing: {dist_dir}")

@@ -225,6 +225,22 @@ def test_kaggle_preview_provenance_uses_runner_bound_full_repo_sha(
     assert "env['STATIC_SITE_REPO_SHA'] = repo_sha" in kernel
 
 
+def test_kaggle_real_all_preview_runs_unified_product_gate() -> None:
+    kernel = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    ).read_text(encoding="utf-8")
+
+    preview_check = "run(['npm', 'run', check_script], cwd=SITE_DIR, env=env)"
+    unified_check = "run(['npm', 'run', 'check:unified-prototype'], cwd=SITE_DIR, env=env)"
+    assert preview_check in kernel
+    assert unified_check in kernel
+    assert kernel.index(preview_check) < kernel.index(unified_check)
+    assert "if page_classes == ['all']:" in kernel[kernel.index(preview_check):kernel.index(unified_check)]
+
+
 def _arg_after(cmd: list[str], name: str) -> str:
     return cmd[cmd.index(name) + 1]
 
@@ -582,6 +598,36 @@ def test_kaggle_runtime_payload_forwards_interest_club_release_gates(
     assert payload["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "1"
     assert payload["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
     assert payload["GOOGLE_AI_LIMITER_SUPABASE_URL"] == "https://limiter.supabase.co"
+
+
+def test_real_review_preview_export_defaults_confirmed_clubs_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    monkeypatch.delenv("ENABLE_INTEREST_CLUB_STATIC_PROJECTION", raising=False)
+    monkeypatch.delenv("PUBLIC_INTEREST_CLUBS_ENABLED", raising=False)
+    args = SimpleNamespace(profile="preview", preview_data_mode="real")
+
+    env = runner.preview_export_env(args)
+
+    assert env["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "1"
+    assert env["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
+
+
+def test_real_review_preview_export_preserves_explicit_club_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    monkeypatch.setenv("ENABLE_INTEREST_CLUB_STATIC_PROJECTION", "0")
+    monkeypatch.setenv("PUBLIC_INTEREST_CLUBS_ENABLED", "0")
+    args = SimpleNamespace(profile="preview", preview_data_mode="real")
+
+    env = runner.preview_export_env(args)
+
+    assert env["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "0"
+    assert env["PUBLIC_INTEREST_CLUBS_ENABLED"] == "0"
 
 
 def test_kaggle_runner_and_builder_forward_related_corpus_revision(
