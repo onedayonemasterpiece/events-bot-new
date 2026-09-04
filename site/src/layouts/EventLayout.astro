@@ -4180,6 +4180,180 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           node.dataset[key] = String(value == null ? '' : value);
         }
 
+        const RUNTIME_EVENT_CARD_MEDIA_DATASET_KEYS = [
+          'mediaRole',
+          'mediaFrameContract',
+          'mediaFrameStyleOwner',
+          'mediaFrameSurface',
+          'mediaFrameRole',
+          'mediaFrameKind',
+          'mediaFrameFit',
+          'mediaFrameCropPermission',
+          'mediaFrameRatio',
+          'mediaFrameSourceWidth',
+          'mediaFrameSourceHeight',
+          'mediaFrameSourceRatio',
+          'mediaFrameObjectPosition',
+          'mediaFrameFocalPosition',
+          'mediaFrameCropReason',
+          'mediaFrameResourceState',
+          'mediaFrameClip',
+          'mediaFrameRadius',
+          'mediaFrameFill',
+          'mediaFrameLoading',
+          'mediaFrameInteractionOwner',
+          'naturalAspectReconciled',
+        ];
+        const RUNTIME_EVENT_CARD_MEDIA_STYLE_PROPERTIES = [
+          '--media-frame-ratio',
+          '--media-frame-object-position',
+          '--dynamic-media-ratio',
+          '--card-focal-y',
+          '--card-focal-offset',
+        ];
+        const RUNTIME_EVENT_CARD_IMAGE_DATASET_KEYS = [
+          'cardAuthoritativeFit',
+          'protectedCropFit',
+          'protectedCropReason',
+          'cardMediaReview',
+        ];
+
+        function bindRuntimeEventCardMediaFrame(card, data, relatedLayout, imageUrl, documentMedia) {
+          if (!(card instanceof HTMLElement)) return;
+          const shell = card.querySelector('[data-card-media-shell]');
+          const image = card.querySelector('[data-card-image]');
+          const fallback = shell?.querySelector(':scope > [data-card-image-fallback]');
+          if (!(shell instanceof HTMLElement)) return;
+
+          // The canonical runtime template intentionally carries a favicon and
+          // complete EventCard state. Clear every template-owned media fact
+          // before publishing the actual item's MediaFrame contract.
+          shell.removeAttribute('data-media-frame');
+          shell.removeAttribute('data-media-frame-fallback');
+          shell.removeAttribute('aria-busy');
+          shell.removeAttribute('aria-hidden');
+          for (const key of RUNTIME_EVENT_CARD_MEDIA_DATASET_KEYS) delete shell.dataset[key];
+          for (const property of RUNTIME_EVENT_CARD_MEDIA_STYLE_PROPERTIES) shell.style.removeProperty(property);
+          shell.className = 'event-card__media-shell event-card__media-shell--dynamic';
+
+          if (image instanceof HTMLImageElement) {
+            for (const attribute of ['src', 'srcset', 'sizes', 'width', 'height', 'onload', 'onerror']) {
+              image.removeAttribute(attribute);
+            }
+            for (const key of RUNTIME_EVENT_CARD_IMAGE_DATASET_KEYS) delete image.dataset[key];
+            image.style.removeProperty('object-fit');
+            image.style.removeProperty('object-position');
+          }
+          if (fallback instanceof HTMLElement) {
+            fallback.hidden = true;
+            fallback.setAttribute('aria-hidden', 'true');
+          }
+
+          const sourceWidth = Number(data.image_width);
+          const sourceHeight = Number(data.image_height);
+          const hasFactualSourceDimensions = Number.isFinite(sourceWidth)
+            && sourceWidth > 0
+            && Number.isFinite(sourceHeight)
+            && sourceHeight > 0;
+          const sourceRatio = hasFactualSourceDimensions ? sourceWidth / sourceHeight : null;
+          const imageTextMode = String(data.image_text_mode || '').trim();
+          const kind = imageTextMode === 'visual_only'
+            ? 'visual'
+            : imageTextMode === 'ocr_text' ? 'document' : 'unknown';
+          const role = String(data.image_media_role || '').trim() || 'unknown_document';
+          const requestedObjectPosition = String(relatedLayout?.objectPosition || '50% 50%').trim();
+          const objectPosition = /^[a-z0-9.%\s-]+$/iu.test(requestedObjectPosition)
+            ? requestedObjectPosition
+            : '50% 50%';
+          const requestedFit = relatedLayout
+            ? (relatedLayout.fit === 'cover' ? 'cover' : 'contain')
+            : (kind === 'visual' && !documentMedia ? 'cover' : 'contain');
+          const fit = kind === 'unknown' ? 'contain' : requestedFit;
+          const cropPermission = fit === 'contain'
+            ? 'forbidden'
+            : relatedLayout?.mediaTreatment === 'document-safe-cover' ? 'reviewed-bounded' : 'allowed';
+          const cropReason = imageUrl
+            ? String(relatedLayout?.cropReason || 'responsive_target_unknown')
+            : 'runtime_event_card_fallback';
+          const requestedFrameRatio = Number(relatedLayout?.rowRatio);
+          const frameRatio = Number.isFinite(requestedFrameRatio) && requestedFrameRatio > 0
+            ? requestedFrameRatio
+            : sourceRatio || 4 / 5;
+          const resourceState = imageUrl ? 'pending' : 'fallback';
+          const focalYValue = Number(data.focal_y);
+          const focalY = Number.isFinite(focalYValue) ? Math.max(0, Math.min(1, focalYValue)) : 0.5;
+          const focalOffset = Math.max(-12, Math.min(12, (0.5 - focalY) * 24));
+          const effectiveObjectPosition = imageUrl ? objectPosition : '50% 50%';
+
+          shell.setAttribute('data-media-frame', '');
+          shell.dataset.mediaFrameContract = 'v1';
+          shell.dataset.mediaFrameStyleOwner = 'media-frame.css';
+          shell.dataset.mediaFrameSurface = 'event-card';
+          shell.dataset.mediaFrameInteractionOwner = 'caller';
+          shell.dataset.mediaFrameRole = imageUrl ? role : 'fallback';
+          shell.dataset.mediaRole = imageUrl ? role : 'fallback';
+          shell.dataset.mediaFrameKind = imageUrl ? kind : 'fallback';
+          shell.dataset.mediaFrameFit = imageUrl ? fit : 'contain';
+          shell.dataset.mediaFrameCropPermission = imageUrl ? cropPermission : 'forbidden';
+          shell.dataset.mediaFrameCropReason = cropReason;
+          shell.dataset.mediaFrameRatio = frameRatio.toFixed(5);
+          shell.dataset.mediaFrameObjectPosition = effectiveObjectPosition;
+          shell.dataset.mediaFrameFocalPosition = effectiveObjectPosition;
+          shell.dataset.mediaFrameClip = 'frame';
+          shell.dataset.mediaFrameRadius = 'surface';
+          shell.dataset.mediaFrameFill = 'true';
+          shell.dataset.mediaFrameLoading = 'lazy';
+          shell.dataset.mediaFrameResourceState = resourceState;
+          if (hasFactualSourceDimensions) {
+            shell.dataset.mediaFrameSourceWidth = String(sourceWidth);
+            shell.dataset.mediaFrameSourceHeight = String(sourceHeight);
+            shell.dataset.mediaFrameSourceRatio = sourceRatio.toFixed(5);
+          }
+          shell.style.setProperty('--media-frame-ratio', frameRatio.toFixed(5));
+          shell.style.setProperty('--media-frame-object-position', effectiveObjectPosition);
+          shell.style.setProperty('--dynamic-media-ratio', frameRatio.toFixed(5));
+          shell.style.setProperty('--card-focal-y', String(focalY));
+          shell.style.setProperty('--card-focal-offset', `${focalOffset}%`);
+          shell.classList.toggle('event-card__media-shell--cover', Boolean(imageUrl && fit === 'cover'));
+          shell.classList.toggle('event-card__media-shell--document', !imageUrl || fit !== 'cover');
+
+          if (!imageUrl || !(image instanceof HTMLImageElement)) {
+            shell.setAttribute('data-media-frame-fallback', '');
+            shell.classList.add('event-card__fallback', 'is-image-missing');
+            shell.removeAttribute('aria-busy');
+            shell.setAttribute('aria-hidden', 'true');
+            if (image instanceof HTMLImageElement) {
+              image.hidden = true;
+              image.setAttribute('alt', '');
+            }
+            if (fallback instanceof HTMLElement) {
+              fallback.hidden = false;
+              fallback.removeAttribute('aria-hidden');
+            }
+            return;
+          }
+
+          shell.classList.add('is-image-loading');
+          shell.setAttribute('aria-busy', 'true');
+          image.hidden = false;
+          image.setAttribute('alt', data.image_alt || '');
+          image.setAttribute('loading', 'lazy');
+          image.setAttribute('decoding', 'async');
+          if (hasFactualSourceDimensions) {
+            image.setAttribute('width', String(sourceWidth));
+            image.setAttribute('height', String(sourceHeight));
+          }
+
+          // Inline handlers survive the authorized-search outerHTML bridge;
+          // property listeners would be lost when that serialized card is parsed.
+          const reconcileNaturalAspect = Boolean(relatedLayout?.useNaturalAspect);
+          const failBroken = "const shell=image.closest('[data-card-media-shell]');if(shell?.dataset.mediaFrameResourceState==='broken')return;if(shell){shell.dataset.mediaFrameResourceState='broken';shell.dataset.mediaFrameKind='fallback';shell.dataset.mediaFrameRole='fallback';shell.dataset.mediaRole='fallback';shell.dataset.mediaFrameFit='contain';shell.dataset.mediaFrameCropPermission='forbidden';shell.dataset.mediaFrameCropReason='resource_load_error';shell.dataset.mediaFrameObjectPosition='50% 50%';shell.dataset.mediaFrameFocalPosition='50% 50%';shell.removeAttribute('data-media-frame-source-width');shell.removeAttribute('data-media-frame-source-height');shell.removeAttribute('data-media-frame-source-ratio');shell.setAttribute('data-media-frame-fallback','');shell.style.setProperty('--media-frame-object-position','50% 50%');shell.classList.remove('is-image-loading','is-image-loaded','event-card__media-shell--cover');shell.classList.add('is-image-missing','event-card__media-shell--document');shell.removeAttribute('aria-busy');}const fallback=shell?.querySelector(':scope > [data-card-image-fallback]');if(fallback){fallback.hidden=false;fallback.removeAttribute('aria-hidden');}image.hidden=true;image.removeAttribute('src');image.removeAttribute('srcset');image.removeAttribute('sizes');image.removeAttribute('width');image.removeAttribute('height');image.removeAttribute('onload');image.removeAttribute('onerror');";
+          const completeLoaded = `if(shell?.dataset.mediaFrameResourceState==='broken')return;if(!(image.naturalWidth>0&&image.naturalHeight>0)){failBroken();return;}const sourceRatio=image.naturalWidth/image.naturalHeight;shell.dataset.mediaFrameSourceWidth=String(image.naturalWidth);shell.dataset.mediaFrameSourceHeight=String(image.naturalHeight);shell.dataset.mediaFrameSourceRatio=sourceRatio.toFixed(5);${reconcileNaturalAspect ? "shell.dataset.mediaFrameRatio=sourceRatio.toFixed(5);shell.style.setProperty('--media-frame-ratio',sourceRatio.toFixed(5));shell.style.setProperty('--dynamic-media-ratio',sourceRatio.toFixed(5));shell.dataset.naturalAspectReconciled='true';" : ''}shell.dataset.mediaFrameResourceState='loaded';shell.removeAttribute('data-media-frame-fallback');shell.classList.remove('is-image-loading','is-image-missing');shell.classList.add('is-image-loaded');shell.removeAttribute('aria-busy');const fallback=shell.querySelector(':scope > [data-card-image-fallback]');if(fallback){fallback.hidden=true;fallback.setAttribute('aria-hidden','true');}`;
+          image.setAttribute('onload', `const image=this;const shell=image.closest('[data-card-media-shell]');if(shell?.dataset.mediaFrameResourceState==='broken')return;const failBroken=()=>{${failBroken}};const completeLoaded=()=>{${completeLoaded}};if(!(image.naturalWidth>0&&image.naturalHeight>0)){failBroken();return;}if(typeof image.decode==='function'){image.decode().then(completeLoaded).catch(failBroken);}else{completeLoaded();}`);
+          image.setAttribute('onerror', `const image=this;${failBroken}`);
+          image.setAttribute('src', imageUrl);
+        }
+
         function applyRuntimeRelatedLayout(card, relatedLayout) {
           if (!(card instanceof HTMLElement)) return;
           const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCropReason', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost'];
@@ -4213,22 +4387,33 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           numericDataset('labRowWorstCrop', relatedLayout.rowWorstCrop, 4);
           numericDataset('labRowCost', relatedLayout.rowCost, 5);
           const rowRatio = Number(relatedLayout.rowRatio);
+          const mediaShell = card.querySelector('[data-card-media-shell]');
           if (Number.isFinite(rowRatio) && rowRatio > 0) {
             card.style.setProperty('--lab-row-media-ratio', rowRatio.toFixed(5));
-            card.querySelector('[data-card-media-shell]')?.style.setProperty('--dynamic-media-ratio', rowRatio.toFixed(5));
+            if (mediaShell instanceof HTMLElement) {
+              mediaShell.dataset.mediaFrameRatio = rowRatio.toFixed(5);
+              mediaShell.style.setProperty('--media-frame-ratio', rowRatio.toFixed(5));
+              mediaShell.style.setProperty('--dynamic-media-ratio', rowRatio.toFixed(5));
+            }
           }
-          const documentMedia = relatedLayout.mediaKind === 'document';
-          const mediaShell = card.querySelector('[data-card-media-shell]');
-          mediaShell?.classList.toggle('event-card__media-shell--document', documentMedia);
-          mediaShell?.classList.toggle('event-card__media-shell--cover', !documentMedia);
-          const image = card.querySelector('[data-card-image]');
-          if (image instanceof HTMLImageElement) {
-            const authoritativeFit = relatedLayout.fit === 'cover' ? 'cover' : 'contain';
-            image.style.objectFit = authoritativeFit;
-            image.style.objectPosition = relatedLayout.objectPosition || '50% 50%';
-            setRuntimeCardDataset(image, 'cardAuthoritativeFit', authoritativeFit);
-            setRuntimeCardDataset(image, 'protectedCropFit', authoritativeFit);
-            setRuntimeCardDataset(image, 'protectedCropReason', relatedLayout.cropReason);
+          if (mediaShell instanceof HTMLElement) {
+            const resourceState = mediaShell.dataset.mediaFrameResourceState;
+            if (resourceState === 'broken' || resourceState === 'fallback') return;
+            const semanticKind = mediaShell.dataset.mediaFrameKind;
+            const authoritativeFit = semanticKind === 'unknown'
+              ? 'contain'
+              : relatedLayout.fit === 'cover' ? 'cover' : 'contain';
+            const objectPosition = String(relatedLayout.objectPosition || '50% 50%');
+            mediaShell.classList.toggle('event-card__media-shell--document', authoritativeFit !== 'cover');
+            mediaShell.classList.toggle('event-card__media-shell--cover', authoritativeFit === 'cover');
+            mediaShell.dataset.mediaFrameFit = authoritativeFit;
+            mediaShell.dataset.mediaFrameCropPermission = authoritativeFit === 'contain'
+              ? 'forbidden'
+              : relatedLayout.mediaTreatment === 'document-safe-cover' ? 'reviewed-bounded' : 'allowed';
+            mediaShell.dataset.mediaFrameCropReason = String(relatedLayout.cropReason || 'responsive_target_unknown');
+            mediaShell.dataset.mediaFrameObjectPosition = objectPosition;
+            mediaShell.dataset.mediaFrameFocalPosition = objectPosition;
+            mediaShell.style.setProperty('--media-frame-object-position', objectPosition);
           }
         }
 
@@ -4270,67 +4455,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             mediaLink.setAttribute('href', href);
             mediaLink.setAttribute('aria-label', `Открыть событие: ${data.title}`);
           }
-          const mediaShell = card.querySelector('[data-card-media-shell]');
-          const image = card.querySelector('[data-card-image]');
-          const mediaRatio = data.image_width > 0 && data.image_height > 0
-            ? `${Math.max(1, data.image_width)} / ${Math.max(1, data.image_height)}`
-            : '4 / 5';
-          const rowRatio = relatedLayout ? Number(relatedLayout.rowRatio).toFixed(5) : mediaRatio;
-          const focalOffset = Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24));
-          if (mediaShell) {
-            mediaShell.className = [
-              'event-card__media-shell',
-              'event-card__media-shell--dynamic',
-              documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover',
-              imageUrl ? 'is-image-loading' : 'event-card__fallback',
-            ].join(' ');
-            mediaShell.dataset.mediaRole = data.image_media_role;
-            mediaShell.style.cssText = '';
-            mediaShell.style.setProperty('--dynamic-media-ratio', rowRatio);
-            mediaShell.style.setProperty('--card-focal-y', String(data.focal_y));
-            mediaShell.style.setProperty('--card-focal-offset', `${focalOffset}%`);
-            if (imageUrl) {
-              mediaShell.setAttribute('aria-busy', 'true');
-              mediaShell.removeAttribute('aria-hidden');
-            } else {
-              mediaShell.removeAttribute('aria-busy');
-              mediaShell.setAttribute('aria-hidden', 'true');
-            }
-          }
           setRuntimeCardText(card, '[data-card-fallback-date]', data.display_date);
           setRuntimeCardText(card, '[data-card-fallback-type]', data.event_type || 'событие');
           setRuntimeCardText(card, '[data-card-fallback-city]', data.city || '', { hideWhenEmpty: true });
-          if (image) {
-            image.hidden = !imageUrl;
-            const authoritativeFit = relatedLayout
-              ? (relatedLayout.fit === 'cover' ? 'cover' : 'contain')
-              : (documentMedia ? 'contain' : 'cover');
-            image.style.objectFit = authoritativeFit;
-            image.style.objectPosition = relatedLayout?.objectPosition || '50% 50%';
-            setRuntimeCardDataset(image, 'cardAuthoritativeFit', authoritativeFit);
-            setRuntimeCardDataset(image, 'protectedCropFit', authoritativeFit);
-            setRuntimeCardDataset(image, 'protectedCropReason', relatedLayout?.cropReason || 'responsive_target_unknown');
-            setRuntimeCardDataset(image, 'cardMediaReview', data.image_review_evidence);
-            const reconcileNaturalAspect = relatedLayout?.useNaturalAspect
-              ? "if(shell&&this.naturalWidth>0&&this.naturalHeight>0){shell.style.setProperty('--dynamic-media-ratio',this.naturalWidth+' / '+this.naturalHeight);shell.dataset.naturalAspectReconciled='true';}"
-              : '';
-            // Search serializes the canonical cloned card to HTML; retain the
-            // load reconciliation in markup rather than a lost property listener.
-            image.setAttribute('onload', `const shell=this.closest('[data-card-media-shell]');${reconcileNaturalAspect}shell?.classList.remove('is-image-loading');shell?.classList.add('is-image-loaded');shell?.removeAttribute('aria-busy');`);
-            if (imageUrl) {
-              image.setAttribute('src', imageUrl);
-              image.setAttribute('alt', data.image_alt);
-              if (data.image_width > 0) image.setAttribute('width', String(data.image_width));
-              else image.removeAttribute('width');
-              if (data.image_height > 0) image.setAttribute('height', String(data.image_height));
-              else image.removeAttribute('height');
-            } else {
-              image.removeAttribute('src');
-              image.removeAttribute('width');
-              image.removeAttribute('height');
-              image.setAttribute('alt', '');
-            }
-          }
 
           const title = card.querySelector('[data-card-title]');
           if (title) {
@@ -4389,6 +4516,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           card.querySelectorAll('.event-card__utility-row').forEach((group) => group.setAttribute('aria-label', `Дополнительные действия: ${data.title}`));
 
           applyRuntimeRelatedLayout(card, relatedGridLayout ? relatedLayout : relatedLayout?.presentation === 'flow' ? relatedLayout : null);
+          bindRuntimeEventCardMediaFrame(card, data, relatedLayout, imageUrl, documentMedia);
           return card;
         }
 
