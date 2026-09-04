@@ -1,0 +1,41 @@
+name: Product icon action composite regression fix
+
+on:
+  push:
+    branches: [work/ui-normalization-product-icon-composites-20260904]
+    paths: [.github/workflows/product-icon-action-composite-regression-fix.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-implementation-workflow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/ui-normalization-product-icon-composites-20260904
+          fetch-depth: 0
+      - name: Make the import assertion whitespace-tolerant
+        shell: bash
+        run: |
+          set -euo pipefail
+          path='.github/workflows/product-icon-action-composite-implementation.yml'
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/product-icon-action-composite-implementation.yml')
+          source = path.read_text(encoding='utf-8')
+          old = "assert.match(source, /import EventLikeAction from /u, `${relativePath} imports the owner`);"
+          new = "assert.match(source, /import EventLikeAction\\s+from\\s+['\"][^'\"]*EventLikeAction\\.astro['\"]/u, `${relativePath} imports the owner`);"
+          if source.count(old) != 1:
+              raise SystemExit(f'expected one import assertion, found {source.count(old)}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+          git diff -- "$path"
+          git config user.name 'f0-normalization-bot'
+          git config user.email 'f0-normalization-bot@users.noreply.github.com'
+          git add "$path"
+          git commit -m 'test(ui): accept wrapped EventLikeAction imports'
+          git push origin HEAD:work/ui-normalization-product-icon-composites-20260904
