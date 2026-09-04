@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added: a minimal executable Astro family source of truth beside `site/src`:
+  one canonical family registry, a generated reverse consumer/production-route
+  graph, an impact query and a fail-closed drift checker. The initial registry
+  covers nine launch-critical families; Penpot binding remains optional metadata.
+
 - Changed: `DesktopEventActionPanel` is now the sole desktop event-action
   anatomy and CSS owner. `DesktopEventPage` passes explicit placement variants
   and media states instead of duplicating root/primary/action-row selectors;

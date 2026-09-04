@@ -75,3 +75,20 @@ The normative design-system architecture lives in `onedayonemasterpiece/lovekgd-
 - `receipts/penpot/resource-graph-to-be-structure-v1.json`.
 
 The integrated Product Atlas/UI Exploration vision in this repository must reference these documents rather than duplicate the Resource Graph page schema or component authority rules.
+
+## Executable Astro family SoT
+
+Launch-critical Astro family identity and impact are executable beside the source:
+
+- registry: `site/src/design-system/astro-family-registry.v1.json`;
+- generated reverse graph: `site/src/design-system/astro-family-consumers.generated.v1.json`;
+- generator / impact query: `site/scripts/generate-astro-family-consumer-graph.mjs`;
+- fail-closed checker: `site/scripts/check-astro-family-sot.mjs`.
+
+```bash
+node site/scripts/generate-astro-family-consumer-graph.mjs --impact EventCard
+node site/scripts/generate-astro-family-consumer-graph.mjs --write
+node site/scripts/check-astro-family-sot.mjs
+```
+
+Penpot binding is optional registry metadata and is not required by these commands.
