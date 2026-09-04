@@ -125,6 +125,10 @@ const publishResourceState = (frame, state, fallbackReason) => {
 
 const clearFailedImageResource = (image) => {
   if (!(image instanceof HTMLImageElement)) return;
+  image.closest('picture')?.querySelectorAll('source').forEach((source) => {
+    source.removeAttribute('srcset');
+    source.removeAttribute('sizes');
+  });
   image.removeAttribute('srcset');
   image.removeAttribute('sizes');
   image.removeAttribute('src');
@@ -202,12 +206,21 @@ const bindMedallions = (root) => {
       sourceRatio: 1,
       presentationRatio: 1,
     }, { loading: image?.getAttribute('loading') || 'lazy', interactionOwner: 'none' });
-    const settle = (state) => publishResourceState(seal, state, 'resource_load_error');
     if (image instanceof HTMLImageElement) {
-      image.addEventListener('load', () => settle('loaded'));
-      image.addEventListener('error', () => settle('error'));
-      settle(image.complete ? (image.naturalWidth > 0 ? 'loaded' : 'error') : 'loading');
-    } else settle('error');
+      bindImageResourceLifecycle(seal, image, seal);
+      if (image.complete) {
+        const loaded = image.naturalWidth > 0 && image.naturalHeight > 0;
+        seal.dataset.imageState = loaded ? 'loaded' : 'error';
+        if (!loaded) clearFailedImageResource(image);
+        publishResourceState(seal, loaded ? 'loaded' : 'error', 'resource_load_error');
+      } else {
+        seal.dataset.imageState = 'loading';
+        publishResourceState(seal, 'loading', 'resource_load_error');
+      }
+    } else {
+      seal.dataset.imageState = 'error';
+      publishResourceState(seal, 'error', 'resource_load_error');
+    }
   });
 };
 
