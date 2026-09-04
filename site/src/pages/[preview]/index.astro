@@ -23,62 +23,16 @@ const canonicalUrl = absoluteUrl('/__preview/');
 const title = `Единый прототип статических страниц | ${SITE_NAME}`;
 const description = 'Закрытая от индексации адаптивная сборка всех основных типов статических страниц KenigEvents на свежих реальных данных.';
 
-const pageGroups = [
-  {
-    title: 'Афиша и календарь',
-    note: 'Дата-списки показывают каждую дату отдельно; Popular объединяет только взаимно связанные даты.',
-    links: [
-      ['/segodnya/', 'Сегодня', 'События текущей даты'],
-      ['/zavtra/', 'Завтра', 'Следующий день'],
-      ['/vyhodnye/', 'Выходные', 'Ближайшие выходные'],
-      ['/populyarnoe/', 'Популярное', 'Desktop V28 и отдельная mobile-композиция'],
-      ['/vystavki/', 'Выставки', 'Каталог выставок'],
-      ['/festivali/', 'Фестивали', 'Календарный таймлайн июля — декабря'],
-    ],
-  },
-  {
-    title: 'Поиск и подборки',
-    note: 'Визуальный Search интегрирован. Реальный авторизованный поиск пока не принят и не заявляется как работающий.',
-    links: [
-      ['/poisk/', 'Поиск', 'Экран авторизованного поиска'],
-      ...materializedSearchCollections.map((collection) => [
-        `/podborki/${collection.slug}/`,
-        collection.title,
-        collection.description,
-      ]),
-    ],
-  },
-  {
-    title: 'Сервисные разделы',
-    note: 'Все разделы доступны из общей адаптивной навигации и возвращают пользователя к афише.',
-    links: [
-      ['/dlya-menya/', 'Для меня', 'Cold-start и персональная навигация без ложного обещания'],
-      ['/kluby-po-interesam/', 'Клубы по интересам', 'Свежая policy-current проекция подтверждённых клубов'],
-      ['/partners/', 'Партнёры', 'Шесть локальных официальных логотипов в компактной сетке'],
-      ['/partnerstvo/', 'Стать партнёром', 'Условия сотрудничества'],
-    ],
-  },
-  {
-    title: 'Отдельные прототипы и QA',
-    note: 'Не входят в основную продуктовую навигацию; нужны для приёмки отдельных механик.',
-    links: [
-      ['/lab/exhibitions-personal/', 'Выставки · персональный discovery', 'Концепт выставок и персональной выдачи'],
-      ['/lab/design-system/', 'Дизайн-система', 'Компоненты и состояния'],
-      ['/lab/occurrences/', 'Связанные даты', 'Resolver, formatter и selector'],
-      ['/lab/medallions/', 'Медальоны', 'Карточки сущностей'],
-    ],
-  },
-] as const;
-
 const preferredSpecimenIds = [5658, 6710, 5370, 6686, 4913, 7001];
+const collapsedEvents = collapseOccurrenceCards(events, 'per-family');
 const specimens: PreviewEvent[] = [];
 const seen = new Set<number>();
-for (const event of collapseOccurrenceCards(events, 'per-family')) {
+for (const event of collapsedEvents) {
   if (!preferredSpecimenIds.includes(event.id)) continue;
   specimens.push(event);
   seen.add(event.id);
 }
-for (const event of collapseOccurrenceCards(events, 'per-family')) {
+for (const event of collapsedEvents) {
   if (specimens.length >= 6) break;
   if (seen.has(event.id)) continue;
   specimens.push(event);
@@ -89,9 +43,110 @@ specimens.sort((a, b) => {
   const bi = preferredSpecimenIds.indexOf(b.id);
   return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
 });
+
+const eventDetailRepresentative = specimens[0];
+if (!eventDetailRepresentative) throw new Error('Preview hub requires one real event-detail representative');
+
+const ownerFacingArchetypes = [
+  { id: 'home', href: '/', label: 'Главная', note: 'Главная страница и полезный cold-start' },
+  { id: 'today', href: '/segodnya/', label: 'Сегодня', note: 'События текущей даты' },
+  { id: 'tomorrow', href: '/zavtra/', label: 'Завтра', note: 'Следующий день' },
+  { id: 'weekend', href: '/vyhodnye/', label: 'Выходные', note: 'Ближайшие выходные' },
+  { id: 'popular', href: '/populyarnoe/', label: 'Популярное', note: 'Desktop V28 и отдельная mobile-композиция' },
+  { id: 'collections', href: '/podborki/besplatnye-sobytiya/', label: 'Подборки', note: 'Материализованная подборка на реальных данных' },
+  { id: 'festivals', href: '/festivali/', label: 'Фестивали', note: 'Календарный таймлайн июля — декабря' },
+  { id: 'exhibitions', href: '/vystavki/', label: 'Выставки', note: 'Каталог выставок' },
+  { id: 'favorites', href: '/izbrannoe/', label: 'Избранное', note: 'Сохранённые будущие события' },
+  { id: 'search', href: '/poisk/', label: 'Поиск', note: 'Экран авторизованного поиска' },
+  { id: 'for-me', href: '/dlya-menya/', label: 'Для меня', note: 'Cold-start и персональная навигация без ложного обещания' },
+  { id: 'focus-group', href: '/fokus-gruppa/', label: 'Фокус-группа', note: 'Программа и путь участника' },
+  { id: 'artifacts', href: '/artefakty/', label: 'Артефакты', note: 'Исследовательская коллекция или честный unavailable state' },
+  { id: 'event-detail', href: `/sobytiya/${eventDetailRepresentative.slug}/`, label: 'Страница события', note: 'Один реальный representative event detail' },
+  { id: 'information', href: '/partners/', label: 'Информационная страница', note: 'Партнёры и служебная информация' },
+] as const;
+
+type OwnerFacingArchetype = (typeof ownerFacingArchetypes)[number];
+type DirectoryLink = {
+  href: string;
+  label: string;
+  note: string;
+  archetypeId?: OwnerFacingArchetype['id'];
+};
+
+const representativeLink = (id: OwnerFacingArchetype['id']): DirectoryLink => {
+  const archetype = ownerFacingArchetypes.find((entry) => entry.id === id);
+  if (!archetype) throw new Error(`Unknown owner-facing archetype: ${id}`);
+  return {
+    href: archetype.href,
+    label: archetype.label,
+    note: archetype.note,
+    archetypeId: archetype.id,
+  };
+};
+const extraLink = (href: string, label: string, note: string): DirectoryLink => ({ href, label, note });
+
+const pageGroups = [
+  {
+    title: 'Афиша и календарь',
+    note: 'Дата-списки показывают каждую дату отдельно; Popular объединяет только взаимно связанные даты.',
+    links: [
+      representativeLink('home'),
+      representativeLink('today'),
+      representativeLink('tomorrow'),
+      representativeLink('weekend'),
+      representativeLink('popular'),
+      representativeLink('exhibitions'),
+      representativeLink('festivals'),
+      representativeLink('event-detail'),
+    ],
+  },
+  {
+    title: 'Поиск и подборки',
+    note: 'Визуальный Search интегрирован. Реальный авторизованный поиск пока не принят и не заявляется как работающий.',
+    links: [
+      representativeLink('search'),
+      representativeLink('collections'),
+      ...materializedSearchCollections
+        .filter((collection) => collection.slug !== 'besplatnye-sobytiya')
+        .map((collection) => extraLink(
+          `/podborki/${collection.slug}/`,
+          collection.title,
+          collection.description,
+        )),
+    ],
+  },
+  {
+    title: 'Сервисные разделы',
+    note: 'Все разделы доступны из общей адаптивной навигации и возвращают пользователя к афише.',
+    links: [
+      representativeLink('favorites'),
+      representativeLink('for-me'),
+      representativeLink('focus-group'),
+      representativeLink('artifacts'),
+      representativeLink('information'),
+      extraLink('/kluby-po-interesam/', 'Клубы по интересам', 'Свежая policy-current проекция подтверждённых клубов'),
+      extraLink('/partnerstvo/', 'Стать партнёром', 'Условия сотрудничества'),
+    ],
+  },
+  {
+    title: 'Отдельные прототипы и QA',
+    note: 'Не входят в основную продуктовую навигацию; нужны для приёмки отдельных механик.',
+    links: [
+      extraLink('/lab/exhibitions-personal/', 'Выставки · персональный discovery', 'Концепт выставок и персональной выдачи'),
+      extraLink('/lab/design-system/', 'Дизайн-система', 'Компоненты и состояния'),
+      extraLink('/lab/occurrences/', 'Связанные даты', 'Resolver, formatter и selector'),
+      extraLink('/lab/medallions/', 'Медальоны', 'Карточки сущностей'),
+    ],
+  },
+];
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main" class="prototype-hub" data-unified-prototype-hub>
+  <main
+    id="main"
+    class="prototype-hub"
+    data-unified-prototype-hub
+    data-owner-archetype-family-count={ownerFacingArchetypes.length}
+  >
     <div class="page-shell">
       <section class="prototype-hero">
         <p class="eyebrow">Единый preprod · noindex</p>
@@ -114,10 +169,13 @@ specimens.sort((a, b) => {
           <section class="prototype-group">
             <header><h2>{group.title}</h2><p>{group.note}</p></header>
             <ul>
-              {group.links.map(([href, label, note]) => (
+              {group.links.map((link) => (
                 <li>
-                  <a href={withBase(href)}>
-                    <span><strong>{label}</strong><small>{note}</small></span>
+                  <a
+                    href={withBase(link.href)}
+                    data-owner-archetype-family={link.archetypeId}
+                  >
+                    <span><strong>{link.label}</strong><small>{link.note}</small></span>
                     <span aria-hidden="true">→</span>
                   </a>
                 </li>

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Changed: the existing immutable Preview hub now exposes one direct
+  representative link for all 15 owner-facing archetype families, including
+  Home, Favorites, Focus Group and Artifacts. The unified prototype gate now
+  derives coverage from the source registry and rejects missing, duplicate,
+  misrouted or non-materialized representatives.
+
 - Added: a minimal executable Astro family source of truth beside `site/src`:
   one canonical family registry, a generated reverse consumer/production-route
   graph, an impact query and a fail-closed drift checker wired into the standard

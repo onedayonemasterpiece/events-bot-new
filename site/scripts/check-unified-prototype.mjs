@@ -10,6 +10,34 @@ if (!buildId || !/^preview-[a-z0-9][a-z0-9._-]*$/u.test(buildId)) throw new Erro
 const root = join(distDir, buildId);
 const prefix = `/${buildId}`;
 
+const previewHubSource = readFileSync(join(siteDir, 'src/pages/[preview]/index.astro'), 'utf8');
+const ownerFacingArchetypeIds = [
+  'home',
+  'today',
+  'tomorrow',
+  'weekend',
+  'popular',
+  'collections',
+  'festivals',
+  'exhibitions',
+  'favorites',
+  'search',
+  'for-me',
+  'focus-group',
+  'artifacts',
+  'event-detail',
+  'information',
+];
+const ownerFacingRegistry = /const ownerFacingArchetypes = \[([\s\S]*?)\]\s+as const;/u.exec(previewHubSource)?.[1];
+if (!ownerFacingRegistry) throw new Error('Preview hub source misses ownerFacingArchetypes registry');
+const sourceOwnerFacingIds = [...ownerFacingRegistry.matchAll(/\bid:\s*'([a-z0-9-]+)'/gu)].map((match) => match[1]);
+if (new Set(sourceOwnerFacingIds).size !== sourceOwnerFacingIds.length) {
+  throw new Error('Preview hub source contains duplicate owner-facing archetype ids');
+}
+if (JSON.stringify(sourceOwnerFacingIds) !== JSON.stringify(ownerFacingArchetypeIds)) {
+  throw new Error(`Preview hub source archetype registry drifted: ${sourceOwnerFacingIds.join(', ')}`);
+}
+
 function file(relative) {
   const path = join(root, relative);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing generated route/file: ${relative}`);
@@ -41,6 +69,9 @@ const primaryRoutes = [
   'podborki/besplatno-s-detmi/',
   'podborki/stendap-na-etoy-nedele/',
   'dlya-menya/',
+  'izbrannoe/',
+  'fokus-gruppa/',
+  'artefakty/',
   'kluby-po-interesam/',
   'partners/',
   'partnerstvo/',
@@ -71,6 +102,54 @@ for (const needle of [
 }
 
 const hubMain = hub.slice(hub.indexOf('data-unified-prototype-hub'), hub.indexOf('</main>', hub.indexOf('data-unified-prototype-hub')));
+const ownerFacingCount = Number(/data-owner-archetype-family-count="(\d+)"/u.exec(hubMain)?.[1]);
+if (ownerFacingCount !== sourceOwnerFacingIds.length) {
+  throw new Error(`Preview hub reports ${ownerFacingCount || 0} owner-facing archetypes instead of ${sourceOwnerFacingIds.length}`);
+}
+const ownerFacingArchetypeLinks = [...hubMain.matchAll(/<a\b[^>]*data-owner-archetype-family="([^"]+)"[^>]*>/gu)].map((match) => {
+  const href = /\bhref="([^"]+)"/u.exec(match[0])?.[1];
+  if (!href) throw new Error(`Owner-facing archetype ${match[1]} has no href`);
+  return { id: match[1], href };
+});
+const builtOwnerFacingIds = ownerFacingArchetypeLinks.map((link) => link.id);
+if (new Set(builtOwnerFacingIds).size !== builtOwnerFacingIds.length) {
+  throw new Error('Preview hub renders duplicate owner-facing archetype links');
+}
+const missingOwnerFacingIds = sourceOwnerFacingIds.filter((id) => !builtOwnerFacingIds.includes(id));
+const unexpectedOwnerFacingIds = builtOwnerFacingIds.filter((id) => !sourceOwnerFacingIds.includes(id));
+if (missingOwnerFacingIds.length || unexpectedOwnerFacingIds.length) {
+  throw new Error(`Preview hub archetype coverage mismatch; missing=${missingOwnerFacingIds.join(',') || 'none'} unexpected=${unexpectedOwnerFacingIds.join(',') || 'none'}`);
+}
+const expectedOwnerFacingHrefs = new Map([
+  ['home', `${prefix}/`],
+  ['today', `${prefix}/segodnya/`],
+  ['tomorrow', `${prefix}/zavtra/`],
+  ['weekend', `${prefix}/vyhodnye/`],
+  ['popular', `${prefix}/populyarnoe/`],
+  ['collections', `${prefix}/podborki/besplatnye-sobytiya/`],
+  ['festivals', `${prefix}/festivali/`],
+  ['exhibitions', `${prefix}/vystavki/`],
+  ['favorites', `${prefix}/izbrannoe/`],
+  ['search', `${prefix}/poisk/`],
+  ['for-me', `${prefix}/dlya-menya/`],
+  ['focus-group', `${prefix}/fokus-gruppa/`],
+  ['artifacts', `${prefix}/artefakty/`],
+  ['information', `${prefix}/partners/`],
+]);
+for (const link of ownerFacingArchetypeLinks) {
+  if (link.id === 'event-detail') {
+    const eventPrefix = `${prefix}/sobytiya/`;
+    const slug = link.href.startsWith(eventPrefix) && link.href.endsWith('/')
+      ? link.href.slice(eventPrefix.length, -1)
+      : '';
+    if (!slug || slug.includes('/')) throw new Error(`Event-detail archetype has an invalid representative href: ${link.href}`);
+    continue;
+  }
+  const expectedHref = expectedOwnerFacingHrefs.get(link.id);
+  if (!expectedHref || link.href !== expectedHref) {
+    throw new Error(`Owner-facing archetype ${link.id} must link ${expectedHref || '(no representative)'}, got ${link.href}`);
+  }
+}
 const hubInternalLinks = [...hubMain.matchAll(/href="([^"]+)"/gu)]
   .map((match) => match[1])
   .filter((href) => href.startsWith(`${prefix}/`));
@@ -266,6 +345,8 @@ console.log(JSON.stringify({
   buildId,
   primaryRoutes: primaryRoutes.length,
   hubInternalLinks: hubInternalLinks.length,
+  ownerFacingArchetypes: sourceOwnerFacingIds.length,
+  ownerFacingArchetypeUrls: Object.fromEntries(ownerFacingArchetypeLinks.map((link) => [link.id, link.href])),
   eventPages: eventPages.length,
   checkedRelatedCards,
   occurrenceSpecimen: occurrencePage[0],
