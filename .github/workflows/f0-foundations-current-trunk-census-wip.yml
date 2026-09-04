@@ -1,0 +1,323 @@
+name: F0 current-trunk foundations census WIP
+
+on:
+  push:
+    branches:
+      - wip/ui-normalization-f0-foundations-next-20260904
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f0-foundations-current-trunk-census-wip
+  cancel-in-progress: true
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    env:
+      TRUNK_BRANCH: agent/static-site-single-kaggle-contract
+    steps:
+      - name: Check out F0 WIP control branch
+        uses: actions/checkout@v4
+        with:
+          ref: wip/ui-normalization-f0-foundations-next-20260904
+          fetch-depth: 0
+
+      - name: Resolve current executable trunk
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/$TRUNK_BRANCH:refs/remotes/origin/$TRUNK_BRANCH"
+          trunk_sha="$(git rev-parse "refs/remotes/origin/$TRUNK_BRANCH")"
+          echo "TRUNK_SHA=$trunk_sha" >> "$GITHUB_ENV"
+          git reset --hard "$trunk_sha"
+          git clean -fd
+          echo "resolved_trunk=$trunk_sha"
+
+      - name: Compute F0 foundations and actual-consumer census
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import re
+          import subprocess
+          from collections import Counter, defaultdict
+          from pathlib import Path
+
+          repo = Path.cwd()
+          src = repo / 'site/src'
+          extensions = {'.astro', '.css', '.js', '.mjs', '.ts', '.tsx'}
+          files = sorted(path for path in src.rglob('*') if path.is_file() and path.suffix in extensions)
+
+          def rel(path: Path) -> str:
+              return path.relative_to(repo).as_posix()
+
+          def read(path: Path) -> str:
+              return path.read_text(encoding='utf-8', errors='replace')
+
+          def is_f0_owned(path: Path) -> bool:
+              value = rel(path)
+              return (
+                  value == 'site/src/styles/design-system.css'
+                  or value.startswith('site/src/components/design-system/')
+                  or value in {
+                      'site/src/components/Icon.astro',
+                      'site/src/components/SocialIcon.astro',
+                  }
+                  or value.startswith('site/src/components/brand/')
+              )
+
+          central_css = [
+              path for path in files
+              if path.suffix == '.css' and (
+                  rel(path) == 'site/src/styles/design-system.css'
+                  or rel(path).startswith('site/src/components/design-system/')
+              )
+          ]
+
+          declaration_re = re.compile(r'(?m)^\s*(--ke-[a-z0-9-]+)\s*:\s*([^;]+);', re.I)
+          use_re = re.compile(r'var\(\s*(--ke-[a-z0-9-]+)', re.I)
+          root_re = re.compile(r':root\s*\{(?P<body>[^{}]*)\}', re.S)
+          raw_colour_re = re.compile(
+              r'(?<![\w-])(?:#[0-9a-f]{3,8}\b|rgba?\([^;{}\n]+\)|hsla?\([^;{}\n]+\))',
+              re.I,
+          )
+          css_rule_re = re.compile(r'(?P<selector>[^{}]+)\{(?P<body>[^{}]*)\}', re.S)
+          numeric_dimension_re = re.compile(
+              r'(?m)^\s*(?:width|min-width|height|min-height|inline-size|block-size)\s*:\s*'
+              r'(?!var\(|auto\b|max-content\b|min-content\b|fit-content\b|100%\b)'
+              r'(-?(?:\d*\.)?\d+(?:px|rem|em))\s*;',
+              re.I,
+          )
+
+          all_declarations: dict[str, list[dict[str, object]]] = defaultdict(list)
+          all_uses: dict[str, set[str]] = defaultdict(set)
+          root_declarations: dict[str, list[dict[str, object]]] = defaultdict(list)
+          raw_registry_root: list[dict[str, object]] = []
+          raw_registry_rules: list[dict[str, object]] = []
+          raw_f0_consumers: list[dict[str, object]] = []
+          raw_external_consumers: list[dict[str, object]] = []
+          local_icon_dimensions: list[dict[str, object]] = []
+          raw_focus_rules: list[dict[str, object]] = []
+          literal_typography: list[dict[str, object]] = []
+          style_owner_files: dict[str, set[str]] = defaultdict(set)
+
+          root_ranges_by_path: dict[Path, list[tuple[int, int]]] = defaultdict(list)
+          for path in central_css:
+              text = read(path)
+              for match in root_re.finditer(text):
+                  root_ranges_by_path[path].append((match.start(), match.end()))
+                  body = match.group('body')
+                  base_line = text.count('\n', 0, match.start('body')) + 1
+                  for decl in declaration_re.finditer(body):
+                      line = base_line + body.count('\n', 0, decl.start())
+                      root_declarations[decl.group(1)].append({
+                          'path': rel(path),
+                          'line': line,
+                          'value': decl.group(2).strip(),
+                      })
+
+          for path in files:
+              text = read(path)
+              value = rel(path)
+              for decl in declaration_re.finditer(text):
+                  all_declarations[decl.group(1)].append({
+                      'path': value,
+                      'line': text.count('\n', 0, decl.start()) + 1,
+                      'value': decl.group(2).strip(),
+                  })
+              for token in use_re.findall(text):
+                  all_uses[token].add(value)
+
+              ranges = root_ranges_by_path.get(path, [])
+              for colour in raw_colour_re.finditer(text):
+                  entry = {
+                      'path': value,
+                      'line': text.count('\n', 0, colour.start()) + 1,
+                      'value': colour.group(0),
+                  }
+                  if path in central_css and any(start <= colour.start() < end for start, end in ranges):
+                      raw_registry_root.append(entry)
+                  elif value == 'site/src/styles/design-system.css':
+                      raw_registry_rules.append(entry)
+                  elif is_f0_owned(path):
+                      raw_f0_consumers.append(entry)
+                  else:
+                      raw_external_consumers.append(entry)
+
+              if path.suffix in {'.css', '.astro'}:
+                  for rule in css_rule_re.finditer(text):
+                      selector = ' '.join(rule.group('selector').split())[-240:]
+                      body = rule.group('body')
+                      line = text.count('\n', 0, rule.start()) + 1
+                      selector_lower = selector.lower()
+                      for family in ('ke-copy-action', 'ke-button', 'ke-badge', 'ke-field', 'ke-state-panel'):
+                          if f'.{family}' in selector_lower:
+                              style_owner_files[family].add(value)
+                      if any(word in selector_lower for word in ('icon', 'svg', 'glyph')):
+                          for dim in numeric_dimension_re.finditer(body):
+                              local_icon_dimensions.append({
+                                  'path': value,
+                                  'line': line + body.count('\n', 0, dim.start()),
+                                  'selector': selector,
+                                  'value': dim.group(1),
+                                  'owner': 'F0' if is_f0_owned(path) else 'external-consumer',
+                              })
+                      if ':focus' in selector_lower and raw_colour_re.search(body):
+                          raw_focus_rules.append({
+                              'path': value,
+                              'line': line,
+                              'selector': selector,
+                              'raw_values': raw_colour_re.findall(body),
+                              'owner': 'F0' if is_f0_owned(path) else 'external-consumer',
+                          })
+                      if is_f0_owned(path):
+                          for prop in ('font-family', 'font-size', 'font-weight', 'line-height'):
+                              prop_re = re.compile(
+                                  rf'(?m)^\s*{re.escape(prop)}\s*:\s*(?!var\(|inherit\b|normal\b)([^;]+);',
+                                  re.I,
+                              )
+                              for item in prop_re.finditer(body):
+                                  literal_typography.append({
+                                      'path': value,
+                                      'line': line + body.count('\n', 0, item.start()),
+                                      'selector': selector,
+                                      'property': prop,
+                                      'value': item.group(1).strip(),
+                                  })
+
+          cross_file_duplicate_roots = {}
+          same_file_repeated_roots = {}
+          for token, entries in sorted(root_declarations.items()):
+              paths = sorted({entry['path'] for entry in entries})
+              if len(paths) > 1:
+                  cross_file_duplicate_roots[token] = entries
+              elif len(entries) > 1:
+                  same_file_repeated_roots[token] = entries
+
+          missing_aliases = {
+              token: sorted(paths)
+              for token, paths in sorted(all_uses.items())
+              if token not in all_declarations
+          }
+
+          icon_role_declarations = {
+              token: entries
+              for token, entries in sorted(root_declarations.items())
+              if token.startswith('--ke-icon-size-')
+          }
+          expected_icon_roles = {
+              '--ke-icon-size-inline',
+              '--ke-icon-size-control',
+              '--ke-icon-size-action',
+              '--ke-icon-size-feature',
+          }
+
+          component_names = ['CopyAction', 'Button', 'Badge', 'Field', 'StatePanel', 'SemanticIcon', 'SocialIcon']
+          consumers: dict[str, list[str]] = {}
+          for component in component_names:
+              pattern = re.compile(rf'<{component}\b')
+              consumers[component] = sorted(
+                  rel(path) for path in files
+                  if path.suffix == '.astro' and pattern.search(read(path))
+              )
+
+          def top_by_path(entries: list[dict[str, object]], limit: int = 30) -> list[dict[str, object]]:
+              counts = Counter(str(entry['path']) for entry in entries)
+              return [
+                  {'path': path, 'count': count}
+                  for path, count in counts.most_common(limit)
+              ]
+
+          def run_check(name: str, command: list[str]) -> dict[str, object]:
+              process = subprocess.run(command, cwd=repo, capture_output=True, text=True)
+              output = (process.stdout + '\n' + process.stderr).strip().splitlines()
+              return {
+                  'name': name,
+                  'exit': process.returncode,
+                  'tail': output[-8:],
+              }
+
+          checks = [
+              run_check('f0-normalization-negative-probes', ['node', 'site/src/components/design-system/f0-normalization-negative-probes.mjs']),
+              run_check('check-design-system', ['node', 'site/scripts/check-design-system.mjs']),
+              run_check('f0-typography-authority', ['node', 'site/src/components/design-system/check-f0-typography-authority.mjs']),
+              run_check('f0-route-theme', ['node', 'site/src/components/design-system/check-f0-route-theme-bindings.mjs']),
+          ]
+
+          report = {
+              'contract': 'kenigevents.f0-current-trunk-foundations-census.wip.v1',
+              'trunk_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'files_scanned': len(files),
+              'central_css_files': [rel(path) for path in central_css],
+              'root_token_count': len(root_declarations),
+              'cross_file_duplicate_root_tokens': cross_file_duplicate_roots,
+              'same_file_repeated_root_tokens': same_file_repeated_roots,
+              'undefined_ke_aliases': missing_aliases,
+              'icon_role_declarations': icon_role_declarations,
+              'icon_role_exact_set_pass': set(icon_role_declarations) == expected_icon_roles,
+              'raw_visible_values': {
+                  'registry_root_count': len(raw_registry_root),
+                  'registry_rule_count': len(raw_registry_rules),
+                  'f0_consumer_count': len(raw_f0_consumers),
+                  'external_consumer_count': len(raw_external_consumers),
+                  'registry_rule_top_files': top_by_path(raw_registry_rules),
+                  'f0_consumer_top_files': top_by_path(raw_f0_consumers),
+                  'external_consumer_top_files': top_by_path(raw_external_consumers),
+                  'f0_consumer_samples': raw_f0_consumers[:40],
+              },
+              'local_icon_dimensions': {
+                  'count': len(local_icon_dimensions),
+                  'f0_count': sum(1 for entry in local_icon_dimensions if entry['owner'] == 'F0'),
+                  'external_count': sum(1 for entry in local_icon_dimensions if entry['owner'] != 'F0'),
+                  'samples': local_icon_dimensions[:80],
+              },
+              'raw_focus_rules': {
+                  'count': len(raw_focus_rules),
+                  'f0_count': sum(1 for entry in raw_focus_rules if entry['owner'] == 'F0'),
+                  'external_count': sum(1 for entry in raw_focus_rules if entry['owner'] != 'F0'),
+                  'samples': raw_focus_rules[:50],
+              },
+              'f0_literal_typography': {
+                  'count': len(literal_typography),
+                  'top_files': top_by_path(literal_typography),
+                  'samples': literal_typography[:80],
+              },
+              'style_owner_files': {key: sorted(value) for key, value in style_owner_files.items()},
+              'actual_component_consumers': consumers,
+              'checks': checks,
+          }
+
+          Path('/tmp/f0-current-trunk-foundations-census.json').write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print('F0_CURRENT_TRUNK_CENSUS_JSON_BEGIN')
+          print(json.dumps(report, ensure_ascii=False, indent=2))
+          print('F0_CURRENT_TRUNK_CENSUS_JSON_END')
+          PY
+
+      - name: Publish concise census summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/f0-current-trunk-foundations-census.json').read_text(encoding='utf-8'))
+          print('trunk_sha=' + data['trunk_sha'])
+          print('cross_file_duplicate_root_tokens=' + str(len(data['cross_file_duplicate_root_tokens'])))
+          print('undefined_ke_aliases=' + str(len(data['undefined_ke_aliases'])))
+          print('icon_role_exact_set_pass=' + str(data['icon_role_exact_set_pass']).lower())
+          print('f0_raw_consumer_values=' + str(data['raw_visible_values']['f0_consumer_count']))
+          print('f0_local_icon_dimensions=' + str(data['local_icon_dimensions']['f0_count']))
+          print('f0_raw_focus_rules=' + str(data['raw_focus_rules']['f0_count']))
+          print('f0_literal_typography=' + str(data['f0_literal_typography']['count']))
+          for check in data['checks']:
+              print(f"check_{check['name']}={check['exit']}")
+          PY
