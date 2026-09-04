@@ -232,3 +232,8 @@ not the translucent hero-selector surface. Count/label consume the existing
 primary override tokens before variant fallback tokens. This corrects accidental
 value drift during token adoption; accepted palette/type semantics are unchanged.
 Regression: `site/tests/event-media-rail-token-adoption.test.mjs`.
+
+The N0 public-identity regression preserves the recorded accepted baseline state
+(`PM0_3_BASELINE_DONE_CURRENT_SUCCESSOR_REBUILD_PENDING`) while still requiring
+Kaggle, real/all and exact manifest/artifact identity for each successor. It must
+not require the obsolete pre-baseline `BLOCKED_BY_SOURCE_CANDIDATE` value.

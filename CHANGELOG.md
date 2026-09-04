@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: the N0 public identity regression follows its accepted-baseline record without regressing to the obsolete pre-baseline blocked state; full-SHA and canonical Kaggle publication requirements remain enforced.
+
 - Fixed: media-rail token adoption preserves the accepted opaque poster-strip surface and existing primary count/label size overrides instead of substituting hero fallback values.
 
 - Changed: normalization acceptance now excludes proven service-only routes and dependencies consistently in Astro/token SoT checks, while preserving shared/runtime and unresolved product consumers; the owner-review stage has finite browser/SoT/projection gates, without requiring a full Penpot materialization.

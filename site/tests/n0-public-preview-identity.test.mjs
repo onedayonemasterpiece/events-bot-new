@@ -189,7 +189,9 @@ test('build identity remains full-SHA and N0 publication policy is Kaggle-only',
   const realGate = acceptance.gate_graph.find((item) => item.id === 'FULL_REAL_KAGGLE_PREVIEW');
   assert.ok(realGate, 'full-real Kaggle gate is missing');
   assert.equal(realGate.owner, 'R0');
-  assert.equal(realGate.status, 'BLOCKED_BY_SOURCE_CANDIDATE');
+  // This record preserves the accepted baseline; its current successor still
+  // needs its own build. Never regress it to the pre-baseline blocked state.
+  assert.equal(realGate.status, 'PM0_3_BASELINE_DONE_CURRENT_SUCCESSOR_REBUILD_PENDING');
   assert.ok(realGate.requires.includes('canonical events-bot-new StaticSiteBuilder'));
   assert.ok(realGate.requires.includes('--preview-data-mode real'));
   assert.ok(realGate.requires.includes('--page-class all'));
