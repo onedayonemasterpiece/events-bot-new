@@ -727,3 +727,20 @@ Browser release gate перед проверкой `loaded|missing` послед
 toast от первого `P`. Поэтому медленная подготовка изображения больше не может
 создать ложный отказ следующего shortcut; продуктовая обработка клавиш не
 изменялась.
+
+## 20. Current full-real owner Preview and mobile typography closure (2026-09-04)
+
+Exact trunk `35d1d73286c61ed8f11759bea985e65b23183d18` опубликован canonical
+Review Preview rail как immutable full `real/all` prefix
+`/preview-real-35d1d7328-normalized-20260904-v1/`. Owner hub содержит 16
+материализованных archetype families; публичный desktop/mobile smoke прошёл
+`32/32` без document overflow, page errors и same-prefix resource failures.
+
+Последующий визуальный spot-check на 390px выявил одну route-local typography
+щель: mobile festival hero наследовал `overflow-wrap:anywhere` и одновременно
+сужал H1 до `12ch`, поэтому слово «Калининградской» делилось внутри слова.
+Механическая коррекция не меняет текст, palette или family anatomy: mobile H1
+занимает доступную ширину, запрещает intra-word break и использует уже
+существующий общий `0.72em` scale для цветной строки. Browser geometry на
+`320/360/390/430px` обязана подтверждать одну строку для слова, отсутствие
+clipping и нулевой document overflow.

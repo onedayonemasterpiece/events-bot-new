@@ -1062,8 +1062,12 @@ const structuredData = [{
   @media (max-width: 760px) {
     .festival-page { width: min(100% - 1rem, 620px); padding-top: 0.5rem; }
     .festival-hero { gap: 1.15rem; padding: 1.45rem 1.2rem; border-radius: 26px; }
-    .festival-hero h1 { max-width: 12ch; font-size: clamp(2.35rem, 12vw, 4rem); }
-    .festival-hero h1 em { font-size: 0.84em; }
+    .festival-hero h1 {
+      max-width: 100%;
+      overflow-wrap: normal;
+      word-break: normal;
+      font-size: clamp(2.35rem, 12vw, 4rem);
+    }
     .festival-hero__copy > p:last-child { margin-top: 0.9rem; font-size: 0.92rem; }
     .festival-hero__facts { width: 100%; min-width: 0; }
     .festival-hero__facts div { padding-inline: 0.55rem; }
