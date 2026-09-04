@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2505,
     "definition_count": 2787,
-    "consumer_count": 3599,
+    "consumer_count": 3607,
     "alias_edge_count": 706,
     "family_count": 109
   },
@@ -67877,7 +67877,14 @@
         "--ke-color-surface-inverse"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-background-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1856,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-17d2b232d90fc2fc",
       "astro_family_set": "families-2901a2cd6b879305",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -67950,7 +67957,50 @@
         "--ke-color-mobile-review-dock-surface",
         "--ke-elevation-mobile-review-like-selected"
       ],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1730,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2030,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2213,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2338,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2417,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2430,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2516,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-17d2b232d90fc2fc",
       "astro_family_set": "families-2901a2cd6b879305",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -98400,6 +98450,12 @@
       ],
       "direct_consumers": [
         {
+          "token": "--ke-color-background-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1856,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-surface-inverse",
           "path": "site/src/styles/design-system.css",
           "line": 333,
@@ -98576,7 +98632,50 @@
         "--ke-color-mobile-review-dock-surface",
         "--ke-elevation-mobile-review-like-selected"
       ],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1730,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2030,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2213,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2338,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2417,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2430,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse-raised",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2516,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-17d2b232d90fc2fc",
       "astro_family_set": "families-2901a2cd6b879305",
       "production_route_set": "routes-18526a9a83f9e22e"

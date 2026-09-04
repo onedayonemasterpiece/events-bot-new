@@ -135,6 +135,10 @@ The desktop event-detail surface consumes `--ke-color-event-detail-ink` and
 `--ke-color-event-detail-surface` directly; its prior component-local
 `--clean-ink` / `--clean-paper` / `--clean-accent` aliases were exact duplicates
 of the established event-detail roles and are not a second authority boundary.
+Its inverse media fallbacks, gallery tiles and related-event surface likewise
+consume the established `--ke-color-background-inverse` and
+`--ke-color-background-inverse-raised` roles instead of repeating their exact
+hex values; palette, layout and runtime behavior are unchanged.
 
 `EventOccurrenceNav` consumes the existing occurrence color, surface, border,
 shape and elevation roles from `event-detail-foundations.css` directly. The

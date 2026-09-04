@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed: desktop event media fallbacks, gallery tiles and the related-event
+  section now consume the existing inverse background roles instead of eight
+  repeated exact hex values, without changing palette, geometry or behavior.
+
 - Fixed: exact local event-route generation now canonicalizes Astro's
   trailing-slash JSON/ICS prerender entries, retaining the required discovery
   manifest and calendar companion instead of dropping both from the slice.
