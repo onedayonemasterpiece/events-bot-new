@@ -142,6 +142,7 @@ const priorityEventIds = new Set(
       document.querySelectorAll('[data-listing-weekend-flow]').forEach(packWeekendFlow);
       // Packing reorders cards without changing the flow width. ResizeObserver
       // therefore cannot invalidate ListingControls' row-end copy measurement.
+      window.KERefreshListingRowEnds?.();
       document.dispatchEvent(new CustomEvent('kenigevents:weekend-listing-packed'));
     });
   }

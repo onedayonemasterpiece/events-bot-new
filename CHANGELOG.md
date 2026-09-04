@@ -3,8 +3,10 @@
 ## [Unreleased]
 
 - Fixed: weekend desktop card packing now invalidates and recomputes row-end
-  title widths after every DOM reorder, preventing intermittent horizontal
-  document overflow at the 1440px owner-review viewport.
+  title widths synchronously after every DOM reorder, with the completion
+  event retained as a deferred fallback. This prevents stale expanded title
+  widths from surviving a busy main thread and intermittently overflowing the
+  1440px owner-review viewport.
 
 - Changed: production rail, regional-bus and Kaup transport schedule consumers now use their existing canonical modality color and elevation roles; schedule semantics, interactions and geometry are unchanged.
 

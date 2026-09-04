@@ -398,6 +398,10 @@ const showCities = cities.length > 1;
       opened.querySelector('summary')?.focus();
     });
     window.KEApplyListingFilters = applyListingFilters;
+    // WeekendEditorialTimeline moves cards inside an animation frame.  A
+    // synchronous hook prevents the previous row-tail width from surviving
+    // until a later frame when the main thread is busy.
+    window.KERefreshListingRowEnds = syncListingRowEnds;
     document.addEventListener('kenigevents:listing-personal-filter', applyListingFilters);
     applyListingFilters();
     document.fonts?.ready.then(scheduleListingRowEnds);

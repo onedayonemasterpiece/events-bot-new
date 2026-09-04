@@ -808,9 +808,11 @@ on `/vyhodnye/` at `1440x900`. The overflowing title copies retained a stale
 the owning flow itself was only `571px` wide and did not resize, so its
 `ResizeObserver` could not request a new row-end measurement.
 
-Weekend packing now emits one completion event after each reorder and
-`ListingControls` recomputes row-end widths on the next bounded animation-frame
-pass. This preserves the reviewed card order, intrinsic media geometry and
+Weekend packing now invokes the shared row-end measurement synchronously after
+each reorder and also emits one completion event as a deferred fallback. The
+synchronous handshake matters under CPU/network contention: a stale expanded
+title width cannot remain visible while a later animation frame is delayed.
+This preserves the reviewed card order, intrinsic media geometry and
 full-title policy; it only invalidates a measurement whose layout input
 changed. The desktop geometry gate covers the exact `1440px` owner-review
 viewport in addition to the existing `721px` and `800px` weekend seams.
