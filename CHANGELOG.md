@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: the iconography census now counts raw inline SVG only in rendered
+  Astro source, as required by its contract. Generated token-impact JSON,
+  checker regexes and serialized runtime markup no longer appear as false
+  product icon-owner gaps; canonical icon consumer and asset scans are
+  unchanged.
+
 - Added: `npm --prefix site run local:focused -- ...` now materializes one
   selected route locally before Astro prerender instead of generating every
   same-class neighbour. It reuses the canonical exporter, page-class contract,
