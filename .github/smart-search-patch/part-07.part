@@ -1,0 +1,120 @@
++    assertExpectedTransportRoutes(expectedFaultProfile, transportFaultEvidence.transport_outcomes, {
++      searchDispatches: SEARCH_SCENARIOS.has(scenario) ? (platform === 'browser' ? 2 : 1) : 0,
++    });
+   }
+   diagnostics = summarizeRuntimeDiagnostics(recorder.entries, ui.consoles);
+   if (diagnostics.blocking_failure_count > 0) throw new Error(`runtime_diagnostics:blocking:${diagnostics.blocking_failure_count}`);
+@@ -104,17 +123,37 @@
+     keyboard_acceptance: platform === 'browser' ? null : journey.keyboardAcceptance,
+     keyboard_preflight: ui.keyboardPreflight || null, safari_startup: ui.safariStartup || null,
+     transport_fault: transportFaultSummary,
++    search: searchResult,
+     otp_issue_request_count: journey.counts.issue, otp_verify_request_count: journey.counts.verify,
+     participant_registration_request_count: journey.counts.registration,
+     participant_registration_status: journey.counts.registrationStatus,
+     mail: journey.mail ? { matching_message_count: journey.mail.matchingMessageCount,
+       folder: process.env.E2E_MAIL_ADAPTER === 'yandex-websocket' ? 'mail-trigger' : 'inbox',
+       delivery_latency_ms: journey.mail.deliveryLatencyMs, otp_length: otp.length, message_id_hash: journey.mail.messageIdHash } : null,
+-    final_ui_state: scenario === PREFLIGHT_SCENARIO ? 'product_email_keyboard_visible' : 'membership_confirmed',
++    final_ui_state: scenario === PREFLIGHT_SCENARIO ? 'product_email_keyboard_visible'
++      : SEARCH_SCENARIOS.has(scenario) ? 'search_results_rendered' : 'membership_confirmed',
+     reload_state: scenario === PREFLIGHT_SCENARIO ? null : 'returning_member',
+     console_error_count: ui.consoles.filter((item) => item.type === 'error').length,
+     essential_failed_request_count: diagnostics.blocking_failure_count, diagnostics, failures: [] });
+ } catch (error) {
++  if (SEARCH_SCENARIOS.has(scenario) && !searchResult) {
++    const partial = await ui?.searchEvidence?.().catch(() => null);
++    if (partial) {
++      searchResult = {
++        query_id: syntheticSearchQuery(runId).query_id,
++        target_origin: searchTarget?.origin || null,
++        target_path: searchTarget?.pathname || null,
++        attempts: partial.physical_request_count,
++        responses: partial.responses || [],
++        route: {
++          routes: (partial.transport_outcomes || []).map((item) => item.finalRoute),
++          dispatch_count: partial.physical_request_count,
++          outcome_count: (partial.transport_outcomes || []).length,
++        },
++        status: 'partial_failure_evidence',
++      };
++    }
++  }
+   latestCounts = await ui?.requestCounts?.().catch(() => null);
+   transportFaultEvidence = await ui?.transportFaultEvidence?.().catch(() => transportFaultEvidence) || transportFaultEvidence;
+   transportFaultSummary = summarizeFaultEvidence(expectedFaultProfile, transportFaultEvidence);
+@@ -128,6 +167,7 @@
+     keyboard_acceptance: platform === 'browser' ? null : ui?.keyboard || null,
+     keyboard_preflight: ui?.keyboardPreflight || null, safari_startup: ui?.safariStartup || null,
+     transport_fault: transportFaultSummary,
++    search: searchResult,
+     otp_issue_request_count: latestCounts?.issue ?? recorder.count('POST', '/auth/v1/otp'),
+     otp_verify_request_count: latestCounts?.verify ?? recorder.count('POST', '/auth/v1/verify'),
+     participant_registration_request_count: latestCounts?.registration ?? recorder.count('POST', '/rpc/register_focus_group_participant_v1'),
+@@ -173,9 +213,10 @@
+ await evidence.writeJsonl('transport-events.sanitized.jsonl', transportFaultEvidence.transport_events || []);
+ await evidence.writeJsonl('transport-outcomes.sanitized.jsonl', transportFaultEvidence.transport_outcomes || []);
+ await evidence.writeJsonl('console.sanitized.jsonl', ui?.consoles || []);
++await evidence.writeJson('search.sanitized.json', result.search || { status: 'not_applicable' });
+ await evidence.writeJson('runtime-diagnostics.json', diagnostics);
+ await evidence.writeJson('mail-delivery.sanitized.json', result.mail || { matching_message_count: 0 });
+-await evidence.writeText('README.md', '# Static-site focus OTP evidence\n\nOpen `qa-summary.json` first. No mailbox body, OTP, email, cookie, token, HAR, trace, video, raw Appium log or native hierarchy is retained.\n');
++await evidence.writeText('README.md', '# Static-site protected QA evidence\n\nOpen `qa-summary.json` first. Search evidence contains only a synthetic query id, route/cache/status counters and bounded response metadata; raw query text, event titles and card bodies are not retained. No mailbox body, OTP, email, cookie, token, HAR, trace, video, raw Appium log or native hierarchy is retained.\n');
+ let audit = await evidence.audit();
+ result.redaction_audit_passed = audit.passed;
+ await evidence.writeJson('result.json', result);
+--- a/site/scripts/static-site-qa-command.mjs
++++ b/site/scripts/static-site-qa-command.mjs
+@@ -1,21 +1,63 @@
+ import { appendFile, readFile } from 'node:fs/promises';
+ 
+ import { selectedPlatforms } from '../e2e/focus-email/helpers/platform.mjs';
+-import { validateFocusE2eTarget } from '../e2e/focus-email/helpers/target-url.mjs';
++import { validateFocusE2eTarget, validateSearchE2eTarget } from '../e2e/focus-email/helpers/target-url.mjs';
+ 
+-const COMMAND = /^\/qa run scenario=(focus\.otp\.(?:browser_tab|ios_keyboard_preflight)) platform=(browser|android|ios|all) target_url=(\S+) expected_repo_sha=([0-9a-f]{40}) mode=(blocking)$/u;
++const SCENARIOS = new Set([
++  'focus.otp.browser_tab',
++  'focus.otp.ios_keyboard_preflight',
++  'search.transport_route_matrix',
++]);
++const FAULT_PROFILES = new Set([
++  'normal',
++  'client_supabase_direct_unreachable',
++  'client_yandex_relay_unreachable',
++  'both_client_routes_unreachable',
++]);
++const ALLOWED_KEYS = new Set([
++  'scenario', 'platform', 'fault_profile', 'target_url', 'search_target_url', 'expected_repo_sha', 'mode',
++]);
+ 
+ export function parseQaRunCommand(body) {
+   const raw = String(body || '').trim();
+-  if (raw.length > 500 || raw.includes('\n')) throw new Error('command_format_invalid');
+-  const match = raw.match(COMMAND);
+-  if (!match) throw new Error('command_format_invalid');
+-  const [, scenario, platform, targetUrl, expectedRepoSha, mode] = match;
+-  const target = validateFocusE2eTarget(targetUrl);
++  if (raw.length > 900 || raw.includes('\n') || !raw.startsWith('/qa run ')) throw new Error('command_format_invalid');
++  const values = {};
++  for (const token of raw.slice('/qa run '.length).split(' ')) {
++    const match = /^([a-z_]+)=(\S+)$/u.exec(token);
++    if (!match || !ALLOWED_KEYS.has(match[1]) || Object.hasOwn(values, match[1])) throw new Error('command_format_invalid');
++    values[match[1]] = match[2];
++  }
++  for (const key of ['scenario', 'platform', 'target_url', 'expected_repo_sha', 'mode']) {
++    if (!values[key]) throw new Error(`command_field_missing:${key}`);
++  }
++  const scenario = values.scenario;
++  const platform = values.platform;
++  const faultProfile = values.fault_profile || 'normal';
++  if (!SCENARIOS.has(scenario)) throw new Error('scenario_invalid');
++  if (!FAULT_PROFILES.has(faultProfile)) throw new Error('fault_profile_invalid');
++  if (values.mode !== 'blocking') throw new Error('mode_invalid');
++  if (!/^[0-9a-f]{40}$/u.test(values.expected_repo_sha)) throw new Error('expected_repo_sha_invalid');
+   selectedPlatforms(platform);
+   if (scenario === 'focus.otp.ios_keyboard_preflight' && platform !== 'ios') throw new Error('scenario_platform_invalid');
+-  return { scenario, platform, target_url: target.href, expected_repo_sha: expectedRepoSha, mode,
+-    target_origin: target.origin, target_path: target.pathname };
++  if (scenario === 'focus.otp.ios_keyboard_preflight' && faultProfile !== 'normal') throw new Error('scenario_fault_profile_invalid');
++

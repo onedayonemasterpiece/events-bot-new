@@ -1,0 +1,120 @@
++      if (!(clients instanceof Map)) return [];
++      return [...clients.values()].flatMap((client) => client?.transport?.outcomeHistory?.() || []);
++    }).catch(() => []);
++    for (const outcome of outcomes) {
++      if (!outcome?.operationId || transportOutcomeIds.has(outcome.operationId)) continue;
++      transportOutcomeIds.add(outcome.operationId);
++      transportOutcomes.push(outcome);
++    }
++    return { receipt: faultReceipt, fault_events: faultEvents, transport_events: transportEvents, transport_outcomes: transportOutcomes };
+   }
++  page.on('response', (response) => {
++    let url;
++    try { url = new URL(response.url()); } catch { return; }
++    if (!url.pathname.endsWith('/functions/v1/event-search') || searchStartedAt === 0) return;
++    const sequence = ++searchResponseSequence;
++    const task = response.json().then((payload) => {
++      const summary = summarizeSearchPayload(payload);
++      if (summary) searchResponses.push({ sequence, ...summary, http_status: response.status(), host: url.hostname });
++    }).catch(() => {
++      searchResponses.push({ sequence, schema_version: '', result_cache_status: 'unreadable', served_from_cache: false,
++        item_count: 0, fallback_count: 0, http_status: response.status(), host: url.hostname });
++    });
++    searchResponseTasks.push(task);
++  });
+   page.on('console', (message) => {
+     if (['error', 'warning'].includes(message.type())) {
+       consoles.push({ type: message.type(), text: redactText(message.text(), [...secrets, otp]) });
+@@ -98,6 +130,66 @@
+       await page.locator('[data-focus-done-title]').filter({ hasText: /Вы уже в фокус-группе|Участие подтверждено/u }).waitFor({ timeout: 20_000 });
+     },
+     async captureMaskedEvidence(name) { await maskPage(page); await page.screenshot({ path: join(evidenceRoot, 'screenshots', `${name}.png`), fullPage: true }); },
++
++    async openSearch(searchTarget) {
++      await syncTransportFaultEvidence();
++      searchStartedAt = Date.now();
++      await page.goto(searchTarget.href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
++      if (new URL(page.url()).origin !== searchTarget.origin) throw new Error('search_navigation_left_allowed_origin');
++      faultPageEventsSeen = 0; transportPageEventsSeen = 0;
++    },
++    async verifySearchSurface() {
++      const root = page.locator('[data-authorized-search]');
++      await root.waitFor({ state: 'attached', timeout: 20_000 }).catch(() => { throw new Error('search_surface_missing'); });
++      const state = await root.evaluate((node) => ({
++        enabled: node.dataset.searchEnabled === 'true', transport: node.dataset.searchTransport || null,
++        authorized: node.classList.contains('is-authorized'), path: location.pathname,
++        input_tag: node.querySelector('[data-search-input]')?.tagName?.toLowerCase() || null,
++        enter_key_hint: node.querySelector('[data-search-input]')?.enterKeyHint || node.querySelector('[data-search-input]')?.getAttribute('enterkeyhint') || null,
++      }));
++      if (!state.enabled) throw new Error('search_surface_disabled');
++      await page.waitForFunction(() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized'), null,
++        { timeout: 20_000 }).catch(() => { throw new Error('search_session_not_restored'); });
++      state.authorized = true;
++      return state;
++    },
++    async focusSearchInput() { await page.locator('[data-search-input]').focus(); return null; },
++    async enterSearchQuery(value) { await page.locator('[data-search-input]').fill(value); },
++    async submitSearchWithKeyboard() { await page.locator('[data-search-input]').press('Enter'); },
++    async waitForSearchCompletion() {
++      await page.waitForFunction(() => {
++        const submit = document.querySelector('[data-search-submit]');
++        const status = document.querySelector('[data-search-status]');
++        const results = document.querySelector('[data-search-results]');
++        if (status?.getAttribute('role') === 'alert') return true;
++        return submit?.getAttribute('aria-busy') === 'false' && results && !results.hidden && results.children.length > 0;
++      }, null, { timeout: 60_000 });
++      const state = await page.evaluate(() => {
++        const status = document.querySelector('[data-search-status]');
++        const results = document.querySelector('[data-search-results]');
++        const alert = status?.getAttribute('role') === 'alert';
++        return {
++          completed: !alert && Boolean(results && !results.hidden && results.children.length > 0),
++          error: alert,
++          rendered_card_count: results?.querySelectorAll('[data-event-id], article.event-card, .event-card').length || 0,
++          result_child_count: results?.children.length || 0,
++          card_renderer_unavailable: Boolean(results?.querySelector('[data-search-card-render-unavailable]')),
++        };
++      });
++      if (state.error) throw new Error('search_ui_error');
++      return state;
++    },
++    async clearSearchInput() { await page.locator('[data-search-input]').fill(''); },
++    async searchEvidence() {
++      await Promise.allSettled(searchResponseTasks);
++      const transport = await syncTransportFaultEvidence();
++      return {
++        responses: [...searchResponses].sort((left, right) => left.sequence - right.sequence).map(({ sequence, ...item }) => item),
++        transport_outcomes: transport.transport_outcomes.filter((item) => item.operation === 'functions.event-search'
++          && Number(item.startedAt || 0) >= searchStartedAt),
++        physical_request_count: recorder.count('POST', '/functions/v1/event-search'),
++      };
++    },
+     async close() { await context.close(); await browser.close(); },
+   };
+ }
+--- a/site/e2e/focus-email/helpers/evidence.mjs
++++ b/site/e2e/focus-email/helpers/evidence.mjs
+@@ -43,6 +43,7 @@
+     keyboard_preflight: input.keyboard_preflight || null,
+     safari_startup: input.safari_startup || null,
+     transport_fault: input.transport_fault || null,
++    search: input.search || null,
+     otp_issue_request_count: input.otp_issue_request_count,
+     otp_verify_request_count: input.otp_verify_request_count,
+     participant_registration_request_count: input.participant_registration_request_count,
+@@ -84,6 +85,7 @@
+     keyboard_preflight: result.keyboard_preflight,
+     safari_startup: result.safari_startup,
+     transport_fault: result.transport_fault,
++    search: result.search,
+     warnings: result.diagnostics?.warnings || [],
+     diagnostics: result.diagnostics,
+     device: result.device,
+@@ -95,7 +97,7 @@
+       fault_events: 'fault-events.sanitized.jsonl', transport_events: 'transport-events.sanitized.jsonl',
+       transport_outcomes: 'transport-outcomes.sanitized.jsonl',
+       mail: 'mail-delivery.sanitized.json', screenshots: 'screenshots/', native_ui: 'native-ui/',
+-      diagnostics: 'runtime-diagnostics.json', redaction: 'redaction-audit.json',
++      search: 'search.sanitized.json', diagnostics: 'runtime-diagnostics.json', redaction: 'redaction-audit.json',
+     },
+   };
