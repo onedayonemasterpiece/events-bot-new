@@ -894,3 +894,12 @@ spills to another key for `rpd`, `no_keys`, unknown admission, or a wait outside
 that bound. This avoids restarting an otherwise healthy projection every ten
 minutes at the next minute-bucket boundary while preserving fail-closed quota
 accounting.
+
+### Frozen clock reaches Astro (review reproducibility)
+
+The validated transaction `build_clock` is passed to Astro as
+`STATIC_SITE_CURRENT_DATE` and `STATIC_SITE_CURRENT_DATETIME`. For real Preview,
+`preview-build.json.currentDate/referenceIso` must exactly match that clock
+before archiving. Kernel wall time remains execution metadata, not page-data time.
+Golden keeps its own pinned corpus clock. Regression:
+`tests/test_static_site_builder_preview_contract.py`.

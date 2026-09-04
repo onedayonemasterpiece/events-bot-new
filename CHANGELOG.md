@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: canonical Kaggle Preview passes its validated frozen clock into Astro and rejects real manifests with drifting date/reference time before archiving; Golden retains its own pinned corpus clock.
+
 - Added: the existing decoder capture path can export and validate a source-bound five-card free-collection structural specimen, including native-ready anatomy/text/SVG/assets, responsive styles and action/media attributes, without Penpot mutation or invented native IDs.
 
 - Fixed: the N0 public identity regression follows its accepted-baseline record without regressing to the obsolete pre-baseline blocked state; full-SHA and canonical Kaggle publication requirements remain enforced.

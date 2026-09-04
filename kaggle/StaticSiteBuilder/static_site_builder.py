@@ -207,6 +207,21 @@ def validate_build_clock(config: dict) -> dict:
     return clock
 
 
+def apply_build_clock_env(env: dict, clock: dict) -> None:
+    """Use the validated transaction clock in Astro, not the kernel wall clock."""
+    env['STATIC_SITE_CURRENT_DATE'] = str(clock['effective_date'])
+    env['STATIC_SITE_CURRENT_DATETIME'] = str(clock['current_datetime'])
+
+
+def validate_preview_clock(manifest: dict, clock: dict, data_mode: str) -> None:
+    # Golden owns its separately pinned corpus clock in build:golden-preview.
+    if data_mode == 'golden':
+        return
+    if (manifest.get('currentDate') != clock['effective_date']
+            or manifest.get('referenceIso') != clock['current_datetime']):
+        raise RuntimeError('preview manifest does not preserve frozen build clock')
+
+
 def validate_semantic_cache_contract(config: dict) -> dict[str, object]:
     mode = str(config.get('semantic_cache_mode') or 'warm').strip().lower()
     if mode not in SEMANTIC_CACHE_MODES:
@@ -1168,6 +1183,7 @@ def main() -> int:
             raise FileNotFoundError(f"site source not staged: {SITE_DIR}")
         WORKING.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
+        apply_build_clock_env(env, build_clock)
         env['PREVIEW_BUILD_ID'] = build_id
         env['PUBLIC_SITE_ORIGIN'] = config.get('public_site_origin') or env.get('PUBLIC_SITE_ORIGIN') or 'https://kenigevents.ru'
         env['SITE_BASE_PATH'] = f'/{build_id}'
@@ -1398,6 +1414,7 @@ def main() -> int:
             )
             if str(preview_manifest.get('dataMode') or 'real') != preview_data_mode:
                 raise RuntimeError('preview manifest data mode mismatch')
+            validate_preview_clock(preview_manifest, build_clock, preview_data_mode)
             archive_path = WORKING / f'{build_id}.tar.gz'
             with tarfile.open(archive_path, 'w:gz') as tar:
                 tar.add(dist_dir, arcname=build_id)
