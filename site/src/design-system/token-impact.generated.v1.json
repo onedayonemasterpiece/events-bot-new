@@ -5,9 +5,9 @@
   "registry_version": "1.0.0",
   "registry_sha256": "4f991aff77086abe5e2c3027beb6b2050b9492c73d3ab624053b56087eb1e35a",
   "source_root": "site/src",
-  "source_inventory_sha256": "3b9f8f460549bed55ca4954a5e8bf4d592d5360b9ace068264a67f5bba79bfbb",
+  "source_inventory_sha256": "8b40c024a9b4211b62d2fd52087cf0322345b77c463ebc87f01c1ceef45d2c4e",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "3ac0c4f43db18f728da29347a3aae9fa37a11fd85d13900c166ce245ce160e2a",
+  "astro_family_graph_sha256": "87a442ca7f3d7b25dd2bf7a63712a0b382e55245e5bd74db5fa19516d53630ed",
   "summary": {
     "token_count": 2506,
     "definition_count": 2788,
@@ -1280,11 +1280,6 @@
     "components-4b5d17ca347e0087": [
       "site/src/components/listings/DateListingSurface.astro",
       "site/src/components/listings/WeekendListingSurface.astro"
-    ],
-    "components-4a1273eb2875264a": [
-      "site/src/components/EventCard.astro",
-      "site/src/components/ServiceShareAction.astro",
-      "site/src/layouts/EventLayout.astro"
     ],
     "components-7e94acb06d6dcc77": [
       "site/src/components/DesktopEventPage.astro",
@@ -17542,31 +17537,31 @@
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 148,
+          "line": 145,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 182,
+          "line": 179,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 187,
+          "line": 184,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 219,
+          "line": 211,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 232,
+          "line": 224,
           "has_fallback": false
         },
         {
@@ -34200,13 +34195,13 @@
         {
           "token": "--text",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 143,
+          "line": 140,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 170,
+          "line": 167,
           "has_fallback": false
         },
         {
@@ -38348,7 +38343,7 @@
         {
           "token": "--muted",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 139,
+          "line": 136,
           "has_fallback": false
         },
         {
@@ -99817,6 +99812,38 @@
       "astro_family_set": "families-68dddb25e83fdaf1",
       "production_route_set": "routes-8860e6323e4d7a5e"
     },
+    "--mobile-bottom-nav-icon-url": {
+      "definitions": [
+        {
+          "path": "site/src/components/MobileBottomNav.astro",
+          "line": 38,
+          "scope": "--- <nav class=\"mobile-bottom-nav\" data-mobile-bottom-nav aria-label=\"Навигация по афише\"> > <anonymous> > item.icon === 'search' && ( <span class=\"mobile-bottom-nav__asset-icon ke-icon-role ke-icon-role--control ke-icon-contract--four-role-v1 ke-icon-size-owner--foundations\" data-ke-icon-name=\"search\" data-ke-icon-asset=\"reference4-v8/search-thin.svg\" data-ke-icon-role=\"control\" data-ke-icon-contract=\"four-role-v1\" data-ke-icon-size-owner=\"foundations.css\" aria-hidden=\"true\" style=",
+          "kind": "css",
+          "value": "url(\"${searchIconUrl",
+          "aliases": [],
+          "token": "--mobile-bottom-nav-icon-url"
+        }
+      ],
+      "aliases_to": [],
+      "aliases_from": [],
+      "direct_consumers": [
+        {
+          "token": "--mobile-bottom-nav-icon-url",
+          "path": "site/src/components/MobileBottomNav.astro",
+          "line": 68,
+          "has_fallback": false
+        },
+        {
+          "token": "--mobile-bottom-nav-icon-url",
+          "path": "site/src/components/MobileBottomNav.astro",
+          "line": 69,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-dbda1f9145691fe0",
+      "astro_family_set": "families-08af58350e71bc19",
+      "production_route_set": "routes-33534e783505830e"
+    },
     "--mobile-bottom-stack-h": {
       "definitions": [
         {
@@ -99839,7 +99866,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/components/MobileBottomNav.astro",
-          "line": 40,
+          "line": 53,
           "has_fallback": false
         },
         {
@@ -99967,13 +99994,13 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/components/MobileBottomNav.astro",
-          "line": 40,
+          "line": 53,
           "has_fallback": false
         },
         {
           "token": "--mobile-nav-h",
           "path": "site/src/components/MobileBottomNav.astro",
-          "line": 48,
+          "line": 61,
           "has_fallback": false
         },
         {
@@ -100182,7 +100209,7 @@
         {
           "token": "--muted",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 139,
+          "line": 136,
           "has_fallback": false
         },
         {
@@ -101576,31 +101603,31 @@
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 148,
+          "line": 145,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 182,
+          "line": 179,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 187,
+          "line": 184,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 219,
+          "line": 211,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 232,
+          "line": 224,
           "has_fallback": false
         },
         {
@@ -103300,38 +103327,6 @@
       "astro_family_set": "families-68dddb25e83fdaf1",
       "production_route_set": "routes-8860e6323e4d7a5e"
     },
-    "--service-share-icon-url": {
-      "definitions": [
-        {
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 94,
-          "scope": "aria-busy=\"false\" > <span class=\"service-share-action__icon service-share-action__icon--default service-share-action__icon--mask\" data-service-share-icon-default aria-hidden=\"true\" style=",
-          "kind": "css",
-          "value": "url(\"${linkIconUrl",
-          "aliases": [],
-          "token": "--service-share-icon-url"
-        }
-      ],
-      "aliases_to": [],
-      "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--service-share-icon-url",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 202,
-          "has_fallback": false
-        },
-        {
-          "token": "--service-share-icon-url",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 203,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-4a1273eb2875264a",
-      "astro_family_set": "families-08af58350e71bc19",
-      "production_route_set": "routes-33534e783505830e"
-    },
     "--shadow": {
       "definitions": [
         {
@@ -103884,13 +103879,13 @@
         {
           "token": "--text",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 143,
+          "line": 140,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/components/ServiceShareAction.astro",
-          "line": 170,
+          "line": 167,
           "has_fallback": false
         },
         {

@@ -150,10 +150,11 @@ for (const file of sourceFiles) {
     ? (source.match(/<svg\b/gu) || []).length
     : 0;
   const uiUsage = staticComponentNames(source, 'Icon');
+  const semanticUiUsage = staticComponentNames(source, 'SemanticIcon');
   const socialUsage = staticComponentNames(source, 'SocialIcon');
   const fileSvgReferences = referencedSvgPaths(source);
 
-  for (const name of uiUsage.names) {
+  for (const name of [...uiUsage.names, ...semanticUiUsage.names]) {
     if (!uiConsumers.has(name)) uiConsumers.set(name, []);
     uiConsumers.get(name).push(relative);
   }
@@ -161,7 +162,8 @@ for (const file of sourceFiles) {
     if (!socialConsumers.has(name)) socialConsumers.set(name, []);
     socialConsumers.get(name).push(relative);
   }
-  if (uiUsage.dynamic.length) dynamicUiConsumers.push({ source: relative, expressions: uiUsage.dynamic });
+  const dynamicUiExpressions = [...uiUsage.dynamic, ...semanticUiUsage.dynamic];
+  if (dynamicUiExpressions.length) dynamicUiConsumers.push({ source: relative, expressions: dynamicUiExpressions });
   if (socialUsage.dynamic.length) dynamicSocialConsumers.push({ source: relative, expressions: socialUsage.dynamic });
   if (inlineSvgCount && file !== uiSourcePath && file !== socialSourcePath) {
     inlineSvgOutsideCanonical.push({ source: relative, count: inlineSvgCount });
@@ -170,7 +172,7 @@ for (const file of sourceFiles) {
   sourceRecords.push({
     source: relative,
     inlineSvgCount,
-    uiIcons: uniqueSorted(uiUsage.names),
+    uiIcons: uniqueSorted([...uiUsage.names, ...semanticUiUsage.names]),
     socialIcons: uniqueSorted(socialUsage.names),
     svgReferences: uniqueSorted(fileSvgReferences),
   });

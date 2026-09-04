@@ -134,8 +134,10 @@ entry; an entry becomes an error once it is no longer needed.
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant
-source formats for canonical `Icon` / `SocialIcon` consumers and SVG asset
-references. Its raw-inline-SVG gap is deliberately narrower: it counts rendered
+source formats for canonical `Icon`, `SemanticIcon` and `SocialIcon` consumers
+and SVG asset references. `SemanticIcon` usage is attributed to the underlying
+canonical UI identity instead of being mislabeled unused. The raw-inline-SVG
+gap is deliberately narrower: it counts rendered
 `<svg>` elements only in `.astro` source, matching the contract's
 `inline-svg-in-astro` discovery rule. Generated JSON graphs, checker regexes and
 serialized runtime markup therefore cannot masquerade as product icon owners.

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed: the iconography consumer census now resolves static `SemanticIcon`
+  usage to the underlying canonical UI icon identity, so normalized consumers
+  no longer leave used icons reported as unused.
+
 - Fixed: the iconography census now counts raw inline SVG only in rendered
   Astro source, as required by its contract. Generated token-impact JSON,
   checker regexes and serialized runtime markup no longer appear as false

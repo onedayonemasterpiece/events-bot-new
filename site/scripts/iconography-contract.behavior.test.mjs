@@ -22,9 +22,15 @@ test('inline SVG census reports rendered Astro source, not serialized source exc
 
   assert.ok(sources.length > 0, 'the census must retain real inline Astro owners');
   assert.ok(sources.every((source) => source.endsWith('.astro')), sources.join('\n'));
-  assert.ok(sources.includes('src/components/MobileBottomNav.astro'));
-  assert.ok(sources.includes('src/components/ServiceShareAction.astro'));
+  assert.ok(sources.includes('src/components/DesktopEventPage.astro'));
+  assert.ok(!sources.includes('src/components/MobileBottomNav.astro'));
+  assert.ok(!sources.includes('src/components/ServiceShareAction.astro'));
   assert.ok(!sources.includes('src/design-system/token-impact.generated.v1.json'));
   assert.ok(!sources.includes('src/components/design-system/f0-candidate-consumer-census.mjs'));
   assert.ok(!sources.includes('src/lib/focus-invite-qr.ts'));
+
+  assert.ok(report.consumers.ui.spark.includes('src/components/MobileBottomNav.astro'));
+  assert.ok(report.consumers.ui.check.includes('src/components/ServiceShareAction.astro'));
+  assert.ok(!report.gaps.unusedUiNames.includes('spark'));
+  assert.ok(!report.gaps.unusedUiNames.includes('check'));
 });
