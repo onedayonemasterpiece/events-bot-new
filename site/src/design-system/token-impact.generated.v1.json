@@ -52519,19 +52519,19 @@
         {
           "token": "--brand",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 241,
+          "line": 231,
           "has_fallback": true
         },
         {
           "token": "--brand",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 255,
+          "line": 245,
           "has_fallback": true
         },
         {
           "token": "--brand",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 255,
+          "line": 245,
           "has_fallback": true
         }
       ],
@@ -58256,13 +58256,13 @@
         {
           "token": "--ink",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 236,
+          "line": 226,
           "has_fallback": true
         },
         {
           "token": "--ink",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 253,
+          "line": 243,
           "has_fallback": true
         }
       ],
@@ -88255,19 +88255,19 @@
         {
           "token": "--muted",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 242,
+          "line": 232,
           "has_fallback": true
         },
         {
           "token": "--muted",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 251,
+          "line": 241,
           "has_fallback": true
         },
         {
           "token": "--muted",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 257,
+          "line": 247,
           "has_fallback": true
         },
         {
@@ -150109,19 +150109,19 @@
         {
           "token": "--muted",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 242,
+          "line": 232,
           "has_fallback": true
         },
         {
           "token": "--muted",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 251,
+          "line": 241,
           "has_fallback": true
         },
         {
           "token": "--muted",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 257,
+          "line": 247,
           "has_fallback": true
         },
         {
@@ -150373,7 +150373,7 @@
         {
           "token": "--paper",
           "path": "site/src/pages/[preview]/index.astro",
-          "line": 236,
+          "line": 226,
           "has_fallback": true
         }
       ],
