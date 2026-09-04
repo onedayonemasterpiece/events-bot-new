@@ -6,7 +6,7 @@
 
 This is the single current UI acceptance contract. Historical hero/date/decision/onboarding labs remain research evidence and must not silently redefine the release baseline.
 
-The canonical component catalog is [the static-site design system](design-system/README.md), rendered at `/lab/design-system/`. Release sign-off must name an immutable preview build id and git SHA and must include that route; screenshots or approval of one event page are not sufficient.
+The canonical component catalog is [the static-site design system](design-system/README.md), with its source contract stored in Git. `/lab/design-system/` is an optional noindex diagnostic renderer, not a user-facing surface and not a release-sign-off target. Release sign-off names an immutable preview build id and git SHA and covers the required production archetypes; screenshots or approval of one event page are not sufficient.
 
 ## Design-system gate
 
@@ -39,7 +39,7 @@ The canonical component catalog is [the static-site design system](design-system
 - slow network and unavailable optional backend;
 - real Android/iOS browser checks for auth, calendar and share;
 - visual baselines tied to one immutable preview build id;
-- `/lab/design-system/` reviewed at the acceptance widths with default/hover/focus/pressed/loading/disabled/error/degraded states;
+- canonical component states are verified through source/behavior contracts and their actual production consumers; a `/lab/*` rendering is optional non-blocking diagnostics;
 - product/design owner signs off exact branch/SHA and open deviations.
 
 ## Current component decisions

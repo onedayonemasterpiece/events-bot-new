@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed: product acceptance now explicitly excludes generated `/lab/*` and the
+  `/__preview/` directory itself. The owner directory exposes only real product
+  archetypes, and the V0 classifier ignores lab observations so QA specimens
+  cannot consume normalization work, create product drift, or affect readiness.
+
+- Fixed: deterministic local focused browser smoke now uses the artifact's
+  declared Kaliningrad build date. Older `/segodnya/` fixtures therefore test
+  the exact generated owner instead of escaping their one-route slice through
+  the intentional live stale-date redirect.
+
 - Fixed: the iconography consumer census now resolves static `SemanticIcon`
   usage to the underlying canonical UI icon identity, so normalized consumers
   no longer leave used icons reported as unused.

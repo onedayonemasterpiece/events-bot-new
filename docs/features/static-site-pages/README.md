@@ -350,8 +350,9 @@ immutable `preview-*` prefix. Одна ссылка адаптируется п�
 связывает реальные страницы: Today/Tomorrow/Weekend, Exhibitions, раздельные
 desktop V28 и mobile Popular representations, Search, materialized Search
 collections, preview-only cold-start `/dlya-menya/`, clubs, `Партнёры`,
-partnership и event detail. Отдельные `/lab/*` ссылки вынесены в QA appendix и
-не подменяют продуктовую навигацию.
+partnership и event detail. `/lab/*` может технически генерироваться как
+noindex-диагностика, но не показывается в owner directory, не входит в V0,
+не блокирует продуктовую нормализацию и не учитывается в проценте готовности.
 Owner-facing registry также обязан давать отдельную ссылку на одну реально
 сгенерированную `/date-YYYY-MM-DD/`: Today/Tomorrow не подменяют произвольный
 `DateListingSurface` при проверке всех типов страниц.

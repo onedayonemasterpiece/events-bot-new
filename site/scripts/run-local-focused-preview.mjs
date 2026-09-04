@@ -286,6 +286,18 @@ export function resolvePlaywrightApi(module) {
   return api;
 }
 
+export function localFocusedBrowserEpoch(currentDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(currentDate || '')) {
+    throw new Error(`Invalid local focused browser date: ${currentDate || '(empty)'}`);
+  }
+  const epoch = Date.parse(`${currentDate}T12:00:00+02:00`);
+  const calendarProbe = new Date(`${currentDate}T00:00:00Z`);
+  if (!Number.isFinite(epoch) || Number.isNaN(calendarProbe.valueOf()) || calendarProbe.toISOString().slice(0, 10) !== currentDate) {
+    throw new Error(`Invalid local focused browser date: ${currentDate}`);
+  }
+  return epoch;
+}
+
 async function loadStagedBrowserModules(stagedSite) {
   const require = createRequire(join(stagedSite, 'package.json'));
   const playwrightEntry = require.resolve('playwright');
@@ -296,15 +308,27 @@ async function loadStagedBrowserModules(stagedSite) {
   return [resolvePlaywrightApi(playwrightModule), releaseGate];
 }
 
-export async function smokeFocusedRoute({ stagedSite, buildRoot, buildId, route, offline }) {
+export async function smokeFocusedRoute({ stagedSite, buildRoot, buildId, route, offline, currentDate }) {
   const [{ chromium }, { browserLaunchOptions, startReleaseServer }] = await loadStagedBrowserModules(stagedSite);
   const server = await startReleaseServer(buildRoot, `/${buildId}`);
   const browser = await chromium.launch(browserLaunchOptions(process.env.PLAYWRIGHT_EXECUTABLE_PATH));
   const observations = [];
+  const browserEpoch = localFocusedBrowserEpoch(currentDate);
   try {
     for (const viewport of [{ id: 'desktop', width: 1440, height: 900 }, { id: 'mobile', width: 390, height: 844 }]) {
       const context = await browser.newContext({ viewport });
       const page = await context.newPage();
+      // Immutable fixtures may intentionally be older than the host clock.
+      // Exercise the artifact at its declared build date so /segodnya/ tests
+      // the requested owner instead of taking the live stale-date redirect.
+      await page.addInitScript((epoch) => {
+        const NativeDate = Date;
+        class FixedDate extends NativeDate {
+          constructor(...args) { super(...(args.length ? args : [epoch])); }
+          static now() { return epoch; }
+        }
+        globalThis.Date = FixedDate;
+      }, browserEpoch);
       const failures = [];
       if (offline) {
         await page.route('**/*', async (requestRoute) => {
@@ -484,7 +508,10 @@ export async function runLocalFocusedPreview(raw) {
 
     const smokeStart = performance.now();
     const browserSmoke = raw.smoke
-      ? await smokeFocusedRoute({ stagedSite, buildRoot: outputPath, buildId, route: selectedRoute || '/__preview/', offline: raw.offline })
+      ? await smokeFocusedRoute({
+        stagedSite, buildRoot: outputPath, buildId,
+        route: selectedRoute || '/__preview/', offline: raw.offline, currentDate,
+      })
       : [];
     durations.browserSmoke = Math.round(performance.now() - smokeStart);
 

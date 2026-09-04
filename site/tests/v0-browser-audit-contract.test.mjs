@@ -8,10 +8,12 @@ import {
   CANONICAL_A0_V0_MATRIX,
   CONTRACT_VERSION,
   OWNERS,
+  PRODUCT_SCOPE,
   PUBLISHED_TARGETS,
   SELECTORS,
   auditContract,
   classifyObservation,
+  isNonProductAuditRoute,
 } from '../scripts/v0-browser-audit-contract.mjs';
 
 const target = {
@@ -84,6 +86,30 @@ test('authored source is evidence, not a hard gate for a newer or older exact pr
   assert.equal(result.authoredAgainstSource, AUTHORED_AGAINST_SOURCE);
   assert.equal(result.checkpointSemantics, 'NON_GATING');
   assert.equal(defect(result, 'SOURCE_SHA_MISMATCH'), undefined);
+});
+
+test('lab and Preview-directory documents are ignored instead of becoming product drift', () => {
+  assert.deepEqual(PRODUCT_SCOPE.excludedRoutePrefixes, ['/lab/', '/__preview/']);
+  assert.equal(isNonProductAuditRoute({ route: '/lab/design-system/' }), true);
+  assert.equal(isNonProductAuditRoute({ route: '/preview-real-sha/lab/hero/' }), true);
+  assert.equal(isNonProductAuditRoute({ routeKey: 'preview', route: '/preview-real-sha/__preview/' }), true);
+  assert.equal(isNonProductAuditRoute({ route: '/segodnya/' }), false);
+
+  const result = classifyObservation({
+    target,
+    documents: [
+      document({ routeKey: 'lab-design-system', route: '/lab/design-system/', httpStatus: 500, documentScrollWidth: 900 }),
+      document({ routeKey: 'today', route: '/segodnya/' }),
+    ],
+  });
+  assert.equal(result.verdict, 'PASS');
+  assert.equal(result.summary.documentsObserved, 1);
+  assert.equal(result.summary.documentsIgnored, 1);
+  assert.deepEqual(result.ignoredDocuments, [{
+    routeKey: 'lab-design-system',
+    route: '/lab/design-system/',
+    reason: 'NON_PRODUCT_QA_ROUTE',
+  }]);
 });
 
 test('classification does not mutate the browser observation payload', () => {

@@ -81,10 +81,6 @@ const primaryRoutes = [
   'kluby-po-interesam/',
   'partners/',
   'partnerstvo/',
-  'lab/exhibitions-personal/',
-  'lab/design-system/',
-  'lab/occurrences/',
-  'lab/medallions/',
 ];
 
 for (const route of primaryRoutes) {
@@ -94,6 +90,9 @@ for (const route of primaryRoutes) {
 }
 
 const hub = html('__preview/index.html');
+if (hub.includes(`href="${prefix}/lab/`)) {
+  throw new Error('Owner Preview directory must not expose non-product /lab/ routes');
+}
 for (const route of primaryRoutes.filter((route) => route !== '__preview/')) {
   if (!hub.includes(`href="${prefix}/${route}`)) throw new Error(`Prototype hub does not link ${route}`);
 }
