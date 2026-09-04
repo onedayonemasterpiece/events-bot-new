@@ -212,10 +212,14 @@ test('ListingEventCard installs a durable error listener before the complete fas
   assert.ok(listenerAt >= 0, 'ListingEventCard must install a persistent image error listener');
   assert.ok(completeAt > listenerAt,
     'error listener must be installed before the image.complete fast path');
+  const errorListenerEnd = source.indexOf(';', listenerAt);
+  assert.ok(errorListenerEnd > listenerAt && errorListenerEnd < completeAt,
+    'ListingEventCard error listener statement must end before the complete fast path');
+  const errorListenerStatement = source.slice(listenerAt, errorListenerEnd + 1);
   assert.doesNotMatch(
-    source,
-    /image\.addEventListener\('error',[\s\S]{0,120}\{ once: true \}\)/u,
-    'a once-only conditional listener misses source failures after initial load',
+    errorListenerStatement,
+    /\{\s*once:\s*true\s*\}/u,
+    'ListingEventCard error listener must remain durable after initial load',
   );
   assert.match(source, /image\.addEventListener\('load', decodeAndFinish, \{ once: true \}\)/u);
 });
