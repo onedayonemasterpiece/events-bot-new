@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Changed: `MobileBottomNav` and `ServiceShareAction` now consume canonical
+  icon identities through the four-role foundations contract. Four and five
+  component-local inline SVG copies plus the local `21px` / `1.15rem` size
+  owners are removed while routes, accessible names, share intents/fallbacks,
+  status and shortcut hooks, 44px targets, responsive behavior and palette stay
+  unchanged.
+
 - Added: `npm --prefix site run local:focused -- ...` now materializes one
   selected route locally before Astro prerender instead of generating every
   same-class neighbour. It reuses the canonical exporter, page-class contract,
