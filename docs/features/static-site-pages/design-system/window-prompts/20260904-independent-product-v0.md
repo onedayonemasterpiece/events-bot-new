@@ -25,3 +25,20 @@ Using a callable browser, personally navigate every product archetype at 390×84
 Publish a concise independent `[VERDICT] V0 PRODUCT ROUTES` comment to #621 containing exact SHA/URL, 36 viewport result count, PASS/DRIFT per Foundations, Typography, Icons/Action composites, MediaFrame, EventCard/Grid and Shell/Routes, and every defect with exact route, viewport, selector, computed/box evidence and screenshot reference. Do not report lab-page drift as product drift. Do not change repository source.
 
 After the verdict, fresh-read the current trunk/result. If a newer exact full real Preview is already published, audit it in the same run; otherwise stop cleanly after the factual verdict.
+
+## Owner correction 2026-09-04 — supersedes conflicting instructions above
+
+This is a finite final owner-audio-review gate, not an endless normalization
+programme. Fresh-read current target in lovekgd-design-system branch
+integration/launch-normalized-sot-penpot-20260902/docs/launch-normalization/STATUS.md
+and newer events-bot-new#621 results. Never assume an old prompt URL is current.
+Audit product routes only; lab, internal connectivity diagnostics and preview
+wrapper visual polish are excluded. Keep shared components in scope.
+Use exact preview-build.json (not PWA manifest) to verify full source SHA.
+Personal browser checks: 1440×900 and 390×844; visual/computed/actions and
+static/client-created cards; media loaded/no-source/broken; Date vs Weekend,
+Popular Large/Compact, headings/icons/action targets and consent-gated local likes.
+For consent/auth gates inspect the actual dialog before calling a click a no-op.
+Do not perform real cloud writes or auth. State untested cases explicitly.
+Do work yourself; no Codex/DevCover MCP delegation. Return exact evidence to #621.
+Full Penpot materialization is not your gate; don't assert A=S=P from browser PASS.
