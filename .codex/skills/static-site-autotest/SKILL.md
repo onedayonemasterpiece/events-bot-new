@@ -54,7 +54,8 @@ ChatGPT launch boundary from the control-plane document; a UI-only
 2. Assign trigger tags and explicit `auth_mode` from the canonical scenario registry.
 3. Select the cheapest evidence layer that can detect the risk:
    - L0 contracts first;
-   - L1 browser for runtime/layout/catalog;
+   - L1 browser for runtime/layout/catalog; material UI changes use canonical
+     `ui-three-way-conformance` as the affected-scope visual/conformance scenario;
    - L2 Android/iOS only for mobile-system behavior or representative high-risk specimens;
    - L3 only when simulator evidence is inherently insufficient.
 4. For a function after login, use `session_fixture` by default. Do not run a
@@ -73,6 +74,10 @@ ChatGPT launch boundary from the control-plane document; a UI-only
    `qa-summary.json` so ChatGPT can inspect the run without the code agent.
 10. Update scenario status, release companion, feature docs and changelog when
     an implementation moves from planned/partial to implemented.
+
+Do not copy the conformance procedure here. Reference the exact case/receipt or
+record machine-readable `not_applicable`; a screenshot without tuple and visual
+agent review is not L1 conformance evidence.
 
 ## Auth mode boundary
 

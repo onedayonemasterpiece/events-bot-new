@@ -20,7 +20,8 @@ Use `docs/features/static-site-pages/design-system/README.md` as the normative c
    - delete `vN` only after consumer search and regression evidence show zero production callers.
 5. Never silently mutate an approved version. Same-version fixes are limited to non-contract corrections such as accessibility or browser bugs that do not change public API, geometry, hierarchy, or interaction behavior.
 6. Update catalog registry/version attributes, `check-design-system.mjs`, `check-preview.mjs`, canonical docs, test scenarios, release evidence and `CHANGELOG.md` together.
-7. Run `npm --prefix site run check:design-system`, an immutable preview build, `check:preview`, responsive/a11y review and public URL smoke before sign-off.
+7. After any material visual change, invoke the canonical `ui-three-way-conformance` skill from `lovekgd-design-system` for only the affected states/viewports. A case or explicit machine-readable `not_applicable` reason is required; do not reproduce the procedure here.
+8. Run `npm --prefix site run check:design-system`, an immutable preview build, `check:preview`, responsive/a11y review and public URL smoke before sign-off.
 
 ## Release blockers
 
@@ -31,3 +32,4 @@ Use `docs/features/static-site-pages/design-system/README.md` as the normative c
 - callers remain on the old version after migration is declared complete;
 - catalog/demo markup diverges from the runtime component;
 - missing immutable preview URL, git SHA, docs, tests or changelog.
+- missing exact Git SoT/Penpot/Astro case (or justified `not_applicable`) after a material visual change.
