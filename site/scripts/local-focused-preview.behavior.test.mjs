@@ -33,6 +33,8 @@ test('produced path inventory excludes shared assets but includes runtime endpoi
       'segodnya/index.html',
       '__preview/index.html',
       '_astro/app.abc.js',
+      'assets/icons/ticket.svg.metadata.json',
+      'service-share/current/manifest.json',
       'data/discovery/7.json',
       'sobytiya/one/event.ics',
       'preview-build.json',

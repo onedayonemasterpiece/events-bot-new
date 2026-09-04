@@ -46,7 +46,8 @@ A real event-detail slice accepts `--db`, exact `--entity-id` and
 keeps the deliberately broader class-wide diagnostic distinct from exact-route
 mode. Exact-route materialization retains only the chosen route, its required
 event endpoints when applicable, `/__preview/`, `robots.txt`, manifests and
-shared assets. Same-class neighbour pages are rejected by the receipt gate.
+shared assets. Static asset metadata is excluded from the product-route receipt;
+same-class neighbour pages are rejected by the receipt gate.
 
 The command prints source/snapshot/data identities, selected owner source,
 generated routes, timings and browser results. It never publishes. Full

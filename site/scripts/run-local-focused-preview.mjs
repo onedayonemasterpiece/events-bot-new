@@ -268,7 +268,7 @@ function eventSupportRoutes(dataDir, selectedRoute, explicitId) {
 
 function routeFromFile(root, file) {
   const rel = relative(root, file).replaceAll(sep, '/');
-  if (rel.startsWith('_astro/')) return null;
+  if (['_astro/', 'assets/', 'service-share/'].some((prefix) => rel.startsWith(prefix))) return null;
   if (rel === 'preview-build.json') return null;
   if (rel.endsWith('/index.html')) return `/${rel.slice(0, -'index.html'.length)}`;
   if (rel === 'index.html') return '/';
