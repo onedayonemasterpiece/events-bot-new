@@ -306,6 +306,15 @@ class FakeAlbumIngestor:
         self.assets.append(asset)
         return asset
 
+    def reverify(
+        self, storage_ref, *, owner_binding, max_bytes, role
+    ) -> VerifiedAsset:
+        assert role == "image"
+        asset = next(asset for asset in self.assets if asset.storage_ref == storage_ref)
+        assert asset.owner_binding == owner_binding
+        assert asset.byte_length <= max_bytes
+        return asset
+
 
 class FakeAlbumAdapter(FakeAdapter):
     def __init__(self) -> None:
