@@ -1,30 +1,45 @@
 {
   "schema": "kenigevents.astro-family-consumers.v1",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
-  "registry_version": "1.0.0",
-  "registry_sha256": "b2a6741838d3276c581fb74d3773c3cdd89fb6f6a8ef9dcfa48d7eca2905dc89",
+  "registry_version": "1.2.0",
+  "registry_sha256": "fe708092d77a43b4a4ddc90514d87fe1186cbd89e28099f38bbc181ba13397de",
   "source_root": "site/src",
   "import_inventory_sha256": "8b40c024a9b4211b62d2fd52087cf0322345b77c463ebc87f01c1ceef45d2c4e",
   "summary": {
-    "family_count": 9,
+    "family_count": 109,
     "source_file_count": 317,
     "import_edge_count": 807,
-    "direct_consumer_edges": 69,
+    "direct_consumer_edges": 269,
+    "protocol_consumer_edges": 32,
     "runtime_factory_edges": 1,
     "runtime_consumer_edges": 2,
-    "production_route_edges": 90,
-    "unique_direct_consumers": 57,
+    "production_route_edges": 511,
+    "unique_direct_consumers": 117,
+    "unique_protocol_consumers": 32,
     "unique_runtime_factories": 1,
     "unique_runtime_consumers": 2,
-    "unique_production_routes": 22
+    "unique_production_routes": 29
   },
   "families": {
     "EventCard": {
       "version": 2,
       "astro_root": "site/src/components/EventCard.astro",
+      "style_owners": [
+        "site/src/components/event-card.css"
+      ],
+      "direct_component_consumers": [
+        "site/src/components/AdaptiveEventCardGrid.astro",
+        "site/src/layouts/EventLayout.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/components/EventCard.astro"
+      ],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/AdaptiveEventCardGrid.astro",
+        "site/src/components/EventCard.astro",
         "site/src/layouts/EventLayout.astro",
         "site/src/pages/lab/design-system/index.astro"
       ],
@@ -52,27 +67,117 @@
           ]
         }
       ],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
       "production_route_patterns": [
         "/",
         "/artefakty/",
-        "/date-[date]/",
+        "/date-*/",
         "/dlya-menya/",
         "/festivali/",
         "/izbrannoe/",
         "/kluby-po-interesam/",
-        "/kluby-po-interesam/[slug]/",
+        "/kluby-po-interesam/*/",
         "/neobychnoe/",
         "/partners/",
         "/partnerstvo/",
         "/podborki/",
-        "/podborki/[slug]/",
+        "/podborki/*/",
         "/podborki/gastronomiya/",
         "/poisk/",
         "/populyarnoe/",
         "/segodnya/",
-        "/sobytiya/[slug]/",
+        "/sobytiya/*/",
         "/vyhodnye/",
-        "/vyhodnye/[start]/",
+        "/vyhodnye/*/",
         "/vystavki/",
         "/zavtra/"
       ],
@@ -104,6 +209,18 @@
     "ListingEventCard": {
       "version": 9,
       "astro_root": "site/src/components/listings/ListingEventCard.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/ExactTimeTimeline.astro",
+        "site/src/components/listings/PopularBehaviorRows.astro",
+        "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+        "site/src/components/listings/PopularPersonalizedRow.astro",
+        "site/src/components/listings/WeekendEditorialTimeline.astro",
+        "site/src/components/listings/WeekendTimeMatrix.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/listings/ExactTimeTimeline.astro",
         "site/src/components/listings/PopularBehaviorRows.astro",
@@ -115,12 +232,38 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
       "production_route_patterns": [
-        "/date-[date]/",
+        "/date-*/",
         "/populyarnoe/",
         "/segodnya/",
         "/vyhodnye/",
-        "/vyhodnye/[start]/",
+        "/vyhodnye/*/",
         "/zavtra/"
       ],
       "production_route_sources": [
@@ -135,35 +278,160 @@
     "MediaFrame": {
       "version": 1,
       "astro_root": "site/src/components/media-frame.css",
-      "direct_consumers": [
+      "style_owners": [
+        "site/src/components/media-frame.css"
+      ],
+      "direct_component_consumers": [
         "site/src/components/EventCard.astro",
         "site/src/components/EventHero.astro",
         "site/src/components/EventMediaRail.astro",
         "site/src/components/listings/ListingEventCard.astro"
       ],
+      "direct_style_consumers": [
+        "site/src/components/EventCard.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventMediaRail.astro",
+        "site/src/components/listings/ListingEventCard.astro"
+      ],
+      "protocol_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/EventCard.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventMediaRail.astro",
+        "site/src/components/ExhibitionPrototypeRow.astro",
+        "site/src/components/exhibitionsMediaFrameBridge.mjs",
+        "site/src/components/listings/ListingEventCard.astro",
+        "site/src/components/listings/MobileListingRailRow.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro",
+        "site/src/components/media-frame.css",
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/EventCard.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventMediaRail.astro",
+        "site/src/components/ExhibitionPrototypeRow.astro",
+        "site/src/components/exhibitionsMediaFrameBridge.mjs",
+        "site/src/components/listings/ListingEventCard.astro",
+        "site/src/components/listings/MobileListingRailRow.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro",
+        "site/src/components/media-frame.css",
+        "site/src/layouts/EventLayout.astro"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
       "production_route_patterns": [
         "/",
         "/artefakty/",
-        "/date-[date]/",
+        "/date-*/",
         "/dlya-menya/",
         "/festivali/",
         "/izbrannoe/",
         "/kluby-po-interesam/",
-        "/kluby-po-interesam/[slug]/",
+        "/kluby-po-interesam/*/",
         "/neobychnoe/",
         "/partners/",
         "/partnerstvo/",
         "/podborki/",
-        "/podborki/[slug]/",
+        "/podborki/*/",
         "/podborki/gastronomiya/",
         "/poisk/",
         "/populyarnoe/",
         "/segodnya/",
-        "/sobytiya/[slug]/",
+        "/sobytiya/*/",
         "/vyhodnye/",
-        "/vyhodnye/[start]/",
+        "/vyhodnye/*/",
         "/vystavki/",
         "/zavtra/"
       ],
@@ -195,6 +463,38 @@
     "AdaptiveEventCardGrid": {
       "version": 1,
       "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
+      "style_owners": [
+        "site/src/components/AdaptiveEventCardGrid.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/components/FavoritesSurface.astro",
+        "site/src/components/FreeCollectionSurface.astro",
+        "site/src/components/GastronomyCollectionSurface.astro",
+        "site/src/components/HomeColdStartFeed.astro",
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/components/listings/PopularMobileBehaviorRows.astro",
+        "site/src/components/OptimizedEventCardGrid.astro",
+        "site/src/components/PersonalFeedSlot.astro",
+        "site/src/components/UnusualListingSurface.astro",
+        "site/src/pages/[preview]/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/components/FavoritesSurface.astro",
+        "site/src/components/FreeCollectionSurface.astro",
+        "site/src/components/GastronomyCollectionSurface.astro",
+        "site/src/components/HomeColdStartFeed.astro",
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/components/listings/PopularMobileBehaviorRows.astro",
+        "site/src/components/OptimizedEventCardGrid.astro",
+        "site/src/components/PersonalFeedSlot.astro",
+        "site/src/components/UnusualListingSurface.astro",
+        "site/src/pages/[preview]/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/FavoritesSurface.astro",
         "site/src/components/FreeCollectionSurface.astro",
@@ -211,16 +511,62 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
       "production_route_patterns": [
         "/",
-        "/date-[date]/",
+        "/date-*/",
         "/izbrannoe/",
         "/neobychnoe/",
-        "/podborki/[slug]/",
+        "/podborki/*/",
         "/podborki/gastronomiya/",
         "/populyarnoe/",
         "/segodnya/",
-        "/sobytiya/[slug]/",
+        "/sobytiya/*/",
         "/vyhodnye/",
         "/zavtra/"
       ],
@@ -241,6 +587,14 @@
     "DateListingSurface": {
       "version": 1,
       "astro_root": "site/src/components/listings/DateListingSurface.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/date-[date].astro",
         "site/src/pages/segodnya/index.astro",
@@ -248,8 +602,22 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
       "production_route_patterns": [
-        "/date-[date]/",
+        "/date-*/",
         "/segodnya/",
         "/zavtra/"
       ],
@@ -262,15 +630,37 @@
     "WeekendListingSurface": {
       "version": 1,
       "astro_root": "site/src/components/listings/WeekendListingSurface.astro",
+      "style_owners": [
+        "site/src/components/listings/WeekendListingSurface.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro"
+      ],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/vyhodnye/[start].astro",
         "site/src/pages/vyhodnye/index.astro"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        }
+      ],
       "production_route_patterns": [
         "/vyhodnye/",
-        "/vyhodnye/[start]/"
+        "/vyhodnye/*/"
       ],
       "production_route_sources": [
         "site/src/pages/vyhodnye/[start].astro",
@@ -280,11 +670,23 @@
     "PopularListingSurface": {
       "version": 1,
       "astro_root": "site/src/components/listings/PopularListingSurface.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/populyarnoe/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/populyarnoe/index.astro"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        }
+      ],
       "production_route_patterns": [
         "/populyarnoe/"
       ],
@@ -295,11 +697,27 @@
     "ExhibitionsPersonalSurface": {
       "version": 1,
       "astro_root": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "style_owners": [
+        "site/src/components/ExhibitionsPersonalSurface.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/vystavki/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/vystavki/index.astro"
+      ],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/vystavki/index.astro"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        }
+      ],
       "production_route_patterns": [
         "/vystavki/"
       ],
@@ -307,9 +725,89 @@
         "site/src/pages/vystavki/index.astro"
       ]
     },
-    "ShellNavigation": {
+    "EventLayout": {
       "version": 1,
       "astro_root": "site/src/layouts/EventLayout.astro",
+      "style_owners": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/[preview]/index.astro",
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/lab/event-desktop/index.astro",
+        "site/src/pages/lab/event-mobile/examples/[variant]/[scenario].astro",
+        "site/src/pages/lab/event-mobile/index.astro",
+        "site/src/pages/lab/event-participants.astro",
+        "site/src/pages/lab/exhibitions-personal/index.astro",
+        "site/src/pages/lab/hero/index.astro",
+        "site/src/pages/lab/hero/review/[caseId]/index.astro",
+        "site/src/pages/lab/hero/review/index.astro",
+        "site/src/pages/lab/medallions/index.astro",
+        "site/src/pages/lab/occurrences/index.astro",
+        "site/src/pages/lab/question-cta/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/[preview]/index.astro",
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/lab/event-desktop/index.astro",
+        "site/src/pages/lab/event-mobile/examples/[variant]/[scenario].astro",
+        "site/src/pages/lab/event-mobile/index.astro",
+        "site/src/pages/lab/event-participants.astro",
+        "site/src/pages/lab/exhibitions-personal/index.astro",
+        "site/src/pages/lab/hero/index.astro",
+        "site/src/pages/lab/hero/review/[caseId]/index.astro",
+        "site/src/pages/lab/hero/review/index.astro",
+        "site/src/pages/lab/medallions/index.astro",
+        "site/src/pages/lab/occurrences/index.astro",
+        "site/src/pages/lab/question-cta/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
+      "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/[preview]/index.astro",
         "site/src/pages/artefakty/index.astro",
@@ -350,27 +848,4905 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
       "production_route_patterns": [
         "/",
         "/artefakty/",
-        "/date-[date]/",
+        "/date-*/",
         "/dlya-menya/",
         "/festivali/",
         "/izbrannoe/",
         "/kluby-po-interesam/",
-        "/kluby-po-interesam/[slug]/",
+        "/kluby-po-interesam/*/",
         "/neobychnoe/",
         "/partners/",
         "/partnerstvo/",
         "/podborki/",
-        "/podborki/[slug]/",
+        "/podborki/*/",
         "/podborki/gastronomiya/",
         "/poisk/",
         "/populyarnoe/",
         "/segodnya/",
-        "/sobytiya/[slug]/",
+        "/sobytiya/*/",
         "/vyhodnye/",
-        "/vyhodnye/[start]/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "PrelaunchLayout": {
+      "version": 1,
+      "astro_root": "site/src/layouts/PrelaunchLayout.astro",
+      "style_owners": [
+        "site/src/layouts/PrelaunchLayout.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
+    },
+    "HomePage": {
+      "version": 1,
+      "astro_root": "site/src/pages/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
+    },
+    "HomeColdStartFeed": {
+      "version": 1,
+      "astro_root": "site/src/components/HomeColdStartFeed.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
+    },
+    "TodayReviewGuard": {
+      "version": 1,
+      "astro_root": "site/src/pages/segodnya/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/segodnya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/segodnya/index.astro"
+      ]
+    },
+    "MobileListingRailSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "MobileListingRailRow": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/MobileListingRailRow.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "MobileDateAccessory": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "EventDetailRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/sobytiya/[slug].astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "MobileEventDetailSurface": {
+      "version": 1,
+      "astro_root": "site/src/pages/sobytiya/[slug].astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "ExhibitionsRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/vystavki/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/vystavki/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/vystavki/index.astro"
+      ]
+    },
+    "EventMediaRail": {
+      "version": 1,
+      "astro_root": "site/src/components/EventMediaRail.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "FestivalsTimelineRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/festivali/index.astro",
+      "style_owners": [
+        "site/src/pages/festivali/index.astro"
+      ],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/festivali/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/festivali/index.astro"
+      ]
+    },
+    "InterestClubCard": {
+      "version": 1,
+      "astro_root": "site/src/components/InterestClubCard.astro",
+      "style_owners": [
+        "site/src/components/InterestClubCard.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/kluby-po-interesam/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/kluby-po-interesam/index.astro"
+      ]
+    },
+    "InterestClubsIndexRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+      "style_owners": [
+        "site/src/pages/kluby-po-interesam/index.astro"
+      ],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/kluby-po-interesam/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/kluby-po-interesam/index.astro"
+      ]
+    },
+    "InterestClubDetailRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "style_owners": [
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+      ],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/kluby-po-interesam/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+      ]
+    },
+    "FreeCollectionSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/FreeCollectionSurface.astro",
+      "style_owners": [
+        "site/src/components/FreeCollectionSurface.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/podborki/[slug]/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/podborki/[slug]/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/podborki/[slug]/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/podborki/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/podborki/[slug]/index.astro"
+      ]
+    },
+    "GastronomyCollectionSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/GastronomyCollectionSurface.astro",
+      "style_owners": [
+        "site/src/components/GastronomyCollectionSurface.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/podborki/gastronomiya/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/podborki/gastronomiya/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/podborki/gastronomiya/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/podborki/gastronomiya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/podborki/gastronomiya/index.astro"
+      ]
+    },
+    "CollectionCatalogRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/podborki/index.astro",
+      "style_owners": [
+        "site/src/pages/podborki/index.astro"
+      ],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/podborki/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/podborki/index.astro"
+      ]
+    },
+    "CollectionCatalog": {
+      "version": 1,
+      "astro_root": "site/src/components/CollectionCatalog.astro",
+      "style_owners": [
+        "site/src/components/CollectionCatalog.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/podborki/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/podborki/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/podborki/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/podborki/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/podborki/index.astro"
+      ]
+    },
+    "CollectionCatalogItem": {
+      "version": 1,
+      "astro_root": "site/src/components/CollectionCatalog.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/podborki/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/podborki/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/podborki/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/podborki/index.astro"
+      ]
+    },
+    "Button": {
+      "version": 2,
+      "astro_root": "site/src/components/design-system/Button.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/design-system/StatePanel.astro",
+        "site/src/components/FocusGroupFeedback.astro",
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/partnerstvo/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/design-system/StatePanel.astro",
+        "site/src/components/FocusGroupFeedback.astro",
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/partnerstvo/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/",
+          "source": "site/src/pages/fokus-gruppa/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/zavershenie/",
+          "source": "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/dlya-menya/",
+        "/fokus-gruppa/",
+        "/fokus-gruppa/priglashenie/",
+        "/fokus-gruppa/zavershenie/",
+        "/partnerstvo/",
+        "/zakrytaya-afisha/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ]
+    },
+    "Badge": {
+      "version": 2,
+      "astro_root": "site/src/components/design-system/Badge.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "Field": {
+      "version": 2,
+      "astro_root": "site/src/components/design-system/Field.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "StatePanel": {
+      "version": 2,
+      "astro_root": "site/src/components/design-system/StatePanel.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "CopyAction": {
+      "version": 2,
+      "astro_root": "site/src/components/design-system/CopyAction.astro",
+      "style_owners": [
+        "site/src/components/design-system/CopyAction.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "Foundations": {
+      "version": 1,
+      "astro_root": "site/src/components/design-system/Foundations.astro",
+      "style_owners": [
+        "site/src/components/design-system/component-foundations.css",
+        "site/src/components/design-system/foundations.css",
+        "site/src/components/design-system/product-contour-foundations.css"
+      ],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/brand/AnnouncementsLockup.astro",
+        "site/src/components/design-system/Badge.astro",
+        "site/src/components/design-system/Button.astro",
+        "site/src/components/design-system/CopyAction.astro",
+        "site/src/components/design-system/Field.astro",
+        "site/src/components/design-system/Foundations.astro",
+        "site/src/components/design-system/SemanticIcon.astro",
+        "site/src/components/design-system/StatePanel.astro",
+        "site/src/components/design-system/surface-foundations.css",
+        "site/src/components/FocusGroupFeedback.astro",
+        "site/src/components/listings/mobile-listing-foundation-bindings.css",
+        "site/src/components/SocialIcon.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/podborki/index.astro"
+      ],
+      "protocol_consumers": [
+        "site/src/components/artifacts/ArtifactCollection.astro",
+        "site/src/components/CollectionCatalog.astro",
+        "site/src/components/design-system/Badge.astro",
+        "site/src/components/design-system/Button.astro",
+        "site/src/components/design-system/component-foundations.css",
+        "site/src/components/design-system/CopyAction.astro",
+        "site/src/components/design-system/Field.astro",
+        "site/src/components/design-system/StatePanel.astro",
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/components/FocusConnectivityDiagnostic.astro",
+        "site/src/components/FocusEggArtifact.astro",
+        "site/src/components/FocusEggCollectionCard.astro",
+        "site/src/components/FocusEggSavedListDemo.astro",
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/FocusGroupThankYou.astro",
+        "site/src/components/InterestClubCard.astro",
+        "site/src/components/InterestProfile.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/partners/index.astro"
+      ],
+      "direct_consumers": [
+        "site/src/components/artifacts/ArtifactCollection.astro",
+        "site/src/components/brand/AnnouncementsLockup.astro",
+        "site/src/components/CollectionCatalog.astro",
+        "site/src/components/design-system/Badge.astro",
+        "site/src/components/design-system/Button.astro",
+        "site/src/components/design-system/component-foundations.css",
+        "site/src/components/design-system/CopyAction.astro",
+        "site/src/components/design-system/Field.astro",
+        "site/src/components/design-system/Foundations.astro",
+        "site/src/components/design-system/SemanticIcon.astro",
+        "site/src/components/design-system/StatePanel.astro",
+        "site/src/components/design-system/surface-foundations.css",
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/components/FocusConnectivityDiagnostic.astro",
+        "site/src/components/FocusEggArtifact.astro",
+        "site/src/components/FocusEggCollectionCard.astro",
+        "site/src/components/FocusEggSavedListDemo.astro",
+        "site/src/components/FocusGroupFeedback.astro",
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/FocusGroupThankYou.astro",
+        "site/src/components/InterestClubCard.astro",
+        "site/src/components/InterestProfile.astro",
+        "site/src/components/listings/mobile-listing-foundation-bindings.css",
+        "site/src/components/SocialIcon.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/podborki/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/",
+          "source": "site/src/pages/fokus-gruppa/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/diagnostika-ustoychivost/",
+          "source": "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/diagnostika/",
+          "source": "site/src/pages/fokus-gruppa/diagnostika/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/kollektsiya/",
+          "source": "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/zavershenie/",
+          "source": "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/fokus-gruppa/",
+        "/fokus-gruppa/diagnostika-ustoychivost/",
+        "/fokus-gruppa/diagnostika/",
+        "/fokus-gruppa/kollektsiya/",
+        "/fokus-gruppa/priglashenie/",
+        "/fokus-gruppa/zavershenie/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zakrytaya-afisha/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "DesktopEventActionPanel": {
+      "version": 1,
+      "astro_root": "site/src/components/DesktopEventActionPanel.astro",
+      "style_owners": [
+        "site/src/components/DesktopEventActionPanel.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventPage.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/components/DesktopEventPage.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "ExhibitionPrototypeRow": {
+      "version": 1,
+      "astro_root": "site/src/components/ExhibitionPrototypeRow.astro",
+      "style_owners": [
+        "site/src/components/ExhibitionPrototypeRow.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/pages/lab/exhibitions-personal/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/pages/lab/exhibitions-personal/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/pages/lab/exhibitions-personal/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/vystavki/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/vystavki/index.astro"
+      ]
+    },
+    "ListingMobileDensitySwitch": {
+      "version": 6,
+      "astro_root": "site/src/components/listings/ListingMobileDensitySwitch.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/populyarnoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/populyarnoe/index.astro"
+      ]
+    },
+    "ArtifactCollection": {
+      "version": 1,
+      "astro_root": "site/src/components/artifacts/ArtifactCollection.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/artefakty/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/artefakty/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/artefakty/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro"
+      ]
+    },
+    "AuthorizedEventSearch": {
+      "version": 1,
+      "astro_root": "site/src/components/AuthorizedEventSearch.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/poisk/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/poisk/index.astro"
+      ]
+    },
+    "SearchResultsComposition": {
+      "version": 1,
+      "astro_root": "site/src/components/AuthorizedEventSearch.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/poisk/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/poisk/index.astro"
+      ]
+    },
+    "DesktopEventDetailSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/DesktopEventPage.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "EventHero": {
+      "version": 1,
+      "astro_root": "site/src/components/EventHero.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/lab/event-mobile/examples/[variant]/[scenario].astro",
+        "site/src/pages/lab/hero/index.astro",
+        "site/src/pages/lab/hero/review/[caseId]/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/lab/event-mobile/examples/[variant]/[scenario].astro",
+        "site/src/pages/lab/hero/index.astro",
+        "site/src/pages/lab/hero/review/[caseId]/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "FavoritesSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/FavoritesSurface.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/izbrannoe/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/izbrannoe/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/izbrannoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/izbrannoe/index.astro"
+      ]
+    },
+    "FocusConnectivityDiagnostic": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusConnectivityDiagnostic.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/diagnostika-ustoychivost/",
+          "source": "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/diagnostika/",
+          "source": "site/src/pages/fokus-gruppa/diagnostika/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/diagnostika-ustoychivost/",
+        "/fokus-gruppa/diagnostika/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika/index.astro"
+      ]
+    },
+    "FocusEggArtifact": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusEggArtifact.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/FocusEggSavedListDemo.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/FocusEggSavedListDemo.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/kollektsiya/",
+          "source": "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/kollektsiya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ]
+    },
+    "FocusEggCollectionCard": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusEggCollectionCard.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/kollektsiya/",
+          "source": "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/kollektsiya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ]
+    },
+    "FocusEggSavedListDemo": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusEggSavedListDemo.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/kollektsiya/",
+          "source": "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/kollektsiya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ]
+    },
+    "FocusGroupFeedback": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupFeedback.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/dlya-menya/",
+        "/zakrytaya-afisha/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ]
+    },
+    "FocusGroupInviteIntake": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/priglashenie/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ]
+    },
+    "FocusGroupInviteShare": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupInviteShare.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/",
+          "source": "site/src/pages/fokus-gruppa/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/",
+        "/zakrytaya-afisha/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ]
+    },
+    "FocusGroupLabPanel": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupLabPanel.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "FocusGroupThankYou": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupThankYou.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/",
+          "source": "site/src/pages/fokus-gruppa/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/zavershenie/",
+          "source": "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/",
+        "/fokus-gruppa/zavershenie/",
+        "/zakrytaya-afisha/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ]
+    },
+    "FocusLabBadge": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusLabBadge.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/FocusGroupLabPanel.astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/FocusGroupLabPanel.astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/",
+          "source": "site/src/pages/fokus-gruppa/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/kollektsiya/",
+          "source": "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/zavershenie/",
+          "source": "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/fokus-gruppa/",
+        "/fokus-gruppa/kollektsiya/",
+        "/fokus-gruppa/priglashenie/",
+        "/fokus-gruppa/zavershenie/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zakrytaya-afisha/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "FocusPwaInstallAction": {
+      "version": 1,
+      "astro_root": "site/src/components/FocusPwaInstallAction.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/FocusGroupInviteIntake.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/FocusGroupInviteIntake.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/priglashenie/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ]
+    },
+    "HomeHeroTalk": {
+      "version": 1,
+      "astro_root": "site/src/components/HomeHeroTalk.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
+    },
+    "HomeQuickNav": {
+      "version": 1,
+      "astro_root": "site/src/components/HomeQuickNav.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
+    },
+    "InterestProfile": {
+      "version": 1,
+      "astro_root": "site/src/components/InterestProfile.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/dlya-menya/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/dlya-menya/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/dlya-menya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/dlya-menya/index.astro"
+      ]
+    },
+    "PersonalFeedSlot": {
+      "version": 1,
+      "astro_root": "site/src/components/PersonalFeedSlot.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "SearchCollectionLinks": {
+      "version": 1,
+      "astro_root": "site/src/components/SearchCollectionLinks.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/poisk/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/poisk/index.astro"
+      ]
+    },
+    "UnusualListingSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/UnusualListingSurface.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/neobychnoe/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/neobychnoe/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/neobychnoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/neobychnoe/index.astro"
+      ]
+    },
+    "ArtifactCollectionRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/artefakty/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/artefakty/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro"
+      ]
+    },
+    "ForMeRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/dlya-menya/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/dlya-menya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/dlya-menya/index.astro"
+      ]
+    },
+    "FocusGroupProgrammeSurface": {
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/",
+          "source": "site/src/pages/fokus-gruppa/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/index.astro"
+      ]
+    },
+    "FocusEggCollectionRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/kollektsiya/",
+          "source": "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/kollektsiya/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ]
+    },
+    "FocusGroupInviteRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/priglashenie/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ]
+    },
+    "FocusGroupCompletionSurface": {
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/fokus-gruppa/zavershenie/",
+          "source": "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/fokus-gruppa/zavershenie/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+      ]
+    },
+    "FavoritesRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/izbrannoe/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/izbrannoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/izbrannoe/index.astro"
+      ]
+    },
+    "PartnersRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/partners/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/partners/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/partners/index.astro"
+      ]
+    },
+    "PartnershipRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/partnerstvo/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/partnerstvo/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/partnerstvo/index.astro"
+      ]
+    },
+    "MaterializedCollectionRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/podborki/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/podborki/[slug]/index.astro"
+      ]
+    },
+    "SearchRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/poisk/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/poisk/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/poisk/index.astro"
+      ]
+    },
+    "ClosedFocusHubRouteComposition": {
+      "version": 1,
+      "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/zakrytaya-afisha/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ]
+    },
+    "ListingPersonalFilter": {
+      "version": 1,
+      "astro_root": "site/src/components/ListingPersonalFilter.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "ExactTimeTimeline": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/ExactTimeTimeline.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "ListingControls": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingControls.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/ListingDiscoveryRail.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/ListingDiscoveryRail.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "ListingDiscoveryRail": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingDiscoveryRail.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/PopularListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/PopularListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "ListingPageHeader": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingPageHeader.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/PopularListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/PopularListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "ListingTimeMarker": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingTimeMarker.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/ExactTimeTimeline.astro",
+        "site/src/components/listings/WeekendEditorialTimeline.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/ExactTimeTimeline.astro",
+        "site/src/components/listings/WeekendEditorialTimeline.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "ListingTimeNav": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingTimeNav.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/ListingWeekendTimeNav.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/ListingWeekendTimeNav.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "PopularBehaviorRows": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularBehaviorRows.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/populyarnoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/populyarnoe/index.astro"
+      ]
+    },
+    "PopularCategoryFilter": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularCategoryFilter.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "PopularMobileAdaptiveRows": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/populyarnoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/populyarnoe/index.astro"
+      ]
+    },
+    "PopularMobileBehaviorRows": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularMobileBehaviorRows.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/populyarnoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/populyarnoe/index.astro"
+      ]
+    },
+    "PopularMobileGroupContext": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularMobileGroupContext.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/PopularListingSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/populyarnoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/populyarnoe/index.astro"
+      ]
+    },
+    "WeekendEditorialTimeline": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendEditorialTimeline.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/WeekendListingSurface.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/vyhodnye/",
+        "/vyhodnye/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro"
+      ]
+    },
+    "WeekendRangeNav": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendRangeNav.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/WeekendListingSurface.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/WeekendListingSurface.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/vyhodnye/",
+        "/vyhodnye/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro"
+      ]
+    },
+    "WeekendTimeMatrix": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendTimeMatrix.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "EventListItem": {
+      "version": 1,
+      "astro_root": "site/src/components/EventListItem.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "EventCtaPanel": {
+      "version": 1,
+      "astro_root": "site/src/components/EventCtaPanel.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "CalendarLink": {
+      "version": 1,
+      "astro_root": "site/src/components/CalendarLink.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventActionPanel.astro",
+        "site/src/components/EventCtaPanel.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventActionPanel.astro",
+        "site/src/components/EventCtaPanel.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "EventFacts": {
+      "version": 1,
+      "astro_root": "site/src/components/EventFacts.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "EventTokenMedallions": {
+      "version": 1,
+      "astro_root": "site/src/components/EventTokenMedallions.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "IconSocialIcon": {
+      "version": 1,
+      "astro_root": "site/src/components/SocialIcon.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/SiteFooter.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/SiteFooter.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "AnnouncementsLockup": {
+      "version": 1,
+      "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/SiteFooter.astro",
+        "site/src/layouts/EventLayout.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/SiteFooter.astro",
+        "site/src/layouts/EventLayout.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "AnnouncementsWordmark": {
+      "version": 1,
+      "astro_root": "site/src/components/brand/AnnouncementsWordmark.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/brand/AnnouncementsLockup.astro",
+        "site/src/components/Reference4MobileMenu.astro",
+        "site/src/components/ServiceShareAction.astro",
+        "site/src/components/SiteFooter.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/brand/AnnouncementsLockup.astro",
+        "site/src/components/Reference4MobileMenu.astro",
+        "site/src/components/ServiceShareAction.astro",
+        "site/src/components/SiteFooter.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "Icon": {
+      "version": 1,
+      "astro_root": "site/src/components/Icon.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/CalendarLink.astro",
+        "site/src/components/design-system/SemanticIcon.astro",
+        "site/src/components/DesktopEventActionPanel.astro",
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/EventCtaPanel.astro",
+        "site/src/components/EventFacts.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventListItem.astro",
+        "site/src/components/EventParticipants.astro",
+        "site/src/components/EventTokenMedallions.astro",
+        "site/src/components/EventTransportSchedule.astro",
+        "site/src/components/ExhibitionPrototypeRow.astro",
+        "site/src/components/KaupTransportSchedule.astro",
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/components/listings/MobileDateAccessory.astro",
+        "site/src/components/PwaInstallAction.astro",
+        "site/src/components/transport/TransportJourneyAlerts.astro",
+        "site/src/components/transport/TransportRouteHeading.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/CalendarLink.astro",
+        "site/src/components/design-system/SemanticIcon.astro",
+        "site/src/components/DesktopEventActionPanel.astro",
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/components/EventCtaPanel.astro",
+        "site/src/components/EventFacts.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventListItem.astro",
+        "site/src/components/EventParticipants.astro",
+        "site/src/components/EventTokenMedallions.astro",
+        "site/src/components/EventTransportSchedule.astro",
+        "site/src/components/ExhibitionPrototypeRow.astro",
+        "site/src/components/KaupTransportSchedule.astro",
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/components/listings/MobileDateAccessory.astro",
+        "site/src/components/PwaInstallAction.astro",
+        "site/src/components/transport/TransportJourneyAlerts.astro",
+        "site/src/components/transport/TransportRouteHeading.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/",
+          "source": "site/src/pages/fokus-gruppa/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/fokus-gruppa/",
+        "/fokus-gruppa/priglashenie/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zakrytaya-afisha/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "MobileBottomNav": {
+      "version": 1,
+      "astro_root": "site/src/components/MobileBottomNav.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/MobileSearchBottomNav.astro",
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/MobileSearchBottomNav.astro",
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "MobileSearchBottomNav": {
+      "version": 1,
+      "astro_root": "site/src/components/MobileSearchBottomNav.astro",
+      "style_owners": [],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
+    },
+    "Reference4MobileMenu": {
+      "version": 1,
+      "astro_root": "site/src/components/Reference4MobileMenu.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "SiteFooter": {
+      "version": 1,
+      "astro_root": "site/src/components/SiteFooter.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "KeyboardEventNavigation": {
+      "version": 1,
+      "astro_root": "site/src/components/KeyboardEventNavigation.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "MobileEventProductionStyles": {
+      "version": 1,
+      "astro_root": "site/src/components/MobileEventProductionStyles.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "AmberRailArtifact": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/AmberRailArtifact.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/listings/MobileListingRailRow.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/listings/MobileListingRailRow.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/date-*/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "StaticSiteAuthRuntime": {
+      "version": 1,
+      "astro_root": "site/src/components/auth/StaticSiteAuthRuntime.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/layouts/EventLayout.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/layouts/EventLayout.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/fokus-gruppa/priglashenie/",
+          "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zakrytaya-afisha/",
+          "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/fokus-gruppa/priglashenie/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zakrytaya-afisha/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "EventTransportSchedule": {
+      "version": 1,
+      "astro_root": "site/src/components/EventTransportSchedule.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "EventBusTransportSchedule": {
+      "version": 1,
+      "astro_root": "site/src/components/EventBusTransportSchedule.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "KaupTransportSchedule": {
+      "version": 1,
+      "astro_root": "site/src/components/KaupTransportSchedule.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/sobytiya/*/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ]
+    },
+    "MobileToastRegion": {
+      "version": 1,
+      "astro_root": "site/src/components/MobileToastRegion.astro",
+      "style_owners": [],
+      "direct_component_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "direct_style_consumers": [],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
+        },
+        {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
+          "pattern": "/partnerstvo/",
+          "source": "site/src/pages/partnerstvo/index.astro"
+        },
+        {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
         "/vystavki/",
         "/zavtra/"
       ],

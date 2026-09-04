@@ -6,6 +6,8 @@
   usage to the underlying canonical UI icon identity, so normalized consumers
   no longer leave used icons reported as unused.
 
+- Changed: completed the executable Astro family SoT for the canonical production-surface contract. The deterministic graph now covers all required component/archetype owners, protocol and hydrated consumers, and wildcard route ownership; its checker fails closed on missing identities or contract coverage and correctly parses `>` inside Astro expressions.
+
 - Fixed: the iconography census now counts raw inline SVG only in rendered
   Astro source, as required by its contract. Generated token-impact JSON,
   checker regexes and serialized runtime markup no longer appear as false
