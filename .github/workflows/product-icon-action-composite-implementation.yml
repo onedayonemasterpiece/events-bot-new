@@ -1,0 +1,768 @@
+name: Product icon action composite implementation
+
+on:
+  push:
+    branches: [work/ui-normalization-product-icon-composites-20260904]
+    paths: [.github/workflows/product-icon-action-composite-implementation.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: product-icon-action-composite-implementation
+  cancel-in-progress: false
+
+jobs:
+  implement-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/ui-normalization-product-icon-composites-20260904
+          fetch-depth: 0
+
+      - name: Set up pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Build one clean current-trunk product commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch='work/ui-normalization-product-icon-composites-20260904'
+          base='ab7cb55971016e41e3af775ef6207c53e4d801ed'
+          census_base='37505929ccf42c3757bdef43ce7a3703c7752b37'
+          trigger_head="$(git rev-parse HEAD)"
+          printf '%s\n' "$trigger_head" > /tmp/product-composite-trigger-head
+          printf '%s\n' "$base" > /tmp/product-composite-base
+
+          git fetch origin agent/static-site-single-kaggle-contract "$branch"
+          test "$(git rev-parse origin/agent/static-site-single-kaggle-contract)" = "$base"
+          test "$(git rev-parse origin/$branch)" = "$trigger_head"
+
+          # The fresh trunk advanced only in other product lanes. Refuse to
+          # transplant the census decision if any selected renderer drifted.
+          for path in \
+            site/src/components/EventCard.astro \
+            site/src/components/EventHero.astro \
+            site/src/components/DesktopEventActionPanel.astro \
+            site/src/components/EventCtaPanel.astro \
+            site/src/components/listings/MobileListingRailRow.astro \
+            site/src/design-system/astro-family-registry.v1.json \
+            site/tests/personal-feed-surface.test.mjs \
+            site/tests/event-detail-runtime-regressions.test.mjs \
+            site/tests/mobile-listing-rails.test.mjs
+          do
+            test "$(git rev-parse "$base:$path")" = "$(git rev-parse "$census_base:$path")"
+          done
+
+          git reset --hard "$base"
+
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path, value):
+              target = Path(path)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(value, encoding='utf-8')
+
+          def replace_once(path, old, new):
+              source = read(path)
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one exact anchor, found {count}: {old[:120]!r}')
+              write(path, source.replace(old, new, 1))
+
+          def regex_replace(path, pattern, replacement, expected=1, flags=0):
+              source = read(path)
+              updated, count = re.subn(pattern, replacement, source, flags=flags)
+              if count != expected:
+                  raise SystemExit(f'{path}: expected {expected} regex replacements, found {count}: {pattern[:140]!r}')
+              write(path, updated)
+
+          component = r'''---
+          import SemanticIcon from './design-system/SemanticIcon.astro';
+
+          export type EventLikePresentation =
+            | 'card'
+            | 'hero'
+            | 'desktop-panel'
+            | 'cta-panel'
+            | 'mobile-rail';
+
+          interface Props {
+            eventId: string | number;
+            eventTitle: string;
+            baseCount?: number;
+            presentation: EventLikePresentation;
+          }
+
+          const {
+            eventId,
+            eventTitle,
+            baseCount = 0,
+            presentation,
+          } = Astro.props;
+          const parsedCount = Number(baseCount);
+          const count = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
+          const compactCount = presentation === 'card' || presentation === 'hero';
+          const countLabel = compactCount && count <= 0 ? '' : String(count);
+          const rootClass = {
+            card: 'feedback-button feedback-button--like',
+            hero: 'secondary-button event-hero__like feedback-button feedback-button--like',
+            'desktop-panel': 'desktop-prototype__icon-action feedback-button--like',
+            'cta-panel': 'secondary-button feedback-button--like',
+            'mobile-rail': 'event-like-cta',
+          }[presentation];
+          const ariaPrefix = presentation === 'desktop-panel' || presentation === 'cta-panel'
+            ? 'Нравится'
+            : 'Поставить лайк';
+          const ariaLabel = compactCount && count <= 0
+            ? `${ariaPrefix}: ${eventTitle}`
+            : `${ariaPrefix}: ${eventTitle}. Сейчас ${count}`;
+          const strongCount = presentation === 'desktop-panel'
+            || presentation === 'cta-panel'
+            || presentation === 'mobile-rail';
+          const mobileRail = presentation === 'mobile-rail';
+          ---
+
+          <button
+            type="button"
+            class={rootClass}
+            data-nosnippet
+            data-event-like-action
+            data-event-like-presentation={presentation}
+            data-ds-component="EventLikeAction"
+            data-ds-family="EventLikeAction"
+            data-ds-version="1"
+            data-ds-variant={presentation}
+            data-ds-state="interactive"
+            data-feedback-action="like"
+            data-event-id={eventId}
+            data-event-title={eventTitle}
+            data-base-count={count}
+            data-like={mobileRail ? '' : undefined}
+            aria-pressed="false"
+            aria-label={ariaLabel}
+            title={presentation === 'desktop-panel' ? 'Нравится' : undefined}
+          >
+            <SemanticIcon name="heart" role="action" />
+            {mobileRail ? (
+              <strong data-like-count data-feedback-count>{countLabel}</strong>
+            ) : strongCount ? (
+              <strong data-feedback-count>{countLabel}</strong>
+            ) : (
+              <span class="feedback-count" data-feedback-count>{countLabel}</span>
+            )}
+          </button>
+          '''
+          component = '\n'.join(line[10:] if line.startswith('          ') else line for line in component.splitlines()) + '\n'
+          write('site/src/components/EventLikeAction.astro', component)
+
+          # EventCard: preserve both presentation slots and every surrounding
+          # action/metadata owner while replacing the duplicated Like root.
+          replace_once(
+              'site/src/components/EventCard.astro',
+              "import SemanticIcon from './design-system/SemanticIcon.astro';\n",
+              "import SemanticIcon from './design-system/SemanticIcon.astro';\nimport EventLikeAction from './EventLikeAction.astro';\n",
+          )
+          replace_once('site/src/components/EventCard.astro', "const likeCountLabel = likesCount > 0 ? String(likesCount) : '';\n", '')
+          replace_once('site/src/components/EventCard.astro', "const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;\n", '')
+          regex_replace(
+              'site/src/components/EventCard.astro',
+              r'(?P<indent>^[ \t]*)<button type="button" class="feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id=\{event\.id\} data-event-title=\{event\.title\} data-base-count=\{likesCount\} aria-pressed="false" aria-label=\{likeAria\}>\n(?P=indent)  <SemanticIcon name="heart" role="action" />\n(?P=indent)  <span class="feedback-count" data-feedback-count>\{likeCountLabel\}</span>\n(?P=indent)</button>',
+              lambda match: f'{match.group("indent")}<EventLikeAction eventId={{event.id}} eventTitle={{event.title}} baseCount={{likesCount}} presentation="card" />',
+              expected=2,
+              flags=re.MULTILINE,
+          )
+
+          # EventHero: keep mobile CTA ordering/classes by selecting the exact
+          # presentation mapping in the shared owner.
+          replace_once(
+              'site/src/components/EventHero.astro',
+              "import Icon from './Icon.astro';\n",
+              "import Icon from './Icon.astro';\nimport EventLikeAction from './EventLikeAction.astro';\n",
+          )
+          replace_once('site/src/components/EventHero.astro', "const likeCountLabel = likesCount > 0 ? String(likesCount) : '';\n", '')
+          replace_once('site/src/components/EventHero.astro', "const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;\n", '')
+          regex_replace(
+              'site/src/components/EventHero.astro',
+              r'(?P<indent>^[ \t]*)<button type="button" class="secondary-button event-hero__like feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id=\{event\.id\} data-event-title=\{event\.title\} data-base-count=\{likesCount\} aria-pressed="false" aria-label=\{likeAria\}>\n(?P=indent)  <Icon name="heart" />\n(?P=indent)  <span class="feedback-count" data-feedback-count>\{likeCountLabel\}</span>\n(?P=indent)</button>',
+              lambda match: f'{match.group("indent")}<EventLikeAction eventId={{event.id}} eventTitle={{event.title}} baseCount={{likesCount}} presentation="hero" />',
+              flags=re.MULTILINE,
+          )
+
+          # Desktop panel.
+          replace_once(
+              'site/src/components/DesktopEventActionPanel.astro',
+              "import Icon from './Icon.astro';\n",
+              "import Icon from './Icon.astro';\nimport EventLikeAction from './EventLikeAction.astro';\n",
+          )
+          regex_replace(
+              'site/src/components/DesktopEventActionPanel.astro',
+              r'(?P<indent>^[ \t]*)<button\n(?P=indent)  type="button"\n(?P=indent)  class="desktop-prototype__icon-action feedback-button--like"\n(?P=indent)  data-nosnippet\n(?P=indent)  data-feedback-action="like"\n(?P=indent)  data-event-id=\{event\.id\}\n(?P=indent)  data-event-title=\{event\.title\}\n(?P=indent)  data-base-count=\{likesCount\}\n(?P=indent)  aria-pressed="false"\n(?P=indent)  aria-label=\{`Нравится: \$\{event\.title\}\. Сейчас \$\{likesCount\}`\}\n(?P=indent)  title="Нравится"\n(?P=indent)>\s*<Icon name="heart" />\s*<strong data-feedback-count>\{likesCount\}</strong></button>',
+              lambda match: f'{match.group("indent")}<EventLikeAction eventId={{event.id}} eventTitle={{event.title}} baseCount={{likesCount}} presentation="desktop-panel" />',
+              flags=re.MULTILINE,
+          )
+
+          # Legacy CTA panel remains source-compatible even though current
+          # production routes do not import it.
+          replace_once(
+              'site/src/components/EventCtaPanel.astro',
+              "import Icon from './Icon.astro';\n",
+              "import Icon from './Icon.astro';\nimport EventLikeAction from './EventLikeAction.astro';\n",
+          )
+          regex_replace(
+              'site/src/components/EventCtaPanel.astro',
+              r'(?P<indent>^[ \t]*)<button type="button" class="secondary-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id=\{event\.id\} data-event-title=\{event\.title\} data-base-count=\{likesCount\} aria-pressed="false" aria-label=\{`Нравится: \$\{event\.title\}\. Сейчас \$\{likesCount\}`\}><Icon name="heart" /> <strong data-feedback-count>\{likesCount\}</strong></button>',
+              lambda match: f'{match.group("indent")}<EventLikeAction eventId={{event.id}} eventTitle={{event.title}} baseCount={{likesCount}} presentation="cta-panel" />',
+              flags=re.MULTILINE,
+          )
+
+          # Mobile rail: only the interactive event-level action moves. Its
+          # feature underlay and inline social proof remain local exceptions.
+          replace_once(
+              'site/src/components/listings/MobileListingRailRow.astro',
+              "import SemanticIcon from '../design-system/SemanticIcon.astro';\n",
+              "import SemanticIcon from '../design-system/SemanticIcon.astro';\nimport EventLikeAction from '../EventLikeAction.astro';\n",
+          )
+          regex_replace(
+              'site/src/components/listings/MobileListingRailRow.astro',
+              r'(?P<indent>^[ \t]*)<button\n(?P=indent)  type="button"\n(?P=indent)  class="event-like-cta"\n(?P=indent)  data-like\n(?P=indent)  data-feedback-action="like"\n(?P=indent)  data-event-id=\{event\.id\}\n(?P=indent)  data-event-title=\{event\.title\}\n(?P=indent)  data-base-count=\{likesCount\}\n(?P=indent)  aria-pressed="false"\n(?P=indent)  aria-label=\{`Поставить лайк: \$\{event\.title\}\. Сейчас \$\{likesCount\}`\}\n(?P=indent)>\n(?P=indent)  <SemanticIcon name="heart" role="action" />\n(?P=indent)  <strong data-like-count data-feedback-count>\{likesCount\}</strong>\n(?P=indent)</button>',
+              lambda match: f'{match.group("indent")}<EventLikeAction eventId={{event.id}} eventTitle={{event.title}} baseCount={{likesCount}} presentation="mobile-rail" />',
+              flags=re.MULTILINE,
+          )
+
+          # Register the component as one family without inventing a style
+          # owner: existing presentation classes remain owned by their current
+          # product surfaces.
+          registry_path = Path('site/src/design-system/astro-family-registry.v1.json')
+          registry = json.loads(registry_path.read_text(encoding='utf-8'))
+          if any(family.get('id') == 'EventLikeAction' for family in registry['families']):
+              raise SystemExit('EventLikeAction is already registered')
+          variants = ['card', 'hero', 'desktop-panel', 'cta-panel', 'mobile-rail']
+          family = {
+              'id': 'EventLikeAction',
+              'version': 1,
+              'astro_root': 'site/src/components/EventLikeAction.astro',
+              'style_owners': [],
+              'variants': variants,
+              'states': ['interactive'],
+              'nested_families': [],
+              'runtime_factories': [],
+              'runtime_clients': [],
+              'consumer_signals': [],
+              'explicit_override_exceptions': [{
+                  'kind': 'dynamic_identity',
+                  'attribute': 'variant',
+                  'values': variants,
+                  'source_regex': r'data-ds-variant=\{presentation\}',
+              }],
+              'penpot_binding': None,
+          }
+          insert_at = next(index for index, item in enumerate(registry['families']) if item['id'] == 'EventCard') + 1
+          registry['families'].insert(insert_at, family)
+          major, minor, _patch = (int(value) for value in registry['version'].split('.'))
+          registry['version'] = f'{major}.{minor + 1}.0'
+          registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          # Migration-aware existing regressions keep their product assertions
+          # but now follow the shared owner rather than the retired local tag.
+          path = 'site/tests/personal-feed-surface.test.mjs'
+          source = read(path)
+          source = source.replace(
+              "const [card, slot, layout, search] = await Promise.all([\n    read('src/components/EventCard.astro'),\n",
+              "const [card, likeAction, slot, layout, search] = await Promise.all([\n    read('src/components/EventCard.astro'),\n    read('src/components/EventLikeAction.astro'),\n",
+              1,
+          )
+          old = "  for (const interaction of ['data-feedback-action=\"not_interested\"', 'data-feedback-action=\"like\"', 'data-native-share', 'data-calendar-action']) {\n    assert.match(card, new RegExp(interaction, 'u'), `canonical EventCard owns ${interaction}`);\n  }"
+          new = "  for (const interaction of ['data-feedback-action=\"not_interested\"', 'data-native-share', 'data-calendar-action']) {\n    assert.match(card, new RegExp(interaction, 'u'), `canonical EventCard owns ${interaction}`);\n  }\n  assert.match(card, /import EventLikeAction from '\\.\\/EventLikeAction\\.astro'/u);\n  assert.equal((card.match(/<EventLikeAction[^>]+presentation=\"card\"/gu) || []).length, 2);\n  for (const interaction of ['data-feedback-action=\"like\"', 'data-feedback-count', 'data-base-count={count}', 'aria-pressed=\"false\"']) {\n    assert.match(likeAction, new RegExp(interaction.replace(/[.*+?^${}()|[\\]\\\\]/gu, '\\\\$&'), 'u'), `EventLikeAction owns ${interaction}`);\n  }"
+          if source.count(old) != 1:
+              raise SystemExit('personal-feed-surface interaction anchor drifted')
+          write(path, source.replace(old, new, 1))
+
+          path = 'site/tests/event-detail-runtime-regressions.test.mjs'
+          source = read(path)
+          old = "  assert.ok(panelRow.indexOf('data-native-share') < panelRow.indexOf('data-feedback-action=\"like\"'));"
+          new = "  assert.ok(panelRow.indexOf('data-native-share') < panelRow.indexOf('<EventLikeAction'));\n  assert.match(panel, /import EventLikeAction from '\\.\\/EventLikeAction\\.astro'/u);\n  assert.match(panel, /<EventLikeAction[^>]+presentation=\"desktop-panel\"/u);"
+          if source.count(old) != 1:
+              raise SystemExit('event-detail panel ordering anchor drifted')
+          write(path, source.replace(old, new, 1))
+
+          path = 'site/tests/mobile-listing-rails.test.mjs'
+          source = read(path)
+          replacements = [
+              (
+                  "const [surface, row, menu, dates, weekend, popular, accessory, previewCheck] = await Promise.all([\n    read('src/components/listings/MobileListingRailSurface.astro'),\n    read('src/components/listings/MobileListingRailRow.astro'),\n",
+                  "const [surface, row, likeAction, menu, dates, weekend, popular, accessory, previewCheck] = await Promise.all([\n    read('src/components/listings/MobileListingRailSurface.astro'),\n    read('src/components/listings/MobileListingRailRow.astro'),\n    read('src/components/EventLikeAction.astro'),\n",
+              ),
+              (
+                  "for (const donorClass of ['event-row', 'rail-window', 'event-summary', 'event-media', 'event-digest', 'event-medallion-slot', 'event-like-cta']) {",
+                  "for (const donorClass of ['event-row', 'rail-window', 'event-summary', 'event-media', 'event-digest', 'event-medallion-slot']) {",
+              ),
+              (
+                  "  for (const role of ['feature', 'inline', 'action']) {\n    assert.match(row, new RegExp(`<SemanticIcon name=\"heart\" role=\"${role}\" \\\\/>`, 'u'));\n  }",
+                  "  for (const role of ['feature', 'inline']) {\n    assert.match(row, new RegExp(`<SemanticIcon name=\"heart\" role=\"${role}\" \\\\/>`, 'u'));\n  }\n  assert.match(row, /<EventLikeAction[^>]+presentation=\"mobile-rail\"/u);\n  assert.match(likeAction, /class=\{rootClass\}/u);\n  assert.match(likeAction, /'mobile-rail': 'event-like-cta'/u);\n  assert.match(likeAction, /<SemanticIcon name=\"heart\" role=\"action\" \\/>/u);",
+              ),
+              (
+                  "  assert.match(row, /data-feedback-count/u);",
+                  "  assert.match(likeAction, /data-like-count data-feedback-count/u);",
+              ),
+          ]
+          for old, new in replacements:
+              if source.count(old) != 1:
+                  raise SystemExit(f'mobile-listing-rails anchor drifted: {old[:100]!r}')
+              source = source.replace(old, new, 1)
+          write(path, source)
+
+          source_test = r'''import assert from 'node:assert/strict';
+          import { readFile, readdir } from 'node:fs/promises';
+          import path from 'node:path';
+          import test from 'node:test';
+          import { fileURLToPath } from 'node:url';
+
+          const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+          const read = (relativePath) => readFile(path.join(siteRoot, relativePath), 'utf8');
+
+          async function walk(directory) {
+            const files = [];
+            for (const entry of await readdir(directory, { withFileTypes: true })) {
+              const absolute = path.join(directory, entry.name);
+              if (entry.isDirectory()) files.push(...await walk(absolute));
+              else if (entry.isFile()) files.push(absolute);
+            }
+            return files;
+          }
+
+          test('EventLikeAction is one narrow event-level owner with five preserved presentations', async () => {
+            const source = await read('src/components/EventLikeAction.astro');
+            assert.equal((source.match(/<button\b/gu) || []).length, 1);
+            assert.doesNotMatch(source, /<style\b|<script\b/u);
+            assert.match(source, /data-ds-component="EventLikeAction"/u);
+            assert.match(source, /data-ds-family="EventLikeAction"/u);
+            assert.match(source, /data-ds-version="1"/u);
+            assert.match(source, /data-ds-variant=\{presentation\}/u);
+            assert.match(source, /data-ds-state="interactive"/u);
+            assert.match(source, /data-feedback-action="like"/u);
+            assert.match(source, /data-base-count=\{count\}/u);
+            assert.match(source, /aria-pressed="false"/u);
+            assert.match(source, /<SemanticIcon name="heart" role="action" \/>/u);
+            for (const [variant, className] of Object.entries({
+              card: 'feedback-button feedback-button--like',
+              hero: 'secondary-button event-hero__like feedback-button feedback-button--like',
+              'desktop-panel': 'desktop-prototype__icon-action feedback-button--like',
+              'cta-panel': 'secondary-button feedback-button--like',
+              'mobile-rail': 'event-like-cta',
+            })) {
+              assert.ok(source.includes(`${variant.includes('-') ? `'${variant}'` : variant}: '${className}'`));
+            }
+            assert.match(source, /const compactCount = presentation === 'card' \|\| presentation === 'hero'/u);
+            assert.match(source, /compactCount && count <= 0 \? '' : String\(count\)/u);
+            assert.match(source, /presentation === 'desktop-panel' \|\| presentation === 'cta-panel'/u);
+            assert.match(source, /data-like=\{mobileRail \? '' : undefined\}/u);
+            assert.match(source, /<strong data-like-count data-feedback-count>/u);
+            assert.match(source, /title=\{presentation === 'desktop-panel' \? 'Нравится' : undefined\}/u);
+            assert.doesNotMatch(source, /UniversalAction|ActionButton|button foundation/iu);
+          });
+
+          test('all event-level Like consumers delegate to the owner while explicit heart exceptions remain distinct', async () => {
+            const consumers = {
+              'src/components/EventCard.astro': ['card', 2],
+              'src/components/EventHero.astro': ['hero', 1],
+              'src/components/DesktopEventActionPanel.astro': ['desktop-panel', 1],
+              'src/components/EventCtaPanel.astro': ['cta-panel', 1],
+              'src/components/listings/MobileListingRailRow.astro': ['mobile-rail', 1],
+            };
+            for (const [relativePath, [presentation, expected]] of Object.entries(consumers)) {
+              const source = await read(relativePath);
+              assert.match(source, /import EventLikeAction from /u, `${relativePath} imports the owner`);
+              assert.equal((source.match(new RegExp(`<EventLikeAction[^>]+presentation="${presentation}"`, 'gu')) || []).length, expected);
+              assert.doesNotMatch(source, /<button\b[^>]*data-feedback-action="like"/u, `${relativePath} has no local event-level root`);
+            }
+            const [participants, exhibition, listingCard, rail] = await Promise.all([
+              read('src/components/EventParticipants.astro'),
+              read('src/components/ExhibitionPrototypeRow.astro'),
+              read('src/components/listings/ListingEventCard.astro'),
+              read('src/components/listings/MobileListingRailRow.astro'),
+            ]);
+            assert.match(participants, /data-participant-like/u);
+            assert.match(exhibition, /data-exhibition-like/u);
+            assert.match(listingCard, /data-listing-like-count/u);
+            assert.match(rail, /<SemanticIcon name="heart" role="feature" \/>/u);
+            assert.match(rail, /<SemanticIcon name="heart" role="inline" \/>/u);
+          });
+
+          test('runtime hooks, route graph and four-role icon contract remain executable', async () => {
+            const [layout, registryText, graphText, foundations, eventCardCss, mobileRailCss] = await Promise.all([
+              read('src/layouts/EventLayout.astro'),
+              read('src/design-system/astro-family-registry.v1.json'),
+              read('src/design-system/astro-family-consumers.generated.v1.json'),
+              read('src/components/design-system/foundations.ts'),
+              read('src/components/event-card.css'),
+              read('src/components/listings/MobileListingRailSurface.astro'),
+            ]);
+            assert.match(layout, /button\.dataset\.baseCount/u);
+            assert.match(layout, /button\.setAttribute\('aria-pressed'/u);
+            assert.match(layout, /button\.querySelector\('\[data-feedback-count\]'\)/u);
+            assert.match(layout, /\[data-feedback-action="like"\]/u);
+            assert.match(eventCardCss, /min-height:\s*44px/u);
+            assert.match(mobileRailCss, /\.event-like-cta\{[^}]*width:72px;[^}]*height:72px/u);
+            assert.match(foundations, /inline: 16,[\s\S]*control: 20,[\s\S]*action: 24,[\s\S]*feature: 32,/u);
+
+            const registry = JSON.parse(registryText);
+            const family = registry.families.find((item) => item.id === 'EventLikeAction');
+            assert.ok(family);
+            assert.equal(family.version, 1);
+            assert.deepEqual(family.variants, ['card', 'hero', 'desktop-panel', 'cta-panel', 'mobile-rail']);
+            assert.deepEqual(family.states, ['interactive']);
+            assert.deepEqual(family.style_owners, []);
+            assert.equal(family.explicit_override_exceptions[0].kind, 'dynamic_identity');
+
+            const graph = JSON.parse(graphText).families.EventLikeAction;
+            assert.ok(graph);
+            assert.deepEqual(graph.direct_consumers, [
+              'site/src/components/DesktopEventActionPanel.astro',
+              'site/src/components/EventCard.astro',
+              'site/src/components/EventCtaPanel.astro',
+              'site/src/components/EventHero.astro',
+              'site/src/components/listings/MobileListingRailRow.astro',
+            ]);
+            for (const route of ['/', '/date-*/', '/segodnya/', '/sobytiya/*/', '/vyhodnye/', '/zavtra/']) {
+              assert.ok(graph.production_route_patterns.includes(route), `route impact misses ${route}`);
+            }
+          });
+
+          test('no second event-level Like button root survives elsewhere in product Astro source', async () => {
+            const files = (await walk(path.join(siteRoot, 'src')))
+              .filter((file) => file.endsWith('.astro'));
+            const owners = [];
+            for (const file of files) {
+              const source = await readFile(file, 'utf8');
+              if (/<button\b[^>]*data-feedback-action="like"/u.test(source)) {
+                owners.push(path.relative(siteRoot, file).split(path.sep).join('/'));
+              }
+            }
+            assert.deepEqual(owners, ['src/components/EventLikeAction.astro']);
+          });
+          '''
+          source_test = '\n'.join(line[10:] if line.startswith('          ') else line for line in source_test.splitlines()) + '\n'
+          write('site/tests/product-icon-action-composite-normalization.test.mjs', source_test)
+
+          browser_test = r'''import assert from 'node:assert/strict';
+          import { spawn } from 'node:child_process';
+          import { once } from 'node:events';
+          import { existsSync } from 'node:fs';
+          import net from 'node:net';
+          import path from 'node:path';
+          import { chromium } from 'playwright';
+
+          const previewRoot = process.env.PRODUCT_ICON_ACTION_PREVIEW_ROOT;
+          assert.ok(previewRoot && existsSync(previewRoot), 'PRODUCT_ICON_ACTION_PREVIEW_ROOT must point to canonical focused outputs');
+          const builds = {
+            listing: 'preview-local-product-like-listing',
+            detail: 'preview-local-product-like-detail',
+          };
+          const routes = {
+            listing: '/date-2026-07-23/',
+            detail: '/sobytiya/spektakl-garazh-kaliningrad-5658/',
+          };
+          for (const build of Object.values(builds)) assert.ok(existsSync(path.join(previewRoot, build)), `missing focused output ${build}`);
+
+          const port = await new Promise((resolve, reject) => {
+            const probe = net.createServer();
+            probe.once('error', reject);
+            probe.listen(0, '127.0.0.1', () => {
+              const address = probe.address();
+              probe.close(() => resolve(address.port));
+            });
+          });
+          const origin = `http://127.0.0.1:${port}`;
+          const server = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1', '--directory', previewRoot], { stdio:'ignore' });
+          for (let attempt = 0; attempt < 60; attempt += 1) {
+            try {
+              const response = await fetch(origin, { signal:AbortSignal.timeout(500) });
+              if (response.ok) break;
+            } catch {}
+            if (attempt === 59) throw new Error('focused preview server did not become ready');
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+
+          const browser = await chromium.launch({ headless:true });
+          const fixedEpoch = Date.parse('2026-07-23T12:00:00+02:00');
+          const failures = [];
+
+          async function open(build, route, viewport) {
+            const context = await browser.newContext({ viewport });
+            const page = await context.newPage();
+            await page.addInitScript((epoch) => {
+              const NativeDate = Date;
+              class FixedDate extends NativeDate {
+                constructor(...args) { super(...(args.length ? args : [epoch])); }
+                static now() { return epoch; }
+              }
+              globalThis.Date = FixedDate;
+              localStorage.removeItem('ke_personalization_profile');
+              localStorage.removeItem('ke_event_feedback_log_v2');
+            }, fixedEpoch);
+            page.on('pageerror', (error) => failures.push(`${viewport.width}x${viewport.height}: ${error.message}`));
+            const url = `${origin}/${build}${route}`.replace(/([^:]\/)\/+/gu, '$1');
+            const response = await page.goto(url, { waitUntil:'domcontentloaded', timeout:60_000 });
+            assert.equal(response?.status(), 200, url);
+            await page.waitForTimeout(350);
+            const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth || 0) - document.documentElement.clientWidth);
+            assert.ok(overflow <= 1, `${url} overflows by ${overflow}px`);
+            return { context, page };
+          }
+
+          async function actionSnapshot(page, presentation) {
+            return page.locator(`[data-event-like-presentation="${presentation}"]`).evaluateAll((nodes) => {
+              const visible = nodes.find((node) => {
+                const rect = node.getBoundingClientRect();
+                const style = getComputedStyle(node);
+                return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+              });
+              if (!visible) return null;
+              const rect = visible.getBoundingClientRect();
+              const icon = visible.querySelector('[data-ke-icon-name="heart"]');
+              return {
+                tag: visible.tagName,
+                family: visible.dataset.dsFamily,
+                component: visible.dataset.dsComponent,
+                version: visible.dataset.dsVersion,
+                variant: visible.dataset.dsVariant,
+                state: visible.dataset.dsState,
+                action: visible.dataset.feedbackAction,
+                pressed: visible.getAttribute('aria-pressed'),
+                width: rect.width,
+                height: rect.height,
+                iconRole: icon?.getAttribute('data-ke-icon-role'),
+              };
+            });
+          }
+
+          async function assertAction(page, presentation) {
+            const snapshot = await actionSnapshot(page, presentation);
+            assert.ok(snapshot, `visible ${presentation} action is missing`);
+            assert.deepEqual({
+              tag:snapshot.tag,
+              family:snapshot.family,
+              component:snapshot.component,
+              version:snapshot.version,
+              variant:snapshot.variant,
+              state:snapshot.state,
+              action:snapshot.action,
+              pressed:snapshot.pressed,
+              iconRole:snapshot.iconRole,
+            }, {
+              tag:'BUTTON', family:'EventLikeAction', component:'EventLikeAction', version:'1',
+              variant:presentation, state:'interactive', action:'like', pressed:'false', iconRole:'action',
+            });
+            assert.ok(snapshot.width >= 44 && snapshot.height >= 44, `${presentation} target is ${snapshot.width}x${snapshot.height}`);
+          }
+
+          try {
+            const desktopDetail = await open(builds.detail, routes.detail, { width:1440, height:900 });
+            await assertAction(desktopDetail.page, 'desktop-panel');
+            await assertAction(desktopDetail.page, 'card');
+            await desktopDetail.context.close();
+
+            const mobileDetail = await open(builds.detail, routes.detail, { width:390, height:844 });
+            await assertAction(mobileDetail.page, 'hero');
+            const hero = mobileDetail.page.locator('[data-event-like-presentation="hero"]:visible').first();
+            const eventId = await hero.getAttribute('data-event-id');
+            const beforeText = (await hero.locator('[data-feedback-count]').textContent() || '').trim();
+            const before = beforeText ? Number(beforeText.replace(/\D/gu, '')) : 0;
+            await hero.click();
+            const accept = mobileDetail.page.locator('[data-personalization-consent-accept]');
+            await accept.waitFor({ state:'visible' });
+            assert.equal(await hero.getAttribute('aria-pressed'), 'false');
+            assert.equal((await hero.locator('[data-feedback-count]').textContent() || '').trim(), beforeText);
+            await accept.click();
+            await mobileDetail.page.waitForFunction(() => document.querySelector('[data-event-like-presentation="hero"]')?.getAttribute('aria-pressed') === 'true');
+            const afterText = (await hero.locator('[data-feedback-count]').textContent() || '').trim();
+            assert.equal(Number(afterText.replace(/\D/gu, '')), before + 1);
+            assert.ok(await mobileDetail.page.evaluate((id) => {
+              const profile = JSON.parse(localStorage.getItem('ke_personalization_profile') || 'null');
+              return profile?.liked_event_ids?.map(String).includes(String(id));
+            }, eventId));
+            await mobileDetail.page.reload({ waitUntil:'domcontentloaded' });
+            await mobileDetail.page.waitForFunction(() => document.querySelector('[data-event-like-presentation="hero"]')?.getAttribute('aria-pressed') === 'true');
+            assert.equal((await mobileDetail.page.locator('[data-event-like-presentation="hero"] [data-feedback-count]').textContent() || '').trim(), afterText);
+            await mobileDetail.context.close();
+
+            const desktopListing = await open(builds.listing, routes.listing, { width:1440, height:900 });
+            assert.ok(await desktopListing.page.locator('[data-event-like-action]').count() >= 0);
+            await desktopListing.context.close();
+
+            const mobileListing = await open(builds.listing, routes.listing, { width:390, height:844 });
+            await assertAction(mobileListing.page, 'mobile-rail');
+            await mobileListing.context.close();
+
+            assert.deepEqual(failures, []);
+            process.stdout.write('product icon action composite browser matrix: PASS\n');
+          } finally {
+            await browser.close();
+            server.kill('SIGTERM');
+            await Promise.race([once(server, 'exit'), new Promise((resolve) => setTimeout(resolve, 1000))]);
+          }
+          '''
+          browser_test = '\n'.join(line[10:] if line.startswith('          ') else line for line in browser_test.splitlines()) + '\n'
+          write('site/tests/product-icon-action-composite-normalization.playwright.mjs', browser_test)
+
+          # One durable normalization entry, appended atop the fresh trunk's
+          # existing documentation rather than replacing concurrent sections.
+          doc_path = Path('docs/features/static-site-pages/design-system/launch-normalization-48h.md')
+          doc = doc_path.read_text(encoding='utf-8')
+          marker = 'Event-level Like action composite normalization (2026-09-04)'
+          if marker in doc:
+              raise SystemExit('normalization doc entry already exists')
+          numbers = [int(value) for value in re.findall(r'^## (\d+)\.', doc, flags=re.MULTILINE)]
+          section_number = max(numbers, default=0) + 1
+          section = f'''\n\n## {section_number}. {marker}\n\nThe repeated event-level Like root is now rendered by one narrow\n`EventLikeAction@1` product owner. Five preserved presentations — EventCard,\nmobile EventHero, desktop action panel, legacy CTA panel and mobile listing rail\n— retain their existing classes, count visibility, accessible wording, runtime\nfeedback hooks and target geometry. EventLayout still owns consent, replay,\nprofile persistence and synchronized counts; no runtime policy moved into the\ncomponent.\n\nParticipant-specific Like, exhibition aggregate Like and read-only social-proof\nhearts remain explicit non-consumers because their entity scope or interaction\npolicy differs. The family is registered in executable Astro SoT, and its\ngenerated impact graph follows actual imports to production routes. No palette,\nlayout, navigation, share, calendar or save behavior changes.\n'''
+          doc_path.write_text(doc.rstrip() + section, encoding='utf-8')
+
+          changelog_path = Path('CHANGELOG.md')
+          changelog = changelog_path.read_text(encoding='utf-8')
+          changelog_marker = '- Changed: event-level Like actions now render through one narrow'
+          if changelog_marker in changelog:
+              raise SystemExit('changelog entry already exists')
+          entry = '''- Changed: event-level Like actions now render through one narrow\n  `EventLikeAction` owner across EventCard, mobile event hero, desktop actions,\n  the legacy CTA panel and mobile listing rail. Existing classes, accessible\n  wording, count/pressed/consent persistence semantics and 44px-or-larger\n  targets remain unchanged; participant, exhibition aggregate and read-only\n  proof hearts stay separate.\n\n'''
+          anchor = '## [Unreleased]\n\n'
+          if changelog.count(anchor) != 1:
+              raise SystemExit('unexpected changelog Unreleased anchor')
+          changelog_path.write_text(changelog.replace(anchor, anchor + entry, 1), encoding='utf-8')
+          PY
+
+          node site/scripts/generate-astro-family-consumer-graph.mjs --write
+
+          git diff --check
+          mapfile -t changed < <(git status --short | sed -E 's/^.. //' | sort)
+          expected=(
+            CHANGELOG.md
+            docs/features/static-site-pages/design-system/launch-normalization-48h.md
+            site/src/components/DesktopEventActionPanel.astro
+            site/src/components/EventCard.astro
+            site/src/components/EventCtaPanel.astro
+            site/src/components/EventHero.astro
+            site/src/components/EventLikeAction.astro
+            site/src/components/listings/MobileListingRailRow.astro
+            site/src/design-system/astro-family-consumers.generated.v1.json
+            site/src/design-system/astro-family-registry.v1.json
+            site/tests/event-detail-runtime-regressions.test.mjs
+            site/tests/mobile-listing-rails.test.mjs
+            site/tests/personal-feed-surface.test.mjs
+            site/tests/product-icon-action-composite-normalization.playwright.mjs
+            site/tests/product-icon-action-composite-normalization.test.mjs
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          printf '%s\n' "${changed[@]}"
+          test "$(printf '%s\n' "${changed[@]}")" = "$(printf '%s\n' "${expected_sorted[@]}")"
+          ! git diff --name-only | grep -E '(^|/)(EventLayout|ServiceShareAction|SiteFooter|PwaInstall|MediaFrame|media-frame)|(^|/)routes|(^|/)kaggle/'
+
+          git config user.name 'f0-normalization-bot'
+          git config user.email 'f0-normalization-bot@users.noreply.github.com'
+          git add "${expected[@]}"
+          git commit -m 'refactor(ui): normalize event like action composite'
+          test "$(git rev-parse HEAD^)" = "$base"
+          git status --short
+          git rev-parse HEAD > /tmp/product-composite-candidate-head
+
+      - name: Install pinned site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: Run focused source and migration regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test \
+            site/tests/product-icon-action-composite-normalization.test.mjs \
+            site/tests/personal-feed-surface.test.mjs \
+            site/tests/event-detail-runtime-regressions.test.mjs \
+            site/tests/mobile-listing-rails.test.mjs
+          node --test site/scripts/astro-family-sot.behavior.test.mjs
+
+      - name: Run design-system and iconography checks
+        working-directory: site
+        run: |
+          npm run check:astro-family-sot
+          npm run check:design-system-production-surfaces
+          npm run check:design-system-iconography -- --out /tmp/product-icon-action-iconography.json
+
+      - name: Install Chromium
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+
+      - name: Materialize exact listing and event-detail routes with canonical local runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/product-icon-action-preview
+          npm --prefix site run local:focused -- \
+            --route /date-2026-07-23/ \
+            --fixture \
+            --current-date 2026-07-23 \
+            --current-datetime 2026-07-23T12:00:00+02:00 \
+            --build-id preview-local-product-like-listing \
+            --output-root /tmp/product-icon-action-preview \
+            --result-json /tmp/product-like-listing.json \
+            --offline \
+            --no-serve
+          npm --prefix site run local:focused -- \
+            --route /sobytiya/spektakl-garazh-kaliningrad-5658/ \
+            --fixture \
+            --current-date 2026-07-23 \
+            --current-datetime 2026-07-23T12:00:00+02:00 \
+            --build-id preview-local-product-like-detail \
+            --output-root /tmp/product-icon-action-preview \
+            --result-json /tmp/product-like-detail.json \
+            --offline \
+            --no-serve
+          node - <<'NODE'
+          const fs = require('fs');
+          for (const path of ['/tmp/product-like-listing.json', '/tmp/product-like-detail.json']) {
+            const receipt = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (receipt.sourceSha !== require('child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding:'utf8' }).trim()) throw new Error(`${path}: source SHA drift`);
+            if (receipt.browserSmoke?.length !== 2) throw new Error(`${path}: missing desktop/mobile canonical smoke`);
+            for (const item of receipt.browserSmoke) if (item.status !== 200 || item.horizontalOverflowPx > 1) throw new Error(`${path}: invalid browser smoke`);
+            console.log(path, receipt.receiptSha256, receipt.selection.exactRoute, receipt.browserSmoke);
+          }
+          NODE
+
+      - name: Run action-specific Playwright matrix and consent replay
+        env:
+          PRODUCT_ICON_ACTION_PREVIEW_ROOT: /tmp/product-icon-action-preview
+        run: node site/tests/product-icon-action-composite-normalization.playwright.mjs
+
+      - name: Verify exact final commit and publish same branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch='work/ui-normalization-product-icon-composites-20260904'
+          base="$(cat /tmp/product-composite-base)"
+          trigger_head="$(cat /tmp/product-composite-trigger-head)"
+          candidate="$(cat /tmp/product-composite-candidate-head)"
+          test "$(git rev-parse HEAD)" = "$candidate"
+          test "$(git rev-parse HEAD^)" = "$base"
+          test -z "$(git status --short)"
+          git diff --check "$base...HEAD"
+          mapfile -t changed < <(git diff --name-only "$base...HEAD" | sort)
+          test "${#changed[@]}" -eq 15
+          ! printf '%s\n' "${changed[@]}" | grep -E '^\.github/workflows/|(^|/)(EventLayout|ServiceShareAction|SiteFooter|PwaInstall|MediaFrame|media-frame)|(^|/)routes|(^|/)kaggle/'
+          git fetch origin "$branch" agent/static-site-single-kaggle-contract
+          test "$(git rev-parse origin/$branch)" = "$trigger_head"
+          test "$(git rev-parse origin/agent/static-site-single-kaggle-contract)" = "$base"
+          git push \
+            --force-with-lease="refs/heads/$branch:$trigger_head" \
+            origin "HEAD:refs/heads/$branch"
+          printf 'PRODUCT_ICON_ACTION_COMPOSITE_HEAD=%s\n' "$candidate"
