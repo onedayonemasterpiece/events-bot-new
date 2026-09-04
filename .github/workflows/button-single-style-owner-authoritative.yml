@@ -1,0 +1,764 @@
+name: Button single visual owner authoritative gate
+
+on:
+  push:
+    branches:
+      - work/ui-normalization-button-single-style-owner-20260904
+    paths:
+      - .github/workflows/button-single-style-owner-authoritative.yml
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: button-single-visual-owner-authoritative
+  cancel-in-progress: false
+
+jobs:
+  validate-and-deliver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_SHA: ce9b0db180af430b20b64e88205434996b9ae99a
+      BRANCH_NAME: work/ui-normalization-button-single-style-owner-20260904
+      ARTIFACT_DIR: /tmp/button-single-visual-owner
+    steps:
+      - name: Check out exact candidate envelope
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Materialize exact final tree from executable trunk
+        id: prepare
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git rev-parse HEAD^)" = "${BASE_SHA}"
+          mapfile -t envelope_paths < <(git diff-tree --no-commit-id --name-only -r HEAD)
+          test "${#envelope_paths[@]}" = 1
+          test "${envelope_paths[0]}" = ".github/workflows/button-single-style-owner-authoritative.yml"
+          mkdir -p "${ARTIFACT_DIR}"
+          cat > /tmp/button-final.patch.gz.b64 <<'PATCH_B64'
+          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
+          PATCH_B64
+          base64 --decode /tmp/button-final.patch.gz.b64 | gzip -dc > /tmp/button-final.patch
+          printf '%s  %s\n' '7f137693a9460dcddc114816d3c704144c57a241b0a177c75307a57c26505519' /tmp/button-final.patch | sha256sum --check
+          git apply --index --whitespace=error-all /tmp/button-final.patch
+          git rm .github/workflows/button-single-style-owner-authoritative.yml
+          cat > /tmp/expected-button-paths.txt <<'EXPECTED_PATHS'
+          CHANGELOG.md
+          docs/features/static-site-pages/design-system/README.md
+          site/package.json
+          site/scripts/button-single-visual-owner-contract.mjs
+          site/scripts/check-button-single-visual-owner.mjs
+          site/src/components/CalendarLink.astro
+          site/src/components/FocusGroupFeedback.astro
+          site/src/components/FocusGroupInviteIntake.astro
+          site/src/components/FocusGroupInviteShare.astro
+          site/src/components/FocusGroupLabPanel.astro
+          site/src/components/FocusPwaInstallAction.astro
+          site/src/components/design-system/component-foundations.css
+          site/src/components/design-system/product-contour-foundations.css
+          site/src/components/listings/ListingControls.astro
+          site/src/design-system/astro-family-consumers.generated.v1.json
+          site/src/pages/dlya-menya/index.astro
+          site/src/pages/fokus-gruppa/zavershenie/index.astro
+          site/src/pages/lab/design-system/index.astro
+          site/src/pages/zakrytaya-afisha/index.astro
+          site/src/styles/design-system.css
+          site/tests/button-single-visual-owner.playwright.mjs
+          site/tests/button-single-visual-owner.test.mjs
+          EXPECTED_PATHS
+          git diff --cached --name-only "${BASE_SHA}" -- | sort > /tmp/actual-button-paths.txt
+          sort -o /tmp/expected-button-paths.txt /tmp/expected-button-paths.txt
+          diff -u /tmp/expected-button-paths.txt /tmp/actual-button-paths.txt
+          git diff --cached --check "${BASE_SHA}" --
+          git diff --cached --name-status "${BASE_SHA}" -- | tee "${ARTIFACT_DIR}/changed-paths.txt"
+          tested_tree="$(git write-tree)"
+          printf 'base_sha=%s\nenvelope_sha=%s\ntested_tree=%s\npatch_sha256=%s\n' \
+            "${BASE_SHA}" "${GITHUB_SHA}" "${tested_tree}" '7f137693a9460dcddc114816d3c704144c57a241b0a177c75307a57c26505519' \
+            | tee "${ARTIFACT_DIR}/identity-before.txt"
+          echo "tested_tree=${tested_tree}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd site
+          npm ci
+
+      - name: Verify generated Astro family graph is deterministic
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          before="$(sha256sum site/src/design-system/astro-family-consumers.generated.v1.json | cut -d' ' -f1)"
+          node site/scripts/generate-astro-family-consumer-graph.mjs --write
+          after="$(sha256sum site/src/design-system/astro-family-consumers.generated.v1.json | cut -d' ' -f1)"
+          test "${before}" = "${after}"
+          git diff --exit-code -- site/src/design-system/astro-family-consumers.generated.v1.json
+
+      - name: Run mandatory source and contract gates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : > "${ARTIFACT_DIR}/gate-exits.tsv"
+          run_gate() {
+            local name="$1"
+            local command="$2"
+            local log="${ARTIFACT_DIR}/gate-${name}.log"
+            set +e
+            bash -o pipefail -c "${command}" 2>&1 | tee "${log}"
+            local status="${PIPESTATUS[0]}"
+            set -e
+            printf '%s\t%s\t%s\n' "${name}" "${status}" "${command}" >> "${ARTIFACT_DIR}/gate-exits.tsv"
+            test "${status}" = 0
+          }
+          run_gate focus-normalization "node --experimental-strip-types --test site/tests/focus-normalization-source.test.mjs"
+          run_gate button-owner-check "cd site && npm run check:button-single-visual-owner -- --out '${ARTIFACT_DIR}/button-owner-report.json'"
+          run_gate button-owner-regression "node --test site/tests/button-single-visual-owner.test.mjs"
+          run_gate pwa-focus-membership "node --experimental-strip-types --test site/tests/pwa-install.test.mjs site/tests/focus-pwa-membership.test.mjs site/tests/focus-group-product-surface.test.mjs"
+          run_gate calendar-event-cta "node --experimental-strip-types --test site/tests/desktop-event-cta.test.mjs"
+          run_gate calendar-event-runtime "node --experimental-strip-types --test --test-name-pattern='desktop calendar label|mobile event actions|desktop action geometry' site/tests/event-detail-runtime-regressions.test.mjs"
+          run_gate design-system "node site/scripts/check-design-system.mjs"
+          run_gate production-surface-contract "cd site && npm run check:design-system-production-surfaces"
+          run_gate astro-family-checker "cd site && npm run check:astro-family-sot"
+          run_gate iconography-contract "cd site && npm run check:design-system-iconography -- --out '${ARTIFACT_DIR}/iconography.json'"
+          run_gate diff-check "git diff --cached --check '${BASE_SHA}' --"
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd site
+          npx playwright install --with-deps chromium
+
+      - name: Build exact-base and candidate representative surfaces
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git worktree add --detach /tmp/button-owner-base "${BASE_SHA}"
+          ln -s "${GITHUB_WORKSPACE}/site/node_modules" /tmp/button-owner-base/site/node_modules
+          run_build() {
+            local name="$1"
+            local command="$2"
+            local log="${ARTIFACT_DIR}/${name}.log"
+            set +e
+            bash -o pipefail -c "${command}" 2>&1 | tee "${log}"
+            local status="${PIPESTATUS[0]}"
+            set -e
+            printf '%s\t%s\t%s\n' "${name}" "${status}" "${command}" >> "${ARTIFACT_DIR}/gate-exits.tsv"
+            test "${status}" = 0
+          }
+          run_build baseline-build "cd /tmp/button-owner-base/site && rm -rf dist && PREVIEW_BUILD_ID=preview-button-base PREVIEW_DATA_MODE=real STATIC_SITE_PAGE_CLASSES=event,focus,lab STATIC_SITE_CURRENT_DATE=2026-09-04 STATIC_SITE_CURRENT_DATETIME=2026-09-04T12:00:00+02:00 STATIC_SITE_REPO_SHA='${BASE_SHA}' npm run build:preview"
+          run_build candidate-build "cd '${GITHUB_WORKSPACE}/site' && rm -rf dist && PREVIEW_BUILD_ID=preview-button-candidate PREVIEW_DATA_MODE=real STATIC_SITE_PAGE_CLASSES=event,focus,lab STATIC_SITE_CURRENT_DATE=2026-09-04 STATIC_SITE_CURRENT_DATETIME=2026-09-04T12:00:00+02:00 STATIC_SITE_REPO_SHA='${GITHUB_SHA}' npm run build:preview"
+          test -f /tmp/button-owner-base/site/dist/preview-button-base/lab/design-system/index.html
+          test -f "${GITHUB_WORKSPACE}/site/dist/preview-button-candidate/lab/design-system/index.html"
+          test -f /tmp/button-owner-base/site/dist/preview-button-base/fokus-gruppa/priglashenie/index.html
+          test -f "${GITHUB_WORKSPACE}/site/dist/preview-button-candidate/fokus-gruppa/priglashenie/index.html"
+
+      - name: Resolve representative event routes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import json
+          import os
+          import shlex
+
+          base_root = Path('/tmp/button-owner-base/site/dist/preview-button-base')
+          candidate_root = Path(os.environ['GITHUB_WORKSPACE']) / 'site/dist/preview-button-candidate'
+
+          class CalendarParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.actions = []
+              def handle_starttag(self, tag, attrs):
+                  if tag != 'a':
+                      return
+                  values = dict(attrs)
+                  if 'data-calendar-action' not in values:
+                      return
+                  self.actions.append(set((values.get('class') or '').split()))
+
+          rows = []
+          for file in sorted(base_root.rglob('index.html')):
+              parser = CalendarParser()
+              parser.feed(file.read_text(encoding='utf-8'))
+              relative = file.relative_to(base_root).as_posix()
+              route = '/' if relative == 'index.html' else f"/{relative[:-len('index.html')]}"
+              for classes in parser.actions:
+                  rows.append({'route': route, 'classes': sorted(classes)})
+
+          def select(token):
+              row = next((row for row in rows if row['route'].startswith('/sobytiya/') and token in row['classes']), None)
+              if row is None:
+                  raise SystemExit(f'No rendered CalendarLink with {token}; census={json.dumps(rows, ensure_ascii=False)}')
+              counterpart = candidate_root / row['route'].lstrip('/') / 'index.html'
+              if not counterpart.exists():
+                  raise SystemExit(f'Candidate counterpart missing: {counterpart}')
+              return row
+
+          primary = select('cta-button')
+          secondary = select('secondary-button')
+          evidence = {'primary': primary, 'secondary': secondary, 'rendered_action_count': len(rows)}
+          artifact_dir = Path(os.environ['ARTIFACT_DIR'])
+          (artifact_dir / 'calendar-route-census.json').write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          (artifact_dir / 'calendar-routes.env').write_text(
+              f"BUTTON_OWNER_EVENT_PRIMARY_ROUTE={shlex.quote(primary['route'])}\n"
+              f"BUTTON_OWNER_EVENT_SECONDARY_ROUTE={shlex.quote(secondary['route'])}\n",
+              encoding='utf-8',
+          )
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Prove before-after computed-style parity on desktop and mobile
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 4171 --directory /tmp/button-owner-base/site/dist >"${ARTIFACT_DIR}/baseline-server.log" 2>&1 &
+          base_server=$!
+          python3 -m http.server 4172 --directory "${GITHUB_WORKSPACE}/site/dist" >"${ARTIFACT_DIR}/candidate-server.log" 2>&1 &
+          candidate_server=$!
+          cleanup() { kill "${base_server}" "${candidate_server}" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for port in 4171 4172; do
+            ready=0
+            for attempt in {1..40}; do
+              if curl --fail --silent "http://127.0.0.1:${port}/" >/dev/null; then ready=1; break; fi
+              sleep 0.25
+            done
+            test "${ready}" = 1
+          done
+          source "${ARTIFACT_DIR}/calendar-routes.env"
+          set +e
+          (
+            cd site
+            BUTTON_OWNER_BASE_URL=http://127.0.0.1:4171/preview-button-base \
+            BUTTON_OWNER_CANDIDATE_URL=http://127.0.0.1:4172/preview-button-candidate \
+            BUTTON_OWNER_EVENT_PRIMARY_ROUTE="${BUTTON_OWNER_EVENT_PRIMARY_ROUTE}" \
+            BUTTON_OWNER_EVENT_SECONDARY_ROUTE="${BUTTON_OWNER_EVENT_SECONDARY_ROUTE}" \
+            BUTTON_OWNER_PARITY_REPORT="${ARTIFACT_DIR}/computed-style-parity.json" \
+            node tests/button-single-visual-owner.playwright.mjs
+          ) 2>&1 | tee "${ARTIFACT_DIR}/computed-style-parity.log"
+          status="${PIPESTATUS[0]}"
+          set -e
+          printf '%s\t%s\t%s\n' playwright-computed-style-parity "${status}" \
+            'node site/tests/button-single-visual-owner.playwright.mjs (1440x900,390x844; exact base/candidate)' \
+            >> "${ARTIFACT_DIR}/gate-exits.tsv"
+          test "${status}" = 0
+
+      - name: Verify tested tree remained immutable
+        shell: bash
+        env:
+          EXPECTED_TREE: ${{ steps.prepare.outputs.tested_tree }}
+        run: |
+          set -Eeuo pipefail
+          git diff --exit-code
+          git diff --cached --check "${BASE_SHA}" --
+          actual_tree="$(git write-tree)"
+          test "${actual_tree}" = "${EXPECTED_TREE}"
+          git diff --cached --name-only "${BASE_SHA}" -- | sort > /tmp/final-button-paths.txt
+          diff -u /tmp/expected-button-paths.txt /tmp/final-button-paths.txt
+          printf 'tested_tree_readback=%s\n' "${actual_tree}" | tee -a "${ARTIFACT_DIR}/identity-before.txt"
+
+      - name: Commit and force-update the same rebased branch
+        id: deliver
+        shell: bash
+        env:
+          TESTED_TREE: ${{ steps.prepare.outputs.tested_tree }}
+        run: |
+          set -Eeuo pipefail
+          export GIT_AUTHOR_NAME='OpenAI Button normalization owner'
+          export GIT_AUTHOR_EMAIL='button-normalization@users.noreply.github.com'
+          export GIT_COMMITTER_NAME='OpenAI Button normalization owner'
+          export GIT_COMMITTER_EMAIL='button-normalization@users.noreply.github.com'
+          final_sha="$(printf '%s\n' 'refactor(ui): converge Button on one visual owner' | git commit-tree "${TESTED_TREE}" -p "${BASE_SHA}")"
+          git reset --hard "${final_sha}"
+          test "$(git rev-parse HEAD^)" = "${BASE_SHA}"
+          test "$(git rev-parse HEAD^{tree})" = "${TESTED_TREE}"
+          test -z "$(git diff --name-only "${BASE_SHA}"..HEAD -- .github/workflows)"
+          git push --force-with-lease="refs/heads/${BRANCH_NAME}:${GITHUB_SHA}" origin "${final_sha}:refs/heads/${BRANCH_NAME}"
+          remote_sha="$(git ls-remote origin "refs/heads/${BRANCH_NAME}" | cut -f1)"
+          test "${remote_sha}" = "${final_sha}"
+          printf 'base_sha=%s\nhead_sha=%s\nhead_parent=%s\nhead_tree=%s\nremote_readback=%s\n' \
+            "${BASE_SHA}" "${final_sha}" "$(git rev-parse HEAD^)" "$(git rev-parse HEAD^{tree})" "${remote_sha}" \
+            | tee "${ARTIFACT_DIR}/final-identity.txt"
+          echo "final_sha=${final_sha}" >> "${GITHUB_OUTPUT}"
+          echo "final_tree=${TESTED_TREE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish exact result in issue 621
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINAL_SHA: ${{ steps.deliver.outputs.final_sha }}
+          FINAL_TREE: ${{ steps.deliver.outputs.final_tree }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY' > "${ARTIFACT_DIR}/issue-comment.md"
+          from pathlib import Path
+          import json
+          import os
+
+          artifact = Path(os.environ['ARTIFACT_DIR'])
+          base = os.environ['BASE_SHA']
+          head = os.environ['FINAL_SHA']
+          tree = os.environ['FINAL_TREE']
+          branch = os.environ['BRANCH_NAME']
+          owner = json.loads((artifact / 'button-owner-report.json').read_text(encoding='utf-8'))
+          parity = json.loads((artifact / 'computed-style-parity.json').read_text(encoding='utf-8'))
+          exits = []
+          for line in (artifact / 'gate-exits.tsv').read_text(encoding='utf-8').splitlines():
+              name, status, command = line.split('\t', 2)
+              exits.append((name, status, command))
+          changed = (artifact / 'changed-paths.txt').read_text(encoding='utf-8').splitlines()
+
+          print('[RESULT] BUTTON_SINGLE_VISUAL_OWNER_PASS')
+          print()
+          print(f'- branch: `{branch}`')
+          print(f'- base: `{base}`')
+          print(f'- head: `{head}`')
+          print(f'- parent read-back: `{base}`')
+          print(f'- tested/final tree: `{tree}`')
+          print(f'- remote read-back: `{head}`')
+          print()
+          print('Implementation facts:')
+          print(f'- canonical base owner: `{owner["owner_path"]}` → `{owner["base_selector"]}`; count `{owner["base_owner_count"]}`;')
+          print(f'- registered native roots: `{owner["native_consumer_count"]}` across `{len(owner["native_consumer_files"])}` files; violations: `{len(owner["violations"])}`;')
+          print('- `FocusPwaInstallAction` retains `data-ke-button-compat="runtime-hook-hidden"`; the existing compatibility test was not weakened or rewritten;')
+          print('- generic CalendarLink `cta-button` / `secondary-button` roots keep their contextual classes and receive only `data-ke-button-compat="contextual-event-action"`; canonical binding is explicit `buttonVariant`;')
+          print('- `DesktopEventActionPanel` and other contextual controls remain separate archetypes; no palette, semantic or runtime redesign.')
+          print()
+          print('Exact command exits:')
+          print('| packet | exit | command |')
+          print('|---|---:|---|')
+          for name, status, command in exits:
+              command = command.replace('|', '\\|')
+              print(f'| `{name}` | `{status}` | `{command}` |')
+          print()
+          print(f'Computed-style parity: `{parity["summary"]["parity_cells"]}`/`{parity["summary"]["parity_cells"]}` cells, failures `0`. Every cell compares all four paddings, borders and radii plus height/min-height, background, color, full font tuple, root geometry and icon geometry.')
+          for cell in parity['cells']:
+              before = cell['before']
+              after = cell['after']
+              b = before['computed']
+              a = after['computed']
+              icon_b = before['iconGeometry']
+              icon_a = after['iconGeometry']
+              border_b = f"{b['borderTopWidth']} {b['borderTopStyle']} {b['borderTopColor']}"
+              border_a = f"{a['borderTopWidth']} {a['borderTopStyle']} {a['borderTopColor']}"
+              padding_b = f"{b['paddingTop']} {b['paddingRight']} {b['paddingBottom']} {b['paddingLeft']}"
+              padding_a = f"{a['paddingTop']} {a['paddingRight']} {a['paddingBottom']} {a['paddingLeft']}"
+              radius_b = f"{b['borderTopLeftRadius']} {b['borderTopRightRadius']} {b['borderBottomRightRadius']} {b['borderBottomLeftRadius']}"
+              radius_a = f"{a['borderTopLeftRadius']} {a['borderTopRightRadius']} {a['borderBottomRightRadius']} {a['borderBottomLeftRadius']}"
+              font_b = f"{b['fontWeight']} {b['fontSize']}/{b['lineHeight']} {b['fontFamily']}"
+              font_a = f"{a['fontWeight']} {a['fontSize']}/{a['lineHeight']} {a['fontFamily']}"
+              icon_before = 'none' if icon_b is None else f"{icon_b['width']}×{icon_b['height']} ({icon_b['computedWidth']}×{icon_b['computedHeight']})"
+              icon_after = 'none' if icon_a is None else f"{icon_a['width']}×{icon_a['height']} ({icon_a['computedWidth']}×{icon_a['computedHeight']})"
+              print(
+                  f"- `{cell['target']}` · `{cell['viewport']['width']}×{cell['viewport']['height']}` · `{cell['route']}`: "
+                  f"height `{b['height']}→{a['height']}`; padding `{padding_b}→{padding_a}`; radius `{radius_b}→{radius_a}`; "
+                  f"border `{border_b}→{border_a}`; background `{b['backgroundColor']} / {b['backgroundImage']}→{a['backgroundColor']} / {a['backgroundImage']}`; "
+                  f"color `{b['color']}→{a['color']}`; font `{font_b}→{font_a}`; icon `{icon_before}→{icon_after}`."
+              )
+          print()
+          print('Exact diff:')
+          for line in changed:
+              print(f'- `{line}`')
+          print()
+          print(f'Action evidence: `{os.environ.get("GITHUB_SERVER_URL")}/{os.environ.get("GITHUB_REPOSITORY")}/actions/runs/{os.environ.get("GITHUB_RUN_ID")}`')
+          print('Public/Kaggle Preview was not republished by this bounded Button batch.')
+          PY
+          existing="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/621/comments" --jq --arg head "${FINAL_SHA}" '[.[] | select(.body | contains("[RESULT] BUTTON_SINGLE_VISUAL_OWNER_PASS") and contains($head))] | length')"
+          if [[ "${existing}" = 0 ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/issues/621/comments" --method POST --raw-field "body=$(cat "${ARTIFACT_DIR}/issue-comment.md")" >/dev/null
+          fi
+          cat "${ARTIFACT_DIR}/issue-comment.md"
+
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: button-single-visual-owner-${{ github.run_id }}
+          path: /tmp/button-single-visual-owner
+          if-no-files-found: error
+          retention-days: 14
