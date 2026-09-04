@@ -799,3 +799,18 @@ existing transport-foundation role has the same value and meaning:
 They are exceptions, not new token owners. A future exact semantic role must
 replace the literal and tighten this allowlist rather than introducing a local
 transport token.
+
+## 23. Weekend row-end invalidation (2026-09-04)
+
+The product-only browser census found an intermittent `66px` document overflow
+on `/vyhodnye/` at `1440x900`. The overflowing title copies retained a stale
+`420px` inline width after `WeekendEditorialTimeline` reordered their cards;
+the owning flow itself was only `571px` wide and did not resize, so its
+`ResizeObserver` could not request a new row-end measurement.
+
+Weekend packing now emits one completion event after each reorder and
+`ListingControls` recomputes row-end widths on the next bounded animation-frame
+pass. This preserves the reviewed card order, intrinsic media geometry and
+full-title policy; it only invalidates a measurement whose layout input
+changed. The desktop geometry gate covers the exact `1440px` owner-review
+viewport in addition to the existing `721px` and `800px` weekend seams.

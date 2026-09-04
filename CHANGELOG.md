@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed: weekend desktop card packing now invalidates and recomputes row-end
+  title widths after every DOM reorder, preventing intermittent horizontal
+  document overflow at the 1440px owner-review viewport.
+
 - Changed: production rail, regional-bus and Kaup transport schedule consumers now use their existing canonical modality color and elevation roles; schedule semantics, interactions and geometry are unchanged.
 
 - Changed: the executable V0 target pointer now names the exact current

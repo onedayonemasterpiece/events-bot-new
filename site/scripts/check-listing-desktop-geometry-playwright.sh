@@ -48,7 +48,8 @@ done
 
 # The desktop Weekend board begins immediately above the 720px mobile
 # boundary. Its fixed time lane and two day summaries must shrink internally;
-# long day/count labels may never widen the document at that seam.
-for width in 721 800; do
+# long day/count labels and repacked row-end copy must never widen the document
+# at those seams or at the owner-review desktop viewport.
+for width in 721 800 1440; do
   check_route vyhodnye "$width" 900 overflow-only
 done

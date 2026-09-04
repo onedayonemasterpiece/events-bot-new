@@ -412,6 +412,7 @@ const showCities = cities.length > 1;
       if (changed) scheduleListingRowEnds();
     });
     document.querySelectorAll('.ke-time-group__flow').forEach((flow) => observer.observe(flow));
+    document.addEventListener('kenigevents:weekend-listing-packed', scheduleListingRowEnds);
     window.addEventListener('resize', scheduleListingRowEnds, { passive: true });
     window.addEventListener('pageshow', scheduleListingRowEnds, { once: true });
   }
