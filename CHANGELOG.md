@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed: the shared mobile toast now consumes its established shell color,
+  elevation, shape, touch-target and canonical action-icon roles instead of
+  local copies, without changing its rendering, queueing or announcements.
+
 - Changed: the shared mobile bottom navigation now consumes its established
   shell color, elevation, icon-size and icon-container roles instead of local
   copies, without changing its four destinations, state or geometry.

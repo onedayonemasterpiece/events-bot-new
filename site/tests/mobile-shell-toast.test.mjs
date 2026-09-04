@@ -80,7 +80,7 @@ test('toast pauses actual time and countdown and honors safe/reduced-motion geom
   }
   assert.match(toast, /top:calc\(var\(--mobile-top-chrome-bottom\) \+ var\(--mobile-header-handle-overhang, 24px\) \+ 8px\)/u);
   assert.match(toast, /max-height:72px/u);
-  assert.match(toast, /min-width:44px; min-height:44px/u);
+  assert.match(toast, /min-width:var\(--ke-toast-control-size\); min-height:var\(--ke-toast-control-size\)/u);
   assert.match(toast, /transform-origin:left/u);
   assert.match(toast, /@keyframes mobile-toast-retreat \{ to \{ transform:scaleX\(0\); \} \}/u);
   assert.match(toast, /prefers-reduced-motion:reduce/u);

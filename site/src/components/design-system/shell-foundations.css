@@ -49,7 +49,7 @@
   --ke-elevation-toast: 0 14px 34px rgba(72, 45, 25, 0.18);
   --ke-toast-radius: var(--ke-shape-radius-control);
   --ke-toast-control-size: var(--ke-size-touch-target);
-  --ke-toast-close-icon-size: var(--ke-icon-size-control);
+  --ke-toast-close-icon-size: var(--ke-icon-size-action);
 
   /* Service share action. Inline SVG copies migrate to Icon/SemanticIcon. */
   --ke-color-service-share-text: var(--ke-color-text-primary);

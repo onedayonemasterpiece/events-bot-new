@@ -151,6 +151,12 @@ state-color, icon-size and icon-container roles. Its four canonical navigation
 identities, current-route behavior and mobile geometry remain unchanged; the
 component no longer repeats those shell values as a parallel local style owner.
 
+`MobileToastRegion` consumes the same shell SoT for its surface, text, action,
+state borders, progress, elevation, radius, touch target and close-glyph size.
+The close glyph maps to the canonical 24 px action-icon role, preserving its
+existing rendered size while keeping the product-wide four-size icon system.
+Queueing, announcements, timing and placement remain owned by the component.
+
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant

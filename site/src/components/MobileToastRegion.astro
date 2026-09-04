@@ -174,14 +174,14 @@
   }
   .mobile-toast-region[hidden] { display:none; }
   .mobile-toast-region.is-drawer-obscured { opacity:0; visibility:hidden; }
-  .mobile-toast { position:relative; min-height:56px; max-height:72px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; overflow:hidden; padding:8px 8px 8px 14px; border:1px solid rgba(121,48,20,.18); border-radius:14px; background:#fffdf8; color:#221a14; box-shadow:0 14px 34px rgba(72,45,25,.18); pointer-events:auto; }
-  .mobile-toast[data-kind="success"] { border-color:rgba(38,120,72,.32); }
-  .mobile-toast[data-kind="error"] { border-color:rgba(164,59,47,.36); }
+  .mobile-toast { position:relative; min-height:56px; max-height:72px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; overflow:hidden; padding:8px 8px 8px 14px; border:1px solid var(--ke-color-toast-border); border-radius:var(--ke-toast-radius); background:var(--ke-color-toast-surface); color:var(--ke-color-toast-text); box-shadow:var(--ke-elevation-toast); pointer-events:auto; }
+  .mobile-toast[data-kind="success"] { border-color:var(--ke-color-toast-success-border); }
+  .mobile-toast[data-kind="error"] { border-color:var(--ke-color-toast-error-border); }
   .mobile-toast__message { min-width:0; max-height:2.7em; margin:0; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.88rem; font-weight:760; line-height:1.35; }
   .mobile-toast__controls { display:flex; align-items:center; }
-  .mobile-toast__action,.mobile-toast__close { min-width:44px; min-height:44px; border:0; background:transparent; color:#793014; font:850 .82rem/1 inherit; cursor:pointer; }
-  .mobile-toast__close { font-size:1.5rem; font-weight:500; }
-  .mobile-toast__countdown { position:absolute; left:0; right:0; bottom:0; height:3px; background:#a54821; transform:scaleX(1); transform-origin:left; }
+  .mobile-toast__action,.mobile-toast__close { min-width:var(--ke-toast-control-size); min-height:var(--ke-toast-control-size); border:0; background:transparent; color:var(--ke-color-toast-action); font:850 .82rem/1 inherit; cursor:pointer; }
+  .mobile-toast__close { font-size:var(--ke-toast-close-icon-size); font-weight:500; }
+  .mobile-toast__countdown { position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--ke-color-toast-progress); transform:scaleX(1); transform-origin:left; }
   .mobile-toast__countdown.is-running { animation:mobile-toast-retreat var(--mobile-toast-duration) linear forwards; }
   .mobile-toast__countdown.is-paused { animation-play-state:paused; }
   @keyframes mobile-toast-retreat { to { transform:scaleX(0); } }
