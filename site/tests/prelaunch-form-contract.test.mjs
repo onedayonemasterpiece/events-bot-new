@@ -24,7 +24,7 @@ test('prelaunch client keeps a permanent backend-confirmed first/repeat state', 
   assert.doesNotMatch(runtime, /email\.value\s*=\s*['"]{2}/u);
 });
 
-test('public prelaunch copy consistently announces the 5 September launch', () => {
+test('public prelaunch copy consistently announces the 20 September launch', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
   const runtime = source('site/src/scripts/prelaunchForm.ts');
