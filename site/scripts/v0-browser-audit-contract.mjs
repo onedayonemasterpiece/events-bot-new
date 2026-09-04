@@ -10,6 +10,11 @@ export const SCHEMA = 'kenigevents.v0-browser-audit.v1';
 export const CONTRACT_VERSION = '1.10.0';
 export const AUTHORED_AGAINST_SOURCE = '1bc6d9cb4c122046f4782532381de953727c1da6';
 export const OWNERS = freeze({ acceptance:'N0', foundations:'F0', framing:'FR0', components:'M0', routes:'A0' });
+export const PRODUCT_SCOPE = freeze({
+  authority:'site/src/data/design-system-production-surface-contract.v1.json',
+  excludedRoutePrefixes:freeze(['/lab/', '/__preview/']),
+  rule:'Only user-facing product archetypes enter V0 verdicts; generated QA/lab routes are non-product diagnostics.',
+});
 export const CANONICAL_A0_V0_MATRIX = freeze({
   repository: 'onedayonemasterpiece/lovekgd-design-system',
   ref: 'a59c8745ca21a39ef085bb912bbd611d6394f1a1',
@@ -60,6 +65,18 @@ const escapes = (frame, image, tolerance = 1) => frame && image && (
   || number(image.x) + number(image.width) > number(frame.x) + number(frame.width) + tolerance
   || number(image.y) + number(image.height) > number(frame.y) + number(frame.height) + tolerance
 );
+const routePath = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try { return new URL(raw, 'https://kenigevents.invalid').pathname; } catch { return raw; }
+};
+export const isNonProductAuditRoute = (input = {}) => {
+  if (input.routeKey === 'preview') return true;
+  const path = routePath(input.route);
+  return PRODUCT_SCOPE.excludedRoutePrefixes.some((prefix) => path === prefix.slice(0, -1)
+    || path.startsWith(prefix)
+    || path.includes(prefix));
+};
 const remainder = (count, rowSize) => {
   const size = Math.max(1, Math.floor(number(rowSize, 1)));
   const rest = Math.max(0, Math.floor(number(count))) % size;
@@ -69,6 +86,7 @@ const remainder = (count, rowSize) => {
 export function classifyObservation(observation = {}) {
   const defects = [];
   const auditGaps = [];
+  const ignoredDocuments = [];
   const target = observation.target || {};
   const documents = Array.isArray(observation.documents) ? observation.documents : [];
   const add = (document, code, owner, selector, evidence = {}) => defects.push({ code, owner, routeKey:document.routeKey, route:document.route, width:document.width, selector, evidence });
@@ -78,6 +96,10 @@ export function classifyObservation(observation = {}) {
 
   for (const input of documents) {
     const document = { ...input, route:input.route || '<unknown>' };
+    if (isNonProductAuditRoute(document)) {
+      ignoredDocuments.push({ routeKey:document.routeKey, route:document.route, reason:'NON_PRODUCT_QA_ROUTE' });
+      continue;
+    }
     const clientWidth = number(document.clientWidth ?? document.width);
     const documentOverflow = Math.max(number(document.documentScrollWidth, clientWidth), number(document.bodyScrollWidth, clientWidth)) - clientWidth;
     if (number(document.httpStatus) !== 200) add(document, 'HTTP_NOT_200', document.routeKey === 'preview' ? OWNERS.acceptance : OWNERS.routes, 'document', { httpStatus:document.httpStatus });
@@ -139,7 +161,8 @@ export function classifyObservation(observation = {}) {
   }
 
   if (observation.complete === true) {
-    const expectedPairs = Array.isArray(observation.expectedPairs) ? observation.expectedPairs : [];
+    const expectedPairs = (Array.isArray(observation.expectedPairs) ? observation.expectedPairs : [])
+      .filter((pair) => !isNonProductAuditRoute(pair));
     if (!expectedPairs.length) auditGaps.push({ code:'EXPECTED_PAIRS_REQUIRED', authority:CANONICAL_A0_V0_MATRIX.path });
     const present = new Set(documents.map((document) => key(document.caseId || document.routeKey, document.width)));
     for (const pair of expectedPairs) if (!present.has(key(pair.caseId || pair.routeKey, pair.width))) auditGaps.push({ code:'ROUTE_VIEWPORT_PAIR_MISSING', caseId:pair.caseId, routeKey:pair.routeKey, width:pair.width });
@@ -154,7 +177,8 @@ export function classifyObservation(observation = {}) {
     verdict:auditGaps.length ? 'INCOMPLETE' : defects.length ? 'DRIFT' : 'PASS',
     defects,
     auditGaps,
-    summary:{ documentsObserved:documents.length, defectCount:defects.length, auditGapCount:auditGaps.length, defectsByOwner:defects.reduce((out, item) => ({ ...out, [item.owner]:(out[item.owner] || 0) + 1 }), {}) },
+    ignoredDocuments,
+    summary:{ documentsObserved:documents.length - ignoredDocuments.length, documentsIgnored:ignoredDocuments.length, defectCount:defects.length, auditGapCount:auditGaps.length, defectsByOwner:defects.reduce((out, item) => ({ ...out, [item.owner]:(out[item.owner] || 0) + 1 }), {}) },
   };
 }
 
@@ -168,6 +192,7 @@ export const auditContract = freeze({
   publishedTargets:PUBLISHED_TARGETS,
   viewports:VIEWPORTS,
   selectors:SELECTORS,
+  productScope:PRODUCT_SCOPE,
   executionBoundary:freeze({ startsBrowser:false, browserExecutor:'my-browser-bridge-or-existing-release-gate', existingLocalReleaseGate:'site/scripts/check-browser-release-gate.mjs', replacesExistingReleaseGate:false, replacesCanonicalA0V0Matrix:false }),
   flowControl:freeze({ fr0CutoverRequiredBeforeFramingWrites:true, fr0MustNotDelayAlreadyReadySuccessor:true }),
   gates:freeze({ documentOverflowTolerancePx:1, controlMinimumPx:44, equalHeightTolerancePx:1, finalLineOccupancyTolerancePx:1, desktopNavigationBreakpointPx:981, safeBlankRelTokens:freeze(['noopener','noreferrer']), canonicalIdentityAttributes:freeze(['data-ds-family','data-ds-version','data-ds-variant','data-ds-state']), mediaFrameContract:'v1', adaptiveGridLayoutEngine:'flex-lines', adaptiveGridRemainderPolicy:'stretch' }),

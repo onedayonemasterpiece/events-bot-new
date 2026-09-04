@@ -84,9 +84,11 @@ integrated Search visual is not acceptance of the live auth/backend journey.
 ## Owner-facing Preview archetype inventory
 
 The existing `/<id>/__preview/` hub must render exactly one prefix-local
-representative link for each family below. Extra product and QA links may remain,
-but they do not satisfy this coverage gate and do not receive the
-`data-owner-archetype-family` marker.
+representative link for each family below. Extra product links may remain, but
+they do not satisfy this coverage gate and do not receive the
+`data-owner-archetype-family` marker. `/lab/*` and the Preview directory itself
+are non-product infrastructure: they may be generated, but are excluded from
+owner review, V0 verdicts, product readiness and A=S=P completion percentages.
 
 | Family ID | Representative route |
 |---|---|
