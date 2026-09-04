@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -6,7 +7,7 @@ import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { buildSpecimenRegistry } from './registry.mjs';
-import { assertEvidencePacket, assertSpecimenRegistry, stableHash } from './validate.mjs';
+import { assertEvidencePacket, assertFreeCollectionStructuralProjection, assertSpecimenRegistry, stableHash } from './validate.mjs';
 import { capturePlaywrightStablePair } from '../evidence.mjs';
 
 const sha = (value) => createHash('sha256').update(value).digest('hex');
@@ -254,3 +255,118 @@ export async function captureWithExactPlaywright({ nodeModules, dist, outputDir,
 }
 
 export function observationDigest(rows) { return stableHash(rows); }
+
+/** Read-only resolved composition export; no native Penpot IDs or writes. */
+export async function captureFreeCollectionStructuralProjection({
+  page, manifestUrl, expectedSha, snapshot, repoRoot, expectedEventIds,
+}) {
+  const response = await page.request.get(manifestUrl);
+  if (response.status() !== 200) throw new Error('Projection manifest is not HTTP 200');
+  const manifestBytes = await response.body();
+  const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  if (!/^[a-f0-9]{40}$/u.test(expectedSha) || manifest.repo_sha !== expectedSha) throw new Error('Projection source SHA mismatch');
+  const registryPath = 'site/src/design-system/astro-family-registry.v1.json';
+  const source = (file) => execFileSync('git', ['show', `${expectedSha}:${file}`], { cwd: repoRoot });
+  const registryBytes = source(registryPath);
+  const registry = JSON.parse(registryBytes.toString('utf8'));
+  const sourceBindings = registry.families.map((family) => ({
+    id: family.id, version: family.version, path: family.astro_root,
+    sha256: sha(source(family.astro_root)),
+    styles: family.style_owners.map((file) => ({ path: file, sha256: sha(source(file)) })),
+    variants: family.variants, states: family.states, nested_families: family.nested_families,
+    token_refs: [...new Set([family.astro_root, ...family.style_owners].flatMap((file) =>
+      [...source(file).toString('utf8').matchAll(/var\(\s*(--ke-[A-Za-z0-9_-]+)/gu)].map((match) => match[1])))].sort(),
+  }));
+  const raw = await page.evaluate(({ sourceBindings, expectedEventIds }) => {
+    const root = document.querySelector('[data-free-collection-surface]');
+    const grid = root?.querySelector('[data-adaptive-event-card-grid]');
+    if (!root || !grid) throw new Error('Free collection root/grid missing');
+    const cards = [...grid.querySelectorAll(':scope > [data-event-card]')].slice(0, 5);
+    const eventIds = cards.map((card) => card.dataset.eventId);
+    if (JSON.stringify(eventIds) !== JSON.stringify(expectedEventIds)) throw new Error('Projection event order mismatch');
+    const selected = new Set(cards);
+    const byFamily = new Map(sourceBindings.map((row) => [row.id, row]));
+    const rect = (node) => { const r = node.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+    const styleNames = ['display', 'visibility', 'opacity', 'position', 'boxSizing', 'width', 'height',
+      'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'padding', 'margin', 'gap', 'flex', 'flexDirection',
+      'flexWrap', 'gridTemplateColumns', 'gridTemplateRows', 'alignItems', 'justifyContent',
+      'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textTransform',
+      'color', 'backgroundColor', 'backgroundImage', 'borderRadius', 'borderWidth', 'borderStyle',
+      'borderColor', 'boxShadow', 'overflow', 'objectFit', 'objectPosition', 'transform', 'zIndex'];
+    const rootStyle = getComputedStyle(root);
+    const tokenNames = [...rootStyle].filter((key) => key.startsWith('--ke-')).sort();
+    const tokens = Object.fromEntries(tokenNames.map((key) => [key, rootStyle.getPropertyValue(key).trim()]));
+    const walk = (node, anatomyPath, inheritedOwner) => {
+      if (node.nodeType === Node.TEXT_NODE) return { kind: 'text', anatomy_path: anatomyPath, text: node.textContent };
+      if (!(node instanceof Element) || ['SCRIPT', 'STYLE', 'TEMPLATE'].includes(node.tagName)) return null;
+      if (node.matches('[data-event-card]') && !selected.has(node)) return null;
+      const family = node.getAttribute('data-ds-family');
+      const owner = family ? byFamily.get(family) : inheritedOwner;
+      if (family && !owner) throw new Error(`Unregistered projected family: ${family}`);
+      const style = getComputedStyle(node);
+      const attributes = Object.fromEntries([...node.attributes]
+        .filter((a) => /^(?:data-|aria-|class$|role$|href$|src$|srcset$|sizes$|alt$|type$|title$|hidden$|viewBox$)/u.test(a.name))
+        .map((a) => [a.name, a.value]));
+      const item = {
+        kind: 'element', anatomy_path: anatomyPath, tag: node.localName, attributes,
+        identity: family ? { family, version: node.getAttribute('data-ds-version'),
+          variant: node.getAttribute('data-ds-variant'), state: node.getAttribute('data-ds-state') } : null,
+        containing_family: owner?.id || null, bounds: rect(node),
+        computed: Object.fromEntries(styleNames.map((key) => [key, style[key]])),
+        token_overrides: Object.fromEntries(tokenNames.map((key) => [key, style.getPropertyValue(key).trim()])
+          .filter(([key, value]) => value !== tokens[key])),
+        pseudo: Object.fromEntries(['::before', '::after'].map((pseudo) => {
+          const value = getComputedStyle(node, pseudo);
+          return [pseudo, Object.fromEntries(['content', ...styleNames].map((key) => [key, value[key]]))];
+        })),
+      };
+      if (node.localName === 'svg') item.svg = { markup: node.outerHTML, view_box: node.getAttribute('viewBox') };
+      if (node instanceof HTMLImageElement) item.image = { src: node.getAttribute('src'), current_src: node.currentSrc,
+        natural_width: node.naturalWidth, natural_height: node.naturalHeight, complete: node.complete };
+      item.children = [...node.childNodes].map((child, index) => walk(child, `${anatomyPath}/${index}`, owner)).filter(Boolean);
+      return item;
+    };
+    return { tree: walk(root, 'free-collection', null), tokens, event_ids: eventIds,
+      viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio }, url: location.href,
+      total_grid_cards: grid.querySelectorAll(':scope > [data-event-card]').length };
+  }, { sourceBindings, expectedEventIds });
+  const nodes = [];
+  const annotate = (node, parentId = null) => {
+    node.stable_id = `free-collection.${stableHash(node.anatomy_path).slice(0, 24)}`;
+    node.parent_id = parentId;
+    if (node.svg) node.svg.sha256 = sha(node.svg.markup);
+    nodes.push(node);
+    for (const child of node.children || []) annotate(child, node.stable_id);
+  };
+  annotate(raw.tree);
+  const used = new Set(nodes.map((node) => node.containing_family).filter(Boolean));
+  for (const id of used) for (const nested of sourceBindings.find((row) => row.id === id)?.nested_families || []) used.add(nested);
+  const projectedBindings = sourceBindings.filter((row) => used.has(row.id));
+  const referencedTokens = new Set(projectedBindings.flatMap((row) => row.token_refs));
+  raw.tokens = Object.fromEntries(Object.entries(raw.tokens).filter(([key]) => referencedTokens.has(key)));
+  raw.token_scope = 'source-referenced-under-projected-owners-including-declared-variants';
+  for (const node of nodes) if (node.token_overrides) node.token_overrides = Object.fromEntries(Object.entries(node.token_overrides).filter(([key]) => referencedTokens.has(key)));
+  const assets = {};
+  for (const node of nodes.filter((node) => node.image?.natural_width > 0)) {
+    const url = node.image.current_src || node.image.src;
+    if (!assets[url]) {
+      const resource = await page.request.get(url);
+      if (resource.status() !== 200) throw new Error(`Projection image bytes unavailable: ${url}`);
+      const bytes = await resource.body();
+      assets[url] = { sha256: sha(bytes), bytes: bytes.length, content_type: resource.headers()['content-type'] };
+    }
+    node.image.asset_sha256 = assets[url].sha256;
+  }
+  const result = {
+    schema: 'current_ui_free_collection_structural_projection_v1',
+    status: 'STRUCTURAL_EXPORT_VALIDATED_NOT_PENPOT_ROUND_TRIP',
+    provenance: { repo_sha: expectedSha, manifest_url: manifestUrl, manifest_sha256: sha(manifestBytes), manifest,
+      snapshot, registry_path: registryPath, registry_sha256: sha(registryBytes),
+      reference_clock: manifest.referenceIso, captured_at: new Date().toISOString() },
+    source_bindings: projectedBindings,
+    assets,
+    ...raw,
+  };
+  assertFreeCollectionStructuralProjection(result, { expectedSha, expectedEventIds, repoRoot });
+  return result;
+}

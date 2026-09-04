@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { REQUIRED_CAPSULES, SPECIMEN_SCHEMA } from './registry.mjs';
 import { assertFixtureDelta } from './fixtures.mjs';
@@ -92,4 +93,83 @@ export function validateTraceIntegrity(registry, observations = [], pageVerifica
     for (const row of registry.source_model_only_cases) if (row.reachability !== 'source-model-only' || row.production_state_claimed !== false) throw new Error(`Unclassified unreachable case: ${row.id}`);
   }
   return true;
+}
+
+/** Validate export structure, never certify an unmaterialized native Penpot file. */
+export function assertFreeCollectionStructuralProjection(record, { expectedSha, expectedEventIds, repoRoot, structuralOnly = false }) {
+  const fail = (message) => { throw new Error(`Free collection projection: ${message}`); };
+  const hash = (value) => /^[a-f0-9]{64}$/u.test(value || '');
+  const p = record?.provenance;
+  if (record?.schema !== 'current_ui_free_collection_structural_projection_v1') fail('schema');
+  if (!/^[a-f0-9]{40}$/u.test(expectedSha || '') || p?.repo_sha !== expectedSha
+      || p.manifest?.repo_sha !== expectedSha || !hash(p.manifest_sha256) || !hash(p.registry_sha256)
+      || !p.snapshot?.id || !hash(p.snapshot?.sha256) || !Number.isFinite(Date.parse(p.reference_clock))) fail('source/data/clock provenance');
+  if (record.viewport?.width !== 1440 && record.viewport?.width !== 390) fail('viewport');
+  if (record.viewport?.height !== (record.viewport.width === 1440 ? 900 : 844)) fail('viewport height');
+  if (expectedEventIds?.length !== 5 || JSON.stringify(record.event_ids) !== JSON.stringify(expectedEventIds)) fail('event order');
+  const bindings = new Map((record.source_bindings || []).map((row) => [row.id, row]));
+  if (!bindings.size) fail('source bindings');
+  for (const binding of bindings.values()) if (!binding.path || !hash(binding.sha256)
+      || !Number.isInteger(binding.version) || !Array.isArray(binding.styles)
+      || binding.styles.some((style) => !style.path || !hash(style.sha256))) fail('source owner hash');
+  if (!structuralOnly) {
+    if (!repoRoot || p.registry_path !== 'site/src/design-system/astro-family-registry.v1.json') fail('exact source repository required');
+    const source = (file) => execFileSync('git', ['show', `${expectedSha}:${file}`], { cwd: repoRoot });
+    const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
+    const registryBytes = source(p.registry_path);
+    if (digest(registryBytes) !== p.registry_sha256) fail('registry content mismatch');
+    const registry = JSON.parse(registryBytes.toString('utf8'));
+    for (const binding of bindings.values()) {
+      const family = registry.families.find((row) => row.id === binding.id);
+      if (!family || family.astro_root !== binding.path || family.version !== binding.version
+          || digest(source(binding.path)) !== binding.sha256
+          || JSON.stringify(family.style_owners) !== JSON.stringify(binding.styles.map((row) => row.path))
+          || binding.styles.some((row) => digest(source(row.path)) !== row.sha256)) fail('source binding content mismatch');
+    }
+  }
+  const nodes = [];
+  const seen = new Set();
+  const visit = (node, parentId = null) => {
+    if (!node || seen.has(node.stable_id) || node.stable_id !== `free-collection.${stableHash(node.anatomy_path).slice(0, 24)}`) fail('stable identity');
+    if (node.parent_id !== parentId) fail('parent link');
+    seen.add(node.stable_id); nodes.push(node);
+    if (node.kind === 'text') { if (typeof node.text !== 'string') fail('text'); return; }
+    if (node.kind !== 'element' || !node.computed || !node.attributes) fail('element anatomy');
+    for (const key of ['x', 'y', 'width', 'height']) if (!Number.isFinite(node.bounds?.[key])) fail('geometry');
+    if (node.bounds.width < 0 || node.bounds.height < 0) fail('negative geometry');
+    if (node.containing_family && !bindings.has(node.containing_family)) fail('unresolved owner');
+    if (node.identity) {
+      const owner = bindings.get(node.identity.family);
+      if (!owner || String(owner.version) !== node.identity.version || node.containing_family !== owner.id) fail('component version/owner');
+    }
+    if (node.svg && (!node.svg.markup || createHash('sha256').update(node.svg.markup).digest('hex') !== node.svg.sha256)) fail('SVG source');
+    if (node.image?.natural_width > 0 && (!hash(node.image.asset_sha256)
+        || record.assets?.[node.image.current_src || node.image.src]?.sha256 !== node.image.asset_sha256)) fail('image content binding');
+    for (const child of node.children || []) visit(child, node.stable_id);
+  };
+  visit(record.tree);
+  if (record.tree.identity?.family !== 'FreeCollectionSurface'
+      || !nodes.some((node) => node.identity?.family === 'AdaptiveEventCardGrid')) fail('composition identities');
+  const cards = nodes.filter((node) => Object.hasOwn(node.attributes || {}, 'data-event-card'));
+  if (cards.length !== 5 || JSON.stringify(cards.map((node) => node.attributes['data-event-id'])) !== JSON.stringify(expectedEventIds)) fail('card corpus');
+  const flatten = (node) => [node, ...(node.children || []).flatMap(flatten)];
+  for (const card of cards) {
+    if (card.identity?.family !== 'EventCard') fail('card identity');
+    const parts = flatten(card);
+    const frames = parts.filter((node) => Object.hasOwn(node.attributes || {}, 'data-media-frame'));
+    if (!frames.length) fail('MediaFrame');
+    for (const frame of frames) {
+      const attrs = frame.attributes;
+      if (attrs['data-media-frame-contract'] !== 'v1' || !['loaded', 'fallback', 'broken'].includes(attrs['data-media-frame-resource-state'])) fail('MediaFrame state');
+      const loadedImages = flatten(frame).filter((node) => node.image?.natural_width > 0 && node.image?.natural_height > 0);
+      if (attrs['data-media-frame-resource-state'] === 'loaded' && !loadedImages.length) fail('loaded media asset');
+      if (attrs['data-media-frame-resource-state'] !== 'loaded' && !Object.hasOwn(attrs, 'data-media-frame-fallback')) fail('fallback anatomy');
+    }
+    for (const semantic of ['like', 'not_interested']) if (!parts.some((node) => node.attributes?.['data-feedback-action'] === semantic)) fail(`action ${semantic}`);
+    if (!parts.some((node) => Object.hasOwn(node.attributes || {}, 'data-native-share'))) fail('share action');
+    const calendars = parts.filter((node) => Object.hasOwn(node.attributes || {}, 'data-calendar-action'));
+    if ((card.attributes['data-calendar-eligible'] === 'true') !== Boolean(calendars.length)
+        || calendars.some((node) => !node.attributes.href)) fail('calendar eligibility/href');
+  }
+  return { valid: true, node_count: nodes.length, card_count: cards.length, penpot_round_trip: false };
 }

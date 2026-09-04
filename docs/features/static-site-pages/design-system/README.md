@@ -237,3 +237,43 @@ The N0 public-identity regression preserves the recorded accepted baseline state
 (`PM0_3_BASELINE_DONE_CURRENT_SUCCESSOR_REBUILD_PENDING`) while still requiring
 Kaggle, real/all and exact manifest/artifact identity for each successor. It must
 not require the obsolete pre-baseline `BLOCKED_BY_SOURCE_CANDIDATE` value.
+
+### Source-bound structural export for later native Penpot
+
+The existing decoder specimen path now exports a bounded real free-collection
+composition through `captureFreeCollectionStructuralProjection` in
+`scripts/current_ui_resource_graph/v1/specimens/capture.mjs`, validated by
+`assertFreeCollectionStructuralProjection` in adjacent `validate.mjs`.
+This is a read-only exporter extension, not a new registry or materializer.
+
+Inputs: a live Playwright page at the exact published product route, its
+`preview-build.json` URL, expected full Git SHA, checked snapshot id/SHA256,
+local repository and exactly five ordered real event IDs. Capture 1440×900 and
+390×844 using the same IDs/snapshot/reference clock. The function itself reads
+and verifies the manifest and resolves registry/owner/style bytes with
+`git show <manifest SHA>:<path>`; uncommitted source is not substituted.
+
+Output retains the actual bounded DOM/text tree, component identity/version,
+parent-linked stable anatomy IDs, responsive geometry/computed/pseudo styles,
+shared resolved token values plus per-node overrides, SVG markup+hash, image
+URL+byte hash+natural geometry, actual action/calendar attributes, and
+MediaFrame-v1 resource attributes. Only the first five grid cards enter the
+specimen; the observed full grid count is context, not acceptance credit.
+Nested source owners resolve through the existing family registry. No native
+Penpot shape IDs are invented and no Penpot file is modified.
+
+Example call within the existing Playwright capture session:
+
+```js
+const packet = await captureFreeCollectionStructuralProjection({
+  page, manifestUrl, expectedSha, snapshot: { id: snapshotId, sha256: snapshotHash },
+  repoRoot, expectedEventIds,
+});
+```
+
+Regression: `node --test tests/test_current_ui_free_collection_structural_projection.mjs`.
+For a stored real packet also set `PROJECTION_PACKET=<artifact.json>`.
+Output goes to `artifacts/codex/`, never into a second manually maintained SoT.
+Current exact packet identity/evidence belongs in the linked STATUS/#621.
+The validator proves structural export integrity, **not** a native Penpot
+round-trip, approved native typography rendering or full-site P materialization.
