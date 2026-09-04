@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: the user-reachable focus completion heading wraps long words within mobile width without clipping controls, hiding page overflow, or changing completion behavior.
+
 - Fixed: canonical Kaggle Preview passes its validated frozen clock into Astro and rejects real manifests with drifting date/reference time before archiving; Golden retains its own pinned corpus clock.
 
 - Added: the existing decoder capture path can export and validate a source-bound five-card free-collection structural specimen, including native-ready anatomy/text/SVG/assets, responsive styles and action/media attributes, without Penpot mutation or invented native IDs.

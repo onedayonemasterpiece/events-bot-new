@@ -277,3 +277,7 @@ Output goes to `artifacts/codex/`, never into a second manually maintained SoT.
 Current exact packet identity/evidence belongs in the linked STATUS/#621.
 The validator proves structural export integrity, **not** a native Penpot
 round-trip, approved native typography rendering or full-site P materialization.
+
+### Focus completion responsive regression
+
+`/fokus-gruppa/zavershenie/` remains product scope because the programme page links to it. Its composition owner wraps long heading words within the available inline size; no global overflow clipping or completion-state behavior change is allowed. Regression: `site/tests/focus-programme-route-normalization.test.mjs`; browser acceptance covers completion states at mobile and desktop widths.

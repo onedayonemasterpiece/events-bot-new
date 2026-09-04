@@ -38,3 +38,10 @@ test('focus programme route keeps research boundaries and normalized visible sur
   assert.doesNotMatch(source, /background:\s*#fff|background:\s*#fff7e7|color:\s*#98401f|background:\s*#e7f2f7/u,
     'route visible palette is owned by foundations');
 });
+
+test('focus completion heading wraps long Russian words without clipping the page', async () => {
+  const completion = await readFile(new URL('../src/pages/fokus-gruppa/zavershenie/index.astro', import.meta.url), 'utf8');
+  assert.match(completion, /\.focus-end h1\s*\{[^}]*overflow-wrap:\s*anywhere/u);
+  assert.doesNotMatch(completion, /(?:html|body)\s*\{[^}]*overflow-x:\s*hidden/u,
+    'do not hide overflowing product text or controls');
+});
