@@ -187,6 +187,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           </div>
           <h3>Иконочное копирование</h3>
           <p class="muted-note">Значение остаётся обычным текстом, а кнопка показывает только общепринятую иконку. Успех меняет copy на check в том же квадрате; скрытый live-status озвучивает результат.</p>
+          <p class="muted-note" data-copy-action-state-evidence="runtime-required">Статические <code>previewState</code>-образцы помечены как <code>catalog-preview</code> и показывают только paint/anatomy. Они не являются browser evidence: первый клик снимает fixture-маркер и выполняет реальный clipboard success/error/reset путь.</p>
           <div class="ds-copy-grid">
             <div class="ds-copy-fixture">
               <span><small>Телефон</small><strong>+7 911 868-89-55</strong></span>
@@ -363,7 +364,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
               <tbody>
 
                 <tr data-ds-component="Button" data-ds-version="1"><td>Button</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Button.astro</code></td><td>default/hover/focus/pressed/loading/disabled</td></tr>
-                <tr data-ds-component="CopyAction" data-ds-version="1"><td>CopyAction</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>design-system/CopyAction.astro</code></td><td>secondary/inverse + success/error + clipboard fallback</td></tr>
+                <tr data-ds-component="CopyAction" data-ds-version="2"><td>CopyAction</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/CopyAction.astro</code></td><td>default/large × secondary/inverse; catalog-preview success/error fixtures; runtime clipboard success/error/reset</td></tr>
                 <tr data-ds-component="Badge" data-ds-version="1"><td>Badge</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Badge.astro</code></td><td>6 semantic tones</td></tr>
                 <tr data-ds-component="Field" data-ds-version="1"><td>Field</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Field.astro</code></td><td>default/focus/error/disabled</td></tr>
                 <tr data-ds-component="StatePanel" data-ds-version="1"><td>StatePanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/loading/error/stale/success/offline</td></tr>

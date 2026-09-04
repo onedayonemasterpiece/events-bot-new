@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const read = (relativePath) => readFileSync(resolve(siteDir, relativePath), 'utf8');
 const css = read('src/styles/design-system.css');
+const foundations = read('src/components/design-system/foundations.css');
 const layout = read('src/layouts/EventLayout.astro');
 const rootPage = read('src/pages/index.astro');
 const catalog = read('src/pages/lab/design-system/index.astro');
@@ -44,9 +45,9 @@ for (const token of requiredTokens) {
 if (!/--ke-control-min:\s*44px/iu.test(css)) throw new Error('Touch-target token must stay at least 44px');
 if (!/@media\s*\(prefers-reduced-motion:\s*reduce\)/iu.test(css)) throw new Error('Design-system CSS misses reduced-motion behavior');
 if (!layout.includes("import '../styles/design-system.css'")) throw new Error('EventLayout does not load the canonical design-system CSS');
-if (!rootPage.includes("import '../styles/design-system.css'")) throw new Error('Root page does not load the canonical design-system CSS');
-if (!rootPage.includes('ke-button ke-button--primary') || !rootPage.includes('ke-button ke-button--secondary')) throw new Error('Root page must use canonical design-system actions');
-if (/background:\s*#(?:98401f|893719)/iu.test(layout)) throw new Error('Approved brand tag colors must come from design-system tokens, not layout-local raw colors');
+if (!rootPage.includes("import EventLayout from '../layouts/EventLayout.astro'") || !rootPage.includes('<EventLayout')) throw new Error('Root page must consume canonical design-system CSS through EventLayout');
+if (/class=["'][^"']*\bke-button\b/u.test(rootPage)) throw new Error('Root page must not bypass registered action components with raw ke-button classes');
+if (!css.includes('--ke-color-brand-tag:') || !css.includes('--ke-color-brand-tag-hover:')) throw new Error('Canonical brand tag paint tokens are missing');
 
 for (const state of ['default', 'hover', 'focus', 'pressed', 'loading', 'disabled']) {
   if (!catalog.includes(`state: '${state}'`)) throw new Error(`Button catalog misses ${state} state`);
@@ -54,12 +55,76 @@ for (const state of ['default', 'hover', 'focus', 'pressed', 'loading', 'disable
 for (const iconName of ['copy', 'check']) {
   if (!icon.includes(`name === '${iconName}'`) || !catalog.includes(`'${iconName}'`)) throw new Error(`CopyAction icon inventory misses ${iconName}`);
 }
-for (const marker of ['data-ke-copy-action', 'navigator.clipboard?.writeText', "document.execCommand('copy')", 'data-ke-copy-status', 'aria-live="polite"', "previewState=\"success\"", "previewState=\"error\""]) {
-  if (!copyAction.includes(marker) && !catalog.includes(marker)) throw new Error(`CopyAction contract misses ${marker}`);
+
+for (const marker of [
+  'data-ke-copy-action',
+  'data-ke-style-owner="CopyAction.astro"',
+  'data-ds-version="2"',
+  "size?: 'default' | 'large'",
+  "previewState?: 'success' | 'error'",
+  'data-ds-size={size}',
+  'data-copy-preview-state={previewState}',
+  "data-copy-state-source={previewState ? 'catalog-preview' : 'runtime'}",
+  'data-copy-state={previewState}',
+  'data-ds-state={initialState}',
+  '--ke-copy-action-target-size: var(--ke-size-touch-target)',
+  '--ke-copy-action-target-size: var(--ke-size-control-large)',
+  'data-ke-icon-role="control"',
+  '<SemanticIcon name="copy" role="control" />',
+  '<SemanticIcon name="check" role="control" />',
+  'width: var(--ke-icon-size-control)',
+  'height: var(--ke-icon-size-control)',
+  'navigator.clipboard?.writeText',
+  "document.execCommand('copy')",
+  'data-ke-copy-status',
+  'aria-live="polite"',
+  "button.dataset.copyState = 'success'",
+  "button.dataset.copyState = 'error'",
+  'delete button.dataset.copyPreviewState',
+  "button.dataset.copyStateSource = 'runtime'",
+  'delete button.dataset.copyState',
+  "button.dataset.dsState = 'default'",
+]) {
+  if (!copyAction.includes(marker)) throw new Error(`CopyAction@2 component implementation misses ${marker}`);
 }
-if (!copyAction.includes("'ke-button--icon'") || !css.includes('.ke-button--icon { width: var(--ke-control-min)')) throw new Error('CopyAction must consume the fixed 44px icon-only button contract');
-if (!css.includes('.ke-copy-action__check-icon') || !css.includes('content: "!"')) throw new Error('CopyAction success/error cannot rely on color alone');
-if (!catalog.includes('<CopyAction') || !catalog.includes('variant="inverse"') || !catalog.includes('design-system/CopyAction.astro')) throw new Error('Catalog misses the real CopyAction fixtures or registry row');
+for (const selector of [
+  '.ke-copy-action[data-copy-state="success"]',
+  '.ke-copy-action[data-copy-state="error"]',
+  '.ke-copy-action[data-copy-state="error"]::after',
+]) {
+  if (!copyAction.includes(selector)) throw new Error(`CopyAction@2 local style owner misses ${selector}`);
+}
+if (css.includes('.ke-copy-action')) throw new Error('Legacy design-system.css must not match the canonical CopyAction@2 root');
+for (const token of [
+  '--ke-size-touch-target: var(--ke-control-min);',
+  '--ke-size-control-large: 52px;',
+  '--ke-icon-size-control: 20px;',
+  '--ke-color-copy-action-success-background:',
+  '--ke-color-copy-action-success-foreground:',
+  '--ke-color-copy-action-error-background:',
+  '--ke-color-copy-action-error-foreground:',
+]) {
+  if (!foundations.includes(token)) throw new Error(`CopyAction@2 foundation contract misses ${token}`);
+}
+if (!catalog.includes('data-copy-action-state-evidence="runtime-required"')) {
+  throw new Error('Catalog must state that static CopyAction previewState fixtures are not runtime browser evidence');
+}
+if (!/<CopyAction\b[^>]*\bsize="large"/u.test(catalog)) throw new Error('Catalog misses the implemented CopyAction size=large fixture');
+for (const state of ['success', 'error']) {
+  if (!new RegExp(`<CopyAction\\b[^>]*\\bpreviewState="${state}"`, 'u').test(catalog)) {
+    throw new Error(`Catalog misses the implemented CopyAction previewState=${state} fixture`);
+  }
+}
+const copyRegistryRow = catalog.match(/<tr data-ds-component="CopyAction" data-ds-version="2">[\s\S]*?<\/tr>/u)?.[0] || '';
+if (!copyRegistryRow || !copyRegistryRow.includes('tone="success">approved') || !copyRegistryRow.includes('runtime clipboard success/error/reset')) {
+  throw new Error('CopyAction registry must describe approved CopyAction@2 and its real runtime state machine');
+}
+if (/<tr data-ds-component="CopyAction" data-ds-version="1"/u.test(catalog)) {
+  throw new Error('Stale CopyAction@1 registry row remains after runtime alignment');
+}
+if (!catalog.includes('<CopyAction') || !catalog.includes('variant="inverse"') || !catalog.includes('design-system/CopyAction.astro')) {
+  throw new Error('Catalog misses the real CopyAction@2 fixtures or registry source');
+}
 for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'EventFacts', 'EventTokenMedallions', 'EventCtaPanel', 'EventCard', 'EventListItem', 'EventMediaRail', 'InterestClubCard', 'ListingPersonalFilter', 'ListingPageHeader', 'ListingControls', 'ListingDiscoveryRail', 'ListingTimeNav', 'ListingTimeMarker', 'ExactTimeTimeline', 'WeekendEditorialTimeline', 'ListingEventCard', 'PersonalFeedSlot', 'SocialIcon']) {
   const renderedDirectly = catalog.includes(`<${component}`);
   const renderedThroughDiscovery = component === 'ListingControls'
@@ -137,6 +202,8 @@ const contrastPairs = [
   ['warning badge', '#5a3b06', '#fff8db'],
   ['danger badge', '#a92d2d', '#fff0f0'],
   ['info badge', '#1f658d', '#e7f2f7'],
+  ['CopyAction success', '#ffffff', '#2d6f58'],
+  ['CopyAction error', '#a92d2d', '#fff0f0'],
 ];
 for (const [name, foreground, background] of contrastPairs) {
   const ratio = contrast(foreground, background);
