@@ -8,6 +8,8 @@ interface Props {
   successLabel?: string;
   errorLabel?: string;
   variant?: 'secondary' | 'inverse';
+  size?: 'default' | 'large';
+  previewState?: 'success' | 'error';
   className?: string;
   resetDelayMs?: number;
 }
@@ -18,34 +20,47 @@ const {
   successLabel = 'Скопировано',
   errorLabel = 'Не удалось скопировать — выделите значение вручную',
   variant = 'secondary',
+  size = 'default',
+  previewState,
   className = '',
   resetDelayMs = 2200,
 } = Astro.props;
+
+const initialState = previewState || 'default';
+const initialLabel = previewState === 'success'
+  ? successLabel
+  : previewState === 'error'
+    ? errorLabel
+    : ariaLabel;
 ---
 
 <button
   type="button"
-  class:list={['ke-copy-action', `ke-copy-action--${variant}`, className]}
+  class:list={['ke-copy-action', `ke-copy-action--${variant}`, size === 'large' && 'ke-copy-action--large', className]}
   data-ke-copy-action
   data-copy-value={value}
   data-copy-default-label={ariaLabel}
   data-copy-success-label={successLabel}
   data-copy-error-label={errorLabel}
   data-copy-reset-ms={Math.max(0, resetDelayMs)}
+  data-copy-preview-state={previewState}
+  data-copy-state-source={previewState ? 'catalog-preview' : 'runtime'}
+  data-copy-state={previewState}
   data-ds-component="CopyAction"
   data-ds-family="CopyAction"
   data-ds-version="2"
   data-ds-variant={variant}
-  data-ds-state="default"
+  data-ds-size={size}
+  data-ds-state={initialState}
   data-ke-foundation-consumer="copy-action"
   data-ke-style-owner="CopyAction.astro"
   data-ke-icon-role="control"
-  aria-label={ariaLabel}
-  title={ariaLabel}
+  aria-label={initialLabel}
+  title={initialLabel}
 >
   <span class="ke-copy-action__icon ke-copy-action__icon--copy" aria-hidden="true"><SemanticIcon name="copy" role="control" /></span>
   <span class="ke-copy-action__icon ke-copy-action__icon--success" aria-hidden="true"><SemanticIcon name="check" role="control" /></span>
-  <span class="sr-only" data-ke-copy-status role="status" aria-live="polite" aria-atomic="true"></span>
+  <span class="sr-only" data-ke-copy-status role="status" aria-live="polite" aria-atomic="true">{previewState ? initialLabel : ''}</span>
 </button>
 
 <script>
@@ -87,6 +102,15 @@ const {
       const status = button.querySelector<HTMLElement>('[data-ke-copy-status]');
       const currentTimer = resetTimers.get(button);
       if (currentTimer) window.clearTimeout(currentTimer);
+      if (button.dataset.copyPreviewState) {
+        delete button.dataset.copyPreviewState;
+        delete button.dataset.copyState;
+        button.dataset.dsState = 'default';
+        button.setAttribute('aria-label', defaultLabel);
+        button.title = defaultLabel;
+        if (status) status.textContent = '';
+      }
+      button.dataset.copyStateSource = 'runtime';
       button.setAttribute('aria-busy', 'true');
       try {
         await copyPlainText(value);
@@ -120,11 +144,12 @@ const {
 
 <style>
   .ke-copy-action {
+    --ke-copy-action-target-size: var(--ke-size-touch-target);
     position: relative;
-    width: var(--ke-size-touch-target);
-    min-width: var(--ke-size-touch-target);
-    height: var(--ke-size-touch-target);
-    min-height: var(--ke-size-touch-target);
+    width: var(--ke-copy-action-target-size);
+    min-width: var(--ke-copy-action-target-size);
+    height: var(--ke-copy-action-target-size);
+    min-height: var(--ke-copy-action-target-size);
     display: inline-grid;
     place-items: center;
     flex: 0 0 auto;
@@ -136,6 +161,9 @@ const {
     background: var(--ke-color-copy-action-background);
     font: inherit;
     cursor: pointer;
+  }
+  .ke-copy-action--large {
+    --ke-copy-action-target-size: var(--ke-size-control-large);
   }
   .ke-copy-action--inverse {
     --ke-color-copy-action-border: var(--ke-color-copy-action-inverse-border);
