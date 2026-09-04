@@ -8,6 +8,8 @@
 
 - Changed: production rail, regional-bus and Kaup transport schedule consumers now use their existing canonical modality color and elevation roles; schedule semantics, interactions and geometry are unchanged.
 
+- Changed: the live footer, service-share and public PWA-install roots now consume their existing canonical visible-role tokens without changing markup, icon ownership, interaction hooks, focus behavior or responsive geometry.
+
 - Changed: the executable V0 target pointer now names the exact current
   full-real Preview at `5862a4ec6`; the preceding `557019d68` URL remains
   explicit ancestry rather than an ambiguous parallel target.

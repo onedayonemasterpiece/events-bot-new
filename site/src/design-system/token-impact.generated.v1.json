@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2506,
     "definition_count": 2788,
-    "consumer_count": 3502,
+    "consumer_count": 3570,
     "alias_edge_count": 704,
     "family_count": 109
   },
@@ -645,7 +645,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-17f4c51a0813f79e": [
+    "components-cfd87489e85cd9fa": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -690,6 +690,7 @@
       "site/src/components/MobileBottomNav.astro",
       "site/src/components/MobileSearchBottomNav.astro",
       "site/src/components/PersonalFeedSlot.astro",
+      "site/src/components/ServiceShareAction.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -715,7 +716,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-30ce129f0d72f63e": [
+    "components-6907a01da4324f6f": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -759,6 +760,7 @@
       "site/src/components/MobileSearchBottomNav.astro",
       "site/src/components/PersonalFeedSlot.astro",
       "site/src/components/SearchCollectionLinks.astro",
+      "site/src/components/ServiceShareAction.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -2261,6 +2263,34 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
+    "components-f7c473c28dd4ff06": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/PwaInstallAction.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
     "components-fcf2b3afd1f0960d": [
       "site/src/components/brand/AnnouncementsLockup.astro",
       "site/src/components/design-system/Badge.astro",
@@ -2679,6 +2709,34 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
+    "components-36f06c77c0ee64c0": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/ServiceShareAction.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
     "components-2b541d0adc426cad": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
@@ -2971,7 +3029,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-9f04ac55e5341edd": [
+    "components-ed043eb409613851": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -3018,6 +3076,7 @@
       "site/src/components/MobileSearchBottomNav.astro",
       "site/src/components/PersonalFeedSlot.astro",
       "site/src/components/SearchCollectionLinks.astro",
+      "site/src/components/ServiceShareAction.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -3043,7 +3102,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-fc2eab04a5f16624": [
+    "components-1c565fae8ea43276": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -3086,6 +3145,7 @@
       "site/src/components/MobileSearchBottomNav.astro",
       "site/src/components/PersonalFeedSlot.astro",
       "site/src/components/SearchCollectionLinks.astro",
+      "site/src/components/ServiceShareAction.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -5236,7 +5296,7 @@
       "site/src/pages/sobytiya/[slug].astro",
       "site/src/pages/vystavki/index.astro"
     ],
-    "components-a5975807f3296f78": [
+    "components-518b7ea928e09c1f": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -5280,7 +5340,6 @@
       "site/src/components/MobileBottomNav.astro",
       "site/src/components/MobileSearchBottomNav.astro",
       "site/src/components/PersonalFeedSlot.astro",
-      "site/src/components/ServiceShareAction.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -5309,7 +5368,7 @@
       "site/src/layouts/PrelaunchLayout.astro",
       "site/src/pages/index.astro"
     ],
-    "components-1bcef381b30c627c": [
+    "components-7d95f9b492b17207": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -5349,7 +5408,6 @@
       "site/src/components/MobileBottomNav.astro",
       "site/src/components/MobileSearchBottomNav.astro",
       "site/src/components/PersonalFeedSlot.astro",
-      "site/src/components/ServiceShareAction.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -5447,7 +5505,7 @@
       "site/src/pages/sobytiya/[slug].astro",
       "site/src/pages/vystavki/index.astro"
     ],
-    "components-3e0b717c429923d1": [
+    "components-f2b74dba50c59540": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -5487,7 +5545,6 @@
       "site/src/components/MobileBottomNav.astro",
       "site/src/components/MobileSearchBottomNav.astro",
       "site/src/components/PersonalFeedSlot.astro",
-      "site/src/components/ServiceShareAction.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -64763,6 +64820,36 @@
         },
         {
           "token": "--ke-color-action-primary-hover",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 145,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-hover-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 179,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-action-primary-hover",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 184,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-action-primary-hover",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-action-primary-hover",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 224,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-action-primary-hover",
           "path": "site/src/pages/fokus-gruppa/index.astro",
           "line": 136,
           "has_fallback": false
@@ -64774,7 +64861,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-17f4c51a0813f79e",
+      "component_set": "components-cfd87489e85cd9fa",
       "astro_family_set": "families-ca39edbcb1f478d8",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -65508,6 +65595,48 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-service-share-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 164,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-hover-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 180,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-shortcut-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-shortcut-border-strong",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-shortcut-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-shell-border",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 117,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-border",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 140,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-unusual-panel-border",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 96,
@@ -65520,7 +65649,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-30ce129f0d72f63e",
+      "component_set": "components-6907a01da4324f6f",
       "astro_family_set": "families-01bbf72f51a4a22e",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -67582,6 +67711,12 @@
           "token": "--rail-surface",
           "path": "site/src/components/listings/MobileListingRailSurface.astro",
           "line": 162,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 141,
           "has_fallback": false
         },
         {
@@ -69969,31 +70104,31 @@
           "has_fallback": false
         },
         {
-          "token": "--primary-strong",
+          "token": "--ke-color-action-primary-hover",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 145,
           "has_fallback": false
         },
         {
-          "token": "--primary-strong",
+          "token": "--ke-color-service-share-hover-border",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 179,
           "has_fallback": false
         },
         {
-          "token": "--primary-strong",
+          "token": "--ke-color-action-primary-hover",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 184,
           "has_fallback": false
         },
         {
-          "token": "--primary-strong",
+          "token": "--ke-color-action-primary-hover",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 211,
           "has_fallback": false
         },
         {
-          "token": "--primary-strong",
+          "token": "--ke-color-action-primary-hover",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 224,
           "has_fallback": false
@@ -71160,6 +71295,48 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-service-share-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 164,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-hover-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 180,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-shortcut-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-shortcut-border-strong",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-shortcut-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-shell-border",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 117,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-border",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 140,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-unusual-panel-border",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 96,
@@ -71256,7 +71433,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-30ce129f0d72f63e",
+      "component_set": "components-6907a01da4324f6f",
       "astro_family_set": "families-01bbf72f51a4a22e",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -84595,7 +84772,20 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-contact",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 156,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-contact",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 162,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84614,7 +84804,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-control-hover-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 180,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84633,7 +84830,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-control-hover-surface",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 180,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84652,7 +84856,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-control-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 174,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84671,7 +84882,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-control-surface",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 176,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84690,7 +84908,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-copy",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 107,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84709,7 +84934,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-document-note",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 164,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84728,7 +84960,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 166,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84747,7 +84986,26 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-muted",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 155,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-muted",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 165,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-muted",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 184,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84766,7 +85024,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-reset-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 185,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84785,7 +85050,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-section-label",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 158,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84808,7 +85080,14 @@
         "--ke-color-action-primary-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-share-border",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 140,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84827,7 +85106,26 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-share-brand",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 118,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-brand",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 132,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-brand",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 143,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84871,8 +85169,21 @@
         "--ke-color-pwa-action-text",
         "--ke-color-pwa-install-button-text"
       ],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-button-text",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 65,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-heading",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 129,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -84894,7 +85205,14 @@
         "--ke-color-action-primary-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-share-shell-border",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 117,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84938,8 +85256,21 @@
         "--ke-color-pwa-action-surface",
         "--ke-color-pwa-install-button-surface"
       ],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-button-surface",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 64,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-surface",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 120,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -84957,7 +85288,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-share-surface-hover",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 143,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84976,7 +85314,20 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-share-text",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 121,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-share-text",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 131,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -84995,7 +85346,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-social-meta",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 183,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -85039,8 +85397,21 @@
         "--ke-color-pwa-install-presentation-surface",
         "--ke-color-pwa-surface"
       ],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-presentation-surface",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 88,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-surface",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 106,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -85083,8 +85454,51 @@
         "--ke-color-pwa-install-text",
         "--ke-color-pwa-text"
       ],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-text",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 41,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-pwa-install-text",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 90,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-text",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 151,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-text",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 154,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-text",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 159,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-text",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 163,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-footer-text",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 177,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -85102,7 +85516,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-footer-utility",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 185,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -86869,13 +87290,13 @@
           "has_fallback": false
         },
         {
-          "token": "--text",
+          "token": "--ke-color-service-share-text",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 140,
           "has_fallback": false
         },
         {
-          "token": "--text",
+          "token": "--ke-color-service-share-text",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 167,
           "has_fallback": false
@@ -91167,7 +91588,7 @@
           "has_fallback": false
         },
         {
-          "token": "--muted",
+          "token": "--ke-color-text-muted",
           "path": "site/src/components/ServiceShareAction.astro",
           "line": 136,
           "has_fallback": false
@@ -93660,8 +94081,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-button-border",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 62,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -93683,8 +94111,15 @@
         "--ke-color-footer-share-surface"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-button-surface",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 64,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -93706,8 +94141,15 @@
         "--ke-color-footer-share-heading"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-button-text",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 65,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -93725,8 +94167,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-copy",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 45,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -93748,8 +94197,15 @@
         "--ke-color-footer-surface"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-presentation-surface",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 88,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -93767,8 +94223,21 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-status",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 107,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-pwa-install-status",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 49,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -93790,8 +94259,21 @@
         "--ke-color-footer-text"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-pwa-install-text",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 41,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-pwa-install-text",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 90,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94757,8 +95239,15 @@
         "--ke-color-action-primary-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 164,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94776,8 +95265,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-error-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 206,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94795,8 +95291,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-error-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 207,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94814,8 +95317,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-error-text",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 208,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94837,8 +95347,15 @@
         "--ke-color-action-primary-hover"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-hover-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 179,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94860,8 +95377,15 @@
         "--ke-color-action-primary-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-hover-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 180,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94883,8 +95407,15 @@
         "--ke-color-action-primary-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-shortcut-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94906,8 +95437,15 @@
         "--ke-color-action-primary-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-shortcut-border-strong",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94929,8 +95467,15 @@
         "--ke-color-action-primary-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-shortcut-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94948,8 +95493,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-success-border",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 199,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94967,8 +95519,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-success-surface",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 200,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -94986,8 +95545,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-success-text",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 201,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -95009,8 +95575,21 @@
         "--ke-color-text-primary"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-service-share-text",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 140,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-text",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 167,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -96128,6 +96707,12 @@
           "token": "--rail-surface",
           "path": "site/src/components/listings/MobileListingRailSurface.astro",
           "line": 162,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 141,
           "has_fallback": false
         },
         {
@@ -99119,6 +99704,12 @@
         },
         {
           "token": "--ke-color-text-muted",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 136,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
           "path": "site/src/pages/artefakty/index.astro",
           "line": 38,
           "has_fallback": false
@@ -99160,7 +99751,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-9f04ac55e5341edd",
+      "component_set": "components-ed043eb409613851",
       "astro_family_set": "families-05b59ce741299fe0",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -99470,6 +100061,18 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-service-share-text",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 140,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-service-share-text",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 167,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-text-primary",
           "path": "site/src/pages/fokus-gruppa/index.astro",
           "line": 112,
@@ -99500,7 +100103,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-fc2eab04a5f16624",
+      "component_set": "components-1c565fae8ea43276",
       "astro_family_set": "families-2004819c3f166d6a",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -101571,7 +102174,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-unusual-notification",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 160,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -101590,7 +102200,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-unusual-notification-ring",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 160,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -106844,7 +107461,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-elevation-footer-share",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 122,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -107327,8 +107951,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-elevation-pwa-install-presentation",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 89,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -107498,8 +108129,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-elevation-service-share-shortcut",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 211,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136605,8 +137243,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-border",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 35,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136811,8 +137456,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-disabled-opacity",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 73,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136849,8 +137501,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-glow",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 38,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136868,8 +137527,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-glow-size",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 38,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136887,8 +137553,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-inset",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 40,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136929,8 +137602,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-presentation-border",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 84,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136948,8 +137628,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-presentation-glow",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 87,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -136967,8 +137654,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-presentation-glow-size",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 87,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -137180,8 +137874,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-pwa-install-surface",
+          "path": "site/src/components/PwaInstallAction.astro",
+          "line": 39,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-f7c473c28dd4ff06",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -138848,8 +139549,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-service-share-disabled-opacity",
+          "path": "site/src/components/ServiceShareAction.astro",
+          "line": 188,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-36f06c77c0ee64c0",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -153768,12 +154476,6 @@
         },
         {
           "token": "--muted",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 136,
-          "has_fallback": false
-        },
-        {
-          "token": "--muted",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 102,
           "has_fallback": false
@@ -154001,7 +154703,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-a5975807f3296f78",
+      "component_set": "components-518b7ea928e09c1f",
       "astro_family_set": "families-dfc14b091cfd20c2",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -155162,36 +155864,6 @@
         },
         {
           "token": "--primary-strong",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 145,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 179,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 184,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 211,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 224,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
           "line": 1060,
           "has_fallback": false
@@ -155425,7 +156097,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-1bcef381b30c627c",
+      "component_set": "components-7d95f9b492b17207",
       "astro_family_set": "families-2901a2cd6b879305",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -157438,18 +158110,6 @@
         },
         {
           "token": "--text",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 140,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
-          "path": "site/src/components/ServiceShareAction.astro",
-          "line": 167,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
           "line": 1056,
           "has_fallback": false
@@ -157605,7 +158265,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-3e0b717c429923d1",
+      "component_set": "components-f2b74dba50c59540",
       "astro_family_set": "families-f0097f8c5b5401d6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },

@@ -32,21 +32,21 @@ import Icon from './Icon.astro';
       display:grid;
       gap:.9rem;
       padding:1rem;
-      border:1px solid rgba(255,255,255,.16);
+      border:1px solid var(--ke-pwa-install-border);
       border-radius:20px;
       background:
-        radial-gradient(circle at 88% 16%,rgba(245,177,143,.16),transparent 9rem),
-        rgba(255,255,255,.055);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
-      color:#fff7ed;
+        radial-gradient(circle at 88% 16%,var(--ke-pwa-install-glow),transparent var(--ke-pwa-install-glow-size)),
+        var(--ke-pwa-install-surface);
+      box-shadow:var(--ke-pwa-install-inset);
+      color:var(--ke-color-pwa-install-text);
     }
     .pwa-install-action__copy { display:grid; gap:.24rem; }
     .pwa-install-action__copy strong { font-size:1rem; line-height:1.2; }
-    .pwa-install-action__copy span { color:#cdbfb4; font-size:.84rem; line-height:1.45; }
+    .pwa-install-action__copy span { color:var(--ke-color-pwa-install-copy); font-size:.84rem; line-height:1.45; }
     .pwa-install-action__status,
     .pwa-install-action__guidance {
       margin:0;
-      color:#d8c9bd;
+      color:var(--ke-color-pwa-install-status);
       font-size:.82rem;
       line-height:1.45;
     }
@@ -59,10 +59,10 @@ import Icon from './Icon.astro';
       gap:.55rem;
       width:100%;
       padding:.65rem 1rem;
-      border:1px solid rgba(255,244,232,.42);
+      border:1px solid var(--ke-color-pwa-install-button-border);
       border-radius:999px;
-      background:#fff8ee;
-      color:#552414;
+      background:var(--ke-color-pwa-install-button-surface);
+      color:var(--ke-color-pwa-install-button-text);
       font:inherit;
       font-weight:850;
       cursor:pointer;
@@ -70,7 +70,7 @@ import Icon from './Icon.astro';
     }
     .pwa-install-action__button :global(.icon) { width:1.25rem; height:1.25rem; }
     .pwa-install-action__button:active { transform:translateY(1px); }
-    .pwa-install-action__button:disabled { cursor:wait; opacity:.72; }
+    .pwa-install-action__button:disabled { cursor:wait; opacity:var(--ke-pwa-install-disabled-opacity); }
   }
   .pwa-install-action[data-pwa-install-presentation="true"]:not([hidden]) {
     display:grid;
@@ -81,13 +81,13 @@ import Icon from './Icon.astro';
     max-width:440px;
     margin-inline:auto;
     padding:1.15rem;
-    border:1px solid rgba(255,255,255,.18);
+    border:1px solid var(--ke-pwa-install-presentation-border);
     border-radius:22px;
     background:
-      radial-gradient(circle at 88% 16%,rgba(245,177,143,.2),transparent 10rem),
-      #25211e;
-    box-shadow:0 24px 64px rgba(0,0,0,.34);
-    color:#fff7ed;
+      radial-gradient(circle at 88% 16%,var(--ke-pwa-install-presentation-glow),transparent var(--ke-pwa-install-presentation-glow-size)),
+      var(--ke-color-pwa-install-presentation-surface);
+    box-shadow:var(--ke-elevation-pwa-install-presentation);
+    color:var(--ke-color-pwa-install-text);
   }
   .pwa-install-action[data-pwa-install-presentation="true"] .pwa-install-action__copy {
     display:grid;
@@ -104,7 +104,7 @@ import Icon from './Icon.astro';
   .pwa-install-action[data-pwa-install-presentation="true"] .pwa-install-action__copy span,
   .pwa-install-action[data-pwa-install-presentation="true"] .pwa-install-action__status,
   .pwa-install-action[data-pwa-install-presentation="true"] .pwa-install-action__guidance {
-    color:#d8c9bd;
+    color:var(--ke-color-pwa-install-status);
   }
   @media (prefers-reduced-motion:reduce) {
     .pwa-install-action__button:active { transform:none; }

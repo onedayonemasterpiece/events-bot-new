@@ -133,16 +133,16 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
     flex-wrap:wrap;
     align-items:center;
     gap:.18rem .28rem;
-    color: var(--muted);
+    color: var(--ke-color-text-muted);
     font-size: .9rem;
     line-height: 1.4;
   }
-  .service-share-action__prompt strong { color:var(--text); font-weight:780; }
+  .service-share-action__prompt strong { color:var(--ke-color-service-share-text); font-weight:780; }
   .service-share-action__prompt :global(.service-share-action__wordmark) {
     width:auto;
     height:1em;
     flex:0 0 auto;
-    color:var(--primary-strong);
+    color:var(--ke-color-action-primary-hover);
   }
   .service-share-action__controls {
     min-width: 0;
@@ -161,10 +161,10 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
     gap: .45rem;
     max-width: 100%;
     padding: .55rem .8rem;
-    border: 1px solid rgba(121, 48, 20, .48);
+    border: 1px solid var(--ke-color-service-share-border);
     border-radius: 999px;
     background: transparent;
-    color: var(--text);
+    color: var(--ke-color-service-share-text);
     box-shadow: none;
     font: inherit;
     font-size: .88rem;
@@ -176,16 +176,16 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
     transition: background-color 160ms ease-out, border-color 160ms ease-out;
   }
   .service-share-action__button:hover {
-    border-color: var(--primary-strong);
-    background: rgba(121, 48, 20, .06);
+    border-color: var(--ke-color-service-share-hover-border);
+    background: var(--ke-color-service-share-hover-surface);
   }
   .service-share-action__button:focus-visible,
   .service-share-action__fallback:focus-visible {
-    outline: 3px solid var(--primary-strong);
+    outline: 3px solid var(--ke-color-action-primary-hover);
     outline-offset: 3px;
   }
   .service-share-action__button:disabled {
-    opacity: .56;
+    opacity: var(--ke-service-share-disabled-opacity);
     cursor: wait;
   }
   .service-share-action__icon {
@@ -196,19 +196,19 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
   }
   .service-share-action__icon--success { display: none; }
   .service-share-action__button[data-service-share-state="success"] {
-    border-color: #3f8a5b;
-    background: rgba(63, 138, 91, .09);
-    color: #2f7449;
+    border-color: var(--ke-color-service-share-success-border);
+    background: var(--ke-color-service-share-success-surface);
+    color: var(--ke-color-service-share-success-text);
   }
   .service-share-action__button[data-service-share-state="success"] .service-share-action__icon--default { display: none; }
   .service-share-action__button[data-service-share-state="success"] .service-share-action__icon--success { display: inline-flex; }
   .service-share-action__button[data-service-share-state="error"] {
-    border-color: #a85645;
-    background: rgba(168, 86, 69, .07);
-    color: #8b4537;
+    border-color: var(--ke-color-service-share-error-border);
+    background: var(--ke-color-service-share-error-surface);
+    color: var(--ke-color-service-share-error-text);
   }
   .service-share-action__button--desktop { display: none; }
-  .service-share-action__shortcut { display:none; min-width:1.45rem; min-height:1.35rem; align-items:center; justify-content:center; padding:.08rem .28rem; border:1px solid rgba(121,48,20,.5); border-bottom-color:rgba(121,48,20,.76); border-radius:4px; background:rgba(121,48,20,.06); color:var(--primary-strong); box-shadow:0 1px 0 rgba(0,0,0,.16); font:800 .68rem/1 ui-monospace,SFMono-Regular,Consolas,monospace; text-transform:uppercase; }
+  .service-share-action__shortcut { display:none; min-width:1.45rem; min-height:1.35rem; align-items:center; justify-content:center; padding:.08rem .28rem; border:1px solid var(--ke-color-service-share-shortcut-border); border-bottom-color:var(--ke-color-service-share-shortcut-border-strong); border-radius:4px; background:var(--ke-color-service-share-shortcut-surface); color:var(--ke-color-action-primary-hover); box-shadow:var(--ke-elevation-service-share-shortcut); font:800 .68rem/1 ui-monospace,SFMono-Regular,Consolas,monospace; text-transform:uppercase; }
   .service-share-action__status {
     position: absolute !important;
     width: 1px !important;
@@ -221,7 +221,7 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
     border: 0 !important;
   }
   .service-share-action__fallback {
-    color: var(--primary-strong);
+    color: var(--ke-color-action-primary-hover);
     font-size: .86rem;
     font-weight: 760;
     overflow-wrap: anywhere;

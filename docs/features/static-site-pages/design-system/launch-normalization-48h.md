@@ -814,3 +814,23 @@ pass. This preserves the reviewed card order, intrinsic media geometry and
 full-title policy; it only invalidates a measurement whose layout input
 changed. The desktop geometry gate covers the exact `1440px` owner-review
 viewport in addition to the existing `721px` and `800px` weekend seams.
+## 24. Footer, service-share and PWA paint-token consumption (2026-09-04)
+
+The three live production roots now consume the already-owned visible-role
+families without changing their markup, runtime hooks, responsive geometry,
+focus treatment or compatibility data attributes:
+
+- `SiteFooter` consumes footer/shell roles for the inverse shell, share callout,
+  social controls, unusual-event indicator and raised share surface;
+- `ServiceShareAction` consumes shell service-share roles for default, hover,
+  success, error and keyboard-shortcut paint states while retaining the current
+  `SemanticIcon` control-role instances and controller contract;
+- `PwaInstallAction` consumes the existing public PWA-install roles for its
+  footer panel and fixed presentation, while retaining the current `Icon`
+  ownership and install-controller hooks.
+
+The migration is value-preserving: only existing tokens with the same computed
+role/value replaced consumer-local paint literals. No tokens, component roots,
+share icon-and-label composite, target dimensions or PWA/service-share runtime
+behavior were added or moved. `site/tests/footer-pwa-share-token-consumption.test.mjs`
+regresses the three real roots and rejects the migrated raw paint literals.
