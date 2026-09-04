@@ -14,7 +14,7 @@ if (!executablePath) throw new Error('No system Chromium executable found');
 
 const cases = [
   ['lab/event-desktop/examples/cta-phone-invariant', 'split', 'split-inline', 3],
-  ['lab/event-desktop/examples/cta-registration-invariant', 'split', 'split-inline', 3],
+  ['lab/event-desktop/examples/cta-registration-invariant', 'split', 'split-inline', 2],
   ['lab/event-desktop/examples/cta-free-calendar-invariant', 'split', 'split-inline', 2],
   ['lab/event-desktop/examples/footer-service-v1', 'editorial', 'editorial-side', 3],
 ];
