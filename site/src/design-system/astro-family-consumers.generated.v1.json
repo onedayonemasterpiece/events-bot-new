@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "7672cd749b43a30c82e4e891b4079a32333f615afc2616a5af5dff6e96a2e934",
+  "registry_sha256": "ea337a8412c1ed780b95de79a06c6923b911331bf98d36fb86330a7aae1a1942",
   "source_root": "site/src",
   "import_inventory_sha256": "8b40c024a9b4211b62d2fd52087cf0322345b77c463ebc87f01c1ceef45d2c4e",
   "product_scope": {
@@ -1395,7 +1395,9 @@
     "HomePage": {
       "version": 1,
       "astro_root": "site/src/pages/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -1418,11 +1420,15 @@
     "HomeColdStartFeed": {
       "version": 1,
       "astro_root": "site/src/components/HomeColdStartFeed.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/HomeColdStartFeed.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/index.astro"
@@ -1445,7 +1451,9 @@
     "TodayReviewGuard": {
       "version": 1,
       "astro_root": "site/src/pages/segodnya/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/segodnya/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -1468,12 +1476,17 @@
     "MobileListingRailSurface": {
       "version": 1,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
         "site/src/components/listings/WeekendListingSurface.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/WeekendListingSurface.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
@@ -1623,7 +1636,9 @@
     "EventDetailRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/sobytiya/[slug].astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -1692,12 +1707,17 @@
     "EventMediaRail": {
       "version": 1,
       "astro_root": "site/src/components/EventMediaRail.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/EventMediaRail.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/DesktopEventPage.astro",
         "site/src/pages/lab/design-system/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/DesktopEventPage.astro",
@@ -2462,11 +2482,15 @@
     "ArtifactCollection": {
       "version": 1,
       "astro_root": "site/src/components/artifacts/ArtifactCollection.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/artifacts/ArtifactCollection.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/artefakty/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/artefakty/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/artefakty/index.astro"
@@ -2543,12 +2567,17 @@
     "DesktopEventDetailSurface": {
       "version": 1,
       "astro_root": "site/src/components/DesktopEventPage.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/DesktopEventPage.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/lab/event-desktop/examples/[scenario].astro",
         "site/src/pages/sobytiya/[slug].astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/lab/event-desktop/examples/[scenario].astro",
@@ -2609,11 +2638,15 @@
     "FavoritesSurface": {
       "version": 1,
       "astro_root": "site/src/components/FavoritesSurface.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FavoritesSurface.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/izbrannoe/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/izbrannoe/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/izbrannoe/index.astro"
@@ -2636,12 +2669,17 @@
     "FocusConnectivityDiagnostic": {
       "version": 1,
       "astro_root": "site/src/components/FocusConnectivityDiagnostic.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusConnectivityDiagnostic.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
         "site/src/pages/fokus-gruppa/diagnostika/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
+        "site/src/pages/fokus-gruppa/diagnostika/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/index.astro",
@@ -2656,11 +2694,15 @@
     "FocusEggArtifact": {
       "version": 1,
       "astro_root": "site/src/components/FocusEggArtifact.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusEggArtifact.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/FocusEggSavedListDemo.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/FocusEggSavedListDemo.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/FocusEggSavedListDemo.astro"
@@ -2683,11 +2725,15 @@
     "FocusEggCollectionCard": {
       "version": 1,
       "astro_root": "site/src/components/FocusEggCollectionCard.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusEggCollectionCard.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
@@ -2710,11 +2756,15 @@
     "FocusEggSavedListDemo": {
       "version": 1,
       "astro_root": "site/src/components/FocusEggSavedListDemo.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusEggSavedListDemo.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
@@ -2737,12 +2787,17 @@
     "FocusGroupFeedback": {
       "version": 1,
       "astro_root": "site/src/components/FocusGroupFeedback.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusGroupFeedback.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/dlya-menya/index.astro",
@@ -2772,11 +2827,15 @@
     "FocusGroupInviteIntake": {
       "version": 1,
       "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusGroupInviteIntake.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/fokus-gruppa/priglashenie/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/fokus-gruppa/priglashenie/index.astro"
@@ -2799,12 +2858,17 @@
     "FocusGroupInviteShare": {
       "version": 1,
       "astro_root": "site/src/components/FocusGroupInviteShare.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusGroupInviteShare.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/fokus-gruppa/index.astro",
@@ -2834,11 +2898,15 @@
     "FocusGroupLabPanel": {
       "version": 1,
       "astro_root": "site/src/components/FocusGroupLabPanel.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusGroupLabPanel.astro"
+      ],
       "direct_component_consumers": [
         "site/src/layouts/EventLayout.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/layouts/EventLayout.astro"
@@ -2987,13 +3055,19 @@
     "FocusGroupThankYou": {
       "version": 1,
       "astro_root": "site/src/components/FocusGroupThankYou.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusGroupThankYou.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/fokus-gruppa/index.astro",
@@ -3030,7 +3104,9 @@
     "FocusLabBadge": {
       "version": 1,
       "astro_root": "site/src/components/FocusLabBadge.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusLabBadge.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupLabPanel.astro",
@@ -3040,7 +3116,15 @@
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/FocusGroupLabPanel.astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/fokus-gruppa/index.astro",
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/FocusGroupInviteIntake.astro",
@@ -3225,11 +3309,15 @@
     "FocusPwaInstallAction": {
       "version": 1,
       "astro_root": "site/src/components/FocusPwaInstallAction.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/FocusPwaInstallAction.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/FocusGroupInviteIntake.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/FocusGroupInviteIntake.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/FocusGroupInviteIntake.astro"
@@ -3252,11 +3340,15 @@
     "HomeHeroTalk": {
       "version": 1,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/HomeHeroTalk.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/index.astro"
@@ -3279,11 +3371,15 @@
     "HomeQuickNav": {
       "version": 1,
       "astro_root": "site/src/components/HomeQuickNav.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/HomeQuickNav.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/index.astro"
@@ -3306,11 +3402,15 @@
     "InterestProfile": {
       "version": 1,
       "astro_root": "site/src/components/InterestProfile.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/InterestProfile.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/dlya-menya/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/dlya-menya/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/dlya-menya/index.astro"
@@ -3333,7 +3433,9 @@
     "PersonalFeedSlot": {
       "version": 1,
       "astro_root": "site/src/components/PersonalFeedSlot.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/PersonalFeedSlot.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/date-[date].astro",
         "site/src/pages/lab/design-system/index.astro",
@@ -3342,7 +3444,14 @@
         "site/src/pages/vyhodnye/index.astro",
         "site/src/pages/zavtra/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/date-[date].astro",
@@ -3394,11 +3503,15 @@
     "SearchCollectionLinks": {
       "version": 1,
       "astro_root": "site/src/components/SearchCollectionLinks.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/SearchCollectionLinks.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/poisk/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/poisk/index.astro"
@@ -3421,11 +3534,15 @@
     "UnusualListingSurface": {
       "version": 1,
       "astro_root": "site/src/components/UnusualListingSurface.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/UnusualListingSurface.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/neobychnoe/index.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/neobychnoe/index.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/neobychnoe/index.astro"
@@ -3448,7 +3565,9 @@
     "ArtifactCollectionRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/artefakty/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/artefakty/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3471,7 +3590,9 @@
     "ForMeRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/dlya-menya/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/dlya-menya/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3494,7 +3615,9 @@
     "FocusGroupProgrammeSurface": {
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3517,7 +3640,9 @@
     "FocusEggCollectionRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3540,7 +3665,9 @@
     "FocusGroupInviteRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3563,7 +3690,9 @@
     "FocusGroupCompletionSurface": {
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3609,7 +3738,9 @@
     "PartnersRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/partners/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/partners/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3632,7 +3763,9 @@
     "PartnershipRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/partnerstvo/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/partnerstvo/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3655,7 +3788,9 @@
     "MaterializedCollectionRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/podborki/[slug]/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/podborki/[slug]/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -3701,7 +3836,9 @@
     "ClosedFocusHubRouteComposition": {
       "version": 1,
       "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
       "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
@@ -5134,12 +5271,17 @@
     "MobileBottomNav": {
       "version": 1,
       "astro_root": "site/src/components/MobileBottomNav.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/MobileBottomNav.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/MobileSearchBottomNav.astro",
         "site/src/layouts/EventLayout.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/MobileSearchBottomNav.astro",
+        "site/src/layouts/EventLayout.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/MobileSearchBottomNav.astro",
@@ -5303,11 +5445,15 @@
     "Reference4MobileMenu": {
       "version": 1,
       "astro_root": "site/src/components/Reference4MobileMenu.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/Reference4MobileMenu.astro"
+      ],
       "direct_component_consumers": [
         "site/src/layouts/EventLayout.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/layouts/EventLayout.astro"
@@ -5456,11 +5602,15 @@
     "SiteFooter": {
       "version": 1,
       "astro_root": "site/src/components/SiteFooter.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/SiteFooter.astro"
+      ],
       "direct_component_consumers": [
         "site/src/layouts/EventLayout.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/layouts/EventLayout.astro"
@@ -5636,11 +5786,15 @@
     "MobileEventProductionStyles": {
       "version": 1,
       "astro_root": "site/src/components/MobileEventProductionStyles.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/MobileEventProductionStyles.astro"
+      ],
       "direct_component_consumers": [
         "site/src/pages/sobytiya/[slug].astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/sobytiya/[slug].astro"
@@ -5663,11 +5817,15 @@
     "AmberRailArtifact": {
       "version": 1,
       "astro_root": "site/src/components/listings/AmberRailArtifact.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/listings/AmberRailArtifact.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/listings/MobileListingRailRow.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/listings/MobileListingRailRow.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/listings/MobileListingRailRow.astro"
@@ -5883,12 +6041,17 @@
     "EventTransportSchedule": {
       "version": 1,
       "astro_root": "site/src/components/EventTransportSchedule.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/EventTransportSchedule.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/DesktopEventPage.astro",
         "site/src/pages/sobytiya/[slug].astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/DesktopEventPage.astro",
@@ -5912,12 +6075,17 @@
     "EventBusTransportSchedule": {
       "version": 1,
       "astro_root": "site/src/components/EventBusTransportSchedule.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/EventBusTransportSchedule.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/DesktopEventPage.astro",
         "site/src/pages/sobytiya/[slug].astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/DesktopEventPage.astro",
@@ -5941,13 +6109,19 @@
     "KaupTransportSchedule": {
       "version": 1,
       "astro_root": "site/src/components/KaupTransportSchedule.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/KaupTransportSchedule.astro"
+      ],
       "direct_component_consumers": [
         "site/src/components/DesktopEventPage.astro",
         "site/src/pages/lab/event-desktop/examples/[scenario].astro",
         "site/src/pages/sobytiya/[slug].astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/DesktopEventPage.astro",
@@ -5972,11 +6146,15 @@
     "MobileToastRegion": {
       "version": 1,
       "astro_root": "site/src/components/MobileToastRegion.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/MobileToastRegion.astro"
+      ],
       "direct_component_consumers": [
         "site/src/layouts/EventLayout.astro"
       ],
-      "direct_style_consumers": [],
+      "direct_style_consumers": [
+        "site/src/layouts/EventLayout.astro"
+      ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/layouts/EventLayout.astro"

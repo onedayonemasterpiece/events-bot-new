@@ -448,13 +448,25 @@
       "style_owners": [
         "site/src/layouts/EventLayout.astro"
       ],
-      "variants": [],
+      "variants": [
+        "afisha",
+        "dates",
+        "search",
+        "personal",
+        "default"
+      ],
       "states": [
         "ready"
       ],
       "nested_families": [
         "EventCard",
-        "Foundations"
+        "Foundations",
+        "FocusGroupLabPanel",
+        "SiteFooter",
+        "AnnouncementsLockup",
+        "MobileBottomNav",
+        "MobileToastRegion",
+        "Reference4MobileMenu"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -464,7 +476,13 @@
           "kind": "dynamic_identity",
           "attribute": "variant",
           "source_regex": "data-ds-variant=\\{mobileSection \\|\\| 'default'\\}",
-          "values": []
+          "values": [
+            "afisha",
+            "dates",
+            "search",
+            "personal",
+            "default"
+          ]
         }
       ],
       "penpot_binding": null
@@ -508,7 +526,9 @@
       "id": "HomePage",
       "version": 1,
       "astro_root": "site/src/pages/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/index.astro"
+      ],
       "variants": [
         "cold-start"
       ],
@@ -539,7 +559,9 @@
       "id": "HomeColdStartFeed",
       "version": 1,
       "astro_root": "site/src/components/HomeColdStartFeed.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/HomeColdStartFeed.astro"
+      ],
       "variants": [
         "local-profile-rerank"
       ],
@@ -574,7 +596,9 @@
       "id": "TodayReviewGuard",
       "version": 1,
       "astro_root": "site/src/pages/segodnya/index.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/segodnya/index.astro"
+      ],
       "variants": [
         "review-date"
       ],
@@ -595,7 +619,9 @@
       "id": "MobileListingRailSurface",
       "version": 1,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
       "variants": [
         "today",
         "tomorrow",
@@ -649,7 +675,36 @@
         "per-date",
         "per-family"
       ],
-      "states": [],
+      "states": [
+        "date-range",
+        "no-time",
+        "exact-time",
+        "multi-media",
+        "single-media",
+        "priority",
+        "lazy",
+        "identity-0",
+        "identity-1",
+        "identity-2",
+        "free-admission",
+        "amber-tail",
+        "hidden",
+        "visible",
+        "temporal-past",
+        "temporal-started-earlier",
+        "temporal-current",
+        "not-interested",
+        "liked",
+        "dragging",
+        "settling",
+        "dislike-active",
+        "dislike-armed",
+        "like-pulling",
+        "like-armed",
+        "media-error",
+        "media-loading",
+        "media-loaded"
+      ],
       "nested_families": [
         "MediaFrame"
       ],
@@ -670,7 +725,38 @@
           "kind": "dynamic_identity",
           "attribute": "state",
           "source_regex": "data-ds-state=\\{rowState\\}",
-          "values": []
+          "values": [
+            "date-range",
+            "no-time",
+            "exact-time",
+            "multi-media",
+            "single-media",
+            "priority",
+            "lazy",
+            "identity-0",
+            "identity-1",
+            "identity-2",
+            "free-admission",
+            "amber-tail",
+            "hidden",
+            "visible",
+            "temporal-past",
+            "temporal-started-earlier",
+            "temporal-current",
+            "not-interested",
+            "liked",
+            "dragging",
+            "settling",
+            "dislike-active",
+            "dislike-armed",
+            "like-pulling",
+            "like-armed",
+            "media-error",
+            "media-loading",
+            "media-loaded"
+          ],
+          "value_pattern": "^(?:date-range|no-time|exact-time) (?:multi-media|single-media) (?:priority|lazy) identity-[0-2](?: free-admission)?(?: amber-tail)? (?:hidden|visible)(?: temporal-(?:past|started-earlier|current))?(?: not-interested)?(?: liked)?(?: dragging)?(?: settling)?(?: dislike-active)?(?: dislike-armed)?(?: like-pulling)?(?: like-armed)?(?: media-(?:error|loading|loaded))?$",
+          "reason": "Runtime appends only the ordered finite tokens matched by value_pattern."
         }
       ],
       "penpot_binding": null
@@ -722,7 +808,9 @@
       "id": "EventDetailRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/sobytiya/[slug].astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
       "variants": [
         "responsive-pair"
       ],
@@ -816,7 +904,9 @@
       "id": "EventMediaRail",
       "version": 1,
       "astro_root": "site/src/components/EventMediaRail.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/EventMediaRail.astro"
+      ],
       "variants": [
         "gallery-thumbnails",
         "hero-selector",
@@ -1505,9 +1595,16 @@
       "id": "ArtifactCollection",
       "version": 1,
       "astro_root": "site/src/components/artifacts/ArtifactCollection.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/artifacts/ArtifactCollection.astro"
+      ],
+      "variants": [
+        "local-browser-collection"
+      ],
+      "states": [
+        "empty",
+        "found"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -1520,13 +1617,38 @@
       "version": 1,
       "astro_root": "site/src/components/AuthorizedEventSearch.astro",
       "style_owners": [],
-      "variants": [],
-      "states": [],
+      "variants": [
+        "ranked-phase-feed"
+      ],
+      "states": [
+        "auth-required",
+        "recovery",
+        "idle",
+        "loading",
+        "populated",
+        "empty",
+        "error"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{enabled \\? 'auth-required' : 'recovery'\\}",
+          "values": [
+            "auth-required",
+            "recovery",
+            "idle",
+            "loading",
+            "populated",
+            "empty",
+            "error"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
@@ -1534,8 +1656,18 @@
       "version": 1,
       "astro_root": "site/src/components/AuthorizedEventSearch.astro",
       "style_owners": [],
-      "variants": [],
-      "states": [],
+      "variants": [
+        "ranked-phase-feed"
+      ],
+      "states": [
+        "auth-required",
+        "recovery",
+        "idle",
+        "loading",
+        "populated",
+        "empty",
+        "error"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -1547,14 +1679,56 @@
       "id": "DesktopEventDetailSurface",
       "version": 1,
       "astro_root": "site/src/components/DesktopEventPage.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/components/DesktopEventPage.astro"
+      ],
+      "variants": [
+        "editorial",
+        "split"
+      ],
+      "states": [
+        "non-ocr",
+        "ocr",
+        "media",
+        "fallback"
+      ],
+      "nested_families": [
+        "AnnouncementsLockup",
+        "DesktopEventActionPanel",
+        "EventBusTransportSchedule",
+        "EventMediaRail",
+        "EventTokenMedallions",
+        "EventTransportSchedule",
+        "Icon",
+        "KaupTransportSchedule"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{candidate\\}",
+          "values": [
+            "editorial",
+            "split"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{`\\$\\{mediaPolicy\\} \\$\\{photoCount > 0 \\? 'media' : 'fallback'\\}`\\}",
+          "values": [
+            "non-ocr",
+            "ocr",
+            "media",
+            "fallback"
+          ],
+          "value_pattern": "^(?:non-ocr|ocr) (?:media|fallback)$",
+          "reason": "Two source-derived state tokens, in source order."
+        }
+      ],
       "penpot_binding": null
     },
     {
@@ -1562,23 +1736,76 @@
       "version": 1,
       "astro_root": "site/src/components/EventHero.astro",
       "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "variants": [
+        "poster-billboard",
+        "poster-attached-card",
+        "photo-cinematic-sheet",
+        "photo-parallax-sheet",
+        "compact-ticketing"
+      ],
+      "states": [
+        "poster-stage",
+        "photo-cover",
+        "fallback-art",
+        "gallery",
+        "fallback"
+      ],
+      "nested_families": [
+        "AnnouncementsLockup",
+        "CalendarLink",
+        "Icon"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{heroComposition\\}",
+          "values": [
+            "poster-billboard",
+            "poster-attached-card",
+            "photo-cinematic-sheet",
+            "photo-parallax-sheet",
+            "compact-ticketing"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{`\\$\\{heroMode\\} \\$\\{hasGallery \\? 'gallery' : 'fallback'\\}`\\}",
+          "values": [
+            "poster-stage",
+            "photo-cover",
+            "fallback-art",
+            "gallery",
+            "fallback"
+          ],
+          "value_pattern": "^(?:poster-stage|photo-cover|fallback-art) (?:gallery|fallback)$",
+          "reason": "Two source-derived state tokens, in source order."
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "FavoritesSurface",
       "version": 1,
       "astro_root": "site/src/components/FavoritesSurface.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/components/FavoritesSurface.astro"
+      ],
+      "variants": [
+        "future-saved-events"
+      ],
+      "states": [
+        "loading",
+        "ready",
+        "error"
+      ],
+      "nested_families": [
+        "AdaptiveEventCardGrid"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
@@ -1589,9 +1816,18 @@
       "id": "FocusConnectivityDiagnostic",
       "version": 1,
       "astro_root": "site/src/components/FocusConnectivityDiagnostic.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/FocusConnectivityDiagnostic.astro"
+      ],
+      "variants": [
+        "resilient-route-probe"
+      ],
+      "states": [
+        "idle",
+        "checking",
+        "complete",
+        "degraded"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -1603,38 +1839,100 @@
       "id": "FocusEggArtifact",
       "version": 1,
       "astro_root": "site/src/components/FocusEggArtifact.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/FocusEggArtifact.astro"
+      ],
+      "variants": [
+        "compact",
+        "default"
+      ],
+      "states": [
+        "locked",
+        "eligible",
+        "found",
+        "unavailable"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{state\\}",
+          "values": [
+            "locked",
+            "eligible",
+            "found",
+            "unavailable"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{compact \\? 'compact' : 'default'\\}",
+          "values": [
+            "compact",
+            "default"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "FocusEggCollectionCard",
       "version": 1,
       "astro_root": "site/src/components/FocusEggCollectionCard.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/FocusEggCollectionCard.astro"
+      ],
+      "variants": [
+        "collection-slot"
+      ],
+      "states": [
+        "locked",
+        "eligible",
+        "found",
+        "unavailable"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{state\\}",
+          "values": [
+            "locked",
+            "eligible",
+            "found",
+            "unavailable"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "FocusEggSavedListDemo",
       "version": 1,
       "astro_root": "site/src/components/FocusEggSavedListDemo.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/components/FocusEggSavedListDemo.astro"
+      ],
+      "variants": [
+        "third-distinct-event-placement"
+      ],
+      "states": [
+        "insufficient-items",
+        "eligible",
+        "found"
+      ],
+      "nested_families": [
+        "FocusEggArtifact"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
@@ -1645,24 +1943,62 @@
       "id": "FocusGroupFeedback",
       "version": 1,
       "astro_root": "site/src/components/FocusGroupFeedback.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/components/FocusGroupFeedback.astro"
+      ],
+      "variants": [
+        "surface",
+        "surface-and-event-issue"
+      ],
+      "states": [
+        "idle",
+        "recorded-local",
+        "dialog-overall",
+        "dialog-surface",
+        "dialog-improvement",
+        "dialog-event-issue"
+      ],
+      "nested_families": [
+        "Button"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{showEventIssue \\? 'surface-and-event-issue' : 'surface'\\}",
+          "values": [
+            "surface",
+            "surface-and-event-issue"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "FocusGroupInviteIntake",
       "version": 1,
       "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/components/FocusGroupInviteIntake.astro"
+      ],
+      "variants": [
+        "pwa-membership"
+      ],
+      "states": [
+        "pending",
+        "install",
+        "identity",
+        "done",
+        "error"
+      ],
+      "nested_families": [
+        "Button",
+        "FocusLabBadge",
+        "FocusPwaInstallAction"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
@@ -1673,9 +2009,21 @@
       "id": "FocusGroupInviteShare",
       "version": 1,
       "astro_root": "site/src/components/FocusGroupInviteShare.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/FocusGroupInviteShare.astro"
+      ],
+      "variants": [
+        "browser-local-link-and-qr"
+      ],
+      "states": [
+        "idle",
+        "manual-copy",
+        "ready",
+        "error",
+        "shared",
+        "share-unavailable",
+        "copied"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -1687,10 +2035,35 @@
       "id": "FocusGroupLabPanel",
       "version": 1,
       "astro_root": "site/src/components/FocusGroupLabPanel.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/components/FocusGroupLabPanel.astro"
+      ],
+      "variants": [
+        "authenticated-research-panel"
+      ],
+      "states": [
+        "inactive",
+        "ready",
+        "score-recorded",
+        "identity-required",
+        "submitting-score",
+        "score-local-only",
+        "score-queued",
+        "score-sent",
+        "issue-dialog",
+        "submitting-issue",
+        "issue-upload-error",
+        "issue-local-error",
+        "issue-queued",
+        "issue-sent",
+        "invite-dialog",
+        "invite-shared",
+        "invite-copied",
+        "invite-copy-error"
+      ],
+      "nested_families": [
+        "FocusLabBadge"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
@@ -1701,37 +2074,79 @@
       "id": "FocusGroupThankYou",
       "version": 1,
       "astro_root": "site/src/components/FocusGroupThankYou.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/FocusGroupThankYou.astro"
+      ],
+      "variants": [
+        "compact",
+        "default"
+      ],
+      "states": [
+        "informational"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{compact \\? 'compact' : 'default'\\}",
+          "values": [
+            "compact",
+            "default"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "FocusLabBadge",
       "version": 1,
       "astro_root": "site/src/components/FocusLabBadge.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/FocusLabBadge.astro"
+      ],
+      "variants": [
+        "compact",
+        "hero"
+      ],
+      "states": [
+        "static"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{size\\}",
+          "values": [
+            "compact",
+            "hero"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "FocusPwaInstallAction",
       "version": 1,
       "astro_root": "site/src/components/FocusPwaInstallAction.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/FocusPwaInstallAction.astro"
+      ],
+      "variants": [
+        "browser-install"
+      ],
+      "states": [
+        "checking",
+        "install-ready",
+        "resolved"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -1743,23 +2158,46 @@
       "id": "HomeHeroTalk",
       "version": 1,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/HomeHeroTalk.astro"
+      ],
+      "variants": [
+        "editorial-feature"
+      ],
+      "states": [
+        "featured-event",
+        "fallback"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{event \\? 'featured-event' : 'fallback'\\}",
+          "values": [
+            "featured-event",
+            "fallback"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "HomeQuickNav",
       "version": 1,
       "astro_root": "site/src/components/HomeQuickNav.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/HomeQuickNav.astro"
+      ],
+      "variants": [
+        "six-route-grid"
+      ],
+      "states": [
+        "populated"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -1771,9 +2209,16 @@
       "id": "InterestProfile",
       "version": 1,
       "astro_root": "site/src/components/InterestProfile.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/InterestProfile.astro"
+      ],
+      "variants": [
+        "local-explicit-signals"
+      ],
+      "states": [
+        "consent",
+        "workspace"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -1785,211 +2230,553 @@
       "id": "PersonalFeedSlot",
       "version": 1,
       "astro_root": "site/src/components/PersonalFeedSlot.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/components/PersonalFeedSlot.astro"
+      ],
+      "variants": [
+        "today",
+        "tomorrow",
+        "date",
+        "weekend",
+        "event-detail",
+        "exhibitions",
+        "popular"
+      ],
+      "states": [
+        "pending",
+        "dormant"
+      ],
+      "nested_families": [
+        "AdaptiveEventCardGrid"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{context\\}",
+          "values": [
+            "today",
+            "tomorrow",
+            "date",
+            "weekend",
+            "event-detail",
+            "exhibitions",
+            "popular"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{isEventDetail \\? 'pending' : 'dormant'\\}",
+          "values": [
+            "pending",
+            "dormant"
+          ],
+          "value_pattern": "^(?:pending|dormant)(?: (?:populated|empty))?$",
+          "reason": "SSR writes pending|dormant; runtime appends populated|empty."
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "SearchCollectionLinks",
       "version": 1,
       "astro_root": "site/src/components/SearchCollectionLinks.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
+      "style_owners": [
+        "site/src/components/SearchCollectionLinks.astro"
+      ],
+      "variants": [
+        "materialized-and-fill-only"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{searchLearningItems\\.length \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "UnusualListingSurface",
       "version": 1,
       "astro_root": "site/src/components/UnusualListingSurface.astro",
-      "style_owners": [],
-      "variants": [],
+      "style_owners": [
+        "site/src/components/UnusualListingSurface.astro"
+      ],
+      "variants": [
+        "one-event-per-concept"
+      ],
       "states": [],
-      "nested_families": [],
+      "nested_families": [
+        "AdaptiveEventCardGrid"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{surfaceState\\}",
+          "values": [],
+          "value_pattern": "^(?:ready populated|empty|withheld .+)$",
+          "reason": "Unapproved branch appends quality_gate.status, whose validated source type is string; therefore no finite state enum is claimed."
+        }
+      ],
       "penpot_binding": null
     },
     {
       "id": "ArtifactCollectionRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/artefakty/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/artefakty/index.astro"
+      ],
+      "variants": [
+        "research-collection"
+      ],
+      "states": [
+        "enabled",
+        "unavailable"
+      ],
+      "nested_families": [
+        "EventLayout",
+        "ArtifactCollection"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "values": [
+            "enabled",
+            "unavailable"
+          ],
+          "source_regex": "data-ds-state=\\{artifactResearchEnabled \\? 'enabled' : 'unavailable'\\}",
+          "reason": "Existing source-bound composition identity; no new route behavior."
+        }
+      ],
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/artefakty/index.astro",
+        "rules": [],
+        "fallback": "inherits nested component and shell responsive contracts"
+      }
     },
     {
       "id": "ForMeRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/dlya-menya/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/dlya-menya/index.astro"
+      ],
+      "variants": [
+        "explainable-local-profile"
+      ],
+      "states": [
+        "anonymous",
+        "authorized",
+        "cold-start",
+        "profiled",
+        "focus-active"
+      ],
+      "nested_families": [
+        "EventLayout",
+        "FocusGroupFeedback",
+        "FocusLabBadge",
+        "InterestProfile"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/dlya-menya/index.astro",
+        "rules": [
+          "@media (max-width:700px) line175",
+          "@media (prefers-reduced-motion:reduce) line181"
+        ],
+        "fallback": "page-local media rules compose nested component contracts"
+      }
     },
     {
       "id": "FocusGroupProgrammeSurface",
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/index.astro"
+      ],
+      "variants": [
+        "research-programme"
+      ],
+      "states": [
+        "available"
+      ],
+      "nested_families": [
+        "Button",
+        "FocusLabBadge",
+        "FocusGroupThankYou",
+        "FocusGroupInviteShare"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/fokus-gruppa/index.astro",
+        "rules": [
+          "@media (max-width:760px) line175"
+        ],
+        "fallback": "page-local media rules compose nested component contracts"
+      }
     },
     {
       "id": "FocusEggCollectionRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
-      "style_owners": [],
-      "variants": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/kollektsiya/index.astro"
+      ],
+      "variants": [
+        "collection-prototype"
+      ],
       "states": [],
-      "nested_families": [],
+      "nested_families": [
+        "FocusEggCollectionCard",
+        "FocusEggSavedListDemo",
+        "FocusLabBadge"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "value_pattern": "^found-[0-9]+-of-[0-9]+$",
+          "source_regex": "data-ds-state=\\{`found-\\$\\{collectionProgress\\.found\\}-of-\\$\\{collectionProgress\\.eligible\\}`\\}",
+          "reason": "Numeric progress from canonical getFocusEggCollectionProgress; not a finite design variant."
+        }
+      ],
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+        "rules": [
+          "@media (min-width:680px) line459",
+          "@media (min-width:920px) line468",
+          "@media (prefers-reduced-motion:reduce) line473"
+        ],
+        "fallback": "page-local media rules compose nested component contracts"
+      }
     },
     {
       "id": "FocusGroupInviteRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/priglashenie/index.astro"
+      ],
+      "variants": [
+        "pwa-membership"
+      ],
+      "states": [
+        "pending",
+        "resolving",
+        "error",
+        "active",
+        "install",
+        "identity",
+        "done"
+      ],
+      "nested_families": [
+        "FocusGroupInviteIntake"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "rules": [],
+        "fallback": "inherits nested component and shell responsive contracts"
+      }
     },
     {
       "id": "FocusGroupCompletionSurface",
       "version": 1,
       "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/fokus-gruppa/zavershenie/index.astro"
+      ],
+      "variants": [
+        "continuity"
+      ],
+      "states": [
+        "time-elapsed",
+        "operator-closed",
+        "operator-cancelled",
+        "participation-cleared",
+        "storage-error"
+      ],
+      "nested_families": [
+        "FocusGroupThankYou",
+        "FocusLabBadge",
+        "Button"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "rules": [
+          "@media (max-width:720px) line173"
+        ],
+        "fallback": "page-local media rules compose nested component contracts"
+      }
     },
     {
       "id": "FavoritesRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/izbrannoe/index.astro",
       "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "variants": [
+        "saved-future-events"
+      ],
+      "states": [
+        "runtime-pending",
+        "loading",
+        "ready",
+        "error",
+        "cloud-idle",
+        "cloud-checking",
+        "cloud-loading",
+        "cloud-error",
+        "cloud-ready"
+      ],
+      "nested_families": [
+        "FavoritesSurface",
+        "EventLayout"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/izbrannoe/index.astro",
+        "rules": [],
+        "fallback": "inherits nested component and shell responsive contracts"
+      }
     },
     {
       "id": "PartnersRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/partners/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/partners/index.astro"
+      ],
+      "variants": [
+        "official-logo-board"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "EventLayout"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "values": [
+            "populated",
+            "empty"
+          ],
+          "source_regex": "data-ds-state=\\{INFO_PARTNERS\\.length \\? 'populated' : 'empty'\\}",
+          "reason": "Existing source-bound composition identity; no new route behavior."
+        }
+      ],
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/partners/index.astro",
+        "rules": [
+          "@media (min-width:680px) line206",
+          "@media (min-width:980px) line216",
+          "@media (max-width:620px) line232",
+          "@media (max-width:360px) line280"
+        ],
+        "fallback": "page-local media rules compose nested component contracts"
+      }
     },
     {
       "id": "PartnershipRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/partnerstvo/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/partnerstvo/index.astro"
+      ],
+      "variants": [
+        "organizer-information"
+      ],
+      "states": [
+        "available"
+      ],
+      "nested_families": [
+        "EventLayout",
+        "Button"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/partnerstvo/index.astro",
+        "rules": [],
+        "fallback": "inherits nested component and shell responsive contracts"
+      }
     },
     {
       "id": "MaterializedCollectionRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/podborki/[slug]/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/podborki/[slug]/index.astro"
+      ],
+      "variants": [
+        "editorial-search-collection"
+      ],
+      "states": [
+        "populated",
+        "empty-with-fallback",
+        "empty"
+      ],
+      "nested_families": [
+        "AdaptiveEventCardGrid",
+        "FreeCollectionSurface",
+        "EventLayout"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "values": [
+            "populated",
+            "empty-with-fallback",
+            "empty"
+          ],
+          "source_regex": "data-ds-state=\\{routeState\\}",
+          "reason": "Existing source-bound composition identity; no new route behavior."
+        }
+      ],
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/podborki/[slug]/index.astro",
+        "rules": [],
+        "fallback": "inherits nested component and shell responsive contracts"
+      }
     },
     {
       "id": "SearchRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/poisk/index.astro",
       "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "variants": [
+        "authorized-vector-search"
+      ],
+      "states": [
+        "runtime-pending",
+        "enabled",
+        "disabled",
+        "idle",
+        "checking-auth",
+        "loading",
+        "success",
+        "empty",
+        "error",
+        "validation"
+      ],
+      "nested_families": [
+        "EventLayout",
+        "AuthorizedEventSearch",
+        "SearchCollectionLinks"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/poisk/index.astro",
+        "rules": [],
+        "fallback": "inherits nested component and shell responsive contracts"
+      }
     },
     {
       "id": "ClosedFocusHubRouteComposition",
       "version": 1,
       "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/pages/zakrytaya-afisha/index.astro"
+      ],
+      "variants": [
+        "participant-hub"
+      ],
+      "states": [
+        "checking",
+        "available",
+        "locked"
+      ],
+      "nested_families": [
+        "FocusLabBadge",
+        "FocusGroupFeedback",
+        "FocusGroupInviteShare",
+        "FocusGroupThankYou"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "responsive_behavior": {
+        "source": "site/src/pages/zakrytaya-afisha/index.astro",
+        "rules": [
+          "@media (max-width:820px) line288",
+          "@media (max-width:560px) line299",
+          "@media (prefers-reduced-motion:reduce) line308"
+        ],
+        "fallback": "page-local media rules compose nested component contracts"
+      }
     },
     {
       "id": "ListingPersonalFilter",
@@ -2451,7 +3238,9 @@
       "id": "MobileBottomNav",
       "version": 1,
       "astro_root": "site/src/components/MobileBottomNav.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/MobileBottomNav.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2489,7 +3278,9 @@
       "id": "Reference4MobileMenu",
       "version": 1,
       "astro_root": "site/src/components/Reference4MobileMenu.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/Reference4MobileMenu.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2508,7 +3299,9 @@
       "id": "SiteFooter",
       "version": 1,
       "astro_root": "site/src/components/SiteFooter.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/SiteFooter.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2546,7 +3339,9 @@
       "id": "MobileEventProductionStyles",
       "version": 1,
       "astro_root": "site/src/components/MobileEventProductionStyles.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/MobileEventProductionStyles.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2565,7 +3360,9 @@
       "id": "AmberRailArtifact",
       "version": 1,
       "astro_root": "site/src/components/listings/AmberRailArtifact.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/listings/AmberRailArtifact.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2603,7 +3400,9 @@
       "id": "EventTransportSchedule",
       "version": 1,
       "astro_root": "site/src/components/EventTransportSchedule.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/EventTransportSchedule.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2622,7 +3421,9 @@
       "id": "EventBusTransportSchedule",
       "version": 1,
       "astro_root": "site/src/components/EventBusTransportSchedule.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/EventBusTransportSchedule.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2641,7 +3442,9 @@
       "id": "KaupTransportSchedule",
       "version": 1,
       "astro_root": "site/src/components/KaupTransportSchedule.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/KaupTransportSchedule.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],
@@ -2660,7 +3463,9 @@
       "id": "MobileToastRegion",
       "version": 1,
       "astro_root": "site/src/components/MobileToastRegion.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/components/MobileToastRegion.astro"
+      ],
       "variants": [],
       "states": [],
       "nested_families": [],

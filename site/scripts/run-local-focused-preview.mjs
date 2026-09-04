@@ -239,8 +239,7 @@ export function buildCanonicalExporterArgs({
     '--base-path', `/${buildId}`, '--repo-sha', sourceSha, '--run-id', `local-focused:${buildId}`,
     '--build-id', buildId, '--snapshot-id', `local-db-${snapshotIdentity.slice(0, 16)}`,
     '--snapshot-sha256', snapshotIdentity, '--snapshot-size', String(snapshotSize),
-    '--snapshot-frozen-db', db, '--current-date', currentDate, '--current-datetime', currentDatetime,
-    '--page-classes', pageClass,
+    '--current-date', currentDate, '--current-datetime', currentDatetime,
   ];
   if (skipImageProbes) args.push('--skip-image-probes');
   return args;

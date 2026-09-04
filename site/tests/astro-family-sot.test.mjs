@@ -201,7 +201,7 @@ test('checker rejects generated graph drift', async () => {
 
 test('checker does not truncate an Astro opening tag at > inside an expression', async () => {
   const fixture = await createFixture({
-    family: fixtureFamily({ variants: [], states: [] }),
+    family: fixtureFamily({ variants: [], states: ['ready', 'empty'], explicit_override_exceptions: [{ kind: 'dynamic_identity', attribute: 'state', values: ['ready', 'empty'], source_regex: String.raw`data-ds-state=\{items\.length > 0 \? 'ready' : 'empty'\}` }] }),
     source: `<article data-ds-state={items.length > 0 ? 'ready' : 'empty'} data-ds-family="ExampleCard" data-ds-version="1"></article>\n`,
   });
   assert.equal((await checkAstroFamilySot({ repoRoot: fixture.root, registryPath })).family_count, 1);
@@ -256,4 +256,35 @@ test('runtime association keeps a service-imported dependency in product checks'
   fixture.registry.production_route_excludes = ['site/src/pages/lab/**'];
   await writeJson(path.resolve(fixture.root, registryPath), fixture.registry);
   await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /Unregistered canonical owners: UnknownRuntimeChild/u);
+});
+
+
+test('published identity values cannot hide behind empty registry metadata', async () => {
+  for (const field of ['variants', 'states']) {
+    const fixture = await createFixture({ family: fixtureFamily({ [field]: [] }) });
+    await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /empty registry metadata/u);
+  }
+});
+
+test('parametric identities require an explicit checked source and value pattern', async () => {
+  const source = '<article data-ds-family="ExampleCard" data-ds-version="1" data-ds-variant="default" data-ds-state={progress}></article>';
+  const noContract = await createFixture({ family: fixtureFamily({ states: [] }), source });
+  await assert.rejects(checkAstroFamilySot({ repoRoot: noContract.root, registryPath }), /empty metadata and no value pattern/u);
+  const family = fixtureFamily({ states: [], explicit_override_exceptions: [{
+    kind: 'dynamic_identity', attribute: 'state', value_pattern: '^found-[0-9]+-of-[0-9]+$',
+    source_regex: 'data-ds-state=\\{progress\\}',
+  }] });
+  const valid = await createFixture({ family, source });
+  assert.equal((await checkAstroFamilySot({ repoRoot: valid.root, registryPath })).family_count, 1);
+  const drift = await createFixture({ family, source: source.replace('{progress}', '{unreviewed}') });
+  await assert.rejects(checkAstroFamilySot({ repoRoot: drift.root, registryPath }), /source no longer matches/u);
+});
+
+
+test('product inline Astro styles require one actual source owner', async () => {
+  const source = '<article data-ds-family="ExampleCard" data-ds-version="1" data-ds-variant="default" data-ds-state="ready"></article><style>article { color: red; }</style>';
+  const missing = await createFixture({ source });
+  await assert.rejects(checkAstroFamilySot({ repoRoot: missing.root, registryPath }), /inline Astro styles have no registered source owner/u);
+  const owned = await createFixture({ source, family: fixtureFamily({ style_owners: ['site/src/components/ExampleCard.astro'] }) });
+  assert.equal((await checkAstroFamilySot({ repoRoot: owned.root, registryPath })).family_count, 1);
 });

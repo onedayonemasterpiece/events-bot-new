@@ -1127,3 +1127,5 @@ hydration; those templates are not collection results and must not be
 misclassified as non-free cards merely because their current fixture is paid.
 The gate still validates every actual regular and exhibition card rendered by
 the collection.
+
+Local real-data focused runs pass the frozen DB as the canonical exporter `--db` plus snapshot identity/hash/size and clock. Page-class and exact-route filtering belong to the existing Astro adapter, not unsupported exporter flags. The CLI contract regression is `site/scripts/local-focused-preview.behavior.test.mjs`.

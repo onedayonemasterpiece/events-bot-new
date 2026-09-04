@@ -97,6 +97,10 @@ function validateDynamicIdentity(family, attribute, source) {
   if (Array.isArray(contract.values) && JSON.stringify(sorted(contract.values)) !== JSON.stringify(sorted(family[`${attribute}s`]))) {
     fail(`${family.id} dynamic ${attribute} values drift from the registry`);
   }
+  if (contract.value_pattern) {
+    if (!contract.value_pattern.startsWith('^') || !contract.value_pattern.endsWith('$')) fail(`${family.id} ${attribute} value pattern must be anchored`);
+    try { new RegExp(contract.value_pattern, 'u'); } catch { fail(`${family.id} invalid ${attribute} value pattern`); }
+  }
   let expression;
   try { expression = new RegExp(contract.source_regex, 'u'); } catch (error) { fail(`${family.id} invalid ${attribute} source_regex: ${error.message}`); }
   if (!expression.test(source)) fail(`${family.id} dynamic ${attribute} source no longer matches its registry contract`);
@@ -118,8 +122,16 @@ function validateIdentity(family, source) {
       if (values.length) fail(`${family.id} declares ${attribute}s but root has no data-ds-${attribute}`);
       continue;
     }
-    if (!values.length) continue;
-    if (identity.kind === 'dynamic') { validateDynamicIdentity(family, attribute, source); continue; }
+    if (identity.kind === 'dynamic') {
+      const contract = exception(family, 'dynamic_identity', attribute);
+      if (!values.length) {
+        if (!contract?.value_pattern) fail(`${family.id} publishes dynamic ${attribute} with empty metadata and no value pattern`);
+        try { new RegExp(contract.value_pattern, 'u'); } catch { fail(`${family.id} has invalid ${attribute} value pattern`); }
+      }
+      validateDynamicIdentity(family, attribute, source);
+      continue;
+    }
+    if (!values.length) fail(`${family.id} publishes literal ${attribute} with empty registry metadata`);
     const observed = attribute === 'state' ? identity.value.split(/\s+/u).filter(Boolean) : [identity.value];
     for (const value of observed) if (!values.includes(value)) fail(`${family.id} root publishes unknown ${attribute}: ${value}`);
   }
@@ -220,6 +232,12 @@ export async function checkAstroFamilySot({ repoRoot = DEFAULT_REPO_ROOT, regist
         if (!source.includes(symbol)) fail(`${family.id} runtime declaration ${symbol} is missing from ${declaration.path}`);
         const allowed = runtimeAllowed.get(symbol) || new Set(); allowed.add(declaration.path); runtimeAllowed.set(symbol, allowed);
       }
+    }
+  }
+  for (const family of registry.families) {
+    const source = sourceByPath.get(family.astro_root);
+    if (source && /<style(?:\s|>)/u.test(source) && !styleOwners.has(family.astro_root)) {
+      fail(`${family.id} inline Astro styles have no registered source owner: ${family.astro_root}`);
     }
   }
   const registeredIds = new Set(familyById.keys());

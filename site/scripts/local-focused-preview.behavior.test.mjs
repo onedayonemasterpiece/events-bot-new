@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
+  buildCanonicalExporterArgs,
   listProducedPaths,
   localFocusedBrowserEpoch,
   parseLocalFocusedArgs,
@@ -83,4 +84,15 @@ test('exact-route smoke distinguishes speculative neighbour prefetch from owned 
   assert.equal(requestIsSpeculativePrefetch(request('other', { purpose: 'prefetch' })), true);
   assert.equal(requestIsSpeculativePrefetch(request('document', { 'sec-purpose': 'prefetch' })), false);
   assert.equal(requestIsSpeculativePrefetch(request('fetch', {})), false);
+});
+
+
+test('real-data focused export only sends flags supported by the canonical exporter', () => {
+  const args = buildCanonicalExporterArgs({ stagedSite: '/site', db: '/frozen.sqlite', outputDir: '/data', limit: 300, buildId: 'preview-local-test', sourceSha: 'a'.repeat(40), snapshotIdentity: 'b'.repeat(64), snapshotSize: 42, currentDate: '2026-09-04', currentDatetime: '2026-09-04T22:53:39+02:00', pageClass: 'focus', skipImageProbes: true });
+  const source = readFileSync(new URL('./export-production-preview-data.py', import.meta.url), 'utf8');
+  const supported = new Set([...source.matchAll(/add_argument\(\s*["'](--[a-z0-9-]+)["']/gu)].map(m => m[1]));
+  for (const arg of args.filter(arg => arg.startsWith('--'))) assert.ok(supported.has(arg), `unsupported canonical exporter flag ${arg}`);
+  assert.equal(args[args.indexOf('--db') + 1], '/frozen.sqlite');
+  assert.equal(args[args.indexOf('--snapshot-sha256') + 1], 'b'.repeat(64));
+  assert.equal(args[args.indexOf('--current-datetime') + 1], '2026-09-04T22:53:39+02:00');
 });

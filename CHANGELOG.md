@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fixed: local real-data focused generation now passes only supported canonical exporter arguments, retaining the immutable DB identity and clock while route/page-class selection remains in the Astro build filter.
+- Fixed: source-published component and route identities no longer pass SoT acceptance with unexplained empty variant/state metadata; existing source behavior and inline style ownership are described without new visual semantics.
+
 - Fixed: the user-reachable focus completion heading wraps long words within mobile width without clipping controls, hiding page overflow, or changing completion behavior.
 
 - Fixed: canonical Kaggle Preview passes its validated frozen clock into Astro and rejects real manifests with drifting date/reference time before archiving; Golden retains its own pinned corpus clock.

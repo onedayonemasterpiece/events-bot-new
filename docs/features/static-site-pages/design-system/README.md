@@ -281,3 +281,7 @@ round-trip, approved native typography rendering or full-site P materialization.
 ### Focus completion responsive regression
 
 `/fokus-gruppa/zavershenie/` remains product scope because the programme page links to it. Its composition owner wraps long heading words within the available inline size; no global overflow clipping or completion-state behavior change is allowed. Regression: `site/tests/focus-programme-route-normalization.test.mjs`; browser acceptance covers completion states at mobile and desktop widths.
+
+### Source identity completeness
+
+The existing Astro-family checker rejects literal source identity values hidden behind empty registry arrays. Parametric state values require an explicit source-bound `dynamic_identity` contract and a real value regex, not invented enumeration labels. Inline Astro styles have one source owner (shared identity roots resolve that same source); runtime state producers remain the behavior authority. This is a description of current source, not permission for new variants or redesign.
