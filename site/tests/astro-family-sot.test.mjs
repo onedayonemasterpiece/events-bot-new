@@ -218,3 +218,12 @@ test('checker fails closed when canonical production coverage is incomplete', as
   await writeJson(path.resolve(fixture.root, registryPath), registry);
   await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /Required production component source is unregistered/u);
 });
+
+test('checker fails closed on an unregistered source-published identity', async () => {
+  const fixture = await createFixture({
+    extraFiles: {
+      'site/src/components/Rogue.astro': '<aside data-ds-family="RogueSurface" data-ds-version="1"></aside>\n',
+    },
+  });
+  await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /Unregistered canonical owners: RogueSurface/u);
+});
