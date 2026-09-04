@@ -9,9 +9,10 @@ function count(source, pattern) {
 }
 
 test('MobileBottomNav delegates visible glyphs to canonical semantic/asset owners and the control role', async () => {
-  const [nav, semantic, foundations] = await Promise.all([
+  const [nav, semantic, icon, foundations] = await Promise.all([
     read('src/components/MobileBottomNav.astro'),
     read('src/components/design-system/SemanticIcon.astro'),
+    read('src/components/Icon.astro'),
     read('src/components/design-system/foundations.ts'),
   ]);
 
@@ -55,6 +56,14 @@ test('MobileBottomNav delegates visible glyphs to canonical semantic/asset owner
   assert.match(semantic, /'ke-icon-contract--four-role-v1'/u);
   assert.match(semantic, /'ke-icon-size-owner--foundations'/u);
   assert.match(semantic, /data-ke-icon-role=\{role\}/u);
+  assert.match(semantic, /<Icon[\s\S]+dataIconName=\{name\}/u,
+    'SemanticIcon must forward its machine-readable identity through the shared Icon renderer');
+  assert.match(semantic, /<Icon[\s\S]+dataIconRole=\{role\}/u,
+    'SemanticIcon must forward its canonical size role through the shared Icon renderer');
+  assert.match(icon, /data-ke-icon-name=\{dataIconName\}/u);
+  assert.match(icon, /data-ke-icon-role=\{dataIconRole\}/u);
+  assert.match(icon, /data-ke-icon-contract=\{dataIconContract\}/u);
+  assert.match(icon, /data-ke-icon-size-owner=\{dataIconSizeOwner\}/u);
   assert.match(foundations, /inline: 16,[\s\S]*control: 20,[\s\S]*action: 24,[\s\S]*feature: 32,/u);
   assert.equal(count(foundations, /^\s*(?:inline|control|action|feature): \d+,?$/gmu), 4);
 });

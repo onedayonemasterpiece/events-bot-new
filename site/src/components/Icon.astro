@@ -3,12 +3,34 @@ interface Props {
   name: 'heart' | 'comment' | 'calendar' | 'dislike' | 'share' | 'pin' | 'ticket' | 'info' | 'spark' | 'lock' | 'image' | 'phone' | 'copy' | 'check' | 'bus' | 'car' | 'walk' | 'install';
   className?: string;
   title?: string;
+  dataIconName?: string;
+  dataIconRole?: 'inline' | 'control' | 'action' | 'feature';
+  dataIconContract?: 'four-role-v1';
+  dataIconSizeOwner?: 'foundations.css';
 }
-const { name, className = '', title } = Astro.props;
+const {
+  name,
+  className = '',
+  title,
+  dataIconName,
+  dataIconRole,
+  dataIconContract,
+  dataIconSizeOwner,
+} = Astro.props;
 const labelled = Boolean(title);
 const common = `icon icon--${name}${className ? ` ${className}` : ''}`;
 ---
-<svg class={common} aria-hidden={labelled ? undefined : 'true'} role={labelled ? 'img' : undefined} viewBox={name === 'calendar' ? '0 0 32 32' : name === 'dislike' ? '0 0 512 512' : '0 0 24 24'} xmlns="http://www.w3.org/2000/svg">
+<svg
+  class={common}
+  data-ke-icon-name={dataIconName}
+  data-ke-icon-role={dataIconRole}
+  data-ke-icon-contract={dataIconContract}
+  data-ke-icon-size-owner={dataIconSizeOwner}
+  aria-hidden={labelled ? undefined : 'true'}
+  role={labelled ? 'img' : undefined}
+  viewBox={name === 'calendar' ? '0 0 32 32' : name === 'dislike' ? '0 0 512 512' : '0 0 24 24'}
+  xmlns="http://www.w3.org/2000/svg"
+>
   {title && <title>{title}</title>}
   {name === 'heart' && (
     <>

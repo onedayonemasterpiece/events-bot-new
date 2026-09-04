@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed: `SemanticIcon` now preserves its canonical name, four-role size and
+  foundation-owner attributes when delegating glyph rendering to `Icon`, so
+  product DOM evidence matches the source-level icon contract.
+
 - Fixed: product acceptance now explicitly excludes generated `/lab/*` and the
   `/__preview/` directory itself. The owner directory exposes only real product
   archetypes, and the V0 classifier ignores lab observations so QA specimens
