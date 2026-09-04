@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added: `npm --prefix site run local:focused -- ...` now materializes one
+  selected route locally before Astro prerender instead of generating every
+  same-class neighbour. It reuses the canonical exporter, page-class contract,
+  builder, slice checker and release server; retains only required support
+  endpoints including `robots.txt`; emits a reproducible receipt; and runs
+  desktop/mobile browser smoke without publication.
+
 - Fixed: the immutable owner Preview hub now exposes the two required product
   archetypes it previously left as non-owner or absent links: Interest Clubs and
   Unusual Events. Its executable gate binds all 17 required production-contract

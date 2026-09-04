@@ -25,21 +25,34 @@ no-op or artifact-only run preserves the previous immutable target; an
 incomplete receipt resolves to unavailable. Production `/`, `current.json` and
 stable `/ics/*` stay untouched.
 
-For a local focused diagnostic, build the selected real-data route family and
-run its generated gates against the same immutable id:
+## Local focused route workflow
+
+Use the canonical local command for one route or one named page class. It stages
+the exact committed source in a detached worktree, invokes the existing exporter,
+page-class selector, Astro preview builder, slice checker and release server, and
+creates no repository DB, `dist`, publication or retention state.
+
+Deterministic offline fixture with desktop/mobile browser smoke:
 
 ```bash
-PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run build:preview
-PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:preview
-PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototype
+FIXTURE_DATE=$(node -p "require('./site/src/data/preview-events.json').build.current_date")
+npm --prefix site run local:focused -- \
+  --route "/date-${FIXTURE_DATE}/" \
+  --fixture --offline --open
 ```
 
-That local output is not a Review Preview and must not be published. A complete
-or owner-facing Review Preview always invokes
-`scripts/run_static_site_builder_kaggle.py`, which builds and checks on Kaggle,
-downloads the hash-bound artifact and publishes only that checked artifact.
-Optional focused publication uses the same page-class selector whose sole
-allowlist is `site/scripts/static-site-page-classes.v1.json`.
+A real event-detail slice accepts `--db`, exact `--entity-id` and
+`--entity-slug`. `--page-class date|event|weekend|collection|personal|focus|partner|lab`
+keeps the deliberately broader class-wide diagnostic distinct from exact-route
+mode. Exact-route materialization retains only the chosen route, its required
+event endpoints when applicable, `/__preview/`, `robots.txt`, manifests and
+shared assets. Same-class neighbour pages are rejected by the receipt gate.
+
+The command prints source/snapshot/data identities, selected owner source,
+generated routes, timings and browser results. It never publishes. Full
+owner-facing `real/all` remains on the dedicated Review Preview Kaggle kernel;
+production candidates remain on the production kernel. The sole page-class
+allowlist remains `site/scripts/static-site-page-classes.v1.json`.
 
 `check:preview` treats a date listing without mobile event rows as valid only
 when the generated page retains the mobile rail shell and renders the explicit
