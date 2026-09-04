@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Changed: event occurrence navigation now consumes its established
+  event-detail occurrence color, surface, border, radius and elevation roles
+  directly across desktop, mobile and practical variants, without changing
+  schedule behavior or geometry.
+
 - Changed: desktop event-detail now consumes established canonical ink and
   surface tokens directly, replacing raw local aliases with role-backed child
   compatibility bridges without changing visual output or interaction behavior.

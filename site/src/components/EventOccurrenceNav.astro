@@ -171,45 +171,45 @@ const scheduleId = `event-schedule-${event.id}`;
   .event-occurrences--single time strong,
   .event-occurrences--desktop .event-occurrences__current time strong { font-size:clamp(.9rem,1.5vw,1.18rem); }
   .event-occurrences--single time b,
-  .event-occurrences--desktop .event-occurrences__current time b { color:#7b6b5e; }
+  .event-occurrences--desktop .event-occurrences__current time b { color:var(--ke-color-occurrence-muted); }
 
   .event-occurrences--desktop { display:flex; flex-direction:column; align-items:flex-end; max-width:min(34rem,100%); text-align:right; text-transform:none; }
-  .event-occurrences--desktop .event-occurrences__summary-links { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:baseline; gap:.12rem .8rem; min-height:1.55rem; margin-top:.12rem; color:#75665b; font-size:.74rem; letter-spacing:0; }
+  .event-occurrences--desktop .event-occurrences__summary-links { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:baseline; gap:.12rem .8rem; min-height:1.55rem; margin-top:.12rem; color:var(--ke-color-occurrence-summary); font-size:.74rem; letter-spacing:0; }
   .event-occurrences__same-date { display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem .45rem; }
-  .event-occurrences__text-links { color:#8d3417; font-variant-numeric:tabular-nums; font-weight:900; white-space:nowrap; }
+  .event-occurrences__text-links { color:var(--ke-color-occurrence-link); font-variant-numeric:tabular-nums; font-weight:900; white-space:nowrap; }
   .event-occurrences__text-links a,
-  .event-occurrences__schedule-jump { color:#8d3417; font-weight:900; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.2em; }
+  .event-occurrences__schedule-jump { color:var(--ke-color-occurrence-link); font-weight:900; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.2em; }
   .event-occurrences__schedule-jump span { text-decoration:none; }
   .event-occurrences__text-links a:hover,
-  .event-occurrences__schedule-jump:hover { color:#b54d22; }
+  .event-occurrences__schedule-jump:hover { color:var(--ke-color-occurrence-link-hover); }
   .event-occurrences__text-links a:focus-visible,
-  .event-occurrences__schedule-jump:focus-visible { outline:2px solid #b54d22; outline-offset:3px; border-radius:3px; }
+  .event-occurrences__schedule-jump:focus-visible { outline:2px solid var(--ke-color-occurrence-link-hover); outline-offset:3px; border-radius:3px; }
 
   .event-occurrences--mobile.event-occurrences--summary { display:grid !important; grid-template-columns:minmax(0,1fr) !important; gap:0 !important; line-height:1.15 !important; }
   .event-occurrences--mobile .event-occurrences__current { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.5rem; min-height:44px; }
   .event-occurrences--mobile .event-occurrences__summary-links { display:grid; gap:0; }
-  .event-occurrences--mobile .event-occurrences__same-date { min-height:44px; color:#75665b; font-size:.78rem; line-height:1.35; }
+  .event-occurrences--mobile .event-occurrences__same-date { min-height:44px; color:var(--ke-color-occurrence-summary); font-size:.78rem; line-height:1.35; }
   .event-occurrences--mobile .event-occurrences__text-links a { display:inline-flex; min-width:44px; min-height:44px; align-items:center; justify-content:center; margin:-.55rem -.35rem; padding:.55rem .35rem; }
   .event-occurrences__other-dates { margin-top:.12rem; }
-  .event-occurrences__other-title { display:flex; min-height:36px; align-items:center; color:#8d3417; font-size:.8rem; font-weight:900; text-decoration:none; }
-  .event-occurrences__mobile-list { display:grid; padding:.1rem .65rem; border:1px solid rgba(121,48,20,.2); border-radius:10px; background:rgba(255,250,242,.64); }
+  .event-occurrences__other-title { display:flex; min-height:36px; align-items:center; color:var(--ke-color-occurrence-link); font-size:.8rem; font-weight:900; text-decoration:none; }
+  .event-occurrences__mobile-list { display:grid; padding:.1rem .65rem; border:1px solid var(--ke-color-event-detail-border); border-radius:var(--ke-occurrence-mobile-panel-radius); background:var(--ke-color-occurrence-mobile-surface); }
   .event-occurrences__mobile-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.7rem; min-height:50px; }
-  .event-occurrences__mobile-row + .event-occurrences__mobile-row { border-top:1px solid rgba(121,48,20,.12); }
+  .event-occurrences__mobile-row + .event-occurrences__mobile-row { border-top:1px solid var(--ke-color-event-detail-border-soft); }
   .event-occurrences__mobile-date { display:flex; align-items:baseline; gap:.45rem; min-width:0; }
-  .event-occurrences__mobile-date small { color:#7b6b5e; font-size:.68rem; font-weight:900; text-transform:uppercase; }
-  .event-occurrences__mobile-date strong { color:#352820; font-size:.82rem; }
+  .event-occurrences__mobile-date small { color:var(--ke-color-occurrence-muted); font-size:.68rem; font-weight:900; text-transform:uppercase; }
+  .event-occurrences__mobile-date strong { color:var(--ke-color-occurrence-date); font-size:.82rem; }
 
   .event-occurrences--practical { width:100%; margin-top:.24rem; scroll-margin-top:7rem; text-transform:none; }
   .event-occurrences__rows { display:grid; gap:.48rem; min-width:0; }
   .event-occurrences__date-row { display:grid; grid-template-columns:minmax(9.5rem,1fr) minmax(8rem,auto); align-items:center; gap:.55rem 1rem; min-width:0; }
-  .event-occurrences__date-row + .event-occurrences__date-row { padding-top:.48rem; border-top:1px solid rgba(121,48,20,.12); }
-  .event-occurrences__date-copy { display:flex; flex-wrap:wrap; align-items:baseline; gap:.18rem .42rem; min-width:0; color:#352820; }
+  .event-occurrences__date-row + .event-occurrences__date-row { padding-top:.48rem; border-top:1px solid var(--ke-color-event-detail-border-soft); }
+  .event-occurrences__date-copy { display:flex; flex-wrap:wrap; align-items:baseline; gap:.18rem .42rem; min-width:0; color:var(--ke-color-occurrence-date); }
   .event-occurrences__date-copy strong { font-size:.82rem; font-weight:950; }
-  .event-occurrences__date-copy > span { color:#75665b; font-size:.72rem; font-weight:800; }
+  .event-occurrences__date-copy > span { color:var(--ke-color-occurrence-summary); font-size:.72rem; font-weight:800; }
   .event-occurrences__times { display:flex; flex-wrap:wrap; justify-content:flex-start; gap:.32rem; min-width:0; font-variant-numeric:tabular-nums; }
-  .event-occurrences__time-chip { display:inline-flex; min-height:32px; align-items:center; justify-content:center; padding:.34rem .58rem; border:1px solid rgba(141,52,23,.28); border-radius:999px; background:#fffaf2; color:#8d3417; font-size:.76rem; font-weight:950; line-height:1; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.18em; white-space:nowrap; }
-  a.event-occurrences__time-chip:hover { border-color:#b54d22; background:#fff3e8; color:#b54d22; }
-  .event-occurrences__time-chip:focus-visible { outline:2px solid #b54d22; outline-offset:2px; }
-  .event-occurrences__time-chip.is-current { border-color:#b54d22; background:#b54d22; color:#fffaf2; text-decoration:none; box-shadow:0 4px 12px rgba(141,52,23,.18); }
+  .event-occurrences__time-chip { display:inline-flex; min-height:32px; align-items:center; justify-content:center; padding:.34rem .58rem; border:1px solid var(--ke-color-occurrence-chip-border); border-radius:var(--ke-occurrence-chip-radius); background:var(--ke-color-occurrence-chip-surface); color:var(--ke-color-occurrence-link); font-size:.76rem; font-weight:950; line-height:1; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.18em; white-space:nowrap; }
+  a.event-occurrences__time-chip:hover { border-color:var(--ke-color-occurrence-link-hover); background:var(--ke-color-occurrence-chip-hover-surface); color:var(--ke-color-occurrence-link-hover); }
+  .event-occurrences__time-chip:focus-visible { outline:2px solid var(--ke-color-occurrence-link-hover); outline-offset:2px; }
+  .event-occurrences__time-chip.is-current { border-color:var(--ke-color-occurrence-chip-current); background:var(--ke-color-occurrence-chip-current); color:var(--ke-color-occurrence-chip-surface); text-decoration:none; box-shadow:var(--ke-elevation-occurrence-current); }
   .event-occurrences__practical-current { display:block; }
 </style>
