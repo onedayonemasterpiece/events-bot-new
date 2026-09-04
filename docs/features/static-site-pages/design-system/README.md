@@ -163,6 +163,18 @@ and both icon tiers. The location glyph remains the 24 px action size; the
 former 15 px water glyph is normalized to the canonical 16 px inline size.
 Weather availability, loading and degraded-state behavior do not change.
 
+`EventMediaRail` consumes the existing gallery, resolved-selector and poster
+rail roles from `family-continuity-foundations.css` for surface, border,
+elevation, spacing, shape and item geometry. This removes a second local visual
+owner while preserving the established thumbnail counts, responsive packing,
+MediaFrame crop authority and all resource-state behavior on event pages.
+
+`EventFallbackArt` consumes the event-detail fallback surface and mobile-height
+roles, so fallback presentation has one owner across every event page.
+`UnusualListingSurface` uses the canonical editorial section-heading type role
+for both populated and empty states. These handoffs do not change fallback
+selection or listing behavior.
+
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant

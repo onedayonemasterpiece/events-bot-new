@@ -493,23 +493,23 @@ const rootStyle = variant === 'gallery-thumbnails'
   .event-media-rail.event-media-rail--gallery-thumbnails {
     display: grid;
     grid-template-columns: repeat(var(--rail-count, 1), minmax(0, 1fr));
-    gap: 0.42rem;
-    padding: 0.44rem;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 18px;
-    background: rgba(31,27,24,0.92);
-    box-shadow: 0 14px 36px rgba(24,18,14,0.2);
+    gap: var(--ke-media-rail-gallery-gap);
+    padding: var(--ke-media-rail-gallery-padding);
+    border: 1px solid var(--ke-color-media-rail-shell-border);
+    border-radius: var(--ke-media-rail-gallery-radius);
+    background: var(--ke-color-media-rail-gallery-surface);
+    box-shadow: var(--ke-elevation-media-rail-gallery);
   }
 
   .event-media-rail--gallery-thumbnails > .event-media-rail__item,
   .event-media-rail--gallery-thumbnails > .event-media-rail__more {
     min-width: 0;
-    height: 54px;
+    height: var(--ke-media-rail-gallery-item-height);
     padding: 0;
-    border: 1px solid rgba(255,255,255,0.16);
-    border-radius: 11px;
-    background: #2d2926;
-    color: #fffaf2;
+    border: 1px solid var(--ke-color-media-rail-item-border);
+    border-radius: var(--ke-media-rail-gallery-item-radius);
+    background: var(--ke-color-media-rail-gallery-item-surface);
+    color: var(--ke-color-media-rail-inverse-text);
     cursor: zoom-in;
   }
 
@@ -538,12 +538,12 @@ const rootStyle = variant === 'gallery-thumbnails'
     grid-template-columns: none;
     flex-wrap: nowrap;
     align-items: stretch;
-    gap: 0.35rem;
-    padding: 0.45rem;
+    gap: var(--ke-media-rail-resolved-gap);
+    padding: var(--ke-media-rail-resolved-padding);
     overflow: hidden;
     border: 0;
-    border-radius: 16px;
-    background: rgba(31,27,24,0.9);
+    border-radius: var(--ke-media-rail-resolved-radius);
+    background: var(--ke-color-media-rail-resolved-surface);
     box-shadow: none;
   }
 
@@ -555,18 +555,18 @@ const rootStyle = variant === 'gallery-thumbnails'
     position: relative;
     flex: 1 1 0;
     width: auto;
-    min-width: 44px;
-    max-width: 68px;
-    height: 48px;
+    min-width: var(--ke-media-rail-hero-item-min-width);
+    max-width: var(--ke-media-rail-hero-item-max-width);
+    height: var(--ke-media-rail-hero-item-height);
     padding: 0;
     border: 2px solid transparent;
-    border-radius: 10px;
-    background: #2b2724;
+    border-radius: var(--ke-media-rail-resolved-item-radius);
+    background: var(--ke-color-media-rail-resolved-item-surface);
     cursor: pointer;
   }
 
   .event-media-rail--hero-selector > .event-media-rail__item.is-current {
-    border-color: #fff;
+    border-color: var(--ke-color-media-rail-current-border);
   }
 
   .event-media-rail--hero-selector > .event-media-rail__more,
@@ -574,7 +574,7 @@ const rootStyle = variant === 'gallery-thumbnails'
     display: grid;
     place-content: center;
     gap: 0.05rem;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--ke-color-media-rail-control-border);
     background: var(--ke-color-media-rail-more-surface, #fffaf2);
     color: var(--ke-color-media-rail-more-text, #241c17);
     line-height: 1;
@@ -585,15 +585,15 @@ const rootStyle = variant === 'gallery-thumbnails'
     position: absolute;
     inset: auto 0.25rem 0.2rem;
     padding: 0.12rem 0.3rem;
-    border-radius: 6px;
-    background: rgba(0,0,0,0.72);
-    color: #fff;
-    font-size: 0.62rem;
+    border-radius: var(--ke-media-rail-role-radius);
+    background: var(--ke-color-media-rail-role-surface);
+    color: var(--ke-color-media-rail-role-text);
+    font-size: var(--ke-media-rail-role-size);
     font-weight: 850;
   }
 
   .event-media-rail--hero-selector > .event-media-rail__more strong {
-    font-size: var(--ke-media-rail-more-count-size, 1.05rem);
+    font-size: var(--ke-media-rail-hero-more-count-size);
   }
 
   .event-media-rail--hero-selector > .event-media-rail__more span,
@@ -601,34 +601,34 @@ const rootStyle = variant === 'gallery-thumbnails'
     position: static;
     padding: 0;
     background: transparent;
-    color: #6f6157;
-    font-size: var(--ke-media-rail-more-label-size, 0.58rem);
+    color: var(--ke-color-media-rail-more-label);
+    font-size: var(--ke-media-rail-resolved-more-label-size);
   }
 
   .event-media-rail.event-media-rail--poster-strip {
-    --split-rail-thumb-height: clamp(104px,13svh,148px);
+    --split-rail-thumb-height: var(--ke-media-rail-poster-thumb-height);
     width: 100%;
-    min-height: calc(var(--split-rail-thumb-height) + 20px);
+    min-height: calc(var(--split-rail-thumb-height) + var(--ke-media-rail-poster-shell-extra-height));
     justify-content: flex-start;
-    gap: 0.5rem;
-    padding: 0.65rem;
+    gap: var(--ke-media-rail-poster-gap);
+    padding: var(--ke-media-rail-poster-padding);
     border-radius: 0;
-    background: #292521;
+    background: var(--ke-color-media-rail-resolved-surface);
   }
 
   .event-media-rail--poster-strip > .event-media-rail__item,
   .event-media-rail--poster-strip > .event-media-rail__item[data-rail-aspect="portrait"],
   .event-media-rail--poster-strip > .event-media-rail__item[data-rail-aspect="landscape"] {
     position: relative;
-    flex: 0 0 var(--split-thumb-width,112px);
-    width: var(--split-thumb-width,112px);
-    min-width: 88px;
-    max-width: 196px;
+    flex: 0 0 var(--split-thumb-width, var(--ke-media-rail-poster-item-width));
+    width: var(--split-thumb-width, var(--ke-media-rail-poster-item-width));
+    min-width: var(--ke-media-rail-poster-item-min-width);
+    max-width: var(--ke-media-rail-poster-item-max-width);
     height: var(--split-rail-thumb-height);
     padding: 0;
     border: 2px solid transparent;
-    border-radius: 10px;
-    background: #2b2724;
+    border-radius: var(--ke-media-rail-resolved-item-radius);
+    background: var(--ke-color-media-rail-resolved-item-surface);
     cursor: pointer;
   }
 
@@ -638,8 +638,8 @@ const rootStyle = variant === 'gallery-thumbnails'
   }
 
   .event-media-rail--poster-strip > .event-media-rail__more {
-    flex: 0 0 104px;
-    width: 104px;
-    min-width: 104px;
+    flex: 0 0 var(--ke-media-rail-poster-more-width);
+    width: var(--ke-media-rail-poster-more-width);
+    min-width: var(--ke-media-rail-poster-more-width);
   }
 </style>

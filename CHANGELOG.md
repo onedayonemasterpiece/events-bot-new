@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Changed: the shared event-media rail now consumes its established gallery,
+  selector and poster-rail color, elevation, spacing, shape and geometry roles
+  instead of keeping parallel literal owners; packing and media behavior are
+  unchanged.
+
+- Changed: event fallback art now consumes its canonical event-detail surface
+  and mobile-height roles, and unusual-listing section headings consume the
+  canonical editorial heading role instead of local copies.
+
 - Changed: the shared date/weather context now consumes its established
   cross-route surface, state, shape, height and icon roles; its water glyph is
   normalized from a one-off 15 px copy to the canonical 16 px inline icon size.

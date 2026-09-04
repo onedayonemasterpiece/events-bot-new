@@ -11,8 +11,8 @@
   "summary": {
     "token_count": 2505,
     "definition_count": 2788,
-    "consumer_count": 3642,
-    "alias_edge_count": 707,
+    "consumer_count": 3685,
+    "alias_edge_count": 708,
     "family_count": 109
   },
   "component_sets": {
@@ -995,7 +995,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-fc0946d0ba8dc402": [
+    "components-1819cfffaeffad2e": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -1008,6 +1008,7 @@
       "site/src/components/DesktopEventPage.astro",
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
+      "site/src/components/EventMediaRail.astro",
       "site/src/components/ExhibitionsPersonalSurface.astro",
       "site/src/components/FavoritesSurface.astro",
       "site/src/components/FocusConnectivityDiagnostic.astro",
@@ -1838,6 +1839,34 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
+    "components-3507a26a5ee9ad4d": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/EventMediaRail.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
     "components-a6cc96791ecf3d62": [
       "site/src/components/brand/AnnouncementsLockup.astro",
       "site/src/components/design-system/Foundations.astro",
@@ -1846,6 +1875,34 @@
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
       "site/src/components/EventOccurrenceNav.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
+    "components-b87a49e7ab355118": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventFallbackArt.astro",
+      "site/src/components/EventHero.astro",
       "site/src/components/FocusGroupFeedback.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/layouts/EventLayout.astro",
@@ -2869,7 +2926,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-f203c9ede50f9b73": [
+    "components-9ac5ac9ed0b4584f": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -2882,6 +2939,7 @@
       "site/src/components/DesktopEventPage.astro",
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
+      "site/src/components/EventMediaRail.astro",
       "site/src/components/ExhibitionsPersonalSurface.astro",
       "site/src/components/FavoritesSurface.astro",
       "site/src/components/FocusConnectivityDiagnostic.astro",
@@ -2992,7 +3050,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-44b6279ad6661c5e": [
+    "components-3aece20d26e169de": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -3005,6 +3063,7 @@
       "site/src/components/DesktopEventPage.astro",
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
+      "site/src/components/EventMediaRail.astro",
       "site/src/components/ExhibitionsPersonalSurface.astro",
       "site/src/components/FavoritesSurface.astro",
       "site/src/components/FocusConnectivityDiagnostic.astro",
@@ -3726,7 +3785,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-7f50c2235d86e095": [
+    "components-ed3931766c452d32": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -3739,6 +3798,7 @@
       "site/src/components/DesktopEventPage.astro",
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
+      "site/src/components/EventMediaRail.astro",
       "site/src/components/ExhibitionsPersonalSurface.astro",
       "site/src/components/FavoritesSurface.astro",
       "site/src/components/FocusConnectivityDiagnostic.astro",
@@ -5114,6 +5174,70 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
+    "components-e9c83b59fe8bb964": [
+      "site/src/components/AdaptiveEventCardGrid.astro",
+      "site/src/components/artifacts/ArtifactCollection.astro",
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Badge.astro",
+      "site/src/components/design-system/Button.astro",
+      "site/src/components/design-system/CopyAction.astro",
+      "site/src/components/design-system/Field.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/design-system/StatePanel.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/EventMediaRail.astro",
+      "site/src/components/ExhibitionsPersonalSurface.astro",
+      "site/src/components/FavoritesSurface.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/FocusGroupInviteIntake.astro",
+      "site/src/components/FocusGroupLabPanel.astro",
+      "site/src/components/FreeCollectionSurface.astro",
+      "site/src/components/GastronomyCollectionSurface.astro",
+      "site/src/components/HomeColdStartFeed.astro",
+      "site/src/components/InterestClubCard.astro",
+      "site/src/components/InterestProfile.astro",
+      "site/src/components/listings/DateListingSurface.astro",
+      "site/src/components/listings/ExactTimeTimeline.astro",
+      "site/src/components/listings/ListingEventCard.astro",
+      "site/src/components/listings/MobileDateAccessory.astro",
+      "site/src/components/listings/MobileListingRailRow.astro",
+      "site/src/components/listings/MobileListingRailSurface.astro",
+      "site/src/components/listings/PopularBehaviorRows.astro",
+      "site/src/components/listings/PopularListingSurface.astro",
+      "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+      "site/src/components/listings/PopularMobileBehaviorRows.astro",
+      "site/src/components/listings/WeekendEditorialTimeline.astro",
+      "site/src/components/listings/WeekendListingSurface.astro",
+      "site/src/components/listings/WeekendTimeMatrix.astro",
+      "site/src/components/MobileBottomNav.astro",
+      "site/src/components/MobileSearchBottomNav.astro",
+      "site/src/components/PersonalFeedSlot.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/components/SocialIcon.astro",
+      "site/src/components/UnusualListingSurface.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
     "components-d49afd1d4208f891": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
@@ -5311,70 +5435,6 @@
       "site/src/pages/festivali/index.astro",
       "site/src/pages/fokus-gruppa/index.astro",
       "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
-      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-      "site/src/pages/index.astro",
-      "site/src/pages/izbrannoe/index.astro",
-      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
-      "site/src/pages/kluby-po-interesam/index.astro",
-      "site/src/pages/partners/index.astro",
-      "site/src/pages/partnerstvo/index.astro",
-      "site/src/pages/podborki/[slug]/index.astro",
-      "site/src/pages/podborki/index.astro",
-      "site/src/pages/poisk/index.astro",
-      "site/src/pages/segodnya/index.astro",
-      "site/src/pages/sobytiya/[slug].astro",
-      "site/src/pages/vystavki/index.astro",
-      "site/src/pages/zakrytaya-afisha/index.astro"
-    ],
-    "components-e9c83b59fe8bb964": [
-      "site/src/components/AdaptiveEventCardGrid.astro",
-      "site/src/components/artifacts/ArtifactCollection.astro",
-      "site/src/components/brand/AnnouncementsLockup.astro",
-      "site/src/components/design-system/Badge.astro",
-      "site/src/components/design-system/Button.astro",
-      "site/src/components/design-system/CopyAction.astro",
-      "site/src/components/design-system/Field.astro",
-      "site/src/components/design-system/Foundations.astro",
-      "site/src/components/design-system/StatePanel.astro",
-      "site/src/components/DesktopEventPage.astro",
-      "site/src/components/EventCard.astro",
-      "site/src/components/EventHero.astro",
-      "site/src/components/EventMediaRail.astro",
-      "site/src/components/ExhibitionsPersonalSurface.astro",
-      "site/src/components/FavoritesSurface.astro",
-      "site/src/components/FocusGroupFeedback.astro",
-      "site/src/components/FocusGroupInviteIntake.astro",
-      "site/src/components/FocusGroupLabPanel.astro",
-      "site/src/components/FreeCollectionSurface.astro",
-      "site/src/components/GastronomyCollectionSurface.astro",
-      "site/src/components/HomeColdStartFeed.astro",
-      "site/src/components/InterestClubCard.astro",
-      "site/src/components/InterestProfile.astro",
-      "site/src/components/listings/DateListingSurface.astro",
-      "site/src/components/listings/ExactTimeTimeline.astro",
-      "site/src/components/listings/ListingEventCard.astro",
-      "site/src/components/listings/MobileDateAccessory.astro",
-      "site/src/components/listings/MobileListingRailRow.astro",
-      "site/src/components/listings/MobileListingRailSurface.astro",
-      "site/src/components/listings/PopularBehaviorRows.astro",
-      "site/src/components/listings/PopularListingSurface.astro",
-      "site/src/components/listings/PopularMobileAdaptiveRows.astro",
-      "site/src/components/listings/PopularMobileBehaviorRows.astro",
-      "site/src/components/listings/WeekendEditorialTimeline.astro",
-      "site/src/components/listings/WeekendListingSurface.astro",
-      "site/src/components/listings/WeekendTimeMatrix.astro",
-      "site/src/components/MobileBottomNav.astro",
-      "site/src/components/MobileSearchBottomNav.astro",
-      "site/src/components/PersonalFeedSlot.astro",
-      "site/src/components/SiteFooter.astro",
-      "site/src/components/SocialIcon.astro",
-      "site/src/components/UnusualListingSurface.astro",
-      "site/src/layouts/EventLayout.astro",
-      "site/src/pages/artefakty/index.astro",
-      "site/src/pages/dlya-menya/index.astro",
-      "site/src/pages/festivali/index.astro",
-      "site/src/pages/fokus-gruppa/index.astro",
       "site/src/pages/fokus-gruppa/priglashenie/index.astro",
       "site/src/pages/fokus-gruppa/zavershenie/index.astro",
       "site/src/pages/index.astro",
@@ -15285,7 +15345,7 @@
         "production_route_patterns": []
       }
     ],
-    "families-edea2d0145e92932": [
+    "families-a01ebba7c84f2149": [
       {
         "id": "AdaptiveEventCardGrid",
         "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
@@ -15465,6 +15525,13 @@
           "/vyhodnye/*/",
           "/vystavki/",
           "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventMediaRail",
+        "astro_root": "site/src/components/EventMediaRail.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
         ]
       },
       {
@@ -22809,6 +22876,310 @@
         "astro_root": "site/src/components/KaupTransportSchedule.astro",
         "production_route_patterns": [
           "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "MaterializedCollectionRouteComposition",
+        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "MobileEventDetailSurface",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "PartnershipRouteComposition",
+        "astro_root": "site/src/pages/partnerstvo/index.astro",
+        "production_route_patterns": [
+          "/partnerstvo/"
+        ]
+      },
+      {
+        "id": "PartnersRouteComposition",
+        "astro_root": "site/src/pages/partners/index.astro",
+        "production_route_patterns": [
+          "/partners/"
+        ]
+      },
+      {
+        "id": "SearchRouteComposition",
+        "astro_root": "site/src/pages/poisk/index.astro",
+        "production_route_patterns": [
+          "/poisk/"
+        ]
+      },
+      {
+        "id": "SiteFooter",
+        "astro_root": "site/src/components/SiteFooter.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "TodayReviewGuard",
+        "astro_root": "site/src/pages/segodnya/index.astro",
+        "production_route_patterns": [
+          "/segodnya/"
+        ]
+      }
+    ],
+    "families-1e52d7e56075cdca": [
+      {
+        "id": "AnnouncementsLockup",
+        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ArtifactCollectionRouteComposition",
+        "astro_root": "site/src/pages/artefakty/index.astro",
+        "production_route_patterns": [
+          "/artefakty/"
+        ]
+      },
+      {
+        "id": "ClosedFocusHubRouteComposition",
+        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+        "production_route_patterns": [
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "CollectionCatalogRouteComposition",
+        "astro_root": "site/src/pages/podborki/index.astro",
+        "production_route_patterns": [
+          "/podborki/"
+        ]
+      },
+      {
+        "id": "DesktopEventDetailSurface",
+        "astro_root": "site/src/components/DesktopEventPage.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventCard",
+        "astro_root": "site/src/components/EventCard.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventDetailRouteComposition",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventHero",
+        "astro_root": "site/src/components/EventHero.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventLayout",
+        "astro_root": "site/src/layouts/EventLayout.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventMediaRail",
+        "astro_root": "site/src/components/EventMediaRail.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "ExhibitionsRouteComposition",
+        "astro_root": "site/src/pages/vystavki/index.astro",
+        "production_route_patterns": [
+          "/vystavki/"
+        ]
+      },
+      {
+        "id": "FavoritesRouteComposition",
+        "astro_root": "site/src/pages/izbrannoe/index.astro",
+        "production_route_patterns": [
+          "/izbrannoe/"
+        ]
+      },
+      {
+        "id": "FestivalsTimelineRouteComposition",
+        "astro_root": "site/src/pages/festivali/index.astro",
+        "production_route_patterns": [
+          "/festivali/"
+        ]
+      },
+      {
+        "id": "FocusGroupFeedback",
+        "astro_root": "site/src/components/FocusGroupFeedback.astro",
+        "production_route_patterns": [
+          "/dlya-menya/",
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "FocusGroupProgrammeSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/"
+        ]
+      },
+      {
+        "id": "ForMeRouteComposition",
+        "astro_root": "site/src/pages/dlya-menya/index.astro",
+        "production_route_patterns": [
+          "/dlya-menya/"
+        ]
+      },
+      {
+        "id": "Foundations",
+        "astro_root": "site/src/components/design-system/Foundations.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/diagnostika-ustoychivost/",
+          "/fokus-gruppa/diagnostika/",
+          "/fokus-gruppa/kollektsiya/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zakrytaya-afisha/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "HomePage",
+        "astro_root": "site/src/pages/index.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "InterestClubDetailRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/*/"
+        ]
+      },
+      {
+        "id": "InterestClubsIndexRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/"
         ]
       },
       {
@@ -32951,7 +33322,7 @@
         ]
       }
     ],
-    "families-1f8fdd22b9727fd4": [
+    "families-41af4dc3040fb310": [
       {
         "id": "AdaptiveEventCardGrid",
         "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
@@ -33131,6 +33502,13 @@
           "/vyhodnye/*/",
           "/vystavki/",
           "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventMediaRail",
+        "astro_root": "site/src/components/EventMediaRail.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
         ]
       },
       {
@@ -37064,7 +37442,7 @@
         ]
       }
     ],
-    "families-ed5790e0be3ae5b5": [
+    "families-6debb659f675f834": [
       {
         "id": "AdaptiveEventCardGrid",
         "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
@@ -37244,6 +37622,13 @@
           "/vyhodnye/*/",
           "/vystavki/",
           "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventMediaRail",
+        "astro_root": "site/src/components/EventMediaRail.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
         ]
       },
       {
@@ -50510,6 +50895,655 @@
         ]
       }
     ],
+    "families-49968b3aabb79676": [
+      {
+        "id": "AdaptiveEventCardGrid",
+        "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
+        "production_route_patterns": [
+          "/",
+          "/date-*/",
+          "/izbrannoe/",
+          "/neobychnoe/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "AnnouncementsLockup",
+        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ArtifactCollection",
+        "astro_root": "site/src/components/artifacts/ArtifactCollection.astro",
+        "production_route_patterns": [
+          "/artefakty/"
+        ]
+      },
+      {
+        "id": "ArtifactCollectionRouteComposition",
+        "astro_root": "site/src/pages/artefakty/index.astro",
+        "production_route_patterns": [
+          "/artefakty/"
+        ]
+      },
+      {
+        "id": "Badge",
+        "astro_root": "site/src/components/design-system/Badge.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "Button",
+        "astro_root": "site/src/components/design-system/Button.astro",
+        "production_route_patterns": [
+          "/dlya-menya/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/partnerstvo/",
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "ClosedFocusHubRouteComposition",
+        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+        "production_route_patterns": [
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "CollectionCatalogRouteComposition",
+        "astro_root": "site/src/pages/podborki/index.astro",
+        "production_route_patterns": [
+          "/podborki/"
+        ]
+      },
+      {
+        "id": "CopyAction",
+        "astro_root": "site/src/components/design-system/CopyAction.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "DateListingSurface",
+        "astro_root": "site/src/components/listings/DateListingSurface.astro",
+        "production_route_patterns": [
+          "/date-*/",
+          "/segodnya/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "DesktopEventDetailSurface",
+        "astro_root": "site/src/components/DesktopEventPage.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventCard",
+        "astro_root": "site/src/components/EventCard.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventDetailRouteComposition",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventHero",
+        "astro_root": "site/src/components/EventHero.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventLayout",
+        "astro_root": "site/src/layouts/EventLayout.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventMediaRail",
+        "astro_root": "site/src/components/EventMediaRail.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "ExactTimeTimeline",
+        "astro_root": "site/src/components/listings/ExactTimeTimeline.astro",
+        "production_route_patterns": [
+          "/date-*/",
+          "/segodnya/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ExhibitionsPersonalSurface",
+        "astro_root": "site/src/components/ExhibitionsPersonalSurface.astro",
+        "production_route_patterns": [
+          "/vystavki/"
+        ]
+      },
+      {
+        "id": "ExhibitionsRouteComposition",
+        "astro_root": "site/src/pages/vystavki/index.astro",
+        "production_route_patterns": [
+          "/vystavki/"
+        ]
+      },
+      {
+        "id": "FavoritesRouteComposition",
+        "astro_root": "site/src/pages/izbrannoe/index.astro",
+        "production_route_patterns": [
+          "/izbrannoe/"
+        ]
+      },
+      {
+        "id": "FavoritesSurface",
+        "astro_root": "site/src/components/FavoritesSurface.astro",
+        "production_route_patterns": [
+          "/izbrannoe/"
+        ]
+      },
+      {
+        "id": "FestivalsTimelineRouteComposition",
+        "astro_root": "site/src/pages/festivali/index.astro",
+        "production_route_patterns": [
+          "/festivali/"
+        ]
+      },
+      {
+        "id": "Field",
+        "astro_root": "site/src/components/design-system/Field.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "FocusGroupCompletionSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/zavershenie/"
+        ]
+      },
+      {
+        "id": "FocusGroupFeedback",
+        "astro_root": "site/src/components/FocusGroupFeedback.astro",
+        "production_route_patterns": [
+          "/dlya-menya/",
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "FocusGroupInviteIntake",
+        "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/priglashenie/"
+        ]
+      },
+      {
+        "id": "FocusGroupInviteRouteComposition",
+        "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/priglashenie/"
+        ]
+      },
+      {
+        "id": "FocusGroupLabPanel",
+        "astro_root": "site/src/components/FocusGroupLabPanel.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "FocusGroupProgrammeSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/"
+        ]
+      },
+      {
+        "id": "ForMeRouteComposition",
+        "astro_root": "site/src/pages/dlya-menya/index.astro",
+        "production_route_patterns": [
+          "/dlya-menya/"
+        ]
+      },
+      {
+        "id": "Foundations",
+        "astro_root": "site/src/components/design-system/Foundations.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/diagnostika-ustoychivost/",
+          "/fokus-gruppa/diagnostika/",
+          "/fokus-gruppa/kollektsiya/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zakrytaya-afisha/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "FreeCollectionSurface",
+        "astro_root": "site/src/components/FreeCollectionSurface.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "GastronomyCollectionSurface",
+        "astro_root": "site/src/components/GastronomyCollectionSurface.astro",
+        "production_route_patterns": [
+          "/podborki/gastronomiya/"
+        ]
+      },
+      {
+        "id": "HomeColdStartFeed",
+        "astro_root": "site/src/components/HomeColdStartFeed.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "HomePage",
+        "astro_root": "site/src/pages/index.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "IconSocialIcon",
+        "astro_root": "site/src/components/SocialIcon.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "InterestClubCard",
+        "astro_root": "site/src/components/InterestClubCard.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/"
+        ]
+      },
+      {
+        "id": "InterestClubDetailRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/*/"
+        ]
+      },
+      {
+        "id": "InterestClubsIndexRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/"
+        ]
+      },
+      {
+        "id": "InterestProfile",
+        "astro_root": "site/src/components/InterestProfile.astro",
+        "production_route_patterns": [
+          "/dlya-menya/"
+        ]
+      },
+      {
+        "id": "ListingEventCard",
+        "astro_root": "site/src/components/listings/ListingEventCard.astro",
+        "production_route_patterns": [
+          "/date-*/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "MaterializedCollectionRouteComposition",
+        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "MobileBottomNav",
+        "astro_root": "site/src/components/MobileBottomNav.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "MobileDateAccessory",
+        "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
+        "production_route_patterns": [
+          "/date-*/",
+          "/segodnya/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "MobileEventDetailSurface",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "MobileListingRailRow",
+        "astro_root": "site/src/components/listings/MobileListingRailRow.astro",
+        "production_route_patterns": [
+          "/date-*/",
+          "/segodnya/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "MobileListingRailSurface",
+        "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
+        "production_route_patterns": [
+          "/date-*/",
+          "/segodnya/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "MobileSearchBottomNav",
+        "astro_root": "site/src/components/MobileSearchBottomNav.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "PartnershipRouteComposition",
+        "astro_root": "site/src/pages/partnerstvo/index.astro",
+        "production_route_patterns": [
+          "/partnerstvo/"
+        ]
+      },
+      {
+        "id": "PartnersRouteComposition",
+        "astro_root": "site/src/pages/partners/index.astro",
+        "production_route_patterns": [
+          "/partners/"
+        ]
+      },
+      {
+        "id": "PersonalFeedSlot",
+        "astro_root": "site/src/components/PersonalFeedSlot.astro",
+        "production_route_patterns": [
+          "/date-*/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "PopularBehaviorRows",
+        "astro_root": "site/src/components/listings/PopularBehaviorRows.astro",
+        "production_route_patterns": [
+          "/populyarnoe/"
+        ]
+      },
+      {
+        "id": "PopularListingSurface",
+        "astro_root": "site/src/components/listings/PopularListingSurface.astro",
+        "production_route_patterns": [
+          "/populyarnoe/"
+        ]
+      },
+      {
+        "id": "PopularMobileAdaptiveRows",
+        "astro_root": "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+        "production_route_patterns": [
+          "/populyarnoe/"
+        ]
+      },
+      {
+        "id": "PopularMobileBehaviorRows",
+        "astro_root": "site/src/components/listings/PopularMobileBehaviorRows.astro",
+        "production_route_patterns": [
+          "/populyarnoe/"
+        ]
+      },
+      {
+        "id": "SearchRouteComposition",
+        "astro_root": "site/src/pages/poisk/index.astro",
+        "production_route_patterns": [
+          "/poisk/"
+        ]
+      },
+      {
+        "id": "SiteFooter",
+        "astro_root": "site/src/components/SiteFooter.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "StatePanel",
+        "astro_root": "site/src/components/design-system/StatePanel.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "TodayReviewGuard",
+        "astro_root": "site/src/pages/segodnya/index.astro",
+        "production_route_patterns": [
+          "/segodnya/"
+        ]
+      },
+      {
+        "id": "UnusualListingSurface",
+        "astro_root": "site/src/components/UnusualListingSurface.astro",
+        "production_route_patterns": [
+          "/neobychnoe/"
+        ]
+      },
+      {
+        "id": "WeekendEditorialTimeline",
+        "astro_root": "site/src/components/listings/WeekendEditorialTimeline.astro",
+        "production_route_patterns": [
+          "/vyhodnye/",
+          "/vyhodnye/*/"
+        ]
+      },
+      {
+        "id": "WeekendListingSurface",
+        "astro_root": "site/src/components/listings/WeekendListingSurface.astro",
+        "production_route_patterns": [
+          "/vyhodnye/",
+          "/vyhodnye/*/"
+        ]
+      },
+      {
+        "id": "WeekendTimeMatrix",
+        "astro_root": "site/src/components/listings/WeekendTimeMatrix.astro",
+        "production_route_patterns": []
+      }
+    ],
     "families-6c3fe9da24ef2378": [
       {
         "id": "AdaptiveEventCardGrid",
@@ -52620,655 +53654,6 @@
         "production_route_patterns": [
           "/segodnya/"
         ]
-      }
-    ],
-    "families-49968b3aabb79676": [
-      {
-        "id": "AdaptiveEventCardGrid",
-        "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
-        "production_route_patterns": [
-          "/",
-          "/date-*/",
-          "/izbrannoe/",
-          "/neobychnoe/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "AnnouncementsLockup",
-        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ArtifactCollection",
-        "astro_root": "site/src/components/artifacts/ArtifactCollection.astro",
-        "production_route_patterns": [
-          "/artefakty/"
-        ]
-      },
-      {
-        "id": "ArtifactCollectionRouteComposition",
-        "astro_root": "site/src/pages/artefakty/index.astro",
-        "production_route_patterns": [
-          "/artefakty/"
-        ]
-      },
-      {
-        "id": "Badge",
-        "astro_root": "site/src/components/design-system/Badge.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "Button",
-        "astro_root": "site/src/components/design-system/Button.astro",
-        "production_route_patterns": [
-          "/dlya-menya/",
-          "/fokus-gruppa/",
-          "/fokus-gruppa/priglashenie/",
-          "/fokus-gruppa/zavershenie/",
-          "/partnerstvo/",
-          "/zakrytaya-afisha/"
-        ]
-      },
-      {
-        "id": "ClosedFocusHubRouteComposition",
-        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
-        "production_route_patterns": [
-          "/zakrytaya-afisha/"
-        ]
-      },
-      {
-        "id": "CollectionCatalogRouteComposition",
-        "astro_root": "site/src/pages/podborki/index.astro",
-        "production_route_patterns": [
-          "/podborki/"
-        ]
-      },
-      {
-        "id": "CopyAction",
-        "astro_root": "site/src/components/design-system/CopyAction.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "DateListingSurface",
-        "astro_root": "site/src/components/listings/DateListingSurface.astro",
-        "production_route_patterns": [
-          "/date-*/",
-          "/segodnya/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "DesktopEventDetailSurface",
-        "astro_root": "site/src/components/DesktopEventPage.astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventCard",
-        "astro_root": "site/src/components/EventCard.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "EventDetailRouteComposition",
-        "astro_root": "site/src/pages/sobytiya/[slug].astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventHero",
-        "astro_root": "site/src/components/EventHero.astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventLayout",
-        "astro_root": "site/src/layouts/EventLayout.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "EventMediaRail",
-        "astro_root": "site/src/components/EventMediaRail.astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "ExactTimeTimeline",
-        "astro_root": "site/src/components/listings/ExactTimeTimeline.astro",
-        "production_route_patterns": [
-          "/date-*/",
-          "/segodnya/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ExhibitionsPersonalSurface",
-        "astro_root": "site/src/components/ExhibitionsPersonalSurface.astro",
-        "production_route_patterns": [
-          "/vystavki/"
-        ]
-      },
-      {
-        "id": "ExhibitionsRouteComposition",
-        "astro_root": "site/src/pages/vystavki/index.astro",
-        "production_route_patterns": [
-          "/vystavki/"
-        ]
-      },
-      {
-        "id": "FavoritesRouteComposition",
-        "astro_root": "site/src/pages/izbrannoe/index.astro",
-        "production_route_patterns": [
-          "/izbrannoe/"
-        ]
-      },
-      {
-        "id": "FavoritesSurface",
-        "astro_root": "site/src/components/FavoritesSurface.astro",
-        "production_route_patterns": [
-          "/izbrannoe/"
-        ]
-      },
-      {
-        "id": "FestivalsTimelineRouteComposition",
-        "astro_root": "site/src/pages/festivali/index.astro",
-        "production_route_patterns": [
-          "/festivali/"
-        ]
-      },
-      {
-        "id": "Field",
-        "astro_root": "site/src/components/design-system/Field.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "FocusGroupCompletionSurface",
-        "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/zavershenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupFeedback",
-        "astro_root": "site/src/components/FocusGroupFeedback.astro",
-        "production_route_patterns": [
-          "/dlya-menya/",
-          "/zakrytaya-afisha/"
-        ]
-      },
-      {
-        "id": "FocusGroupInviteIntake",
-        "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/priglashenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupInviteRouteComposition",
-        "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/priglashenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupLabPanel",
-        "astro_root": "site/src/components/FocusGroupLabPanel.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "FocusGroupProgrammeSurface",
-        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/"
-        ]
-      },
-      {
-        "id": "ForMeRouteComposition",
-        "astro_root": "site/src/pages/dlya-menya/index.astro",
-        "production_route_patterns": [
-          "/dlya-menya/"
-        ]
-      },
-      {
-        "id": "Foundations",
-        "astro_root": "site/src/components/design-system/Foundations.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/fokus-gruppa/",
-          "/fokus-gruppa/diagnostika-ustoychivost/",
-          "/fokus-gruppa/diagnostika/",
-          "/fokus-gruppa/kollektsiya/",
-          "/fokus-gruppa/priglashenie/",
-          "/fokus-gruppa/zavershenie/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zakrytaya-afisha/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "FreeCollectionSurface",
-        "astro_root": "site/src/components/FreeCollectionSurface.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
-        ]
-      },
-      {
-        "id": "GastronomyCollectionSurface",
-        "astro_root": "site/src/components/GastronomyCollectionSurface.astro",
-        "production_route_patterns": [
-          "/podborki/gastronomiya/"
-        ]
-      },
-      {
-        "id": "HomeColdStartFeed",
-        "astro_root": "site/src/components/HomeColdStartFeed.astro",
-        "production_route_patterns": [
-          "/"
-        ]
-      },
-      {
-        "id": "HomePage",
-        "astro_root": "site/src/pages/index.astro",
-        "production_route_patterns": [
-          "/"
-        ]
-      },
-      {
-        "id": "IconSocialIcon",
-        "astro_root": "site/src/components/SocialIcon.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "InterestClubCard",
-        "astro_root": "site/src/components/InterestClubCard.astro",
-        "production_route_patterns": [
-          "/kluby-po-interesam/"
-        ]
-      },
-      {
-        "id": "InterestClubDetailRouteComposition",
-        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
-        "production_route_patterns": [
-          "/kluby-po-interesam/*/"
-        ]
-      },
-      {
-        "id": "InterestClubsIndexRouteComposition",
-        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
-        "production_route_patterns": [
-          "/kluby-po-interesam/"
-        ]
-      },
-      {
-        "id": "InterestProfile",
-        "astro_root": "site/src/components/InterestProfile.astro",
-        "production_route_patterns": [
-          "/dlya-menya/"
-        ]
-      },
-      {
-        "id": "ListingEventCard",
-        "astro_root": "site/src/components/listings/ListingEventCard.astro",
-        "production_route_patterns": [
-          "/date-*/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "MaterializedCollectionRouteComposition",
-        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
-        ]
-      },
-      {
-        "id": "MobileBottomNav",
-        "astro_root": "site/src/components/MobileBottomNav.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "MobileDateAccessory",
-        "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
-        "production_route_patterns": [
-          "/date-*/",
-          "/segodnya/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "MobileEventDetailSurface",
-        "astro_root": "site/src/pages/sobytiya/[slug].astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "MobileListingRailRow",
-        "astro_root": "site/src/components/listings/MobileListingRailRow.astro",
-        "production_route_patterns": [
-          "/date-*/",
-          "/segodnya/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "MobileListingRailSurface",
-        "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
-        "production_route_patterns": [
-          "/date-*/",
-          "/segodnya/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "MobileSearchBottomNav",
-        "astro_root": "site/src/components/MobileSearchBottomNav.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "PartnershipRouteComposition",
-        "astro_root": "site/src/pages/partnerstvo/index.astro",
-        "production_route_patterns": [
-          "/partnerstvo/"
-        ]
-      },
-      {
-        "id": "PartnersRouteComposition",
-        "astro_root": "site/src/pages/partners/index.astro",
-        "production_route_patterns": [
-          "/partners/"
-        ]
-      },
-      {
-        "id": "PersonalFeedSlot",
-        "astro_root": "site/src/components/PersonalFeedSlot.astro",
-        "production_route_patterns": [
-          "/date-*/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "PopularBehaviorRows",
-        "astro_root": "site/src/components/listings/PopularBehaviorRows.astro",
-        "production_route_patterns": [
-          "/populyarnoe/"
-        ]
-      },
-      {
-        "id": "PopularListingSurface",
-        "astro_root": "site/src/components/listings/PopularListingSurface.astro",
-        "production_route_patterns": [
-          "/populyarnoe/"
-        ]
-      },
-      {
-        "id": "PopularMobileAdaptiveRows",
-        "astro_root": "site/src/components/listings/PopularMobileAdaptiveRows.astro",
-        "production_route_patterns": [
-          "/populyarnoe/"
-        ]
-      },
-      {
-        "id": "PopularMobileBehaviorRows",
-        "astro_root": "site/src/components/listings/PopularMobileBehaviorRows.astro",
-        "production_route_patterns": [
-          "/populyarnoe/"
-        ]
-      },
-      {
-        "id": "SearchRouteComposition",
-        "astro_root": "site/src/pages/poisk/index.astro",
-        "production_route_patterns": [
-          "/poisk/"
-        ]
-      },
-      {
-        "id": "SiteFooter",
-        "astro_root": "site/src/components/SiteFooter.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "StatePanel",
-        "astro_root": "site/src/components/design-system/StatePanel.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "TodayReviewGuard",
-        "astro_root": "site/src/pages/segodnya/index.astro",
-        "production_route_patterns": [
-          "/segodnya/"
-        ]
-      },
-      {
-        "id": "UnusualListingSurface",
-        "astro_root": "site/src/components/UnusualListingSurface.astro",
-        "production_route_patterns": [
-          "/neobychnoe/"
-        ]
-      },
-      {
-        "id": "WeekendEditorialTimeline",
-        "astro_root": "site/src/components/listings/WeekendEditorialTimeline.astro",
-        "production_route_patterns": [
-          "/vyhodnye/",
-          "/vyhodnye/*/"
-        ]
-      },
-      {
-        "id": "WeekendListingSurface",
-        "astro_root": "site/src/components/listings/WeekendListingSurface.astro",
-        "production_route_patterns": [
-          "/vyhodnye/",
-          "/vyhodnye/*/"
-        ]
-      },
-      {
-        "id": "WeekendTimeMatrix",
-        "astro_root": "site/src/components/listings/WeekendTimeMatrix.astro",
-        "production_route_patterns": []
       }
     ],
     "families-2330e3e2f1b71cf9": [
@@ -70335,6 +70720,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-media-rail-inverse-text",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 512,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-media-rail-more-surface",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 521,
@@ -71350,6 +71741,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-media-rail-current-border",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 569,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-connectivity-input-surface",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 495,
@@ -71590,8 +71987,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-fc0946d0ba8dc402",
-      "astro_family_set": "families-edea2d0145e92932",
+      "component_set": "components-1819cfffaeffad2e",
+      "astro_family_set": "families-a01ebba7c84f2149",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-badge-accent-border": {
@@ -81272,9 +81669,16 @@
         "--ke-color-media-rail-more-label",
         "--ke-color-question-cta-muted"
       ],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-more-label",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 604,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-event-detail-surface": {
@@ -81544,8 +81948,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-event-fallback-surface",
+          "path": "site/src/components/EventFallbackArt.astro",
+          "line": 27,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-b87a49e7ab355118",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -90237,6 +90648,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-media-rail-inverse-text",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 512,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-media-rail-more-surface",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 521,
@@ -92970,9 +93387,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-control-border",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 577,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-current-border": {
@@ -92993,9 +93417,16 @@
         "--ke-color-background-surface-strong"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-current-border",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 569,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-gallery-item-surface": {
@@ -93012,9 +93443,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-gallery-item-surface",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 511,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-gallery-surface": {
@@ -93031,9 +93469,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-gallery-surface",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 500,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-inverse-text": {
@@ -93054,9 +93499,16 @@
         "--ke-color-surface-warm"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-inverse-text",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 512,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-item-border": {
@@ -93073,9 +93525,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-item-border",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 509,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-more-label": {
@@ -93096,9 +93555,16 @@
         "--ke-color-event-detail-muted-warm"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-more-label",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 604,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-more-surface": {
@@ -93187,9 +93653,22 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-resolved-item-surface",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 564,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-media-rail-resolved-item-surface",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 631,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-resolved-surface": {
@@ -93206,9 +93685,22 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-resolved-surface",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 546,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-media-rail-resolved-surface",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 616,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-role-surface": {
@@ -93225,9 +93717,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-role-surface",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 589,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-role-text": {
@@ -93248,9 +93747,16 @@
         "--ke-color-text-inverse"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-role-text",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 590,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-media-rail-shell-border": {
@@ -93267,9 +93773,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-color-media-rail-shell-border",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 498,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-mobile-event-action": {
@@ -102082,6 +102595,18 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-media-rail-current-border",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 569,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-media-rail-role-text",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 590,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-connectivity-action-text",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 424,
@@ -102622,8 +103147,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-f203c9ede50f9b73",
-      "astro_family_set": "families-edea2d0145e92932",
+      "component_set": "components-9ac5ac9ed0b4584f",
+      "astro_family_set": "families-a01ebba7c84f2149",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-surface-warm": {
@@ -103085,6 +103610,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-media-rail-inverse-text",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 512,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-media-rail-more-surface",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 521,
@@ -103451,6 +103982,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-media-rail-role-text",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 590,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-connectivity-action-text",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 424,
@@ -103547,8 +104084,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-44b6279ad6661c5e",
-      "astro_family_set": "families-1f8fdd22b9727fd4",
+      "component_set": "components-3aece20d26e169de",
+      "astro_family_set": "families-41af4dc3040fb310",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-text-inverse-muted": {
@@ -109262,6 +109799,12 @@
           "has_fallback": true
         },
         {
+          "token": "--ke-media-rail-hero-item-min-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 558,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-connectivity-copy-action-min-height",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 499,
@@ -109490,8 +110033,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-7f50c2235d86e095",
-      "astro_family_set": "families-ed5790e0be3ae5b5",
+      "component_set": "components-ed3931766c452d32",
+      "astro_family_set": "families-6debb659f675f834",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-copy-action-status-mark-inset": {
@@ -112066,9 +112609,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-elevation-media-rail-gallery",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 501,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-elevation-mobile-card": {
@@ -112723,8 +113273,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
+      "direct_consumers": [
+        {
+          "token": "--ke-event-fallback-mobile-min-height",
+          "path": "site/src/components/EventFallbackArt.astro",
+          "line": 29,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-b87a49e7ab355118",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
@@ -122599,6 +123156,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-editorial-section",
+          "path": "site/src/components/UnusualListingSurface.astro",
+          "line": 101,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-type-display-unusual",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
@@ -123352,6 +123915,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-editorial-section",
+          "path": "site/src/components/UnusualListingSurface.astro",
+          "line": 101,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-type-display-unusual",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
@@ -123865,12 +124434,6 @@
           "token": "--ke-media-rail-more-count-size",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 526,
-          "has_fallback": true
-        },
-        {
-          "token": "--ke-media-rail-more-count-size",
-          "path": "site/src/components/EventMediaRail.astro",
-          "line": 596,
           "has_fallback": true
         },
         {
@@ -130974,9 +131537,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-gallery-gap",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 496,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-gallery-item-height": {
@@ -130993,9 +131563,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-gallery-item-height",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 507,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-gallery-item-radius": {
@@ -131012,9 +131589,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-gallery-item-radius",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 510,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-gallery-padding": {
@@ -131031,9 +131615,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-gallery-padding",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 497,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-gallery-radius": {
@@ -131050,9 +131641,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-gallery-radius",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 499,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-hero-item-height": {
@@ -131073,9 +131671,16 @@
         "--ke-size-control-comfortable"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-hero-item-height",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 560,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-hero-item-max-width": {
@@ -131092,9 +131697,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-hero-item-max-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 559,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-hero-item-min-width": {
@@ -131115,9 +131727,16 @@
         "--ke-size-touch-target"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-hero-item-min-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 558,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-hero-more-count-size": {
@@ -131134,9 +131753,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-hero-more-count-size",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 596,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-more-count-size": {
@@ -131162,12 +131788,6 @@
           "token": "--ke-media-rail-more-count-size",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 526,
-          "has_fallback": true
-        },
-        {
-          "token": "--ke-media-rail-more-count-size",
-          "path": "site/src/components/EventMediaRail.astro",
-          "line": 596,
           "has_fallback": true
         }
       ],
@@ -131195,12 +131815,6 @@
           "path": "site/src/components/EventMediaRail.astro",
           "line": 531,
           "has_fallback": true
-        },
-        {
-          "token": "--ke-media-rail-more-label-size",
-          "path": "site/src/components/EventMediaRail.astro",
-          "line": 605,
-          "has_fallback": true
         }
       ],
       "component_set": "components-64ef281afa32e00e",
@@ -131221,9 +131835,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-poster-gap",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 613,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-poster-item-max-width": {
@@ -131240,9 +131861,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-poster-item-max-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 626,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-poster-item-min-width": {
@@ -131259,9 +131887,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-poster-item-min-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 625,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-poster-item-width": {
@@ -131278,9 +131913,22 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-poster-item-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 623,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-media-rail-poster-item-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 624,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-poster-more-width": {
@@ -131297,9 +131945,28 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-poster-more-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 641,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-media-rail-poster-more-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 642,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-media-rail-poster-more-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 643,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-poster-padding": {
@@ -131316,9 +131983,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-poster-padding",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 614,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-poster-shell-extra-height": {
@@ -131335,9 +132009,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-poster-shell-extra-height",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 611,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-poster-thumb-height": {
@@ -131350,13 +132031,60 @@
           "value": "clamp(104px, 13svh, 148px)",
           "aliases": [],
           "token": "--ke-media-rail-poster-thumb-height"
+        },
+        {
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2213,
+          "scope": "@media (min-width:1024px) > .desktop-prototype__media-rail--poster",
+          "kind": "css",
+          "value": "clamp(104px,13svh,148px)",
+          "aliases": [],
+          "token": "--split-rail-thumb-height"
+        },
+        {
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 609,
+          "scope": ".event-media-rail.event-media-rail--poster-strip",
+          "kind": "css",
+          "value": "var(--ke-media-rail-poster-thumb-height)",
+          "aliases": [
+            "--ke-media-rail-poster-thumb-height"
+          ],
+          "token": "--split-rail-thumb-height"
         }
       ],
       "aliases_to": [],
-      "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "aliases_from": [
+        "--split-rail-thumb-height"
+      ],
+      "direct_consumers": [
+        {
+          "token": "--split-rail-thumb-height",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2213,
+          "has_fallback": false
+        },
+        {
+          "token": "--split-rail-thumb-height",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2214,
+          "has_fallback": false
+        },
+        {
+          "token": "--split-rail-thumb-height",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 611,
+          "has_fallback": false
+        },
+        {
+          "token": "--split-rail-thumb-height",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 627,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-resolved-gap": {
@@ -131373,9 +132101,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-resolved-gap",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 541,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-resolved-item-radius": {
@@ -131392,9 +132127,22 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-resolved-item-radius",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 563,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-media-rail-resolved-item-radius",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 630,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-resolved-more-label-size": {
@@ -131411,9 +132159,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-resolved-more-label-size",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 605,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-resolved-padding": {
@@ -131430,9 +132185,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-resolved-padding",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 542,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-resolved-radius": {
@@ -131449,9 +132211,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-resolved-radius",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 545,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-role-radius": {
@@ -131468,9 +132237,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-role-radius",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 588,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-role-size": {
@@ -131487,9 +132263,16 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--ke-media-rail-role-size",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 591,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-3507a26a5ee9ad4d",
+      "astro_family_set": "families-1e52d7e56075cdca",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-media-rail-thumbnail-size": {
@@ -147380,14 +148163,20 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-media-rail-hero-item-height",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 560,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-personalization-control-min",
           "path": "site/src/components/InterestProfile.astro",
           "line": 642,
           "has_fallback": false
         }
       ],
-      "component_set": "components-17d2b232d90fc2fc",
-      "astro_family_set": "families-2901a2cd6b879305",
+      "component_set": "components-e9c83b59fe8bb964",
+      "astro_family_set": "families-49968b3aabb79676",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-size-control-large": {
@@ -148007,6 +148796,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-media-rail-hero-item-min-width",
+          "path": "site/src/components/EventMediaRail.astro",
+          "line": 558,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-connectivity-copy-action-min-height",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 499,
@@ -148181,8 +148976,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-7f50c2235d86e095",
-      "astro_family_set": "families-ed5790e0be3ae5b5",
+      "component_set": "components-ed3931766c452d32",
+      "astro_family_set": "families-6debb659f675f834",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-space-1": {
@@ -153637,12 +154432,6 @@
           "has_fallback": true
         },
         {
-          "token": "--ke-media-rail-more-count-size",
-          "path": "site/src/components/EventMediaRail.astro",
-          "line": 596,
-          "has_fallback": true
-        },
-        {
           "token": "--ke-exhibitions-page-font-size",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 171,
@@ -154199,9 +154988,16 @@
         "--ke-type-h2-weight"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-d35062d1c372aff0",
-      "astro_family_set": "families-11ed85034645ff0d",
+      "direct_consumers": [
+        {
+          "token": "--ke-type-editorial-section",
+          "path": "site/src/components/UnusualListingSurface.astro",
+          "line": 101,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-27dc9d1fce76bb81",
+      "astro_family_set": "families-d1e4463721a7e9fd",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-type-editorial-section-line": {
@@ -154234,9 +155030,16 @@
       "aliases_from": [
         "--ke-type-editorial-section"
       ],
-      "direct_consumers": [],
-      "component_set": "components-d35062d1c372aff0",
-      "astro_family_set": "families-11ed85034645ff0d",
+      "direct_consumers": [
+        {
+          "token": "--ke-type-editorial-section",
+          "path": "site/src/components/UnusualListingSurface.astro",
+          "line": 101,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-27dc9d1fce76bb81",
+      "astro_family_set": "families-d1e4463721a7e9fd",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-type-editorial-section-size": {
@@ -154269,9 +155072,16 @@
       "aliases_from": [
         "--ke-type-editorial-section"
       ],
-      "direct_consumers": [],
-      "component_set": "components-d35062d1c372aff0",
-      "astro_family_set": "families-11ed85034645ff0d",
+      "direct_consumers": [
+        {
+          "token": "--ke-type-editorial-section",
+          "path": "site/src/components/UnusualListingSurface.astro",
+          "line": 101,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-27dc9d1fce76bb81",
+      "astro_family_set": "families-d1e4463721a7e9fd",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-type-event-meta-date-size": {
@@ -155797,6 +156607,12 @@
           "token": "--ke-type-feature-section",
           "path": "site/src/components/HomeColdStartFeed.astro",
           "line": 143,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-editorial-section",
+          "path": "site/src/components/UnusualListingSurface.astro",
+          "line": 101,
           "has_fallback": false
         }
       ],
@@ -162576,12 +163392,16 @@
           "line": 609,
           "scope": ".event-media-rail.event-media-rail--poster-strip",
           "kind": "css",
-          "value": "clamp(104px,13svh,148px)",
-          "aliases": [],
+          "value": "var(--ke-media-rail-poster-thumb-height)",
+          "aliases": [
+            "--ke-media-rail-poster-thumb-height"
+          ],
           "token": "--split-rail-thumb-height"
         }
       ],
-      "aliases_to": [],
+      "aliases_to": [
+        "--ke-media-rail-poster-thumb-height"
+      ],
       "aliases_from": [],
       "direct_consumers": [
         {

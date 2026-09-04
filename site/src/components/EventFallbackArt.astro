@@ -24,8 +24,8 @@ const art = resolveEventFallbackArt(event);
 )}
 
 <style>
-  .event-fallback-art { width:100%; height:100%; display:grid; place-items:center; overflow:hidden; background:#181818; }
+  .event-fallback-art { width:100%; height:100%; display:grid; place-items:center; overflow:hidden; background:var(--ke-color-event-fallback-surface); }
   .event-fallback-art img { width:100%; height:100%; display:block; object-fit:contain; object-position:center; }
-  .event-fallback-art--mobile { min-height:clamp(300px,92vw,560px); }
+  .event-fallback-art--mobile { min-height:var(--ke-event-fallback-mobile-min-height); }
   .event-fallback-art--desktop { position:absolute; inset:0; min-height:100%; }
 </style>
