@@ -29,12 +29,12 @@ test('public prelaunch copy consistently announces the 5 September launch', () =
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
   const runtime = source('site/src/scripts/prelaunchForm.ts');
 
-  assert.match(page, /data-launch-date="2026-09-05"/u);
-  assert.match(page, /<time datetime="2026-09-05">5 сентября<\/time>/u);
-  assert.match(layout, /запуск 5 сентября/u);
-  assert.match(layout, /Запуск 5 сентября 2026 года/u);
-  assert.match(runtime, /5 сентября пришлём ссылку на сервис/u);
-  assert.doesNotMatch(`${page}\n${layout}\n${runtime}`, /1 сентября|2026-09-01/u);
+  assert.match(page, /data-launch-date="2026-09-20"/u);
+  assert.match(page, /<time datetime="2026-09-20">20 сентября<\/time>/u);
+  assert.match(layout, /запуск 20 сентября/u);
+  assert.match(layout, /Запуск 20 сентября 2026 года/u);
+  assert.match(runtime, /20 сентября пришлём ссылку на сервис/u);
+  assert.doesNotMatch(`${page}\n${layout}\n${runtime}`, /1 сентября|5 сентября|2026-09-01|2026-09-05/u);
 });
 
 test('prelaunch RPC is replay-safe in the resilient transport catalog', () => {

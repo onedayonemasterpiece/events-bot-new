@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Changed: KenigEvents prelaunch date moved from 5 to 20 September 2026 across the root page, SEO metadata and subscription confirmations; release checks updated.
+
 ### Fixed
 - Private eventsBot MCP owned social schedules no longer hit the former 10-attempt product ceiling: the retained daily attempt guard is emergency-scale, and local pre-provider reference/digest failures remain uncharged. Provider-read, principal-bound image `ast_*` references can now be safely rematerialized through the existing `social_asset_stage` tool for VK or Telegram after byte/digest/MIME/dimension/expiry reverification; raw URLs, paths, native IDs, expired refs, and foreign-principal refs remain rejected. Explicit edit/delete of an exact principal-bound scheduled/postponed queue item is directly authorized through the authenticated ChatGPT resource, while already-published content still requires external approval.
 
