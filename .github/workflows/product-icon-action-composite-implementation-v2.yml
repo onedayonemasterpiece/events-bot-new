@@ -1,0 +1,151 @@
+name: Product icon action composite implementation v2
+
+on:
+  push:
+    branches: [work/ui-normalization-product-icon-composites-20260904]
+    paths: [.github/workflows/product-icon-action-composite-implementation-v2.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: product-icon-action-composite-implementation-v2
+  cancel-in-progress: false
+
+jobs:
+  implement-test-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/ui-normalization-product-icon-composites-20260904
+          fetch-depth: 0
+
+      - name: Set up pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Reuse the reviewed implementation script with one regression-only correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/product-icon-action-composite-implementation.yml').read_text(encoding='utf-8')
+          start_marker = '      - name: Build one clean current-trunk product commit\n'
+          end_marker = '\n      - name: Install pinned site dependencies\n'
+          start = workflow.index(start_marker)
+          run_at = workflow.index('        run: |\n', start) + len('        run: |\n')
+          end = workflow.index(end_marker, run_at)
+          lines = workflow[run_at:end].splitlines()
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+
+          old = "assert.match(source, /import EventLikeAction from /u, `${relativePath} imports the owner`);"
+          new = "assert.match(source, /import EventLikeAction\\s+from\\s+['\"][^'\"]*EventLikeAction\\.astro['\"]/u, `${relativePath} imports the owner`);"
+          if script.count(old) != 1:
+              raise SystemExit(f'expected one generated import assertion, found {script.count(old)}')
+          script = script.replace(old, new, 1)
+          Path('/tmp/product-icon-action-build.sh').write_text(script, encoding='utf-8')
+          PY
+          bash -n /tmp/product-icon-action-build.sh
+          bash /tmp/product-icon-action-build.sh
+
+      - name: Install pinned site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: Run focused source and migration regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test \
+            site/tests/product-icon-action-composite-normalization.test.mjs \
+            site/tests/personal-feed-surface.test.mjs \
+            site/tests/event-detail-runtime-regressions.test.mjs \
+            site/tests/mobile-listing-rails.test.mjs
+          node --test site/scripts/astro-family-sot.behavior.test.mjs
+
+      - name: Run design-system and iconography checks
+        working-directory: site
+        run: |
+          npm run check:astro-family-sot
+          npm run check:design-system-production-surfaces
+          npm run check:design-system-iconography -- --out /tmp/product-icon-action-iconography.json
+
+      - name: Install Chromium
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+
+      - name: Materialize exact listing and event-detail routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/product-icon-action-preview
+          npm --prefix site run local:focused -- \
+            --route /date-2026-07-23/ \
+            --fixture \
+            --current-date 2026-07-23 \
+            --current-datetime 2026-07-23T12:00:00+02:00 \
+            --build-id preview-local-product-like-listing \
+            --output-root /tmp/product-icon-action-preview \
+            --result-json /tmp/product-like-listing.json \
+            --offline \
+            --no-serve
+          npm --prefix site run local:focused -- \
+            --route /sobytiya/spektakl-garazh-kaliningrad-5658/ \
+            --fixture \
+            --current-date 2026-07-23 \
+            --current-datetime 2026-07-23T12:00:00+02:00 \
+            --build-id preview-local-product-like-detail \
+            --output-root /tmp/product-icon-action-preview \
+            --result-json /tmp/product-like-detail.json \
+            --offline \
+            --no-serve
+          node - <<'NODE'
+          const fs = require('fs');
+          const child = require('child_process');
+          const head = child.execFileSync('git', ['rev-parse', 'HEAD'], { encoding:'utf8' }).trim();
+          for (const receiptPath of ['/tmp/product-like-listing.json', '/tmp/product-like-detail.json']) {
+            const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+            if (receipt.sourceSha !== head) throw new Error(`${receiptPath}: source SHA drift`);
+            if (receipt.browserSmoke?.length !== 2) throw new Error(`${receiptPath}: missing desktop/mobile canonical smoke`);
+            for (const item of receipt.browserSmoke) {
+              if (item.status !== 200 || item.horizontalOverflowPx > 1) throw new Error(`${receiptPath}: invalid browser smoke`);
+            }
+            console.log(receiptPath, receipt.receiptSha256, receipt.selection.exactRoute, receipt.browserSmoke);
+          }
+          NODE
+
+      - name: Run action-specific Playwright matrix and consent replay
+        env:
+          PRODUCT_ICON_ACTION_PREVIEW_ROOT: /tmp/product-icon-action-preview
+        run: node site/tests/product-icon-action-composite-normalization.playwright.mjs
+
+      - name: Verify exact final commit and publish same branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch='work/ui-normalization-product-icon-composites-20260904'
+          base="$(cat /tmp/product-composite-base)"
+          trigger_head="$(cat /tmp/product-composite-trigger-head)"
+          candidate="$(cat /tmp/product-composite-candidate-head)"
+          test "$(git rev-parse HEAD)" = "$candidate"
+          test "$(git rev-parse HEAD^)" = "$base"
+          test -z "$(git status --short)"
+          git diff --check "$base...HEAD"
+          mapfile -t changed < <(git diff --name-only "$base...HEAD" | sort)
+          test "${#changed[@]}" -eq 15
+          ! printf '%s\n' "${changed[@]}" | grep -E '^\.github/workflows/|(^|/)(EventLayout|ServiceShareAction|SiteFooter|PwaInstall|MediaFrame|media-frame)|(^|/)routes|(^|/)kaggle/'
+          git fetch origin "$branch" agent/static-site-single-kaggle-contract
+          test "$(git rev-parse origin/$branch)" = "$trigger_head"
+          test "$(git rev-parse origin/agent/static-site-single-kaggle-contract)" = "$base"
+          git push \
+            --force-with-lease="refs/heads/$branch:$trigger_head" \
+            origin "HEAD:refs/heads/$branch"
+          printf 'PRODUCT_ICON_ACTION_COMPOSITE_HEAD=%s\n' "$candidate"
