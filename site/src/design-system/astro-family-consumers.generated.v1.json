@@ -5,11 +5,11 @@
   "registry_version": "1.0.0",
   "registry_sha256": "b2a6741838d3276c581fb74d3773c3cdd89fb6f6a8ef9dcfa48d7eca2905dc89",
   "source_root": "site/src",
-  "import_inventory_sha256": "dac4e634f58eab0d2032904b9345e91a4e2bb51b9f6d75494508f459e49152b2",
+  "import_inventory_sha256": "3b9f8f460549bed55ca4954a5e8bf4d592d5360b9ace068264a67f5bba79bfbb",
   "summary": {
     "family_count": 9,
     "source_file_count": 317,
-    "import_edge_count": 804,
+    "import_edge_count": 805,
     "direct_consumer_edges": 69,
     "runtime_factory_edges": 1,
     "runtime_consumer_edges": 2,

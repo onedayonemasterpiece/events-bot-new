@@ -3,8 +3,10 @@ import EventLayout from '../../layouts/EventLayout.astro';
 import AdaptiveEventCardGrid from '../../components/AdaptiveEventCardGrid.astro';
 import { materializedSearchCollections } from '../../data/searchCollections';
 import { collapseOccurrenceCards } from '../../lib/eventOccurrences';
+import { getStaticEventDateAvailability } from '../../lib/staticEventDates';
 import {
   absoluteUrl,
+  getCurrentDate,
   getEvents,
   getPreviewBuild,
   PREVIEW_BUILD_ID,
@@ -46,11 +48,27 @@ specimens.sort((a, b) => {
 
 const eventDetailRepresentative = specimens[0];
 if (!eventDetailRepresentative) throw new Error('Preview hub requires one real event-detail representative');
+const currentDate = getCurrentDate();
+const nextDate = new Date(`${currentDate}T12:00:00Z`);
+nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+const tomorrowDate = nextDate.toISOString().slice(0, 10);
+const availableDates = [...getStaticEventDateAvailability().availableDates].sort();
+const arbitraryDate = availableDates.find((date) => date !== currentDate && date !== tomorrowDate)
+  || availableDates.find((date) => date !== currentDate)
+  || availableDates[0];
+if (!arbitraryDate) throw new Error('Preview hub requires one materialized arbitrary date representative');
+const arbitraryDateLabel = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Kaliningrad',
+}).format(new Date(`${arbitraryDate}T12:00:00+02:00`));
 
 const ownerFacingArchetypes = [
   { id: 'home', href: '/', label: 'Главная', note: 'Главная страница и полезный cold-start' },
   { id: 'today', href: '/segodnya/', label: 'Сегодня', note: 'События текущей даты' },
   { id: 'tomorrow', href: '/zavtra/', label: 'Завтра', note: 'Следующий день' },
+  { id: 'date', href: `/date-${arbitraryDate}/`, label: arbitraryDateLabel, note: 'Произвольная доступная дата · отдельный DateListingSurface' },
   { id: 'weekend', href: '/vyhodnye/', label: 'Выходные', note: 'Ближайшие выходные' },
   { id: 'popular', href: '/populyarnoe/', label: 'Популярное', note: 'Desktop V28 и отдельная mobile-композиция' },
   { id: 'collections', href: '/podborki/besplatnye-sobytiya/', label: 'Подборки', note: 'Материализованная подборка на реальных данных' },
@@ -93,6 +111,7 @@ const pageGroups = [
       representativeLink('home'),
       representativeLink('today'),
       representativeLink('tomorrow'),
+      representativeLink('date'),
       representativeLink('weekend'),
       representativeLink('popular'),
       representativeLink('exhibitions'),

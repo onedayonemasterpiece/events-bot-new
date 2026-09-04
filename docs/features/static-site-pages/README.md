@@ -352,6 +352,9 @@ desktop V28 и mobile Popular representations, Search, materialized Search
 collections, preview-only cold-start `/dlya-menya/`, clubs, `Партнёры`,
 partnership и event detail. Отдельные `/lab/*` ссылки вынесены в QA appendix и
 не подменяют продуктовую навигацию.
+Owner-facing registry также обязан давать отдельную ссылку на одну реально
+сгенерированную `/date-YYYY-MM-DD/`: Today/Tomorrow не подменяют произвольный
+`DateListingSurface` при проверке всех типов страниц.
 
 Сборка берёт только актуальную public projection из read-only production
 SQLite snapshot. Пустой clubs dataset показывается честным empty state, а не

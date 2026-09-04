@@ -9,8 +9,8 @@
   unchanged.
 
 - Changed: the existing immutable Preview hub now exposes one direct
-  representative link for all 15 owner-facing archetype families, including
-  Home, Favorites, Focus Group and Artifacts. The unified prototype gate now
+  representative link for all 16 owner-facing archetype families, including
+  Home, arbitrary Date, Favorites, Focus Group and Artifacts. The unified prototype gate now
   derives coverage from the source registry and rejects missing, duplicate,
   misrouted or non-materialized representatives.
 

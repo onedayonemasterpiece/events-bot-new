@@ -9,12 +9,14 @@ const buildId = process.env.PREVIEW_BUILD_ID || readdirSync(distDir).find((name)
 if (!buildId || !/^preview-[a-z0-9][a-z0-9._-]*$/u.test(buildId)) throw new Error(`Invalid or missing preview build id: ${buildId || '(missing)'}`);
 const root = join(distDir, buildId);
 const prefix = `/${buildId}`;
+const previewManifest = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
 
 const previewHubSource = readFileSync(join(siteDir, 'src/pages/[preview]/index.astro'), 'utf8');
 const ownerFacingArchetypeIds = [
   'home',
   'today',
   'tomorrow',
+  'date',
   'weekend',
   'popular',
   'collections',
@@ -143,6 +145,22 @@ for (const link of ownerFacingArchetypeLinks) {
       ? link.href.slice(eventPrefix.length, -1)
       : '';
     if (!slug || slug.includes('/')) throw new Error(`Event-detail archetype has an invalid representative href: ${link.href}`);
+    continue;
+  }
+  if (link.id === 'date') {
+    const dateMatch = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}/date-(\\d{4}-\\d{2}-\\d{2})/$`, 'u').exec(link.href);
+    if (!dateMatch) {
+      throw new Error(`Date archetype has an invalid representative href: ${link.href}`);
+    }
+    const nextDate = new Date(`${previewManifest.currentDate}T12:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    if ([previewManifest.currentDate, nextDate.toISOString().slice(0, 10)].includes(dateMatch[1])) {
+      throw new Error(`Date archetype must not duplicate Today or Tomorrow: ${link.href}`);
+    }
+    const dateContent = html(routeTarget(new URL(link.href, 'https://kenigevents.ru').pathname));
+    if (!dateContent.includes('data-ds-family="DateListingSurface"') || !dateContent.includes('data-ds-variant="date"')) {
+      throw new Error(`Date archetype does not materialize DateListingSurface/date: ${link.href}`);
+    }
     continue;
   }
   const expectedHref = expectedOwnerFacingHrefs.get(link.id);
