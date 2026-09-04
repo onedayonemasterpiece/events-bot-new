@@ -17,3 +17,13 @@ test('unified prototype derives festival completeness from the current exported 
   assert.doesNotMatch(checker, /length < 6/u);
   assert.doesNotMatch(checker, /\['july', 'august'/u);
 });
+
+test('unified prototype verifies the current always-visible occurrence selector markup', async () => {
+  const checker = await read('scripts/check-unified-prototype.mjs');
+
+  assert.match(checker, /data-occurrence-variant="desktop"/u);
+  assert.match(checker, /data-occurrence-variant="mobile"/u);
+  assert.match(checker, /data-occurrence-variant="practical"/u);
+  assert.match(checker, /event-occurrences__rows/u);
+  assert.doesNotMatch(checker, /includes\('event-occurrences__schedule'\)/u);
+});

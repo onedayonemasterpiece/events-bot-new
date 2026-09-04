@@ -298,7 +298,8 @@ const occurrencePage = eventPages.find(([, content]) => /data-occurrence-alterna
 if (!occurrencePage) throw new Error('Fresh real-data build does not contain an explicit mutual occurrence specimen');
 if (!occurrencePage[1].includes('data-occurrence-variant="desktop"')
   || !occurrencePage[1].includes('data-occurrence-variant="mobile"')
-  || !occurrencePage[1].includes('event-occurrences__schedule')) {
+  || !occurrencePage[1].includes('data-occurrence-variant="practical"')
+  || !occurrencePage[1].includes('event-occurrences__rows')) {
   throw new Error(`Occurrence specimen ${occurrencePage[0]} misses the always-visible detail selector contract`);
 }
 

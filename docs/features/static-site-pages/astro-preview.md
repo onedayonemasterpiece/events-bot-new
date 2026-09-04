@@ -84,10 +84,13 @@ but they do not satisfy this coverage gate and do not receive the
 | `event-detail` | one current real `/sobytiya/{slug}/` route |
 | `information` | `/partners/` |
 
-`site/src/pages/[preview]/index.astro` owns the 15-family source registry.
+`site/src/pages/[preview]/index.astro` owns the 16-family source registry.
 `check:unified-prototype` reads that registry and the generated hub, then fails on a
 missing, duplicate, misrouted or non-materialized representative. Event Detail uses
-one real specimen; the hub does not enumerate the event catalog.
+one real specimen; the hub does not enumerate the event catalog. For a real-data
+occurrence specimen the same gate follows the current `EventOccurrenceNav` contract:
+desktop and mobile summaries plus the always-visible practical selector identified by
+`data-occurrence-variant="practical"` and its `event-occurrences__rows` content owner.
 
 The `/dlya-menya/` page is an honest finite cold-start surface. Production
 generation retains it for product navigation but keeps it explicitly noindex
@@ -96,7 +99,7 @@ content. A successful local build or prefix upload never authorizes root
 promotion or a stable calendar rewrite.
 
 The same Astro page set now includes `/festivali/` in production generation.
-Its 21-item July–December catalog is exported from core Fly SQLite rather than
+Its current catalog is exported from core Fly SQLite rather than
 the former hardcoded TypeScript array. Source/status honesty rules, DB/backfill
 ownership and compact one-to-four-card packing are canonical in
 [`festival-timeline.md`](festival-timeline.md). Immutable review artifacts

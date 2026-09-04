@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: the full real/all unified Preview gate now verifies the current
+  always-visible occurrence selector (`practical` variant and row owner)
+  instead of a retired `event-occurrences__schedule` class. The exact staged
+  real projection can therefore fail only on an actual selector regression,
+  not on obsolete checker markup.
+
 - Fixed: the canonical desktop Editorial action panel now resets obsolete
   hero-grid placement when mounted in its bounded side owner. OCR companion
   events no longer collapse the panel to a zero-width action row or create
