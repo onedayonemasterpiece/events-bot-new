@@ -348,9 +348,12 @@ const socialProofLabel = [
       const mediaFrame = frame.querySelector('[data-media-frame]');
       const image = frame.querySelector('[data-media-frame-image]');
       const fallback = mediaFrame?.querySelector(':scope > [data-media-frame-fallback]');
+      let terminalResourceState = '';
       const finish = (resourceState) => {
+        if (terminalResourceState === 'broken') return;
         const loaded = resourceState === 'loaded';
         const broken = resourceState === 'broken';
+        if (broken) terminalResourceState = 'broken';
         frame.classList.remove('ke-skeleton');
         frame.dataset.listingMediaReady = 'true';
         if (mediaFrame instanceof HTMLElement) {
@@ -371,6 +374,7 @@ const socialProofLabel = [
         if (fallback instanceof HTMLElement) fallback.hidden = loaded;
         if (broken && image instanceof HTMLImageElement) {
           image.hidden = true;
+          image.removeAttribute('sizes');
           image.removeAttribute('srcset');
           image.removeAttribute('src');
         }
@@ -392,11 +396,10 @@ const socialProofLabel = [
           .then(() => finish('loaded'))
           .catch(() => finish(image.naturalWidth > 0 && image.naturalHeight > 0 ? 'loaded' : 'broken'));
       };
+      const onImageError = () => finish('broken');
+      image.addEventListener('error', onImageError);
       if (image.complete) decodeAndFinish();
-      else {
-        image.addEventListener('load', decodeAndFinish, { once: true });
-        image.addEventListener('error', () => finish('broken'), { once: true });
-      }
+      else image.addEventListener('load', decodeAndFinish, { once: true });
     });
   }
   initListingMediaSkeletons();
