@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed: exact local event-route generation now canonicalizes Astro's
+  trailing-slash JSON/ICS prerender entries, retaining the required discovery
+  manifest and calendar companion instead of dropping both from the slice.
+
 - Changed: event occurrence navigation now consumes its established
   event-detail occurrence color, surface, border, radius and elevation roles
   directly across desktop, mobile and practical variants, without changing

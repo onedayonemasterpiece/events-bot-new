@@ -64,6 +64,10 @@ export function normalizeFocusedRoute(value) {
   if (route.includes('..') || route.includes('?') || route.includes('#')) {
     throw new Error(`Focused route must be a clean pathname: ${value}`);
   }
+  // Astro exposes endpoint entries with a trailing slash when the site-wide
+  // `trailingSlash: 'always'` policy is active, although the emitted JSON/ICS
+  // asset path and the focused-route contract are extension-final.
+  if (/\.[a-z0-9]+\/$/iu.test(route)) route = route.slice(0, -1);
   if (!/\/[^/]+\.[a-z0-9]+$/iu.test(route) && !route.endsWith('/')) route += '/';
   return route;
 }

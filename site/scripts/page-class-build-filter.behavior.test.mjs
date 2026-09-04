@@ -35,8 +35,8 @@ test('actual Astro route owners map to stable page classes', () => {
 
 test('focused route normalization distinguishes page routes and runtime endpoints', () => {
   assert.deepEqual(
-    normalizeStaticSiteFocusedRoutes('["/segodnya","/__preview/","/data/discovery/7.json"]'),
-    ['/segodnya/', '/__preview/', '/data/discovery/7.json'],
+    normalizeStaticSiteFocusedRoutes('["/segodnya","/__preview/","/data/discovery/7.json/","/sobytiya/one/event.ics/"]'),
+    ['/segodnya/', '/__preview/', '/data/discovery/7.json', '/sobytiya/one/event.ics'],
   );
 });
 
@@ -57,15 +57,15 @@ test('exact event route keeps only canonical detail companions and preview shell
   const paths = [
     { pathname: '/sobytiya/one/', route: { component: 'src/pages/sobytiya/[slug].astro' } },
     { pathname: '/sobytiya/two/', route: { component: 'src/pages/sobytiya/[slug].astro' } },
-    { pathname: '/sobytiya/one/event.ics', route: { component: 'src/pages/sobytiya/[slug]/event.ics.ts' } },
-    { pathname: '/data/discovery/7.json', route: { component: 'src/pages/data/discovery/[eventId].json.ts' } },
-    { pathname: '/data/discovery/8.json', route: { component: 'src/pages/data/discovery/[eventId].json.ts' } },
+    { pathname: '/sobytiya/one/event.ics/', route: { component: 'src/pages/sobytiya/[slug]/event.ics.ts' } },
+    { pathname: '/data/discovery/7.json/', route: { component: 'src/pages/data/discovery/[eventId].json.ts' } },
+    { pathname: '/data/discovery/8.json/', route: { component: 'src/pages/data/discovery/[eventId].json.ts' } },
     { pathname: '/__preview/', route: { component: 'src/pages/[preview]/index.astro' } },
   ];
   const focused = ['/sobytiya/one/', '/sobytiya/one/event.ics', '/data/discovery/7.json', '/__preview/'];
   assert.deepEqual(
     filterPrerenderPaths(paths, ['event'], focused).map((entry) => entry.pathname),
-    ['/sobytiya/one/', '/sobytiya/one/event.ics', '/data/discovery/7.json', '/__preview/'],
+    ['/sobytiya/one/', '/sobytiya/one/event.ics/', '/data/discovery/7.json/', '/__preview/'],
   );
 });
 

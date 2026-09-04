@@ -49,6 +49,11 @@ event endpoints when applicable, `/__preview/`, `robots.txt`, manifests and
 shared assets. Static asset metadata is excluded from the product-route receipt;
 same-class neighbour pages are rejected by the receipt gate.
 
+Astro's global `trailingSlash: 'always'` also appends `/` to prerender entry
+pathnames for `.json` and `.ics` endpoints. The focused selector canonicalizes
+those entries back to extension-final asset paths before matching, so an exact
+event slice cannot silently omit its discovery manifest or calendar companion.
+
 The command prints source/snapshot/data identities, selected owner source,
 generated routes, timings and browser results. It never publishes. Full
 owner-facing `real/all` remains on the dedicated Review Preview Kaggle kernel;
