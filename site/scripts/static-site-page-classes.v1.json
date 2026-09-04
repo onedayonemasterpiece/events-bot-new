@@ -47,5 +47,95 @@
   "always_preview_components": [
     "src/pages/[preview]/index.astro",
     "src/pages/robots.txt.ts"
-  ]
+  ],
+  "focused_route_families": {
+    "home": {
+      "page_classes": ["date"],
+      "patterns": [
+        { "kind": "exact", "value": "/", "role": "page", "required": true }
+      ]
+    },
+    "today": {
+      "page_classes": ["date", "personal"],
+      "patterns": [
+        { "kind": "exact", "value": "/segodnya/", "role": "page", "required": true },
+        { "kind": "exact", "value": "/data/personal-feed.json/", "role": "dependency", "required": true }
+      ]
+    },
+    "tomorrow": {
+      "page_classes": ["date", "personal"],
+      "patterns": [
+        { "kind": "exact", "value": "/zavtra/", "role": "page", "required": true },
+        { "kind": "exact", "value": "/data/personal-feed.json/", "role": "dependency", "required": true }
+      ]
+    },
+    "date": {
+      "page_classes": ["date", "personal"],
+      "patterns": [
+        { "kind": "prefix", "value": "/date-", "role": "page", "required": true },
+        { "kind": "exact", "value": "/data/personal-feed.json/", "role": "dependency", "required": true }
+      ]
+    },
+    "weekend": {
+      "page_classes": ["weekend", "personal"],
+      "patterns": [
+        { "kind": "prefix", "value": "/vyhodnye/", "role": "page", "required": true },
+        { "kind": "exact", "value": "/data/personal-feed.json/", "role": "dependency", "required": true }
+      ]
+    },
+    "popular": {
+      "page_classes": ["collection", "personal"],
+      "patterns": [
+        { "kind": "exact", "value": "/populyarnoe/", "role": "page", "required": true },
+        { "kind": "exact", "value": "/data/personal-feed.json/", "role": "dependency", "required": true }
+      ]
+    },
+    "collections": {
+      "page_classes": ["collection"],
+      "patterns": [
+        { "kind": "prefix", "value": "/podborki/", "role": "page", "required": true }
+      ]
+    },
+    "festivals": {
+      "page_classes": ["collection"],
+      "patterns": [
+        { "kind": "exact", "value": "/festivali/", "role": "page", "required": true }
+      ]
+    },
+    "exhibitions": {
+      "page_classes": ["collection"],
+      "patterns": [
+        { "kind": "exact", "value": "/vystavki/", "role": "page", "required": true }
+      ]
+    },
+    "favorites": {
+      "page_classes": ["personal"],
+      "patterns": [
+        { "kind": "exact", "value": "/izbrannoe/", "role": "page", "required": true }
+      ]
+    },
+    "search": {
+      "page_classes": ["personal"],
+      "patterns": [
+        { "kind": "exact", "value": "/poisk/", "role": "page", "required": true }
+      ]
+    },
+    "for-me": {
+      "page_classes": ["personal"],
+      "patterns": [
+        { "kind": "exact", "value": "/dlya-menya/", "role": "page", "required": true },
+        { "kind": "exact", "value": "/data/personal-feed.json/", "role": "dependency", "required": true }
+      ]
+    }
+  },
+  "focused_event_detail": {
+    "page_classes": ["event", "personal"],
+    "patterns": [
+      { "kind": "exact", "template": "/sobytiya/{slug}/", "role": "page", "required": true },
+      { "kind": "exact", "template": "/sobytiya/{slug}/event.ics/", "role": "dependency", "required": true },
+      { "kind": "prefix", "template": "/sobytiya/{slug}/transport/", "role": "dependency", "required": false },
+      { "kind": "exact", "template": "/data/discovery/{id}.json/", "role": "dependency", "required": true },
+      { "kind": "exact", "value": "/data/personal-feed.json/", "role": "dependency", "required": true }
+    ]
+  }
 }
