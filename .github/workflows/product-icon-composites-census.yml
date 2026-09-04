@@ -1,0 +1,106 @@
+name: Product icon composites census
+
+on:
+  push:
+    branches: [work/ui-normalization-product-icon-composites-20260904]
+    paths: [.github/workflows/product-icon-composites-census.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/ui-normalization-product-icon-composites-20260904
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+      - name: Exact product action composite census
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, re
+
+          root = Path('site/src')
+          graph = json.loads((root / 'design-system/astro-family-consumers.generated.v1.json').read_text())
+          routes_by_root = {
+              family['astro_root']: family.get('production_route_patterns', [])
+              for family in graph['families'].values()
+          }
+          patterns = {
+              'event_like': re.compile(r'data-feedback-action=["\']like["\']'),
+              'share': re.compile(r'data-native-share(?:\s|>|=)'),
+              'calendar': re.compile(r'data-calendar-action(?:\s|>|=)'),
+              'save': re.compile(r'data-saved-event-action(?:\s|>|=)'),
+              'heart': re.compile(r'(?:SemanticIcon|Icon)\s+name=["\']heart["\']'),
+              'count': re.compile(r'data-(?:feedback|share|like|small-like|listing-like|listing-share|aggregate)-count'),
+          }
+          records = []
+          for path in sorted(root.rglob('*.astro')):
+              rel = path.as_posix()
+              if '/lab/' in rel or rel.endswith('/404.astro') or rel.endswith('/500.astro'):
+                  continue
+              source = path.read_text(encoding='utf-8')
+              kinds = [name for name, pattern in patterns.items() if pattern.search(source)]
+              if not kinds:
+                  continue
+              lines = source.splitlines()
+              hits = []
+              for number, line in enumerate(lines, 1):
+                  if any(pattern.search(line) for pattern in patterns.values()):
+                      hits.append(f'{number}: {line.strip()}')
+              records.append({
+                  'path': rel,
+                  'kinds': kinds,
+                  'routes': routes_by_root.get(rel, []),
+                  'hits': hits,
+              })
+
+          print('=== PRODUCT ACTION COMPOSITE CENSUS ===')
+          for record in records:
+              print(json.dumps(record, ensure_ascii=False))
+
+          print('=== EVENT LIKE EXACT SOURCES ===')
+          event_like = [record for record in records if 'event_like' in record['kinds']]
+          print(json.dumps({
+              'count': len(event_like),
+              'paths': [record['path'] for record in event_like],
+          }, ensure_ascii=False, indent=2))
+
+          print('=== HEART NON EVENT-LIKE EXCEPTIONS ===')
+          exceptions = [record for record in records if 'heart' in record['kinds'] and 'event_like' not in record['kinds']]
+          print(json.dumps({
+              'count': len(exceptions),
+              'paths': [record['path'] for record in exceptions],
+          }, ensure_ascii=False, indent=2))
+
+          print('=== DIRECT IMPORT CONSUMERS ===')
+          targets = [
+              'EventCard.astro',
+              'EventHero.astro',
+              'EventCtaPanel.astro',
+              'DesktopEventActionPanel.astro',
+              'listings/MobileListingRailRow.astro',
+          ]
+          for target in targets:
+              name = Path(target).stem
+              consumers = []
+              for path in sorted(root.rglob('*.astro')):
+                  rel = path.as_posix()
+                  if '/lab/' in rel:
+                      continue
+                  text = path.read_text(encoding='utf-8')
+                  if re.search(rf"(?:from\s+['\"][^'\"]*{re.escape(name)}\.astro['\"]|<{re.escape(name)}\b)", text):
+                      consumers.append(rel)
+              print(json.dumps({'target': target, 'consumers': consumers}, ensure_ascii=False))
+
+          print('=== CURRENT HEAD ===')
+          PY
+          git rev-parse HEAD
+          git status --short
