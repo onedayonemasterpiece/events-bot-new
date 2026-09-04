@@ -160,10 +160,11 @@ function cropFraction(sourceRatio, targetRatio) {
 
 /**
  * Final compact-card treatment. Classified visual media fills its shell.
- * Classified OCR/document assets may use cover only inside the 20% crop
- * budget; unclassified/error media remains whole because there is no positive
- * crop evidence. The public resolver enforces the crop budget itself, so direct
- * callers and packRelatedCardRows share the same fail-closed boundary.
+ * A crop-area limit is not evidence that OCR text survives the crop.
+ * Until this API has a verified text-region contract, document media remains
+ * whole; an exact-ratio cover is uncropped and is still allowed. The existing
+ * 20% maximum remains a ceiling, not permission to trim unlocated text.
+ * Direct callers and packRelatedCardRows share this fail-closed boundary.
  */
 export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = relatedCardMediaGeometry(item)) {
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);
@@ -210,14 +211,28 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
         coverCrop:0,
       };
     }
+    if (potentialCoverCrop > EPSILON) {
+      // image_text_mode classifies the asset; it does not locate its text.
+      // Centering a numerically legal crop can remove the entire headline.
+      // Do not invent OCR boxes or treat photo valuable_region as text proof.
+      return {
+        mediaKind:'document',
+        mediaTreatment:'document-contain',
+        fit:'contain',
+        objectPosition:'50% 50%',
+        cropReason:'document_text_crop_unproven',
+        potentialCoverCrop,
+        coverCrop:0,
+      };
+    }
     return {
       mediaKind:'document',
       mediaTreatment:'document-safe-cover',
       fit:'cover',
       objectPosition:'50% 50%',
-      cropReason:potentialCoverCrop <= EPSILON ? 'document_uncropped' : 'document_bounded_cover',
+      cropReason:'document_uncropped',
       potentialCoverCrop,
-      coverCrop:potentialCoverCrop,
+      coverCrop:0,
     };
   }
   const crop = resolveEventImageCrop(geometry?.asset || relatedCardPrimaryImageAsset(item), normalizedTargetAspect);
@@ -283,8 +298,9 @@ export function resolveMobileEventCardMedia(item, options = {}) {
 }
 
 function documentTargetInterval(entry) {
-  // Ordinary OCR posters stay uncropped. Only an unusually tall document may
-  // spend up to the explicit 20% area budget to keep its whole row compact.
+  // Preserve the existing candidate-frame interval for tall documents. This
+  // selects row geometry, not crop permission: the media resolver still
+  // contains unlocated text when the candidate ratio differs from the source.
   if (entry.ratio >= VERY_TALL_DOCUMENT_RATIO - EPSILON) return [entry.ratio, entry.ratio];
   return [entry.ratio, entry.ratio / (1 - MAX_DOCUMENT_CROP)];
 }
@@ -298,9 +314,7 @@ function rowTarget(row) {
     if (lower > upper + EPSILON) return null;
     return {
       targetRatio:upper,
-      rowMode:documents.some(({ ratio }) => ratio < VERY_TALL_DOCUMENT_RATIO - EPSILON)
-        ? 'document-led-bounded-cover'
-        : 'document-led-uncropped',
+      rowMode:'document-led-uncropped',
     };
   }
   return {
@@ -455,19 +469,32 @@ function optimizeRows(selected, rowSize, mediaTreatment) {
   return best?.groups || null;
 }
 
-function selectionCombinations(length, exactSize) {
-  const result = [];
-  const choose = (start, selected) => {
-    if (selected.length === exactSize) {
-      result.push(selected);
-      return;
+/**
+ * Layout may choose geometry, not remove admitted events. If no complete
+ * intrinsic-ratio partition exists, keep the ranked prefix and use a common
+ * compact frame only for incompatible rows. Documents stay whole through the
+ * same media resolver; compatible rows keep their existing layout unchanged.
+ */
+function containedFallbackRows(selected, rowSize, mediaTreatment) {
+  const rows = [];
+  for (let offset = 0; offset < selected.length; offset += rowSize) {
+    const entries = selected.slice(offset, offset + rowSize);
+    let plan = rowPlan(entries, mediaTreatment);
+    if (!plan) {
+      const targetRatio = PREFERRED_VISUAL_RATIO;
+      const decisions = entries.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
+      plan = {
+        targetRatio,
+        rowMode:'document-mixed-contained',
+        decisions,
+        cost:estimatedChromeCost(entries) + (1 / targetRatio),
+        visualCrop:decisions.filter(({ mediaKind }) => mediaKind === 'visual')
+          .reduce((sum, decision) => sum + decision.coverCrop, 0),
+      };
     }
-    for (let index = start; index < length; index += 1) {
-      choose(index + 1, [...selected, index]);
-    }
-  };
-  choose(0, []);
-  return result;
+    rows.push({ entries, plan });
+  }
+  return rows;
 }
 
 function materializeRow(row, rowIndex, presentation) {
@@ -500,8 +527,9 @@ function materializeRow(row, rowIndex, presentation) {
  * Enumerate every feasible full-row grouping plus one optional final
  * remainder, then use bitmask dynamic programming to minimize the sum of
  * normalized full-card row heights.
- * Reordering is therefore intentional, deterministic and globally optimal for
- * the declared cost model rather than a greedy per-row guess.
+ * Reordering is intentional and deterministic within the feasible intrinsic
+ * partitions. If none exists, contained rows preserve the admitted prefix;
+ * that content-preserving fallback does not claim a global optimum.
  */
 export function packRelatedCardRows(items, options = {}) {
   const requestedLimit = Number(options.limit ?? items.length);
@@ -513,38 +541,12 @@ export function packRelatedCardRows(items, options = {}) {
   const geometry = options.geometry || relatedCardMediaGeometry;
   const targetCount = Math.min(limit, items.length);
   if (!targetCount) return [];
-  // Usually the ranked prefix is feasible and takes the fast path. If its OCR
-  // ratios cannot share the required number of full rows, inspect only three
-  // lower-ranked alternates, preserve the largest possible card count, and
-  // choose the lowest rank-displacement set before comparing page height.
-  // This prevents the old workaround of emitting middle singleton/pair rows.
-  const pool = items.slice(0, Math.min(items.length, targetCount + 3))
+  // The caller owns eligibility and limit. Geometry optimization must preserve
+  // the admitted ranked prefix, including a mixed-document final remainder.
+  const selected = items.slice(0, targetCount)
     .map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
-  let selected = pool.slice(0, targetCount);
-  let rows = optimizeRows(selected, rowSize, mediaTreatment);
-  if (!rows) {
-    let winner = null;
-    for (let count = targetCount; count >= 1 && !winner; count -= 1) {
-      for (const indexes of selectionCombinations(pool.length, count)) {
-        const candidateSelection = indexes.map((index) => pool[index]);
-        const candidateRows = optimizeRows(candidateSelection, rowSize, mediaTreatment);
-        if (!candidateRows) continue;
-        const rankDisplacement = indexes.reduce((sum, index, rank) => sum + Math.max(0, index - rank), 0);
-        const cost = candidateRows.reduce((sum, row) => sum + row.plan.cost, 0);
-        const signature = indexes.join('.');
-        const candidate = { selected:candidateSelection, rows:candidateRows, rankDisplacement, cost, signature };
-        if (!winner
-          || rankDisplacement < winner.rankDisplacement
-          || (rankDisplacement === winner.rankDisplacement && cost < winner.cost - EPSILON)
-          || (rankDisplacement === winner.rankDisplacement && Math.abs(cost - winner.cost) <= EPSILON && signature < winner.signature)) {
-          winner = candidate;
-        }
-      }
-    }
-    if (!winner) return [];
-    selected = winner.selected;
-    rows = winner.rows;
-  }
+  const rows = optimizeRows(selected, rowSize, mediaTreatment)
+    || containedFallbackRows(selected, rowSize, mediaTreatment);
   return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex, presentation));
 }
 
