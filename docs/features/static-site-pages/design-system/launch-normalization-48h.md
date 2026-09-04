@@ -743,4 +743,4 @@ Review Preview rail как immutable full `real/all` prefix
 занимает доступную ширину, запрещает intra-word break и использует уже
 существующий общий `0.72em` scale для цветной строки. Browser geometry на
 `320/360/390/430px` обязана подтверждать одну строку для слова, отсутствие
-clipping и нулевой document overflow.
+clipping, раздельные fact labels и нулевой document overflow.

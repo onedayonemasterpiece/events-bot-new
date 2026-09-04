@@ -5,7 +5,9 @@
 - Fixed: the festival mobile hero no longer permits an emphasized Russian word
   to break or clip mid-word. The route keeps the accepted heading family and
   palette, removes only its narrow `12ch` override, and reuses the established
-  `0.72em` emphasis scale across 320–430px viewports.
+  `0.72em` emphasis scale across 320–430px viewports. Its three fact columns
+  also reserve enough width to keep adjacent uppercase labels from colliding
+  at 320px.
 
 - Fixed: the full real/all unified Preview gate now verifies the current
   always-visible occurrence selector (`practical` variant and row owner)
