@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed: the shared mobile bottom navigation now consumes its established
+  shell color, elevation, icon-size and icon-container roles instead of local
+  copies, without changing its four destinations, state or geometry.
+
 - Changed: desktop event media fallbacks, gallery tiles and the related-event
   section now consume the existing inverse background roles instead of eight
   repeated exact hex values, without changing palette, geometry or behavior.

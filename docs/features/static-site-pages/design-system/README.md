@@ -146,6 +146,11 @@ desktop, mobile and practical variants therefore share one token-owned visual
 language without changing their established schedule anatomy, target sizes or
 responsive geometry.
 
+`MobileBottomNav` consumes its existing shell-owned surface, border, elevation,
+state-color, icon-size and icon-container roles. Its four canonical navigation
+identities, current-route behavior and mobile geometry remain unchanged; the
+component no longer repeats those shell values as a parallel local style owner.
+
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant

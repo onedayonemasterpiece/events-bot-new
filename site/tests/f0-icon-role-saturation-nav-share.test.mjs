@@ -51,7 +51,8 @@ test('MobileBottomNav delegates visible glyphs to canonical semantic/asset owner
     assert.ok(nav.includes(`mobileDiscoveryHref('${route}'`));
   }
   assert.match(nav, /\.mobile-bottom-nav a \{[\s\S]*min-height:var\(--mobile-nav-h\)/u);
-  assert.match(nav, /\.mobile-bottom-nav__icon \{ width:38px; height:28px;/u);
+  assert.match(nav, /\.mobile-bottom-nav__icon \{ width:var\(--ke-mobile-nav-icon-container-width\); height:var\(--ke-mobile-nav-icon-container-height\);/u);
+  assert.match(nav, /\.mobile-bottom-nav \.ke-icon-role \{ --ke-icon-size:var\(--ke-mobile-nav-icon-size\); \}/u);
 
   assert.match(semantic, /'ke-icon-contract--four-role-v1'/u);
   assert.match(semantic, /'ke-icon-size-owner--foundations'/u);
