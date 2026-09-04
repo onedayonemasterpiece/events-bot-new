@@ -50,6 +50,14 @@ require its expired public row or date route. The crop gate therefore combines
 a current generated visual-only rail specimen with the frozen Pianissimo
 geometry once the original route has left the active export.
 
+The blocking multi-image recommendation-journey canary follows the same rule.
+`6408 -> 6407` remains the preferred historical pair while both generated
+routes satisfy the factual structural contract, but `check:preview` derives the
+candidate route set from the complete active generated event catalog and may
+select another qualifying multi-image CTA journey when that pair is absent. If
+the generated catalog contains no qualifying journey at all, the gate still
+fails closed; expiry of the preferred IDs alone is not a release failure.
+
 Shared progressive-enhancement controls outside a page's primary `main`
 landmark may be intentionally hidden until their browser capability is known.
 No-JavaScript content gates therefore inspect the product page's own landmark,

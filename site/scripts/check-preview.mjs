@@ -16,7 +16,7 @@ const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
 const buildId = process.env.PREVIEW_BUILD_ID || readdirSync(distDir).find((name) => name.startsWith('preview-'));
 if (!buildId) throw new Error('No preview-* folder found in dist');
-const root = join(distDir, buildId);
+const root = join(siteDir, 'dist', buildId);
 const required = [
   '__preview/index.html',
   'segodnya/index.html',
@@ -73,9 +73,7 @@ if (festivalTimelineData.schema_version !== 'festival-timeline-static-v1') {
 }
 const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
 const browserJourneyBasePath = String(previewBuild.basePath || `/${buildId}`).replace(/\/$/u, '');
-const browserJourneyRoutes = [6408, 6407]
-  .map((eventId) => eventsData.events.find((event) => Number(event.id) === eventId))
-  .filter(Boolean)
+const browserJourneyRoutes = eventsData.events
   .map((event) => `${browserJourneyBasePath}/sobytiya/${event.slug}/`);
 assertRequiredPreviewBrowserJourney(staticSpecimenCandidates(root, browserJourneyBasePath, browserJourneyRoutes));
 const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');
