@@ -1460,3 +1460,41 @@ def test_review_capacity_exhaustion_is_a_safe_error_before_push() -> None:
         runner.require_kernel_slot_available(
             Client(), "zigomaro/kenigevents-static-site-builder-review", "review"
         )
+
+
+def test_busy_production_slot_still_allows_independent_review_request() -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    class Client:
+        calls: list[str] = []
+
+        def get_kernel_status(self, kernel_ref: str):
+            self.calls.append(kernel_ref)
+            if kernel_ref.endswith("kenigevents-static-site-builder"):
+                return {"status": "RUNNING"}
+            return {"status": "COMPLETE"}
+
+    client = Client()
+    # A review request consults only its dedicated slot, so an occupied
+    # production builder neither blocks it nor has its metadata touched.
+    runner.require_kernel_slot_available(
+        client, "zigomaro/kenigevents-static-site-builder-review", "review"
+    )
+    assert client.calls == ["zigomaro/kenigevents-static-site-builder-review"]
+
+
+def test_slot_retarget_keeps_immutable_build_provenance_payload() -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    provenance = {
+        "build_id": "preview-immutable-identity",
+        "repo_sha": "a" * 40,
+        "snapshot": {"snapshot_id": "snapshot-1", "sha256": "b" * 64},
+    }
+    # Slot selection is deliberately independent from the immutable build
+    # identity payload passed through the canonical staging/package path.
+    before = json.dumps(provenance, sort_keys=True)
+    assert runner.resolve_kernel_ref(
+        SimpleNamespace(profile="preview", kernel_slot="", kernel_slug=""), "zigomaro"
+    )[0] == "review"
+    assert json.dumps(provenance, sort_keys=True) == before
