@@ -52,7 +52,9 @@ The command prints source/snapshot/data identities, selected owner source,
 generated routes, timings and browser results. It never publishes. Full
 owner-facing `real/all` remains on the dedicated Review Preview Kaggle kernel;
 production candidates remain on the production kernel. The sole page-class
-allowlist remains `site/scripts/static-site-page-classes.v1.json`.
+allowlist remains `site/scripts/static-site-page-classes.v1.json`. A verified
+`PLAYWRIGHT_EXECUTABLE_PATH` reuses the installed local Chromium; otherwise the
+staged checkout installs its matching Playwright browser.
 
 `check:preview` treats a date listing without mobile event rows as valid only
 when the generated page retains the mobile rail shell and renders the explicit

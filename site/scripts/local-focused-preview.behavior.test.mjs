@@ -22,6 +22,8 @@ test('page-class validation delegates to canonical registry export', () => {
   assert.throws(() => resolvePageClass('invented'), /Unknown STATIC_SITE_PAGE_CLASSES/u);
   const source = readFileSync(new URL('./run-local-focused-preview.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /SELECTABLE_PAGE_CLASSES|new Set\(\['event'/u);
+  assert.match(source, /configuredBrowser && existsSync\(configuredBrowser\)/u);
+  assert.match(source, /npm', \['ci', '--no-audit', '--no-fund'\]/u);
 });
 
 test('produced path inventory excludes shared assets but includes runtime endpoints', () => {

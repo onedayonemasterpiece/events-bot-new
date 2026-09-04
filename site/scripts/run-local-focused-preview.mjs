@@ -219,9 +219,12 @@ function safeSlug(value) {
   return String(value || '').replace(/[^a-zA-Z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '').slice(0, 28) || 'slice';
 }
 function installDependencies(stagedSite, smoke) {
-  const npm = run('npm', ['ci'], { cwd: stagedSite });
+  const npm = run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: stagedSite });
   let browser = { durationMs: 0 };
-  if (smoke) browser = run('npm', ['exec', '--', 'playwright', 'install', 'chromium'], { cwd: stagedSite });
+  const configuredBrowser = String(process.env.PLAYWRIGHT_EXECUTABLE_PATH || '').trim();
+  if (smoke && !(configuredBrowser && existsSync(configuredBrowser))) {
+    browser = run('npm', ['exec', '--', 'playwright', 'install', 'chromium'], { cwd: stagedSite });
+  }
   return { npmCiMs: npm.durationMs, playwrightInstallMs: browser.durationMs };
 }
 
