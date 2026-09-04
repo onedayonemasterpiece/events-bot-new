@@ -9,7 +9,8 @@
   endpoints including `robots.txt`; emits a reproducible receipt; and runs
   desktop/mobile browser smoke without publication. A configured existing
   Playwright browser is reused instead of downloaded again, and asset metadata
-  is distinguished from generated product/runtime routes.
+  is distinguished from generated product/runtime routes. Browser smoke accepts
+  Playwright's CommonJS default export as well as a native named export.
 
 - Fixed: the immutable owner Preview hub now exposes the two required product
   archetypes it previously left as non-owner or absent links: Interest Clubs and

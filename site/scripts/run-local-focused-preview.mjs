@@ -280,13 +280,20 @@ export function listProducedPaths(buildRoot) {
   return [...new Set(walkFiles(buildRoot).map((file) => routeFromFile(buildRoot, file)).filter(Boolean))].sort();
 }
 
+export function resolvePlaywrightApi(module) {
+  const api = module?.chromium ? module : module?.default;
+  if (!api?.chromium) throw new Error('Staged Playwright module does not expose chromium');
+  return api;
+}
+
 async function loadStagedBrowserModules(stagedSite) {
   const require = createRequire(join(stagedSite, 'package.json'));
   const playwrightEntry = require.resolve('playwright');
-  return Promise.all([
+  const [playwrightModule, releaseGate] = await Promise.all([
     import(`${pathToFileURL(playwrightEntry).href}?focused=${Date.now()}`),
     import(`${pathToFileURL(join(stagedSite, 'scripts', 'check-browser-release-gate.mjs')).href}?focused=${Date.now()}`),
   ]);
+  return [resolvePlaywrightApi(playwrightModule), releaseGate];
 }
 
 export async function smokeFocusedRoute({ stagedSite, buildRoot, buildId, route, offline }) {

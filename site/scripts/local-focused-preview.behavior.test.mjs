@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   listProducedPaths,
   parseLocalFocusedArgs,
+  resolvePlaywrightApi,
   resolvePageClass,
 } from './run-local-focused-preview.mjs';
 import { STATIC_SITE_PAGE_CLASSES } from './page-class-build-filter.mjs';
@@ -54,4 +55,12 @@ test('produced path inventory excludes shared assets but includes runtime endpoi
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('staged Playwright supports both ESM named and CommonJS default exports', () => {
+  const named = { chromium: { launch: () => 'named' } };
+  const commonJs = { default: { chromium: { launch: () => 'default' } } };
+  assert.equal(resolvePlaywrightApi(named).chromium.launch(), 'named');
+  assert.equal(resolvePlaywrightApi(commonJs).chromium.launch(), 'default');
+  assert.throws(() => resolvePlaywrightApi({ default: {} }), /does not expose chromium/u);
 });
