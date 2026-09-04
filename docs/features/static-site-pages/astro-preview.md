@@ -661,6 +661,13 @@ Disallow: /
 
 The static-site production build path now has a Kaggle CPU runner that reuses the existing events-bot Kaggle infrastructure instead of inventing a separate execution path:
 
+- production and owner Review Preview use separate private Kaggle execution
+  slugs but the same runner, exporter, kernel source, artifact checks and
+  publisher; the runner changes only the isolated staged kernel identity;
+- for a first-time Review Preview slug bootstrap, both staged `id` and `title`
+  are bound to that slug because Kaggle derives a new kernel URL slug from its
+  title. The repository metadata remains the production identity.
+
 ```bash
 python scripts/run_static_site_builder_kaggle.py \
   --db /data/db.sqlite \

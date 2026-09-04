@@ -62,7 +62,7 @@ def test_review_lane_has_isolated_lock_scratch_and_resource_lease(
     assert production_scratch.exists()
 
 
-def test_staged_kernel_metadata_changes_only_selected_execution_ref(
+def test_staged_kernel_metadata_binds_selected_execution_ref_and_slug_title(
     tmp_path: Path,
 ) -> None:
     from scripts import run_static_site_builder_kaggle as runner
@@ -88,6 +88,7 @@ def test_staged_kernel_metadata_changes_only_selected_execution_ref(
     assert rewritten == {
         **original,
         "id": "zigomaro/kenigevents-static-site-builder-review-preview",
+        "title": "kenigevents-static-site-builder-review-preview",
     }
 
 

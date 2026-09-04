@@ -5,7 +5,9 @@
 - Fixed Review Preview Kaggle starvation: the static-site runner now has a
   validated private review-preview execution lane with its own staged kernel
   ref, local lock, scratch cleanup scope and status resource lease, while the
-  canonical production kernel/package remains unchanged.
+  canonical production kernel/package remains unchanged. First-time private
+  review-kernel bootstrap now binds the staged title to the selected slug as
+  required by Kaggle, without mutating repository kernel metadata.
 
 - Fixed static-preview regression gates to use exported gallery cardinality and
   to keep Popular Large/Compact checks separate from Date/Weekend mobile rails.

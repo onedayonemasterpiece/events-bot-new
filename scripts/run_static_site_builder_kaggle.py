@@ -975,11 +975,12 @@ def copy_tree(src: Path, dst: Path, *, ignore_extra: list[str] | None = None) ->
 
 
 def rewrite_staged_kernel_metadata_id(staging: Path, kernel_ref: str) -> None:
-    """Bind the copied Kaggle package to its selected execution slug only.
+    """Bind the copied Kaggle package to its selected execution slug.
 
     The canonical metadata in the repository remains the production slug.
-    Staging is an isolated copy, and replacing its ``id`` is intentionally the
-    only metadata mutation needed to route the exact same package to review.
+    Staging is an isolated copy. Kaggle derives a new kernel slug from its
+    title, so the staged title must match the selected slug when the private
+    review kernel is bootstrapped; existing kernels accept the same pair.
     """
 
     metadata_path = staging / 'kernel-metadata.json'
@@ -989,7 +990,9 @@ def rewrite_staged_kernel_metadata_id(staging: Path, kernel_ref: str) -> None:
         raise RuntimeError(f'staged Kaggle kernel metadata is invalid: {exc}') from exc
     if not isinstance(metadata, dict):
         raise RuntimeError('staged Kaggle kernel metadata must be a JSON object')
+    _owner, slug = kernel_ref.split('/', 1)
     metadata['id'] = kernel_ref
+    metadata['title'] = slug
     metadata_path.write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2) + '\n',
         encoding='utf-8',
