@@ -164,28 +164,6 @@
   animation: ke-spin 700ms linear infinite;
 }
 
-.ke-copy-action { position: relative; flex: 0 0 auto; overflow: visible; }
-.ke-copy-action__icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); display: grid; place-items: center; }
-.ke-copy-action__icon .icon { grid-area: 1 / 1; }
-.ke-copy-action__check-icon { display: none; }
-.ke-copy-action[data-copy-state="success"] { border-color: var(--ke-color-success-700); background: var(--ke-color-success-700); color: var(--ke-color-surface-strong); }
-.ke-copy-action[data-copy-state="success"] .ke-copy-action__copy-icon { display: none; }
-.ke-copy-action[data-copy-state="success"] .ke-copy-action__check-icon { display: block; }
-.ke-copy-action[data-copy-state="error"] { border-color: var(--ke-color-danger-700); background: var(--ke-color-danger-50); color: var(--ke-color-danger-700); }
-.ke-copy-action[data-copy-state="error"]::after {
-  content: "!";
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 14px;
-  height: 14px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--ke-color-danger-700);
-  color: var(--ke-color-surface-strong);
-  font: 900 10px / 1 var(--ke-font-sans);
-}
 .ke-visually-hidden {
   position: absolute !important;
   width: 1px !important;

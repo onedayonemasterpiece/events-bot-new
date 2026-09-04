@@ -15,6 +15,7 @@ const foundationsTs = read('site/src/components/design-system/foundations.ts');
 const badge = read('site/src/components/design-system/Badge.astro');
 const field = read('site/src/components/design-system/Field.astro');
 const statePanel = read('site/src/components/design-system/StatePanel.astro');
+const copyAction = read('site/src/components/design-system/CopyAction.astro');
 
 const obsoletePrimitiveOwner = /(?:^|\n)\.ke-(?:badge|field|state-panel)(?:--|__|\s|\{|:)/u;
 assert.doesNotMatch(
@@ -26,8 +27,6 @@ assert.doesNotMatch(
 for (const requiredCompatibilityAnchor of [
   '.ke-button {',
   '.ke-button--icon { width: var(--ke-control-min)',
-  '.ke-copy-action__check-icon',
-  'content: "!"',
 ]) {
   assert.ok(
     legacyCss.includes(requiredCompatibilityAnchor),
@@ -47,6 +46,36 @@ for (const selector of ['.ke-foundation-badge', '.ke-foundation-field', '.ke-fou
   assert.ok(componentCss.includes(selector), `component-foundations.css misses ${selector}`);
 }
 
+assert.ok(!legacyCss.includes('.ke-copy-action'), 'design-system.css must not retain a second CopyAction selector owner');
+assert.ok(
+  copyAction.includes('data-ke-style-owner="CopyAction.astro"'),
+  'CopyAction must publish its canonical local style owner',
+);
+for (const marker of [
+  '--ke-color-copy-action-success-foreground',
+  '--ke-color-copy-action-error-background',
+  '--ke-color-copy-action-error-foreground',
+  '.ke-copy-action[data-copy-state="error"]::after',
+  'width: var(--ke-icon-size-control)',
+  'height: var(--ke-icon-size-control)',
+]) {
+  assert.ok(copyAction.includes(marker), `CopyAction canonical owner misses ${marker}`);
+}
+for (const token of [
+  '--ke-color-copy-action-success-foreground:',
+  '--ke-color-copy-action-error-background:',
+  '--ke-color-copy-action-error-foreground:',
+  '--ke-color-copy-action-error-mark-background:',
+  '--ke-color-copy-action-error-mark-foreground:',
+  '--ke-copy-action-status-mark-inset:',
+  '--ke-copy-action-status-mark-size:',
+  '--ke-copy-action-status-mark-type-size:',
+  '--ke-copy-action-status-mark-line:',
+  '--ke-copy-action-status-mark-weight:',
+]) {
+  assert.ok(foundationsCss.includes(token), `foundations.css misses ${token}`);
+}
+
 const roleBlock = foundationsTs.match(/export const ICON_SIZE_ROLES = \{([\s\S]*?)\} as const;/u)?.[1] || '';
 const iconRoles = Object.fromEntries(
   [...roleBlock.matchAll(/^\s*([a-z-]+):\s*(\d+),?\s*$/gmu)]
@@ -56,7 +85,6 @@ assert.deepEqual(iconRoles, { inline: 16, control: 20, action: 24, feature: 32 }
 
 for (const binding of [
   '.ke-button .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control);',
-  '.ke-copy-action__icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control);',
   '.ke-filter-chip__check { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control);',
   '.ke-filter-chip__check { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline); }',
   '.ke-listing-card__free-medallion .icon { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action);',
@@ -121,4 +149,4 @@ for (const [token, expectedOwner] of [
   assert.deepEqual(owners, [expectedOwner], `${token} must have exactly one F0 declaration owner`);
 }
 
-console.log('F0 normalization negative probes passed: duplicate primitive and alias owners removed; compatibility anchors retained; physical consumers use exactly four icon roles; canonical SVG registry intact.');
+console.log('F0 normalization negative probes passed: duplicate primitive and CopyAction owners removed; physical consumers use exactly four icon roles; canonical SVG registry intact.');

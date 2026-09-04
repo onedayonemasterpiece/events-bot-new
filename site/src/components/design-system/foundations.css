@@ -235,8 +235,18 @@
   --ke-color-copy-action-inverse-background: rgba(255, 255, 255, 0.09);
   --ke-color-copy-action-success-background: #2d6f58;
   --ke-color-copy-action-success-border: #70bb9d;
+  --ke-color-copy-action-success-foreground: var(--ke-color-text-inverse);
   --ke-color-copy-action-error-border: #f28c76;
+  --ke-color-copy-action-error-background: var(--ke-color-status-danger-background);
+  --ke-color-copy-action-error-foreground: var(--ke-color-status-danger-foreground);
   --ke-color-copy-action-error-ring: rgba(242, 140, 118, 0.2);
+  --ke-color-copy-action-error-mark-background: var(--ke-color-status-danger-foreground);
+  --ke-color-copy-action-error-mark-foreground: var(--ke-color-text-inverse);
+  --ke-copy-action-status-mark-inset: 2px;
+  --ke-copy-action-status-mark-size: 14px;
+  --ke-copy-action-status-mark-type-size: 10px;
+  --ke-copy-action-status-mark-line: 1;
+  --ke-copy-action-status-mark-weight: 900;
 
   /*
    * Retained close pairs:

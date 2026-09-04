@@ -38,6 +38,7 @@ const {
   data-ds-variant={variant}
   data-ds-state="default"
   data-ke-foundation-consumer="copy-action"
+  data-ke-style-owner="CopyAction.astro"
   data-ke-icon-role="control"
   aria-label={ariaLabel}
   title={ariaLabel}
@@ -119,13 +120,16 @@ const {
 
 <style>
   .ke-copy-action {
+    position: relative;
     width: var(--ke-size-touch-target);
     min-width: var(--ke-size-touch-target);
     height: var(--ke-size-touch-target);
     min-height: var(--ke-size-touch-target);
     display: inline-grid;
     place-items: center;
+    flex: 0 0 auto;
     padding: 0;
+    overflow: visible;
     border: var(--ke-shape-border-hairline) solid var(--ke-color-copy-action-border);
     border-radius: var(--ke-shape-radius-control);
     color: var(--ke-color-copy-action-foreground);
@@ -145,13 +149,36 @@ const {
   .ke-copy-action[data-copy-state="success"] {
     --ke-color-copy-action-background: var(--ke-color-copy-action-success-background);
     --ke-color-copy-action-border: var(--ke-color-copy-action-success-border);
+    --ke-color-copy-action-foreground: var(--ke-color-copy-action-success-foreground);
   }
   .ke-copy-action[data-copy-state="error"] {
     --ke-color-copy-action-border: var(--ke-color-copy-action-error-border);
+    --ke-color-copy-action-background: var(--ke-color-copy-action-error-background);
+    --ke-color-copy-action-foreground: var(--ke-color-copy-action-error-foreground);
     box-shadow: 0 0 0 var(--ke-shape-border-strong) var(--ke-color-copy-action-error-ring);
+  }
+  .ke-copy-action[data-copy-state="error"]::after {
+    content: "!";
+    position: absolute;
+    top: var(--ke-copy-action-status-mark-inset);
+    right: var(--ke-copy-action-status-mark-inset);
+    width: var(--ke-copy-action-status-mark-size);
+    min-width: var(--ke-copy-action-status-mark-size);
+    height: var(--ke-copy-action-status-mark-size);
+    min-height: var(--ke-copy-action-status-mark-size);
+    display: grid;
+    place-items: center;
+    border-radius: var(--ke-shape-radius-pill);
+    background: var(--ke-color-copy-action-error-mark-background);
+    color: var(--ke-color-copy-action-error-mark-foreground);
+    font: var(--ke-copy-action-status-mark-weight) var(--ke-copy-action-status-mark-type-size) / var(--ke-copy-action-status-mark-line) var(--ke-font-family-sans);
   }
   .ke-copy-action__icon {
     grid-area: 1 / 1;
+    width: var(--ke-icon-size-control);
+    min-width: var(--ke-icon-size-control);
+    height: var(--ke-icon-size-control);
+    min-height: var(--ke-icon-size-control);
     display: inline-grid;
     place-items: center;
   }
