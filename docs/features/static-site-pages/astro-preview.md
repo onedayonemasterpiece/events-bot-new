@@ -25,21 +25,61 @@ no-op or artifact-only run preserves the previous immutable target; an
 incomplete receipt resolves to unavailable. Production `/`, `current.json` and
 stable `/ics/*` stay untouched.
 
-For a local focused diagnostic, build the selected real-data route family and
-run its generated gates against the same immutable id:
+## Local focused route workflow
+
+Use one canonical local command for a single route or one named page class. It
+stages the exact committed source in a detached worktree, reuses the existing
+page-class selector and `build-preview.mjs`, then serves the checked output with
+the existing release server. It creates no repository DB, `dist`, artifact,
+publisher or retention state.
+
+Deterministic offline fixture, including desktop/mobile browser smoke:
 
 ```bash
-PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run build:preview
-PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:preview
-PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototype
+FIXTURE_DATE=$(node -p "require('./site/src/data/preview-events.json').build.current_date")
+npm --prefix site run local:focused -- \
+  --route "/date-${FIXTURE_DATE}/" \
+  --fixture \
+  --offline \
+  --open
 ```
 
-That local output is not a Review Preview and must not be published. A complete
-or owner-facing Review Preview always invokes
-`scripts/run_static_site_builder_kaggle.py`, which builds and checks on Kaggle,
-downloads the hash-bound artifact and publishes only that checked artifact.
-Optional focused publication uses the same page-class selector whose sole
-allowlist is `site/scripts/static-site-page-classes.v1.json`.
+A real local DB slice uses the canonical production exporter; a dynamic event
+route must provide the exact entity id so the selected event cannot be omitted:
+
+```bash
+npm --prefix site run local:focused -- \
+  --route /sobytiya/<slug>/ \
+  --db /data/db.sqlite \
+  --entity-id <id> \
+  --entity-slug <slug> \
+  --limit 24 \
+  --skip-image-probes \
+  --open
+```
+
+The alternative `--page-class date|event|weekend|collection|personal|focus|partner|lab`
+builds that one canonical class and opens `/<buildId>/__preview/`. The command
+prints `buildId`, full source SHA/tree, snapshot and generated-data identities,
+selected owner source, generated routes, stage durations and both smoke
+viewports. `--no-serve` is intended for CI; `--result-json` writes the same
+receipt outside the repository.
+
+The three execution lanes remain distinct:
+
+1. **Local focused:** one route or one non-`all` page class, fixture or explicit
+   DB snapshot, never published.
+2. **Review Preview Kaggle:** full `real/all` through
+   `scripts/run_static_site_builder_kaggle.py --profile preview`; this is the
+   owner/V0 review artifact.
+3. **Production candidate:** full catalog on the production kernel and existing
+   checked publisher/promotion contract.
+
+Local focused execution is not a second exporter, builder, preview service or
+publisher. It directly invokes `export-production-preview-data.py` in real-DB
+mode, passes the canonical class to Astro, executes `build:preview` plus
+`check:preview-slice`, and imports `startReleaseServer` from the existing browser
+release gate.
 
 `check:preview` treats a date listing without mobile event rows as valid only
 when the generated page retains the mobile rail shell and renders the explicit
@@ -84,18 +124,10 @@ but they do not satisfy this coverage gate and do not receive the
 | `event-detail` | one current real `/sobytiya/{slug}/` route |
 | `information` | `/partners/` |
 
-`site/src/pages/[preview]/index.astro` owns the 16-family source registry.
+`site/src/pages/[preview]/index.astro` owns the 15-family source registry.
 `check:unified-prototype` reads that registry and the generated hub, then fails on a
 missing, duplicate, misrouted or non-materialized representative. Event Detail uses
-one real specimen; the hub does not enumerate the event catalog. For a real-data
-occurrence specimen the same gate follows the current `EventOccurrenceNav` contract:
-desktop and mobile summaries plus the always-visible practical selector identified by
-`data-occurrence-variant="practical"` and its `event-occurrences__rows` content owner.
-Other full-real checks likewise choose factual specimens from the exact staged
-projection (compatibility grid, breadcrumb, semantic-error media and persisted
-duration forecast). Historical named regressions such as `6686` and `6529` remain in
-their dedicated deterministic packets; their absence from a bounded current-event
-slice is not itself a production defect.
+one real specimen; the hub does not enumerate the event catalog.
 
 The `/dlya-menya/` page is an honest finite cold-start surface. Production
 generation retains it for product navigation but keeps it explicitly noindex
@@ -104,7 +136,7 @@ content. A successful local build or prefix upload never authorizes root
 promotion or a stable calendar rewrite.
 
 The same Astro page set now includes `/festivali/` in production generation.
-Its current catalog is exported from core Fly SQLite rather than
+Its 21-item July–December catalog is exported from core Fly SQLite rather than
 the former hardcoded TypeScript array. Source/status honesty rules, DB/backfill
 ownership and compact one-to-four-card packing are canonical in
 [`festival-timeline.md`](festival-timeline.md). Immutable review artifacts

@@ -55,22 +55,92 @@ export function pageClassForComponent(value) {
   return null;
 }
 
-export function staticSitePageClassFilterIntegration(value) {
-  const pageClasses = normalizeStaticSitePageClasses(value);
-  if (pageClasses[0] === 'all') return null;
+export function normalizeFocusedRoute(value) {
+  let route = String(value || '').trim();
+  if (!route) throw new Error('Focused route cannot be empty');
+  if (!route.startsWith('/')) route = `/${route}`;
+  route = route.replace(/\/+/gu, '/');
+  if (route.includes('..') || route.includes('?') || route.includes('#')) {
+    throw new Error(`Focused route must be a clean pathname: ${value}`);
+  }
+  if (!/\/[^/]+\.[a-z0-9]+$/iu.test(route) && !route.endsWith('/')) route += '/';
+  return route;
+}
+
+export function normalizeStaticSiteFocusedRoutes(value) {
+  if (value === null || value === undefined || value === '') return [];
+  let raw = value;
+  if (typeof value === 'string' && value.trim().startsWith('[')) {
+    try {
+      raw = JSON.parse(value);
+    } catch (error) {
+      throw new Error(`Invalid STATIC_SITE_FOCUSED_ROUTES JSON: ${error.message}`);
+    }
+  }
+  const values = Array.isArray(raw) ? raw : String(raw).split(',');
+  return [...new Set(values.map(normalizeFocusedRoute))];
+}
+
+function entryPathname(entry) {
+  let pathname = String(entry?.pathname || entry?.route?.pathname || '');
+  if (!pathname) return null;
+  if (!pathname.startsWith('/')) pathname = `/${pathname}`;
+  const buildId = String(process.env.PREVIEW_BUILD_ID || '').trim();
+  const base = buildId ? `/${buildId}` : '';
+  if (base && (pathname === base || pathname.startsWith(`${base}/`))) {
+    pathname = pathname.slice(base.length) || '/';
+  }
+  return normalizeFocusedRoute(pathname);
+}
+
+export function filterPrerenderPaths(paths, pageClasses, focusedRoutes = []) {
   const allowed = new Set(['shell', ...pageClasses]);
+  const focused = new Set(normalizeStaticSiteFocusedRoutes(focusedRoutes));
+  const classScoped = paths.filter(({ route }) => allowed.has(pageClassForComponent(route?.component)));
+  if (!focused.size) return classScoped;
+  const kept = classScoped.filter((entry) => {
+    const pathname = entryPathname(entry);
+    return pathname && focused.has(pathname);
+  });
+  if (!kept.some(({ route }) => pageClassForComponent(route?.component) === 'shell')) {
+    throw new Error('Focused preview lost its mandatory __preview/ shell');
+  }
+  return kept;
+}
+
+export function staticSitePageClassFilterIntegration(
+  value,
+  focusedRoutes = process.env.STATIC_SITE_FOCUSED_ROUTES || '',
+) {
+  const pageClasses = normalizeStaticSitePageClasses(value);
+  const focused = normalizeStaticSiteFocusedRoutes(focusedRoutes);
+  if (pageClasses[0] === 'all' && !focused.length) return null;
+  if (pageClasses[0] === 'all' && focused.length) {
+    throw new Error('STATIC_SITE_FOCUSED_ROUTES requires one or more named page classes');
+  }
   return {
-    name: 'kenigevents-static-page-class-filter',
+    name: focused.length
+      ? `kenigevents-static-focused-route:${pageClasses.join(',')}`
+      : 'kenigevents-static-page-class-filter',
     hooks: {
       'astro:build:start': ({ setPrerenderer }) => {
         setPrerenderer((defaultPrerenderer) => ({
           ...defaultPrerenderer,
-          name: `kenigevents-page-classes:${pageClasses.join(',')}`,
+          name: focused.length
+            ? `kenigevents-focused:${pageClasses.join(',')}`
+            : `kenigevents-page-classes:${pageClasses.join(',')}`,
           async getStaticPaths() {
             const paths = await defaultPrerenderer.getStaticPaths();
-            const kept = paths.filter(({ route }) => allowed.has(pageClassForComponent(route.component)));
-            if (!kept.some(({ route }) => pageClassForComponent(route.component) === 'shell')) {
+            const kept = filterPrerenderPaths(paths, pageClasses, focused);
+            if (!kept.some(({ route }) => pageClassForComponent(route?.component) === 'shell')) {
               throw new Error('Page-class preview lost its mandatory __preview/ shell');
+            }
+            if (focused.length) {
+              const generated = new Set(kept.map(entryPathname).filter(Boolean));
+              const missing = focused.filter((route) => !generated.has(route));
+              if (missing.length) {
+                throw new Error(`Focused preview did not materialize requested routes: ${missing.join(', ')}`);
+              }
             }
             return kept;
           },

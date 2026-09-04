@@ -15,6 +15,7 @@
     "build:golden-preview": "node scripts/build-golden-preview.mjs",
     "build:production": "node scripts/build-production.mjs",
     "build:secret-candidate": "node scripts/build-secret-candidate.mjs",
+    "local:focused": "node scripts/run-local-focused-preview.mjs",
     "check:bus-directory": "node scripts/check-bus-transport-directory.mjs",
     "check:rail-directory": "node scripts/check-rail-transport-directory.mjs",
     "check:preview": "node scripts/check-preview.mjs",

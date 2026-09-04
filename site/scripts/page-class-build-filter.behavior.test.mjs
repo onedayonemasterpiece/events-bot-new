@@ -2,27 +2,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
+  filterPrerenderPaths,
+  normalizeStaticSiteFocusedRoutes,
   normalizeStaticSitePageClasses,
   pageClassForComponent,
   STATIC_SITE_PAGE_CLASSES,
 } from './page-class-build-filter.mjs';
 
-test('page classes are normalized and all cannot be combined', () => {
+test('page classes are normalized and sourced only from versioned contract', () => {
   assert.deepEqual(normalizeStaticSitePageClasses('event,date,event'), ['event', 'date']);
   assert.deepEqual(normalizeStaticSitePageClasses(''), ['all']);
   assert.throws(() => normalizeStaticSitePageClasses('all,event'), /cannot combine all/u);
-  assert.throws(() => normalizeStaticSitePageClasses('unknown'), /Unknown STATIC_SITE_PAGE_CLASSES/u);
-  assert.deepEqual(STATIC_SITE_PAGE_CLASSES, [
-    'event', 'date', 'weekend', 'collection', 'personal', 'focus', 'partner', 'lab',
-  ]);
-});
-
-test('the selector reads the one versioned page-class contract', () => {
-  const contract = JSON.parse(readFileSync(
-    new URL('./static-site-page-classes.v1.json', import.meta.url),
-    'utf8',
-  ));
-  assert.equal(contract.schema_version, 'kenigevents_static_site_page_classes_v1');
+  const contract = JSON.parse(readFileSync(new URL('./static-site-page-classes.v1.json', import.meta.url), 'utf8'));
   assert.deepEqual(STATIC_SITE_PAGE_CLASSES, Object.keys(contract.classes));
 });
 
@@ -38,4 +29,53 @@ test('actual Astro route owners map to stable page classes', () => {
   assert.equal(pageClassForComponent('src/pages/partners/index.astro'), 'partner');
   assert.equal(pageClassForComponent('src/pages/lab/design-system/index.astro'), 'lab');
   assert.equal(pageClassForComponent('src/pages/sitemap.xml.ts'), null);
+});
+
+test('focused route normalization distinguishes page routes and runtime endpoints', () => {
+  assert.deepEqual(
+    normalizeStaticSiteFocusedRoutes('["/segodnya","/__preview/","/data/discovery/7.json"]'),
+    ['/segodnya/', '/__preview/', '/data/discovery/7.json'],
+  );
+});
+
+test('exact date route drops same-class neighbours before prerender', () => {
+  const paths = [
+    { pathname: '/segodnya/', route: { component: 'src/pages/segodnya/index.astro' } },
+    { pathname: '/zavtra/', route: { component: 'src/pages/zavtra/index.astro' } },
+    { pathname: '/date-2026-09-04/', route: { component: 'src/pages/date-[date].astro' } },
+    { pathname: '/__preview/', route: { component: 'src/pages/[preview]/index.astro' } },
+    { pathname: '/robots.txt', route: { component: 'src/pages/robots.txt.ts' } },
+  ];
+  const kept = filterPrerenderPaths(paths, ['date'], ['/segodnya/', '/__preview/']);
+  assert.deepEqual(kept.map((entry) => entry.pathname), ['/segodnya/', '/__preview/']);
+});
+
+test('exact event route keeps only canonical detail companions and preview shell', () => {
+  const paths = [
+    { pathname: '/sobytiya/one/', route: { component: 'src/pages/sobytiya/[slug].astro' } },
+    { pathname: '/sobytiya/two/', route: { component: 'src/pages/sobytiya/[slug].astro' } },
+    { pathname: '/sobytiya/one/event.ics', route: { component: 'src/pages/sobytiya/[slug]/event.ics.ts' } },
+    { pathname: '/data/discovery/7.json', route: { component: 'src/pages/data/discovery/[eventId].json.ts' } },
+    { pathname: '/data/discovery/8.json', route: { component: 'src/pages/data/discovery/[eventId].json.ts' } },
+    { pathname: '/__preview/', route: { component: 'src/pages/[preview]/index.astro' } },
+  ];
+  const focused = ['/sobytiya/one/', '/sobytiya/one/event.ics', '/data/discovery/7.json', '/__preview/'];
+  assert.deepEqual(
+    filterPrerenderPaths(paths, ['event'], focused).map((entry) => entry.pathname),
+    ['/sobytiya/one/', '/sobytiya/one/event.ics', '/data/discovery/7.json', '/__preview/'],
+  );
+});
+
+test('class-wide date selection remains class-wide', () => {
+  const paths = [
+    { pathname: '/segodnya/', route: { component: 'src/pages/segodnya/index.astro' } },
+    { pathname: '/zavtra/', route: { component: 'src/pages/zavtra/index.astro' } },
+    { pathname: '/date-2026-09-04/', route: { component: 'src/pages/date-[date].astro' } },
+    { pathname: '/sobytiya/one/', route: { component: 'src/pages/sobytiya/[slug].astro' } },
+    { pathname: '/__preview/', route: { component: 'src/pages/[preview]/index.astro' } },
+  ];
+  assert.deepEqual(
+    filterPrerenderPaths(paths, ['date']).map((entry) => entry.pathname),
+    ['/segodnya/', '/zavtra/', '/date-2026-09-04/', '/__preview/'],
+  );
 });

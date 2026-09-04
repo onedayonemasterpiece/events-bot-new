@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Added: `npm --prefix site run local:focused -- ...` now builds one
+  selected real route or canonical page class in a detached local worktree. It
+  reuses the production preview exporter, page-class selector, Astro preview
+  builder, slice checker and release server; emits source/snapshot/data
+  identities, routes and stage timings; and runs desktop/mobile resource smoke.
+  Fixture and explicit DB modes leave DBs, `dist`, artifacts and publication
+  state outside the repository. Full `real/all` review remains on Review Kaggle,
+  and production candidates remain on the production kernel.
+
 - Fixed: the festival mobile hero no longer permits an emphasized Russian word
   to break or clip mid-word. The route keeps the accepted heading family and
   palette, removes only its narrow `12ch` override, and reuses the established
