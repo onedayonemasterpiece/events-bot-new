@@ -27,3 +27,14 @@ test('unified prototype verifies the current always-visible occurrence selector 
   assert.match(checker, /event-occurrences__rows/u);
   assert.doesNotMatch(checker, /includes\('event-occurrences__schedule'\)/u);
 });
+
+test('full real gate selects current projected event specimens instead of expired ids', async () => {
+  const checker = await read('scripts/check-unified-prototype.mjs');
+
+  assert.match(checker, /const compatibilityPage = eventPages\.find/u);
+  assert.match(checker, /const semanticErrorEvent = eventsData\.events\.find/u);
+  assert.match(checker, /const forecastPage = eventPages\.find/u);
+  assert.match(checker, /data-event-end-basis="forecast"/u);
+  assert.doesNotMatch(checker, /event\.id === 6686/u);
+  assert.doesNotMatch(checker, /event\.id === 6529/u);
+});

@@ -308,22 +308,23 @@ const railPage = eventPages.find(([, content]) => content.includes('data-transpo
 if (!busPage) throw new Error('Fresh real-data build misses a bus-navigation event specimen');
 if (!railPage) throw new Error('Fresh real-data build misses a rail-navigation event specimen');
 
-const event6686 = eventsData.events.find((event) => event.id === 6686);
-const event6529 = eventsData.events.find((event) => event.id === 6529);
-if (!event6686 || !event6529) throw new Error('Fresh real-data build misses the 6686/6529 acceptance regressions');
-const event6686Html = html(`sobytiya/${event6686.slug}/index.html`);
-const event6529Html = html(`sobytiya/${event6529.slug}/index.html`);
-if (!/<div[^>]*data-adaptive-event-card-grid[^>]*data-optimized-event-card-grid|<div[^>]*data-optimized-event-card-grid[^>]*data-adaptive-event-card-grid/u.test(event6686Html)) {
+const compatibilityPage = eventPages.find(([, content]) => /<div[^>]*data-adaptive-event-card-grid[^>]*data-optimized-event-card-grid|<div[^>]*data-optimized-event-card-grid[^>]*data-adaptive-event-card-grid/u.test(content));
+if (!compatibilityPage) {
   throw new Error('Event-detail compatibility grid must expose adaptive and legacy diagnostics on the same root');
 }
-if (!event6686Html.includes('data-product-breadcrumbs') || !event6686Html.includes('data-product-parent-link')) {
+const breadcrumbPage = eventPages.find(([, content]) => content.includes('data-product-breadcrumbs') && content.includes('data-product-parent-link'));
+if (!breadcrumbPage) {
   throw new Error('Deep event page misses desktop semantic breadcrumbs');
 }
-if (event6686Html.includes('crumbs--after-hero')) {
+if (eventPages.some(([, content]) => content.includes('crumbs--after-hero'))) {
   throw new Error('Deep event page regressed to the retired mobile breadcrumb/back row');
 }
-if (!event6686Html.includes('data-selected-media-semantic-status="error"') || !/data-clean-hero-image[^>]*data-protected-crop-fit="contain"/u.test(event6686Html)) {
-  throw new Error('Text-heavy semantic-error media 6686 is not protected by fail-closed contain');
+const semanticErrorEvent = eventsData.events.find((event) => event.image_assets?.some((asset) => asset.media_semantic_status === 'error'));
+if (semanticErrorEvent) {
+  const semanticErrorHtml = html(`sobytiya/${semanticErrorEvent.slug}/index.html`);
+  if (!semanticErrorHtml.includes('data-selected-media-semantic-status="error"') || !/data-clean-hero-image[^>]*data-protected-crop-fit="contain"/u.test(semanticErrorHtml)) {
+    throw new Error(`Text-heavy semantic-error media ${semanticErrorEvent.id} is not protected by fail-closed contain`);
+  }
 }
 const forbiddenDurationServiceCopy = [
   'Экспериментальный прогноз длительности',
@@ -333,17 +334,16 @@ const forbiddenDurationServiceCopy = [
   'confidence',
   'прогноз ИИ',
 ];
-const forecastBasisCount = (event6529Html.match(/data-event-end-basis="forecast"/gu) || []).length;
+const forecastPage = eventPages.find(([, content]) => content.includes('data-event-end-basis="forecast"'));
+if (!forecastPage) throw new Error('Fresh real-data build misses a persisted Smart Update duration specimen');
+const forecastBasisCount = (forecastPage[1].match(/data-event-end-basis="forecast"/gu) || []).length;
 if (forecastBasisCount !== 2
-  || event6529Html.includes('data-event-end-basis="schedule_cutoff"')
-  || !event6529Html.includes('17:50')
-  || !event6529Html.includes('18:56')
-  || event6529Html.includes('06:42')
-  || forbiddenDurationServiceCopy.some((copy) => event6529Html.includes(copy))) {
-  throw new Error('6529 must show the same clean Smart Update forecast on desktop and mobile, without fallback/model copy/next-morning trains');
+  || forecastPage[1].includes('data-event-end-basis="schedule_cutoff"')
+  || forbiddenDurationServiceCopy.some((copy) => forecastPage[1].includes(copy))) {
+  throw new Error(`Forecast specimen ${forecastPage[0]} must show one persisted Smart Update forecast on desktop and mobile without fallback/model copy`);
 }
-if (!event6529Html.includes('data-keyboard-event-navigation-mounted')) {
-  throw new Error('6529 named preview page must mount the reviewed keyboard navigation');
+if (!forecastPage[1].includes('data-keyboard-event-navigation-mounted')) {
+  throw new Error(`Forecast specimen ${forecastPage[0]} must mount the reviewed keyboard navigation`);
 }
 
 let checkedRelatedCards = 0;
@@ -384,4 +384,8 @@ console.log(JSON.stringify({
   occurrenceSpecimen: occurrencePage[0],
   busSpecimen: busPage[0],
   railSpecimen: railPage[0],
+  compatibilitySpecimen: compatibilityPage[0],
+  breadcrumbSpecimen: breadcrumbPage[0],
+  semanticErrorSpecimen: semanticErrorEvent?.slug || null,
+  forecastSpecimen: forecastPage[0],
 }, null, 2));

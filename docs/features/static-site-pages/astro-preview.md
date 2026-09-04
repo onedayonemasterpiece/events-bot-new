@@ -91,6 +91,11 @@ one real specimen; the hub does not enumerate the event catalog. For a real-data
 occurrence specimen the same gate follows the current `EventOccurrenceNav` contract:
 desktop and mobile summaries plus the always-visible practical selector identified by
 `data-occurrence-variant="practical"` and its `event-occurrences__rows` content owner.
+Other full-real checks likewise choose factual specimens from the exact staged
+projection (compatibility grid, breadcrumb, semantic-error media and persisted
+duration forecast). Historical named regressions such as `6686` and `6529` remain in
+their dedicated deterministic packets; their absence from a bounded current-event
+slice is not itself a production defect.
 
 The `/dlya-menya/` page is an honest finite cold-start surface. Production
 generation retains it for product navigation but keeps it explicitly noindex

@@ -5,8 +5,10 @@
 - Fixed: the full real/all unified Preview gate now verifies the current
   always-visible occurrence selector (`practical` variant and row owner)
   instead of a retired `event-occurrences__schedule` class. The exact staged
-  real projection can therefore fail only on an actual selector regression,
-  not on obsolete checker markup.
+  real projection also chooses its compatibility, breadcrumb, semantic-error
+  and duration specimens from current exported events instead of requiring
+  expired historical ids; named deterministic regression packets remain
+  unchanged.
 
 - Fixed: the canonical desktop Editorial action panel now resets obsolete
   hero-grid placement when mounted in its bounded side owner. OCR companion
