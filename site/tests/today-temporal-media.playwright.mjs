@@ -56,7 +56,7 @@ async function visualState(row) {
   const media = row.locator('.event-media');
   await media.waitFor();
   await row.page().waitForFunction(
-    (id) => document.querySelector(`[data-mobile-listing-row][data-event-id="${id}"] .event-media`)?.dataset.mediaState === 'loaded',
+    (id) => document.querySelector(`[data-mobile-listing-row][data-event-id="${id}"] .event-media`)?.dataset.mediaFrameResourceState === 'loaded',
     await row.getAttribute('data-event-id'),
   );
   await row.page().waitForTimeout(250);
