@@ -123,6 +123,31 @@ const publishResourceState = (frame, state, fallbackReason) => {
   }
 };
 
+const clearFailedImageResource = (image) => {
+  if (!(image instanceof HTMLImageElement)) return;
+  image.removeAttribute('srcset');
+  image.removeAttribute('sizes');
+  image.removeAttribute('src');
+};
+
+const bindImageResourceLifecycle = (frame, image, stateTarget = frame, isCurrent = () => true) => {
+  if (!(frame instanceof HTMLElement) || !(image instanceof HTMLImageElement)) return;
+  if (image.dataset.mediaFrameResourceLifecycleBound === 'true') return;
+  image.dataset.mediaFrameResourceLifecycleBound = 'true';
+
+  const settle = (state) => {
+    if (!isCurrent()) return;
+    const loaded = state === 'loaded' && image.naturalWidth > 0 && image.naturalHeight > 0;
+    if (loaded && frame.dataset.mediaFrameResourceState === 'broken') return;
+    if (stateTarget instanceof HTMLElement) stateTarget.dataset.imageState = loaded ? 'loaded' : 'error';
+    publishResourceState(frame, loaded ? 'loaded' : 'error', 'resource_load_error');
+    if (!loaded) clearFailedImageResource(image);
+  };
+
+  image.addEventListener('load', () => settle('loaded'));
+  image.addEventListener('error', () => settle('error'));
+};
+
 const deckManifestFor = (deck) => parseArray(deck?.dataset?.deckManifest);
 
 const syncDeckFrame = (frame) => {
@@ -135,8 +160,11 @@ const syncDeckFrame = (frame) => {
     loading: frame.querySelector('[data-deck-image]')?.getAttribute('loading') || 'lazy',
     interactionOwner: 'caller',
   });
+  const image = frame.querySelector('[data-deck-image]');
+  bindImageResourceLifecycle(frame, image, frame, () => frame.dataset.deckVisual === 'media');
   const visual = frame.dataset.deckVisual;
   const state = visual === 'depth-tail' ? 'depth' : frame.dataset.imageState || 'idle';
+  if (state === 'error') clearFailedImageResource(image);
   publishResourceState(frame, state, visual === 'depth-tail' ? 'deck_depth_tail' : undefined);
 };
 
@@ -213,6 +241,12 @@ const matchingGalleryAsset = (manifest, image) => {
 const applyGalleryResource = (media, image, asset) => {
   if (!(media instanceof HTMLElement) || !(image instanceof HTMLImageElement)) return;
   publishFrame(media, 'exhibitions-gallery', asset || {}, { loading: 'interactive', interactionOwner: 'caller' });
+  const resourceState = media.dataset.imageState || 'idle';
+  if (resourceState === 'error') {
+    clearFailedImageResource(image);
+    publishResourceState(media, 'error', 'resource_load_error');
+    return;
+  }
   const srcset = String(asset?.srcset || '').trim();
   if (srcset) {
     if (image.getAttribute('srcset') !== srcset) image.setAttribute('srcset', srcset);
@@ -223,7 +257,7 @@ const applyGalleryResource = (media, image, asset) => {
   }
   if (finitePositive(asset?.width)) image.width = Number(asset.width);
   if (finitePositive(asset?.height)) image.height = Number(asset.height);
-  publishResourceState(media, media.dataset.imageState || 'idle', 'resource_load_error');
+  publishResourceState(media, resourceState, 'resource_load_error');
 };
 
 const bindGallery = (root) => {
@@ -239,6 +273,7 @@ const bindGallery = (root) => {
   skeleton?.setAttribute('data-media-frame-placeholder', '');
   error?.setAttribute('data-media-frame-fallback', '');
   galleryState.set(dialog, { manifest: [] });
+  bindImageResourceLifecycle(media, image, media);
 
   const sync = () => {
     const state = galleryState.get(dialog) || { manifest: [] };
