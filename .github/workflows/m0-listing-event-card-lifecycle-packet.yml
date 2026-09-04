@@ -1,0 +1,51 @@
+name: M0 ListingEventCard lifecycle packet
+
+on:
+  push:
+    branches:
+      - work/ui-normalization-m0-event-card-factual-fallback-20260904
+    paths:
+      - site/src/components/listings/ListingEventCard.astro
+      - site/tests/listing-event-card-media-fallback.test.mjs
+      - .github/workflows/m0-listing-event-card-lifecycle-packet.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m0-listing-event-card-lifecycle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  focused-packet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch commit
+        uses: actions/checkout@v4
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run exact M0 focused packet
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test \
+            tests/listing-event-card-media-fallback.test.mjs \
+            tests/m0-event-card-fallback-anatomy.test.mjs \
+            tests/m0-event-card-media-frame-resource-state.test.mjs \
+            tests/event-card-control-target.test.mjs \
+            tests/adaptive-event-card-grid.test.mjs \
+            tests/optimized-grid-adapter.test.mjs \
+            tests/related-card-packer-inputs.test.mjs \
+            tests/ui-normalization-m0-contract.test.mjs
+          npm run check:design-system-production-surfaces
+
+      - name: Verify clean patch shape
+        shell: bash
+        run: git diff --check
