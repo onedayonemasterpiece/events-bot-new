@@ -58,6 +58,37 @@ regression contract for
 The reviewer enters through `/<id>/__preview/`; that hub owns the page-type
 inventory and links only targets inside the same prefix. It must state that the
 integrated Search visual is not acceptance of the live auth/backend journey.
+
+## Owner-facing Preview archetype inventory
+
+The existing `/<id>/__preview/` hub must render exactly one prefix-local
+representative link for each family below. Extra product and QA links may remain,
+but they do not satisfy this coverage gate and do not receive the
+`data-owner-archetype-family` marker.
+
+| Family ID | Representative route |
+|---|---|
+| `home` | `/` |
+| `today` | `/segodnya/` |
+| `tomorrow` | `/zavtra/` |
+| `weekend` | `/vyhodnye/` |
+| `popular` | `/populyarnoe/` |
+| `collections` | `/podborki/besplatnye-sobytiya/` |
+| `festivals` | `/festivali/` |
+| `exhibitions` | `/vystavki/` |
+| `favorites` | `/izbrannoe/` |
+| `search` | `/poisk/` |
+| `for-me` | `/dlya-menya/` |
+| `focus-group` | `/fokus-gruppa/` |
+| `artifacts` | `/artefakty/` |
+| `event-detail` | one current real `/sobytiya/{slug}/` route |
+| `information` | `/partners/` |
+
+`site/src/pages/[preview]/index.astro` owns the 15-family source registry.
+`check:unified-prototype` reads that registry and the generated hub, then fails on a
+missing, duplicate, misrouted or non-materialized representative. Event Detail uses
+one real specimen; the hub does not enumerate the event catalog.
+
 The `/dlya-menya/` page is an honest finite cold-start surface. Production
 generation retains it for product navigation but keeps it explicitly noindex
 and outside the sitemap; it is not presented as server-personalized SEO

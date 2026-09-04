@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Changed: the existing immutable Preview hub now exposes one direct
+  representative link for all 15 owner-facing archetype families, including
+  Home, Favorites, Focus Group and Artifacts. The unified prototype gate now
+  derives coverage from the source registry and rejects missing, duplicate,
+  misrouted or non-materialized representatives.
+
 - Fixed Review Preview Kaggle starvation: the static-site runner now has a
   validated private review-preview execution lane with its own staged kernel
   ref, local lock, scratch cleanup scope and status resource lease, while the
