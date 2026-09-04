@@ -1,0 +1,27 @@
+name: Astro family SoT rebase readback
+
+on:
+  push:
+    paths:
+      - '.github/workflows/astro-family-sot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload exact trunk files needed for rebase
+        uses: actions/upload-artifact@v4
+        with:
+          name: astro-family-sot-rebase-readback
+          path: |
+            CHANGELOG.md
+            docs/features/static-site-pages/design-system/README.md
+            site/src/components/DesktopEventPage.astro
+          if-no-files-found: error
+          retention-days: 1
