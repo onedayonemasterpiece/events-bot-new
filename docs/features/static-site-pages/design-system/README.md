@@ -157,6 +157,12 @@ The close glyph maps to the canonical 24 px action-icon role, preserving its
 existing rendered size while keeping the product-wide four-size icon system.
 Queueing, announcements, timing and placement remain owned by the component.
 
+`WeatherDateContext` consumes its cross-route weather roles for desktop,
+compact and mobile surfaces, including colors, borders, radii, minimum heights
+and both icon tiers. The location glyph remains the 24 px action size; the
+former 15 px water glyph is normalized to the canonical 16 px inline size.
+Weather availability, loading and degraded-state behavior do not change.
+
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed: the shared date/weather context now consumes its established
+  cross-route surface, state, shape, height and icon roles; its water glyph is
+  normalized from a one-off 15 px copy to the canonical 16 px inline icon size.
+
 - Changed: the shared mobile toast now consumes its established shell color,
   elevation, shape, touch-target and canonical action-icon roles instead of
   local copies, without changing its rendering, queueing or announcements.
