@@ -1,0 +1,469 @@
+{
+  "schema": "kenigevents.astro-family-registry.v1",
+  "version": "1.0.0",
+  "source_root": "site/src",
+  "generated_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
+  "production_route_excludes": [
+    "site/src/pages/lab/**",
+    "site/src/pages/[preview]/**",
+    "site/src/pages/404.astro",
+    "site/src/pages/500.astro"
+  ],
+  "families": [
+    {
+      "id": "EventCard",
+      "version": 2,
+      "astro_root": "site/src/components/EventCard.astro",
+      "style_owners": [
+        "site/src/components/event-card.css"
+      ],
+      "variants": [
+        "overlay-controls",
+        "split-actions"
+      ],
+      "states": [
+        "runtime-template",
+        "packed-row",
+        "mobile-flow",
+        "calendar-eligible",
+        "media-fallback",
+        "media-visual",
+        "media-document",
+        "media-unknown",
+        "consumer-metadata"
+      ],
+      "nested_families": [
+        "MediaFrame"
+      ],
+      "runtime_factories": [
+        {
+          "path": "site/src/layouts/EventLayout.astro",
+          "symbols": [
+            "createEventCardElement",
+            "KenigEventsCreateEventCard",
+            "KenigEventsRenderEventCard"
+          ]
+        }
+      ],
+      "runtime_clients": [
+        {
+          "path": "site/src/components/FavoritesSurface.astro",
+          "symbols": [
+            "KenigEventsCreateEventCard"
+          ]
+        },
+        {
+          "path": "site/src/components/AuthorizedEventSearch.astro",
+          "symbols": [
+            "KenigEventsRenderEventCard"
+          ]
+        }
+      ],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "type CardVariant = 'overlay-controls' \\| 'split-actions';",
+          "values": [
+            "overlay-controls",
+            "split-actions"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "const cardState = \\[\\s*runtimeTemplate && 'runtime-template',\\s*desktopRelatedCrop && 'packed-row',\\s*mobileFlowMedia && 'mobile-flow',\\s*canAddToCalendar && 'calendar-eligible',\\s*`media-\\$\\{mediaFrameKind\\}`,\\s*Object\\.keys\\(safeRootAttributes\\)\\.length > 0 && 'consumer-metadata',\\s*\\]\\.filter\\(Boolean\\)\\.join\\(' '\\) \\|\\| undefined;",
+          "values": [
+            "runtime-template",
+            "packed-row",
+            "mobile-flow",
+            "calendar-eligible",
+            "media-fallback",
+            "media-visual",
+            "media-document",
+            "media-unknown",
+            "consumer-metadata"
+          ]
+        },
+        {
+          "kind": "runtime_declaration",
+          "path": "site/src/env.d.ts",
+          "symbols": [
+            "KenigEventsCreateEventCard",
+            "KenigEventsRenderEventCard"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingEventCard",
+      "version": 9,
+      "astro_root": "site/src/components/listings/ListingEventCard.astro",
+      "style_owners": [],
+      "variants": [
+        "regular",
+        "weekend",
+        "popular"
+      ],
+      "states": [
+        "priority",
+        "supplemental",
+        "temporal-label",
+        "social-proof",
+        "identity",
+        "free-admission",
+        "adaptive-crop",
+        "media-fallback",
+        "media-visual",
+        "media-document",
+        "media-unknown",
+        "consumer-metadata"
+      ],
+      "nested_families": [
+        "MediaFrame"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "density\\?: 'regular' \\| 'weekend' \\| 'popular';",
+          "values": [
+            "regular",
+            "weekend",
+            "popular"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "const cardState = \\[\\s*priority && 'priority',\\s*supplemental && 'supplemental',\\s*temporalLabel && 'temporal-label',\\s*hasSocialProof && 'social-proof',\\s*totalIdentityCount > 0 && 'identity',\\s*showFree && 'free-admission',\\s*image\\.adaptiveCrop && 'adaptive-crop',\\s*`media-\\$\\{mediaFrameKind\\}`,\\s*Object\\.keys\\(safeRootAttributes\\)\\.length > 0 && 'consumer-metadata',\\s*\\]\\.filter\\(Boolean\\)\\.join\\(' '\\) \\|\\| undefined;",
+          "values": [
+            "priority",
+            "supplemental",
+            "temporal-label",
+            "social-proof",
+            "identity",
+            "free-admission",
+            "adaptive-crop",
+            "media-fallback",
+            "media-visual",
+            "media-document",
+            "media-unknown",
+            "consumer-metadata"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MediaFrame",
+      "version": 1,
+      "astro_root": "site/src/components/media-frame.css",
+      "style_owners": [
+        "site/src/components/media-frame.css"
+      ],
+      "variants": [
+        "visual",
+        "document",
+        "fallback",
+        "unknown"
+      ],
+      "states": [
+        "pending",
+        "loaded",
+        "fallback",
+        "broken"
+      ],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "non_astro_root",
+          "reason": "MediaFrame is a distributed data protocol with one canonical CSS paint owner."
+        },
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Consumers publish data-media-frame-* on their existing semantic roots; no wrapper component is introduced."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "AdaptiveEventCardGrid",
+      "version": 1,
+      "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
+      "style_owners": [
+        "site/src/components/AdaptiveEventCardGrid.astro"
+      ],
+      "variants": [
+        "flow-1-column",
+        "flow-2-column",
+        "flow-3-column",
+        "flow-4-column",
+        "flow-5-column",
+        "flow-6-column",
+        "packed-1-column",
+        "packed-2-column",
+        "packed-3-column",
+        "packed-4-column",
+        "packed-5-column",
+        "packed-6-column"
+      ],
+      "states": [
+        "responsive-progressive",
+        "responsive-stack",
+        "legacy-adapter",
+        "personal-feed",
+        "discovery-feed",
+        "runtime-managed",
+        "runtime-visible-only",
+        "remainder-complete",
+        "remainder-stretch-N-of-M",
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "EventCard"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "const gridVariant = `\\$\\{mode\\}-\\$\\{rowSize\\}-column`;",
+          "values": [
+            "flow-1-column",
+            "flow-2-column",
+            "flow-3-column",
+            "flow-4-column",
+            "flow-5-column",
+            "flow-6-column",
+            "packed-1-column",
+            "packed-2-column",
+            "packed-3-column",
+            "packed-4-column",
+            "packed-5-column",
+            "packed-6-column"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "const gridState = \\[gridBaseState, `remainder-\\$\\{initialRemainderVariant\\}`, initialRuntimeState\\]\\.filter\\(Boolean\\)\\.join\\(' '\\) \\|\\| undefined;",
+          "values": [
+            "responsive-progressive",
+            "responsive-stack",
+            "legacy-adapter",
+            "personal-feed",
+            "discovery-feed",
+            "runtime-managed",
+            "runtime-visible-only",
+            "remainder-complete",
+            "remainder-stretch-N-of-M",
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "DateListingSurface",
+      "version": 1,
+      "astro_root": "site/src/components/listings/DateListingSurface.astro",
+      "style_owners": [],
+      "variants": [
+        "today",
+        "tomorrow",
+        "date"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "ListingEventCard"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "kind: 'today' \\| 'tomorrow' \\| 'date';",
+          "values": [
+            "today",
+            "tomorrow",
+            "date"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{events\\.length \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "WeekendListingSurface",
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendListingSurface.astro",
+      "style_owners": [
+        "site/src/components/listings/WeekendListingSurface.astro"
+      ],
+      "variants": [
+        "current",
+        "dated"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "ListingEventCard"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "routeVariant\\?: 'current' \\| 'dated';",
+          "values": [
+            "current",
+            "dated"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{events\\.length \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "PopularListingSurface",
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularListingSurface.astro",
+      "style_owners": [],
+      "variants": [
+        "social-signal-groups"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "ListingEventCard",
+        "AdaptiveEventCardGrid"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{visibleEvents\\.length \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ExhibitionsPersonalSurface",
+      "version": 1,
+      "astro_root": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "style_owners": [
+        "site/src/components/ExhibitionsPersonalSurface.astro"
+      ],
+      "variants": [
+        "ranked-personal-catalog"
+      ],
+      "states": [
+        "personal",
+        "all-topics",
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "MediaFrame"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{newItems\\.length \\+ priorityItems\\.length \\+ tailItems\\.length > 0 \\? 'personal all-topics populated' : 'personal all-topics empty'\\}",
+          "values": [
+            "personal",
+            "all-topics",
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ShellNavigation",
+      "version": 1,
+      "astro_root": "site/src/layouts/EventLayout.astro",
+      "style_owners": [
+        "site/src/layouts/EventLayout.astro"
+      ],
+      "variants": [
+        "top-standard",
+        "top-contextual",
+        "top-immersive",
+        "bottom-nav",
+        "bottom-cta",
+        "bottom-none"
+      ],
+      "states": [],
+      "nested_families": [
+        "EventCard"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The document shell spans html, body, header and navigation roots; a synthetic wrapper would change layout and landmarks."
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "export type MobileTopMode = 'standard' \\| 'contextual' \\| 'immersive';[\\s\\S]*export type MobileBottomMode = 'nav' \\| 'cta' \\| 'none';",
+          "values": [
+            "top-standard",
+            "top-contextual",
+            "top-immersive",
+            "bottom-nav",
+            "bottom-cta",
+            "bottom-none"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    }
+  ]
+}
