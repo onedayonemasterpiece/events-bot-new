@@ -53,6 +53,10 @@ Astro's global `trailingSlash: 'always'` also appends `/` to prerender entry
 pathnames for `.json` and `.ics` endpoints. The focused selector canonicalizes
 those entries back to extension-final asset paths before matching, so an exact
 event slice cannot silently omit its discovery manifest or calendar companion.
+The browser smoke ignores only Chromium requests explicitly marked
+`sec-purpose: prefetch` for intentionally excluded neighbour pages; HTTP errors
+for the selected document, owned runtime endpoints, scripts and fetches remain
+fatal.
 
 The command prints source/snapshot/data identities, selected owner source,
 generated routes, timings and browser results. It never publishes. Full

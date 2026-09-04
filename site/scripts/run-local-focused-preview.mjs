@@ -298,6 +298,13 @@ export function localFocusedBrowserEpoch(currentDate) {
   return epoch;
 }
 
+export function requestIsSpeculativePrefetch(request) {
+  if (request?.resourceType?.() !== 'other') return false;
+  const headers = request?.headers?.() || {};
+  const purpose = String(headers['sec-purpose'] || headers.purpose || '').toLowerCase();
+  return purpose.split(/[;,\s]+/u).includes('prefetch');
+}
+
 async function loadStagedBrowserModules(stagedSite) {
   const require = createRequire(join(stagedSite, 'package.json'));
   const playwrightEntry = require.resolve('playwright');
@@ -338,7 +345,11 @@ export async function smokeFocusedRoute({ stagedSite, buildRoot, buildId, route,
         });
       }
       page.on('response', (response) => {
-        if (response.url().startsWith(server.origin) && response.status() >= 400) failures.push(`${response.status()} ${response.url()}`);
+        if (
+          response.url().startsWith(server.origin)
+          && response.status() >= 400
+          && !requestIsSpeculativePrefetch(response.request())
+        ) failures.push(`${response.status()} ${response.url()}`);
       });
       page.on('pageerror', (error) => failures.push(`pageerror ${error.message}`));
       const expectedPath = `/${buildId}${route}`.replace(/\/+/gu, '/');

@@ -7,6 +7,7 @@ import {
   listProducedPaths,
   localFocusedBrowserEpoch,
   parseLocalFocusedArgs,
+  requestIsSpeculativePrefetch,
   resolvePlaywrightApi,
   resolvePageClass,
 } from './run-local-focused-preview.mjs';
@@ -71,4 +72,15 @@ test('browser smoke is pinned to the immutable build date', () => {
   assert.equal(new Date(epoch).toISOString(), '2026-07-23T10:00:00.000Z');
   assert.throws(() => localFocusedBrowserEpoch('2026-02-31'), /Invalid local focused browser date/u);
   assert.throws(() => localFocusedBrowserEpoch('today'), /Invalid local focused browser date/u);
+});
+
+test('exact-route smoke distinguishes speculative neighbour prefetch from owned requests', () => {
+  const request = (resourceType, headers) => ({
+    resourceType: () => resourceType,
+    headers: () => headers,
+  });
+  assert.equal(requestIsSpeculativePrefetch(request('other', { 'sec-purpose': 'prefetch' })), true);
+  assert.equal(requestIsSpeculativePrefetch(request('other', { purpose: 'prefetch' })), true);
+  assert.equal(requestIsSpeculativePrefetch(request('document', { 'sec-purpose': 'prefetch' })), false);
+  assert.equal(requestIsSpeculativePrefetch(request('fetch', {})), false);
 });

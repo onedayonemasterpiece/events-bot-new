@@ -5,6 +5,9 @@
 - Fixed: exact local event-route generation now canonicalizes Astro's
   trailing-slash JSON/ICS prerender entries, retaining the required discovery
   manifest and calendar companion instead of dropping both from the slice.
+- Fixed: exact-route browser smoke now distinguishes speculative prefetches of
+  deliberately excluded neighbour pages from failures of owned page resources,
+  so a one-page event slice remains strict and independently executable.
 
 - Changed: event occurrence navigation now consumes its established
   event-detail occurrence color, surface, border, radius and elevation roles
