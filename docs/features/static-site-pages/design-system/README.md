@@ -130,3 +130,18 @@ variables outside that namespace remain in the census but are not promoted to a
 second global design-token authority. Any intentionally unresolved legacy
 boundary or shared global owner is an explicit, narrowly documented registry
 entry; an entry becomes an error once it is no longer needed.
+
+## Iconography census boundary
+
+`site/scripts/check-design-system-iconography-contract.mjs` scans all relevant
+source formats for canonical `Icon` / `SocialIcon` consumers and SVG asset
+references. Its raw-inline-SVG gap is deliberately narrower: it counts rendered
+`<svg>` elements only in `.astro` source, matching the contract's
+`inline-svg-in-astro` discovery rule. Generated JSON graphs, checker regexes and
+serialized runtime markup therefore cannot masquerade as product icon owners.
+
+```bash
+cd site
+node scripts/check-design-system-iconography-contract.mjs
+node --test scripts/iconography-contract.behavior.test.mjs
+```

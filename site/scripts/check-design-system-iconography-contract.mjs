@@ -142,7 +142,13 @@ const svgReferences = [];
 for (const file of sourceFiles) {
   const source = await readFile(file, 'utf8');
   const relative = rel(file);
-  const inlineSvgCount = (source.match(/<svg\b/gu) || []).length;
+  // The contract's discovery surface is specifically "inline-svg-in-astro".
+  // Non-Astro sources can legitimately contain regexes, generated source
+  // excerpts or serialized markup; counting those strings as rendered inline
+  // icons produces false product gaps (for example in generated impact graphs).
+  const inlineSvgCount = path.extname(file) === '.astro'
+    ? (source.match(/<svg\b/gu) || []).length
+    : 0;
   const uiUsage = staticComponentNames(source, 'Icon');
   const socialUsage = staticComponentNames(source, 'SocialIcon');
   const fileSvgReferences = referencedSvgPaths(source);
