@@ -1,0 +1,245 @@
+name: FR0 MediaFrame failed-resource saturation
+
+on:
+  push:
+    branches:
+      - work/ui-normalization-fr0-20260903
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fr0-mediaframe-failed-resource-saturation-20260904
+  cancel-in-progress: false
+
+jobs:
+  patch-test-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/ui-normalization-fr0-20260903
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply bounded FR0 production and regression changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_line(path: str, prefix: str, replacement: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              lines = text.splitlines(keepends=True)
+              indexes = [index for index, line in enumerate(lines) if line.startswith(prefix)]
+              if len(indexes) != 1:
+                  raise SystemExit(f'{path}: expected one line starting with {prefix!r}, found {len(indexes)}')
+              newline = '\n' if lines[indexes[0]].endswith('\n') else ''
+              lines[indexes[0]] = replacement + newline
+              target.write_text(''.join(lines), encoding='utf-8')
+
+          def replace_block(path: str, start_marker: str, end_marker: str, replacement: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              start = text.find(start_marker)
+              end = text.find(end_marker, start + len(start_marker))
+              if start < 0 or end < 0:
+                  raise SystemExit(f'{path}: bounded markers not found: {start_marker!r} .. {end_marker!r}')
+              if text.find(start_marker, start + len(start_marker)) >= 0:
+                  raise SystemExit(f'{path}: start marker is not unique: {start_marker!r}')
+              target.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
+
+          replace_line(
+              'site/src/components/EventHero.astro',
+              'const primaryMediaFrameImageErrorHandler = ',
+              '''const primaryMediaFrameImageErrorHandler = `const frame=this.closest('[data-media-frame][data-media-frame-contract="v1"]');if(!frame)return;this.dataset.mediaFrameFailed='true';for(const attribute of ['srcset','sizes','src'])this.removeAttribute(attribute);frame.dataset.mediaFrameResourceState='broken';frame.dataset.mediaFrameKind='fallback';frame.dataset.mediaFrameFit='contain';frame.dataset.mediaFrameCropPermission='forbidden';frame.dataset.mediaFrameCropReason='resource_load_error';frame.dataset.mediaFrameObjectPosition='50% 50%';frame.dataset.mediaFrameFocalPosition='50% 50%';frame.style.setProperty('--media-frame-object-position','50% 50%');frame.setAttribute('data-media-frame-fallback','');`;''',
+          )
+
+          replace_line(
+              'site/src/components/EventMediaRail.astro',
+              'const mediaFrameImageErrorHandler = ',
+              '''const mediaFrameImageErrorHandler = `const frame=this.closest('[data-media-frame][data-media-frame-contract="v1"]');if(!frame)return;this.dataset.mediaFrameFailed='true';for(const attribute of ['srcset','sizes','src'])this.removeAttribute(attribute);this.removeAttribute('data-thumbnail-src');this.removeAttribute('data-thumbnail-srcset');frame.dataset.mediaFrameResourceState='broken';frame.dataset.mediaFrameKind='fallback';frame.dataset.mediaFrameFit='contain';frame.dataset.mediaFrameCropPermission='forbidden';frame.dataset.mediaFrameCropReason='resource_load_error';frame.dataset.mediaFrameObjectPosition='50% 50%';frame.dataset.mediaFrameFocalPosition='50% 50%';frame.style.setProperty('--media-frame-object-position','50% 50%');frame.setAttribute('data-media-frame-fallback','');`;''',
+          )
+
+          replace_block(
+              'site/src/components/exhibitionsMediaFrameBridge.mjs',
+              'const clearFailedImageResource = (image) => {',
+              '\n\nconst bindImageResourceLifecycle =',
+              '''const clearFailedImageResource = (image) => {
+            if (!(image instanceof HTMLImageElement)) return;
+            image.closest('picture')?.querySelectorAll('source').forEach((source) => {
+              source.removeAttribute('srcset');
+              source.removeAttribute('sizes');
+            });
+            image.removeAttribute('srcset');
+            image.removeAttribute('sizes');
+            image.removeAttribute('src');
+          };''',
+          )
+
+          replace_block(
+              'site/src/components/exhibitionsMediaFrameBridge.mjs',
+              'const bindMedallions = (root) => {',
+              '\n\nconst galleryState = new WeakMap();',
+              '''const bindMedallions = (root) => {
+            root.querySelectorAll('[data-exhibition-medallion]').forEach((seal) => {
+              if (!(seal instanceof HTMLElement) || seal.dataset.mediaFrameBridgeBound === 'true') return;
+              seal.dataset.mediaFrameBridgeBound = 'true';
+              const image = seal.querySelector('[data-media-frame-image]');
+              publishFrame(seal, 'exhibitions-medallion', {
+                mediaRole: seal.dataset.mediaFrameRole || 'organizer',
+                textMode: 'visual_only',
+                treatment: 'photo-cover',
+                safeCrop: true,
+                cropReason: 'institutional_identity_square',
+                objectPosition: '50% 50%',
+                width: 44,
+                height: 44,
+                sourceRatio: 1,
+                presentationRatio: 1,
+              }, { loading: image?.getAttribute('loading') || 'lazy', interactionOwner: 'none' });
+              if (image instanceof HTMLImageElement) {
+                bindImageResourceLifecycle(seal, image, seal);
+                if (image.complete) {
+                  const loaded = image.naturalWidth > 0 && image.naturalHeight > 0;
+                  seal.dataset.imageState = loaded ? 'loaded' : 'error';
+                  if (!loaded) clearFailedImageResource(image);
+                  publishResourceState(seal, loaded ? 'loaded' : 'error', 'resource_load_error');
+                } else {
+                  seal.dataset.imageState = 'loading';
+                  publishResourceState(seal, 'loading', 'resource_load_error');
+                }
+              } else {
+                seal.dataset.imageState = 'error';
+                publishResourceState(seal, 'error', 'resource_load_error');
+              }
+            });
+          };''',
+          )
+
+          regression = r'''import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          import test from 'node:test';
+
+          const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+
+          const templateHandler = (source, name) => {
+            const marker = `const ${name} = \``;
+            const start = source.indexOf(marker);
+            const end = source.indexOf('`;', start + marker.length);
+            assert.ok(start >= 0, `missing handler ${name}`);
+            assert.ok(end > start, `unterminated handler ${name}`);
+            return source.slice(start + marker.length, end);
+          };
+
+          const block = (source, startMarker, endMarker) => {
+            const start = source.indexOf(startMarker);
+            const end = source.indexOf(endMarker, start + startMarker.length);
+            assert.ok(start >= 0, `missing block ${startMarker}`);
+            assert.ok(end > start, `unterminated block ${startMarker}`);
+            return source.slice(start, end);
+          };
+
+          test('EventHero and EventMediaRail clear failed URL candidates before publishing terminal fallback', async () => {
+            const [hero, rail] = await Promise.all([
+              read('src/components/EventHero.astro'),
+              read('src/components/EventMediaRail.astro'),
+            ]);
+            const heroError = templateHandler(hero, 'primaryMediaFrameImageErrorHandler');
+            const railError = templateHandler(rail, 'mediaFrameImageErrorHandler');
+            const heroLoad = templateHandler(hero, 'primaryMediaFrameImageLoadHandler');
+            const railLoad = templateHandler(rail, 'mediaFrameImageLoadHandler');
+
+            for (const [label, handler] of [['EventHero', heroError], ['EventMediaRail', railError]]) {
+              const cleanup = "for(const attribute of ['srcset','sizes','src'])this.removeAttribute(attribute)";
+              assert.ok(handler.includes(cleanup), `${label} must remove failed responsive resources`);
+              assert.ok(handler.indexOf(cleanup) < handler.indexOf("frame.dataset.mediaFrameResourceState='broken'"),
+                `${label} cleanup must precede terminal broken publication`);
+              for (const invariant of [
+                "frame.dataset.mediaFrameKind='fallback'",
+                "frame.dataset.mediaFrameFit='contain'",
+                "frame.dataset.mediaFrameCropPermission='forbidden'",
+                "frame.dataset.mediaFrameCropReason='resource_load_error'",
+                "frame.dataset.mediaFrameObjectPosition='50% 50%'",
+                "frame.dataset.mediaFrameFocalPosition='50% 50%'",
+                "frame.style.setProperty('--media-frame-object-position','50% 50%')",
+                "frame.setAttribute('data-media-frame-fallback','')",
+              ]) assert.ok(handler.includes(invariant), `${label} missing ${invariant}`);
+              assert.doesNotMatch(handler, /\.style\.(?:objectFit|objectPosition)\s*=/u,
+                `${label} error handling must not become a second paint owner`);
+            }
+
+            assert.ok(heroLoad.includes("this.dataset.mediaFrameFailed==='true'"));
+            assert.ok(railLoad.includes("this.dataset.mediaFrameFailed==='true'"));
+            assert.ok(railError.includes("this.removeAttribute('data-thumbnail-src')"));
+            assert.ok(railError.includes("this.removeAttribute('data-thumbnail-srcset')"));
+          });
+
+          test('exhibitions medallion reuses the durable lifecycle binder and clears picture candidates', async () => {
+            const [bridge, row] = await Promise.all([
+              read('src/components/exhibitionsMediaFrameBridge.mjs'),
+              read('src/components/ExhibitionPrototypeRow.astro'),
+            ]);
+            const cleanup = block(bridge, 'const clearFailedImageResource =', 'const bindImageResourceLifecycle =');
+            const medallions = block(bridge, 'const bindMedallions =', 'const galleryState = new WeakMap();');
+
+            for (const invariant of [
+              "image.closest('picture')?.querySelectorAll('source')",
+              "source.removeAttribute('srcset')",
+              "source.removeAttribute('sizes')",
+              "image.removeAttribute('srcset')",
+              "image.removeAttribute('sizes')",
+              "image.removeAttribute('src')",
+            ]) assert.ok(cleanup.includes(invariant), `picture cleanup missing ${invariant}`);
+
+            for (const invariant of [
+              'bindImageResourceLifecycle(seal, image, seal)',
+              'image.naturalWidth > 0 && image.naturalHeight > 0',
+              "seal.dataset.imageState = loaded ? 'loaded' : 'error'",
+              'if (!loaded) clearFailedImageResource(image)',
+              "publishResourceState(seal, loaded ? 'loaded' : 'error', 'resource_load_error')",
+              "publishResourceState(seal, 'loading', 'resource_load_error')",
+            ]) assert.ok(medallions.includes(invariant), `medallion lifecycle missing ${invariant}`);
+            assert.doesNotMatch(medallions, /image\.addEventListener\(/u,
+              'medallion must not keep a second bespoke listener implementation');
+            assert.match(row, /data-exhibition-medallion[\s\S]*?<span class="ex-deck__medallion-fallback" data-media-frame-fallback[\s\S]*?<picture>/u,
+              'medallion fallback must remain a direct child before picture resources');
+          });
+          '''
+          Path('site/tests/fr0-media-frame-failed-resource-cleanup.test.mjs').write_text(
+              '\n'.join(line[10:] if line.startswith('          ') else line for line in regression.splitlines()) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Run focused FR0 source packet
+        working-directory: site
+        run: |
+          node --test \
+            tests/fr0-media-frame-failed-resource-cleanup.test.mjs \
+            tests/fr0-event-hero-resource-fallback.test.mjs \
+            tests/fr0-media-rail-fallback-contract.test.mjs \
+            tests/fr0-media-rail-clip-owner.test.mjs \
+            tests/fr0-exhibitions-post-load-resource-failure.test.mjs \
+            tests/fr0-exhibitions-media-frame-contract.test.mjs \
+            tests/m0-event-hero-media-frame-contract.test.mjs
+
+      - name: Publish clean product branch
+        shell: bash
+        run: |
+          git config user.name "fr0-normalization-bot"
+          git config user.email "fr0-normalization-bot@users.noreply.github.com"
+          git rm .github/workflows/fr0-mediaframe-failed-resource-saturation-20260904.yml
+          git add \
+            site/src/components/EventHero.astro \
+            site/src/components/EventMediaRail.astro \
+            site/src/components/exhibitionsMediaFrameBridge.mjs \
+            site/tests/fr0-media-frame-failed-resource-cleanup.test.mjs
+          git diff --cached --check
+          git commit -m "fix(ui): clear failed MediaFrame resources"
+          git push origin HEAD:work/ui-normalization-fr0-20260903
