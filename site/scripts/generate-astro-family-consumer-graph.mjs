@@ -71,6 +71,7 @@ export function routePatternForFile(file, pagesRoot = 'site/src/pages') {
   let relative = file.slice(`${pagesRoot}/`.length).replace(/\.astro$/u, '');
   if (relative === 'index') return '/';
   if (relative.endsWith('/index')) relative = relative.slice(0, -'/index'.length);
+  relative = relative.split('/').map(routePatternSegment).join('/');
   return `/${relative}/`.replace(/\/+/gu, '/');
 }
 
@@ -92,6 +93,27 @@ function normalizeRuntimeEntries(entries = []) {
   return [...entries]
     .map((entry) => ({ path: entry.path, symbols: sortedUnique(entry.symbols || []) }))
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function normalizeConsumerSignals(entries = []) {
+  return [...entries]
+    .map((entry) => ({ kind: entry.kind, value: entry.value }))
+    .sort((left, right) => left.kind.localeCompare(right.kind) || left.value.localeCompare(right.value));
+}
+
+function protocolConsumers(signals, files, contents) {
+  const consumers = [];
+  for (const signal of signals) {
+    if (signal.kind !== 'source_marker') continue;
+    for (const file of files) {
+      if (contents.get(file)?.includes(signal.value)) consumers.push(file);
+    }
+  }
+  return sortedUnique(consumers);
+}
+
+function routePatternSegment(segment) {
+  return segment.replace(/\[\.\.\.[^\]]+\]/gu, '**').replace(/\[[^\]]+\]/gu, '*');
 }
 
 export async function buildAstroFamilyGraph({
@@ -139,26 +161,43 @@ export async function buildAstroFamilyGraph({
   for (const family of registry.families) {
     const runtimeFactories = normalizeRuntimeEntries(family.runtime_factories);
     const runtimeClients = normalizeRuntimeEntries(family.runtime_clients);
+    const consumerSignals = normalizeConsumerSignals(family.consumer_signals);
+    const componentConsumers = sortedUnique(reverse.get(family.astro_root) || []);
+    const styleConsumers = sortedUnique((family.style_owners || []).flatMap((owner) => reverse.get(owner) || []));
+    const signalConsumers = protocolConsumers(consumerSignals, files, contents);
+    const directConsumers = sortedUnique([...componentConsumers, ...styleConsumers, ...signalConsumers]);
     const seeds = sortedUnique([
       family.astro_root,
+      ...(family.style_owners || []),
       ...runtimeFactories.map((entry) => entry.path),
       ...runtimeClients.map((entry) => entry.path),
+      ...signalConsumers,
     ]);
     const affected = transitiveConsumers(seeds, reverse);
     const routeSources = productionPages.filter((file) => affected.has(file));
+    const productionRoutes = routeSources.map((source) => ({
+      pattern: routePatternForFile(source, pagesRoot),
+      source,
+    })).sort((left, right) => left.pattern.localeCompare(right.pattern) || left.source.localeCompare(right.source));
     families[family.id] = {
       version: family.version,
       astro_root: family.astro_root,
-      direct_consumers: sortedUnique(reverse.get(family.astro_root) || []),
+      style_owners: sortedUnique(family.style_owners || []),
+      direct_component_consumers: componentConsumers,
+      direct_style_consumers: styleConsumers,
+      protocol_consumers: signalConsumers,
+      direct_consumers: directConsumers,
       runtime_factories: runtimeFactories,
       runtime_clients: runtimeClients,
-      production_route_patterns: sortedUnique(routeSources.map((file) => routePatternForFile(file, pagesRoot))),
-      production_route_sources: sortedUnique(routeSources),
+      production_routes: productionRoutes,
+      production_route_patterns: sortedUnique(productionRoutes.map((route) => route.pattern)),
+      production_route_sources: sortedUnique(productionRoutes.map((route) => route.source)),
     };
   }
 
   const familyValues = Object.values(families);
   const directConsumers = familyValues.flatMap((family) => family.direct_consumers);
+  const protocolConsumersCount = familyValues.flatMap((family) => family.protocol_consumers);
   const runtimeFactories = familyValues.flatMap((family) => family.runtime_factories.map((entry) => entry.path));
   const runtimeClients = familyValues.flatMap((family) => family.runtime_clients.map((entry) => entry.path));
   const routes = familyValues.flatMap((family) => family.production_route_patterns);
@@ -166,7 +205,7 @@ export async function buildAstroFamilyGraph({
 
   return {
     schema: 'kenigevents.astro-family-consumers.v1',
-    version: '1.0.0',
+    version: '1.2.0',
     registry: registryPath,
     registry_version: registry.version,
     registry_sha256: digest(registryText),
@@ -177,10 +216,12 @@ export async function buildAstroFamilyGraph({
       source_file_count: files.length,
       import_edge_count: [...forward.values()].reduce((sum, imports) => sum + imports.length, 0),
       direct_consumer_edges: directConsumers.length,
+      protocol_consumer_edges: protocolConsumersCount.length,
       runtime_factory_edges: runtimeFactories.length,
       runtime_consumer_edges: runtimeClients.length,
       production_route_edges: routes.length,
       unique_direct_consumers: new Set(directConsumers).size,
+      unique_protocol_consumers: new Set(protocolConsumersCount).size,
       unique_runtime_factories: new Set(runtimeFactories).size,
       unique_runtime_consumers: new Set(runtimeClients).size,
       unique_production_routes: new Set(routes).size,
@@ -212,9 +253,12 @@ export function impactFor(graph, familyId) {
     family: familyId,
     version: family.version,
     astro_root: family.astro_root,
+    style_owners: family.style_owners,
     direct_consumers: family.direct_consumers,
+    protocol_consumers: family.protocol_consumers,
     runtime_factories: family.runtime_factories,
     runtime_consumers: family.runtime_clients,
+    production_routes: family.production_routes,
     production_route_patterns: family.production_route_patterns,
   };
 }

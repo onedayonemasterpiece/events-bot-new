@@ -1,6 +1,6 @@
 {
   "schema": "kenigevents.astro-family-registry.v1",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "source_root": "site/src",
   "generated_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
   "production_route_excludes": [
@@ -59,6 +59,7 @@
           ]
         }
       ],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
         {
           "kind": "dynamic_identity",
@@ -72,7 +73,7 @@
         {
           "kind": "dynamic_identity",
           "attribute": "state",
-          "source_regex": "const cardState = \\[\\s*runtimeTemplate && 'runtime-template',\\s*desktopRelatedCrop && 'packed-row',\\s*mobileFlowMedia && 'mobile-flow',\\s*canAddToCalendar && 'calendar-eligible',\\s*`media-\\$\\{mediaFrameKind\\}`,\\s*Object\\.keys\\(safeRootAttributes\\)\\.length > 0 && 'consumer-metadata',\\s*\\]\\.filter\\(Boolean\\)\\.join\\(' '\\) \\|\\| undefined;",
+          "source_regex": "const cardState = \\[[\\s\\S]*?\\]\\.filter\\(Boolean\\)\\.join\\(' '\\) \\|\\| undefined;",
           "values": [
             "runtime-template",
             "packed-row",
@@ -125,6 +126,7 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
         {
           "kind": "dynamic_identity",
@@ -139,7 +141,7 @@
         {
           "kind": "dynamic_identity",
           "attribute": "state",
-          "source_regex": "const cardState = \\[\\s*priority && 'priority',\\s*supplemental && 'supplemental',\\s*temporalLabel && 'temporal-label',\\s*hasSocialProof && 'social-proof',\\s*totalIdentityCount > 0 && 'identity',\\s*showFree && 'free-admission',\\s*image\\.adaptiveCrop && 'adaptive-crop',\\s*`media-\\$\\{mediaFrameKind\\}`,\\s*Object\\.keys\\(safeRootAttributes\\)\\.length > 0 && 'consumer-metadata',\\s*\\]\\.filter\\(Boolean\\)\\.join\\(' '\\) \\|\\| undefined;",
+          "source_regex": "const cardState = \\[[\\s\\S]*?\\]\\.filter\\(Boolean\\)\\.join\\(' '\\) \\|\\| undefined;",
           "values": [
             "priority",
             "supplemental",
@@ -180,6 +182,12 @@
       "nested_families": [],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [
+        {
+          "kind": "source_marker",
+          "value": "data-media-frame"
+        }
+      ],
       "explicit_override_exceptions": [
         {
           "kind": "non_astro_root",
@@ -231,6 +239,7 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
         {
           "kind": "dynamic_identity",
@@ -291,6 +300,7 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
         {
           "kind": "dynamic_identity",
@@ -334,6 +344,7 @@
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
         {
           "kind": "dynamic_identity",
@@ -370,10 +381,13 @@
       ],
       "nested_families": [
         "ListingEventCard",
-        "AdaptiveEventCardGrid"
+        "AdaptiveEventCardGrid",
+        "MobileListingRailSurface",
+        "ListingMobileDensitySwitch"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
         {
           "kind": "dynamic_identity",
@@ -404,10 +418,12 @@
         "empty"
       ],
       "nested_families": [
-        "MediaFrame"
+        "MediaFrame",
+        "ExhibitionPrototypeRow"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
         {
           "kind": "dynamic_identity",
@@ -424,46 +440,2364 @@
       "penpot_binding": null
     },
     {
-      "id": "ShellNavigation",
+      "id": "EventLayout",
       "version": 1,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro"
       ],
-      "variants": [
-        "top-standard",
-        "top-contextual",
-        "top-immersive",
-        "bottom-nav",
-        "bottom-cta",
-        "bottom-none"
+      "variants": [],
+      "states": [
+        "ready"
       ],
-      "states": [],
       "nested_families": [
-        "EventCard"
+        "EventCard",
+        "Foundations"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
+      "consumer_signals": [],
       "explicit_override_exceptions": [
-        {
-          "kind": "identity_attribute_absent",
-          "reason": "The document shell spans html, body, header and navigation roots; a synthetic wrapper would change layout and landmarks."
-        },
         {
           "kind": "dynamic_identity",
           "attribute": "variant",
-          "source_regex": "export type MobileTopMode = 'standard' \\| 'contextual' \\| 'immersive';[\\s\\S]*export type MobileBottomMode = 'nav' \\| 'cta' \\| 'none';",
+          "source_regex": "data-ds-variant=\\{mobileSection \\|\\| 'default'\\}",
+          "values": []
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "PrelaunchLayout",
+      "version": 1,
+      "astro_root": "site/src/layouts/PrelaunchLayout.astro",
+      "style_owners": [
+        "site/src/layouts/PrelaunchLayout.astro"
+      ],
+      "variants": [
+        "standalone"
+      ],
+      "states": [
+        "preview",
+        "secret-candidate",
+        "production"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{prelaunchState\\}",
           "values": [
-            "top-standard",
-            "top-contextual",
-            "top-immersive",
-            "bottom-nav",
-            "bottom-cta",
-            "bottom-none"
+            "preview",
+            "secret-candidate",
+            "production"
           ]
         }
       ],
       "penpot_binding": null
+    },
+    {
+      "id": "HomePage",
+      "version": 1,
+      "astro_root": "site/src/pages/index.astro",
+      "style_owners": [],
+      "variants": [
+        "cold-start"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "HomeColdStartFeed"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{feed\\.length \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "HomeColdStartFeed",
+      "version": 1,
+      "astro_root": "site/src/components/HomeColdStartFeed.astro",
+      "style_owners": [],
+      "variants": [
+        "local-profile-rerank"
+      ],
+      "states": [
+        "static-fallback",
+        "local-rerank",
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "AdaptiveEventCardGrid"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{`static-fallback \\$\\{visibleEvents\\.length \\? 'populated' : 'empty'\\}`\\}",
+          "values": [
+            "static-fallback",
+            "local-rerank",
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "TodayReviewGuard",
+      "version": 1,
+      "astro_root": "site/src/pages/segodnya/index.astro",
+      "style_owners": [],
+      "variants": [
+        "review-date"
+      ],
+      "states": [
+        "idle",
+        "redirect",
+        "stale",
+        "error"
+      ],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileListingRailSurface",
+      "version": 1,
+      "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
+      "style_owners": [],
+      "variants": [
+        "today",
+        "tomorrow",
+        "weekend",
+        "popular",
+        "date"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "MobileListingRailRow",
+        "MobileDateAccessory",
+        "MediaFrame"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{current\\}",
+          "values": [
+            "today",
+            "tomorrow",
+            "weekend",
+            "popular",
+            "date"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{total > 0 \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileListingRailRow",
+      "version": 1,
+      "astro_root": "site/src/components/listings/MobileListingRailRow.astro",
+      "style_owners": [],
+      "variants": [
+        "per-date",
+        "per-family"
+      ],
+      "states": [],
+      "nested_families": [
+        "MediaFrame"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{occurrenceMode\\}",
+          "values": [
+            "per-date",
+            "per-family"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{rowState\\}",
+          "values": []
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileDateAccessory",
+      "version": 1,
+      "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
+      "style_owners": [],
+      "variants": [
+        "today",
+        "tomorrow",
+        "weekend",
+        "date"
+      ],
+      "states": [
+        "archived-selection",
+        "current-horizon"
+      ],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{current\\}",
+          "values": [
+            "today",
+            "tomorrow",
+            "weekend",
+            "date"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{selectedDate < today \\? 'archived-selection' : 'current-horizon'\\}",
+          "values": [
+            "archived-selection",
+            "current-horizon"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventDetailRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/sobytiya/[slug].astro",
+      "style_owners": [],
+      "variants": [
+        "responsive-pair"
+      ],
+      "states": [
+        "archived",
+        "active"
+      ],
+      "nested_families": [
+        "MobileEventDetailSurface",
+        "AdaptiveEventCardGrid"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{archivedDetail \\? 'archived' : 'active'\\}",
+          "values": [
+            "archived",
+            "active"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileEventDetailSurface",
+      "version": 1,
+      "astro_root": "site/src/pages/sobytiya/[slug].astro",
+      "style_owners": [],
+      "variants": [
+        "accepted-v8"
+      ],
+      "states": [
+        "archived",
+        "active"
+      ],
+      "nested_families": [
+        "AdaptiveEventCardGrid"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{archivedDetail \\? 'archived' : 'active'\\}",
+          "values": [
+            "archived",
+            "active"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ExhibitionsRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/vystavki/index.astro",
+      "style_owners": [],
+      "variants": [
+        "personal-immersive"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "ExhibitionsPersonalSurface"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{projection\\.items\\.length \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventMediaRail",
+      "version": 1,
+      "astro_root": "site/src/components/EventMediaRail.astro",
+      "style_owners": [],
+      "variants": [
+        "gallery-thumbnails",
+        "hero-selector",
+        "poster-strip"
+      ],
+      "states": [
+        "responsive-pending",
+        "overflow",
+        "complete"
+      ],
+      "nested_families": [
+        "MediaFrame"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{variant\\}",
+          "values": [
+            "gallery-thumbnails",
+            "hero-selector",
+            "poster-strip"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{rootState\\}",
+          "values": [
+            "responsive-pending",
+            "overflow",
+            "complete"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "FestivalsTimelineRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/festivali/index.astro",
+      "style_owners": [
+        "site/src/pages/festivali/index.astro"
+      ],
+      "variants": [
+        "annual-timeline"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{resolvedItems\\.length > 0 \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "InterestClubCard",
+      "version": 1,
+      "astro_root": "site/src/components/InterestClubCard.astro",
+      "style_owners": [
+        "site/src/components/InterestClubCard.astro"
+      ],
+      "variants": [
+        "photographic-catalog-card"
+      ],
+      "states": [
+        "cover-ready",
+        "fallback-art"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{cover \\? 'cover-ready' : 'fallback-art'\\}",
+          "values": [
+            "cover-ready",
+            "fallback-art"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "InterestClubsIndexRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+      "style_owners": [
+        "site/src/pages/kluby-po-interesam/index.astro"
+      ],
+      "variants": [
+        "verified-directory"
+      ],
+      "states": [
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "InterestClubCard",
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{clubs\\.length \\? 'populated' : 'empty'\\}",
+          "values": [
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "InterestClubDetailRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "style_owners": [
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+      ],
+      "variants": [
+        "verified-club"
+      ],
+      "states": [
+        "future-meetings",
+        "history-only"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{club\\.future_meetings\\.length \\? 'future-meetings' : 'history-only'\\}",
+          "values": [
+            "future-meetings",
+            "history-only"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "FreeCollectionSurface",
+      "version": 1,
+      "astro_root": "site/src/components/FreeCollectionSurface.astro",
+      "style_owners": [
+        "site/src/components/FreeCollectionSurface.astro"
+      ],
+      "variants": [
+        "timed-and-exhibitions"
+      ],
+      "states": [
+        "timed",
+        "exhibitions",
+        "populated",
+        "empty"
+      ],
+      "nested_families": [
+        "AdaptiveEventCardGrid",
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{surfaceState\\}",
+          "values": [
+            "timed",
+            "exhibitions",
+            "populated",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "GastronomyCollectionSurface",
+      "version": 1,
+      "astro_root": "site/src/components/GastronomyCollectionSurface.astro",
+      "style_owners": [
+        "site/src/components/GastronomyCollectionSurface.astro"
+      ],
+      "variants": [
+        "future-and-recent"
+      ],
+      "states": [
+        "last-good",
+        "blocked",
+        "empty",
+        "ready"
+      ],
+      "nested_families": [
+        "AdaptiveEventCardGrid",
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{collectionState\\}",
+          "values": [
+            "last-good",
+            "blocked",
+            "empty",
+            "ready"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "CollectionCatalogRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/podborki/index.astro",
+      "style_owners": [
+        "site/src/pages/podborki/index.astro"
+      ],
+      "variants": [
+        "publication-status-catalog"
+      ],
+      "states": [
+        "available",
+        "empty",
+        "deferred-items",
+        "all-public"
+      ],
+      "nested_families": [
+        "CollectionCatalog",
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{`\\$\\{availableCount \\? 'available' : 'empty'\\} \\$\\{collectionCatalogEntries\\.length - availableCount \\? 'deferred-items' : 'all-public'\\}`\\}",
+          "values": [
+            "available",
+            "empty",
+            "deferred-items",
+            "all-public"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "CollectionCatalog",
+      "version": 1,
+      "astro_root": "site/src/components/CollectionCatalog.astro",
+      "style_owners": [
+        "site/src/components/CollectionCatalog.astro"
+      ],
+      "variants": [
+        "publication-status-grid"
+      ],
+      "states": [
+        "available",
+        "empty"
+      ],
+      "nested_families": [
+        "CollectionCatalogItem",
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{entries\\.some\\(\\(entry\\) => Boolean\\(entry\\.path\\)\\) \\? 'available' : 'empty'\\}",
+          "values": [
+            "available",
+            "empty"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "CollectionCatalogItem",
+      "version": 1,
+      "astro_root": "site/src/components/CollectionCatalog.astro",
+      "style_owners": [],
+      "variants": [
+        "link",
+        "disabled"
+      ],
+      "states": [
+        "public",
+        "repair",
+        "blocked",
+        "deferred"
+      ],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{entry\\.status\\}",
+          "values": [
+            "public",
+            "repair",
+            "blocked",
+            "deferred"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "Button",
+      "version": 2,
+      "astro_root": "site/src/components/design-system/Button.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "pressed",
+        "loading",
+        "disabled"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "['\\\"]data-ds-variant['\\\"]",
+          "values": []
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "['\\\"]data-ds-state['\\\"]\\s*:\\s*state",
+          "values": [
+            "default",
+            "hover",
+            "focus",
+            "pressed",
+            "loading",
+            "disabled"
+          ]
+        },
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "Badge",
+      "version": 2,
+      "astro_root": "site/src/components/design-system/Badge.astro",
+      "style_owners": [],
+      "variants": [
+        "neutral",
+        "brand",
+        "accent",
+        "success",
+        "warning",
+        "danger"
+      ],
+      "states": [
+        "default"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{tone\\}",
+          "values": [
+            "neutral",
+            "brand",
+            "accent",
+            "success",
+            "warning",
+            "danger"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "Field",
+      "version": 2,
+      "astro_root": "site/src/components/design-system/Field.astro",
+      "style_owners": [],
+      "variants": [
+        "text",
+        "search",
+        "email"
+      ],
+      "states": [
+        "default",
+        "hover",
+        "focus",
+        "error",
+        "disabled"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{type\\}",
+          "values": [
+            "text",
+            "search",
+            "email"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{state\\}",
+          "values": [
+            "default",
+            "hover",
+            "focus",
+            "error",
+            "disabled"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "StatePanel",
+      "version": 2,
+      "astro_root": "site/src/components/design-system/StatePanel.astro",
+      "style_owners": [],
+      "variants": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger",
+        "loading"
+      ],
+      "states": [
+        "loading",
+        "default"
+      ],
+      "nested_families": [
+        "Button",
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{tone\\}",
+          "values": [
+            "neutral",
+            "info",
+            "success",
+            "warning",
+            "danger",
+            "loading"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{tone === 'loading' \\? 'loading' : 'default'\\}",
+          "values": [
+            "loading",
+            "default"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "CopyAction",
+      "version": 2,
+      "astro_root": "site/src/components/design-system/CopyAction.astro",
+      "style_owners": [
+        "site/src/components/design-system/CopyAction.astro"
+      ],
+      "variants": [
+        "secondary",
+        "inverse"
+      ],
+      "states": [
+        "default",
+        "success",
+        "error"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{variant\\}",
+          "values": [
+            "secondary",
+            "inverse"
+          ]
+        },
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{initialState\\}",
+          "values": [
+            "default",
+            "success",
+            "error"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "Foundations",
+      "version": 1,
+      "astro_root": "site/src/components/design-system/Foundations.astro",
+      "style_owners": [
+        "site/src/components/design-system/foundations.css",
+        "site/src/components/design-system/component-foundations.css",
+        "site/src/components/design-system/product-contour-foundations.css"
+      ],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [
+        {
+          "kind": "source_marker",
+          "value": "data-ke-foundation-consumer"
+        }
+      ],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Foundations is the canonical style/token owner and slot wrapper; consumers expose data-ke-foundation-consumer without introducing another DOM wrapper."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "DesktopEventActionPanel",
+      "version": 1,
+      "astro_root": "site/src/components/DesktopEventActionPanel.astro",
+      "style_owners": [
+        "site/src/components/DesktopEventActionPanel.astro"
+      ],
+      "variants": [
+        "editorial-side",
+        "split-inline",
+        "editorial-flow",
+        "split-flow"
+      ],
+      "states": [
+        "non-ocr",
+        "ocr"
+      ],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The accepted desktop action owner predates family diagnostics; registering its existing source owner avoids changing UI markup in this SoT-only batch."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ExhibitionPrototypeRow",
+      "version": 1,
+      "astro_root": "site/src/components/ExhibitionPrototypeRow.astro",
+      "style_owners": [
+        "site/src/components/ExhibitionPrototypeRow.astro"
+      ],
+      "variants": [],
+      "states": [],
+      "nested_families": [
+        "MediaFrame"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The canonical exhibition row is already a single source owner and MediaFrame consumer; this SoT-only batch does not add a wrapper or change its DOM contract."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingMobileDensitySwitch",
+      "version": 6,
+      "astro_root": "site/src/components/listings/ListingMobileDensitySwitch.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ArtifactCollection",
+      "version": 1,
+      "astro_root": "site/src/components/artifacts/ArtifactCollection.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "AuthorizedEventSearch",
+      "version": 1,
+      "astro_root": "site/src/components/AuthorizedEventSearch.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "SearchResultsComposition",
+      "version": 1,
+      "astro_root": "site/src/components/AuthorizedEventSearch.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "DesktopEventDetailSurface",
+      "version": 1,
+      "astro_root": "site/src/components/DesktopEventPage.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventHero",
+      "version": 1,
+      "astro_root": "site/src/components/EventHero.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FavoritesSurface",
+      "version": 1,
+      "astro_root": "site/src/components/FavoritesSurface.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusConnectivityDiagnostic",
+      "version": 1,
+      "astro_root": "site/src/components/FocusConnectivityDiagnostic.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusEggArtifact",
+      "version": 1,
+      "astro_root": "site/src/components/FocusEggArtifact.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusEggCollectionCard",
+      "version": 1,
+      "astro_root": "site/src/components/FocusEggCollectionCard.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusEggSavedListDemo",
+      "version": 1,
+      "astro_root": "site/src/components/FocusEggSavedListDemo.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupFeedback",
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupFeedback.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupInviteIntake",
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupInviteShare",
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupInviteShare.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupLabPanel",
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupLabPanel.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupThankYou",
+      "version": 1,
+      "astro_root": "site/src/components/FocusGroupThankYou.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusLabBadge",
+      "version": 1,
+      "astro_root": "site/src/components/FocusLabBadge.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusPwaInstallAction",
+      "version": 1,
+      "astro_root": "site/src/components/FocusPwaInstallAction.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "HomeHeroTalk",
+      "version": 1,
+      "astro_root": "site/src/components/HomeHeroTalk.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "HomeQuickNav",
+      "version": 1,
+      "astro_root": "site/src/components/HomeQuickNav.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "InterestProfile",
+      "version": 1,
+      "astro_root": "site/src/components/InterestProfile.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "PersonalFeedSlot",
+      "version": 1,
+      "astro_root": "site/src/components/PersonalFeedSlot.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "SearchCollectionLinks",
+      "version": 1,
+      "astro_root": "site/src/components/SearchCollectionLinks.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "UnusualListingSurface",
+      "version": 1,
+      "astro_root": "site/src/components/UnusualListingSurface.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "ArtifactCollectionRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/artefakty/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "ForMeRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/dlya-menya/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupProgrammeSurface",
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusEggCollectionRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupInviteRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FocusGroupCompletionSurface",
+      "version": 1,
+      "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "FavoritesRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/izbrannoe/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "PartnersRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/partners/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "PartnershipRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/partnerstvo/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "MaterializedCollectionRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "SearchRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/poisk/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "ClosedFocusHubRouteComposition",
+      "version": 1,
+      "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingPersonalFilter",
+      "version": 1,
+      "astro_root": "site/src/components/ListingPersonalFilter.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ExactTimeTimeline",
+      "version": 1,
+      "astro_root": "site/src/components/listings/ExactTimeTimeline.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingControls",
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingControls.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingDiscoveryRail",
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingDiscoveryRail.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingPageHeader",
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingPageHeader.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingTimeMarker",
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingTimeMarker.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ListingTimeNav",
+      "version": 1,
+      "astro_root": "site/src/components/listings/ListingTimeNav.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "PopularBehaviorRows",
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularBehaviorRows.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "PopularCategoryFilter",
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularCategoryFilter.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "PopularMobileAdaptiveRows",
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "PopularMobileBehaviorRows",
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularMobileBehaviorRows.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "PopularMobileGroupContext",
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularMobileGroupContext.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "WeekendEditorialTimeline",
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendEditorialTimeline.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "WeekendRangeNav",
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendRangeNav.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "WeekendTimeMatrix",
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendTimeMatrix.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventListItem",
+      "version": 1,
+      "astro_root": "site/src/components/EventListItem.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The design-system catalog names this existing Astro owner; its production DOM predates the diagnostic marker."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventCtaPanel",
+      "version": 1,
+      "astro_root": "site/src/components/EventCtaPanel.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The design-system catalog names this existing Astro owner; its production DOM predates the diagnostic marker."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "CalendarLink",
+      "version": 1,
+      "astro_root": "site/src/components/CalendarLink.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The design-system catalog names this existing Astro owner; its production DOM predates the diagnostic marker."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventFacts",
+      "version": 1,
+      "astro_root": "site/src/components/EventFacts.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The design-system catalog names this existing Astro owner; its production DOM predates the diagnostic marker."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventTokenMedallions",
+      "version": 1,
+      "astro_root": "site/src/components/EventTokenMedallions.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The design-system catalog names this existing Astro owner; its production DOM predates the diagnostic marker."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "IconSocialIcon",
+      "version": 1,
+      "astro_root": "site/src/components/SocialIcon.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The design-system catalog uses the IconSocialIcon specimen id for the existing SocialIcon Astro owner."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "AnnouncementsLockup",
+      "version": 1,
+      "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "The design-system catalog names this existing brand Astro owner; its production DOM predates the diagnostic marker."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "AnnouncementsWordmark",
+      "version": 1,
+      "astro_root": "site/src/components/brand/AnnouncementsWordmark.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "Icon",
+      "version": 1,
+      "astro_root": "site/src/components/Icon.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileBottomNav",
+      "version": 1,
+      "astro_root": "site/src/components/MobileBottomNav.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileSearchBottomNav",
+      "version": 1,
+      "astro_root": "site/src/components/MobileSearchBottomNav.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "Reference4MobileMenu",
+      "version": 1,
+      "astro_root": "site/src/components/Reference4MobileMenu.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "SiteFooter",
+      "version": 1,
+      "astro_root": "site/src/components/SiteFooter.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "KeyboardEventNavigation",
+      "version": 1,
+      "astro_root": "site/src/components/KeyboardEventNavigation.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileEventProductionStyles",
+      "version": 1,
+      "astro_root": "site/src/components/MobileEventProductionStyles.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "AmberRailArtifact",
+      "version": 1,
+      "astro_root": "site/src/components/listings/AmberRailArtifact.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "StaticSiteAuthRuntime",
+      "version": 1,
+      "astro_root": "site/src/components/auth/StaticSiteAuthRuntime.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventTransportSchedule",
+      "version": 1,
+      "astro_root": "site/src/components/EventTransportSchedule.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "EventBusTransportSchedule",
+      "version": 1,
+      "astro_root": "site/src/components/EventBusTransportSchedule.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "KaupTransportSchedule",
+      "version": 1,
+      "astro_root": "site/src/components/KaupTransportSchedule.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "MobileToastRegion",
+      "version": 1,
+      "astro_root": "site/src/components/MobileToastRegion.astro",
+      "style_owners": [],
+      "variants": [],
+      "states": [],
+      "nested_families": [],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "identity_attribute_absent",
+          "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
+        }
+      ],
+      "penpot_binding": null
     }
-  ]
+  ],
+  "production_surface_contract": {
+    "path": "site/src/data/design-system-production-surface-contract.v1.json",
+    "required_component_family_ids": [
+      "brand.identity-and-pwa",
+      "foundations.iconography",
+      "shell.header-navigation-footer",
+      "navigation.keyboard",
+      "event.cards-and-rails",
+      "event.detail-and-media",
+      "event.medallions",
+      "artifacts.collection",
+      "focus-group.flow",
+      "exhibitions",
+      "favorites",
+      "authorization",
+      "search",
+      "personalization.for-me",
+      "transport.rail-and-bus",
+      "system.notifications-and-status"
+    ],
+    "required_archetype_owners": [
+      {
+        "id": "home",
+        "families": [
+          "HomePage"
+        ]
+      },
+      {
+        "id": "today-listing",
+        "families": [
+          "TodayReviewGuard"
+        ]
+      },
+      {
+        "id": "tomorrow-listing",
+        "families": [
+          "DateListingSurface"
+        ]
+      },
+      {
+        "id": "weekend-listing",
+        "families": [
+          "WeekendListingSurface"
+        ]
+      },
+      {
+        "id": "popular-listing",
+        "families": [
+          "PopularListingSurface"
+        ]
+      },
+      {
+        "id": "collections",
+        "families": [
+          "CollectionCatalogRouteComposition"
+        ]
+      },
+      {
+        "id": "festivals",
+        "families": [
+          "FestivalsTimelineRouteComposition"
+        ]
+      },
+      {
+        "id": "exhibitions",
+        "families": [
+          "ExhibitionsRouteComposition"
+        ]
+      },
+      {
+        "id": "favorites",
+        "families": [
+          "FavoritesRouteComposition"
+        ]
+      },
+      {
+        "id": "search",
+        "families": [
+          "SearchRouteComposition"
+        ]
+      },
+      {
+        "id": "for-me",
+        "families": [
+          "ForMeRouteComposition"
+        ]
+      },
+      {
+        "id": "focus-group",
+        "families": [
+          "FocusGroupProgrammeSurface"
+        ]
+      },
+      {
+        "id": "artifacts",
+        "families": [
+          "ArtifactCollectionRouteComposition"
+        ]
+      },
+      {
+        "id": "event-detail",
+        "families": [
+          "EventDetailRouteComposition"
+        ]
+      },
+      {
+        "id": "interest-clubs",
+        "families": [
+          "InterestClubsIndexRouteComposition"
+        ]
+      },
+      {
+        "id": "unusual-events",
+        "families": [
+          "UnusualListingSurface"
+        ]
+      },
+      {
+        "id": "information-pages",
+        "families": [
+          "PartnersRouteComposition",
+          "PartnershipRouteComposition"
+        ]
+      }
+    ]
+  }
 }

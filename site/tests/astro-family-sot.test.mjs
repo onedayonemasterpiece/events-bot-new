@@ -16,16 +16,10 @@ const repoRoot = path.resolve(siteRoot, '..');
 const registryPath = 'site/src/design-system/astro-family-registry.v1.json';
 const graphPath = 'site/src/design-system/astro-family-consumers.generated.v1.json';
 
-const expectedFamilies = [
-  'AdaptiveEventCardGrid',
-  'DateListingSurface',
-  'EventCard',
-  'ExhibitionsPersonalSurface',
-  'ListingEventCard',
-  'MediaFrame',
-  'PopularListingSurface',
-  'ShellNavigation',
-  'WeekendListingSurface',
+const requiredFamilies = [
+  'EventCard', 'EventLayout', 'HomePage', 'EventDetailRouteComposition',
+  'ExhibitionsRouteComposition', 'InterestClubsIndexRouteComposition',
+  'MobileBottomNav', 'StaticSiteAuthRuntime', 'EventTransportSchedule',
 ];
 
 async function json(file) {
@@ -48,6 +42,7 @@ function fixtureFamily(overrides = {}) {
     nested_families: [],
     runtime_factories: [],
     runtime_clients: [],
+    consumer_signals: [],
     explicit_override_exceptions: [],
     penpot_binding: null,
     ...overrides,
@@ -62,10 +57,18 @@ async function createFixture({ family = fixtureFamily(), source, extraFamilies =
     source_root: 'site/src',
     generated_graph: graphPath,
     production_route_excludes: [],
+    production_surface_contract: {
+      path: 'site/src/data/production-surface-contract.json',
+      required_component_family_ids: [],
+      required_archetype_owners: [],
+    },
     families: [family, ...extraFamilies],
   };
   const rootSource = source || `---\nimport './example-card.css';\n---\n<article data-ds-family="ExampleCard" data-ds-version="1" data-ds-variant="default" data-ds-state="ready"></article>\n`;
   await writeJson(path.resolve(root, registryPath), registry);
+  await writeJson(path.resolve(root, 'site/src/data/production-surface-contract.json'), {
+    component_families: [], archetypes: [],
+  });
   await mkdir(path.resolve(root, 'site/src/components'), { recursive: true });
   await mkdir(path.resolve(root, 'site/src/pages'), { recursive: true });
   await writeFile(path.resolve(root, 'site/src/components/ExampleCard.astro'), rootSource, 'utf8');
@@ -80,25 +83,25 @@ async function createFixture({ family = fixtureFamily(), source, extraFamilies =
   return { root, registry };
 }
 
-test('current Astro registry, reverse graph and fail-closed checker agree', async () => {
+test('complete canonical production-surface registry, graph and checker agree', async () => {
   const registry = await json(path.resolve(repoRoot, registryPath));
-  assert.deepEqual(registry.families.map((family) => family.id).sort(), expectedFamilies);
-  assert.equal(registry.families.length, 9);
+  for (const id of requiredFamilies) assert.ok(registry.families.some((family) => family.id === id), `registry misses ${id}`);
+  assert.equal(registry.families.length, 109);
+  assert.ok(registry.production_surface_contract);
   for (const family of registry.families) {
     for (const field of [
       'id', 'version', 'astro_root', 'style_owners', 'variants', 'states',
-      'nested_families', 'runtime_factories', 'runtime_clients',
+      'nested_families', 'runtime_factories', 'runtime_clients', 'consumer_signals',
       'explicit_override_exceptions', 'penpot_binding',
     ]) assert.ok(Object.hasOwn(family, field), `${family.id} misses ${field}`);
   }
-
   const generated = await json(path.resolve(repoRoot, graphPath));
   const rebuilt = await buildAstroFamilyGraph({ repoRoot, registryPath });
   assert.deepEqual(generated, rebuilt);
   const checked = await checkAstroFamilySot({ repoRoot, registryPath });
-  assert.equal(checked.family_count, 9);
-  assert.equal(checked.graph_summary.family_count, 9);
-  assert.ok(checked.graph_summary.direct_consumer_edges > 0);
+  assert.equal(checked.family_count, registry.families.length);
+  assert.equal(checked.graph_summary.family_count, registry.families.length);
+  assert.ok(checked.graph_summary.protocol_consumer_edges > 0);
   assert.ok(checked.graph_summary.production_route_edges > 0);
 });
 
@@ -117,13 +120,13 @@ test('impact command reports direct, runtime and production-route consumers', ()
   assert.ok(impact.production_route_patterns.length > 0);
 });
 
-test('checker rejects duplicate roots and duplicate style owners', async () => {
-  const duplicateRoot = fixtureFamily({ id: 'DuplicateRoot', style_owners: [] });
-  const first = await createFixture({ extraFamilies: [duplicateRoot] });
-  await assert.rejects(
-    checkAstroFamilySot({ repoRoot: first.root, registryPath }),
-    /Duplicate canonical root/u,
-  );
+test('checker permits multi-identity roots but rejects duplicate style owners', async () => {
+  const sibling = fixtureFamily({ id: 'SiblingRoot', style_owners: [] });
+  const first = await createFixture({
+    source: '<article data-ds-family="ExampleCard" data-ds-version="1" data-ds-variant="default" data-ds-state="ready"></article><section data-ds-family="SiblingRoot" data-ds-version="1" data-ds-variant="default" data-ds-state="ready"></section>\n',
+    extraFamilies: [sibling],
+  });
+  assert.equal((await checkAstroFamilySot({ repoRoot: first.root, registryPath })).family_count, 2);
 
   const duplicateStyle = fixtureFamily({
     id: 'DuplicateStyle',
@@ -194,4 +197,24 @@ test('checker rejects generated graph drift', async () => {
     checkAstroFamilySot({ repoRoot: fixture.root, registryPath }),
     /graph drift/u,
   );
+});
+
+test('checker does not truncate an Astro opening tag at > inside an expression', async () => {
+  const fixture = await createFixture({
+    family: fixtureFamily({ variants: [], states: [] }),
+    source: `<article data-ds-state={items.length > 0 ? 'ready' : 'empty'} data-ds-family="ExampleCard" data-ds-version="1"></article>\n`,
+  });
+  assert.equal((await checkAstroFamilySot({ repoRoot: fixture.root, registryPath })).family_count, 1);
+});
+
+test('checker fails closed when canonical production coverage is incomplete', async () => {
+  const fixture = await createFixture();
+  const registry = await json(path.resolve(fixture.root, registryPath));
+  await writeJson(path.resolve(fixture.root, 'site/src/data/production-surface-contract.json'), {
+    component_families: [{ id: 'required', required: true, source_files: ['site/src/components/Required.astro'] }],
+    archetypes: [],
+  });
+  registry.production_surface_contract.required_component_family_ids = ['required'];
+  await writeJson(path.resolve(fixture.root, registryPath), registry);
+  await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /Required production component source is unregistered/u);
 });

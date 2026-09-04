@@ -147,3 +147,20 @@ cd site
 node scripts/check-design-system-iconography-contract.mjs
 node --test scripts/iconography-contract.behavior.test.mjs
 ```
+
+### Complete production-surface family coverage
+
+The Astro-family registry now covers every required component source and every
+required archetype in
+`site/src/data/design-system-production-surface-contract.v1.json`, in addition
+to the source-published `data-ds-family` and `data-ds-component` identities.
+`production_surface_contract` is a fail-closed mapping: a required component
+source, archetype, route, or identity that is absent from the registry makes
+`check:astro-family-sot` fail.
+
+The consumer graph records direct component and style-import consumers,
+source-marker protocol consumers (including distributed media/foundation
+protocols), explicit runtime/hydrated factory/client consumers, and canonical
+route patterns. Dynamic Astro route segments are materialized as `*` (or `**`)
+so contract routes compare exactly. The opening-tag reader deliberately skips
+`>` inside Astro `{...}` expressions before validating a family identity.
