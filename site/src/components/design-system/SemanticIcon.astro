@@ -72,5 +72,13 @@ const localSemantic = name === 'trend-up'
     )}
   </svg>
 ) : (
-  <Icon name={existingName} className={classes} title={title} />
+  <Icon
+    name={existingName}
+    className={classes}
+    title={title}
+    dataIconName={name}
+    dataIconRole={role}
+    dataIconContract="four-role-v1"
+    dataIconSizeOwner="foundations.css"
+  />
 )}

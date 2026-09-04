@@ -764,3 +764,9 @@ asset owner and the `1.15rem` size owner are removed. Mobile/image/text intents,
 accessible names, live status, visible and `noscript` fallbacks, `P`/`S`
 shortcuts, 44px targets, responsive state switching, controller hydration and
 the accepted palette remain unchanged.
+
+Both native `SemanticIcon` paths expose the same runtime evidence. When a
+semantic icon delegates its glyph to the lower-level `Icon` renderer, the SVG
+still carries `data-ke-icon-name`, `data-ke-icon-role`, the `four-role-v1`
+contract and `foundations.css` size owner; source normalization without those
+generated-DOM identities is incomplete.
