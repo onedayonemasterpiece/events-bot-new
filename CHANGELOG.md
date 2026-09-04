@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed: the global product footer now consumes its complete established
+  continuity roles for type, spacing, shape and responsive geometry instead of
+  retaining a parallel literal style copy; links and behavior are unchanged.
+
 - Changed: the shared event-media rail now consumes its established gallery,
   selector and poster-rail color, elevation, spacing, shape and geometry roles
   instead of keeping parallel literal owners; packing and media behavior are

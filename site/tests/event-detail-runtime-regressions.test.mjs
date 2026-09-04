@@ -316,9 +316,9 @@ test('accepted service footer is global, cohesive and exposes Partners separatel
   assert.match(component, /showPrompt=\{false\}/u);
   assert.match(component, /<strong>Поделитесь<\/strong>/u);
   assert.match(component, /id="footer-share-title" aria-label="Понравились Анонсы\? Поделитесь"/u);
-  assert.match(component, /min-height: 84px/u);
+  assert.match(component, /min-height: var\(--ke-footer-share-min-height\)/u);
   assert.doesNotMatch(component, /min-height: 190px/u);
-  assert.match(component, /min-height: 48px/u);
+  assert.match(component, /min-height: var\(--ke-footer-share-action-min-height\)/u);
   assert.match(socialIcon, /import \{ withBase \} from '\.\.\/lib\/events'/u);
   assert.match(socialIcon, /withBase\('\/assets\/social\/max-colored-official\.svg'\)/u);
   assert.equal(maxMetadata.source_page, 'https://go.max.ru/brandbook');

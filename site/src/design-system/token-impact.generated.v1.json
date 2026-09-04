@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2505,
     "definition_count": 2788,
-    "consumer_count": 3685,
+    "consumer_count": 3767,
     "alias_edge_count": 708,
     "family_count": 109
   },
@@ -124737,7 +124737,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-bottom-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 166,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124756,7 +124763,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-bottom-padding-top",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 166,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124775,7 +124789,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-brand-copy-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 155,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124794,7 +124815,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-brand-copy-max",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 155,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124813,7 +124841,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-brand-copy-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 155,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124836,7 +124871,14 @@
         "--ke-space-lg"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-brand-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 150,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124855,7 +124897,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-brand-link-max",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 151,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124874,7 +124923,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 157,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124893,7 +124949,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-heading-letter",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 158,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124912,7 +124975,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-heading-margin-bottom",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 158,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124931,7 +125001,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-heading-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 158,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124950,7 +125027,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-heading-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 158,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124969,7 +125053,20 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-link-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 159,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-column-link-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 163,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -124988,7 +125085,20 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-link-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 159,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-column-link-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 163,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125007,7 +125117,20 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-column-link-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 159,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-column-link-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 163,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125026,7 +125149,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-contact-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 156,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125045,7 +125175,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-document-copy-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 165,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125064,7 +125201,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-document-copy-margin",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 165,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125083,7 +125227,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-document-copy-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 165,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125102,7 +125253,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-document-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 163,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125121,7 +125279,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-document-note-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 164,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125140,7 +125305,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-document-note-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 164,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125159,7 +125331,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-endorsement-letter",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 153,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125178,7 +125357,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-endorsement-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 153,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125197,7 +125383,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-endorsement-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 153,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125216,7 +125409,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-link-underline-offset",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 162,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125235,7 +125435,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-lockup-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 152,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125254,7 +125461,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-main-brand-fr",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 146,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125273,7 +125487,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-main-brand-min",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 146,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125292,7 +125513,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-main-column-min",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 146,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125311,7 +125539,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-main-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 147,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125330,7 +125565,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-main-column-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 201,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125349,7 +125591,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-main-row-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 201,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125368,7 +125617,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-padding-bottom",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 195,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125387,7 +125643,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-padding-top",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 195,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125406,7 +125669,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-share-border-left",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 197,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125425,7 +125695,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-share-heading-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 198,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125448,7 +125725,14 @@
         "--ke-space-lg"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-share-padding",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 197,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125467,7 +125751,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-share-radius",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 197,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125486,7 +125777,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-share-wordmark-height",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 199,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125505,7 +125803,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-mobile-stack-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 196,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125524,7 +125829,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-notification-margin-left",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 160,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125543,7 +125855,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-notification-ring-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 160,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125562,7 +125881,20 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-notification-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 160,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-notification-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 160,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125581,7 +125913,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-padding-bottom",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 105,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125600,7 +125939,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-padding-top",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 105,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125619,7 +125965,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-action-basis",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 137,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125642,7 +125995,14 @@
         "--ke-size-control-comfortable"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-action-min-height",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 138,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125665,7 +126025,14 @@
         "--ke-space-lg"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-action-padding-inline",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 139,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125684,7 +126051,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-actions-max",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 133,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125703,7 +126077,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-border-left",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 118,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125722,7 +126103,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 115,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125741,7 +126129,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-heading-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 129,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125760,7 +126155,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-heading-letter",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 129,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125779,7 +126181,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-heading-line",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 129,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125798,7 +126207,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-heading-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 129,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125817,7 +126233,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-heading-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 130,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125836,7 +126259,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-min-height",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 111,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125855,7 +126285,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-padding-bottom",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 116,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125874,7 +126311,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-padding-left",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 116,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125893,7 +126337,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-padding-right",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 116,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125912,7 +126363,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-padding-top",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 116,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125935,7 +126393,14 @@
         "--ke-shape-radius-focus-panel-compact"
       ],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-radius",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 119,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125954,7 +126419,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-strong-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 131,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125973,7 +126445,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-share-wordmark-height",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 132,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -125992,7 +126471,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-social-control-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 172,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126011,7 +126497,20 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-social-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 167,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-social-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 207,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126053,7 +126552,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-social-label-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 182,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126072,7 +126578,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-social-label-weight",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 182,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126091,7 +126604,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-social-meta-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 183,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126110,7 +126630,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-social-padding-block",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 173,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126129,7 +126656,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-social-padding-inline",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 173,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126148,7 +126682,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-stack-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 109,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126167,7 +126708,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-tablet-share-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 188,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126186,7 +126734,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-utility-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 184,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126205,7 +126760,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-utility-size",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 184,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -126224,7 +126786,14 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-footer-wordmark-max",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 154,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -147273,6 +147842,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-footer-share-radius",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 119,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-unusual-panel-radius-compact",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 110,
@@ -148172,6 +148747,12 @@
           "token": "--ke-personalization-control-min",
           "path": "site/src/components/InterestProfile.astro",
           "line": 642,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-share-action-min-height",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 138,
           "has_fallback": false
         }
       ],
@@ -151013,6 +151594,24 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-footer-share-action-padding-inline",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 139,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-brand-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 150,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-mobile-share-padding",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 197,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-weather-radius",
           "path": "site/src/components/WeatherDateContext.astro",
           "line": 45,
@@ -153264,6 +153863,24 @@
           "token": "--ke-personal-feed-section-padding-inline-min",
           "path": "site/src/components/PersonalFeedSlot.astro",
           "line": 98,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-share-action-padding-inline",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 139,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-brand-gap",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 150,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-footer-mobile-share-padding",
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 197,
           "has_fallback": false
         },
         {

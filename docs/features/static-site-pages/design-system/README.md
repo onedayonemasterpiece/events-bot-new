@@ -175,6 +175,13 @@ roles, so fallback presentation has one owner across every event page.
 for both populated and empty states. These handoffs do not change fallback
 selection or listing behavior.
 
+`SiteFooter` consumes its complete established continuity contract for share
+banner, brand lockup, navigation columns, documents, social controls, utility
+copy and responsive geometry. Because the token values were extracted from the
+accepted footer, this is an exact visual handoff: footer behavior, links and
+desktop/mobile composition remain unchanged while the shared SoT becomes the
+only owner of those values across product routes.
+
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant
