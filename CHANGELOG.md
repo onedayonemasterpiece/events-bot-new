@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: the immutable owner Preview hub now exposes the two required product
+  archetypes it previously left as non-owner or absent links: Interest Clubs and
+  Unusual Events. Its executable gate binds all 17 required production-contract
+  archetypes to exactly one representative while retaining arbitrary Date as an
+  additional owner-useful surface, for 18 directly reviewable page families.
+
 - Fixed: the festival mobile hero no longer permits an emphasized Russian word
   to break or clip mid-word. The route keeps the accepted heading family and
   palette, removes only its narrow `12ch` override, and reuses the established

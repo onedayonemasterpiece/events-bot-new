@@ -65,22 +65,24 @@ const arbitraryDateLabel = new Intl.DateTimeFormat('ru-RU', {
 }).format(new Date(`${arbitraryDate}T12:00:00+02:00`));
 
 const ownerFacingArchetypes = [
-  { id: 'home', href: '/', label: 'Главная', note: 'Главная страница и полезный cold-start' },
-  { id: 'today', href: '/segodnya/', label: 'Сегодня', note: 'События текущей даты' },
-  { id: 'tomorrow', href: '/zavtra/', label: 'Завтра', note: 'Следующий день' },
+  { id: 'home', contractId: 'home', href: '/', label: 'Главная', note: 'Главная страница и полезный cold-start' },
+  { id: 'today', contractId: 'today-listing', href: '/segodnya/', label: 'Сегодня', note: 'События текущей даты' },
+  { id: 'tomorrow', contractId: 'tomorrow-listing', href: '/zavtra/', label: 'Завтра', note: 'Следующий день' },
   { id: 'date', href: `/date-${arbitraryDate}/`, label: arbitraryDateLabel, note: 'Произвольная доступная дата · отдельный DateListingSurface' },
-  { id: 'weekend', href: '/vyhodnye/', label: 'Выходные', note: 'Ближайшие выходные' },
-  { id: 'popular', href: '/populyarnoe/', label: 'Популярное', note: 'Desktop V28 и отдельная mobile-композиция' },
-  { id: 'collections', href: '/podborki/besplatnye-sobytiya/', label: 'Подборки', note: 'Материализованная подборка на реальных данных' },
-  { id: 'festivals', href: '/festivali/', label: 'Фестивали', note: 'Календарный таймлайн июля — декабря' },
-  { id: 'exhibitions', href: '/vystavki/', label: 'Выставки', note: 'Каталог выставок' },
-  { id: 'favorites', href: '/izbrannoe/', label: 'Избранное', note: 'Сохранённые будущие события' },
-  { id: 'search', href: '/poisk/', label: 'Поиск', note: 'Экран авторизованного поиска' },
-  { id: 'for-me', href: '/dlya-menya/', label: 'Для меня', note: 'Cold-start и персональная навигация без ложного обещания' },
-  { id: 'focus-group', href: '/fokus-gruppa/', label: 'Фокус-группа', note: 'Программа и путь участника' },
-  { id: 'artifacts', href: '/artefakty/', label: 'Артефакты', note: 'Исследовательская коллекция или честный unavailable state' },
-  { id: 'event-detail', href: `/sobytiya/${eventDetailRepresentative.slug}/`, label: 'Страница события', note: 'Один реальный representative event detail' },
-  { id: 'information', href: '/partners/', label: 'Информационная страница', note: 'Партнёры и служебная информация' },
+  { id: 'weekend', contractId: 'weekend-listing', href: '/vyhodnye/', label: 'Выходные', note: 'Ближайшие выходные' },
+  { id: 'popular', contractId: 'popular-listing', href: '/populyarnoe/', label: 'Популярное', note: 'Desktop V28 и отдельная mobile-композиция' },
+  { id: 'collections', contractId: 'collections', href: '/podborki/besplatnye-sobytiya/', label: 'Подборки', note: 'Материализованная подборка на реальных данных' },
+  { id: 'festivals', contractId: 'festivals', href: '/festivali/', label: 'Фестивали', note: 'Календарный таймлайн июля — декабря' },
+  { id: 'exhibitions', contractId: 'exhibitions', href: '/vystavki/', label: 'Выставки', note: 'Каталог выставок' },
+  { id: 'favorites', contractId: 'favorites', href: '/izbrannoe/', label: 'Избранное', note: 'Сохранённые будущие события' },
+  { id: 'search', contractId: 'search', href: '/poisk/', label: 'Поиск', note: 'Экран авторизованного поиска' },
+  { id: 'for-me', contractId: 'for-me', href: '/dlya-menya/', label: 'Для меня', note: 'Cold-start и персональная навигация без ложного обещания' },
+  { id: 'focus-group', contractId: 'focus-group', href: '/fokus-gruppa/', label: 'Фокус-группа', note: 'Программа и путь участника' },
+  { id: 'artifacts', contractId: 'artifacts', href: '/artefakty/', label: 'Артефакты', note: 'Исследовательская коллекция или честный unavailable state' },
+  { id: 'interest-clubs', contractId: 'interest-clubs', href: '/kluby-po-interesam/', label: 'Клубы по интересам', note: 'Свежая policy-current проекция подтверждённых клубов' },
+  { id: 'unusual-events', contractId: 'unusual-events', href: '/neobychnoe/', label: 'Необычные события', note: 'Отдельная подборка необычных форматов' },
+  { id: 'event-detail', contractId: 'event-detail', href: `/sobytiya/${eventDetailRepresentative.slug}/`, label: 'Страница события', note: 'Один реальный representative event detail' },
+  { id: 'information', contractId: 'information-pages', href: '/partners/', label: 'Информационная страница', note: 'Партнёры и служебная информация' },
 ] as const;
 
 type OwnerFacingArchetype = (typeof ownerFacingArchetypes)[number];
@@ -89,6 +91,7 @@ type DirectoryLink = {
   label: string;
   note: string;
   archetypeId?: OwnerFacingArchetype['id'];
+  contractArchetypeId?: string;
 };
 
 const representativeLink = (id: OwnerFacingArchetype['id']): DirectoryLink => {
@@ -99,6 +102,7 @@ const representativeLink = (id: OwnerFacingArchetype['id']): DirectoryLink => {
     label: archetype.label,
     note: archetype.note,
     archetypeId: archetype.id,
+    contractArchetypeId: 'contractId' in archetype ? archetype.contractId : undefined,
   };
 };
 const extraLink = (href: string, label: string, note: string): DirectoryLink => ({ href, label, note });
@@ -116,6 +120,7 @@ const pageGroups = [
       representativeLink('popular'),
       representativeLink('exhibitions'),
       representativeLink('festivals'),
+      representativeLink('unusual-events'),
       representativeLink('event-detail'),
     ],
   },
@@ -142,8 +147,8 @@ const pageGroups = [
       representativeLink('for-me'),
       representativeLink('focus-group'),
       representativeLink('artifacts'),
+      representativeLink('interest-clubs'),
       representativeLink('information'),
-      extraLink('/kluby-po-interesam/', 'Клубы по интересам', 'Свежая policy-current проекция подтверждённых клубов'),
       extraLink('/partnerstvo/', 'Стать партнёром', 'Условия сотрудничества'),
     ],
   },
@@ -193,6 +198,7 @@ const pageGroups = [
                   <a
                     href={withBase(link.href)}
                     data-owner-archetype-family={link.archetypeId}
+                    data-production-contract-archetype={link.contractArchetypeId}
                   >
                     <span><strong>{link.label}</strong><small>{link.note}</small></span>
                     <span aria-hidden="true">→</span>

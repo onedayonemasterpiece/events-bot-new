@@ -71,6 +71,7 @@ but they do not satisfy this coverage gate and do not receive the
 | `home` | `/` |
 | `today` | `/segodnya/` |
 | `tomorrow` | `/zavtra/` |
+| `date` | one current materialized `/date-YYYY-MM-DD/` route distinct from Today and Tomorrow |
 | `weekend` | `/vyhodnye/` |
 | `popular` | `/populyarnoe/` |
 | `collections` | `/podborki/besplatnye-sobytiya/` |
@@ -81,14 +82,22 @@ but they do not satisfy this coverage gate and do not receive the
 | `for-me` | `/dlya-menya/` |
 | `focus-group` | `/fokus-gruppa/` |
 | `artifacts` | `/artefakty/` |
+| `interest-clubs` | `/kluby-po-interesam/` |
+| `unusual-events` | `/neobychnoe/` |
 | `event-detail` | one current real `/sobytiya/{slug}/` route |
 | `information` | `/partners/` |
 
-`site/src/pages/[preview]/index.astro` owns the 16-family source registry.
+`site/src/pages/[preview]/index.astro` owns the 18-family source registry: all
+17 required production-contract archetypes plus the separately useful arbitrary-Date
+representative.
 `check:unified-prototype` reads that registry and the generated hub, then fails on a
 missing, duplicate, misrouted or non-materialized representative. Event Detail uses
-one real specimen; the hub does not enumerate the event catalog. For a real-data
-occurrence specimen the same gate follows the current `EventOccurrenceNav` contract:
+one real specimen; the hub does not enumerate the event catalog. The same gate also
+reads
+`design-system-production-surface-contract.v1.json` and rejects any missing or
+duplicate required contract archetype, so the owner directory cannot silently drift
+behind the canonical production inventory.
+For a real-data occurrence specimen it follows the current `EventOccurrenceNav` contract:
 desktop and mobile summaries plus the always-visible practical selector identified by
 `data-occurrence-variant="practical"` and its `event-occurrences__rows` content owner.
 Other full-real checks likewise choose factual specimens from the exact staged
