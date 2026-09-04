@@ -2,14 +2,27 @@
 
 ## [Unreleased]
 
-- Added: `npm --prefix site run local:focused -- ...` now builds one
-  selected real route or canonical page class in a detached local worktree. It
-  reuses the production preview exporter, page-class selector, Astro preview
-  builder, slice checker and release server; emits source/snapshot/data
-  identities, routes and stage timings; and runs desktop/mobile resource smoke.
-  Fixture and explicit DB modes leave DBs, `dist`, artifacts and publication
-  state outside the repository. Full `real/all` review remains on Review Kaggle,
-  and production candidates remain on the production kernel.
+- Added: `npm --prefix site run local:focused -- ...` now materializes one
+  selected route locally before Astro prerender instead of generating every
+  same-class neighbour. It reuses the canonical exporter, page-class contract,
+  builder, slice checker and release server; retains only required support
+  endpoints including `robots.txt`; emits a reproducible receipt; and runs
+  desktop/mobile browser smoke without publication. A configured existing
+  Playwright browser is reused instead of downloaded again, and asset metadata
+  is distinguished from generated product/runtime routes. Browser smoke accepts
+  Playwright's CommonJS default export as well as a native named export.
+- Added: static-site token authority now has a deterministic custom-property
+  census and reverse impact graph. It resolves token aliases through the
+  existing Astro family/route graph, supports token-to-component-to-route
+  queries, and fails closed on stale graphs, conflicting `--ke-` global owners,
+  undefined non-fallback consumers, and undocumented alias cycles without
+  changing token values or visual output.
+
+- Fixed: the immutable owner Preview hub now exposes the two required product
+  archetypes it previously left as non-owner or absent links: Interest Clubs and
+  Unusual Events. Its executable gate binds all 17 required production-contract
+  archetypes to exactly one representative while retaining arbitrary Date as an
+  additional owner-useful surface, for 18 directly reviewable page families.
 
 - Fixed: the festival mobile hero no longer permits an emphasized Russian word
   to break or clip mid-word. The route keeps the accepted heading family and

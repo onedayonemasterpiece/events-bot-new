@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
+import productionSurfaceContract from '../src/data/design-system-production-surface-contract.v1.json' with { type: 'json' };
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -27,6 +28,8 @@ const ownerFacingArchetypeIds = [
   'for-me',
   'focus-group',
   'artifacts',
+  'interest-clubs',
+  'unusual-events',
   'event-detail',
   'information',
 ];
@@ -65,6 +68,7 @@ const primaryRoutes = [
   'populyarnoe/',
   'vystavki/',
   'festivali/',
+  'neobychnoe/',
   'poisk/',
   'podborki/besplatnye-sobytiya/',
   'podborki/dzhaz-na-vyhodnyh/',
@@ -113,6 +117,21 @@ const ownerFacingArchetypeLinks = [...hubMain.matchAll(/<a\b[^>]*data-owner-arch
   if (!href) throw new Error(`Owner-facing archetype ${match[1]} has no href`);
   return { id: match[1], href };
 });
+const productionContractArchetypeIds = [...hubMain.matchAll(/\bdata-production-contract-archetype="([^"]+)"/gu)]
+  .map((match) => match[1]);
+const requiredProductionContractArchetypeIds = productionSurfaceContract.archetypes
+  .filter((archetype) => archetype.required)
+  .map((archetype) => archetype.id);
+if (new Set(productionContractArchetypeIds).size !== productionContractArchetypeIds.length) {
+  throw new Error('Preview hub renders duplicate production-contract archetype representatives');
+}
+const missingProductionContractArchetypes = requiredProductionContractArchetypeIds
+  .filter((id) => !productionContractArchetypeIds.includes(id));
+const unexpectedProductionContractArchetypes = productionContractArchetypeIds
+  .filter((id) => !requiredProductionContractArchetypeIds.includes(id));
+if (missingProductionContractArchetypes.length || unexpectedProductionContractArchetypes.length) {
+  throw new Error(`Preview hub production-contract coverage mismatch; missing=${missingProductionContractArchetypes.join(',') || 'none'} unexpected=${unexpectedProductionContractArchetypes.join(',') || 'none'}`);
+}
 const builtOwnerFacingIds = ownerFacingArchetypeLinks.map((link) => link.id);
 if (new Set(builtOwnerFacingIds).size !== builtOwnerFacingIds.length) {
   throw new Error('Preview hub renders duplicate owner-facing archetype links');
@@ -136,6 +155,8 @@ const expectedOwnerFacingHrefs = new Map([
   ['for-me', `${prefix}/dlya-menya/`],
   ['focus-group', `${prefix}/fokus-gruppa/`],
   ['artifacts', `${prefix}/artefakty/`],
+  ['interest-clubs', `${prefix}/kluby-po-interesam/`],
+  ['unusual-events', `${prefix}/neobychnoe/`],
   ['information', `${prefix}/partners/`],
 ]);
 for (const link of ownerFacingArchetypeLinks) {

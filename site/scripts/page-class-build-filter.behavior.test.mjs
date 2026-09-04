@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   filterPrerenderPaths,
+  FOCUSED_PREVIEW_SUPPORT_ROUTES,
   normalizeStaticSiteFocusedRoutes,
   normalizeStaticSitePageClasses,
   pageClassForComponent,
@@ -38,7 +39,7 @@ test('focused route normalization distinguishes page routes and runtime endpoint
   );
 });
 
-test('exact date route drops same-class neighbours before prerender', () => {
+test('exact date route drops same-class neighbours but keeps required support before prerender', () => {
   const paths = [
     { pathname: '/segodnya/', route: { component: 'src/pages/segodnya/index.astro' } },
     { pathname: '/zavtra/', route: { component: 'src/pages/zavtra/index.astro' } },
@@ -46,8 +47,9 @@ test('exact date route drops same-class neighbours before prerender', () => {
     { pathname: '/__preview/', route: { component: 'src/pages/[preview]/index.astro' } },
     { pathname: '/robots.txt', route: { component: 'src/pages/robots.txt.ts' } },
   ];
-  const kept = filterPrerenderPaths(paths, ['date'], ['/segodnya/', '/__preview/']);
-  assert.deepEqual(kept.map((entry) => entry.pathname), ['/segodnya/', '/__preview/']);
+  const focused = ['/segodnya/', '/__preview/', ...FOCUSED_PREVIEW_SUPPORT_ROUTES];
+  const kept = filterPrerenderPaths(paths, ['date'], focused);
+  assert.deepEqual(kept.map((entry) => entry.pathname), ['/segodnya/', '/__preview/', '/robots.txt']);
 });
 
 test('exact event route keeps only canonical detail companions and preview shell', () => {

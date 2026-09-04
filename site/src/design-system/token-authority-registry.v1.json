@@ -1,0 +1,30 @@
+{
+  "schema": "kenigevents.token-authority-registry.v1",
+  "version": "1.0.0",
+  "source_root": "site/src",
+  "generated_graph": "site/src/design-system/token-impact.generated.v1.json",
+  "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
+  "authority": {
+    "prefixes": [
+      "--ke-"
+    ],
+    "shared_global_root_owners": [
+      {
+        "token": "--ke-focus-intake-spinner-size",
+        "source_paths": [
+          "site/src/components/design-system/continuity-aliases.css",
+          "site/src/components/design-system/surface-foundations.css"
+        ],
+        "value": "var(--ke-icon-size-feature)",
+        "reason": "The continuity bridge and the semantic surface registry intentionally publish the same compatibility alias while the bridge is retained."
+      }
+    ]
+  },
+  "external_undefined_tokens": [
+    {
+      "token": "--ke-site-header-stack-height",
+      "reason": "Legacy sticky-listing integration boundary; its absence intentionally falls back to the browser declaration semantics until the shell publishes a measured stack height."
+    }
+  ],
+  "documented_alias_cycles": []
+}

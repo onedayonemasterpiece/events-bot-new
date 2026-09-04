@@ -19,6 +19,7 @@ const PAGE_CLASS_COMPONENTS = Object.freeze(PAGE_CLASS_CONTRACT.classes);
 const ALWAYS_PREVIEW_COMPONENTS = Object.freeze(PAGE_CLASS_CONTRACT.always_preview_components);
 
 export const STATIC_SITE_PAGE_CLASSES = Object.freeze(Object.keys(PAGE_CLASS_COMPONENTS));
+export const FOCUSED_PREVIEW_SUPPORT_ROUTES = Object.freeze(['/robots.txt']);
 
 function normalizedComponent(value) {
   return String(value || '').replaceAll('\\', '/').replace(/^\.\//u, '');
@@ -96,7 +97,11 @@ function entryPathname(entry) {
 export function filterPrerenderPaths(paths, pageClasses, focusedRoutes = []) {
   const allowed = new Set(['shell', ...pageClasses]);
   const focused = new Set(normalizeStaticSiteFocusedRoutes(focusedRoutes));
-  const classScoped = paths.filter(({ route }) => allowed.has(pageClassForComponent(route?.component)));
+  const support = new Set(FOCUSED_PREVIEW_SUPPORT_ROUTES);
+  const classScoped = paths.filter((entry) => (
+    allowed.has(pageClassForComponent(entry.route?.component))
+    || support.has(entryPathname(entry))
+  ));
   if (!focused.size) return classScoped;
   const kept = classScoped.filter((entry) => {
     const pathname = entryPathname(entry);

@@ -10,6 +10,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  FOCUSED_PREVIEW_SUPPORT_ROUTES,
   normalizeStaticSitePageClasses,
   pageClassForComponent,
   STATIC_SITE_PAGE_CLASSES,
@@ -218,9 +219,12 @@ function safeSlug(value) {
   return String(value || '').replace(/[^a-zA-Z0-9._-]+/gu, '-').replace(/^-+|-+$/gu, '').slice(0, 28) || 'slice';
 }
 function installDependencies(stagedSite, smoke) {
-  const npm = run('npm', ['ci'], { cwd: stagedSite });
+  const npm = run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: stagedSite });
   let browser = { durationMs: 0 };
-  if (smoke) browser = run('npm', ['exec', '--', 'playwright', 'install', 'chromium'], { cwd: stagedSite });
+  const configuredBrowser = String(process.env.PLAYWRIGHT_EXECUTABLE_PATH || '').trim();
+  if (smoke && !(configuredBrowser && existsSync(configuredBrowser))) {
+    browser = run('npm', ['exec', '--', 'playwright', 'install', 'chromium'], { cwd: stagedSite });
+  }
   return { npmCiMs: npm.durationMs, playwrightInstallMs: browser.durationMs };
 }
 
@@ -264,7 +268,7 @@ function eventSupportRoutes(dataDir, selectedRoute, explicitId) {
 
 function routeFromFile(root, file) {
   const rel = relative(root, file).replaceAll(sep, '/');
-  if (rel.startsWith('_astro/')) return null;
+  if (['_astro/', 'assets/', 'service-share/'].some((prefix) => rel.startsWith(prefix))) return null;
   if (rel === 'preview-build.json') return null;
   if (rel.endsWith('/index.html')) return `/${rel.slice(0, -'index.html'.length)}`;
   if (rel === 'index.html') return '/';
@@ -276,13 +280,20 @@ export function listProducedPaths(buildRoot) {
   return [...new Set(walkFiles(buildRoot).map((file) => routeFromFile(buildRoot, file)).filter(Boolean))].sort();
 }
 
+export function resolvePlaywrightApi(module) {
+  const api = module?.chromium ? module : module?.default;
+  if (!api?.chromium) throw new Error('Staged Playwright module does not expose chromium');
+  return api;
+}
+
 async function loadStagedBrowserModules(stagedSite) {
   const require = createRequire(join(stagedSite, 'package.json'));
   const playwrightEntry = require.resolve('playwright');
-  return Promise.all([
+  const [playwrightModule, releaseGate] = await Promise.all([
     import(`${pathToFileURL(playwrightEntry).href}?focused=${Date.now()}`),
     import(`${pathToFileURL(join(stagedSite, 'scripts', 'check-browser-release-gate.mjs')).href}?focused=${Date.now()}`),
   ]);
+  return [resolvePlaywrightApi(playwrightModule), releaseGate];
 }
 
 export async function smokeFocusedRoute({ stagedSite, buildRoot, buildId, route, offline }) {
@@ -431,7 +442,9 @@ export async function runLocalFocusedPreview(raw) {
 
     const buildId = safeBuildId(raw.buildId || `preview-local-${safeSlug(pageClass)}-${sourceSha.slice(0, 8)}-${Date.now().toString(36)}`);
     const supportRoutes = selectedRoute ? eventSupportRoutes(dataDir, selectedRoute, raw.entityId) : [];
-    const focusedRoutes = selectedRoute ? [selectedRoute, ...supportRoutes, '/__preview/'] : [];
+    const focusedRoutes = selectedRoute
+      ? [selectedRoute, ...supportRoutes, '/__preview/', ...FOCUSED_PREVIEW_SUPPORT_ROUTES]
+      : [];
     const env = {
       ...process.env,
       PREVIEW_BUILD_ID: buildId,

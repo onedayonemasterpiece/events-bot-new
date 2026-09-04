@@ -93,3 +93,40 @@ node site/scripts/check-astro-family-sot.mjs
 ```
 
 Penpot binding is optional registry metadata and is not required by these commands.
+
+## Executable token authority and reverse impact SoT
+
+CSS custom-property authority is independently materialized without changing a
+token value or a visual consumer:
+
+- policy registry: `site/src/design-system/token-authority-registry.v1.json`;
+- generated census/impact graph: `site/src/design-system/token-impact.generated.v1.json`;
+- deterministic generator and token query: `site/scripts/generate-token-impact-graph.mjs`;
+- fail-closed verifier: `site/scripts/check-token-impact-sot.mjs`.
+
+The census covers CSS declarations in `.css` and Astro style surfaces, aliases
+formed with `var(--token)`, direct `var()` consumers, and runtime
+`style.setProperty()` definitions. The impact projection follows source imports
+and the existing generated Astro-family graph, so a query yields its direct
+consumer components, affected registered families, and production routes.
+
+```bash
+# Read-only component/family/route impact for one token.
+node site/scripts/generate-token-impact-graph.mjs --impact --ke-color-action-primary
+
+# Regenerate only when source or registry authority intentionally changes.
+node site/scripts/generate-token-impact-graph.mjs --write
+
+# CI-safe verifier: no writes.
+node site/scripts/check-token-impact-sot.mjs
+node --test site/scripts/token-impact-graph.behavior.test.mjs
+```
+
+The checker rejects stale graph materialization, a stale Astro-family route
+graph, conflicting global owners for the `--ke-` authority namespace,
+non-fallback `var()` consumers with no CSS/runtime definition, and alias cycles
+unless an exact, reasoned exception is present in the registry. Compatibility
+variables outside that namespace remain in the census but are not promoted to a
+second global design-token authority. Any intentionally unresolved legacy
+boundary or shared global owner is an explicit, narrowly documented registry
+entry; an entry becomes an error once it is no longer needed.

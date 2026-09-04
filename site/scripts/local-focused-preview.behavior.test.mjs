@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   listProducedPaths,
   parseLocalFocusedArgs,
+  resolvePlaywrightApi,
   resolvePageClass,
 } from './run-local-focused-preview.mjs';
 import { STATIC_SITE_PAGE_CLASSES } from './page-class-build-filter.mjs';
@@ -22,6 +23,8 @@ test('page-class validation delegates to canonical registry export', () => {
   assert.throws(() => resolvePageClass('invented'), /Unknown STATIC_SITE_PAGE_CLASSES/u);
   const source = readFileSync(new URL('./run-local-focused-preview.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /SELECTABLE_PAGE_CLASSES|new Set\(\['event'/u);
+  assert.match(source, /configuredBrowser && existsSync\(configuredBrowser\)/u);
+  assert.match(source, /npm', \['ci', '--no-audit', '--no-fund'\]/u);
 });
 
 test('produced path inventory excludes shared assets but includes runtime endpoints', () => {
@@ -31,9 +34,12 @@ test('produced path inventory excludes shared assets but includes runtime endpoi
       'segodnya/index.html',
       '__preview/index.html',
       '_astro/app.abc.js',
+      'assets/icons/ticket.svg.metadata.json',
+      'service-share/current/manifest.json',
       'data/discovery/7.json',
       'sobytiya/one/event.ics',
       'preview-build.json',
+      'robots.txt',
     ]) {
       const path = join(root, rel);
       mkdirSync(join(path, '..'), { recursive: true });
@@ -42,10 +48,19 @@ test('produced path inventory excludes shared assets but includes runtime endpoi
     assert.deepEqual(listProducedPaths(root), [
       '/__preview/',
       '/data/discovery/7.json',
+      '/robots.txt',
       '/segodnya/',
       '/sobytiya/one/event.ics',
     ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('staged Playwright supports both ESM named and CommonJS default exports', () => {
+  const named = { chromium: { launch: () => 'named' } };
+  const commonJs = { default: { chromium: { launch: () => 'default' } } };
+  assert.equal(resolvePlaywrightApi(named).chromium.launch(), 'named');
+  assert.equal(resolvePlaywrightApi(commonJs).chromium.launch(), 'default');
+  assert.throws(() => resolvePlaywrightApi({ default: {} }), /does not expose chromium/u);
 });
