@@ -77,6 +77,83 @@ SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-[A-Za-z0-9_-]+')
 SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
 STATIC_SITE_PAGE_CLASSES = STATIC_SITE_PREVIEW_PAGE_CLASSES - {'all'}
 DEFAULT_DURABLE_CACHE_MAX_BYTES = 64 * 1024 * 1024
+KERNEL_SLOT_PRODUCTION = 'production'
+KERNEL_SLOT_REVIEW = 'review'
+KERNEL_SLOT_NAMES = frozenset({KERNEL_SLOT_PRODUCTION, KERNEL_SLOT_REVIEW})
+DEFAULT_PRODUCTION_KERNEL_SLUG = 'kenigevents-static-site-builder'
+DEFAULT_REVIEW_KERNEL_SLUG = 'kenigevents-static-site-builder-review'
+KERNEL_SLUG_RE = re.compile(r'[a-z0-9][a-z0-9-]{2,95}')
+KERNEL_LIVE_STATUSES = frozenset({'QUEUED', 'RUNNING', 'INITIALIZING', 'PREPARING'})
+
+
+class StaticSiteExecutionCapacityError(RuntimeError):
+    """A dedicated Kaggle execution slot is already durably reserved."""
+
+
+def resolve_kernel_slot(args: argparse.Namespace) -> str:
+    """Bind each build profile to its non-interchangeable Kaggle slot."""
+
+    implied = KERNEL_SLOT_PRODUCTION if args.profile == 'production-candidate' else KERNEL_SLOT_REVIEW
+    requested = str(getattr(args, 'kernel_slot', '') or implied).strip().lower()
+    if requested not in KERNEL_SLOT_NAMES:
+        raise ValueError(f'unknown static-site kernel slot: {requested!r}')
+    if requested != implied:
+        raise ValueError(
+            f'{args.profile} must use the {implied} kernel slot; cross-slot fallback is forbidden'
+        )
+    return requested
+
+
+def resolve_kernel_ref(args: argparse.Namespace, env_user: str) -> tuple[str, str]:
+    """Return the immutable slot/ref pair without ever falling back to production."""
+
+    slot = resolve_kernel_slot(args)
+    configured = str(getattr(args, 'kernel_slug', '') or '').strip().lower()
+    if not configured:
+        env_name = (
+            'STATIC_SITE_PRODUCTION_KAGGLE_KERNEL_SLUG'
+            if slot == KERNEL_SLOT_PRODUCTION
+            else 'STATIC_SITE_REVIEW_KAGGLE_KERNEL_SLUG'
+        )
+        configured = (os.getenv(env_name) or '').strip().lower()
+    slug = configured or (
+        DEFAULT_PRODUCTION_KERNEL_SLUG
+        if slot == KERNEL_SLOT_PRODUCTION
+        else DEFAULT_REVIEW_KERNEL_SLUG
+    )
+    if not KERNEL_SLUG_RE.fullmatch(slug):
+        raise ValueError(f'invalid static-site Kaggle kernel slug: {slug!r}')
+    if slot == KERNEL_SLOT_REVIEW and slug == DEFAULT_PRODUCTION_KERNEL_SLUG:
+        raise ValueError('review kernel slot must not target the production builder slug')
+    return slot, f'{env_user}/{slug}'
+
+
+def resource_lease_for_kernel_slot(slot: str) -> str:
+    if slot == KERNEL_SLOT_PRODUCTION:
+        return 'static_site:builder'
+    if slot == KERNEL_SLOT_REVIEW:
+        return 'static_site:review'
+    raise ValueError(f'unknown static-site kernel slot: {slot!r}')
+
+
+def configure_kernel_metadata_slot(staging: Path, kernel_ref: str) -> None:
+    """Retarget only metadata; both slots package the same canonical source tree."""
+
+    metadata_path = staging / 'kernel-metadata.json'
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    metadata['id'] = kernel_ref
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+
+def require_kernel_slot_available(client, kernel_ref: str, slot: str) -> None:
+    """Fail closed before push; `kernels_push` must never replace a live run."""
+
+    status = client.get_kernel_status(kernel_ref)
+    current = str(status.get('status') or '').upper()
+    if current in KERNEL_LIVE_STATUSES:
+        raise StaticSiteExecutionCapacityError(
+            f'static_site_{slot}_capacity_exhausted:{kernel_ref}:{current}'
+        )
 
 
 def normalize_page_classes(values: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
@@ -1320,10 +1397,16 @@ def create_status_dataset_if_configured(
     build_id: str,
     kernel_ref: str,
     dataset_ref: str,
+    resource_lease: str,
+    require_status: bool = False,
 ) -> str | None:
     status_db = (args.status_db or os.getenv('STATIC_SITE_STATUS_DB') or '').strip()
     callback_url = resolve_status_callback_url(args)
     if not status_db or not callback_url:
+        if require_status:
+            raise StaticSiteExecutionCapacityError(
+                'static_site_review_capacity_requires_status_db_and_callback'
+            )
         print(
             '[static-site-kaggle] status dataset skipped: '
             f"status_db={'yes' if status_db else 'no'} callback_url={'yes' if callback_url else 'no'}",
@@ -1346,11 +1429,12 @@ def create_status_dataset_if_configured(
             kernel_ref=kernel_ref,
             dataset_ref=dataset_ref,
             callback_url=callback_url,
-            resource_leases=['static_site:builder'],
+            resource_leases=[resource_lease],
         )
     )
     if not config:
         return None
+    args._status_run_config = config
     status_dataset = create_kaggle_status_dataset(
         client,
         username=env_user,
@@ -1364,11 +1448,43 @@ def create_status_dataset_if_configured(
     return status_dataset
 
 
+def release_unpushed_status_reservation(args: argparse.Namespace, resource_lease: str) -> None:
+    """Release only a preflight lease when no Kaggle metadata push occurred."""
+
+    config = getattr(args, '_status_run_config', None)
+    status_db = (getattr(args, 'status_db', '') or os.getenv('STATIC_SITE_STATUS_DB') or '').strip()
+    if not isinstance(config, dict) or not status_db:
+        return
+    try:
+        from db import Database
+        from kaggle_status import record_kaggle_run_event
+
+        async def _release() -> None:
+            db = Database(status_db)
+            try:
+                await record_kaggle_run_event(db, {
+                    'run_id': config['run_id'], 'token': config['token'],
+                    'event': 'resource_release', 'status': 'running',
+                    'resource': {'key': resource_lease, 'action': 'release'},
+                })
+            finally:
+                await db.close()
+        asyncio.run(_release())
+    except Exception as exc:
+        # Keep the original launch failure authoritative; expiry remains the
+        # fail-closed fallback if the tiny cleanup transaction itself fails.
+        print(f'[static-site-kaggle] preflight lease cleanup failed: {exc}', flush=True)
+
+
 def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_dir: Path, client, env_user: str) -> tuple[str, str]:
     if not KERNEL_SRC.exists():
         raise FileNotFoundError(KERNEL_SRC)
     args.repo_sha = resolve_repo_sha(getattr(args, 'repo_sha', ''))
     copy_tree(KERNEL_SRC, staging)
+    kernel_ref = str(getattr(args, 'kernel_ref', '') or '').strip()
+    if not kernel_ref:
+        raise ValueError('static-site kernel ref is required before staging')
+    configure_kernel_metadata_slot(staging, kernel_ref)
     image_source = getattr(args, 'image_source_contract', None) or resolve_image_source_contract(args)
     build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
     search_receipt_source: Path | None = None
@@ -1633,6 +1749,8 @@ def main() -> int:
         help='Preview-only route class; repeat or pass a comma list. Default: all.',
     )
     parser.add_argument('--repo-sha', default=os.getenv('STATIC_SITE_REPO_SHA', ''))
+    parser.add_argument('--kernel-slot', choices=sorted(KERNEL_SLOT_NAMES), default='')
+    parser.add_argument('--kernel-slug', default='')
     parser.add_argument(
         '--image-source-manifest',
         default=os.getenv('STATIC_SITE_IMAGE_SOURCE_MANIFEST_FILE', ''),
@@ -1884,7 +2002,9 @@ def main() -> int:
         if not env_user:
             raise RuntimeError('KAGGLE_USERNAME is required')
         client = KaggleClient()
-        kernel_ref = f'{env_user}/kenigevents-static-site-builder'
+        kernel_slot, kernel_ref = resolve_kernel_ref(args, env_user)
+        args.kernel_slot = kernel_slot
+        args.kernel_ref = kernel_ref
         if args.adopt_existing:
             return adopt_existing_kernel_output(args, client, kernel_ref)
         require_static_site_storage_ready()
@@ -1913,8 +2033,12 @@ def main() -> int:
                 shutil.copytree(tmp_root, keep)
                 print(f"[static-site-kaggle] staging kept: {keep}", flush=True)
 
+            pushed_kernel = False
             try:
                 dataset_sources = [dataset_ref, *secret_dataset_refs]
+                # Refuse an already-running slot before reserving it. The
+                # reservation below then closes the concurrent-caller race.
+                require_kernel_slot_available(client, kernel_ref, kernel_slot)
                 status_dataset = create_status_dataset_if_configured(
                     args,
                     client,
@@ -1922,10 +2046,15 @@ def main() -> int:
                     build_id=build_id,
                     kernel_ref=kernel_ref,
                     dataset_ref=dataset_ref,
+                    resource_lease=resource_lease_for_kernel_slot(kernel_slot),
+                    require_status=(kernel_slot == KERNEL_SLOT_REVIEW),
                 )
                 if status_dataset:
                     dataset_sources.append(status_dataset)
+                # The durable status-lease reservation serializes duplicate review
+                # submissions before `kernels_push` can replace slot metadata.
                 client.push_kernel(kernel_path=staging, dataset_sources=dataset_sources)
+                pushed_kernel = True
                 print(f"[static-site-kaggle] pushed {kernel_ref} build_id={build_id} datasets={dataset_sources}", flush=True)
                 wait_kernel_dataset_sources(client, kernel_ref, dataset_sources)
                 if args.no_wait:
@@ -1969,6 +2098,10 @@ def main() -> int:
                         raise RuntimeError(f'Kaggle static-site builder failed: {status}')
                 raise TimeoutError(f'Kaggle static-site builder timeout; last_status={last_status}')
             finally:
+                if not pushed_kernel:
+                    release_unpushed_status_reservation(
+                        args, resource_lease_for_kernel_slot(kernel_slot)
+                    )
                 if secret_dataset_refs and not args.no_wait and not args.keep_secret_datasets:
                     cleanup_secret_datasets(client, secret_dataset_refs)
 

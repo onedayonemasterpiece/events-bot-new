@@ -468,6 +468,10 @@ def create_kaggle_status_dataset(
     return slug
 
 
+class KaggleResourceLeaseBusy(RuntimeError):
+    """A server-side resource lease prevents a second remote launch."""
+
+
 async def create_kaggle_run_config(
     db: Database,
     *,
@@ -539,6 +543,19 @@ async def create_kaggle_run_config(
                 now,
             ),
         )
+        # Reserve before Kaggle metadata can be pushed.  A kernel-side acquire is
+        # still retained for heartbeat/release, but it is too late to prevent two
+        # callers from replacing the same slot between dataset upload and start.
+        for resource_key in dict.fromkeys(str(item).strip() for item in (resource_leases or []) if str(item).strip()):
+            reservation = await _record_resource(
+                conn,
+                run_id=run_id,
+                resource={"key": resource_key, "action": "acquire", "holder_kind": "kaggle_preflight"},
+            )
+            if reservation.get("resource_action") == "blocked":
+                raise KaggleResourceLeaseBusy(
+                    f"kaggle_resource_lease_busy:{resource_key}:{reservation.get('holder_run_id') or 'unknown'}"
+                )
     return {
         "run_id": run_id,
         "session_id": session_id,

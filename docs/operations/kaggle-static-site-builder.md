@@ -254,6 +254,25 @@ Rules:
   writes (`If-None-Match: *`) below one immutable `_review/<token>/`
   prefix.
 
+## Review Preview capacity (2026-09-04)
+
+Review Preview is a separate **execution slot**, not a second build pipeline. The
+canonical runner selects `zigomaro/kenigevents-static-site-builder-review` for
+`--profile preview`; production candidates remain on
+`zigomaro/kenigevents-static-site-builder`. Both slots receive the same staged
+`kaggle/StaticSiteBuilder` package, source tarball, exporter/page-class contract
+and checked host publisher. Only staged `kernel-metadata.json.id` changes.
+
+The runner reserves `static_site:review` in the status ledger before Kaggle
+metadata is pushed (production retains `static_site:builder`). Thus duplicate
+review requests coalesce at their caller/outbox and a second launcher fails
+closed with `kaggle_resource_lease_busy` rather than replacing a live review
+kernel. A live-slot probe is also performed before reservation; it returns the
+explicit `static_site_review_capacity_exhausted` error. There is no fallback to
+the production slug and no cancellation/preemption. Review requires a status DB
+and callback so this reservation is durable. Snapshot, build ID, repo SHA,
+dataset identity and publisher receipt remain per-run immutable.
+
 ## Current implementation path
 
 - Runner: `scripts/run_static_site_builder_kaggle.py`.

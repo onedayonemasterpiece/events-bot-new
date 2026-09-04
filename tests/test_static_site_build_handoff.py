@@ -1400,3 +1400,63 @@ def test_production_candidate_requires_collection_semantics_independent_of_relat
     assert _arg_after(cmd, "--collection-batch-last-good").endswith(
         "collection-batch-last-good.json"
     )
+
+
+def test_review_preview_uses_dedicated_slot_without_production_fallback() -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    review = SimpleNamespace(profile="preview", kernel_slot="", kernel_slug="")
+    production = SimpleNamespace(profile="production-candidate", kernel_slot="", kernel_slug="")
+    assert runner.resolve_kernel_ref(review, "zigomaro") == (
+        "review",
+        "zigomaro/kenigevents-static-site-builder-review",
+    )
+    assert runner.resolve_kernel_ref(production, "zigomaro") == (
+        "production",
+        "zigomaro/kenigevents-static-site-builder",
+    )
+    assert runner.resource_lease_for_kernel_slot("review") == "static_site:review"
+    with pytest.raises(ValueError, match="cross-slot fallback"):
+        runner.resolve_kernel_slot(SimpleNamespace(profile="preview", kernel_slot="production"))
+
+
+def test_review_kernel_metadata_reuses_canonical_packaged_source(tmp_path: Path) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    metadata = tmp_path / "kernel-metadata.json"
+    metadata.write_text('{"id":"eventsbot/kenigevents-static-site-builder","code_file":"static_site_builder.py"}', encoding="utf-8")
+    canonical_script = tmp_path / "static_site_builder.py"
+    canonical_script.write_text("# canonical builder\n", encoding="utf-8")
+    before = hashlib.sha256(canonical_script.read_bytes()).hexdigest()
+
+    runner.configure_kernel_metadata_slot(tmp_path, "zigomaro/kenigevents-static-site-builder-review")
+
+    assert json.loads(metadata.read_text(encoding="utf-8"))["id"] == "zigomaro/kenigevents-static-site-builder-review"
+    assert hashlib.sha256(canonical_script.read_bytes()).hexdigest() == before
+
+
+def test_busy_production_slot_does_not_preempt_or_mutate_review_slot() -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    class Client:
+        def get_kernel_status(self, kernel_ref: str):
+            assert kernel_ref == "zigomaro/kenigevents-static-site-builder"
+            return {"status": "RUNNING"}
+
+    with pytest.raises(runner.StaticSiteExecutionCapacityError, match="capacity_exhausted"):
+        runner.require_kernel_slot_available(
+            Client(), "zigomaro/kenigevents-static-site-builder", "production"
+        )
+
+
+def test_review_capacity_exhaustion_is_a_safe_error_before_push() -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    class Client:
+        def get_kernel_status(self, _kernel_ref: str):
+            return {"status": "QUEUED"}
+
+    with pytest.raises(runner.StaticSiteExecutionCapacityError, match="static_site_review_capacity_exhausted"):
+        runner.require_kernel_slot_available(
+            Client(), "zigomaro/kenigevents-static-site-builder-review", "review"
+        )

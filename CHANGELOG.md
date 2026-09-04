@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: Review Preview now has a dedicated Kaggle execution slot and durable
+  `static_site:review` preflight lease. It packages the exact canonical
+  StaticSiteBuilder source while production remains on its existing slot; busy
+  capacity fails closed without preemption or fallback.
+
 - Fixed static-preview regression gates to use exported gallery cardinality and
   to keep Popular Large/Compact checks separate from Date/Weekend mobile rails.
 

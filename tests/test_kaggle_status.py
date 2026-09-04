@@ -1006,3 +1006,33 @@ def test_kaggle_status_client_does_not_retry_authoritative_resource_block(
 
     assert client.acquire_resource("telegram_session:story") is False
     assert len(calls) == 1
+
+@pytest.mark.asyncio
+async def test_preflight_resource_lease_coalesces_duplicate_review_launches(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    path = str(tmp_path / "db.sqlite")
+    first_db = Database(path)
+    await first_db.init()
+    first = await create_kaggle_run_config(
+        first_db,
+        run_id="static-site:review-one",
+        session_id=None,
+        kind="static_site_builder",
+        notebook="StaticSiteBuilder",
+        resource_leases=["static_site:review"],
+    )
+    assert first
+    await first_db.close()
+
+    second_db = Database(path)
+    await second_db.init()
+    with pytest.raises(kaggle_status.KaggleResourceLeaseBusy, match="static_site:review"):
+        await create_kaggle_run_config(
+            second_db,
+            run_id="static-site:review-two",
+            session_id=None,
+            kind="static_site_builder",
+            notebook="StaticSiteBuilder",
+            resource_leases=["static_site:review"],
+        )
+    await second_db.close()
