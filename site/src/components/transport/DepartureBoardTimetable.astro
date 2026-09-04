@@ -60,13 +60,13 @@ const additional = options.slice(2);
   table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
   thead th { padding:.38rem .25rem; color:#6a7471; font-size:.62rem; font-weight:850; text-align:left; }
   thead th:first-child,tbody th { width:2rem; }
-  tbody th { padding:.52rem .25rem; border-top:1px solid rgba(61,74,70,.14); color:#67716e; font-size:.68rem; text-align:left; }
-  td { padding:.52rem .25rem; border-top:1px solid rgba(61,74,70,.14); color:#17201f; font-size:.88rem; font-weight:850; white-space:nowrap; }
-  td:first-of-type { color:#d34b3e; }
-  td small { display:block; color:#8e3d1e; font-size:.65rem; font-weight:800; white-space:normal; }
+  tbody th { padding:.52rem .25rem; border-top:1px solid var(--ke-color-transport-row-line); color:#67716e; font-size:.68rem; text-align:left; }
+  td { padding:.52rem .25rem; border-top:1px solid var(--ke-color-transport-row-line); color:var(--ke-color-transport-route-text); font-size:.88rem; font-weight:850; white-space:nowrap; }
+  td:first-of-type { color:var(--ke-color-transport-departure); }
+  td small { display:block; color:var(--ke-color-transport-tight); font-size:.65rem; font-weight:800; white-space:normal; }
   details table { margin-top:.05rem; }
-  summary { display:flex; align-items:center; justify-content:center; min-height:44px; margin-top:.35rem; padding:.2rem .55rem; border:1px solid rgba(69,76,73,.22); border-radius:12px; cursor:pointer; color:#17201f; background:#fff; font-size:.76rem; font-weight:850; list-style:none; text-align:center; }
+  summary { display:flex; align-items:center; justify-content:center; min-height:44px; margin-top:.35rem; padding:.2rem .55rem; border:1px solid var(--ke-color-transport-control-line); border-radius:12px; cursor:pointer; color:var(--ke-color-transport-route-text); background:var(--ke-color-transport-control-surface); font-size:.76rem; font-weight:850; list-style:none; text-align:center; }
   summary::-webkit-details-marker { display:none; }
-  summary:focus-visible { outline:3px solid #b54d22; outline-offset:2px; }
+  summary:focus-visible { outline:3px solid var(--ke-color-transport-focus); outline-offset:2px; }
   @container kaup-transport (max-width:390px) { th,td { padding-inline:.11rem; } td { font-size:.77rem; } thead th { font-size:.56rem; } thead th:first-child,tbody th { width:1.65rem; } }
 </style>

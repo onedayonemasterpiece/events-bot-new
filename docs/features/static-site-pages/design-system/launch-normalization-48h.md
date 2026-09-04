@@ -770,3 +770,32 @@ semantic icon delegates its glyph to the lower-level `Icon` renderer, the SVG
 still carries `data-ke-icon-name`, `data-ke-icon-role`, the `four-role-v1`
 contract and `foundations.css` size owner; source normalization without those
 generated-DOM identities is incomplete.
+
+## 22. Production transport-token consumer normalization (2026-09-04)
+
+The production event-detail transport consumers now bind only to their existing
+modality roles in
+`site/src/components/design-system/transport-foundations.css`: warm rail,
+cool regional bus, and the distinct Kaup/route and official-transfer families.
+This is a presentation-only convergence: schedule data, experiment selection,
+route semantics, controls, responsive containers, radii and geometry are
+unchanged. The compact Kaup treatment keeps its separate transfer surface;
+rail and regional-bus surfaces remain intentionally different modality scans.
+
+The executable source regression is
+`site/tests/transport-token-consumers.test.mjs`. It confirms every referenced
+transport role is defined by that foundation owner and rejects new raw colour
+literals in production-reachable schedule consumers.
+
+The test permits only these documented non-equivalent retained literals; no
+existing transport-foundation role has the same value and meaning:
+
+- rail's `#78342f` / `rgba(151,53,46,0.08)` empty-return advisory pair;
+- Kaup header brand icon `#a54821` and its independent translucent summary
+  underline `rgba(255,255,255,.38)`;
+- the three intentionally distinct compact timetable label inks `#6a7471`,
+  `#67716e` and `#65706d`.
+
+They are exceptions, not new token owners. A future exact semantic role must
+replace the literal and tighten this allowlist rather than introducing a local
+transport token.

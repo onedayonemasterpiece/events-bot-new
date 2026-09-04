@@ -48,15 +48,15 @@ const { route, title, subtitle, originMapUrl, originMapLabel } = Astro.props;
     align-items:center;
     gap:.12rem;
     border-radius:13px;
-    color:#fff;
-    background:#176653;
+    color:var(--ke-color-kaup-transfer-action-text);
+    background:var(--ke-color-transport-route);
     font-variant-numeric:tabular-nums;
   }
   .transport-route-heading__badge :global(.icon) { width:.8rem; height:.8rem; fill:currentColor; }
   .transport-route-heading__badge strong { font-size:.9rem; line-height:1; }
   .transport-route-heading__copy { min-width:0; display:grid; gap:.1rem; }
-  .transport-route-heading__copy>strong { color:#17201f; font-size:1rem; line-height:1.17; }
-  .transport-route-heading__copy small { color:#66706e; font-size:.75rem; line-height:1.28; }
+  .transport-route-heading__copy>strong { color:var(--ke-color-transport-route-text); font-size:1rem; line-height:1.17; }
+  .transport-route-heading__copy small { color:var(--ke-color-transport-route-muted); font-size:.75rem; line-height:1.28; }
   .transport-route-heading__map {
     width:44px;
     min-height:44px;
@@ -64,11 +64,11 @@ const { route, title, subtitle, originMapUrl, originMapLabel } = Astro.props;
     align-items:center;
     justify-content:center;
     border-radius:50%;
-    color:#176653;
+    color:var(--ke-color-transport-route);
     text-decoration:none;
   }
-  .transport-route-heading__map:hover { background:rgba(23,102,83,.09); }
-  .transport-route-heading__map:focus-visible { outline:3px solid #b54d22; outline-offset:2px; }
+  .transport-route-heading__map:hover { background:var(--ke-color-transport-route-hover); }
+  .transport-route-heading__map:focus-visible { outline:3px solid var(--ke-color-transport-focus); outline-offset:2px; }
   .transport-route-heading__map :global(.icon) { width:1.08rem; height:1.08rem; }
   @container kaup-transport (max-width:390px) {
     .transport-route-heading { grid-template-columns:auto minmax(0,1fr) 40px; gap:.5rem; }

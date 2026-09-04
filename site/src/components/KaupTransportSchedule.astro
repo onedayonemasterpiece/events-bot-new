@@ -59,33 +59,33 @@ const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABA
 )}
 
 <style>
-  .kaup-transport { container:kaup-transport / inline-size; margin:1.25rem 0 0; overflow:hidden; border:1px solid rgba(58,68,65,.17); border-radius:18px; background:#fffdfa; color:#17201f; box-shadow:0 12px 30px rgba(39,49,46,.07); }
+  .kaup-transport { container:kaup-transport / inline-size; margin:1.25rem 0 0; overflow:hidden; border:1px solid var(--ke-color-kaup-border); border-radius:18px; background:var(--ke-color-kaup-surface); color:var(--ke-color-transport-route-text); box-shadow:var(--ke-elevation-kaup); }
   .kaup-transport__header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.9rem 1rem .75rem; }
-  .kaup-transport__header p { margin:0; color:#d34b3e; font-size:.68rem; font-weight:900; letter-spacing:.075em; text-transform:uppercase; }
+  .kaup-transport__header p { margin:0; color:var(--ke-color-transport-departure); font-size:.68rem; font-weight:900; letter-spacing:.075em; text-transform:uppercase; }
   .kaup-transport__header h2 { margin:.1rem 0 0; font-size:clamp(1.35rem,2.4vw,1.8rem); line-height:1.12; }
   .kaup-transport__header :global(.icon) { width:1.65rem; height:1.65rem; color:#a54821; }
-  .kaup-transport__transfer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.75rem; padding:.85rem 1rem; border-top:1px solid rgba(93,71,43,.14); background:#302b27; color:#fffaf2; }
+  .kaup-transport__transfer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.75rem; padding:.85rem 1rem; border-top:1px solid var(--ke-color-kaup-section-line); background:var(--ke-color-kaup-transfer-surface); color:var(--ke-color-kaup-transfer-text); }
   .kaup-transport__transfer h3,.kaup-transport__bus h3 { margin:0; font-size:1.05rem; line-height:1.25; }
   .kaup-transport__transfer-details { margin:.25rem 0 0; }
-  .kaup-transport__transfer-details summary { display:flex; align-items:center; gap:.55rem; width:max-content; min-height:44px; cursor:pointer; color:#e6d9cd; font-size:.78rem; font-weight:750; list-style:none; text-decoration:underline; text-decoration-color:rgba(255,255,255,.38); text-underline-offset:.16em; }
+  .kaup-transport__transfer-details summary { display:flex; align-items:center; gap:.55rem; width:max-content; min-height:44px; cursor:pointer; color:var(--ke-color-kaup-transfer-muted); font-size:.78rem; font-weight:750; list-style:none; text-decoration:underline; text-decoration-color:rgba(255,255,255,.38); text-underline-offset:.16em; }
   .kaup-transport__transfer-details summary::-webkit-details-marker { display:none; }
   .kaup-transport__transfer-details summary::after { width:.42rem; height:.42rem; border-right:1.5px solid; border-bottom:1.5px solid; content:""; transform:rotate(45deg) translateY(-.1rem); }
   .kaup-transport__transfer-details[open] summary::after { transform:rotate(225deg); }
-  .kaup-transport__transfer-details p { max-width:58rem; margin:.35rem 0; color:#e2d6ca; font-size:.8rem; line-height:1.4; }
-  .kaup-transport__transfer-details ul { display:flex; flex-wrap:wrap; gap:.3rem .85rem; margin:.35rem 0 0; padding:0; list-style:none; color:#fff; font-size:.78rem; }
-  .kaup-transport__transfer-details li::before { color:#d36c3c; content:"• "; }
-  .kaup-transport__transfer>a { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-height:44px; padding:.58rem .8rem; border-radius:11px; background:#bd4e20; color:#fff; font-size:.86rem; font-weight:900; text-decoration:none; white-space:nowrap; }
+  .kaup-transport__transfer-details p { max-width:58rem; margin:.35rem 0; color:var(--ke-color-kaup-transfer-copy); font-size:.8rem; line-height:1.4; }
+  .kaup-transport__transfer-details ul { display:flex; flex-wrap:wrap; gap:.3rem .85rem; margin:.35rem 0 0; padding:0; list-style:none; color:var(--ke-color-kaup-transfer-action-text); font-size:.78rem; }
+  .kaup-transport__transfer-details li::before { color:var(--ke-color-kaup-transfer-bullet); content:"• "; }
+  .kaup-transport__transfer>a { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-height:44px; padding:.58rem .8rem; border-radius:11px; background:var(--ke-color-kaup-transfer-action); color:var(--ke-color-kaup-transfer-action-text); font-size:.86rem; font-weight:900; text-decoration:none; white-space:nowrap; }
   .kaup-transport__transfer>a :global(.icon) { width:1.1rem; height:1.1rem; }
-  .kaup-transport__bus { margin:.8rem 1rem; padding:.78rem; border-radius:16px; background:#f4f1e8; }
-  .kaup-transport__car a { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; width:44px; min-height:44px; margin-left:auto; border-radius:50%; color:#176653; text-decoration:none; }
-  .kaup-transport__car a:hover { background:rgba(23,102,83,.09); }
+  .kaup-transport__bus { margin:.8rem 1rem; padding:.78rem; border-radius:16px; background:var(--ke-color-transport-timeline-surface); }
+  .kaup-transport__car a { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; width:44px; min-height:44px; margin-left:auto; border-radius:50%; color:var(--ke-color-transport-route); text-decoration:none; }
+  .kaup-transport__car a:hover { background:var(--ke-color-transport-route-hover); }
   .kaup-transport__car a :global(.icon) { width:1.2rem; height:1.2rem; }
-  .kaup-transport__car { display:flex; align-items:center; gap:.55rem; padding:.55rem 1rem; border-top:1px solid rgba(93,71,43,.14); }
-  .kaup-transport__car>:global(.icon) { width:1.25rem; height:1.25rem; flex:0 0 auto; color:#176653; }
+  .kaup-transport__car { display:flex; align-items:center; gap:.55rem; padding:.55rem 1rem; border-top:1px solid var(--ke-color-kaup-section-line); }
+  .kaup-transport__car>:global(.icon) { width:1.25rem; height:1.25rem; flex:0 0 auto; color:var(--ke-color-transport-route); }
   .kaup-transport__car p { display:flex; flex-wrap:wrap; gap:.2rem .55rem; margin:0; font-size:.82rem; }
-  .kaup-transport__car p span { color:#6c5c51; }
-  .kaup-transport footer { padding:.48rem 1rem; border-top:1px solid rgba(93,71,43,.12); color:#6c5c51; font-size:.7rem; line-height:1.35; }
-  .kaup-transport footer a { color:#8e3d1e; font-weight:800; }
+  .kaup-transport__car p span { color:var(--ke-color-transport-route-muted-warm); }
+  .kaup-transport footer { padding:.48rem 1rem; border-top:1px solid var(--ke-color-kaup-footer-line); color:var(--ke-color-transport-route-muted-warm); font-size:.7rem; line-height:1.35; }
+  .kaup-transport footer a { color:var(--ke-color-transport-tight); font-weight:800; }
   .kaup-transport footer a,.kaup-transport footer .kaup-transport__schedule-effective { margin-left:.18rem; }
   @container kaup-transport (max-width:560px) {
     .kaup-transport__header { padding:.75rem .8rem .6rem; }
@@ -98,8 +98,8 @@ const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABA
     .kaup-transport__car { padding:.48rem .8rem; }
     .kaup-transport footer { padding:.42rem .8rem; font-size:.65rem; }
   }
-  .kaup-transport--compact { margin-top:1rem; border-radius:15px; background:#fffdfa; }
-  .kaup-transport--compact .kaup-transport__transfer { background:#342f2b; }
+  .kaup-transport--compact { margin-top:1rem; border-radius:15px; background:var(--ke-color-kaup-surface); }
+  .kaup-transport--compact .kaup-transport__transfer { background:var(--ke-color-kaup-transfer-surface-compact); }
   @container kaup-transport (max-width:360px) {
     .kaup-transport__transfer { grid-template-columns:minmax(0,1fr) auto; gap:.45rem; }
   }

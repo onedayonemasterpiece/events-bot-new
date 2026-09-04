@@ -46,17 +46,17 @@ const copy = treatment === 'departure-board'
 
 <style>
   .transport-journey-alerts { display:grid; gap:.42rem; margin-top:.5rem; }
-  .transport-journey-alerts__walk { display:flex; align-items:center; gap:.5rem; min-height:44px; padding:.34rem .45rem; color:#204f46; font-size:.74rem; line-height:1.28; }
-  .transport-journey-alerts__walk>:global(.icon) { width:1.15rem; height:1.15rem; flex:0 0 auto; color:#176653; }
+  .transport-journey-alerts__walk { display:flex; align-items:center; gap:.5rem; min-height:44px; padding:.34rem .45rem; color:var(--ke-color-transport-route-copy); font-size:.74rem; line-height:1.28; }
+  .transport-journey-alerts__walk>:global(.icon) { width:1.15rem; height:1.15rem; flex:0 0 auto; color:var(--ke-color-transport-route); }
   .transport-journey-alerts__walk p { min-width:0; display:grid; margin:0; }
-  .transport-journey-alerts__walk p span { color:#526460; font-size:.68rem; }
-  .transport-journey-alerts__walk a { width:44px; min-height:44px; display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; margin-left:auto; border-radius:50%; color:#176653; text-decoration:none; }
-  .transport-journey-alerts__walk a:hover { background:rgba(23,102,83,.09); }
-  .transport-journey-alerts__walk a:focus-visible { outline:3px solid #b54d22; outline-offset:2px; }
+  .transport-journey-alerts__walk p span { color:var(--ke-color-transport-route-walk-muted); font-size:.68rem; }
+  .transport-journey-alerts__walk a { width:44px; min-height:44px; display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; margin-left:auto; border-radius:50%; color:var(--ke-color-transport-route); text-decoration:none; }
+  .transport-journey-alerts__walk a:hover { background:var(--ke-color-transport-route-hover); }
+  .transport-journey-alerts__walk a:focus-visible { outline:3px solid var(--ke-color-transport-focus); outline-offset:2px; }
   .transport-journey-alerts__walk a :global(.icon) { width:1.1rem; height:1.1rem; }
-  .transport-journey-alerts__warning { margin:0; padding:.52rem .62rem; border-left:3px solid #e49a16; border-radius:0 10px 10px 0; color:#3f3320; background:#fff2d8; font-size:.75rem; font-weight:850; line-height:1.35; }
-  .transport-journey-alerts--route-strips .transport-journey-alerts__walk { border-radius:10px; background:#e4efec; }
-  .transport-journey-alerts--route-strips .transport-journey-alerts__warning { background:#fff0d2; }
+  .transport-journey-alerts__warning { margin:0; padding:.52rem .62rem; border-left:3px solid var(--ke-color-transport-warning-line); border-radius:0 10px 10px 0; color:var(--ke-color-transport-warning-text); background:var(--ke-color-transport-warning-surface); font-size:.75rem; font-weight:850; line-height:1.35; }
+  .transport-journey-alerts--route-strips .transport-journey-alerts__walk { border-radius:10px; background:var(--ke-color-transport-route-surface); }
+  .transport-journey-alerts--route-strips .transport-journey-alerts__warning { background:var(--ke-color-transport-warning-surface-strong); }
   .transport-journey-alerts--next-departure .transport-journey-alerts__walk { padding-inline:.15rem; }
   @container kaup-transport (max-width:390px) {
     .transport-journey-alerts__walk { padding-inline:.3rem; font-size:.69rem; }
