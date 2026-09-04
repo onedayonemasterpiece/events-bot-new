@@ -70,13 +70,90 @@ ARTIFACT_ROOT = static_site_artifact_root(ROOT)
 SCRATCH_ROOT = static_site_scratch_root(ARTIFACT_ROOT)
 OUTPUT_ROOT = static_site_output_root()
 LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
+DEFAULT_KERNEL_SLUG = 'kenigevents-static-site-builder'
+REVIEW_PREVIEW_KERNEL_SLUG = 'kenigevents-static-site-builder-review-preview'
+KERNEL_SLUG_TO_EXECUTION_LANE = {
+    DEFAULT_KERNEL_SLUG: 'production',
+    REVIEW_PREVIEW_KERNEL_SLUG: 'review-preview',
+}
+KERNEL_REF_RE = re.compile(
+    r'(?P<owner>[a-z0-9][a-z0-9_-]{0,62})/'
+    r'(?P<slug>[a-z0-9][a-z0-9-]{0,62})'
+)
+EXECUTION_LANE_RESOURCE_LEASES = {
+    'production': 'static_site:builder',
+    'review-preview': 'static_site:builder:review-preview',
+}
 ADOPT_REMOTE_LIVE_EXIT = 75
 ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
 BUILD_ID_RE = re.compile(r'(?:preview|production)-[A-Za-z0-9][A-Za-z0-9._-]{0,191}')
-SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-[A-Za-z0-9_-]+')
+SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-(?!review-preview-)[A-Za-z0-9_-]+')
+REVIEW_PREVIEW_SCRATCH_DIR_RE = re.compile(
+    r'static-site-kaggle-review-preview-[A-Za-z0-9_-]+'
+)
 SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
 STATIC_SITE_PAGE_CLASSES = STATIC_SITE_PREVIEW_PAGE_CLASSES - {'all'}
 DEFAULT_DURABLE_CACHE_MAX_BYTES = 64 * 1024 * 1024
+
+
+def resolve_kernel_ref(value: str | None, *, env_user: str) -> tuple[str, str]:
+    """Resolve one of the two owned static-site execution kernels.
+
+    A kernel ref is an execution lane, not an arbitrary notebook destination:
+    both lanes package the same checked source, while their separate Kaggle
+    slugs prevent a long production candidate from starving an operator review.
+    """
+
+    owner = str(env_user or '').strip().lower()
+    if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,62}', owner):
+        raise ValueError('KAGGLE_USERNAME must be a valid Kaggle owner slug')
+    configured = str(value or '').strip().lower()
+    if not configured:
+        configured = f'{owner}/{DEFAULT_KERNEL_SLUG}'
+    match = KERNEL_REF_RE.fullmatch(configured)
+    if not match:
+        raise ValueError('--kernel-ref must be an owned Kaggle ref: <owner>/<slug>')
+    if match.group('owner') != owner:
+        raise ValueError('--kernel-ref owner must match KAGGLE_USERNAME')
+    slug = match.group('slug')
+    lane = KERNEL_SLUG_TO_EXECUTION_LANE.get(slug)
+    if lane is None:
+        allowed = ', '.join(sorted(KERNEL_SLUG_TO_EXECUTION_LANE))
+        raise ValueError(f'--kernel-ref must use one supported static-site slug: {allowed}')
+    return configured, lane
+
+
+def execution_lane_resource_lease(execution_lane: str) -> str:
+    try:
+        return EXECUTION_LANE_RESOURCE_LEASES[execution_lane]
+    except KeyError as exc:
+        raise ValueError(f'unsupported static-site execution lane: {execution_lane!r}') from exc
+
+
+def execution_lane_lock_path(execution_lane: str) -> Path:
+    """Keep the historical production lock while isolating review execution."""
+
+    if execution_lane == 'production':
+        return LOCK_PATH
+    if execution_lane == 'review-preview':
+        return ARTIFACT_ROOT / 'static-site-kaggle-review-preview.lock'
+    raise ValueError(f'unsupported static-site execution lane: {execution_lane!r}')
+
+
+def execution_lane_scratch_prefix(execution_lane: str) -> str:
+    if execution_lane == 'production':
+        return 'static-site-kaggle-'
+    if execution_lane == 'review-preview':
+        return 'static-site-kaggle-review-preview-'
+    raise ValueError(f'unsupported static-site execution lane: {execution_lane!r}')
+
+
+def execution_lane_scratch_dir_re(execution_lane: str) -> re.Pattern[str]:
+    if execution_lane == 'production':
+        return SCRATCH_DIR_RE
+    if execution_lane == 'review-preview':
+        return REVIEW_PREVIEW_SCRATCH_DIR_RE
+    raise ValueError(f'unsupported static-site execution lane: {execution_lane!r}')
 
 
 def normalize_page_classes(values: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
@@ -194,25 +271,32 @@ def require_static_site_storage_ready() -> None:
         )
 
 
-def prune_abandoned_static_site_scratch(scratch_root: Path = SCRATCH_ROOT) -> dict[str, object]:
+def prune_abandoned_static_site_scratch(
+    scratch_root: Path = SCRATCH_ROOT,
+    *,
+    execution_lane: str = 'production',
+) -> dict[str, object]:
     """Remove only runner-owned scratch trees while the process lock is held.
 
     ``TemporaryDirectory`` handles normal exits.  A killed Fly process can
     leave the staged SQLite dataset behind, however, and that residue can make
     the next capacity probe fail before it gets a chance to recover.  The
-    caller must hold ``LOCK_PATH``; therefore no conforming local runner can be
-    using one of these directories at the same time.
+    caller must hold the selected execution lane's local lock; therefore no
+    conforming runner in that lane can be using one of these directories at the
+    same time.  Lanes deliberately use disjoint names, so review cleanup can
+    never delete a production candidate's staging tree (or vice versa).
     """
 
     root = Path(scratch_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
     removed: list[str] = []
     removed_bytes = 0
+    owned_scratch_dir_re = execution_lane_scratch_dir_re(execution_lane)
     for candidate in root.iterdir():
         if (
             candidate.is_symlink()
             or not candidate.is_dir()
-            or not SCRATCH_DIR_RE.fullmatch(candidate.name)
+            or not owned_scratch_dir_re.fullmatch(candidate.name)
         ):
             continue
         size = 0
@@ -890,6 +974,28 @@ def copy_tree(src: Path, dst: Path, *, ignore_extra: list[str] | None = None) ->
     shutil.copytree(src, dst, ignore=ignore, dirs_exist_ok=True)
 
 
+def rewrite_staged_kernel_metadata_id(staging: Path, kernel_ref: str) -> None:
+    """Bind the copied Kaggle package to its selected execution slug only.
+
+    The canonical metadata in the repository remains the production slug.
+    Staging is an isolated copy, and replacing its ``id`` is intentionally the
+    only metadata mutation needed to route the exact same package to review.
+    """
+
+    metadata_path = staging / 'kernel-metadata.json'
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f'staged Kaggle kernel metadata is invalid: {exc}') from exc
+    if not isinstance(metadata, dict):
+        raise RuntimeError('staged Kaggle kernel metadata must be a JSON object')
+    metadata['id'] = kernel_ref
+    metadata_path.write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + '\n',
+        encoding='utf-8',
+    )
+
+
 def run(cmd: list[str], cwd: Path = ROOT, env: dict[str, str] | None = None) -> None:
     print(f"[static-site-kaggle] $ {' '.join(cmd)}", flush=True)
     subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
@@ -1346,7 +1452,11 @@ def create_status_dataset_if_configured(
             kernel_ref=kernel_ref,
             dataset_ref=dataset_ref,
             callback_url=callback_url,
-            resource_leases=['static_site:builder'],
+            resource_leases=[
+                execution_lane_resource_lease(
+                    str(getattr(args, 'execution_lane', 'production'))
+                )
+            ],
         )
     )
     if not config:
@@ -1364,11 +1474,24 @@ def create_status_dataset_if_configured(
     return status_dataset
 
 
-def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_dir: Path, client, env_user: str) -> tuple[str, str]:
+def stage_kernel_and_dataset(
+    args: argparse.Namespace,
+    staging: Path,
+    dataset_dir: Path,
+    client,
+    env_user: str,
+    *,
+    kernel_ref: str | None = None,
+) -> tuple[str, str]:
     if not KERNEL_SRC.exists():
         raise FileNotFoundError(KERNEL_SRC)
     args.repo_sha = resolve_repo_sha(getattr(args, 'repo_sha', ''))
     copy_tree(KERNEL_SRC, staging)
+    # ``kernel_ref`` is passed by the real lifecycle.  Retain the optional
+    # argument for direct staging helpers/tests that intentionally do not make
+    # a Kaggle package at all.
+    if kernel_ref is not None:
+        rewrite_staged_kernel_metadata_id(staging, kernel_ref)
     image_source = getattr(args, 'image_source_contract', None) or resolve_image_source_contract(args)
     build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
     search_receipt_source: Path | None = None
@@ -1619,6 +1742,15 @@ def main() -> int:
     parser.add_argument('--expected-snapshot-size', type=int, default=0)
     parser.add_argument('--profile', choices=['preview', 'production-candidate'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
     parser.add_argument(
+        '--kernel-ref',
+        default=os.getenv('STATIC_SITE_KAGGLE_KERNEL_REF', ''),
+        help=(
+            'Owned Kaggle kernel execution ref. Defaults to '
+            '<KAGGLE_USERNAME>/kenigevents-static-site-builder; the only other '
+            'supported lane is .../kenigevents-static-site-builder-review-preview.'
+        ),
+    )
+    parser.add_argument(
         '--preview-data-mode',
         choices=['real', 'golden'],
         default=os.getenv('STATIC_SITE_PREVIEW_DATA_MODE', 'real'),
@@ -1864,12 +1996,33 @@ def main() -> int:
     args.image_source_contract = resolve_image_source_contract(args)
 
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
-    with LOCK_PATH.open('w') as lock_file:
+    env_user = (os.getenv('KAGGLE_USERNAME') or '').strip()
+    if not env_user:
+        raise RuntimeError('KAGGLE_USERNAME is required')
+    try:
+        args.kernel_ref, args.execution_lane = resolve_kernel_ref(
+            args.kernel_ref,
+            env_user=env_user,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    if args.execution_lane == 'review-preview' and args.profile != 'preview':
+        raise SystemExit(
+            'the review-preview --kernel-ref is restricted to --profile preview'
+        )
+    lock_path = execution_lane_lock_path(args.execution_lane)
+    with lock_path.open('w') as lock_file:
         try:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise SystemExit('static-site Kaggle builder is already running locally')
-        scratch_prune = prune_abandoned_static_site_scratch(SCRATCH_ROOT)
+            raise SystemExit(
+                'static-site Kaggle builder is already running locally '
+                f'for execution lane {args.execution_lane}'
+            )
+        scratch_prune = prune_abandoned_static_site_scratch(
+            SCRATCH_ROOT,
+            execution_lane=args.execution_lane,
+        )
         if scratch_prune['removed_directories']:
             print(
                 '[static-site-kaggle] abandoned scratch cleanup '
@@ -1880,17 +2033,15 @@ def main() -> int:
         # Import after --help parsing so optional Kaggle deps are not required for docs.
         from video_announce.kaggle_client import KaggleClient
 
-        env_user = (os.getenv('KAGGLE_USERNAME') or '').strip()
-        if not env_user:
-            raise RuntimeError('KAGGLE_USERNAME is required')
         client = KaggleClient()
-        kernel_ref = f'{env_user}/kenigevents-static-site-builder'
+        kernel_ref = args.kernel_ref
         if args.adopt_existing:
             return adopt_existing_kernel_output(args, client, kernel_ref)
         require_static_site_storage_ready()
 
         with tempfile.TemporaryDirectory(
-            prefix='static-site-kaggle-', dir=SCRATCH_ROOT
+            prefix=execution_lane_scratch_prefix(args.execution_lane),
+            dir=SCRATCH_ROOT,
         ) as tmp:
             tmp_root = Path(tmp)
             staging = tmp_root / 'kernel'
@@ -1898,7 +2049,14 @@ def main() -> int:
             staging.mkdir(parents=True)
             dataset_dir.mkdir(parents=True)
 
-            build_id, dataset_ref = stage_kernel_and_dataset(args, staging, dataset_dir, client, env_user)
+            build_id, dataset_ref = stage_kernel_and_dataset(
+                args,
+                staging,
+                dataset_dir,
+                client,
+                env_user,
+                kernel_ref=kernel_ref,
+            )
             secret_dataset_refs = create_secret_datasets_if_needed(
                 args,
                 client=client,

@@ -35,6 +35,47 @@ Object Storage credentials into the notebook. A local Astro build is only a
 diagnostic/test gate and is never a publishable production or preview source.
 The former `npm run deploy:preview` local-dist publisher is retired.
 
+### Execution-capacity lanes
+
+There are exactly two **private Kaggle execution slugs**, but only one packaged
+implementation. The repository's canonical
+`kaggle/StaticSiteBuilder/kernel-metadata.json` remains the production metadata;
+after copying that package to an isolated staging directory, the runner changes
+only its `id` before `kernels_push`:
+
+| Lane | Kernel ref | Local lock / status resource lease | Use |
+|---|---|---|---|
+| production | default: `<KAGGLE_USERNAME>/kenigevents-static-site-builder` | historical `static-site-kaggle.lock` / `static_site:builder` | production candidates and normal automated rail |
+| review preview | explicit: `<KAGGLE_USERNAME>/kenigevents-static-site-builder-review-preview` | `static-site-kaggle-review-preview.lock` / `static_site:builder:review-preview` | operator preview/review while production is busy |
+
+`--kernel-ref` is validated: it must be owned by `KAGGLE_USERNAME` and use one
+of those two slugs. The selected ref is used unchanged for status-ledger
+configuration, push, crash adoption, status polling and output download. This
+is capacity isolation only: it does not create a second exporter, notebook or
+publisher, and it does not allow concurrent production-candidate publication.
+Review scratch trees are also lane-specific, so cleanup under one local lock
+cannot remove the other lane's staging input.
+
+Before relying on the review lane, an owner performs a one-time bootstrap:
+
+1. Create/verify the private Kaggle kernel
+   `zigomaro/kenigevents-static-site-builder-review-preview` (or the matching
+   slug under the actual `KAGGLE_USERNAME`) and keep it private with the same
+   CPU/internet settings as the canonical builder.
+2. Verify the API credential used by the runner owns that slug; do not point
+   `--kernel-ref` at another account.
+3. Preflight the account's actual concurrent-notebook allowance. Separate
+   slugs avoid a fixed-kernel collision, but cannot bypass a per-account Kaggle
+   concurrency quota; if the quota is one, the second execution still queues.
+
+An operator review invocation adds only the lane selection to the usual command:
+
+```bash
+python scripts/run_static_site_builder_kaggle.py \
+  --kernel-ref zigomaro/kenigevents-static-site-builder-review-preview \
+  --profile preview --catalog-mode slice ...
+```
+
 Only the final route prefix and allowed completeness differ:
 
 | Profile | Generation | Object prefix / public URL | Rule |
