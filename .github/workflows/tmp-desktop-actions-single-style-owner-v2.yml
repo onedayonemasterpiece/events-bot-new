@@ -1,0 +1,242 @@
+name: temporary desktop actions single style owner v2
+
+on:
+  push:
+    branches:
+      - work/ui-normalization-desktop-actions-single-style-owner-20260904
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Apply bounded implementation and focused assertion migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/tmp-desktop-actions-single-style-owner.py
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('site/tests/desktop-event-actions-single-style-owner.test.mjs'): [
+                  ('  assert.match(panelStyle, /data-action-variant="editorial-side"/u);\n', ''),
+              ],
+              Path('site/tests/event-detail-runtime-regressions.test.mjs'): [
+                  (
+                      "  assert.match(panel, /family\\?: 'split' \\| 'editorial'/u);\n",
+                      "  assert.match(panel, /type DesktopActionVariant = 'editorial-side' \\| 'split-inline' \\| 'editorial-flow' \\| 'split-flow'/u);\n"
+                      "  assert.match(panel, /type DesktopActionState = 'non-ocr' \\| 'ocr'/u);\n",
+                  ),
+                  (
+                      '  assert.match(desktop, /family="editorial"/u);\n'
+                      '  assert.match(desktop, /family="split"/u);\n',
+                      '  assert.match(desktop, /variant="editorial-side" state=\\{mediaPolicy\\}/u);\n'
+                      '  assert.match(desktop, /variant="split-inline" state=\\{mediaPolicy\\}/u);\n',
+                  ),
+              ],
+              Path('site/tests/desktop-event-cta.test.mjs'): [
+                  (
+                      '  assert.match(page, /family="editorial"/u);\n'
+                      '  assert.match(page, /family="split"/u);\n',
+                      '  assert.match(page, /variant="editorial-side" state=\\{mediaPolicy\\}/u);\n'
+                      '  assert.match(page, /variant="split-inline" state=\\{mediaPolicy\\}/u);\n',
+                  ),
+              ],
+          }
+
+          for path, changes in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              for old, new in changes:
+                  count = text.count(old)
+                  if count != 1:
+                      raise RuntimeError(f'{path}: expected one assertion block, found {count}')
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install pinned site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: Run focused source regressions
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/desktop-event-actions-single-style-owner.test.mjs
+          node --test tests/desktop-event-cta.test.mjs
+          node --test tests/event-share-wiring.test.mjs
+          node --test --test-name-pattern='desktop calendar label|desktop telephone|desktop action geometry' tests/event-detail-runtime-regressions.test.mjs
+          node scripts/check-design-system-production-surface-contract.mjs
+          git diff --check
+
+      - name: Build bounded preview and run desktop contract
+        working-directory: site
+        env:
+          PREVIEW_BUILD_ID: preview-desktop-actions-single-style-owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:preview
+          npm run check:production-desktop
+
+      - name: Verify rendered action geometry
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$(find dist -path '*/lab/event-desktop/examples/cta-phone-invariant/index.html' -print -quit)"
+          test -n "$fixture"
+          root="${fixture%/lab/event-desktop/examples/cta-phone-invariant/index.html}"
+          python3 -m http.server 4173 --directory "$root" >/tmp/desktop-actions-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/lab/event-desktop/examples/cta-phone-invariant/ >/dev/null && break
+            sleep 0.5
+          done
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright';
+
+          const executablePath = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+          ].find((candidate) => fs.existsSync(candidate));
+          if (!executablePath) throw new Error('No system Chromium executable found');
+
+          const browser = await chromium.launch({ headless: true, executablePath, args: ['--no-sandbox'] });
+          const page = await browser.newPage({ viewport: { width: 1536, height: 864 } });
+          const cases = [
+            ['lab/event-desktop/examples/cta-phone-invariant/', 'split', 'split-inline'],
+            ['lab/event-desktop/examples/cta-registration-invariant/', 'split', 'split-inline'],
+            ['lab/event-desktop/examples/cta-free-calendar-invariant/', 'split', 'split-inline'],
+            ['lab/event-desktop/examples/footer-service-v1/', 'editorial', 'editorial-side'],
+          ];
+
+          for (const [route, family, variant] of cases) {
+            await page.goto(`http://127.0.0.1:4173/${route}`, { waitUntil: 'networkidle' });
+            await page.waitForSelector('[data-desktop-action-panel]');
+            await page.waitForTimeout(120);
+            const result = await page.evaluate(({ family, variant }) => {
+              const panel = document.querySelector('[data-desktop-action-panel]');
+              if (!(panel instanceof HTMLElement)) return { ok: false, reason: 'panel missing' };
+              const primary = panel.querySelector(':scope > .desktop-prototype__primary-action');
+              const row = panel.querySelector(':scope > [data-desktop-action-row="calendar-share-like"]');
+              const admission = panel.querySelector(':scope > p:first-child');
+              const controls = row ? [...row.children].filter((item) => item instanceof HTMLElement) : [];
+              const panelRect = panel.getBoundingClientRect();
+              const children = [admission, primary, row, ...controls].filter(Boolean);
+              const childRects = children.map((item) => item.getBoundingClientRect());
+              const contained = childRects.every((rect) => rect.left >= panelRect.left - 1
+                && rect.right <= panelRect.right + 1
+                && rect.top >= panelRect.top - 1
+                && rect.bottom <= panelRect.bottom + 1);
+              const targets = [primary, ...controls].filter(Boolean).map((item) => {
+                const rect = item.getBoundingClientRect();
+                return { width: rect.width, height: rect.height };
+              });
+              const targetFloor = targets.length > 0 && targets.every((target) => target.width >= 44 && target.height >= 44);
+              const icons = [...panel.querySelectorAll('.desktop-prototype__primary-action .icon, .desktop-prototype__icon-action .icon')].map((icon) => {
+                const rect = icon.getBoundingClientRect();
+                return { width: rect.width, height: rect.height };
+              });
+              const centralIcons = icons.length > 0 && icons.every((icon) => Math.abs(icon.width - 24) <= 0.5 && Math.abs(icon.height - 24) <= 0.5);
+              return {
+                ok: panel.dataset.actionFamily === family
+                  && panel.dataset.actionVariant === variant
+                  && Boolean(panel.dataset.actionState)
+                  && contained
+                  && targetFloor
+                  && centralIcons
+                  && panel.scrollWidth <= panel.clientWidth + 1,
+                family: panel.dataset.actionFamily,
+                variant: panel.dataset.actionVariant,
+                state: panel.dataset.actionState,
+                layout: panel.dataset.actionLayout,
+                density: panel.dataset.actionDensity,
+                fit: panel.dataset.actionFit,
+                contained,
+                targetFloor,
+                centralIcons,
+                targets,
+                icons,
+                panel: { width: panelRect.width, height: panelRect.height },
+              };
+            }, { family, variant });
+            if (!result.ok) throw new Error(`${route}: ${JSON.stringify(result)}`);
+            console.log(route, JSON.stringify(result));
+          }
+          await browser.close();
+          JS
+
+      - name: Commit and force-push clean bounded branch
+        shell: bash
+        env:
+          BASE_SHA: e8ba758ed32ee4de74df4f2ce490423fbb8e1e74
+          FINAL_BRANCH: work/ui-normalization-desktop-actions-single-style-owner-20260904
+        run: |
+          set -euo pipefail
+          git config user.name 'chatgpt-bounded-engineer'
+          git config user.email 'chatgpt-bounded-engineer@example.local'
+          expected=(
+            CHANGELOG.md
+            docs/features/static-site-pages/event-page-product-design.md
+            site/src/components/DesktopEventActionPanel.astro
+            site/src/components/DesktopEventPage.astro
+            site/tests/desktop-event-actions-single-style-owner.test.mjs
+            site/tests/desktop-event-cta.test.mjs
+            site/tests/event-detail-runtime-regressions.test.mjs
+          )
+          git add -- "${expected[@]}"
+          git diff --cached --check
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          test "$(printf '%s\n' "${changed[@]}")" = "$(printf '%s\n' "${expected[@]}" | sort)"
+          git diff --cached --binary > /tmp/desktop-actions-product.patch
+          git reset --hard
+          git switch --detach "$BASE_SHA"
+          git apply --index /tmp/desktop-actions-product.patch
+          git commit -m 'refactor(site): centralize desktop action panel styles'
+          final_head="$(git rev-parse HEAD)"
+          git push --force origin "HEAD:refs/heads/$FINAL_BRANCH"
+          echo "FINAL_HEAD=$final_head" >> "$GITHUB_ENV"
+          {
+            echo '## Desktop actions single style owner'
+            echo
+            echo "- base: \`$BASE_SHA\`"
+            echo "- head: \`$final_head\`"
+            echo '- focused source regressions: PASS'
+            echo '- preview build and desktop contract: PASS'
+            echo '- rendered 1536×864 action geometry: PASS'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read back exact clean diff
+        shell: bash
+        env:
+          BASE_SHA: e8ba758ed32ee4de74df4f2ce490423fbb8e1e74
+          FINAL_BRANCH: work/ui-normalization-desktop-actions-single-style-owner-20260904
+        run: |
+          set -euo pipefail
+          git fetch --force origin "$FINAL_BRANCH:refs/remotes/origin/$FINAL_BRANCH"
+          remote_head="$(git rev-parse "refs/remotes/origin/$FINAL_BRANCH")"
+          test "$remote_head" = "$FINAL_HEAD"
+          test "$(git rev-parse "$remote_head^")" = "$BASE_SHA"
+          git diff --name-only "$BASE_SHA" "$remote_head"
+          test "$(git diff --name-only "$BASE_SHA" "$remote_head" | wc -l)" -eq 7
