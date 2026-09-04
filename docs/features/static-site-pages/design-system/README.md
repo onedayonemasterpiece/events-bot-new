@@ -83,7 +83,8 @@ Launch-critical Astro family identity and impact are executable beside the sourc
 - registry: `site/src/design-system/astro-family-registry.v1.json`;
 - generated reverse graph: `site/src/design-system/astro-family-consumers.generated.v1.json`;
 - generator / impact query: `site/scripts/generate-astro-family-consumer-graph.mjs`;
-- fail-closed checker: `site/scripts/check-astro-family-sot.mjs`.
+- fail-closed checker: `site/scripts/check-astro-family-sot.mjs`;
+- CI entrypoint: `cd site && npm run check:astro-family-sot`.
 
 ```bash
 node site/scripts/generate-astro-family-consumer-graph.mjs --impact EventCard

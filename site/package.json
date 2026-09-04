@@ -22,6 +22,7 @@
     "check:unified-prototype": "node scripts/check-unified-prototype.mjs",
     "check:production": "node scripts/check-production.mjs",
     "check:design-system-production-surfaces": "node scripts/check-design-system-production-surface-contract.mjs",
+    "check:astro-family-sot": "node scripts/check-astro-family-sot.mjs",
     "check:design-system-iconography": "node scripts/check-design-system-iconography-contract.mjs",
     "check:production-desktop": "node scripts/check-production-desktop-contract.mjs",
     "check:desktop-cta-geometry": "bash scripts/check-desktop-cta-geometry-playwright.sh",

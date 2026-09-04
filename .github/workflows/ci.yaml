@@ -111,6 +111,8 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - name: Install pinned site dependencies
         run: npm ci --no-audit --no-fund
+      - name: Validate executable Astro family SoT
+        run: npm run check:astro-family-sot
       - name: Validate design-system production surface contract
         run: npm run check:design-system-production-surfaces
       - name: Inventory design-system iconography
