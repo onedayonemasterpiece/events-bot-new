@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added: static-site token authority now has a deterministic custom-property
+  census and reverse impact graph. It resolves token aliases through the
+  existing Astro family/route graph, supports token-to-component-to-route
+  queries, and fails closed on stale graphs, conflicting `--ke-` global owners,
+  undefined non-fallback consumers, and undocumented alias cycles without
+  changing token values or visual output.
+
 - Fixed: the immutable owner Preview hub now exposes the two required product
   archetypes it previously left as non-owner or absent links: Interest Clubs and
   Unusual Events. Its executable gate binds all 17 required production-contract
