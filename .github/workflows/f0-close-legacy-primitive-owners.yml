@@ -1,147 +1,128 @@
-name: F0 close legacy primitive owners
+name: F0 owner-review evidence
 
+# Continuation of the existing F0 runner, not a second build or release path.
+# The completed 20260903 hardcoded repair remains in Git history. This branch
+# only collects anonymous evidence and an exact source/dependency archive for
+# ChatGPT's network-isolated runtime. No deployment or automatic source writes.
 on:
   push:
     branches:
-      - work/ui-normalization-f0-wave-3-20260903
+      - work/owner-audioreview-card-geometry-20260905
     paths:
       - .github/workflows/f0-close-legacy-primitive-owners.yml
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: f0-close-legacy-primitive-owners
+  group: f0-owner-review-evidence-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  close-owner:
-    runs-on: ubuntu-latest
+  owner-review-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - name: Check out exact F0 branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: work/ui-normalization-f0-wave-3-20260903
-          fetch-depth: 0
-
-      - name: Apply bounded owner and icon-role repairs
-        shell: bash
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.16.0'
+      - name: Export exact tracked source, without git credentials
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('site/src/styles/design-system.css')
-          source = path.read_text(encoding='utf-8')
-          start_marker = '\n.ke-badge {\n'
-          end_marker = '\n/* Shared date-listing system: Today, Tomorrow and Weekend use this exact\n'
-
-          if source.count(start_marker) == 1:
-              start = source.index(start_marker)
-              end = source.index(end_marker, start)
-              removed = source[start:end]
-              for required in ('.ke-badge', '.ke-field', '.ke-state-panel'):
-                  if required not in removed:
-                      raise SystemExit(f'bounded legacy block does not contain {required}')
-              replacement = (
-                  '\n\n/* Badge, Field and StatePanel visual ownership moved to\n'
-                  '   site/src/components/design-system/component-foundations.css. */\n'
-              )
-              source = source[:start] + replacement + source[end:]
-          elif source.count(start_marker) != 0:
-              raise SystemExit(f'expected zero or one legacy Badge owner, found {source.count(start_marker)}')
-
-          replacements = {
-              '.ke-button .icon { width: 1.18rem; height: 1.18rem; flex: 0 0 auto; fill: currentColor; }':
-                  '.ke-button .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); flex: 0 0 auto; fill: currentColor; }',
-              '.ke-copy-action__icon { width: 1.18rem; height: 1.18rem; display: grid; place-items: center; }':
-                  '.ke-copy-action__icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); display: grid; place-items: center; }',
-              '.ke-filter-chip__check { width: 1.15rem; height: 1.15rem; display: grid; place-items: center; border: 1px solid color-mix(in srgb, currentColor 28%, transparent); border-radius: 50%; color: transparent; font-size: 0.72rem; line-height: 1; }':
-                  '.ke-filter-chip__check { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); display: grid; place-items: center; border: 1px solid color-mix(in srgb, currentColor 28%, transparent); border-radius: 50%; color: transparent; font-size: 0.72rem; line-height: 1; }',
-              '.ke-filter-chip__check { width: 1rem; height: 1rem; }':
-                  '.ke-filter-chip__check { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline); }',
-              '.ke-listing-card__free-medallion .icon { width: 24px; height: 24px; fill: currentColor; }':
-                  '.ke-listing-card__free-medallion .icon { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action); fill: currentColor; }',
-              'grid-template-columns: 20px auto;':
-                  'grid-template-columns: var(--ke-icon-size-control) auto;',
-              '.ke-listing-card__utility .icon { width: 20px; height: 20px; fill: currentColor; }':
-                  '.ke-listing-card__utility .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); fill: currentColor; }',
-              'grid-template-columns: 17px minmax(0, 1fr);':
-                  'grid-template-columns: var(--ke-icon-size-inline) minmax(0, 1fr);',
-              '.ke-listing-card__social-proof .icon { width: 17px; height: 17px; fill: currentColor; }':
-                  '.ke-listing-card__social-proof .icon { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline); fill: currentColor; }',
-              'grid-template-rows: 14px auto;':
-                  'grid-template-rows: var(--ke-icon-size-inline) auto;',
-              '    width: 14px;\n    height: 14px;\n  }\n  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) b {':
-                  '    width: var(--ke-icon-size-inline);\n    height: var(--ke-icon-size-inline);\n  }\n  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) b {',
-              '  .ke-listing-mobile-density-switch__icon {\n    width: 16px;\n    height: 16px;':
-                  '  .ke-listing-mobile-density-switch__icon {\n    width: var(--ke-icon-size-inline);\n    height: var(--ke-icon-size-inline);',
+          mkdir -p artifacts/owner-review
+          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
+          git archive --format=tar HEAD site docs .codex/skills AGENTS.md .github CHANGELOG.md | gzip > artifacts/owner-review/source.tar.gz
+      - name: Install lockfile dependencies for the isolated review runtime
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: Export pinned Linux dependencies
+        run: tar -czf artifacts/owner-review/node-modules.tar.gz -C site node_modules
+      - name: Run existing card regression tests
+        working-directory: site
+        run: node --test tests/owner-audioreview-card-geometry.test.mjs
+      - name: Install Chromium for exact viewport evidence
+        working-directory: site
+        run: npx playwright install --with-deps chromium
+      - name: Capture the rejected immutable build, not production
+        working-directory: site
+        run: |
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          import { mkdir, writeFile } from 'node:fs/promises';
+          import { createHash } from 'node:crypto';
+          const out = '../artifacts/owner-review';
+          const base = 'https://kenigevents.ru/preview-real-8b1bb8129-normalized-20260904-v1/';
+          const expected = '8b1bb81298bfca2fe2aaa3ceb7e5f654748b301f';
+          const manifest = await (await fetch(base + 'preview-build.json')).json();
+          if (manifest.repo_sha !== expected) throw new Error('Wrong review SHA');
+          await writeFile(out + '/preview-build.json', JSON.stringify(manifest, null, 2));
+          await mkdir(out + '/cache', {recursive:true});
+          const browser = await chromium.launch({headless:true});
+          const cache = {}; const pending = new Set(); const measurements = [];
+          const context = await browser.newContext({viewport:{width:1440,height:900}, locale:'ru-RU'});
+          const page = await context.newPage();
+          page.on('response', response => {
+            const url = new URL(response.url());
+            const kind = response.request().resourceType();
+            if (!['kenigevents.ru','static.kenigevents.ru'].includes(url.hostname)) return;
+            if (!['document','stylesheet','script','image','font'].includes(kind)) return;
+            if (response.status() !== 200 || url.pathname.includes('/auth/')) return;
+            const job = (async () => {
+              const body = await response.body();
+              const key = createHash('sha256').update(response.url()).digest('hex');
+              await writeFile(out + '/cache/' + key, body);
+              cache[response.url()] = {file:key,contentType:response.headers()['content-type'] || 'application/octet-stream'};
+            })().catch(()=>{}).finally(()=>pending.delete(job));
+            pending.add(job);
+          });
+          await page.goto(base + '__preview/', {waitUntil:'networkidle'});
+          const links = await page.locator('a[href]').evaluateAll(nodes => nodes.map(n=>({text:n.textContent.trim(),href:n.href})));
+          await writeFile(out+'/preview-links.json', JSON.stringify(links,null,2));
+          const routes = ['segodnya/','zavtra/','vyhodnye/','vystavki/','populyarnoe/','podborki/besplatnye-sobytiya/'];
+          for (const link of links) {
+            if (/фестивали|необычное|клубы|главная/i.test(link.text) && link.href.startsWith(base) && !link.href.includes('/lab/')) {
+              const route = link.href.slice(base.length).split(/[?#]/)[0];
+              if (!routes.includes(route) && !route.includes('__preview')) routes.push(route);
+            }
           }
-
-          for old, new in replacements.items():
-              old_count = source.count(old)
-              new_count = source.count(new)
-              if old_count == 1:
-                  source = source.replace(old, new, 1)
-              elif old_count == 0 and new_count >= 1:
-                  continue
-              else:
-                  raise SystemExit(
-                      f'expected one old source or an existing replacement; old={old_count}, new={new_count}: {old[:80]}'
-                  )
-
-          path.write_text(source, encoding='utf-8')
-          PY
-
-      - name: Run F0 ownership probes
-        shell: bash
-        run: node site/src/components/design-system/f0-normalization-negative-probes.mjs
-
-      - name: Record unrelated legacy check result without blocking F0 owner repair
-        shell: bash
-        run: |
-          set +e
-          node site/scripts/check-design-system.mjs > /tmp/check-design-system.log 2>&1
-          status=$?
-          set -e
-          cat /tmp/check-design-system.log
-          if [ "$status" -ne 0 ] && ! grep -Fq 'Root page does not load the canonical design-system CSS' /tmp/check-design-system.log; then
-            exit "$status"
-          fi
-          if [ "$status" -ne 0 ]; then
-            echo 'Known non-F0 drift retained for A0/N0: stale direct-import assertion.'
-          fi
-
-      - name: Commit bounded source repair before census
-        shell: bash
-        run: |
-          git config user.name 'f0-normalization-bot'
-          git config user.email 'f0-normalization-bot@users.noreply.github.com'
-          if ! git diff --quiet -- site/src/styles/design-system.css; then
-            git add site/src/styles/design-system.css
-            git commit -m 'refactor(ui): finish physical icon-role binding'
-          fi
-
-      - name: Materialize F0 branch and current candidate checklist census
-        shell: bash
-        run: |
-          git fetch origin \
-            work/ui-normalization-f0-wave-3-20260903 \
-            r0/ui-normalization-current-candidate-20260903
-          node site/src/components/design-system/f0-candidate-consumer-census.mjs HEAD \
-            > site/src/components/design-system/f0-role-branch-census.v1.json
-          node site/src/components/design-system/f0-candidate-consumer-census.mjs origin/r0/ui-normalization-current-candidate-20260903 \
-            > site/src/components/design-system/f0-current-candidate-census.v1.json
-          node -e "for (const p of process.argv.slice(1)) { const x=require('./'+p); if (!x.resolved_ref || !x.checklist_evidence) throw new Error('invalid census '+p); console.log(p, x.resolved_ref); }" \
-            site/src/components/design-system/f0-role-branch-census.v1.json \
-            site/src/components/design-system/f0-current-candidate-census.v1.json
-
-      - name: Commit census evidence and push
-        shell: bash
-        run: |
-          git add \
-            site/src/components/design-system/f0-role-branch-census.v1.json \
-            site/src/components/design-system/f0-current-candidate-census.v1.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'test(ui): record F0 branch and candidate census'
-          fi
-          git push origin HEAD:work/ui-normalization-f0-wave-3-20260903
+          try {
+            for (const [width,height] of [[1440,900],[390,844],[1920,1080]]) {
+              await page.setViewportSize({width,height});
+              for (const [index,route] of routes.entries()) {
+                const response = await page.goto(base+route,{waitUntil:'networkidle',timeout:45000});
+                await page.waitForTimeout(600);
+                const record = await page.evaluate(() => {
+                  const box = e => {const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
+                  const style = e => {const s=getComputedStyle(e);return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','color','backgroundColor','marginTop','marginBottom','paddingTop','paddingBottom','paddingLeft','paddingRight','maxWidth','overflowX','display','gap'].map(k=>[k,s[k]]));};
+                  return {url:location.href,viewport:{width:innerWidth,height:innerHeight},documentWidth:document.documentElement.scrollWidth,
+                    headings:[...document.querySelectorAll('h1,h2,h3')].filter(e=>e.getClientRects().length && getComputedStyle(e).visibility!=='hidden').slice(0,70).map(e=>({tag:e.tagName,text:e.textContent.trim(),class:e.className,box:box(e),style:style(e),parent:{class:e.parentElement.className,box:box(e.parentElement),style:style(e.parentElement)}})),
+                    grids:[...document.querySelectorAll('[data-adaptive-event-card-grid]')].filter(e=>e.getClientRects().length).map(e=>({attributes:Object.fromEntries([...e.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value])),box:box(e),cards:[...e.children].filter(e=>e.getClientRects().length).map(e=>({id:e.getAttribute('data-event-id'),box:box(e)}))})),
+                    scrollers:[...document.querySelectorAll('main *')].filter(e=>e.clientWidth>0 && e.scrollWidth>e.clientWidth+2 && ['auto','scroll'].includes(getComputedStyle(e).overflowX)).slice(0,30).map(e=>({class:e.className,box:box(e),clientWidth:e.clientWidth,scrollWidth:e.scrollWidth})),
+                    logoLinks:[...document.querySelectorAll('header a[href]')].map(a=>({text:a.textContent.trim(),href:a.getAttribute('href')})).slice(0,20)};
+                });
+                const name = `${width}-${index}-${route.replaceAll('/','_')||'home'}`;
+                record.status = response.status(); record.screenshot = name+'.png';
+                await page.screenshot({path:out+'/'+name+'.png',fullPage:false});
+                await page.screenshot({path:out+'/'+name+'-full.png',fullPage:true});
+                measurements.push(record);
+              }
+            }
+          } finally {
+            await Promise.allSettled([...pending]);
+            await writeFile(out+'/cache-index.json',JSON.stringify(cache,null,2));
+            await writeFile(out+'/measurements.json',JSON.stringify(measurements,null,2));
+            await writeFile(out+'/qa-summary.json',JSON.stringify({scenario:'owner-audioreview',auth_mode:'anonymous',platform:'chromium-desktop-viewports',source_sha:process.env.GITHUB_SHA,review_sha:expected,browser:browser.version(),target:base,status:'EVIDENCE_ONLY_NOT_ACCEPTANCE',pages:measurements.length,penpot:'NOT_CHECKED',production_changed:false},null,2));
+            await browser.close();
+          }
+          JS
+      - name: Upload source and anonymous visual evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: owner-review-evidence-${{ github.sha }}
+          path: artifacts/owner-review/
+          retention-days: 7
+          if-no-files-found: error
