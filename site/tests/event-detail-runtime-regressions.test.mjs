@@ -108,10 +108,16 @@ test('dynamic recommendation media reserves geometry through load and failure', 
   assert.match(events, /image_height\?: number \| null/u);
   assert.match(layout, /<EventCard event=\{runtimeTemplateEvent\} variant="split-actions" desktopRelatedCrop runtimeTemplate/u);
   assert.match(layout, /sourceCard\.cloneNode\(true\)/u);
-  assert.match(layout, /'event-card__media-shell--dynamic'[\s\S]*imageUrl \? 'is-image-loading'/u);
+  // The canonical runtime binder now owns pending/fallback state; do not
+  // require the removed handwritten class-array implementation.
+  assert.match(layout, /shell\.className = 'event-card__media-shell event-card__media-shell--dynamic'/u);
+  assert.match(layout, /const resourceState = imageUrl \? 'pending' : 'fallback'/u);
+  assert.match(layout, /shell\.dataset\.mediaFrameResourceState = resourceState/u);
+  assert.match(layout, /shell\.classList\.add\('is-image-loading'\)/u);
   assert.match(layout, /--dynamic-media-ratio/u);
   assert.match(card, /const imageLoadHandler = [\s\S]*is-image-loaded/u);
-  assert.match(card, /const imageErrorHandler = [\s\S]*is-image-missing/u);
+  assert.match(card, /const failedResourceTransition = [\s\S]*is-image-missing/u);
+  assert.match(card, /const imageErrorHandler = [\s\S]*failedResourceTransition/u);
   assert.match(card, /onload=\{imageLoadHandler\}/u);
   assert.match(card, /onerror=\{imageErrorHandler\}/u);
   assert.match(layout, /prefers-reduced-motion: reduce/u);

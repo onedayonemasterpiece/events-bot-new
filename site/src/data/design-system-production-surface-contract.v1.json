@@ -12,10 +12,15 @@
     "require_matching_snapshot": true,
     "exclude_route_prefixes": [
       "/lab/",
-      "/__preview/"
+      "/__preview/",
+      "/fokus-gruppa/diagnostika/",
+      "/fokus-gruppa/diagnostika-ustoychivost/"
     ],
     "exclude_source_prefixes": [
-      "site/src/pages/lab/"
+      "site/src/pages/lab/",
+      "site/src/pages/[preview]/",
+      "site/src/pages/fokus-gruppa/diagnostika/",
+      "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/"
     ],
     "rule": "A page, component or icon enters the current design-system inventory only when it is reachable from an HTML route in the accepted production artifact at the exact release SHA. Source presence alone is not production use."
   },

@@ -1,6 +1,47 @@
 # Нормализация UI — исполняемый Astro-маршрут
 
-Статус: `ACTIVE`  
+## Действующий этап: завершение нормализации → аудиоревью владельца
+
+Решение владельца от 2026-09-04 заменяет прежнюю бесконечную программу.
+**Было → стало:** историческая integration-ветка, обязательный перенос в новый
+component package и полная Penpot-материализация до приёмки → существующий
+`agent/static-site-single-kaggle-contract`, канонические Astro owners на месте,
+проверенные данные структурной Penpot-проекции и одна законченная review-сборка.
+Основание: явное решение владельца; это смена этапа, не redesign и не production release.
+
+Нормативный [контракт](https://github.com/onedayonemasterpiece/lovekgd-design-system/blob/integration/launch-normalized-sot-penpot-20260902/contracts/launch-normalized-ui.v1.yaml); единственное место текущих SHA, URL и
+незакрытых gates — [STATUS](https://github.com/onedayonemasterpiece/lovekgd-design-system/blob/integration/launch-normalized-sot-penpot-20260902/docs/launch-normalization/STATUS.md). Исторические checkpoints ниже не current.
+
+Условие завершения: согласованные **продуктовые** страницы; единая система
+heading/type/spacing/color/icon/action roles; сохранённые Date/Weekend,
+Large/Compact и mobile gesture variants; браузерные визуальные/computed/action
+проверки static и hydrated UI в 1440×900 и 390×844; независимый browser audit;
+source-bound SoT с реальными nested/variant/state/responsive/token/asset ссылками;
+валидированная структурная проекция реальной free collection с карточками,
+media и actions на одном corpus/clock; один exact Kaggle Preview с manifest.
+`penpot_binding: null`, число семейств и список файлов не доказывают проекцию.
+Полная запись в Penpot не обязательна; **A=S=P не заявляется без Penpot round-trip**.
+
+Scope задаёт существующий `astro-family-registry.v1.json` совместно с production
+surface contract: lab, preview wrapper, внутренние connectivity diagnostics и
+их доказанные service-only dependencies не входят в нормализацию/метрики.
+Общие и runtime dependencies остаются; неизвестный static edge не исключает
+consumer. Preview остаётся рабочим входом, endpoints/PWA/assets/fixtures не удаляются.
+Generated Astro/token graphs используют эту же классификацию, без второго registry.
+
+Локально проверяем изменённые routes на неизменном snapshot/clock. Финальный
+real/all Preview строится единым Kaggle runner на отдельном review kernel;
+`page_classes=all` не означает `catalog_mode=full`: mode/limit сообщаются явно.
+Production root, stable ICS и существующий Penpot не мутируются.
+
+Внешние ChatGPT-окна получают только независимые полезные bounded пакеты,
+возвращают evidence/diff в #621, без делегации в Codex MCP. Запуск не считается
+подтверждённым до факта. Native workers — обычно не более двух. После выполнения
+перечисленных gates нормализация **останавливается до аудиоревью владельца**;
+необязательный refactor, новый пакет и Penpot polish не продлевают этот этап.
+
+
+Исторический programme record (не текущий merge target):
 Координация: `onedayonemasterpiece/events-bot-new#621`  
 Implementation branch: `integration/ui-normalization-launch-20260902`  
 Base at programme design: `61f7a6af5f5e82515dcd42c93dd02748297112bc`

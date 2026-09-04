@@ -227,3 +227,33 @@ test('checker fails closed on an unregistered source-published identity', async 
   });
   await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /Unregistered canonical owners: RogueSurface/u);
 });
+
+test('service-only closure is excluded but a shared product import cannot hide identities', async () => {
+  const fixture = await createFixture({ extraFiles: {
+    'site/src/pages/lab/index.astro': `---\nimport Demo from '../../components/ServiceOnly.astro';\nimport ExampleCard from '../../components/ExampleCard.astro';\n---\n<Demo /><ExampleCard />`,
+    'site/src/components/ServiceOnly.astro': '<aside data-ds-family="ServiceDemo"></aside>',
+  } });
+  fixture.registry.production_route_excludes = ['site/src/pages/lab/**'];
+  await writeJson(path.resolve(fixture.root, registryPath), fixture.registry);
+  await writeAstroFamilyGraph({ repoRoot: fixture.root, registryPath });
+  const graph = await buildAstroFamilyGraph({ repoRoot: fixture.root, registryPath });
+  assert.ok(graph.product_scope.service_only_sources.includes('site/src/components/ServiceOnly.astro'));
+  assert.ok(graph.product_scope.checked_sources.includes('site/src/components/ExampleCard.astro'));
+  await checkAstroFamilySot({ repoRoot: fixture.root, registryPath });
+  await writeFile(path.resolve(fixture.root, 'site/src/pages/index.astro'), `---\nimport Demo from '../components/ServiceOnly.astro';\n---\n<Demo />`);
+  await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /Unregistered canonical owners: ServiceDemo/u);
+});
+
+test('runtime association keeps a service-imported dependency in product checks', async () => {
+  const fixture = await createFixture({
+    family: fixtureFamily({ runtime_clients: [{ path: 'site/src/runtime/client.ts', symbols: ['ExampleFactory'] }] }),
+    extraFiles: {
+      'site/src/pages/lab/index.astro': `---\nimport '../../runtime/client.ts';\n---\n<div />`,
+      'site/src/runtime/client.ts': `import '../components/RuntimeChild.astro';\nvoid ExampleFactory;`,
+      'site/src/components/RuntimeChild.astro': '<div data-ds-component="UnknownRuntimeChild"></div>',
+    },
+  });
+  fixture.registry.production_route_excludes = ['site/src/pages/lab/**'];
+  await writeJson(path.resolve(fixture.root, registryPath), fixture.registry);
+  await assert.rejects(checkAstroFamilySot({ repoRoot: fixture.root, registryPath }), /Unregistered canonical owners: UnknownRuntimeChild/u);
+});

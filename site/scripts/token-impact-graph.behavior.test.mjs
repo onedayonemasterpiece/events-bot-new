@@ -90,3 +90,20 @@ test('checker rejects a stale generated impact graph', async (t) => {
   await writeFile(path.join(root, 'site/src/styles/tokens.css'), ':root { --ke-base: 2px; }\n');
   await assert.rejects(checkTokenImpactSot({ repoRoot: root }), /Token impact graph drift/);
 });
+
+test('service-only tokens are outside acceptance but shared product consumption still fails closed', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const registryPath = path.join(root, 'site/src/design-system/astro-family-registry.v1.json');
+  const registry = JSON.parse(await readFile(registryPath, 'utf8'));
+  registry.production_route_excludes = ['site/src/pages/lab/**'];
+  await writeJson(registryPath, registry);
+  await mkdir(path.join(root, 'site/src/pages/lab'), { recursive: true });
+  await writeFile(path.join(root, 'site/src/pages/lab/index.astro'), `---\nimport '../../components/Demo.astro';\n---\n<Demo />`);
+  await writeFile(path.join(root, 'site/src/components/Demo.astro'), '<style>.demo { color: var(--ke-service-undefined); }</style>');
+  await regenerate(root);
+  await assert.doesNotReject(checkTokenImpactSot({ repoRoot: root }));
+  await writeFile(path.join(root, 'site/src/pages/index.astro'), `---\nimport '../components/Demo.astro';\n---\n<Demo />`);
+  await regenerate(root);
+  await assert.rejects(checkTokenImpactSot({ repoRoot: root }), /Undefined consumed tokens: --ke-service-undefined/);
+});

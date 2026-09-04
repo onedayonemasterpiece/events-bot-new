@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Changed: normalization acceptance now excludes proven service-only routes and dependencies consistently in Astro/token SoT checks, while preserving shared/runtime and unresolved product consumers; the owner-review stage has finite browser/SoT/projection gates, without requiring a full Penpot materialization.
+
 - Changed: the global product footer now consumes its complete established
   continuity roles for type, spacing, shape and responsive geometry instead of
   retaining a parallel literal style copy; links and behavior are unchanged.

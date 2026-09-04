@@ -1,6 +1,15 @@
 # Static-site design-system integration
 
-## Current status
+## Действующий этап: завершение нормализации → аудиоревью владельца
+
+Единственная executable authority — `agent/static-site-single-kaggle-contract`.
+Решением владельца 2026-09-04 прежняя открытая программа заменена конечным
+этапом: [scope, gates, остановка и ссылки на контракт/STATUS](launch-normalization-48h.md#действующий-этап-завершение-нормализации--аудиоревью-владельца).
+Полная материализация в Penpot и перенос Astro в новый пакет не требуются.
+Валидированная структурная проекция требуется; A=S=P без Penpot не заявляется.
+Ниже сохранена история реконструкции, не инструкция повторять её.
+
+## История реконструкции — не состояние текущего этапа
 
 ```text
 Resource Graph TO-BE structure: PASS
@@ -12,11 +21,11 @@ promoted component families: 0
 
 Принятой компонентной дизайн-системы ранее не существовало. Предыдущие Penpot generations 003–005 являются technical experiments and historical evidence. Активный Resource Graph очищен и содержит только пустую TO-BE структуру.
 
-## Authority during reconstruction
+## Историческая authority во время реконструкции
 
 До promotion каждого resource family текущий Astro source в этом репозитории является executable source of fact о существующей реализации. Его нельзя автоматически считать нормализованной дизайн-системой: decoder должен обнаружить component families, inline/CSS patterns, one-to-many/many-to-one relationships, states, consumers, local overrides и unresolved fragmentation.
 
-## Target authority after promotion
+## Историческая гипотеза package promotion — не требование этого этапа
 
 После promotion семейства versioned component package в `onedayonemasterpiece/lovekgd-design-system` становится canonical для:
 
@@ -48,7 +57,7 @@ This repository
   integration, release and runtime evidence
 ```
 
-## Next bounded stage
+## Исторический план decoder — superseded
 
 Source-first decoder:
 

@@ -3,6 +3,7 @@ version: 1
 entrypoints:
   root_readme: README.md
   docs_index: docs/README.md
+  static_site_normalization: docs/features/static-site-pages/design-system/launch-normalization-48h.md
   agent_routes: AGENTS.md
 
 sections:

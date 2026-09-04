@@ -212,7 +212,10 @@ export async function buildTokenImpactGraph({
   const registryText = await readFile(path.resolve(repoRoot, registryPath), 'utf8');
   const registry = JSON.parse(registryText);
   const sourceRoot = registry.source_root;
-  const absoluteFiles = await walkFiles(path.resolve(repoRoot, sourceRoot));
+  const astroGraph = await buildAstroFamilyGraph({ repoRoot });
+  const serviceOnly = new Set(astroGraph.product_scope.service_only_sources);
+  const absoluteFiles = (await walkFiles(path.resolve(repoRoot, sourceRoot)))
+    .filter((file) => !serviceOnly.has(posix(path.relative(repoRoot, file))));
   const files = absoluteFiles.map((file) => posix(path.relative(repoRoot, file)));
   const forward = new Map();
   const reverse = new Map();
@@ -259,7 +262,6 @@ export async function buildTokenImpactGraph({
   }
   for (const [target, consumers] of reverse) reverse.set(target, sortedUnique(consumers));
 
-  const astroGraph = await buildAstroFamilyGraph({ repoRoot });
   const astroGraphPath = registry.astro_family_graph;
   const astroGraphText = await readFile(path.resolve(repoRoot, astroGraphPath), 'utf8');
   const astroFamilyRegistry = JSON.parse(await readFile(path.resolve(repoRoot, astroGraph.registry), 'utf8'));

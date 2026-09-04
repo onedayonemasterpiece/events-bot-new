@@ -62,7 +62,7 @@ async function resolveImport(repoRoot, sourceRoot, importer, specifier) {
 
 function excludedRoute(file, excludes) {
   return excludes.some((pattern) => {
-    if (pattern.endsWith('/**')) return file.startsWith(pattern.slice(0, -3));
+    if (pattern.endsWith('/**')) return file.startsWith(`${pattern.slice(0, -3)}/`);
     return file === pattern;
   });
 }
@@ -157,6 +157,31 @@ export async function buildAstroFamilyGraph({
     && !excludedRoute(file, registry.production_route_excludes || [])
   ));
 
+  // Only proven service-only dependencies are excluded. Unresolved/unreferenced
+  // sources remain in the checked census: absence of an import is not proof of
+  // absence of a runtime consumer. Shared dependencies always remain in scope.
+  const servicePages = files.filter((file) => file.startsWith(`${pagesRoot}/`)
+    && file.endsWith('.astro') && excludedRoute(file, registry.production_route_excludes || []));
+  const productClosure = transitiveConsumers(productionPages, forward);
+  const serviceClosure = transitiveConsumers(servicePages, forward);
+  // Explicit factory/client and protocol associations supplement literal imports.
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const family of registry.families) {
+      const runtime = [...(family.runtime_factories || []), ...(family.runtime_clients || [])].map((entry) => entry.path);
+      const signals = protocolConsumers(normalizeConsumerSignals(family.consumer_signals), files, contents);
+      const seeds = [family.astro_root, ...(family.style_owners || []), ...runtime, ...signals];
+      if (!seeds.some((file) => productClosure.has(file))) continue;
+      for (const file of transitiveConsumers(seeds, forward)) {
+        if (!productClosure.has(file)) { productClosure.add(file); expanded = true; }
+      }
+    }
+  }
+  const serviceOnlySources = sortedUnique([...serviceClosure].filter((file) => !productClosure.has(file)));
+  const serviceOnly = new Set(serviceOnlySources);
+  const checkedSources = files.filter((file) => !serviceOnly.has(file));
+
   const families = {};
   for (const family of registry.families) {
     const runtimeFactories = normalizeRuntimeEntries(family.runtime_factories);
@@ -211,7 +236,15 @@ export async function buildAstroFamilyGraph({
     registry_sha256: digest(registryText),
     source_root: sourceRoot,
     import_inventory_sha256: digest(JSON.stringify(importInventory)),
+    product_scope: {
+      route_sources: productionPages,
+      service_route_sources: servicePages,
+      service_only_sources: serviceOnlySources,
+      checked_sources: checkedSources,
+      policy: 'Exclude only proven service-only closure; retain shared, explicit runtime and unresolved sources.',
+    },
     summary: {
+      product_family_count: registry.families.filter((family) => !serviceOnly.has(family.astro_root)).length,
       family_count: registry.families.length,
       source_file_count: files.length,
       import_edge_count: [...forward.values()].reduce((sum, imports) => sum + imports.length, 0),

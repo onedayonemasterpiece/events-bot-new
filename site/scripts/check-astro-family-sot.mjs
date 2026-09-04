@@ -175,7 +175,9 @@ export async function checkAstroFamilySot({ repoRoot = DEFAULT_REPO_ROOT, regist
   if (!Array.isArray(registry.families) || !registry.families.length) fail('Astro family registry is empty');
   for (const key of FORBIDDEN_TOP_LEVEL_KEYS) if (Object.hasOwn(registry, key)) fail(`Operational field is forbidden in Astro family registry: ${key}`);
 
-  const sourceFiles = await walkSource(path.resolve(repoRoot, registry.source_root), repoRoot);
+  const expectedGraph = await buildAstroFamilyGraph({ repoRoot, registryPath });
+  const serviceOnly = new Set(expectedGraph.product_scope.service_only_sources);
+  const sourceFiles = (await walkSource(path.resolve(repoRoot, registry.source_root), repoRoot)).filter((file) => !serviceOnly.has(file));
   const sourceByPath = new Map();
   for (const file of sourceFiles) sourceByPath.set(file, await readFile(path.resolve(repoRoot, file), 'utf8'));
   globalThis.__astroFamilySotText = new Map([[path.resolve(repoRoot, registry.production_surface_contract.path), await readFile(path.resolve(repoRoot, registry.production_surface_contract.path), 'utf8')]]);
@@ -202,7 +204,7 @@ export async function checkAstroFamilySot({ repoRoot = DEFAULT_REPO_ROOT, regist
     for (const signal of family.consumer_signals) validateConsumerSignal(family, signal);
     for (const file of requiredPaths) if (!await exists(path.resolve(repoRoot, file))) fail(`${family.id} references missing source: ${file}`);
     const rootSource = await readFile(path.resolve(repoRoot, family.astro_root), 'utf8');
-    validateIdentity(family, rootSource);
+    if (!serviceOnly.has(family.astro_root)) validateIdentity(family, rootSource);
     for (const nested of family.nested_families) if (!familyById.has(nested) && !registry.families.some((item) => item.id === nested)) fail(`${family.id} references unregistered nested family: ${nested}`);
     for (const entry of [...family.runtime_factories, ...family.runtime_clients]) {
       const source = await readFile(path.resolve(repoRoot, entry.path), 'utf8');
@@ -230,7 +232,6 @@ export async function checkAstroFamilySot({ repoRoot = DEFAULT_REPO_ROOT, regist
     if (unknown.length) fail(`Unregistered runtime consumer for ${symbol}: ${unknown.join(', ')}`);
   }
 
-  const expectedGraph = await buildAstroFamilyGraph({ repoRoot, registryPath });
   validateProductionSurfaceCoverage(registry, expectedGraph, rootOwners, repoRoot);
   const resolvedGraphPath = graphPath || registry.generated_graph;
   if (!await exists(path.resolve(repoRoot, resolvedGraphPath))) fail(`Generated graph is missing: ${resolvedGraphPath}`);

@@ -7,7 +7,9 @@
     "site/src/pages/lab/**",
     "site/src/pages/[preview]/**",
     "site/src/pages/404.astro",
-    "site/src/pages/500.astro"
+    "site/src/pages/500.astro",
+    "site/src/pages/fokus-gruppa/diagnostika/**",
+    "site/src/pages/fokus-gruppa/diagnostika-ustoychivost/**"
   ],
   "families": [
     {
