@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   listProducedPaths,
+  localFocusedBrowserEpoch,
   parseLocalFocusedArgs,
   resolvePlaywrightApi,
   resolvePageClass,
@@ -63,4 +64,11 @@ test('staged Playwright supports both ESM named and CommonJS default exports', (
   assert.equal(resolvePlaywrightApi(named).chromium.launch(), 'named');
   assert.equal(resolvePlaywrightApi(commonJs).chromium.launch(), 'default');
   assert.throws(() => resolvePlaywrightApi({ default: {} }), /does not expose chromium/u);
+});
+
+test('browser smoke is pinned to the immutable build date', () => {
+  const epoch = localFocusedBrowserEpoch('2026-07-23');
+  assert.equal(new Date(epoch).toISOString(), '2026-07-23T10:00:00.000Z');
+  assert.throws(() => localFocusedBrowserEpoch('2026-02-31'), /Invalid local focused browser date/u);
+  assert.throws(() => localFocusedBrowserEpoch('today'), /Invalid local focused browser date/u);
 });

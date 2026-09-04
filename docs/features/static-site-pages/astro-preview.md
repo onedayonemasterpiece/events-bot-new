@@ -57,6 +57,12 @@ allowlist remains `site/scripts/static-site-page-classes.v1.json`. A verified
 `PLAYWRIGHT_EXECUTABLE_PATH` reuses the installed local Chromium; otherwise the
 staged checkout installs its matching Playwright browser.
 
+Browser smoke runs at the artifact's declared Kaliningrad build date. This is
+required for deterministic older fixtures: their `/segodnya/` owner is tested
+as generated instead of following the intentional live stale-date redirect to
+a route outside the exact local slice. Stale/current/redirect behavior remains
+covered separately by the date-availability contract tests.
+
 `check:preview` treats a date listing without mobile event rows as valid only
 when the generated page retains the mobile rail shell and renders the explicit
 no-events marker as visible. This keeps empty current dates buildable without

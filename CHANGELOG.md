@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: deterministic local focused browser smoke now uses the artifact's
+  declared Kaliningrad build date. Older `/segodnya/` fixtures therefore test
+  the exact generated owner instead of escaping their one-route slice through
+  the intentional live stale-date redirect.
+
 - Fixed: the iconography consumer census now resolves static `SemanticIcon`
   usage to the underlying canonical UI icon identity, so normalized consumers
   no longer leave used icons reported as unused.
