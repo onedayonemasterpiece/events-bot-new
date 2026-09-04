@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: the canonical desktop Editorial action panel now resets obsolete
+  hero-grid placement when mounted in its bounded side owner. OCR companion
+  events no longer collapse the panel to a zero-width action row or create
+  document-level horizontal overflow; action order, targets and behavior are
+  unchanged.
+
 - Changed: the existing immutable Preview hub now exposes one direct
   representative link for all 15 owner-facing archetype families, including
   Home, Favorites, Focus Group and Artifacts. The unified prototype gate now

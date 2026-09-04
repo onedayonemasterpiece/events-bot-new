@@ -268,6 +268,11 @@ acceptance covers the whole `282/282` catalog with no page errors, plus a
 visible H1/CTA, action-panel child geometry and zero horizontal overflow.
 Phone variants must prove a one-line number and every calendar/share/like
 control inside the graphite panel; text presence alone is not acceptance.
+The production Editorial side panel is a single full-width grid item inside
+its bounded side owner. Historical hero-grid `grid-column/grid-row` placement
+must be reset on the `editorial-side` variant: otherwise OCR companion events
+collapse the action row and push calendar/share/like controls beyond the
+viewport even though the surrounding stage itself is correctly bounded.
 Interaction checks cover exact
 gallery indices, classified-poster opening, idle autorotation, CTA safe
 release, immutable thumbnail derivatives and both transport types. Public HTTP

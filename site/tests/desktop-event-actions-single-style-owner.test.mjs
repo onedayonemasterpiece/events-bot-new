@@ -54,6 +54,11 @@ test('DesktopEventActionPanel is the single desktop action anatomy and CSS owner
   }
   assert.match(panelStyle, /data-desktop-action-panel/u);
   assert.match(panelStyle, /data-action-variant="split-inline"/u);
+  assert.match(
+    panelStyle,
+    /data-action-variant="editorial-side"[^}]*grid-column:auto !important;[^}]*grid-row:auto !important;/u,
+    'the Editorial side panel must reset obsolete hero-grid placement inside its bounded side owner',
+  );
 });
 
 test('desktop action controls keep accepted targets and central icon roles', async () => {

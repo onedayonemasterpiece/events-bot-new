@@ -381,7 +381,7 @@ const shareFileName = `kenigevents-${event.slug}`;
 :global(.desktop-prototype--gallery [data-desktop-action-panel]) { grid-template-columns:minmax(90px,auto) minmax(160px,1fr); }
 :global(.desktop-prototype--gallery .desktop-prototype__action-row) { grid-column:1/-1; }}
 @media (min-width:1024px) {:global([data-desktop-action-panel][data-action-variant="split-inline"]) { margin:0 clamp(1.5rem,3vw,3.2rem); border-radius:24px; }
-:global(.desktop-clean-event--editorial .desktop-editorial-side [data-desktop-action-panel]) { position:static; inset:auto; width:min(100%,330px); margin:0; border-radius:22px; }
+:global(.desktop-clean-event--editorial .desktop-editorial-side [data-desktop-action-panel][data-action-variant="editorial-side"]) { position:static; inset:auto; grid-column:auto !important; grid-row:auto !important; width:min(100%,330px); margin:0; border-radius:22px; }
 :global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"]),
 :global(.desktop-clean-event--reading [data-desktop-action-panel][data-action-variant="split-inline"]),
 :global(.desktop-clean-event--bento [data-desktop-action-panel][data-action-variant="split-inline"]) { display:grid; grid-template-columns:minmax(100px,.3fr) minmax(210px,1fr) auto; align-items:center; }
