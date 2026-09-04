@@ -1,0 +1,403 @@
+{
+  "schema": "kenigevents.astro-family-consumers.v1",
+  "version": "1.0.0",
+  "registry": "site/src/design-system/astro-family-registry.v1.json",
+  "registry_version": "1.0.0",
+  "registry_sha256": "b2a6741838d3276c581fb74d3773c3cdd89fb6f6a8ef9dcfa48d7eca2905dc89",
+  "source_root": "site/src",
+  "import_inventory_sha256": "dac4e634f58eab0d2032904b9345e91a4e2bb51b9f6d75494508f459e49152b2",
+  "summary": {
+    "family_count": 9,
+    "source_file_count": 317,
+    "import_edge_count": 804,
+    "direct_consumer_edges": 69,
+    "runtime_factory_edges": 1,
+    "runtime_consumer_edges": 2,
+    "production_route_edges": 90,
+    "unique_direct_consumers": 57,
+    "unique_runtime_factories": 1,
+    "unique_runtime_consumers": 2,
+    "unique_production_routes": 22
+  },
+  "families": {
+    "EventCard": {
+      "version": 2,
+      "astro_root": "site/src/components/EventCard.astro",
+      "direct_consumers": [
+        "site/src/components/AdaptiveEventCardGrid.astro",
+        "site/src/layouts/EventLayout.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [
+        {
+          "path": "site/src/layouts/EventLayout.astro",
+          "symbols": [
+            "createEventCardElement",
+            "KenigEventsCreateEventCard",
+            "KenigEventsRenderEventCard"
+          ]
+        }
+      ],
+      "runtime_clients": [
+        {
+          "path": "site/src/components/AuthorizedEventSearch.astro",
+          "symbols": [
+            "KenigEventsRenderEventCard"
+          ]
+        },
+        {
+          "path": "site/src/components/FavoritesSurface.astro",
+          "symbols": [
+            "KenigEventsCreateEventCard"
+          ]
+        }
+      ],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-[date]/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/[slug]/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/[slug]/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/[slug]/",
+        "/vyhodnye/",
+        "/vyhodnye/[start]/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "ListingEventCard": {
+      "version": 9,
+      "astro_root": "site/src/components/listings/ListingEventCard.astro",
+      "direct_consumers": [
+        "site/src/components/listings/ExactTimeTimeline.astro",
+        "site/src/components/listings/PopularBehaviorRows.astro",
+        "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+        "site/src/components/listings/PopularPersonalizedRow.astro",
+        "site/src/components/listings/WeekendEditorialTimeline.astro",
+        "site/src/components/listings/WeekendTimeMatrix.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/date-[date]/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/vyhodnye/",
+        "/vyhodnye/[start]/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "MediaFrame": {
+      "version": 1,
+      "astro_root": "site/src/components/media-frame.css",
+      "direct_consumers": [
+        "site/src/components/EventCard.astro",
+        "site/src/components/EventHero.astro",
+        "site/src/components/EventMediaRail.astro",
+        "site/src/components/listings/ListingEventCard.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-[date]/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/[slug]/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/[slug]/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/[slug]/",
+        "/vyhodnye/",
+        "/vyhodnye/[start]/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "AdaptiveEventCardGrid": {
+      "version": 1,
+      "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
+      "direct_consumers": [
+        "site/src/components/FavoritesSurface.astro",
+        "site/src/components/FreeCollectionSurface.astro",
+        "site/src/components/GastronomyCollectionSurface.astro",
+        "site/src/components/HomeColdStartFeed.astro",
+        "site/src/components/lab/MobileEventReviewPage.astro",
+        "site/src/components/listings/PopularMobileBehaviorRows.astro",
+        "site/src/components/OptimizedEventCardGrid.astro",
+        "site/src/components/PersonalFeedSlot.astro",
+        "site/src/components/UnusualListingSurface.astro",
+        "site/src/pages/[preview]/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/sobytiya/[slug].astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/",
+        "/date-[date]/",
+        "/izbrannoe/",
+        "/neobychnoe/",
+        "/podborki/[slug]/",
+        "/podborki/gastronomiya/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/[slug]/",
+        "/vyhodnye/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "DateListingSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/DateListingSurface.astro",
+      "direct_consumers": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/date-[date]/",
+        "/segodnya/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "WeekendListingSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/WeekendListingSurface.astro",
+      "direct_consumers": [
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/vyhodnye/",
+        "/vyhodnye/[start]/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro"
+      ]
+    },
+    "PopularListingSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/listings/PopularListingSurface.astro",
+      "direct_consumers": [
+        "site/src/pages/populyarnoe/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/populyarnoe/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/populyarnoe/index.astro"
+      ]
+    },
+    "ExhibitionsPersonalSurface": {
+      "version": 1,
+      "astro_root": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "direct_consumers": [
+        "site/src/pages/vystavki/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/vystavki/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/vystavki/index.astro"
+      ]
+    },
+    "ShellNavigation": {
+      "version": 1,
+      "astro_root": "site/src/layouts/EventLayout.astro",
+      "direct_consumers": [
+        "site/src/pages/[preview]/index.astro",
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/lab/design-system/index.astro",
+        "site/src/pages/lab/event-desktop/examples/[scenario].astro",
+        "site/src/pages/lab/event-desktop/index.astro",
+        "site/src/pages/lab/event-mobile/examples/[variant]/[scenario].astro",
+        "site/src/pages/lab/event-mobile/index.astro",
+        "site/src/pages/lab/event-participants.astro",
+        "site/src/pages/lab/exhibitions-personal/index.astro",
+        "site/src/pages/lab/hero/index.astro",
+        "site/src/pages/lab/hero/review/[caseId]/index.astro",
+        "site/src/pages/lab/hero/review/index.astro",
+        "site/src/pages/lab/medallions/index.astro",
+        "site/src/pages/lab/occurrences/index.astro",
+        "site/src/pages/lab/question-cta/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-[date]/",
+        "/dlya-menya/",
+        "/festivali/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/[slug]/",
+        "/neobychnoe/",
+        "/partners/",
+        "/partnerstvo/",
+        "/podborki/",
+        "/podborki/[slug]/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/[slug]/",
+        "/vyhodnye/",
+        "/vyhodnye/[start]/",
+        "/vystavki/",
+        "/zavtra/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
+        "site/src/pages/partnerstvo/index.astro",
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zavtra/index.astro"
+      ]
+    }
+  }
+}

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added: a minimal executable Astro family source of truth beside `site/src`:
+  one canonical family registry, a generated reverse consumer/production-route
+  graph, an impact query and a fail-closed drift checker. The initial registry
+  covers nine launch-critical families; Penpot binding remains optional metadata.
+
 - Fixed static-preview regression gates to use exported gallery cardinality and
   to keep Popular Large/Compact checks separate from Date/Weekend mobile rails.
 
