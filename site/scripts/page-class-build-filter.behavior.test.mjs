@@ -7,6 +7,7 @@ import {
   normalizeStaticSiteFocusedRoutes,
   normalizeStaticSitePageClasses,
   pageClassForComponent,
+  staticSitePageClassFilterIntegration,
   STATIC_SITE_PAGE_CLASSES,
 } from './page-class-build-filter.mjs';
 
@@ -65,6 +66,47 @@ test('exact event route keeps only canonical detail companions and preview shell
   assert.deepEqual(
     filterPrerenderPaths(paths, ['event'], focused).map((entry) => entry.pathname),
     ['/sobytiya/one/', '/sobytiya/one/event.ics', '/data/discovery/7.json', '/__preview/'],
+  );
+});
+
+test('exact static route emits one product HTML route and rejects collection neighbours', () => {
+  const paths = [
+    { pathname: '/festivali/', route: { component: 'src/pages/festivali/index.astro' } },
+    { pathname: '/vystavki/', route: { component: 'src/pages/vystavki/index.astro' } },
+    { pathname: '/populyarnoe/', route: { component: 'src/pages/populyarnoe/index.astro' } },
+    { pathname: '/__preview/', route: { component: 'src/pages/[preview]/index.astro' } },
+    { pathname: '/robots.txt', route: { component: 'src/pages/robots.txt.ts' } },
+  ];
+  const focused = ['/festivali/', '/__preview/', ...FOCUSED_PREVIEW_SUPPORT_ROUTES];
+  const kept = filterPrerenderPaths(paths, ['collection'], focused);
+  assert.deepEqual(kept.map((entry) => entry.pathname), ['/festivali/', '/__preview/', '/robots.txt']);
+  const generatedHtmlRoutes = kept.filter((entry) => entry.route.component.endsWith('.astro'));
+  const productHtmlRoutes = generatedHtmlRoutes.filter((entry) => pageClassForComponent(entry.route.component) !== 'shell');
+  assert.equal(generatedHtmlRoutes.length, 2, 'focused output must contain selected page plus owner entry');
+  assert.equal(productHtmlRoutes.length, 1, 'focused output must contain exactly one product HTML route');
+  assert.equal(productHtmlRoutes[0].pathname, '/festivali/');
+});
+
+test('focused integration fails closed when a requested route is not materialized', async () => {
+  const paths = [
+    { pathname: '/festivali/', route: { component: 'src/pages/festivali/index.astro' } },
+    { pathname: '/__preview/', route: { component: 'src/pages/[preview]/index.astro' } },
+    { pathname: '/robots.txt', route: { component: 'src/pages/robots.txt.ts' } },
+  ];
+  const integration = staticSitePageClassFilterIntegration(
+    'collection',
+    JSON.stringify(['/missing-route/', '/__preview/', ...FOCUSED_PREVIEW_SUPPORT_ROUTES]),
+  );
+  let wrapPrerenderer;
+  integration.hooks['astro:build:start']({ setPrerenderer(value) { wrapPrerenderer = value; } });
+  assert.equal(typeof wrapPrerenderer, 'function');
+  const prerenderer = wrapPrerenderer({
+    name: 'default-prerenderer',
+    async getStaticPaths() { return paths; },
+  });
+  await assert.rejects(
+    () => prerenderer.getStaticPaths(),
+    /Focused preview did not materialize requested routes: \/missing-route\//u,
   );
 });
 
