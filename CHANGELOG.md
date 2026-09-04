@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Changed: `DesktopEventActionPanel` is now the sole desktop event-action
+  anatomy and CSS owner. `DesktopEventPage` passes explicit placement variants
+  and media states instead of duplicating root/primary/action-row selectors;
+  the accepted palette and interactions are preserved, control targets remain
+  at least 52px, and action glyphs use the central action icon role.
+
 - Fixed Review Preview Kaggle starvation: the static-site runner now has a
   validated private review-preview execution lane with its own staged kernel
   ref, local lock, scratch cleanup scope and status resource lease, while the
@@ -5697,7 +5703,7 @@
 
 ### Fixed
 - **Telegram event medallions**: restricted ordinary venue-medallion alias matching to event location fields and repaired Afisha posts where description/festival text had added `kant-island` or `simfoniya-vetra` incorrectly.
-- **Tretyakov Parser**: 
+- **Tretyakov Parser**:
   - Исправлена навигация по календарю — теперь парсер корректно находит все даты через стрелку `.week-calendar-next`.
   - Исправлено извлечение времени — парсер теперь прокручивает календарь к нужной дате перед кликом, устраняя ошибки `00:00` для дат на других страницах календаря.
   - Добавлена полная поддержка min/max цен из всех секторов.

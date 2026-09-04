@@ -15,15 +15,19 @@ import {
   withBase,
 } from '../lib/events';
 
+type DesktopActionVariant = 'editorial-side' | 'split-inline' | 'editorial-flow' | 'split-flow';
+type DesktopActionState = 'non-ocr' | 'ocr';
+
 interface Props {
   event: PreviewEvent;
   shareImage?: string;
   shareImageTextMode?: PreviewEvent['image_text_mode'];
-  className?: string;
-  family?: 'split' | 'editorial';
+  variant: DesktopActionVariant;
+  state: DesktopActionState;
 }
 
-const { event, shareImage = event.image_url || '', shareImageTextMode = event.image_text_mode || 'unknown', className = '', family = 'editorial' } = Astro.props;
+const { event, shareImage = event.image_url || '', shareImageTextMode = event.image_text_mode || 'unknown', variant, state } = Astro.props;
+const family = variant.startsWith('editorial') ? 'editorial' : 'split';
 const dateTimeLabel = getOccurrencePresentation(event).compactLabel;
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
@@ -55,9 +59,11 @@ const shareFileName = `kenigevents-${event.slug}`;
 ---
 
 <aside
-  class:list={['desktop-prototype__action', className]}
+  class="desktop-prototype__action"
   data-feedback-scope
   data-desktop-action-panel
+  data-action-variant={variant}
+  data-action-state={state}
   data-action-family={family}
   data-action-layout={family === 'split' ? 'inline' : 'stacked'}
   data-primary-action-kind={calendarPrimary ? 'calendar' : (ctaIsTelephone ? 'phone' : 'default')}
@@ -268,10 +274,10 @@ const shareFileName = `kenigevents-${event.slug}`;
   }
   :global(.desktop-prototype__primary-action [data-desktop-primary-label]),
   :global(.desktop-prototype__primary-action [data-calendar-label]) { min-width:0; }
-  :global(.desktop-prototype__primary-action .icon) { width: 1.5rem; height: 1.5rem; }
+  :global(.desktop-prototype__primary-action .icon) { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action); }
   :global(button.desktop-prototype__primary-action) { border:0; font:inherit; cursor:pointer; }
-  /* The success toast intentionally escapes the rounded CTA; a later page-level
-     primary-action rule otherwise clips it even though it does not affect layout. */
+  /* The success toast intentionally escapes the rounded CTA. This component
+     owns both the action anatomy and the clipping exception. */
   .desktop-prototype__phone-copy { position:relative; width:100%; min-width:0; overflow:visible !important; white-space:nowrap; }
   .desktop-prototype__phone-copy:active { box-shadow:0 6px 14px rgba(124,49,20,.22); }
   .desktop-prototype__phone-copy:focus-visible { outline:3px solid var(--ke-focus-ring,#f1ae79); outline-offset:3px; }
@@ -344,11 +350,91 @@ const shareFileName = `kenigevents-${event.slug}`;
     max-width: 0;
     opacity: 0;
   }
-  :global(.desktop-prototype__icon-action .icon) { width: 29px; height: 29px; }
+  :global(.desktop-prototype__icon-action .icon) { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action); }
   :global(.desktop-prototype__icon-action strong) { font-size: .92rem; font-variant-numeric: tabular-nums; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:52px; min-width:52px; padding-inline:.3rem; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]),
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { transition:none; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { width:0; max-width:0; opacity:0; }
+
+
+  /*
+   * Public placement variants migrated from DesktopEventPage.astro.
+   * The page supplies only variant/state; this component remains the sole
+   * anatomy and CSS owner for its root and descendants.
+   */
+:global(.desktop-prototype--editorial.desktop-prototype--non-ocr [data-desktop-action-panel]) { position:absolute; right:3%; bottom:3%; width:min(28%,330px); border-radius:22px; }
+:global(.desktop-prototype--editorial.desktop-prototype--ocr [data-desktop-action-panel]) { grid-column:2; grid-row:1; align-self:end; grid-template-columns:minmax(90px,auto) minmax(170px,1fr); margin-left:-2rem; }
+:global(.desktop-prototype--editorial.desktop-prototype--ocr .desktop-prototype__action-row) { grid-column:1/-1; }
+:global(.desktop-prototype--split [data-desktop-action-panel]) { grid-column:2; grid-row:2; margin:0 clamp(1.25rem,3vw,3rem) clamp(1.25rem,3vw,3rem); border-radius:22px; }
+:global(.desktop-prototype--gallery [data-desktop-action-panel]) { grid-column:2; grid-row:1; grid-template-columns:auto minmax(180px,1fr) auto; align-self:end; align-items:center; margin:0 clamp(1.2rem,2.5vw,2.5rem) clamp(.2rem,1vh,.8rem); border-radius:22px; }
+:global(.desktop-prototype--gallery .desktop-prototype__action-row) { min-width:112px; }
+@media (min-width:1024px) {:global(.desktop-clean-event--editorial.desktop-clean-event--non-ocr [data-desktop-action-panel][data-action-variant$="-flow"]) { display:none; }
+:global(.desktop-clean-event--editorial.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant$="-flow"]) { grid-column:2; grid-row:2; grid-template-columns:minmax(100px,.32fr) minmax(190px,1fr) auto; align-items:center; margin:0; }
+:global(.desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-prototype__action-row) { grid-column:auto; }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant$="-flow"]) { align-self:start; }
+:global(.desktop-clean-event--reading [data-desktop-action-panel][data-action-variant$="-flow"]) { grid-column:2; grid-row:2; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(2rem,4vw,4rem); border-radius:24px; }}
+@media (min-width:1024px) and (max-height:720px) {:global(.desktop-prototype--split [data-desktop-action-panel]) { margin:0 1.4rem .7rem; }
+:global(.desktop-clean-event--editorial.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant$="-flow"]) { padding:.75rem; }}
+@media (min-width:1024px) and (max-width:1200px) {:global(.desktop-clean-event--editorial.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant$="-flow"]) { grid-template-columns:minmax(180px,1fr) auto; }
+:global(.desktop-clean-event--editorial.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant$="-flow"]>p) { display:none; }
+:global(.desktop-prototype--gallery [data-desktop-action-panel]) { grid-template-columns:minmax(90px,auto) minmax(160px,1fr); }
+:global(.desktop-prototype--gallery .desktop-prototype__action-row) { grid-column:1/-1; }}
+@media (min-width:1024px) {:global([data-desktop-action-panel][data-action-variant="split-inline"]) { margin:0 clamp(1.5rem,3vw,3.2rem); border-radius:24px; }
+:global(.desktop-clean-event--editorial .desktop-editorial-side [data-desktop-action-panel]) { position:static; inset:auto; width:min(100%,330px); margin:0; border-radius:22px; }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"]),
+:global(.desktop-clean-event--reading [data-desktop-action-panel][data-action-variant="split-inline"]),
+:global(.desktop-clean-event--bento [data-desktop-action-panel][data-action-variant="split-inline"]) { display:grid; grid-template-columns:minmax(100px,.3fr) minmax(210px,1fr) auto; align-items:center; }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr .desktop-prototype__action-row),
+:global(.desktop-clean-event--reading .desktop-prototype__action-row),
+:global(.desktop-clean-event--bento .desktop-prototype__action-row) { grid-column:auto; }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"]) { position:sticky; top:calc(var(--desktop-header-height) + .75rem); z-index:12; isolation:isolate; background:#292521; box-shadow:0 -.75rem 0 var(--clean-paper),0 16px 34px rgba(47,33,23,.24); }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"]::before) { content:""; position:absolute; left:0; right:0; bottom:100%; height:.85rem; background:var(--clean-paper); pointer-events:none; }}
+@media (min-width:1024px) and (max-width:1279px) {:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"]),
+:global(.desktop-clean-event--bento [data-desktop-action-panel][data-action-variant="split-inline"]) { grid-template-columns:minmax(0,1fr) auto; }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"] .desktop-prototype__primary-action),
+:global(.desktop-clean-event--bento [data-desktop-action-panel][data-action-variant="split-inline"] .desktop-prototype__primary-action) { grid-column:1/-1; grid-row:2; }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"] .desktop-prototype__action-row),
+:global(.desktop-clean-event--bento [data-desktop-action-panel][data-action-variant="split-inline"] .desktop-prototype__action-row) { grid-column:2; grid-row:1; }}
+@media (min-width:1024px) {:global(.desktop-clean-event--editorial .desktop-editorial-side [data-desktop-action-panel]) { order:2; width:100%; }
+:global(.desktop-clean-event--editorial.desktop-clean-event--ocr .desktop-editorial-side [data-desktop-action-panel]) { order:1; }
+:global(.desktop-clean-event--split [data-desktop-action-panel][data-action-variant="split-inline"]) { position:sticky; top:calc(var(--desktop-header-height) + .75rem); z-index:12; display:grid; grid-template-columns:minmax(100px,.3fr) minmax(210px,1fr) auto; align-items:center; isolation:isolate; background:#292521; box-shadow:0 -.75rem 0 var(--clean-paper),0 16px 34px rgba(47,33,23,.24); }
+:global(.desktop-clean-event--split [data-desktop-action-panel][data-action-variant="split-inline"]::before) { content:""; position:absolute; left:0; right:0; bottom:100%; height:.85rem; background:var(--clean-paper); pointer-events:none; }
+:global(.desktop-clean-event--split .desktop-prototype__action-row) { grid-column:auto; }}
+@media (min-width:1024px) and (max-width:1279px) {:global(.desktop-clean-event--split [data-desktop-action-panel][data-action-variant="split-inline"]) { grid-template-columns:minmax(0,1fr) auto; }
+:global(.desktop-clean-event--split [data-desktop-action-panel][data-action-variant="split-inline"] .desktop-prototype__primary-action) { grid-column:1/-1; grid-row:2; }
+:global(.desktop-clean-event--split [data-desktop-action-panel][data-action-variant="split-inline"] .desktop-prototype__action-row) { grid-column:2; grid-row:1; }}
+@media (min-width:1024px) {:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"]),
+:global(.desktop-clean-event--split.desktop-clean-event--non-ocr [data-desktop-action-panel][data-action-variant="split-inline"]) {
+      grid-template-columns:minmax(132px,max-content) minmax(180px,1fr) auto;
+      column-gap:.9rem;
+    }
+:global(.desktop-clean-event--split.desktop-clean-event--ocr [data-desktop-action-panel][data-action-variant="split-inline"] > p),
+:global(.desktop-clean-event--split.desktop-clean-event--non-ocr [data-desktop-action-panel][data-action-variant="split-inline"] > p) { min-width:132px; }
+:global(.desktop-clean-event--split [data-desktop-action-panel][data-action-variant="split-inline"] > p strong) { white-space:nowrap; }
+:global(.desktop-clean-event .desktop-prototype__action-row) { gap:.7rem; }
+:global(.desktop-clean-event .desktop-prototype__icon-action) { min-width:56px; min-height:56px; padding:.45rem; }
+:global(.desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side [data-desktop-action-panel]) {
+      order:2;
+      margin-top:max(12px,calc(clamp(390px,57svh,620px) - 91px));
+      transform:translate3d(0,0,0);
+      transition:none;
+      will-change:transform;
+    }
+:global(.desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] [data-desktop-action-panel]) {
+      position:relative;
+      top:auto;
+      z-index:4;
+      order:1;
+      margin-top:max(12px,calc(clamp(390px,57svh,620px) - 91px));
+      transform:translate3d(0,0,0);
+      transition:none;
+      will-change:transform;
+    }
+:global(.desktop-clean-event [data-desktop-action-panel][data-primary-action-kind="phone"] .desktop-prototype__primary-action) { overflow:hidden; }}
+@media (min-width:1024px) and (max-height:720px) {:global(.desktop-clean-event--editorial.desktop-clean-event--non-ocr .desktop-editorial-side [data-desktop-action-panel]),
+:global(.desktop-clean-event--editorial .desktop-editorial-side[data-companion-arrival="true"] [data-desktop-action-panel]) {
+      margin-top:max(12px,calc(46svh - 100px));
+    }}
 
 </style>

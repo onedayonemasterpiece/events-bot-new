@@ -232,6 +232,23 @@ CTA quality rules:
 - sticky mobile CTA must reserve bottom padding and not cover content;
 - share/calendar/ticket clicks must attach `event_id`, `surface`, `viewport_class`, `layout_mode`, `served_list_id/hash` when applicable.
 
+### Desktop action-panel ownership
+
+`DesktopEventActionPanel.astro` is the single anatomy and CSS owner for the
+primary CTA, calendar/share/like row, counters, control targets and icon sizing.
+`DesktopEventPage.astro` places the component and passes one explicit named pair:
+
+- `variant`: `editorial-side`, `split-inline`, `editorial-flow` or `split-flow`;
+- `state`: `non-ocr` or `ocr`.
+
+The page must not restyle `.desktop-prototype__primary-action`,
+`.desktop-prototype__icon-action`, `.desktop-prototype__action-row` or duplicate
+the component root. Desktop control targets remain at least 52px (therefore
+above the 44px floor), and visible action glyphs consume
+`--ke-icon-size-action`. This boundary is structural only: the accepted palette,
+share/like/calendar behavior, phone reveal/copy lifecycle and responsive fit
+measurement remain unchanged.
+
 ## 6. Mobile layout
 
 Mobile goal: decide quickly with one thumb.

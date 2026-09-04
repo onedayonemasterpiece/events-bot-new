@@ -84,8 +84,8 @@ test('Editorial hierarchy and production role-first media boundaries stay intact
   const page = await read('src/components/DesktopEventPage.astro');
   const presentation = await read('src/lib/desktopEventPresentation.ts');
 
-  assert.match(page, /family="editorial"/u);
-  assert.match(page, /family="split"/u);
+  assert.match(page, /variant="editorial-side" state=\{mediaPolicy\}/u);
+  assert.match(page, /variant="split-inline" state=\{mediaPolicy\}/u);
   assert.match(presentation, /isTechnicallyStrongEventMedia/u);
   assert.match(presentation, /media_semantic_status === 'classified'/u);
   assert.match(presentation, /media_role === 'event_photo'/u);

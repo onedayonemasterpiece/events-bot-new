@@ -262,14 +262,15 @@ test('desktop action geometry follows the resolved media family', async () => {
   const panelRow = panel.slice(panel.indexOf('data-desktop-action-row="calendar-share-like"'));
   assert.ok(panelRow.indexOf('<CalendarLink') < panelRow.indexOf('data-native-share'));
   assert.ok(panelRow.indexOf('data-native-share') < panelRow.indexOf('data-feedback-action="like"'));
-  assert.match(panel, /family\?: 'split' \| 'editorial'/u);
+  assert.match(panel, /type DesktopActionVariant = 'editorial-side' \| 'split-inline' \| 'editorial-flow' \| 'split-flow'/u);
+  assert.match(panel, /type DesktopActionState = 'non-ocr' \| 'ocr'/u);
   assert.match(panel, /data-action-family=\{family\}/u);
   assert.match(panel, /data-action-layout=\{family === 'split' \? 'inline' : 'stacked'\}/u);
   assert.match(panel, /data-action-layout="inline"[^}]*grid-template-columns:minmax\(112px,max-content\) minmax\(0,1fr\) auto !important/su);
   assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-columns:minmax\(0,1fr\) !important/su);
   assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-rows:auto auto auto !important/su);
-  assert.match(desktop, /family="editorial"/u);
-  assert.match(desktop, /family="split"/u);
+  assert.match(desktop, /variant="editorial-side" state=\{mediaPolicy\}/u);
+  assert.match(desktop, /variant="split-inline" state=\{mediaPolicy\}/u);
   assert.match(desktop, /const splitFamily = panel\.dataset\.actionFamily === 'split'/u);
   assert.match(desktop, /if \(!splitFamily\) return/u);
   assert.match(desktop, /return !\(outside \|\| overlaps \|\| primaryLabelDoesNotFit \|\| overflows\)/u);
