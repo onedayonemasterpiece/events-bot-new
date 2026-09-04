@@ -1,0 +1,442 @@
+{
+  "schema_version": "editorial_collection_temporal_window_evidence_v1",
+  "generated_for_research_at": "2026-08-02",
+  "decision_scope": "Inventory sufficiency for bounded editorial collection editions on the static site",
+  "source": {
+    "repository": "onedayonemasterpiece/events-bot-analytics",
+    "workflow_run_id": 30753130460,
+    "artifact_id": 8835105912,
+    "artifact_name": "event-catalog-30753130460-1",
+    "bundle_generated_at": "2026-08-02T14:55:50.791302+00:00",
+    "source_sha": "5142c48529dd65ba21e025aea52342d944df38f8",
+    "eligibility_predicate_version": "static_event_public_projection_v2",
+    "eligible_event_rows": 401,
+    "excluded_event_rows": 24,
+    "file_sha256": {
+      "events-analysis.json": {
+        "sha256": "ed927be71ba63d25684f09539bfa279684490d1ff4096488ff5869bf0a0b9598",
+        "size": 644128
+      },
+      "production-catalog.json": {
+        "sha256": "476972f0036f6996139bcd42604d4ed359283cccdd641051f8663278173cfa5e",
+        "size": 61718
+      },
+      "static-preview-events.json": {
+        "sha256": "8472338b91044f326bce63fc3267f108869987a914f068491636388a91a3f174",
+        "size": 3767708
+      }
+    }
+  },
+  "grain_and_method": {
+    "as_of_date": "2026-08-02",
+    "timezone": "Europe/Kaliningrad for product interpretation; source bundle timestamps are UTC",
+    "event_row_count": 401,
+    "explicit_concept_count": 363,
+    "multi_row_explicit_concept_count": 29,
+    "largest_explicit_concept_row_count": 6,
+    "concept_deduplication": "Transitive union of event ids linked by other_date_ids. This catches explicit repeated-date families but not every semantic/source duplicate.",
+    "window_inclusion": "A concept is counted when at least one eligible event row overlaps the inclusive window.",
+    "category_rules": {
+      "Театр": "event_type in {спектакль, театр} OR topic THEATRE",
+      "Детям": "topic FAMILY or KIDS_SCHOOL OR event_type семейное",
+      "Выставки": "event_type выставка OR topic EXHIBITIONS",
+      "Концерты": "event_type концерт/concert OR topic CONCERTS",
+      "Ярмарки": "event_type ярмарка",
+      "Гастро": "manual research review; not a production taxonomy",
+      "Средневековье": "manual research review; catalog concepts and editorial anchors are reported separately"
+    },
+    "known_limitations": [
+      "Future months are incomplete announcement horizons, not final supply.",
+      "Long-running exhibitions overlap many windows and can inflate raw inventory.",
+      "Topic and event_type values are not perfectly normalized.",
+      "Explicit other_date_ids do not catch all duplicates; Grozd is manually collapsed.",
+      "Big Kaup sub-program concerts are separate catalog concepts but one editorial anchor.",
+      "The analysis measures inventory readiness, not search demand or conversion."
+    ]
+  },
+  "overall_inventory": {
+    "rolling_concepts_from_as_of": {
+      "7": 141,
+      "14": 193,
+      "21": 227,
+      "30": 258,
+      "45": 281,
+      "60": 307,
+      "90": 338,
+      "120": 354,
+      "180": 360
+    },
+    "calendar_months": {
+      "2026-08": {
+        "concepts_overlapping": 258,
+        "event_rows_overlapping": 278,
+        "event_rows_starting": 241
+      },
+      "2026-09": {
+        "concepts_overlapping": 68,
+        "event_rows_overlapping": 73,
+        "event_rows_starting": 56
+      },
+      "2026-10": {
+        "concepts_overlapping": 44,
+        "event_rows_overlapping": 52,
+        "event_rows_starting": 42
+      },
+      "2026-11": {
+        "concepts_overlapping": 18,
+        "event_rows_overlapping": 18,
+        "event_rows_starting": 15
+      },
+      "2026-12": {
+        "concepts_overlapping": 8,
+        "event_rows_overlapping": 9,
+        "event_rows_starting": 6
+      },
+      "2027-01": {
+        "concepts_overlapping": 3,
+        "event_rows_overlapping": 3,
+        "event_rows_starting": 2
+      }
+    }
+  },
+  "category_inventory": {
+    "rolling_concepts_from_as_of": {
+      "Театр": {
+        "7": 12,
+        "14": 22,
+        "21": 27,
+        "30": 36,
+        "45": 47,
+        "60": 51,
+        "90": 61
+      },
+      "Детям": {
+        "7": 28,
+        "14": 32,
+        "21": 36,
+        "30": 40,
+        "45": 47,
+        "60": 51,
+        "90": 56
+      },
+      "Выставки": {
+        "7": 47,
+        "14": 52,
+        "21": 53,
+        "30": 55,
+        "45": 56,
+        "60": 57,
+        "90": 59
+      },
+      "Концерты": {
+        "7": 45,
+        "14": 73,
+        "21": 95,
+        "30": 112,
+        "45": 123,
+        "60": 145,
+        "90": 165
+      },
+      "Ярмарки": {
+        "7": 5,
+        "14": 5,
+        "21": 5,
+        "30": 5,
+        "45": 5,
+        "60": 5,
+        "90": 5
+      },
+      "Гастро — ручной research review": {
+        "7": 4,
+        "14": 4,
+        "21": 5,
+        "30": 5,
+        "45": 5,
+        "60": 5,
+        "90": 5
+      },
+      "Средневековье — catalog concepts": {
+        "7": 4,
+        "14": 5,
+        "21": 5,
+        "30": 6,
+        "45": 6,
+        "60": 6,
+        "90": 6
+      },
+      "Средневековье — editorial anchors": {
+        "7": 2,
+        "14": 3,
+        "21": 3,
+        "30": 4,
+        "45": 4,
+        "60": 4,
+        "90": 4
+      }
+    },
+    "calendar_months": {
+      "2026-08": {
+        "Театр": 36,
+        "Детям": 40,
+        "Выставки": 55,
+        "Концерты": 112,
+        "Ярмарки": 5,
+        "Гастро": 5,
+        "Средневековье_каталог": 6,
+        "Средневековье_якоря": 4
+      },
+      "2026-09": {
+        "Театр": 17,
+        "Детям": 13,
+        "Выставки": 16,
+        "Концерты": 33,
+        "Ярмарки": 0,
+        "Гастро": 0,
+        "Средневековье_каталог": 0,
+        "Средневековье_якоря": 0
+      },
+      "2026-10": {
+        "Театр": 12,
+        "Детям": 8,
+        "Выставки": 10,
+        "Концерты": 21,
+        "Ярмарки": 0,
+        "Гастро": 0,
+        "Средневековье_каталог": 0,
+        "Средневековье_якоря": 0
+      },
+      "2026-11": {
+        "Театр": 6,
+        "Детям": 0,
+        "Выставки": 3,
+        "Концерты": 9,
+        "Ярмарки": 0,
+        "Гастро": 0,
+        "Средневековье_каталог": 0,
+        "Средневековье_якоря": 0
+      },
+      "2026-12": {
+        "Театр": 3,
+        "Детям": 1,
+        "Выставки": 3,
+        "Концерты": 2,
+        "Ярмарки": 0,
+        "Гастро": 0,
+        "Средневековье_каталог": 0,
+        "Средневековье_якоря": 0
+      },
+      "2027-01": {
+        "Театр": 0,
+        "Детям": 0,
+        "Выставки": 1,
+        "Концерты": 0,
+        "Ярмарки": 0,
+        "Гастро": 0,
+        "Средневековье_каталог": 0,
+        "Средневековье_якоря": 0
+      }
+    },
+    "remaining_august_by_as_of_date": {
+      "2026-08-02": {
+        "Театр": 36,
+        "Детям": 40,
+        "Выставки": 55,
+        "Концерты": 112,
+        "Ярмарки": 5,
+        "Гастро": 5,
+        "Средневековье_каталог": 6,
+        "Средневековье_якоря": 4
+      },
+      "2026-08-03": {
+        "Театр": 32,
+        "Детям": 30,
+        "Выставки": 49,
+        "Концерты": 98,
+        "Ярмарки": 1,
+        "Гастро": 3,
+        "Средневековье_каталог": 5,
+        "Средневековье_якоря": 3
+      },
+      "2026-08-10": {
+        "Театр": 22,
+        "Детям": 15,
+        "Выставки": 34,
+        "Концерты": 62,
+        "Ярмарки": 0,
+        "Гастро": 2,
+        "Средневековье_каталог": 2,
+        "Средневековье_якоря": 2
+      },
+      "2026-08-17": {
+        "Театр": 16,
+        "Детям": 12,
+        "Выставки": 26,
+        "Концерты": 35,
+        "Ярмарки": 0,
+        "Гастро": 1,
+        "Средневековье_каталог": 1,
+        "Средневековье_якоря": 1
+      },
+      "2026-08-24": {
+        "Театр": 9,
+        "Детям": 6,
+        "Выставки": 21,
+        "Концерты": 12,
+        "Ярмарки": 0,
+        "Гастро": 1,
+        "Средневековье_каталог": 1,
+        "Средневековье_якоря": 1
+      },
+      "2026-08-31": {
+        "Театр": 0,
+        "Детям": 4,
+        "Выставки": 17,
+        "Концерты": 0,
+        "Ярмарки": 0,
+        "Гастро": 0,
+        "Средневековье_каталог": 0,
+        "Средневековье_якоря": 0
+      }
+    },
+    "rare_theme_week_concentration": [
+      {
+        "start": "2026-08-02",
+        "end": "2026-08-09",
+        "fairs": 5,
+        "gastro_reviewed": 4,
+        "medieval_catalog_concepts": 4,
+        "medieval_editorial_anchors": 2
+      },
+      {
+        "start": "2026-08-10",
+        "end": "2026-08-16",
+        "fairs": 0,
+        "gastro_reviewed": 2,
+        "medieval_catalog_concepts": 1,
+        "medieval_editorial_anchors": 1
+      },
+      {
+        "start": "2026-08-17",
+        "end": "2026-08-23",
+        "fairs": 0,
+        "gastro_reviewed": 1,
+        "medieval_catalog_concepts": 0,
+        "medieval_editorial_anchors": 0
+      },
+      {
+        "start": "2026-08-24",
+        "end": "2026-08-31",
+        "fairs": 0,
+        "gastro_reviewed": 1,
+        "medieval_catalog_concepts": 1,
+        "medieval_editorial_anchors": 1
+      }
+    ]
+  },
+  "manual_review_sets": {
+    "gastro_concepts": {
+      "grozd_festival": [
+        7185,
+        6994
+      ],
+      "plov_picnic": [
+        7354
+      ],
+      "coffee_still_life": [
+        7126
+      ],
+      "culinary_identity_talk": [
+        7332
+      ],
+      "tea_rave": [
+        7324
+      ]
+    },
+    "medieval_catalog_concepts": {
+      "drakkar_ragna": [
+        7374
+      ],
+      "big_kaup": [
+        6191
+      ],
+      "big_kaup_drevo": [
+        6796
+      ],
+      "big_kaup_spiritual_seasons": [
+        7353
+      ],
+      "castle_restoration_exhibition": [
+        7055
+      ],
+      "medieval_feast_tournament": [
+        7131
+      ]
+    },
+    "medieval_editorial_anchors": {
+      "drakkar_ragna": [
+        7374
+      ],
+      "big_kaup_program": [
+        6191,
+        6796,
+        7353
+      ],
+      "castle_restoration_exhibition": [
+        7055
+      ],
+      "medieval_feast_tournament": [
+        7131
+      ]
+    },
+    "notes": {
+      "gastro": "Five reviewed concepts: Grozd (two duplicate rows), plov picnic, coffee still-life, culinary-identity talk, tea rave. Coffee still-life is borderline; only three are strong primary gastro experiences.",
+      "medieval": "Six catalog concepts collapse to four independent editorial anchors because two Kaup concerts are sub-programs of the same festival."
+    }
+  },
+  "popularity_signal_coverage": {
+    "7": {
+      "event_rows": 146,
+      "concepts": 141,
+      "rows_with_popularity_signal_score_gt_0": 40,
+      "rows_with_source_likes_gt_0": 130,
+      "rows_with_source_views_gt_0": 141
+    },
+    "14": {
+      "event_rows": 206,
+      "concepts": 193,
+      "rows_with_popularity_signal_score_gt_0": 51,
+      "rows_with_source_likes_gt_0": 174,
+      "rows_with_source_views_gt_0": 200
+    },
+    "30": {
+      "event_rows": 278,
+      "concepts": 258,
+      "rows_with_popularity_signal_score_gt_0": 59,
+      "rows_with_source_likes_gt_0": 230,
+      "rows_with_source_views_gt_0": 270
+    }
+  },
+  "initial_product_thresholds": {
+    "status": "hypothesis_to_calibrate",
+    "no_edition": {
+      "independent_concepts_max": 2
+    },
+    "mini_guide": {
+      "independent_concepts_min": 3,
+      "independent_concepts_max": 5
+    },
+    "full_edition": {
+      "independent_concepts_min": 6,
+      "preferred_concepts_max": 12
+    },
+    "full_edition_additional_gates": {
+      "primary_relevance_min": 4,
+      "distinct_active_dates_min": 3,
+      "distinct_weeks_min": 2,
+      "narrative_groups_min": 3,
+      "largest_series_or_festival_share_max": 0.4,
+      "critical_fact_completeness_min": 0.75
+    },
+    "overfull_action": "Shorten the human-readable period or editorially select 8–12 concepts while preserving a complete compact index."
+  }
+}
