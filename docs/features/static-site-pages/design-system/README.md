@@ -136,6 +136,12 @@ The desktop event-detail surface consumes `--ke-color-event-detail-ink` and
 `--clean-ink` / `--clean-paper` / `--clean-accent` aliases were exact duplicates
 of the established event-detail roles and are not a second authority boundary.
 
+`EventOccurrenceNav` consumes the existing occurrence color, surface, border,
+shape and elevation roles from `event-detail-foundations.css` directly. The
+desktop, mobile and practical variants therefore share one token-owned visual
+language without changing their established schedule anatomy, target sizes or
+responsive geometry.
+
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant
