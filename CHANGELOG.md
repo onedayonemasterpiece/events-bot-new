@@ -2,10 +2,21 @@
 
 ## [Unreleased]
 
+- Fixed: the iconography consumer census now resolves static `SemanticIcon`
+  usage to the underlying canonical UI icon identity, so normalized consumers
+  no longer leave used icons reported as unused.
+
 - Fixed: the iconography census now counts raw inline SVG only in rendered
   Astro source, as required by its contract. Generated token-impact JSON,
   checker regexes and serialized runtime markup no longer appear as false
   product icon-owner gaps; canonical icon consumer and asset scans are
+  unchanged.
+
+- Changed: `MobileBottomNav` and `ServiceShareAction` now consume canonical
+  icon identities through the four-role foundations contract. Four and five
+  component-local inline SVG copies plus the local `21px` / `1.15rem` size
+  owners are removed while routes, accessible names, share intents/fallbacks,
+  status and shortcut hooks, 44px targets, responsive behavior and palette stay
   unchanged.
 
 - Added: `npm --prefix site run local:focused -- ...` now materializes one

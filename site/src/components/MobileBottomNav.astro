@@ -1,6 +1,7 @@
 ---
+import SemanticIcon from './design-system/SemanticIcon.astro';
 import { mobileDiscoveryHref } from '../lib/mobileDiscoveryRoutes';
-import { BASE_PATH } from '../lib/events';
+import { BASE_PATH, withBase } from '../lib/events';
 
 export type MobileSection = 'afisha' | 'dates' | 'search' | 'personal' | null;
 
@@ -10,6 +11,7 @@ const discoveryBases = {
   calendarBase: import.meta.env.PUBLIC_MOBILE_CALENDAR_BASE_URL,
   searchBase: import.meta.env.PUBLIC_MOBILE_SEARCH_BASE_URL,
 };
+const searchIconUrl = withBase('/assets/icons/reference4-v8/search-thin.svg');
 const items = [
   { key: 'afisha', label: 'Афиша', href: mobileDiscoveryHref('/populyarnoe/', discoveryBases, BASE_PATH), icon: 'ticket' },
   { key: 'dates', label: 'Даты', href: mobileDiscoveryHref('/segodnya/', discoveryBases, BASE_PATH), icon: 'calendar' },
@@ -22,10 +24,21 @@ const items = [
   {items.map((item) => (
     <a href={item.href} data-mobile-nav-section={item.key} aria-current={item.key === current ? 'page' : undefined}>
       <span class="mobile-bottom-nav__icon">
-        {item.icon === 'ticket' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.75 6.25A2.25 2.25 0 0 1 7 4h10a2.25 2.25 0 0 1 2.25 2.25v2.06a2.3 2.3 0 0 0 0 4.38v2.06A2.25 2.25 0 0 1 17 17H7a2.25 2.25 0 0 1-2.25-2.25v-2.06a2.3 2.3 0 0 0 0-4.38V6.25Zm5 1a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5Zm0 4a.75.75 0 0 0 0 1.5h2.8a.75.75 0 0 0 0-1.5h-2.8Z" /></svg>}
-        {item.icon === 'calendar' && <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.25A2.75 2.75 0 0 1 21 6.75v11.5A2.75 2.75 0 0 1 18.25 21H5.75A2.75 2.75 0 0 1 3 18.25V6.75A2.75 2.75 0 0 1 5.75 4H6V3a1 1 0 0 1 1-1ZM5 9v9.25c0 .41.34.75.75.75h12.5c.41 0 .75-.34.75-.75V9H5Z" clip-rule="evenodd" /></svg>}
-        {item.icon === 'search' && <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M10.75 3a7.75 7.75 0 1 0 4.82 13.82l3.8 3.8a.88.88 0 0 0 1.24-1.24l-3.8-3.8A7.75 7.75 0 0 0 10.75 3Zm-6 7.75a6 6 0 1 1 12 0 6 6 0 0 1-12 0Z" /></svg>}
-        {item.icon === 'personal' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8c.36 0 .68.23.81.56l1.78 4.55 4.55 1.78a.87.87 0 0 1 0 1.62l-4.55 1.78-1.78 4.55a.87.87 0 0 1-1.62 0l-1.78-4.55-4.55-1.78a.87.87 0 0 1 0-1.62l4.55-1.78 1.78-4.55c.13-.33.45-.56.81-.56Zm6.05 12.45c.28 0 .52.17.63.43l.58 1.38 1.38.58a.68.68 0 0 1 0 1.26l-1.38.58-.58 1.38a.68.68 0 0 1-1.26 0l-.58-1.38-1.38-.58a.68.68 0 0 1 0-1.26l1.38-.58.58-1.38a.68.68 0 0 1 .63-.43Z" /></svg>}
+        {item.icon === 'ticket' && <SemanticIcon name="ticket" role="control" />}
+        {item.icon === 'calendar' && <SemanticIcon name="calendar" role="control" />}
+        {item.icon === 'search' && (
+          <span
+            class="mobile-bottom-nav__asset-icon ke-icon-role ke-icon-role--control ke-icon-contract--four-role-v1 ke-icon-size-owner--foundations"
+            data-ke-icon-name="search"
+            data-ke-icon-asset="reference4-v8/search-thin.svg"
+            data-ke-icon-role="control"
+            data-ke-icon-contract="four-role-v1"
+            data-ke-icon-size-owner="foundations.css"
+            aria-hidden="true"
+            style={`--mobile-bottom-nav-icon-url:url("${searchIconUrl}")`}
+          ></span>
+        )}
+        {item.icon === 'personal' && <SemanticIcon name="spark" role="control" />}
       </span>
       <span>{item.label}</span>
     </a>
@@ -50,8 +63,12 @@ const items = [
       font-weight:760; text-decoration:none; -webkit-tap-highlight-color:transparent;
     }
     .mobile-bottom-nav__icon { width:38px; height:28px; display:grid; place-items:center; border-radius:10px; }
+    .mobile-bottom-nav__asset-icon {
+      background:currentColor;
+      -webkit-mask:var(--mobile-bottom-nav-icon-url) center / contain no-repeat;
+      mask:var(--mobile-bottom-nav-icon-url) center / contain no-repeat;
+    }
     .mobile-bottom-nav a[aria-current="page"] { color:#221a14; font-weight:900; }
     .mobile-bottom-nav a[aria-current="page"] .mobile-bottom-nav__icon { background:rgba(34,26,20,.08); }
-    .mobile-bottom-nav svg { width:21px; height:21px; fill:currentColor; stroke:none; }
   }
 </style>

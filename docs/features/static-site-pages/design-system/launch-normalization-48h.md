@@ -744,3 +744,23 @@ Review Preview rail как immutable full `real/all` prefix
 существующий общий `0.72em` scale для цветной строки. Browser geometry на
 `320/360/390/430px` обязана подтверждать одну строку для слова, отсутствие
 clipping, раздельные fact labels и нулевой document overflow.
+
+## 21. Navigation and service-share icon role saturation (2026-09-04)
+
+`MobileBottomNav` and `ServiceShareAction` now delegate visible glyph identity
+to canonical icon sources and size ownership to the existing four-role F0
+contract. No route, action, fallback or palette behavior changes.
+
+`MobileBottomNav` uses `SemanticIcon` with the `control` role for ticket,
+calendar and personal-highlight glyphs. Search keeps the classified
+`reference4-v8/search-thin.svg` asset under the same central role. The
+component no longer contains four inline SVG copies or a local `21px` owner;
+its labels, links, active state, 38×28 icon slot and mobile navigation targets
+remain unchanged.
+
+`ServiceShareAction` uses `SemanticIcon` with the `control` role for share,
+image, link and success glyphs. Five local SVG copies, the local link-mask
+asset owner and the `1.15rem` size owner are removed. Mobile/image/text intents,
+accessible names, live status, visible and `noscript` fallbacks, `P`/`S`
+shortcuts, 44px targets, responsive state switching, controller hydration and
+the accepted palette remain unchanged.
