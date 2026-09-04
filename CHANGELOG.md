@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Fixed: the production static Preview gate now treats `6408 -> 6407` as a preferred historical multi-image recommendation specimen only while that factual pair exists, otherwise selecting another qualifying journey from the active generated catalog. Expired historical canary IDs no longer cause a deterministic late failure, while catalogs with no qualifying multi-image journey still fail closed.
+
 - Private eventsBot MCP owned social schedules no longer hit the former 10-attempt product ceiling: the retained daily attempt guard is emergency-scale, and local pre-provider reference/digest failures remain uncharged. Provider-read, principal-bound image `ast_*` references can now be safely rematerialized through the existing `social_asset_stage` tool for VK or Telegram after byte/digest/MIME/dimension/expiry reverification; raw URLs, paths, native IDs, expired refs, and foreign-principal refs remain rejected. Explicit edit/delete of an exact principal-bound scheduled/postponed queue item is directly authorized through the authenticated ChatGPT resource, while already-published content still requires external approval.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
