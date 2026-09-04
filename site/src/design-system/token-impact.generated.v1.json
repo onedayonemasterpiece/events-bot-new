@@ -9,10 +9,10 @@
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
   "astro_family_graph_sha256": "8b086b221cce858c8130119d144d54f39c9eb53c9f826fce227395b5f038406e",
   "summary": {
-    "token_count": 2506,
-    "definition_count": 2788,
+    "token_count": 2505,
+    "definition_count": 2787,
     "consumer_count": 3570,
-    "alias_edge_count": 704,
+    "alias_edge_count": 706,
     "family_count": 109
   },
   "component_sets": {
@@ -786,7 +786,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-89d121ed2d7cc5cc": [
+    "components-a40a01128fc5d540": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
@@ -797,6 +797,7 @@
       "site/src/components/design-system/Field.astro",
       "site/src/components/design-system/Foundations.astro",
       "site/src/components/design-system/StatePanel.astro",
+      "site/src/components/DesktopEventActionPanel.astro",
       "site/src/components/DesktopEventPage.astro",
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
@@ -1806,9 +1807,10 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-766845a2c5507f79": [
+    "components-b38c31e4a0bc1fd7": [
       "site/src/components/brand/AnnouncementsLockup.astro",
       "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventActionPanel.astro",
       "site/src/components/DesktopEventPage.astro",
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
@@ -1846,6 +1848,34 @@
       "site/src/components/EventHero.astro",
       "site/src/components/FocusGroupFeedback.astro",
       "site/src/components/KaupTransportSchedule.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
+    "components-ec3f69cf47ee3552": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventActionPanel.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/FocusGroupFeedback.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/layouts/EventLayout.astro",
       "site/src/pages/artefakty/index.astro",
@@ -2916,7 +2946,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-c326bcab354a7da9": [
+    "components-a250bae181b00256": [
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
       "site/src/components/CollectionCatalog.astro",
@@ -2926,6 +2956,7 @@
       "site/src/components/design-system/Field.astro",
       "site/src/components/design-system/Foundations.astro",
       "site/src/components/design-system/StatePanel.astro",
+      "site/src/components/DesktopEventActionPanel.astro",
       "site/src/components/DesktopEventPage.astro",
       "site/src/components/EventCard.astro",
       "site/src/components/EventHero.astro",
@@ -3210,6 +3241,38 @@
       "site/src/components/SiteFooter.astro",
       "site/src/components/transport/DepartureBoardTimetable.astro",
       "site/src/components/transport/RouteStripsTimetable.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
+    "components-766845a2c5507f79": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/KaupTransportSchedule.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/components/transport/DepartureBoardTimetable.astro",
+      "site/src/components/transport/RouteStripsTimetable.astro",
+      "site/src/components/transport/TransportJourneyAlerts.astro",
+      "site/src/components/transport/TransportRouteHeading.astro",
       "site/src/layouts/EventLayout.astro",
       "site/src/pages/artefakty/index.astro",
       "site/src/pages/dlya-menya/index.astro",
@@ -12858,7 +12921,7 @@
         "production_route_patterns": []
       }
     ],
-    "families-df07405bb22e4443": [
+    "families-c989d96168e54f89": [
       {
         "id": "AdaptiveEventCardGrid",
         "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
@@ -12975,6 +13038,13 @@
           "/date-*/",
           "/segodnya/",
           "/zavtra/"
+        ]
+      },
+      {
+        "id": "DesktopEventActionPanel",
+        "astro_root": "site/src/components/DesktopEventActionPanel.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
         ]
       },
       {
@@ -21812,6 +21882,317 @@
         "production_route_patterns": []
       }
     ],
+    "families-0fbb1b0e82a55f5a": [
+      {
+        "id": "AnnouncementsLockup",
+        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ArtifactCollectionRouteComposition",
+        "astro_root": "site/src/pages/artefakty/index.astro",
+        "production_route_patterns": [
+          "/artefakty/"
+        ]
+      },
+      {
+        "id": "ClosedFocusHubRouteComposition",
+        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+        "production_route_patterns": [
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "CollectionCatalogRouteComposition",
+        "astro_root": "site/src/pages/podborki/index.astro",
+        "production_route_patterns": [
+          "/podborki/"
+        ]
+      },
+      {
+        "id": "DesktopEventActionPanel",
+        "astro_root": "site/src/components/DesktopEventActionPanel.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "DesktopEventDetailSurface",
+        "astro_root": "site/src/components/DesktopEventPage.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventCard",
+        "astro_root": "site/src/components/EventCard.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventDetailRouteComposition",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventHero",
+        "astro_root": "site/src/components/EventHero.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventLayout",
+        "astro_root": "site/src/layouts/EventLayout.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ExhibitionsRouteComposition",
+        "astro_root": "site/src/pages/vystavki/index.astro",
+        "production_route_patterns": [
+          "/vystavki/"
+        ]
+      },
+      {
+        "id": "FavoritesRouteComposition",
+        "astro_root": "site/src/pages/izbrannoe/index.astro",
+        "production_route_patterns": [
+          "/izbrannoe/"
+        ]
+      },
+      {
+        "id": "FestivalsTimelineRouteComposition",
+        "astro_root": "site/src/pages/festivali/index.astro",
+        "production_route_patterns": [
+          "/festivali/"
+        ]
+      },
+      {
+        "id": "FocusGroupFeedback",
+        "astro_root": "site/src/components/FocusGroupFeedback.astro",
+        "production_route_patterns": [
+          "/dlya-menya/",
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "FocusGroupProgrammeSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/"
+        ]
+      },
+      {
+        "id": "ForMeRouteComposition",
+        "astro_root": "site/src/pages/dlya-menya/index.astro",
+        "production_route_patterns": [
+          "/dlya-menya/"
+        ]
+      },
+      {
+        "id": "Foundations",
+        "astro_root": "site/src/components/design-system/Foundations.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/diagnostika-ustoychivost/",
+          "/fokus-gruppa/diagnostika/",
+          "/fokus-gruppa/kollektsiya/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zakrytaya-afisha/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "HomePage",
+        "astro_root": "site/src/pages/index.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "InterestClubDetailRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/*/"
+        ]
+      },
+      {
+        "id": "InterestClubsIndexRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/"
+        ]
+      },
+      {
+        "id": "KaupTransportSchedule",
+        "astro_root": "site/src/components/KaupTransportSchedule.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "MaterializedCollectionRouteComposition",
+        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "MobileEventDetailSurface",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "PartnershipRouteComposition",
+        "astro_root": "site/src/pages/partnerstvo/index.astro",
+        "production_route_patterns": [
+          "/partnerstvo/"
+        ]
+      },
+      {
+        "id": "PartnersRouteComposition",
+        "astro_root": "site/src/pages/partners/index.astro",
+        "production_route_patterns": [
+          "/partners/"
+        ]
+      },
+      {
+        "id": "SearchRouteComposition",
+        "astro_root": "site/src/pages/poisk/index.astro",
+        "production_route_patterns": [
+          "/poisk/"
+        ]
+      },
+      {
+        "id": "SiteFooter",
+        "astro_root": "site/src/components/SiteFooter.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "TodayReviewGuard",
+        "astro_root": "site/src/pages/segodnya/index.astro",
+        "production_route_patterns": [
+          "/segodnya/"
+        ]
+      }
+    ],
     "families-756b4c954d8af4ac": [
       {
         "id": "AnnouncementsLockup",
@@ -22043,6 +22424,310 @@
         "astro_root": "site/src/components/KaupTransportSchedule.astro",
         "production_route_patterns": [
           "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "MaterializedCollectionRouteComposition",
+        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "MobileEventDetailSurface",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "PartnershipRouteComposition",
+        "astro_root": "site/src/pages/partnerstvo/index.astro",
+        "production_route_patterns": [
+          "/partnerstvo/"
+        ]
+      },
+      {
+        "id": "PartnersRouteComposition",
+        "astro_root": "site/src/pages/partners/index.astro",
+        "production_route_patterns": [
+          "/partners/"
+        ]
+      },
+      {
+        "id": "SearchRouteComposition",
+        "astro_root": "site/src/pages/poisk/index.astro",
+        "production_route_patterns": [
+          "/poisk/"
+        ]
+      },
+      {
+        "id": "SiteFooter",
+        "astro_root": "site/src/components/SiteFooter.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "TodayReviewGuard",
+        "astro_root": "site/src/pages/segodnya/index.astro",
+        "production_route_patterns": [
+          "/segodnya/"
+        ]
+      }
+    ],
+    "families-ae52d23d48447a07": [
+      {
+        "id": "AnnouncementsLockup",
+        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ArtifactCollectionRouteComposition",
+        "astro_root": "site/src/pages/artefakty/index.astro",
+        "production_route_patterns": [
+          "/artefakty/"
+        ]
+      },
+      {
+        "id": "ClosedFocusHubRouteComposition",
+        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+        "production_route_patterns": [
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "CollectionCatalogRouteComposition",
+        "astro_root": "site/src/pages/podborki/index.astro",
+        "production_route_patterns": [
+          "/podborki/"
+        ]
+      },
+      {
+        "id": "DesktopEventActionPanel",
+        "astro_root": "site/src/components/DesktopEventActionPanel.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "DesktopEventDetailSurface",
+        "astro_root": "site/src/components/DesktopEventPage.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventCard",
+        "astro_root": "site/src/components/EventCard.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventDetailRouteComposition",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventHero",
+        "astro_root": "site/src/components/EventHero.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventLayout",
+        "astro_root": "site/src/layouts/EventLayout.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ExhibitionsRouteComposition",
+        "astro_root": "site/src/pages/vystavki/index.astro",
+        "production_route_patterns": [
+          "/vystavki/"
+        ]
+      },
+      {
+        "id": "FavoritesRouteComposition",
+        "astro_root": "site/src/pages/izbrannoe/index.astro",
+        "production_route_patterns": [
+          "/izbrannoe/"
+        ]
+      },
+      {
+        "id": "FestivalsTimelineRouteComposition",
+        "astro_root": "site/src/pages/festivali/index.astro",
+        "production_route_patterns": [
+          "/festivali/"
+        ]
+      },
+      {
+        "id": "FocusGroupFeedback",
+        "astro_root": "site/src/components/FocusGroupFeedback.astro",
+        "production_route_patterns": [
+          "/dlya-menya/",
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "FocusGroupProgrammeSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/"
+        ]
+      },
+      {
+        "id": "ForMeRouteComposition",
+        "astro_root": "site/src/pages/dlya-menya/index.astro",
+        "production_route_patterns": [
+          "/dlya-menya/"
+        ]
+      },
+      {
+        "id": "Foundations",
+        "astro_root": "site/src/components/design-system/Foundations.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/diagnostika-ustoychivost/",
+          "/fokus-gruppa/diagnostika/",
+          "/fokus-gruppa/kollektsiya/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zakrytaya-afisha/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "HomePage",
+        "astro_root": "site/src/pages/index.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "InterestClubDetailRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/*/"
+        ]
+      },
+      {
+        "id": "InterestClubsIndexRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/"
         ]
       },
       {
@@ -31103,7 +31788,7 @@
         ]
       }
     ],
-    "families-abc705e8e28bb473": [
+    "families-ab5b0acdebe54504": [
       {
         "id": "AnnouncementsLockup",
         "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
@@ -31195,6 +31880,13 @@
         "id": "CopyAction",
         "astro_root": "site/src/components/design-system/CopyAction.astro",
         "production_route_patterns": []
+      },
+      {
+        "id": "DesktopEventActionPanel",
+        "astro_root": "site/src/components/DesktopEventActionPanel.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
       },
       {
         "id": "DesktopEventDetailSurface",
@@ -55553,12 +56245,16 @@
           "line": 1723,
           "scope": "</script> </main> <style> .desktop-clean-event",
           "kind": "css",
-          "value": "#b54d22",
-          "aliases": [],
+          "value": "var(--ke-color-event-detail-action)",
+          "aliases": [
+            "--ke-color-event-detail-action"
+          ],
           "token": "--clean-accent"
         }
       ],
-      "aliases_to": [],
+      "aliases_to": [
+        "--ke-color-event-detail-action"
+      ],
       "aliases_from": [],
       "direct_consumers": [
         {
@@ -55572,44 +56268,6 @@
       "astro_family_set": "families-f9f1b6a420090478",
       "production_route_set": "routes-5d4b2b11b299cff4"
     },
-    "--clean-ink": {
-      "definitions": [
-        {
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1723,
-          "scope": "</script> </main> <style> .desktop-clean-event",
-          "kind": "css",
-          "value": "#241c17",
-          "aliases": [],
-          "token": "--clean-ink"
-        }
-      ],
-      "aliases_to": [],
-      "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--clean-ink",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1723,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-ink",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1738,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-ink",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1947,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-0d55acad46a0f45c",
-      "astro_family_set": "families-9b89656ea2d7d566",
-      "production_route_set": "routes-5d4b2b11b299cff4"
-    },
     "--clean-paper": {
       "definitions": [
         {
@@ -55617,12 +56275,16 @@
           "line": 1723,
           "scope": "</script> </main> <style> .desktop-clean-event",
           "kind": "css",
-          "value": "#fffaf2",
-          "aliases": [],
+          "value": "var(--ke-color-event-detail-surface)",
+          "aliases": [
+            "--ke-color-event-detail-surface"
+          ],
           "token": "--clean-paper"
         }
       ],
-      "aliases_to": [],
+      "aliases_to": [
+        "--ke-color-event-detail-surface"
+      ],
       "aliases_from": [],
       "direct_consumers": [
         {
@@ -55647,84 +56309,6 @@
           "token": "--clean-paper",
           "path": "site/src/components/DesktopEventActionPanel.astro",
           "line": 402,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1725,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1774,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1808,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1812,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1817,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1872,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1902,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1947,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1969,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 1986,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 2185,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 2203,
-          "has_fallback": false
-        },
-        {
-          "token": "--clean-paper",
-          "path": "site/src/components/DesktopEventPage.astro",
-          "line": 2205,
           "has_fallback": false
         }
       ],
@@ -66952,12 +67536,24 @@
             "--ke-color-surface-warm"
           ],
           "token": "--ke-color-kaup-transfer-text"
+        },
+        {
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1723,
+          "scope": "</script> </main> <style> .desktop-clean-event",
+          "kind": "css",
+          "value": "var(--ke-color-event-detail-surface)",
+          "aliases": [
+            "--ke-color-event-detail-surface"
+          ],
+          "token": "--clean-paper"
         }
       ],
       "aliases_to": [
         "--ke-color-header"
       ],
       "aliases_from": [
+        "--clean-paper",
         "--ke-color-artifact-found-end",
         "--ke-color-artifact-slot-surface",
         "--ke-color-clubs-mobile-shelf-surface",
@@ -67018,6 +67614,108 @@
           "token": "--ke-color-copy-action-foreground",
           "path": "site/src/components/design-system/CopyAction.astro",
           "line": 160,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 391,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 392,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 401,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 402,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1725,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1774,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1808,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1812,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1817,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1872,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1902,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1947,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1969,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1986,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2185,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2203,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2205,
           "has_fallback": false
         },
         {
@@ -67093,8 +67791,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-89d121ed2d7cc5cc",
-      "astro_family_set": "families-df07405bb22e4443",
+      "component_set": "components-a40a01128fc5d540",
+      "astro_family_set": "families-c989d96168e54f89",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-background-inverse": {
@@ -77142,10 +77840,22 @@
             "--ke-color-event-detail-action"
           ],
           "token": "--ke-color-transport-focus"
+        },
+        {
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1723,
+          "scope": "</script> </main> <style> .desktop-clean-event",
+          "kind": "css",
+          "value": "var(--ke-color-event-detail-action)",
+          "aliases": [
+            "--ke-color-event-detail-action"
+          ],
+          "token": "--clean-accent"
         }
       ],
       "aliases_to": [],
       "aliases_from": [
+        "--clean-accent",
         "--ke-color-event-action-primary",
         "--ke-color-mobile-event-action",
         "--ke-color-mobile-review-like-selected",
@@ -77154,6 +77864,12 @@
         "--ke-color-transport-focus"
       ],
       "direct_consumers": [
+        {
+          "token": "--clean-accent",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 267,
+          "has_fallback": true
+        },
         {
           "token": "--ke-color-transport-focus",
           "path": "site/src/components/transport/DepartureBoardTimetable.astro",
@@ -77179,8 +77895,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-766845a2c5507f79",
-      "astro_family_set": "families-756b4c954d8af4ac",
+      "component_set": "components-b38c31e4a0bc1fd7",
+      "astro_family_set": "families-0fbb1b0e82a55f5a",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-event-detail-action-dark": {
@@ -77386,7 +78102,26 @@
       "aliases_from": [
         "--ke-color-question-cta-text"
       ],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-color-event-detail-ink",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1723,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-ink",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1738,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-ink",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1947,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-6693794b1c6c98a6",
       "production_route_set": "routes-18526a9a83f9e22e"
@@ -77712,18 +78447,133 @@
             "--ke-color-event-detail-surface"
           ],
           "token": "--ke-color-occurrence-chip-surface"
+        },
+        {
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1723,
+          "scope": "</script> </main> <style> .desktop-clean-event",
+          "kind": "css",
+          "value": "var(--ke-color-event-detail-surface)",
+          "aliases": [
+            "--ke-color-event-detail-surface"
+          ],
+          "token": "--clean-paper"
         }
       ],
       "aliases_to": [
         "--ke-color-surface-warm"
       ],
       "aliases_from": [
+        "--clean-paper",
         "--ke-color-occurrence-chip-surface",
         "--ke-color-question-cta-surface"
       ],
-      "direct_consumers": [],
-      "component_set": "components-1d2aaa489688c9b3",
-      "astro_family_set": "families-6693794b1c6c98a6",
+      "direct_consumers": [
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 391,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 392,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 401,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 402,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1725,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1774,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1808,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1812,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1817,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1872,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1902,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1947,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1969,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1986,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2185,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2203,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2205,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-ec3f69cf47ee3552",
+      "astro_family_set": "families-ae52d23d48447a07",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-event-detail-surface-hover": {
@@ -86308,6 +87158,17 @@
           "token": "--ke-color-kaup-transfer-text"
         },
         {
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1723,
+          "scope": "</script> </main> <style> .desktop-clean-event",
+          "kind": "css",
+          "value": "var(--ke-color-event-detail-surface)",
+          "aliases": [
+            "--ke-color-event-detail-surface"
+          ],
+          "token": "--clean-paper"
+        },
+        {
           "path": "site/src/styles/design-system.css",
           "line": 34,
           "scope": ":root",
@@ -86319,6 +87180,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [
+        "--clean-paper",
         "--ke-color-artifact-found-end",
         "--ke-color-artifact-slot-surface",
         "--ke-color-background-header",
@@ -86380,6 +87242,108 @@
           "token": "--ke-color-copy-action-foreground",
           "path": "site/src/components/design-system/CopyAction.astro",
           "line": 160,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 391,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 392,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 401,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 402,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1725,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1774,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1808,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1812,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1817,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1872,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1902,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1947,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1969,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1986,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2185,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2203,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2205,
           "has_fallback": false
         },
         {
@@ -86461,8 +87425,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-89d121ed2d7cc5cc",
-      "astro_family_set": "families-df07405bb22e4443",
+      "component_set": "components-a40a01128fc5d540",
+      "astro_family_set": "families-c989d96168e54f89",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-home-ambient-end": {
@@ -98785,12 +99749,24 @@
             "--ke-color-surface-warm"
           ],
           "token": "--ke-color-kaup-transfer-text"
+        },
+        {
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1723,
+          "scope": "</script> </main> <style> .desktop-clean-event",
+          "kind": "css",
+          "value": "var(--ke-color-event-detail-surface)",
+          "aliases": [
+            "--ke-color-event-detail-surface"
+          ],
+          "token": "--clean-paper"
         }
       ],
       "aliases_to": [
         "--ke-color-background-header"
       ],
       "aliases_from": [
+        "--clean-paper",
         "--ke-color-artifact-found-end",
         "--ke-color-artifact-slot-surface",
         "--ke-color-collection-link-hover-surface",
@@ -98840,6 +99816,108 @@
           "token": "--ke-color-collection-link-hover-surface",
           "path": "site/src/components/CollectionCatalog.astro",
           "line": 83,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 391,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 392,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 401,
+          "has_fallback": false
+        },
+        {
+          "token": "--clean-paper",
+          "path": "site/src/components/DesktopEventActionPanel.astro",
+          "line": 402,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1725,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1774,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1808,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1812,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1817,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1872,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1902,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1947,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1969,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 1986,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2185,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2203,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-event-detail-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2205,
           "has_fallback": false
         },
         {
@@ -98903,8 +99981,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-c326bcab354a7da9",
-      "astro_family_set": "families-abc705e8e28bb473",
+      "component_set": "components-a250bae181b00256",
+      "astro_family_set": "families-ab5b0acdebe54504",
       "production_route_set": "routes-18526a9a83f9e22e"
     },
     "--ke-color-surface-warm-translucent": {

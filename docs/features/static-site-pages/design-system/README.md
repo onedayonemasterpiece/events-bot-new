@@ -131,6 +131,11 @@ second global design-token authority. Any intentionally unresolved legacy
 boundary or shared global owner is an explicit, narrowly documented registry
 entry; an entry becomes an error once it is no longer needed.
 
+The desktop event-detail surface consumes `--ke-color-event-detail-ink` and
+`--ke-color-event-detail-surface` directly; its prior component-local
+`--clean-ink` / `--clean-paper` / `--clean-accent` aliases were exact duplicates
+of the established event-detail roles and are not a second authority boundary.
+
 ## Iconography census boundary
 
 `site/scripts/check-design-system-iconography-contract.mjs` scans all relevant

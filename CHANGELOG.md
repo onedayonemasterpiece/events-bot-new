@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed: desktop event-detail now consumes established canonical ink and
+  surface tokens directly, replacing raw local aliases with role-backed child
+  compatibility bridges without changing visual output or interaction behavior.
+
 - Fixed: weekend desktop card packing now invalidates and recomputes row-end
   title widths synchronously after every DOM reorder, with the completion
   event retained as a deferred fallback. This prevents stale expanded title
