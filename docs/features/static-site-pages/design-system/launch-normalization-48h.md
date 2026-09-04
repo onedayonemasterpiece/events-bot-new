@@ -417,6 +417,11 @@ empty state: its mobile rail root must exist and publish
 into a passing empty fixture. Popular is intentionally different: it owns the
 accepted Large/Compact representations and must not recreate a disconnected
 third `MobileListingRailSurface` merely to satisfy a generic preview check.
+Date/Weekend rail Playwright helpers therefore must not assert their
+`.feed-head`/`.group-head` sticky anatomy on Popular. Popular browser coverage
+uses its own Large/Compact roots, sticky sentinel and internal-scroll contract.
+Live-route media assertions derive gallery cardinality from the exported event;
+they must not invent an obsolete second image for a current single-image event.
 Real data may omit any evidence shelf that has fewer than three honest
 candidates; the remaining shelves preserve canonical order and 3–5 cards.
 

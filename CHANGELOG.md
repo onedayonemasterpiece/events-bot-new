@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fixed static-preview regression gates to use exported gallery cardinality and
+  to keep Popular Large/Compact checks separate from Date/Weekend mobile rails.
+
 - Changed: integrated the post-FR0 M0 card/grid batch on the current normalized
   successor. `EventCard` and `ListingEventCard` now publish the canonical
   `pending | loaded | fallback | broken` media resource lifecycle, fail broken

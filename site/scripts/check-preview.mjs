@@ -194,9 +194,14 @@ const pianissimoRoutePath = join(root, pianissimoRoute, 'index.html');
 let pianissimoRail = '';
 if (existsSync(pianissimoRoutePath)) {
   pianissimoRail = mobileRailRow(pianissimoRoute, pianissimoEventId);
+  const pianissimo = eventsData.events.find((event) => event.id === pianissimoEventId);
+  const galleryCount = Math.max(1, pianissimo?.image_assets?.length || 0);
+  const mediaReason = galleryCount > 1
+    ? 'safe_visual_landscape_5x4'
+    : 'single_safe_visual_landscape_5x4';
   for (const marker of [
-    'data-mobile-rail-gallery-count="2"',
-    'data-mobile-rail-media-reason="safe_visual_landscape_5x4"',
+    `data-mobile-rail-gallery-count="${galleryCount}"`,
+    `data-mobile-rail-media-reason="${mediaReason}"`,
     '--media-width:140px',
     'data-media-frame-fit="cover"',
     'data-media-frame-crop-permission="reviewed"',
@@ -352,7 +357,7 @@ if (moreRoutePath && existsSync(moreRoutePath)) {
   }
 }
 for (const row of [pianissimoRail, moreRail].filter(Boolean)) {
-  if ((row.match(/icon--heart/gu) || []).length !== 3 || !row.includes('icon__heart-outline') || !row.includes('icon__heart-solid')) {
+  if ((row.match(/ke-semantic-icon--heart/gu) || []).length !== 3 || !row.includes('icon__heart-outline') || !row.includes('icon__heart-solid')) {
     throw new Error('Mobile rail must use the shared hollow/solid heart component for proof, underlay and action');
   }
 }

@@ -55,7 +55,7 @@ async function assertCoreGeometry(page, route, width) {
   assert.equal(arrow.path, 'M3 11.5H40M31 2.5L40 11.5L31 20.5');
 }
 
-async function assertStickyHierarchy(page, route, popular = false) {
+async function assertStickyHierarchy(page, route) {
   await page.goto(`${baseUrl}${route}`, { waitUntil: 'domcontentloaded' });
   const feedPosition = await page.locator('.feed-head').evaluate((node) => getComputedStyle(node).position);
   assert.equal(feedPosition, 'static');
@@ -76,7 +76,6 @@ async function assertStickyHierarchy(page, route, popular = false) {
   closeEnough(boxes.sticky.height, 64);
   assert.equal(boxes.sticky.visibility, 'visible');
   closeEnough(boxes.group.top, 64);
-  if (popular) closeEnough(boxes.group.height, 80);
 }
 
 for (const width of [320, 390]) {
@@ -86,7 +85,6 @@ for (const width of [320, 390]) {
     await assertCoreGeometry(page, route, width);
   }
   await assertStickyHierarchy(page, '/vyhodnye/');
-  await assertStickyHierarchy(page, '/populyarnoe/', true);
 
   await page.goto(`${baseUrl}/vyhodnye/`, { waitUntil: 'domcontentloaded' });
   const dateGeometry = await page.locator('[data-mobile-date-accessory]').evaluate((node) => {
