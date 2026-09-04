@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Changed: the executable V0 target pointer now names the exact current
+  full-real Preview at `5862a4ec6`; the preceding `557019d68` URL remains
+  explicit ancestry rather than an ambiguous parallel target.
+
 - Fixed: `SemanticIcon` now preserves its canonical name, four-role size and
   foundation-owner attributes when delegating glyph rendering to `Icon`, so
   product DOM evidence matches the source-level icon contract.

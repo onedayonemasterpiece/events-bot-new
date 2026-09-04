@@ -25,7 +25,7 @@ export const CANONICAL_A0_V0_MATRIX = freeze({
   relationship: 'EXECUTABLE_OVERLAY_NOT_REPLACEMENT',
 });
 export const PUBLISHED_TARGETS = freeze({
-  real: freeze({ url:'https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/', sourceSha:'1bc6d9cb4c122046f4782532381de953727c1da6', dataMode:'real', status:'HTTP_200_CURRENT_PUBLIC_PRE_F0_BASELINE_UNAUDITED_BY_V0', supersedes:'https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/' }),
+  real: freeze({ url:'https://kenigevents.ru/preview-real-5862a4ec6-normalized-20260904-v1/__preview/', sourceSha:'5862a4ec6728359548e6c4af76f97f1d9b94fb27', dataMode:'real', status:'HTTP_200_CURRENT_PUBLIC_PENDING_INDEPENDENT_V0', supersedes:'https://kenigevents.ru/preview-real-557019d68-normalized-20260904-v1/__preview/' }),
   golden: freeze({ url:'https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/', sourceSha:'84504f30eebc334deba46e94365601c3d572c5c0', dataMode:'golden', status:'V0_DRIFT_5527892153' }),
 });
 export const VIEWPORTS = freeze([

@@ -71,10 +71,10 @@ test('the executable overlay references rather than replaces the canonical A0-V0
 });
 
 test('published target pointer follows the newest exact R0 HTTP-200 real preview without erasing history', () => {
-  assert.equal(PUBLISHED_TARGETS.real.url, 'https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/');
-  assert.equal(PUBLISHED_TARGETS.real.sourceSha, AUTHORED_AGAINST_SOURCE);
-  assert.equal(PUBLISHED_TARGETS.real.supersedes, 'https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/');
-  assert.match(PUBLISHED_TARGETS.real.status, /UNAUDITED_BY_V0/u);
+  assert.equal(PUBLISHED_TARGETS.real.url, 'https://kenigevents.ru/preview-real-5862a4ec6-normalized-20260904-v1/__preview/');
+  assert.equal(PUBLISHED_TARGETS.real.sourceSha, '5862a4ec6728359548e6c4af76f97f1d9b94fb27');
+  assert.equal(PUBLISHED_TARGETS.real.supersedes, 'https://kenigevents.ru/preview-real-557019d68-normalized-20260904-v1/__preview/');
+  assert.match(PUBLISHED_TARGETS.real.status, /PENDING_INDEPENDENT_V0/u);
 });
 
 test('authored source is evidence, not a hard gate for a newer or older exact preview target', () => {
