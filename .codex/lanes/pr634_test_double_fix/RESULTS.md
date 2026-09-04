@@ -2,7 +2,7 @@
 
 - Lane ID: `pr634_test_double_fix`
 - Base SHA: `fdfb259ffa407210dcd0b30aa0201514923b3030`
-- Head SHA: `87c818958b8eadf0b143573de41e3e3af97a6756`
+- Repair head SHA: `87c818958b8eadf0b143573de41e3e3af97a6756`
 - PR branch: `hotfix/production-static-gate-active-data-20260904`
 - Commit: `87c818958 test: reverify staged album assets in runtime double`
 
@@ -18,7 +18,7 @@ Added the synchronous `FakeAlbumIngestor.reverify()` test-double method. It find
 - `uv run --with-requirements requirements.txt pytest -q tests/test_private_events_mcp_social_workspace_runtime.py::test_four_image_schedule_runs_one_prepare_commit_operation_in_order` — PASS (`1 passed in 0.55s`).
 - `uv run --with-requirements requirements.txt pytest -q tests/test_private_events_mcp_*.py` — PASS (`568 passed, 3 warnings in 22.55s`). Warnings are pre-existing aiohttp `NotAppKeyWarning` messages in `main_part2.py`.
 - `git diff --check` and `git diff --cached --check` — PASS.
-- Pushed commit to the existing PR branch; remote branch resolves to `87c818958b8eadf0b143573de41e3e3af97a6756`.
+- Pushed the repair commit to the existing PR branch; this results record is committed separately to preserve its immutable evidence.
 
 ## Changed files
 
