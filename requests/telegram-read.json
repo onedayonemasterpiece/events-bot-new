@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "mode": "latest",
+  "targets": [
+    "https://t.me/lovekenig"
+  ],
+  "limit": 2
+}
