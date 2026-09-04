@@ -1,0 +1,144 @@
+name: Bootstrap minimal Astro family SoT
+
+on:
+  push:
+    branches:
+      - work/design-system-minimal-astro-sot-20260904
+    paths:
+      - .github/workflows/bootstrap-minimal-astro-sot.yml
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: minimal-astro-sot-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-check-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Update one canonical doc and changelog
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          doc = Path('docs/features/static-site-pages/design-system/README.md')
+          text = doc.read_text(encoding='utf-8')
+          marker = '## Executable Astro family SoT'
+          section = '''
+          ## Executable Astro family SoT
+
+          Launch-critical Astro family identity and impact are executable beside the source:
+
+          - registry: `site/src/design-system/astro-family-registry.v1.json`;
+          - generated reverse graph: `site/src/design-system/astro-family-consumers.generated.v1.json`;
+          - generator / impact query: `site/scripts/generate-astro-family-consumer-graph.mjs`;
+          - fail-closed checker: `site/scripts/check-astro-family-sot.mjs`.
+
+          ```bash
+          node site/scripts/generate-astro-family-consumer-graph.mjs --impact EventCard
+          node site/scripts/generate-astro-family-consumer-graph.mjs --write
+          node site/scripts/check-astro-family-sot.mjs
+          ```
+
+          Penpot binding is optional registry metadata and is not required by these commands.
+          '''.strip()
+          if marker not in text:
+              doc.write_text(text.rstrip() + '\n\n' + section + '\n', encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          bullet = '''- Added: a minimal executable Astro family source of truth beside `site/src`:
+            one canonical family registry, a generated reverse consumer/production-route
+            graph, an impact query and a fail-closed drift checker. The initial registry
+            covers nine launch-critical families; Penpot binding remains optional metadata.'''
+          if bullet not in text:
+              anchor = '## [Unreleased]\n\n'
+              if anchor not in text:
+                  raise SystemExit('CHANGELOG.md misses ## [Unreleased]')
+              text = text.replace(anchor, anchor + bullet + '\n\n', 1)
+              changelog.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Generate reverse graph
+        run: node site/scripts/generate-astro-family-consumer-graph.mjs --write
+
+      - name: Run fail-closed checker
+        run: node site/scripts/check-astro-family-sot.mjs | tee /tmp/astro-family-check.json
+
+      - name: Run registry and negative tests
+        run: node --test site/tests/astro-family-sot.test.mjs | tee /tmp/astro-family-tests.tap
+
+      - name: Show EventCard impact
+        run: node site/scripts/generate-astro-family-consumer-graph.mjs --impact EventCard | tee /tmp/event-card-impact.json
+
+      - name: Verify patch
+        run: git diff --check
+
+      - name: Commit implementation and remove bootstrap workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'design-system-tooling'
+          git config user.email 'design-system-tooling@example.local'
+          git add \
+            site/src/design-system/astro-family-registry.v1.json \
+            site/src/design-system/astro-family-consumers.generated.v1.json \
+            site/scripts/generate-astro-family-consumer-graph.mjs \
+            site/scripts/check-astro-family-sot.mjs \
+            site/tests/astro-family-sot.test.mjs \
+            docs/features/static-site-pages/design-system/README.md \
+            CHANGELOG.md
+          git commit -m 'feat(ui): add executable Astro family impact graph'
+          git rm .github/workflows/bootstrap-minimal-astro-sot.yml
+          git commit -m 'chore(ui): remove Astro SoT bootstrap workflow'
+          git push origin HEAD:work/design-system-minimal-astro-sot-20260904
+
+      - name: Publish exact result to issue 621
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          families="$(node -e "const r=require('./site/src/design-system/astro-family-registry.v1.json');process.stdout.write(r.families.map(x=>x.id).join(', '))")"
+          summary="$(node -e "const g=require('./site/src/design-system/astro-family-consumers.generated.v1.json');const s=g.summary;process.stdout.write('direct_edges='+s.direct_consumer_edges+', unique_direct='+s.unique_direct_consumers+', runtime_factories='+s.runtime_factory_edges+', runtime_clients='+s.runtime_consumer_edges+', route_edges='+s.production_route_edges+', unique_routes='+s.unique_production_routes)")"
+          tests="$(awk '/^# tests /{t=$3}/^# pass /{p=$3}/^# fail /{f=$3}END{printf "%s/%s PASS, fail=%s",p,t,f}' /tmp/astro-family-tests.tap)"
+          body="$(cat <<EOF
+          [RESULT] MINIMAL_EXECUTABLE_ASTRO_SOT
+
+          branch/head:
+          - \`work/design-system-minimal-astro-sot-20260904@${head_sha}\`
+
+          registry families (9):
+          - ${families}
+
+          generated consumer/route counts:
+          - ${summary}
+
+          tests:
+          - \`node site/scripts/check-astro-family-sot.mjs\`: PASS
+          - \`node --test site/tests/astro-family-sot.test.mjs\`: ${tests}
+          - generated graph readback and \`git diff --check\`: PASS
+
+          show component impact:
+          \`node site/scripts/generate-astro-family-consumer-graph.mjs --impact EventCard\`
+
+          Penpot binding is optional metadata and was not used as a gate. Final diff contains only the registry/generated graph/generator/checker/tests, one canonical doc update and CHANGELOG.
+          EOF
+          )"
+          gh api repos/onedayonemasterpiece/events-bot-new/issues/621/comments -f body="$body"
