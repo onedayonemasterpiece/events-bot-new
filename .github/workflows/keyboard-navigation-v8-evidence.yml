@@ -1,0 +1,116 @@
+name: Keyboard navigation V8 evidence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/keyboard-navigation-v8-evidence.yml'
+      - 'docs/features/static-site-pages/keyboard-event-navigation-v8-product-model.md'
+      - 'docs/testing/keyboard-event-navigation-scenarios.v2.yml'
+      - 'site/e2e/keyboard-navigation-v8/**'
+      - 'site/tests/keyboard-event-navigation-v8-evidence.test.mjs'
+      - 'site/src/components/DesktopEventPage.astro'
+      - 'site/src/components/KeyboardEventNavigation*.astro'
+      - 'site/src/lib/keyboardEventNavigation.mjs'
+      - 'site/src/lib/desktopEventPresentation.ts'
+      - 'site/src/pages/sobytiya/[slug].astro'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keyboard-navigation-v8-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Source and scenario contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+      - name: Check runner syntax
+        run: node --check site/e2e/keyboard-navigation-v8/run.mjs
+      - name: Run V8 source contracts
+        run: node --test site/tests/keyboard-event-navigation-v8-evidence.test.mjs
+
+  browser-evidence:
+    name: ${{ matrix.browser }} · Editorial + Split
+    needs: source-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      PREVIEW_BUILD_ID: preview-keyboard-v8-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.browser }}
+      STATIC_SITE_REPO_SHA: ${{ github.sha }}
+      KEYBOARD_NAVIGATION_BROWSER: ${{ matrix.browser }}
+      KEYBOARD_NAVIGATION_BASE_URL: http://127.0.0.1:4321
+      KEYBOARD_NAVIGATION_EVIDENCE_DIR: ${{ github.workspace }}/artifacts/keyboard-navigation-v8/${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Install Playwright browser and host dependencies
+        working-directory: site
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Build immutable preview tree
+        working-directory: site
+        run: npm run build:preview
+
+      - name: Start static server
+        run: |
+          python3 -m http.server 4321 --directory site/dist > /tmp/keyboard-v8-http.log 2>&1 &
+          echo $! > /tmp/keyboard-v8-http.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error \
+              "http://127.0.0.1:4321/${PREVIEW_BUILD_ID}/preview-build.json" \
+              > /tmp/keyboard-v8-preview-build.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/keyboard-v8-http.log
+          exit 1
+
+      - name: Run characterization and V8 gap evidence
+        working-directory: site
+        run: node e2e/keyboard-navigation-v8/run.mjs
+
+      - name: Collect server and build metadata
+        if: always()
+        run: |
+          mkdir -p "artifacts/keyboard-navigation-v8/${{ matrix.browser }}"
+          cp /tmp/keyboard-v8-http.log "artifacts/keyboard-navigation-v8/${{ matrix.browser }}/http-server.log" || true
+          cp /tmp/keyboard-v8-preview-build.json "artifacts/keyboard-navigation-v8/${{ matrix.browser }}/preview-build.json" || true
+
+      - name: Stop static server
+        if: always()
+        run: |
+          if test -f /tmp/keyboard-v8-http.pid; then
+            kill "$(cat /tmp/keyboard-v8-http.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload keyboard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-navigation-v8-${{ matrix.browser }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/keyboard-navigation-v8/${{ matrix.browser }}
+          if-no-files-found: error
+          retention-days: 14
