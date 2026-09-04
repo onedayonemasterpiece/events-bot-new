@@ -224,3 +224,11 @@ protocols), explicit runtime/hydrated factory/client consumers, and canonical
 route patterns. Dynamic Astro route segments are materialized as `*` (or `**`)
 so contract routes compare exactly. The opening-tag reader deliberately skips
 `>` inside Astro `{...}` expressions before validating a family identity.
+
+### Media rail acceptance preservation
+
+The poster-strip uses the existing `--ke-color-surface-inverse-raised` (#292521),
+not the translucent hero-selector surface. Count/label consume the existing
+primary override tokens before variant fallback tokens. This corrects accidental
+value drift during token adoption; accepted palette/type semantics are unchanged.
+Regression: `site/tests/event-media-rail-token-adoption.test.mjs`.

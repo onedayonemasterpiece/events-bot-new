@@ -57,3 +57,13 @@ test('EventMediaRail consumes the existing gallery, resolved, poster and role to
   assert.doesNotMatch(source, /border-radius:\s*(?:18|16|11|10|6)px/u);
   assert.doesNotMatch(source, /--split-rail-thumb-height:\s*clamp\(104px,\s*13svh,\s*148px\)/u);
 });
+
+
+test('rail adoption preserves accepted poster surface and primary count/label overrides', async () => {
+  const source = await read('src/components/EventMediaRail.astro');
+  const tokens = await read('src/styles/design-system.css');
+  assert.match(tokens, /--ke-color-surface-inverse-raised:\s*#292521/u);
+  assert.match(source, /\.event-media-rail\.event-media-rail--poster-strip\s*\{[^}]*background:\s*var\(--ke-color-surface-inverse-raised\)/u);
+  assert.match(source, /var\(--ke-media-rail-more-count-size, var\(--ke-media-rail-hero-more-count-size\)\)/u);
+  assert.match(source, /var\(--ke-media-rail-more-label-size, var\(--ke-media-rail-resolved-more-label-size\)\)/u);
+});
