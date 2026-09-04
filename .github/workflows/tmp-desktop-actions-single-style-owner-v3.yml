@@ -1,0 +1,174 @@
+name: temporary desktop actions single style owner v3
+
+on:
+  push:
+    branches:
+      - work/ui-normalization-desktop-actions-single-style-owner-20260904
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Apply bounded implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/tmp-desktop-actions-single-style-owner.py
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('site/tests/desktop-event-actions-single-style-owner.test.mjs'): [
+                  ('  assert.match(panelStyle, /data-action-variant="editorial-side"/u);\n', ''),
+              ],
+              Path('site/tests/event-detail-runtime-regressions.test.mjs'): [
+                  (
+                      "  assert.match(panel, /family\\?: 'split' \\| 'editorial'/u);\n",
+                      "  assert.match(panel, /type DesktopActionVariant = 'editorial-side' \\| 'split-inline' \\| 'editorial-flow' \\| 'split-flow'/u);\n"
+                      "  assert.match(panel, /type DesktopActionState = 'non-ocr' \\| 'ocr'/u);\n",
+                  ),
+                  (
+                      '  assert.match(desktop, /family="editorial"/u);\n'
+                      '  assert.match(desktop, /family="split"/u);\n',
+                      '  assert.match(desktop, /variant="editorial-side" state=\\{mediaPolicy\\}/u);\n'
+                      '  assert.match(desktop, /variant="split-inline" state=\\{mediaPolicy\\}/u);\n',
+                  ),
+              ],
+              Path('site/tests/desktop-event-cta.test.mjs'): [
+                  (
+                      '  assert.match(page, /family="editorial"/u);\n'
+                      '  assert.match(page, /family="split"/u);\n',
+                      '  assert.match(page, /variant="editorial-side" state=\\{mediaPolicy\\}/u);\n'
+                      '  assert.match(page, /variant="split-inline" state=\\{mediaPolicy\\}/u);\n',
+                  ),
+              ],
+          }
+          for path, changes in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              for old, new in changes:
+                  if text.count(old) != 1:
+                      raise RuntimeError(f'{path}: focused assertion block not unique')
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+
+          touched = [
+              Path('CHANGELOG.md'),
+              Path('docs/features/static-site-pages/event-page-product-design.md'),
+              Path('site/src/components/DesktopEventActionPanel.astro'),
+              Path('site/src/components/DesktopEventPage.astro'),
+              Path('site/tests/desktop-event-actions-single-style-owner.test.mjs'),
+              Path('site/tests/desktop-event-cta.test.mjs'),
+              Path('site/tests/event-detail-runtime-regressions.test.mjs'),
+          ]
+          for path in touched:
+              text = path.read_text(encoding='utf-8')
+              final_newline = text.endswith('\n')
+              text = '\n'.join(line.rstrip() for line in text.splitlines())
+              if final_newline:
+                  text += '\n'
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install pinned dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+
+      - name: Run focused source packet
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/desktop-event-actions-single-style-owner.test.mjs
+          node --test tests/desktop-event-cta.test.mjs
+          node --test tests/event-share-wiring.test.mjs
+          node --test --test-name-pattern='desktop calendar label|desktop telephone|desktop action geometry' tests/event-detail-runtime-regressions.test.mjs
+          node scripts/check-design-system-production-surface-contract.mjs
+          git diff --check
+
+      - name: Build bounded preview
+        working-directory: site
+        env:
+          PREVIEW_BUILD_ID: preview-desktop-actions-single-style-owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:preview
+          npm run check:production-desktop
+
+      - name: Run rendered geometry packet
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$(find dist -path '*/lab/event-desktop/examples/cta-phone-invariant/index.html' -print -quit)"
+          test -n "$fixture"
+          root="${fixture%/lab/event-desktop/examples/cta-phone-invariant/index.html}"
+          python3 -m http.server 4173 --directory "$root" >/tmp/desktop-actions-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/lab/event-desktop/examples/cta-phone-invariant/ >/dev/null && break
+            sleep 0.5
+          done
+          STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4173 node ../.github/tmp-desktop-actions-geometry.mjs
+
+      - name: Publish clean one-commit branch
+        shell: bash
+        env:
+          BASE_SHA: e8ba758ed32ee4de74df4f2ce490423fbb8e1e74
+          FINAL_BRANCH: work/ui-normalization-desktop-actions-single-style-owner-20260904
+        run: |
+          set -euo pipefail
+          git config user.name 'chatgpt-bounded-engineer'
+          git config user.email 'chatgpt-bounded-engineer@example.local'
+          expected=(
+            CHANGELOG.md
+            docs/features/static-site-pages/event-page-product-design.md
+            site/src/components/DesktopEventActionPanel.astro
+            site/src/components/DesktopEventPage.astro
+            site/tests/desktop-event-actions-single-style-owner.test.mjs
+            site/tests/desktop-event-cta.test.mjs
+            site/tests/event-detail-runtime-regressions.test.mjs
+          )
+          git add -- "${expected[@]}"
+          git diff --cached --check
+          mapfile -t changed < <(git diff --cached --name-only | sort)
+          test "$(printf '%s\n' "${changed[@]}")" = "$(printf '%s\n' "${expected[@]}" | sort)"
+          git diff --cached --binary > /tmp/desktop-actions-product.patch
+          git reset --hard
+          git switch --detach "$BASE_SHA"
+          git apply --index /tmp/desktop-actions-product.patch
+          git commit -m 'refactor(site): centralize desktop action panel styles'
+          final_head="$(git rev-parse HEAD)"
+          git push --force origin "HEAD:refs/heads/$FINAL_BRANCH"
+          echo "FINAL_HEAD=$final_head" >> "$GITHUB_ENV"
+          echo "final_head=$final_head" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Exact remote readback
+        shell: bash
+        env:
+          BASE_SHA: e8ba758ed32ee4de74df4f2ce490423fbb8e1e74
+          FINAL_BRANCH: work/ui-normalization-desktop-actions-single-style-owner-20260904
+        run: |
+          set -euo pipefail
+          git fetch --force origin "$FINAL_BRANCH:refs/remotes/origin/$FINAL_BRANCH"
+          remote_head="$(git rev-parse "refs/remotes/origin/$FINAL_BRANCH")"
+          test "$remote_head" = "$FINAL_HEAD"
+          test "$(git rev-parse "$remote_head^")" = "$BASE_SHA"
+          git diff --name-only "$BASE_SHA" "$remote_head"
+          test "$(git diff --name-only "$BASE_SHA" "$remote_head" | wc -l)" -eq 7
