@@ -1,0 +1,53 @@
+name: Temporary documentation network audit PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/docs-network-audit-pr-temp.yml"
+      - ".github/workflows/docs-network-audit-temp.yml"
+      - ".docs-audit-trigger"
+      - "docs/**"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract and run audit program
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/docs-network-audit-temp.yml').read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(source) if "python3 - <<'PY'" in line) + 1
+          end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
+          block = source[start:end]
+          indent = min(len(line) - len(line.lstrip()) for line in block if line.strip())
+          Path('/tmp/docs_network_audit.py').write_text(
+              '\n'.join(line[indent:] for line in block) + '\n', encoding='utf-8'
+          )
+          PY
+          python3 /tmp/docs_network_audit.py
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-network-audit-pr
+          path: artifacts/docs-network-audit/
+          if-no-files-found: error
+          retention-days: 3
