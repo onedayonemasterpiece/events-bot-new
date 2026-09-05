@@ -1212,12 +1212,16 @@ Framing follow-up removes the unsupported tall-document crop interval from row
 selection. Feasible flow rows use the documents' natural ratio, static and runtime
 rows retain all admitted IDs. `data-adaptive-grid-framing-status` explicitly
 reports unsatisfied constraints rather than declaring remaining fields accepted.
-The exact2fe Free row7915/7916/7920 (all1810×2560) has a feasible uncropped frame;
-stable row8080/8564/8308 conflicts between document ratios0.70703125 and1.0.
-The8673 related set has7 documents in5 distinct ratios across4 rows; no full
-uncropped equal-width/equal-height partition exists under current restrictions.
-These bounded unresolved cases prevent blanket framing acceptance. Variable-width
-rows would be a product change and are not silently enabled.
+The initial fixed-row diagnosis in #621/5551385248 is superseded by the owner's
+full-pool clarification: variable widths are forbidden, but rows must first be
+composed from the entire eligible pool, not a fixed initial 12/10-card slice.
+Free has 111 candidates in the comparison corpus; event8673 has a larger actual
+related pool than its first10. Initial grouping may change retrieval order;
+already painted cards must remain stable on append. Safe vertical framing up to
+20% is a last fallback only after compatible natural rows/visual fillers, with
+important-text protection, not an automatic OCR crop allowance. Canonical joint
+rules are in `image-framing.md` and DS1.14.2. The published26fb02851 is an
+intermediate snapshot before this full-pool correction, not final acceptance.
 
 The existing typography-authority checker now validates owner-correction status and the explicitly scoped mobile H1 alias; it no longer mistakes that responsive binding for a second owner. Duplicate owner checks remain active.
 

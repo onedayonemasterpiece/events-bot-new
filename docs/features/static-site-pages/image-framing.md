@@ -1,6 +1,7 @@
 # Event image framing and focal metadata
 
-> Status: **pixel-current producer/export plus surface-specific consumers implemented**.
+> Status: **pixel-current producer/export implemented; joint owner framing correction active, not visually accepted**.
+> Current authority: owner follow-up in #621/5551113067 and subsequent full-pool clarification, mirrored in DS contract 1.14.2. The rules below are acceptance requirements; they do not certify the current deployed candidate.
 
 ## Contract
 
@@ -16,10 +17,14 @@
 - Compact cards never have unused bands around an image: every packed card uses
   `cover`, in both static related rows and hydrated continuation rows.
 - A normal OCR/document card defines an exact feasible row ratio and is not
-  cropped. Only a very tall document (source width/height below `4/5`) may widen
-  that interval, and no more than `20%` of its source area may be cropped.
-- Cards in a row have one media height and one total card height. Cards may be
-  reordered between rows; input order is not an acceptance requirement.
+  cropped. Only after grouping the full eligible pool proves insufficient may a safest
+  vertical crop widen that interval: at most `20%` of source area, with positive
+  evidence that important text is retained. Tallness or the area budget alone
+  is never permission to crop an OCR/unknown source.
+- Cards in a row have one media height and one total card height. Cards have equal widths within a row; variable-width packing is prohibited.
+  Before the first paint, cards may be grouped across the full eligible pool.
+  After paint, append/feedback must preserve the visible prefix and active card;
+  raw retrieval order is not the same thing as this visible-order guarantee.
 - A non-final row is always full. The optimizer may emit one incomplete row
   only as the final row of the section; it may choose which cards belong to
   that remainder so OCR-safe grouping does not create holes above it.
@@ -36,32 +41,31 @@
 
 ## Global compact-row optimizer
 
-`site/src/lib/relatedCardLayout.mjs` enumerates feasible card groupings (up to
-the surface row-size cap) and uses dynamic programming over the complete set of
-cards. It minimizes the sum of normalized full-row heights, including the
-row-local intrinsic title/place/action height, rather than greedily optimizing
-the current row. The body is bounded by the card's two-line copy contract and
-is estimated from those same text tracks in the search cost; CSS then stretches
-only to the tallest real content inside that row. It must not reserve the
-rejected global `184px + 58px + 56px` chrome. Ties prefer fewer rows, less
-visual crop and less displacement from source order.
+`site/src/lib/relatedCardLayout.mjs` is the shared row owner. Compose from the
+**complete eligible collection/discovery pool before applying the initial page
+limit**. Group compatible document ratios and use genuinely `visual_only`
+fillers, then paginate the resulting stable sequence. A conflict among the first
+12 Free cards or the first 10 related cards does not establish corpus scarcity.
+Do not limit the search to three extra candidates or discard admitted events to
+manufacture a feasible prefix. Server and hydrated clients must agree on the
+planned sequence, and appending must never move already visible cards.
 
-The solver first enumerates the optional final remainder of size
-`cardCount % rowSize`, then partitions everything else into exact full rows.
-Fullness is therefore a hard constraint, not a score that a shorter row can
-outvote. The browser gate checks row cardinality, row-local equal media/card
-heights and that at least one content-owning card per row has no large synthetic
-body gap. If the ranked prefix is mathematically OCR-incompatible, the packer
-may inspect at most three following candidates and keeps the largest feasible
-card count; it never repairs incompatibility by opening an earlier partial row.
+Within this constraint, prefer full compatible natural-ratio rows, less safe
+crop and less source-order displacement. Only the final row may be incomplete;
+its cards keep regular column widths, not stretched widths. All admitted IDs
+must survive exactly once. Protected-text and painted-bounds checks are joint:
+`contain` in an arbitrary fixed shell is protection, not accepted no-fields
+geometry. A natural image with a matching natural frame may use `contain`
+without letterboxing; CSS `object-fit` alone is not the acceptance evidence.
 
-For each candidate row the solver intersects document-safe target intervals.
-An ordinary document contributes only its natural ratio; a very tall document
-contributes `[naturalRatio, naturalRatio / 0.8]`. Infeasible combinations are
-rejected. The selected target is then shared by every card in the row, so media
-and outer-card heights are equal and no image uses `contain` inside a fixed
-frame. `rowWorstCrop`, `coverCrop` and `rowCost` are emitted as diagnostics and
-checked against the rendered result.
+A document without usable positive crop evidence contributes only its natural
+ratio. A proposed fallback must fit the approved 20% vertical-crop budget **and**
+retain important text using source-bound evidence. No unconditional
+`[naturalRatio, naturalRatio / 0.8]` interval is allowed. If no safe complete
+partition exists, retain all events and report the smallest actual full-pool
+conflict explicitly; do not call remaining fields a PASS. Existing diagnostics
+(`rowWorstCrop`, `coverCrop`, row status) support, but do not replace, decoded
+browser measurements of image bounds, source crop, row geometry and text safety.
 
 ## Pixel-current bbox contract
 
@@ -81,14 +85,14 @@ geometry is stale, the image is OCR/text, or the responsive target ratio is
 unknown, the strict OCR/large-surface renderer uses `contain`. A `visual_only`
 hero/gallery is the deliberate product exception and fills with `cover`.
 Compact cards use the separate bounded-row contract above: documents constrain
-the row instead of creating bands, and very tall documents alone may lose at
-most `20%` of their area.
+the row instead of creating bands, and the scarcity fallback may lose at most `20%` of source area only with
+positive important-text safety evidence.
 
 Production desktop post-build contract checks the actual surface contract. A
 non-OCR hero/gallery media must compute to `cover`. In recommendation rows,
-every image must compute to `cover` with zero unused frame budget; document
-cards must additionally compute to `document-safe-cover` with applied crop no
-greater than `20%`. The gate decodes the real image, checks loaded/fallback
+every loaded image must have zero unused frame budget. Natural-frame
+documents need no crop; any `document-safe-cover` case must have proven text
+safety and an applied crop no greater than `20%`. The gate decodes the real image, checks loaded/fallback
 layers, equal media and card heights per row, records the independent
 unused-frame/crop ratios and retains the rendered row screenshot.
 
@@ -107,15 +111,14 @@ The browser/static renderer consumes metadata but does not run vision models.
 ## Acceptance
 
 - golden corpus across posters, portraits, groups, architecture, text-heavy images and sparse photos;
-- no cut faces/heads; no OCR crop except the documented very-tall `<=20%` case;
+- no cut faces/heads or important text; OCR crop only under the proven scarcity fallback above;
 - zero image-frame bands for classified visual media and for classified
-  documents admitted to bounded cover; an unclassified/error document is the
-  deliberate fail-closed exception and remains whole until media enrichment
-  supplies positive crop evidence. Card and media shells still keep equal
-  outer heights within each compact row;
+  documents alike; an unclassified/error document remains whole in a natural
+  frame until positive crop evidence exists, not a silent fixed-frame fields
+  exception. Card and media shells keep equal outer heights within each row;
 - every non-final compact row is full and only the final row may be incomplete;
 - no global fixed body/action reservation; row chrome follows real row content;
-- the globally selected grouping has the minimum normalized total page height;
+- grouping uses the full eligible pool before pagination, retains all IDs and freezes the rendered prefix;
 - repeatable output for the same versioned media;
 - visual regression for hero/card/list/gallery/share formats;
 - safe fallback when metadata is missing/low confidence;
