@@ -9,9 +9,9 @@
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
   "astro_family_graph_sha256": "f7c633f9e644603b160a454003cbd159d086b2660d581a547ebc308902af0026",
   "summary": {
-    "token_count": 2536,
-    "definition_count": 2852,
-    "consumer_count": 3583,
+    "token_count": 2535,
+    "definition_count": 2847,
+    "consumer_count": 3582,
     "alias_edge_count": 895,
     "family_count": 109
   },
@@ -58655,7 +58655,7 @@
         {
           "token": "--accent-soft",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 717,
+          "line": 718,
           "has_fallback": false
         }
       ],
@@ -59322,7 +59322,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4509,
+          "line": 4510,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -59350,7 +59350,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4508,
+          "line": 4509,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -59812,7 +59812,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1061,
+          "line": 1062,
           "scope": "<top-level>",
           "kind": "css",
           "value": ":before {",
@@ -60008,7 +60008,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2472,
+          "line": 2473,
           "scope": "style=",
           "kind": "css",
           "value": "url('${withBase('/assets/ui/desktop-head-leather-r5.webp')",
@@ -60022,7 +60022,7 @@
         {
           "token": "--desktop-brand-tag-skin",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 902,
+          "line": 903,
           "has_fallback": false
         }
       ],
@@ -60034,7 +60034,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5839,
+          "line": 5840,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60048,7 +60048,7 @@
         {
           "token": "--desktop-continuous-parallax-y",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2285,
+          "line": 2286,
           "has_fallback": true
         }
       ],
@@ -60626,7 +60626,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1396,
+          "line": 1397,
           "scope": "<top-level>",
           "kind": "css",
           "value": "hover {",
@@ -60695,7 +60695,7 @@
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 163,
+          "line": 160,
           "scope": "></span></span></button> <span id=\"reference4-service-share-status\" class=\"sr-only\" data-service-share-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></span> <a class=\"sr-only\" data-service-share-fallback href=\"https://kenigevents.ru/\" hidden>https://kenigevents.ru/</a> </section> </div> </div> </details> <style is:global> @media (max-width:759px) > body.mobile-shell-reference4 .mobile-discovery-menu--reference4",
           "kind": "css",
           "value": "cubic-bezier(.22,.86,.32,1)",
@@ -60704,7 +60704,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1937,
+          "line": 1938,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "cubic-bezier(0.22, 0.86, 0.32, 1)",
@@ -60718,13 +60718,13 @@
         {
           "token": "--drawer-ease",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 167,
+          "line": 164,
           "has_fallback": false
         },
         {
           "token": "--drawer-ease",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1946,
+          "line": 1947,
           "has_fallback": false
         }
       ],
@@ -60736,7 +60736,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1936,
+          "line": 1937,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "max(0.85rem, env(safe-area-inset-left))",
@@ -60750,7 +60750,7 @@
         {
           "token": "--drawer-handle-left",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1957,
+          "line": 1958,
           "has_fallback": false
         }
       ],
@@ -60762,7 +60762,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1935,
+          "line": 1936,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "max(0px, calc(-1.15rem + env(safe-area-inset-top)))",
@@ -60781,7 +60781,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1934,
+          "line": 1935,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "clamp(10rem, 36vw, 10.85rem)",
@@ -60795,37 +60795,37 @@
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1942,
+          "line": 1943,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1945,
+          "line": 1946,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1953,
+          "line": 1954,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1958,
+          "line": 1959,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2017,
+          "line": 2018,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2045,
+          "line": 2046,
           "has_fallback": false
         }
       ],
@@ -60837,7 +60837,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1445,
+          "line": 1446,
           "scope": "<top-level>",
           "kind": "css",
           "value": ":after {",
@@ -60846,7 +60846,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1462,
+          "line": 1463,
           "scope": "@media (prefers-reduced-motion: reduce)",
           "kind": "css",
           "value": ":after { animation: none",
@@ -60883,7 +60883,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4507,
+          "line": 4508,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60892,7 +60892,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4544,
+          "line": 4545,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60901,7 +60901,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4589,
+          "line": 4590,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60915,13 +60915,13 @@
         {
           "token": "--dynamic-media-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1442,
+          "line": 1443,
           "has_fallback": true
         },
         {
           "token": "--dynamic-media-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1484,
+          "line": 1485,
           "has_fallback": true
         }
       ],
@@ -61242,7 +61242,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2253,
+          "line": 2254,
           "scope": "@media (min-width: 1024px) > .desktop-event-reading-shell",
           "kind": "css",
           "value": "max(16px, calc((100vw - 1180px) / 2))",
@@ -61256,13 +61256,13 @@
         {
           "token": "--event-gutter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2255,
+          "line": 2256,
           "has_fallback": false
         },
         {
           "token": "--event-gutter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2255,
+          "line": 2256,
           "has_fallback": false
         }
       ],
@@ -61776,7 +61776,7 @@
         {
           "token": "--gallery-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1146,
+          "line": 1147,
           "has_fallback": true
         }
       ],
@@ -61802,7 +61802,7 @@
         {
           "token": "--gallery-source-height",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 986,
+          "line": 987,
           "has_fallback": false
         }
       ],
@@ -61828,7 +61828,7 @@
         {
           "token": "--gallery-source-width",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 985,
+          "line": 986,
           "has_fallback": false
         }
       ],
@@ -61840,7 +61840,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 724,
           "scope": ".event-hero__visual",
           "kind": "css",
           "value": "#1c1c1c",
@@ -61849,7 +61849,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 741,
+          "line": 742,
           "scope": ".event-hero[data-hero-tint=\"warm\"] .event-hero__visual",
           "kind": "css",
           "value": "#2e1815",
@@ -61858,7 +61858,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 742,
+          "line": 743,
           "scope": ".event-hero[data-hero-tint=\"deep\"] .event-hero__visual",
           "kind": "css",
           "value": "#171b32",
@@ -61867,7 +61867,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 743,
+          "line": 744,
           "scope": ".event-hero[data-hero-tint=\"cool\"] .event-hero__visual",
           "kind": "css",
           "value": "#12302d",
@@ -61876,7 +61876,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 744,
+          "line": 745,
           "scope": ".event-hero[data-hero-tint=\"neutral\"] .event-hero__visual",
           "kind": "css",
           "value": "#1c1c1c",
@@ -61890,13 +61890,13 @@
         {
           "token": "--hero-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 734,
+          "line": 735,
           "has_fallback": false
         },
         {
           "token": "--hero-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 734,
+          "line": 735,
           "has_fallback": false
         }
       ],
@@ -61908,7 +61908,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5795,
+          "line": 5796,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61922,7 +61922,7 @@
         {
           "token": "--hero-parallax-y",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2160,
+          "line": 2161,
           "has_fallback": true
         }
       ],
@@ -61934,7 +61934,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5793,
+          "line": 5794,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61948,7 +61948,7 @@
         {
           "token": "--hero-poster-parallax-y",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2131,
+          "line": 2132,
           "has_fallback": true
         }
       ],
@@ -61960,7 +61960,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5792,
+          "line": 5793,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61993,7 +61993,7 @@
         {
           "token": "--hero-source-height",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2177,
+          "line": 2178,
           "has_fallback": false
         }
       ],
@@ -62019,7 +62019,7 @@
         {
           "token": "--hero-source-width",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2176,
+          "line": 2177,
           "has_fallback": false
         }
       ],
@@ -69063,7 +69063,7 @@
         {
           "token": "--ke-color-background-header",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 304,
+          "line": 303,
           "has_fallback": false
         },
         {
@@ -71037,7 +71037,7 @@
         {
           "token": "--ke-color-background-surface",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 246,
+          "line": 244,
           "has_fallback": false
         },
         {
@@ -73048,7 +73048,7 @@
         {
           "token": "--ke-color-border-default",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 244,
+          "line": 242,
           "has_fallback": false
         },
         {
@@ -74402,43 +74402,43 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1169,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1176,
+          "line": 1177,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1383,
+          "line": 1384,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1555,
+          "line": 1556,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1784,
+          "line": 1785,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1891,
+          "line": 1892,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2216,
+          "line": 2217,
           "has_fallback": false
         },
         {
@@ -74450,13 +74450,13 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 345,
+          "line": 346,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 536,
+          "line": 537,
           "has_fallback": false
         },
         {
@@ -74948,43 +74948,37 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1080,
+          "line": 1081,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1225,
+          "line": 1226,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1252,
+          "line": 1253,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1256,
+          "line": 1257,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1303,
+          "line": 1304,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1364,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1384,
+          "line": 1365,
           "has_fallback": false
         },
         {
@@ -74996,175 +74990,181 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1410,
+          "line": 1386,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1535,
+          "line": 1411,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1546,
+          "line": 1536,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1554,
+          "line": 1547,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1562,
+          "line": 1555,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1578,
+          "line": 1563,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1605,
+          "line": 1579,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1709,
+          "line": 1606,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1765,
+          "line": 1710,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1783,
+          "line": 1766,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1790,
+          "line": 1784,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1798,
+          "line": 1791,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1846,
+          "line": 1799,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1861,
+          "line": 1847,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1873,
+          "line": 1862,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1874,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1970,
+          "line": 1971,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 322,
+          "line": 321,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 347,
+          "line": 348,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 380,
+          "line": 381,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 435,
+          "line": 436,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 452,
+          "line": 453,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 469,
+          "line": 470,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 499,
+          "line": 500,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 600,
+          "line": 601,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 626,
+          "line": 627,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 633,
+          "line": 634,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 698,
+          "line": 699,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 756,
+          "line": 757,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 854,
+          "line": 855,
           "has_fallback": false
         },
         {
@@ -76459,13 +76459,13 @@
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1970,
+          "line": 1971,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 854,
+          "line": 855,
           "has_fallback": false
         }
       ],
@@ -76491,7 +76491,7 @@
         {
           "token": "--ke-color-brand-tag-hover",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1982,
+          "line": 1983,
           "has_fallback": false
         }
       ],
@@ -92643,7 +92643,7 @@
         {
           "token": "--ke-color-background-header",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 304,
+          "line": 303,
           "has_fallback": false
         },
         {
@@ -93696,79 +93696,79 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1076,
+          "line": 1077,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1517,
+          "line": 1518,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1551,
+          "line": 1552,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1575,
+          "line": 1576,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1777,
+          "line": 1778,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1797,
+          "line": 1798,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1821,
+          "line": 1822,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1824,
+          "line": 1825,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1836,
+          "line": 1837,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1850,
+          "line": 1851,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1867,
+          "line": 1868,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1869,
+          "line": 1870,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2024,
+          "line": 2025,
           "has_fallback": false
         },
         {
@@ -93786,49 +93786,49 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 327,
+          "line": 326,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 346,
+          "line": 347,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 489,
+          "line": 490,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 493,
+          "line": 494,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 505,
+          "line": 506,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 519,
+          "line": 520,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 548,
+          "line": 549,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 552,
+          "line": 553,
           "has_fallback": false
         },
         {
@@ -95978,7 +95978,7 @@
         {
           "token": "--ke-color-border-default",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 244,
+          "line": 242,
           "has_fallback": false
         },
         {
@@ -96236,43 +96236,43 @@
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1385,
+          "line": 1386,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1410,
+          "line": 1411,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1783,
+          "line": 1784,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1827,
+          "line": 1828,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1833,
+          "line": 1834,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1896,
+          "line": 1897,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 709,
+          "line": 710,
           "has_fallback": false
         },
         {
@@ -99463,91 +99463,85 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1092,
+          "line": 1093,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1170,
+          "line": 1171,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1175,
+          "line": 1176,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1181,
+          "line": 1182,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1206,
+          "line": 1207,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1268,
+          "line": 1269,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1294,
+          "line": 1295,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1411,
+          "line": 1412,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1552,
+          "line": 1553,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1574,
+          "line": 1575,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1577,
+          "line": 1578,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1791,
+          "line": 1792,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1796,
+          "line": 1797,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1823,
-          "has_fallback": false
-        },
-        {
-          "token": "--muted",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1832,
+          "line": 1824,
           "has_fallback": false
         },
         {
@@ -99559,19 +99553,25 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1883,
+          "line": 1834,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1888,
+          "line": 1884,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1894,
+          "line": 1889,
+          "has_fallback": false
+        },
+        {
+          "token": "--muted",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1895,
           "has_fallback": false
         },
         {
@@ -99583,25 +99583,25 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 379,
+          "line": 380,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 492,
+          "line": 493,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 595,
+          "line": 596,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 623,
+          "line": 624,
           "has_fallback": false
         },
         {
@@ -101656,55 +101656,55 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1169,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1176,
+          "line": 1177,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1383,
+          "line": 1384,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1555,
+          "line": 1556,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1784,
+          "line": 1785,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1891,
+          "line": 1892,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2216,
+          "line": 2217,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 345,
+          "line": 346,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 536,
+          "line": 537,
           "has_fallback": false
         },
         {
@@ -105157,7 +105157,7 @@
         {
           "token": "--ke-color-background-surface",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 246,
+          "line": 244,
           "has_fallback": false
         },
         {
@@ -108787,31 +108787,31 @@
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1383,
+          "line": 1384,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1555,
+          "line": 1556,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1784,
+          "line": 1785,
           "has_fallback": false
         },
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2183,
+          "line": 2184,
           "has_fallback": false
         },
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 721,
+          "line": 722,
           "has_fallback": false
         },
         {
@@ -132925,19 +132925,19 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -133816,19 +133816,19 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -134614,7 +134614,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -134811,13 +134811,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -142214,7 +142214,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2597,
+          "line": 2598,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -142228,7 +142228,7 @@
         {
           "token": "--ke-lower-nav-offset",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 239,
+          "line": 237,
           "has_fallback": true
         }
       ],
@@ -142265,14 +142265,14 @@
         },
         {
           "token": "--ke-lower-surface-offset",
-          "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 236,
+          "path": "site/src/components/MobileToastRegion.astro",
+          "line": 211,
           "has_fallback": true
         },
         {
           "token": "--ke-lower-surface-offset",
-          "path": "site/src/components/MobileToastRegion.astro",
-          "line": 211,
+          "path": "site/src/components/SiteFooter.astro",
+          "line": 105,
           "has_fallback": true
         }
       ],
@@ -154596,7 +154596,7 @@
         {
           "token": "--ke-shape-radius-control",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 245,
+          "line": 243,
           "has_fallback": false
         },
         {
@@ -155046,13 +155046,13 @@
         {
           "token": "--radius-xl",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 386,
+          "line": 387,
           "has_fallback": false
         },
         {
           "token": "--radius-xl",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 396,
+          "line": 397,
           "has_fallback": false
         }
       ],
@@ -156572,19 +156572,19 @@
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2184,
+          "line": 2185,
           "has_fallback": false
         },
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 387,
+          "line": 388,
           "has_fallback": false
         },
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 398,
+          "line": 399,
           "has_fallback": false
         },
         {
@@ -156945,7 +156945,7 @@
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 244,
+          "line": 242,
           "has_fallback": false
         },
         {
@@ -157722,7 +157722,7 @@
         {
           "token": "--ke-shape-radius-control",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 245,
+          "line": 243,
           "has_fallback": false
         },
         {
@@ -160874,7 +160874,7 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -165661,7 +165661,7 @@
         {
           "token": "--ke-type-card-action-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1502,
+          "line": 1503,
           "has_fallback": false
         }
       ],
@@ -165687,13 +165687,13 @@
         {
           "token": "--ke-type-card-metadata-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1494,
+          "line": 1495,
           "has_fallback": false
         },
         {
           "token": "--ke-type-card-metadata-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1499,
+          "line": 1500,
           "has_fallback": false
         }
       ],
@@ -165719,19 +165719,19 @@
         {
           "token": "--ke-type-card-status-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1493,
+          "line": 1494,
           "has_fallback": false
         },
         {
           "token": "--ke-type-card-status-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1495,
+          "line": 1496,
           "has_fallback": false
         },
         {
           "token": "--ke-type-card-status-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1498,
+          "line": 1499,
           "has_fallback": false
         }
       ],
@@ -165757,7 +165757,7 @@
         {
           "token": "--ke-type-card-title-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1496,
+          "line": 1497,
           "has_fallback": false
         },
         {
@@ -167107,13 +167107,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -167341,13 +167341,13 @@
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -167608,13 +167608,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -167868,13 +167868,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -168117,13 +168117,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -168289,13 +168289,13 @@
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -168515,13 +168515,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -168735,13 +168735,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -168943,13 +168943,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2434,
+          "line": 2435,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 700,
+          "line": 701,
           "has_fallback": false
         },
         {
@@ -169057,7 +169057,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -169131,7 +169131,7 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -169221,7 +169221,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -169333,7 +169333,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -169453,7 +169453,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 701,
+          "line": 702,
           "has_fallback": false
         },
         {
@@ -171698,7 +171698,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4585,
+          "line": 4586,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -171969,43 +171969,43 @@
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1385,
+          "line": 1386,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1410,
+          "line": 1411,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1783,
+          "line": 1784,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1827,
+          "line": 1828,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1833,
+          "line": 1834,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1896,
+          "line": 1897,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 709,
+          "line": 710,
           "has_fallback": false
         }
       ],
@@ -172428,7 +172428,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4506,
+          "line": 4507,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172437,7 +172437,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4543,
+          "line": 4544,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172446,7 +172446,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4609,
+          "line": 4610,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172563,7 +172563,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4505,
+          "line": 4506,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172572,7 +172572,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4544,
+          "line": 4545,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172581,7 +172581,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4588,
+          "line": 4589,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172790,13 +172790,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 236,
-          "has_fallback": false
-        },
-        {
-          "token": "--mobile-bottom-stack-h",
-          "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 239,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -172808,7 +172802,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1926,
+          "line": 1927,
           "has_fallback": false
         }
       ],
@@ -172847,13 +172841,13 @@
         {
           "token": "--mobile-header-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1929,
+          "line": 1930,
           "has_fallback": false
         },
         {
           "token": "--mobile-header-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1929,
+          "line": 1930,
           "has_fallback": false
         },
         {
@@ -172917,13 +172911,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 236,
-          "has_fallback": false
-        },
-        {
-          "token": "--mobile-bottom-stack-h",
-          "path": "site/src/components/design-system/shell-foundations.css",
-          "line": 239,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -172953,7 +172941,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1926,
+          "line": 1927,
           "has_fallback": false
         }
       ],
@@ -173308,91 +173296,85 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1092,
+          "line": 1093,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1170,
+          "line": 1171,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1175,
+          "line": 1176,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1181,
+          "line": 1182,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1206,
+          "line": 1207,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1268,
+          "line": 1269,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1294,
+          "line": 1295,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1411,
+          "line": 1412,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1552,
+          "line": 1553,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1574,
+          "line": 1575,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1577,
+          "line": 1578,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1791,
+          "line": 1792,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1796,
+          "line": 1797,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1823,
-          "has_fallback": false
-        },
-        {
-          "token": "--muted",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1832,
+          "line": 1824,
           "has_fallback": false
         },
         {
@@ -173404,19 +173386,25 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1883,
+          "line": 1834,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1888,
+          "line": 1884,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1894,
+          "line": 1889,
+          "has_fallback": false
+        },
+        {
+          "token": "--muted",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1895,
           "has_fallback": false
         },
         {
@@ -173428,25 +173416,25 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 379,
+          "line": 380,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 492,
+          "line": 493,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 595,
+          "line": 596,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 623,
+          "line": 624,
           "has_fallback": false
         },
         {
@@ -174017,7 +174005,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5757,
+          "line": 5758,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",
@@ -174152,7 +174140,7 @@
         {
           "path": "site/src/layouts/PrelaunchLayout.astro",
           "line": 147,
-          "scope": "></script> <style is:global> :root",
+          "scope": "></script> <style is:global> html.prelaunch-document",
           "kind": "css",
           "value": "#080a0e",
           "aliases": [],
@@ -174184,7 +174172,7 @@
         {
           "path": "site/src/layouts/PrelaunchLayout.astro",
           "line": 150,
-          "scope": "></script> <style is:global> :root",
+          "scope": "></script> <style is:global> html.prelaunch-document",
           "kind": "css",
           "value": "#f0c89e",
           "aliases": [],
@@ -174216,7 +174204,7 @@
         {
           "path": "site/src/layouts/PrelaunchLayout.astro",
           "line": 149,
-          "scope": "></script> <style is:global> :root",
+          "scope": "></script> <style is:global> html.prelaunch-document",
           "kind": "css",
           "value": "#bbb5aa",
           "aliases": [],
@@ -174287,7 +174275,7 @@
         {
           "path": "site/src/layouts/PrelaunchLayout.astro",
           "line": 148,
-          "scope": "></script> <style is:global> :root",
+          "scope": "></script> <style is:global> html.prelaunch-document",
           "kind": "css",
           "value": "#f5efe6",
           "aliases": [],
@@ -174488,55 +174476,55 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1169,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1176,
+          "line": 1177,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1383,
+          "line": 1384,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1555,
+          "line": 1556,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1784,
+          "line": 1785,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1891,
+          "line": 1892,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2216,
+          "line": 2217,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 345,
+          "line": 346,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 536,
+          "line": 537,
           "has_fallback": false
         },
         {
@@ -174641,43 +174629,37 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1080,
+          "line": 1081,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1225,
+          "line": 1226,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1252,
+          "line": 1253,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1256,
+          "line": 1257,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1303,
+          "line": 1304,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1364,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1384,
+          "line": 1365,
           "has_fallback": false
         },
         {
@@ -174689,163 +174671,169 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1410,
+          "line": 1386,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1535,
+          "line": 1411,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1546,
+          "line": 1536,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1554,
+          "line": 1547,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1562,
+          "line": 1555,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1578,
+          "line": 1563,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1605,
+          "line": 1579,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1709,
+          "line": 1606,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1765,
+          "line": 1710,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1783,
+          "line": 1766,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1790,
+          "line": 1784,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1798,
+          "line": 1791,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1846,
+          "line": 1799,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1861,
+          "line": 1847,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1873,
+          "line": 1862,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 322,
+          "line": 1874,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 347,
+          "line": 321,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 380,
+          "line": 348,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 435,
+          "line": 381,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 452,
+          "line": 436,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 469,
+          "line": 453,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 499,
+          "line": 470,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 600,
+          "line": 500,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 626,
+          "line": 601,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 633,
+          "line": 627,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 698,
+          "line": 634,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 756,
+          "line": 699,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 757,
           "has_fallback": false
         },
         {
@@ -174908,19 +174896,19 @@
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1383,
+          "line": 1384,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1555,
+          "line": 1556,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1784,
+          "line": 1785,
           "has_fallback": false
         }
       ],
@@ -174964,7 +174952,7 @@
         {
           "token": "--progress",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 598,
+          "line": 599,
           "has_fallback": false
         }
       ],
@@ -174976,7 +174964,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1646,
+          "line": 1647,
           "scope": ".event-token--pushkin",
           "kind": "css",
           "value": "1.077",
@@ -174990,13 +174978,13 @@
         {
           "token": "--pushkin-composite-height-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1648,
+          "line": 1649,
           "has_fallback": false
         },
         {
           "token": "--pushkin-composite-height-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1654,
+          "line": 1655,
           "has_fallback": false
         }
       ],
@@ -175008,7 +174996,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1645,
+          "line": 1646,
           "scope": ".event-token--pushkin",
           "kind": "css",
           "value": "1.212",
@@ -175022,13 +175010,13 @@
         {
           "token": "--pushkin-composite-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1647,
+          "line": 1648,
           "has_fallback": false
         },
         {
           "token": "--pushkin-composite-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1653,
+          "line": 1654,
           "has_fallback": false
         }
       ],
@@ -175081,7 +175069,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1538,
+          "line": 1539,
           "scope": ".like-burst span:nth-child(2)",
           "kind": "css",
           "value": "-16deg",
@@ -175090,7 +175078,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1539,
+          "line": 1540,
           "scope": ".like-burst span:nth-child(3)",
           "kind": "css",
           "value": "14deg",
@@ -175099,7 +175087,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1540,
+          "line": 1541,
           "scope": ".like-burst span:nth-child(4)",
           "kind": "css",
           "value": "8deg",
@@ -175113,7 +175101,7 @@
         {
           "token": "--r",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1541,
+          "line": 1542,
           "has_fallback": true
         }
       ],
@@ -175216,13 +175204,13 @@
         {
           "token": "--radius-xl",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 386,
+          "line": 387,
           "has_fallback": false
         },
         {
           "token": "--radius-xl",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 396,
+          "line": 397,
           "has_fallback": false
         }
       ],
@@ -175318,7 +175306,7 @@
         {
           "token": "--rail-count",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1315,
+          "line": 1316,
           "has_fallback": true
         }
       ],
@@ -175885,66 +175873,11 @@
       "astro_family_set": "families-d68cecff6594a912",
       "production_route_set": "routes-eeb1e414a37a4cbd"
     },
-    "--reference4": {
-      "definitions": [
-        {
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 252,
-          "scope": "></span></span></button> <span id=\"reference4-service-share-status\" class=\"sr-only\" data-service-share-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></span> <a class=\"sr-only\" data-service-share-fallback href=\"https://kenigevents.ru/\" hidden>https://kenigevents.ru/</a> </section> </div> </div> </details> <style is:global> @media (max-width:759px)",
-          "kind": "css",
-          "value": "not([open]) > .mobile-discovery-menu__summary { height:48px!important",
-          "aliases": [],
-          "token": "--reference4"
-        },
-        {
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 253,
-          "scope": "></span></span></button> <span id=\"reference4-service-share-status\" class=\"sr-only\" data-service-share-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></span> <a class=\"sr-only\" data-service-share-fallback href=\"https://kenigevents.ru/\" hidden>https://kenigevents.ru/</a> </section> </div> </div> </details> <style is:global> @media (max-width:759px)",
-          "kind": "css",
-          "value": "not([open]) .brand-tag__endorsement { display:none",
-          "aliases": [],
-          "token": "--reference4"
-        },
-        {
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 287,
-          "scope": "@media (max-width:350px)",
-          "kind": "css",
-          "value": "not([open]) > .mobile-discovery-menu__summary { height:48px!important",
-          "aliases": [],
-          "token": "--reference4"
-        },
-        {
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 288,
-          "scope": "@media (max-width:350px)",
-          "kind": "css",
-          "value": "not([open]) .brand-tag__endorsement { display:none",
-          "aliases": [],
-          "token": "--reference4"
-        }
-      ],
-      "aliases_to": [],
-      "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-b41de554dae4b106",
-      "astro_family_set": "families-8297defe7785725a",
-      "production_route_set": "routes-d690b48482e738de"
-    },
     "--reference4-icon": {
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
           "line": 102,
-          "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
-          "kind": "css",
-          "value": "url('${icon('handshake-thin.svg')",
-          "aliases": [],
-          "token": "--reference4-icon"
-        },
-        {
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 105,
           "scope": "></span></span><span>Стать партнёром</span><i aria-hidden=\"true\"></i> </a> <a class=\"reference4-menu__row\" href=\"mailto:info@kenigevents.ru?subject=Правообладателям\"> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('handshake-thin.svg')",
@@ -175953,7 +175886,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 128,
+          "line": 125,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('heart-thin.svg')",
@@ -175962,7 +175895,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 140,
+          "line": 137,
           "scope": "></span></span><span>Избранное</span> </a> </div> <span class=\"sr-only\" data-static-auth-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></span> <button class=\"reference4-menu__share\" type=\"button\" data-service-share-button data-service-share-intent=\"mobile\" aria-label=\"Поделиться анонсами KenigEvents\" aria-describedby=\"reference4-service-share-status\" aria-busy=\"false\" ><span>Поделиться</span><span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('share-network-thin.svg')",
@@ -176035,16 +175968,7 @@
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
           "line": 78,
-          "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
-          "kind": "css",
-          "value": "url('${icon('squares-four-thin.svg')",
-          "aliases": [],
-          "token": "--reference4-icon"
-        },
-        {
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 81,
-          "scope": "></span></span><span>Все подборки</span><i aria-hidden=\"true\"></i> </a> > data-unusual-nav-link> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
+          "scope": "></span></span><span>Для меня</span><i aria-hidden=\"true\"></i> </a> </nav> <nav class=\"reference4-menu__list-plane\" aria-label=\"Подборки\" data-reference4-collections aria-hidden=\"true\"> <button class=\"reference4-menu__row reference4-menu__row--back\" type=\"button\" data-reference4-collections-back> <span class=\"reference4-menu__back-icon\" aria-hidden=\"true\"></span><span>Назад к афише</span> </button> > data-unusual-nav-link> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('sparkle-thin.svg')",
           "aliases": [],
@@ -176052,7 +175976,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 87,
+          "line": 84,
           "scope": "<anonymous> > > <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('squares-four-thin.svg')",
@@ -176061,10 +175985,19 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 90,
+          "line": 87,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('chats-thin.svg')",
+          "aliases": [],
+          "token": "--reference4-icon"
+        },
+        {
+          "path": "site/src/components/Reference4MobileMenu.astro",
+          "line": 96,
+          "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
+          "kind": "css",
+          "value": "url('${icon('handshake-thin.svg')",
           "aliases": [],
           "token": "--reference4-icon"
         },
@@ -176084,13 +176017,13 @@
         {
           "token": "--reference4-icon",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 251,
+          "line": 248,
           "has_fallback": false
         },
         {
           "token": "--reference4-icon",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 251,
+          "line": 248,
           "has_fallback": false
         }
       ],
@@ -176116,7 +176049,7 @@
         {
           "token": "--reference4-tag",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 188,
+          "line": 185,
           "has_fallback": false
         }
       ],
@@ -176346,7 +176279,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 569,
+          "line": 570,
           "scope": ".authorized-search__submit",
           "kind": "css",
           "value": "0%",
@@ -176360,7 +176293,7 @@
         {
           "token": "--search-progress",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 581,
+          "line": 582,
           "has_fallback": false
         }
       ],
@@ -176427,19 +176360,19 @@
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2184,
+          "line": 2185,
           "has_fallback": false
         },
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 387,
+          "line": 388,
           "has_fallback": false
         },
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 398,
+          "line": 399,
           "has_fallback": false
         }
       ],
@@ -176470,7 +176403,7 @@
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 163,
+          "line": 160,
           "scope": "></span></span></button> <span id=\"reference4-service-share-status\" class=\"sr-only\" data-service-share-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></span> <a class=\"sr-only\" data-service-share-fallback href=\"https://kenigevents.ru/\" hidden>https://kenigevents.ru/</a> </section> </div> </div> </details> <style is:global> @media (max-width:759px) > body.mobile-shell-reference4 .mobile-discovery-menu--reference4",
           "kind": "css",
           "value": "84px",
@@ -176484,7 +176417,7 @@
         {
           "token": "--shell-tag-h",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 181,
+          "line": 178,
           "has_fallback": false
         }
       ],
@@ -176496,7 +176429,7 @@
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 163,
+          "line": 160,
           "scope": "></span></span></button> <span id=\"reference4-service-share-status\" class=\"sr-only\" data-service-share-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></span> <a class=\"sr-only\" data-service-share-fallback href=\"https://kenigevents.ru/\" hidden>https://kenigevents.ru/</a> </section> </div> </div> </details> <style is:global> @media (max-width:759px) > body.mobile-shell-reference4 .mobile-discovery-menu--reference4",
           "kind": "css",
           "value": "120px",
@@ -176510,7 +176443,7 @@
         {
           "token": "--shell-tag-w",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 180,
+          "line": 177,
           "has_fallback": false
         }
       ],
@@ -176531,7 +176464,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1518,
+          "line": 1519,
           "scope": "<top-level>",
           "kind": "css",
           "value": "hover { border-color: transparent",
@@ -176849,13 +176782,13 @@
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2183,
+          "line": 2184,
           "has_fallback": false
         },
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 721,
+          "line": 722,
           "has_fallback": false
         }
       ],
@@ -176900,79 +176833,79 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1076,
+          "line": 1077,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1517,
+          "line": 1518,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1551,
+          "line": 1552,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1575,
+          "line": 1576,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1777,
+          "line": 1778,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1797,
+          "line": 1798,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1821,
+          "line": 1822,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1824,
+          "line": 1825,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1836,
+          "line": 1837,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1850,
+          "line": 1851,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1867,
+          "line": 1868,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1869,
+          "line": 1870,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2024,
+          "line": 2025,
           "has_fallback": false
         },
         {
@@ -176990,49 +176923,49 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 327,
+          "line": 326,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 346,
+          "line": 347,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 489,
+          "line": 490,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 493,
+          "line": 494,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 505,
+          "line": 506,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 519,
+          "line": 520,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 548,
+          "line": 549,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 552,
+          "line": 553,
           "has_fallback": false
         },
         {
@@ -177234,19 +177167,19 @@
         {
           "token": "--token-brand-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1616,
+          "line": 1617,
           "has_fallback": true
         },
         {
           "token": "--token-brand-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1672,
+          "line": 1673,
           "has_fallback": true
         },
         {
           "token": "--token-brand-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1679,
+          "line": 1680,
           "has_fallback": true
         }
       ],
@@ -177278,19 +177211,19 @@
         {
           "token": "--token-brand-ring",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1617,
+          "line": 1618,
           "has_fallback": true
         },
         {
           "token": "--token-brand-ring",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1674,
+          "line": 1675,
           "has_fallback": true
         },
         {
           "token": "--token-brand-ring",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1681,
+          "line": 1682,
           "has_fallback": true
         }
       ],
@@ -177338,7 +177271,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1598,
+          "line": 1599,
           "scope": ".event-token",
           "kind": "css",
           "value": "clamp(108px, 26vw, 128px)",
@@ -177347,7 +177280,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1627,
+          "line": 1628,
           "scope": ".event-token--badge",
           "kind": "css",
           "value": "clamp(88px,23vw,104px)",
@@ -177356,7 +177289,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1695,
+          "line": 1696,
           "scope": ".event-token--pill",
           "kind": "css",
           "value": "auto",
@@ -177370,19 +177303,13 @@
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1599,
-          "has_fallback": false
-        },
-        {
-          "token": "--token-size",
-          "path": "site/src/layouts/EventLayout.astro",
           "line": 1600,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1609,
+          "line": 1601,
           "has_fallback": false
         },
         {
@@ -177400,7 +177327,7 @@
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1647,
+          "line": 1612,
           "has_fallback": false
         },
         {
@@ -177412,13 +177339,19 @@
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1653,
+          "line": 1649,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
           "line": 1654,
+          "has_fallback": false
+        },
+        {
+          "token": "--token-size",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1655,
           "has_fallback": false
         }
       ],
@@ -177640,7 +177573,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1538,
+          "line": 1539,
           "scope": ".like-burst span:nth-child(2)",
           "kind": "css",
           "value": "-42px",
@@ -177649,7 +177582,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1539,
+          "line": 1540,
           "scope": ".like-burst span:nth-child(3)",
           "kind": "css",
           "value": "38px",
@@ -177658,7 +177591,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1540,
+          "line": 1541,
           "scope": ".like-burst span:nth-child(4)",
           "kind": "css",
           "value": "4px",
@@ -177672,7 +177605,7 @@
         {
           "token": "--x",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1541,
+          "line": 1542,
           "has_fallback": true
         }
       ],

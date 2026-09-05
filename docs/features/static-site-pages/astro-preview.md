@@ -1205,3 +1205,5 @@ The next same-corpus Kaggle handoff must use the product Home URL as its primary
 link. Source changes/test packets are not deployed runtime or independent acceptance.
 
 Home no longer adds a second page-local top gap before Hero Talk; existing shell/brand clearance remains the shell owner. This is not a new Hero or palette.
+
+Shell follow-up fixes scope prelaunch document styles to the actual prelaunch root, preserve the full brand while page context is active, restore desktop Today and remove only the rejected mobile All collections link. The shared bottom island remains on desktop and mobile; its terminal clearance is inside SiteFooter, not blank body padding. Browser regression must use real wheel/menu/Back input, not scrollTo alone.
