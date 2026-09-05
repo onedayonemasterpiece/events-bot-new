@@ -19,9 +19,14 @@ test('Free collection retains its medallion identity while using one ordinary li
   assert.doesNotMatch(surface, /free-collection__shelf|backdrop-filter/u);
   assert.match(surface, /data-compact-visible/u);
   assert.match(surface, /<h1 id="free-collection-title">Бесплатные события<\/h1>/u);
-  assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*?events=\{events\}[\s\S]*?rowSize=\{3\}[\s\S]*?mobileFlowMedia[\s\S]*?discoveryFeed[\s\S]*?runtimeManaged[\s\S]*?runtimeVisibleOnly[\s\S]*?runtimeSourcePolicy="all-direct"/u);
+  assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*?events=\{initialEvents\}[\s\S]*?rowSize=\{3\}[\s\S]*?mobileFlowMedia[\s\S]*?discoveryFeed[\s\S]*?runtimeManaged[\s\S]*?runtimeVisibleOnly[\s\S]*?runtimeSourcePolicy="all-direct"/u);
   assert.match(surface, /data-free-collection-grid/gu);
   assert.match(surface, /data-free-collection-eligibility':'confirmed-free'/u);
+  assert.match(surface, /events\.slice\(0, 12\)/u);
+  assert.match(surface, /id="free-collection-catalog" type="application\/json"[\s\S]*?set:html=\{freeCatalogJson\}/u);
+  assert.match(surface, /page_size: 12, preload_target: 12, eligibility_filter: 'confirmed-free'/u);
+  assert.match(surface, /JSON\.stringify\(freeCatalog\)\.replace\(\/</u);
+  assert.match(surface, /discoverySrc="#free-collection-catalog"/u);
   assert.match(surface, /data-free-collection-result-count[\s\S]*?data-free-collection-loaded-count[\s\S]*?data-free-collection-total-count/u);
   assert.doesNotMatch(surface, /data-free-collection-event-group="exhibitions"|Бесплатные выставки|regularEvents|exhibitionEvents/u);
   assert.match(surface, /parents=\{\[\s*\{ label:'Афиша', href:siteHomeHref\(\) \},\s*\]\}/u);

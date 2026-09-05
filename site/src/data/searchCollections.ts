@@ -112,9 +112,9 @@ export function getMaterializedSearchCollectionEvents(slug: string): PreviewEven
       && event.start_date <= weekend.end
       && /джаз/iu.test(event.title));
   } else if (slug === 'besplatnye-sobytiya') {
-    matches = events.filter((event) => event.ticket.is_free);
+    matches = events.filter((event) => event.ticket.is_free === true);
   } else if (slug === 'besplatno-s-detmi') {
-    matches = events.filter((event) => event.ticket.is_free
+    matches = events.filter((event) => event.ticket.is_free === true
       && event.topics.some((topic) => topic === 'FAMILY' || topic === 'KIDS_SCHOOL'));
   } else if (slug === 'stendap-na-etoy-nedele') {
     const end = datePlusDays(currentDate, 6);

@@ -6,6 +6,7 @@ import './design-system/product-contour-foundations.css';
 import type { PreviewEvent } from '../lib/types';
 import { siteHomeHref, withBase } from '../lib/events';
 import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
+import { toPersonalFeedCandidate } from '../lib/personalization/catalog';
 
 interface Props {
   title: string;
@@ -18,9 +19,18 @@ interface Props {
   totalEvents?: number;
 }
 const { title, description, criteria, updatedDate, referenceDate, events, totalEvents = events.length } = Astro.props;
-const loadedCount = events.length;
+const initialEvents = events.slice(0, 12);
+const loadedCount = initialEvents.length;
 const totalCount = Math.max(loadedCount, Number.isFinite(totalEvents) ? Math.floor(totalEvents) : loadedCount);
 const surfaceState = events.length ? 'populated' : 'empty';
+const freeCatalog = {
+  version: 1, schema_version: 'listing-personal-feed-v1',
+  feature_schema_version: 'event-detail-related-v1', taxonomy_version: 'event-taxonomy-v1',
+  surface: 'free_collection', algorithm_id: 'static_personal_feed_catalog_v1',
+  page_size: 12, preload_target: 12, eligibility_filter: 'confirmed-free',
+  related_static: events.map((event) => toPersonalFeedCandidate(event, referenceDate)),
+};
+const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
 ---
 <main
   id="main"
@@ -68,12 +78,13 @@ const surfaceState = events.length ? 'populated' : 'empty';
       </div>
       {events.length ? (
         <AdaptiveEventCardGrid
-          events={events}
+          events={initialEvents}
           mode="flow"
           rowSize={3}
           responsive="progressive"
           mobileFlowMedia
           discoveryFeed
+          discoverySrc="#free-collection-catalog"
           runtimeManaged
           runtimeVisibleOnly
           runtimeSourcePolicy="all-direct"
@@ -83,10 +94,12 @@ const surfaceState = events.length ? 'populated' : 'empty';
             'data-free-collection-eligibility':'confirmed-free',
           }}
         />
+        <button type="button" class="secondary-button free-collection__load-more" data-free-collection-load-more hidden>Показать ещё</button>
       ) : (
         <p class="free-collection__empty">Сейчас в актуальной выгрузке нет событий с подтверждённым бесплатным входом.</p>
       )}
     </section>
+    <script id="free-collection-catalog" type="application/json" set:html={freeCatalogJson}></script>
   </div>
 </main>
 
