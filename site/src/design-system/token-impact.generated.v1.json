@@ -7,11 +7,11 @@
   "source_root": "site/src",
   "source_inventory_sha256": "5c390a2016db5fcf73453040f18ba015f42bf55c507cd78318fcc5ce9a241f75",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "f7c633f9e644603b160a454003cbd159d086b2660d581a547ebc308902af0026",
+  "astro_family_graph_sha256": "0832aaa45b7c05b704e62c2b71d6c6a6d5abcd939c3055d0ff1b3f2345f5240d",
   "summary": {
-    "token_count": 2535,
-    "definition_count": 2847,
-    "consumer_count": 3582,
+    "token_count": 2534,
+    "definition_count": 2844,
+    "consumer_count": 3583,
     "alias_edge_count": 895,
     "family_count": 109
   },
@@ -58667,7 +58667,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 349,
+          "line": 405,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"1\"]",
           "kind": "css",
           "value": "1",
@@ -58676,7 +58676,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 350,
+          "line": 406,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"2\"]",
           "kind": "css",
           "value": "2",
@@ -58685,7 +58685,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 351,
+          "line": 407,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"3\"]",
           "kind": "css",
           "value": "3",
@@ -58694,7 +58694,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 352,
+          "line": 408,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"4\"]",
           "kind": "css",
           "value": "4",
@@ -58703,7 +58703,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 353,
+          "line": 409,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"5\"]",
           "kind": "css",
           "value": "5",
@@ -58712,7 +58712,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 354,
+          "line": 410,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"6\"]",
           "kind": "css",
           "value": "6",
@@ -58721,7 +58721,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 422,
+          "line": 463,
           "scope": "@media (max-width: 1023px) > .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size]",
           "kind": "css",
           "value": "1",
@@ -58730,7 +58730,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 433,
+          "line": 474,
           "scope": "@media (max-width: 960px) > .adaptive-event-card-grid--responsive-progressive:is( [data-adaptive-grid-row-size=\"3\"], [data-adaptive-grid-row-size=\"4\"], [data-adaptive-grid-row-size=\"5\"], [data-adaptive-grid-row-size=\"6\"] )",
           "kind": "css",
           "value": "2",
@@ -58739,7 +58739,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 439,
+          "line": 480,
           "scope": "@media (max-width: 620px) > .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size]",
           "kind": "css",
           "value": "1",
@@ -58753,7 +58753,7 @@
         {
           "token": "--adaptive-event-card-columns",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 335,
+          "line": 391,
           "has_fallback": true
         }
       ],
@@ -58765,7 +58765,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 330,
+          "line": 386,
           "scope": "</script> <style> .cards-grid.adaptive-event-card-grid",
           "kind": "css",
           "value": "clamp(.85rem, 1.6vw, 1.25rem)",
@@ -58779,7 +58779,33 @@
         {
           "token": "--adaptive-event-card-gap",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 336,
+          "line": 392,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-02ffec46e9e0016c",
+      "astro_family_set": "families-d5ad89d7b87bde06",
+      "production_route_set": "routes-d690b48482e738de"
+    },
+    "--adaptive-flow-row-media-ratio": {
+      "definitions": [
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 347,
+          "scope": "<runtime-style-property>",
+          "kind": "runtime",
+          "value": "<runtime>",
+          "aliases": [],
+          "token": "--adaptive-flow-row-media-ratio"
+        }
+      ],
+      "aliases_to": [],
+      "aliases_from": [],
+      "direct_consumers": [
+        {
+          "token": "--adaptive-flow-row-media-ratio",
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 419,
           "has_fallback": false
         }
       ],
@@ -61694,34 +61720,6 @@
       "component_set": "components-3d9ef90164e94aee",
       "astro_family_set": "families-7b21d2f6a80b0791",
       "production_route_set": "routes-d2a23eda312acc84"
-    },
-    "--flow": {
-      "definitions": [
-        {
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 364,
-          "scope": "@media (min-width: 621px)",
-          "kind": "css",
-          "value": "not([data-adaptive-grid-row-size=\"1\"]):not(.adaptive-event-card-grid--responsive-stack)",
-          "aliases": [],
-          "token": "--flow"
-        },
-        {
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 368,
-          "scope": "@media (min-width: 621px)",
-          "kind": "css",
-          "value": "not([data-adaptive-grid-row-size=\"1\"]):not(.adaptive-event-card-grid--responsive-stack)",
-          "aliases": [],
-          "token": "--flow"
-        }
-      ],
-      "aliases_to": [],
-      "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-02ffec46e9e0016c",
-      "astro_family_set": "families-d5ad89d7b87bde06",
-      "production_route_set": "routes-d690b48482e738de"
     },
     "--fragment-delay": {
       "definitions": [
@@ -171712,13 +171710,13 @@
         {
           "token": "--lab-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 399,
+          "line": 440,
           "has_fallback": false
         },
         {
           "token": "--lab-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 403,
+          "line": 444,
           "has_fallback": false
         }
       ],
@@ -173582,7 +173580,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 397,
+          "line": 438,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-link) {",
@@ -173591,7 +173589,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 401,
+          "line": 442,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-shell) {",
@@ -173600,7 +173598,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 406,
+          "line": 447,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media) {",
@@ -173609,7 +173607,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 411,
+          "line": 452,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media-shell) {",
@@ -173618,7 +173616,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 414,
+          "line": 455,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media) { background: transparent !important",
@@ -173627,7 +173625,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 415,
+          "line": 456,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-card-authoritative-fit=\"contain\"]) { background: #15110f",
@@ -173636,7 +173634,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 416,
+          "line": 457,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__body) { min-height: 0",
@@ -173645,7 +173643,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 417,
+          "line": 458,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__utility-row) { min-height: 58px",
@@ -173654,7 +173652,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 418,
+          "line": 459,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px",
@@ -176061,40 +176059,12 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 427,
+          "line": 468,
           "scope": "@media (max-width: 960px)",
           "kind": "css",
           "value": "is(",
           "aliases": [],
           "token": "--responsive-progressive"
-        }
-      ],
-      "aliases_to": [],
-      "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-02ffec46e9e0016c",
-      "astro_family_set": "families-d5ad89d7b87bde06",
-      "production_route_set": "routes-d690b48482e738de"
-    },
-    "--responsive-stack": {
-      "definitions": [
-        {
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 375,
-          "scope": "@media (min-width: 1024px)",
-          "kind": "css",
-          "value": "not([data-adaptive-grid-row-size=\"1\"])",
-          "aliases": [],
-          "token": "--responsive-stack"
-        },
-        {
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 377,
-          "scope": "@media (min-width: 1024px)",
-          "kind": "css",
-          "value": "not([data-adaptive-grid-row-size=\"1\"])",
-          "aliases": [],
-          "token": "--responsive-stack"
         }
       ],
       "aliases_to": [],

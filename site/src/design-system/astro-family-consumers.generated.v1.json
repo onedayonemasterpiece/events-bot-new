@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "1fef8a2c6e952792f2bc60678f8eef693357ec24c8b00fe41df767f6357725fb",
+  "registry_sha256": "adfb4d1ed9e7c929e8de7fcdb5a29366cdc1dd94c0b33031080d07c7696fd16e",
   "source_root": "site/src",
   "import_inventory_sha256": "7b30c4623b51b41a65982106f5901ec954670f4a1224a55c89c4b02a6789ea61",
   "product_scope": {
@@ -389,13 +389,13 @@
     "family_count": 109,
     "source_file_count": 322,
     "import_edge_count": 820,
-    "direct_consumer_edges": 274,
-    "protocol_consumer_edges": 32,
+    "direct_consumer_edges": 275,
+    "protocol_consumer_edges": 33,
     "runtime_factory_edges": 1,
     "runtime_consumer_edges": 4,
     "production_route_edges": 547,
     "unique_direct_consumers": 119,
-    "unique_protocol_consumers": 32,
+    "unique_protocol_consumers": 33,
     "unique_runtime_factories": 1,
     "unique_runtime_consumers": 4,
     "unique_production_routes": 27
@@ -673,6 +673,7 @@
         "site/src/components/listings/ListingEventCard.astro"
       ],
       "protocol_consumers": [
+        "site/src/components/AdaptiveEventCardGrid.astro",
         "site/src/components/DesktopEventPage.astro",
         "site/src/components/EventCard.astro",
         "site/src/components/EventHero.astro",
@@ -686,6 +687,7 @@
         "site/src/layouts/EventLayout.astro"
       ],
       "direct_consumers": [
+        "site/src/components/AdaptiveEventCardGrid.astro",
         "site/src/components/DesktopEventPage.astro",
         "site/src/components/EventCard.astro",
         "site/src/components/EventHero.astro",

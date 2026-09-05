@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Framing uses natural ratios for feasible document rows and reports exact incompatible sets without dropping events or treating protective letterboxing as accepted output.
 - Preserved full desktop/mobile brand through scroll, restored Today navigation, removed the rejected mobile All collections entry, scoped prelaunch scroll locking, and kept both desktop/mobile bottom islands with footer-owned clearance.
 - Removed Home’s duplicate page-local top spacer before Hero Talk; shell retains ownership of brand/header clearance.
 - Owner follow-up: shared lighter card typography (including listing titles), read-only actual shell occupied rectangles, and larger in-flow Free mobile page identity; framing acceptance now checks painted bounds and text/ID safety together.

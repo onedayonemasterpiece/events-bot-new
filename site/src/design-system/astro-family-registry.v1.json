@@ -298,7 +298,17 @@
           ]
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "framing_status": [
+          "satisfied",
+          "unsatisfied"
+        ],
+        "framing_contract": "joint_painted_bounds_protected_text_admission_row_geometry_stable_order",
+        "framing_owner": "site/src/lib/relatedCardLayout.mjs",
+        "flow_order": "stable_visible_prefix",
+        "infeasible_corpus": "explicit_minimal_document_ratio_conflict_not_accepted_letterboxing"
+      }
     },
     {
       "id": "DateListingSurface",

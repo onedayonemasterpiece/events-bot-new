@@ -1207,3 +1207,14 @@ link. Source changes/test packets are not deployed runtime or independent accept
 Home no longer adds a second page-local top gap before Hero Talk; existing shell/brand clearance remains the shell owner. This is not a new Hero or palette.
 
 Shell follow-up fixes scope prelaunch document styles to the actual prelaunch root, preserve the full brand while page context is active, restore desktop Today and remove only the rejected mobile All collections link. The shared bottom island remains on desktop and mobile; its terminal clearance is inside SiteFooter, not blank body padding. Browser regression must use real wheel/menu/Back input, not scrollTo alone.
+
+Framing follow-up removes the unsupported tall-document crop interval from row
+selection. Feasible flow rows use the documents' natural ratio, static and runtime
+rows retain all admitted IDs. `data-adaptive-grid-framing-status` explicitly
+reports unsatisfied constraints rather than declaring remaining fields accepted.
+The exact2fe Free row7915/7916/7920 (all1810×2560) has a feasible uncropped frame;
+stable row8080/8564/8308 conflicts between document ratios0.70703125 and1.0.
+The8673 related set has7 documents in5 distinct ratios across4 rows; no full
+uncropped equal-width/equal-height partition exists under current restrictions.
+These bounded unresolved cases prevent blanket framing acceptance. Variable-width
+rows would be a product change and are not silently enabled.
