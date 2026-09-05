@@ -10,3 +10,11 @@ test('visual viewport clips keyboard/offscreen, duplicate updates are stable, in
  assert.equal(r.rects.length,1);assert.equal(r.rects[0].height,22);
  assert.deepEqual(shellOccupiedSpace({width:NaN,height:0},[]).rects,[]);
 });
+
+test('SoT identity ignores CSS selectors before actual root markup',async()=>{
+ const {identityBlock}=await import('../scripts/check-astro-family-sot.mjs');
+ const source='<style>body[data-ds-family="PrelaunchLayout"]{overflow:hidden}</style><body data-ds-family="PrelaunchLayout" data-ds-version="1">';
+ assert.match(identityBlock(source,'PrelaunchLayout'),/^<body/);
+ assert.ok(identityBlock(source,'PrelaunchLayout').includes('data-ds-version="1"'));
+ assert.equal(identityBlock('<style>[data-ds-family="Fake"]{}</style>','Fake'),null);
+});

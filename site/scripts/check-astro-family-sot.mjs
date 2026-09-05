@@ -76,12 +76,16 @@ export function findOpeningTagEnd(source, start) {
   return -1;
 }
 
-function identityBlock(source, id) {
-  const match = new RegExp(`data-ds-family\\s*=\\s*["']${id}["']`, 'u').exec(source);
-  if (!match) return null;
-  const start = source.lastIndexOf('<', match.index);
-  const end = start === -1 ? -1 : findOpeningTagEnd(source, start);
-  return start === -1 || end === -1 ? null : source.slice(start, end + 1);
+export function identityBlock(source, id) {
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  for (const match of source.matchAll(new RegExp(`data-ds-family\\s*=\\s*["']${escaped}["']`, 'gu'))) {
+    const start = source.lastIndexOf('<', match.index);
+    const end = start === -1 ? -1 : findOpeningTagEnd(source, start);
+    // A CSS selector or script string after the opening <style>/<script> tag
+    // is not component identity. Continue to the actual opening element.
+    if (start !== -1 && end >= match.index) return source.slice(start, end + 1);
+  }
+  return null;
 }
 
 function readIdentityAttribute(block, attribute) {

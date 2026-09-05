@@ -1220,3 +1220,5 @@ These bounded unresolved cases prevent blanket framing acceptance. Variable-widt
 rows would be a product change and are not silently enabled.
 
 The existing typography-authority checker now validates owner-correction status and the explicitly scoped mobile H1 alias; it no longer mistakes that responsive binding for a second owner. Duplicate owner checks remain active.
+
+Family SoT validation now distinguishes a CSS attribute selector from actual opening-tag identity; scoped Prelaunch CSS must not be mistaken for missing root metadata. Negative CSS-only identity remains rejected.
