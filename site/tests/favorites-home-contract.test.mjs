@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import vm from 'node:vm';
 import {
   joinFutureSavedEvents,
   mergeSavedEventRefs,
@@ -154,4 +155,44 @@ test('favorites and home source contracts use canonical adaptive/card runtimes a
   assert.match(migration, /security invoker/u);
   assert.match(migration, /to authenticated/u);
   assert.doesNotMatch(migration, /auth\.role\(\)/u);
+});
+
+
+test('Home supplies the complete eligible pool and keeps rendered order stable on feedback', async () => {
+  const [home, feed] = await Promise.all([read('src/pages/index.astro'), read('src/components/HomeColdStartFeed.astro')]);
+  assert.doesNotMatch(home, /if\s*\(feed\.length\s*>=\s*30\)\s*break/u);
+  assert.match(home, /data-home-eligible-count=\{feed\.length\}/u);
+  assert.doesNotMatch(feed, /events\.slice\(0,\s*30\)/u);
+  assert.match(feed, /events=\{eligibleEvents\}/u);
+  assert.match(feed, /limit=\{30\}/u);
+  assert.doesNotMatch(feed, /grid\.(?:appendChild|prepend|replaceChildren|insertBefore)\(/u);
+  assert.match(feed, /item\.element\.hidden = !visible\.has/u, 'explicit hidden/not-interested feedback remains respected');
+  assert.match(feed, /Порядок уже показанных событий сохранён/u);
+});
+
+
+test('Home feedback runtime preserves painted order while honoring explicit hidden choices', async () => {
+  const source = await read('src/components/HomeColdStartFeed.astro');
+  const script = source.split('<script>')[1].split('</script>')[0].replace(/import[^;]+;/gu, '');
+  class Element { constructor(dataset = {}) { this.dataset = dataset; this.hidden = false; } }
+  const items = ['1', '2', '3'].map((id, i) => new Element({eventId:id, homeBaseRank:String(i), homeCategory:'music', homeTags:'[]'}));
+  const grid = new Element();
+  grid.querySelectorAll = () => items;
+  grid.appendChild = () => assert.fail('feedback moved an already painted card');
+  const status = {textContent:''};
+  const root = new Element();
+  root.querySelector = (selector) => selector === '[data-home-feed-grid]' ? grid : status;
+  let profile = null;
+  const handlers = {};
+  const window = {localStorage:{getItem:() => JSON.stringify(profile)}, addEventListener:(name, handler) => {handlers[name] = handler;}, setTimeout:(fn) => fn()};
+  const document = {querySelectorAll:() => [root], addEventListener:() => {}};
+  vm.runInNewContext(script, {window, document, HTMLElement:Element, Element, homeProfileSignalCount, rankHomeFeedItems});
+  assert.deepEqual(items.map(x => x.dataset.eventId), ['1','2','3']);
+  profile = {consent_ok:true, profile_version:'anon-profile-v1', feature_schema_version:'event-detail-related-v1', taxonomy_version:'event-taxonomy-v1', liked_event_ids:['3'], hidden_event_ids:['2']};
+  handlers.storage({key:'ke_personalization_profile'});
+  assert.deepEqual(items.map(x => x.dataset.eventId), ['1','2','3']);
+  assert.equal(items[1].hidden, true);
+  assert.equal(items[2].dataset.homeFeedRank, '0', 'score/rank metadata still updates without a DOM move');
+  assert.equal(root.dataset.homeFeedMode, 'profile_feedback');
+  assert.match(status.textContent, /Порядок уже показанных событий сохранён/u);
 });

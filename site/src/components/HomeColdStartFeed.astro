@@ -6,9 +6,10 @@ import { eventCategory, eventTags } from '../lib/events';
 
 interface Props { events: PreviewEvent[]; }
 const { events } = Astro.props;
-const visibleEvents = events.slice(0, 30);
+// The shared grid plans compatible rows from the full pool before limit30.
+const eligibleEvents = events;
 const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
-  visibleEvents.map((event, index) => [
+  eligibleEvents.map((event, index) => [
     `${event.id}:${index}`,
     {
       className:'home-feed__item',
@@ -28,8 +29,8 @@ const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
   class="home-feed"
   data-ds-family="HomeColdStartFeed"
   data-ds-version="1"
-  data-ds-variant="local-profile-rerank"
-  data-ds-state={`static-fallback ${visibleEvents.length ? 'populated' : 'empty'}`}
+  data-ds-variant="stable-profile-feedback"
+  data-ds-state={`static-fallback ${eligibleEvents.length ? 'populated' : 'empty'}`}
   data-home-cold-start-feed
   data-home-feed-mode="static_fallback"
   aria-labelledby="home-feed-title"
@@ -42,7 +43,7 @@ const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
     <p data-home-feed-status role="status" aria-live="polite">Разнообразная общая подборка — вход и внешние сервисы не нужны.</p>
   </header>
   <AdaptiveEventCardGrid
-    events={visibleEvents}
+    events={eligibleEvents}
     mode="flow"
     limit={30}
     rowSize={3}
@@ -99,15 +100,15 @@ const itemRoots: Record<string, AdaptiveEventCardItemRoot> = Object.fromEntries(
       for (const item of ranked) {
         item.element.dataset.homeFeedRank = String(item.rank);
         item.element.dataset.homeFeedScore = Number(item.score || 0).toFixed(3);
-        grid.appendChild(item.element);
+        // Do not shuffle the already-painted sequence after profile feedback.
       }
       const signals = homeProfileSignalCount(profile);
       if (status) {
         status.textContent = signals > 0
-          ? `Порядок уточнён по локальным оценкам: ${signals}. В ленте не больше 30 событий.`
+          ? `Локальных оценок: ${signals}. Порядок уже показанных событий сохранён.`
           : 'Разнообразная общая подборка — вход и внешние сервисы не нужны.';
       }
-      const mode = signals > 0 ? 'local_rerank' : 'static_fallback';
+      const mode = signals > 0 ? 'profile_feedback' : 'static_fallback';
       root.dataset.homeFeedMode = mode;
       root.dataset.dsState = `${mode.replace('_', '-')} ${ranked.length ? 'populated' : 'empty'}`;
     };

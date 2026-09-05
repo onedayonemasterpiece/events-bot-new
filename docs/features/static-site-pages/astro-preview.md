@@ -1226,3 +1226,9 @@ intermediate snapshot before this full-pool correction, not final acceptance.
 The existing typography-authority checker now validates owner-correction status and the explicitly scoped mobile H1 alias; it no longer mistakes that responsive binding for a second owner. Duplicate owner checks remain active.
 
 Family SoT validation now distinguishes a CSS attribute selector from actual opening-tag identity; scoped Prelaunch CSS must not be mistaken for missing root metadata. Negative CSS-only identity remains rejected.
+
+Home feeds the shared planner the whole deduplicated eligible pool, retaining the
+30-card display limit. Local profile feedback updates scores and respects explicit
+hidden/not-interested choices without reshuffling already-painted cards. The
+status copy no longer claims a reordered feed. Source eligibility count and
+visible fallback count are separate; no personalized backend is introduced.

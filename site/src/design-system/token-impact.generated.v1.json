@@ -7,7 +7,7 @@
   "source_root": "site/src",
   "source_inventory_sha256": "5c390a2016db5fcf73453040f18ba015f42bf55c507cd78318fcc5ce9a241f75",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "0832aaa45b7c05b704e62c2b71d6c6a6d5abcd939c3055d0ff1b3f2345f5240d",
+  "astro_family_graph_sha256": "15670a98197393d4a1fead6afa0855717175d33c1b0b4a297c173588d7053c40",
   "summary": {
     "token_count": 2534,
     "definition_count": 2844,
@@ -67329,7 +67329,7 @@
         {
           "token": "--ke-color-border-brand-soft",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 130,
+          "line": 131,
           "has_fallback": false
         },
         {
@@ -68971,7 +68971,7 @@
         {
           "token": "--ke-color-home-feed-surface",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 132,
+          "line": 133,
           "has_fallback": false
         },
         {
@@ -72477,7 +72477,7 @@
         {
           "token": "--ke-color-border-brand-soft",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 130,
+          "line": 131,
           "has_fallback": false
         },
         {
@@ -76076,7 +76076,7 @@
         {
           "token": "--ke-color-border-brand-soft",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 130,
+          "line": 131,
           "has_fallback": false
         },
         {
@@ -92545,7 +92545,7 @@
         {
           "token": "--ke-color-home-feed-surface",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 132,
+          "line": 133,
           "has_fallback": false
         },
         {
@@ -92871,7 +92871,7 @@
         {
           "token": "--ke-color-home-feed-surface",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 132,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -99353,7 +99353,7 @@
         {
           "token": "--muted",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 149,
+          "line": 150,
           "has_fallback": false
         },
         {
@@ -109482,7 +109482,7 @@
         {
           "token": "--ke-color-home-feed-surface",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 132,
+          "line": 133,
           "has_fallback": false
         },
         {
@@ -109597,7 +109597,7 @@
         {
           "token": "--ke-color-home-feed-surface",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 132,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -132659,7 +132659,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -133550,7 +133550,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -134588,7 +134588,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -158654,7 +158654,7 @@
         {
           "token": "--ke-shape-radius-home-feed",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 131,
+          "line": 132,
           "has_fallback": false
         }
       ],
@@ -163111,7 +163111,7 @@
         {
           "token": "--ke-space-home-feed-padding",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 129,
+          "line": 130,
           "has_fallback": false
         }
       ],
@@ -169037,7 +169037,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -169111,7 +169111,7 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -169201,7 +169201,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -169307,7 +169307,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -169433,7 +169433,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -173270,7 +173270,7 @@
         {
           "token": "--muted",
           "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 149,
+          "line": 150,
           "has_fallback": false
         },
         {

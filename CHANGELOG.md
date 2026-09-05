@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Home passes the complete eligible pool to shared row planning before its 30-card limit and no longer reshuffles visible cards on local feedback.
 - Family SoT identity validation ignores CSS selector mentions and validates the actual component root.
 - Typography authority checker now recognizes the active owner-correction status and the single existing mobile H1 alias without allowing duplicate token owners.
 - Framing uses natural ratios for feasible document rows and reports exact incompatible sets without dropping events or treating protective letterboxing as accepted output.

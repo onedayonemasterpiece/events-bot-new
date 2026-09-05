@@ -33,7 +33,6 @@ for (const event of [...popular, ...fallback]) {
   if (familyIds.some((id) => offeredFamilyIds.has(id))) continue;
   feed.push(event);
   familyIds.forEach((id) => offeredFamilyIds.add(id));
-  if (feed.length >= 30) break;
 }
 const heroScenes = buildHomeHeroTalkDeck(getEvents(), currentDate, `home:${currentDate}`);
 const title = SITE_NAME;
@@ -61,7 +60,8 @@ const description = 'Афиша Калининграда без шума: пол
       data-ds-variant="cold-start"
       data-ds-state={feed.length ? 'populated' : 'empty'}
       data-home-page
-      data-home-static-fallback-count={feed.length}
+      data-home-static-fallback-count={Math.min(feed.length, 30)}
+      data-home-eligible-count={feed.length}
     >
       <div class="page-shell home-page__shell">
         <HomeHeroTalk scenes={heroScenes} />

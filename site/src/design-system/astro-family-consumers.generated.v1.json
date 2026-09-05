@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "adfb4d1ed9e7c929e8de7fcdb5a29366cdc1dd94c0b33031080d07c7696fd16e",
+  "registry_sha256": "99fd734438259626323464bb709ca06d02deedd5274206a848ba934e0170e32a",
   "source_root": "site/src",
   "import_inventory_sha256": "7b30c4623b51b41a65982106f5901ec954670f4a1224a55c89c4b02a6789ea61",
   "product_scope": {

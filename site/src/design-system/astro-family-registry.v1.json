@@ -620,11 +620,11 @@
         "site/src/components/HomeColdStartFeed.astro"
       ],
       "variants": [
-        "local-profile-rerank"
+        "stable-profile-feedback"
       ],
       "states": [
         "static-fallback",
-        "local-rerank",
+        "profile-feedback",
         "populated",
         "empty"
       ],
@@ -638,10 +638,10 @@
         {
           "kind": "dynamic_identity",
           "attribute": "state",
-          "source_regex": "data-ds-state=\\{`static-fallback \\$\\{visibleEvents\\.length \\? 'populated' : 'empty'\\}`\\}",
+          "source_regex": "data-ds-state=\\{`static-fallback \\$\\{eligibleEvents\\.length \\? 'populated' : 'empty'\\}`\\}",
           "values": [
             "static-fallback",
-            "local-rerank",
+            "profile-feedback",
             "populated",
             "empty"
           ]
