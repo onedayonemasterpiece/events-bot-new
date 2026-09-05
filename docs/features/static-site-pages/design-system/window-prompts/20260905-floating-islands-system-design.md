@@ -1,131 +1,156 @@
 # Новое окно ChatGPT: сквозная система Floating Island для KenigEvents
 
-Дата постановки: 2026-09-05. Это самостоятельная продуктовая и системно-дизайнерская работа в ChatGPT, не сырой тикет для автономного Codex и не новый оркестратор.
+Дата: 2026-09-05, расширенная постановка после восстановления «Плана релиза». Самостоятельная продуктовая, архитектурная и системно-дизайнерская работа в ChatGPT, не сырой тикет Codex и не новый оркестратор.
 
 ## Результат и способ работы
 
-Спроектируй полноценную сквозную систему Floating Island для всего сайта KenigEvents / «Полюбить Калининград Анонсы». Собери существующие концепции, проверь фактические потребители и преврати их в согласованную документальную спецификацию: роли, композиции, состояния, взаимодействия, responsive-поведение, ограничения, контракты интеграции, план миграции и автотесты. Не заканчивай инвентаризацией референсов или списком будущих задач.
+Спроектируй полноценную систему Floating Island **для всего публичного сайта**, восстановив прежние концепции и их связи с надёжным подключением, статистикой, продуктовыми решениями и персонализацией. Нужна сохраняемая спецификация: применимость по архетипам, роли, композиции, состояния, геометрия, поведение, интеграция, миграция и автотесты. Не заканчивай аудитом референсов или списком того, что кому-то предстоит придумать.
 
-Работай сам в ChatGPT. Не передавай продуктовое проектирование Codex/DevCoveer и не запускай агентов. Небольшие документальные/машиночитаемые изменения и их проверки выполняй лично. Кодовую интеграцию выдели в последующий bounded-пакет, когда контракты перестанут быть неоднозначными. Это не разрешение на deploy, live provider runs, массовую замену шапок или запись в текущие canonical Penpot components.
+Работай лично в ChatGPT. Не делегируй исследование/проектирование Codex/DevCoveer. Небольшие документальные и детерминированные source/schema/test изменения допустимы; реальную runtime-интеграцию выдели в последующий законченный пакет с критериями проверки. Это не разрешение на deploy, реальные provider runs, изменения production/чужих foundations/STATUS или перезапись canonical Penpot components.
 
-GitHub нужен для источников и сохранения результата. Браузер и Penpot нужны для проверки реальных состояний и page-context, если доступны. Сначала discovery и реальный read; отсутствие этих инструментов ограничивает визуальное evidence, но не отменяет документальное проектирование. Не подменяй Penpot Figma и скриншот чтением кода. Запрет доступа не обходить. Не заявляй о недоступности по памяти предыдущего окна. При жёсткой блокировке записи сохрани полный результат файлами и точно назови несохранённое, без выдуманного remote commit.
+GitHub — источники и сохранение. Браузер и Penpot — проверка реальных страниц и состояний, если доступны. Сначала discovery и реальный read; предыдущая ошибка доступа не доказывает нынешней недоступности. Не подменяй Penpot Figma, screenshot чтением исходника и tool description успешным действием. Ограничения доступа не обходить. Без браузера/Penpot документальная работа продолжается, но визуальное evidence честно остаётся непроверенным. При невозможной записи выдай полный пакет файлами и точную границу несохранённого, не выдуманный commit.
 
-## Продуктовый контекст владельца
+## 1. Продуктовая цель и принятые направления
 
-Floating Island — система, а не одна дополнительная кнопка и не только голосовой поиск. Предусмотрены как минимум:
+Floating Island — управляемая система, а не одна кнопка поверх страницы и не частная функция голосового поиска. Минимальные роли: часть шапки; подходящие одиночные полки/контекстные панели; нижняя навигация; голосовой/текстовый composer. Заголовки последовательных ответов поиска — потребители той же контекстной роли.
 
-- часть шапки сайта;
-- некоторые одиночные полки/контекстные панели;
-- нижний навигационный блок;
-- голосовой/текстовый composer;
-- контекстные заголовки последовательных ответов поиска как потребители той же системы.
+Несколько островов могут сосуществовать. Не нужен запрет «четвёртого острова» или universal pill для всех смыслов. Не каждый прямоугольник и не каждый архетип обязательно превращается в остров. Surface, composition, control semantics и layout/runtime behavior проектируются отдельно; composer, navigation dock и persistent-state dock не сливаются по сходству радиуса.
 
-Несколько островов одновременно допустимы. Нужно управлять геометрией, состояниями и приоритетами, а не запрещать четвёртый остров. Не превращать всё в universal floating pill; не делать отдельные локальные z-index/offset-решения на каждой странице. Не обязательно каждую страницу или каждый прямоугольник превращать в остров.
+Цель — сохранить понятный контекст и управление, не перекрыть афишу, не потерять действие/ввод и не заставить контент прыгать. Карточки/сетка/медиа/CTA остаются общими. «Бесплатно» — обычная фильтрованная выборка, а не ошибочный канон с двумя карточками в desktop-строке и произвольным отдельным блоком «бесплатные выставки». Технический счётчик не заменяет осмысленный заголовок.
 
-Итог должен объяснять, что человек может сделать, какой контекст видит и что не теряет при прокрутке/открытии клавиатуры. Ради нового chrome нельзя ухудшить сам список событий, карточки, CTA, навигацию и чтение. Проблемный вариант страницы «Бесплатно» с двумя карточками вместо трёх и случайным разбиением на «бесплатные выставки» нельзя канонизировать как желаемый дизайн. Это обычная фильтрованная выборка с общим grid/card-поведением; счётчик не подменяет осмысленный заголовок.
+Владелец хочет генерировать визуальные варианты и делать подробное, в том числе голосовое, ревью. Подготовь реальные page-context/anatomy/state материалы для такого review, а не абстрактные телефоны. Не закрепляй случайные новые шрифты/цвета/радиусы или красивый чужой рендер как уже принятые tokens.
 
-Владелец планирует собственные генерации визуальных вариантов и подробные, в том числе голосовые, ревью. Здесь сначала нужны правильные anatomy, сценарии, поведение и site-specific материалы для review. Не закрепляй случайные радиусы, цвета, шрифт или неутверждённый красивый рендер как canonical tokens.
+## 2. Сначала восстанови общий план, затем проектируй оболочку
 
-## Что уже найдено: начни с этих источников, затем расширяй поиск адресно
+Это обязательная часть анализа, не необязательное приложение. В конце июля/начале августа уже были увязаны выдача, доставка действий, статистика, продуктовые решения и профиль. Голос/острова не создают независимый новый продукт.
+
+В `onedayonemasterpiece/events-bot-new` прочитай:
+
+- `docs/features/static-site-pages/release-plan.md` — «План релиза», его scope, data progression, current/historical evidence и другие связанные gates;
+- `docs/features/static-personal-announcements/README.md`, `global-product-decisions.md` и **`release-integration.md`** — верхнеуровневый F1–F17 scope и восстановленные стыки с нынешней работой;
+- `docs/features/static-site-pages/presentation-release-checklist.md` — разграничение visual review, functional acceptance и регулярного readout;
+- `docs/features/unsigned-personalization/production-integration.md` — общий BackendClient/OperationCatalog, маршруты, acknowledgement/replay и budget;
+- `docs/operations/yandex-dependency-resilience.md` — независимые capabilities и аварийные состояния;
+- `docs/features/static-site-pages/analytics/README.md` — определения/consent/exposure/metrics/delivery, особенно §24 reverse bridge, §29–33 tests/DoD/фактическая граница;
+- `docs/features/static-site-pages/personalizaion/requirements.md` и `personalization-to-be.md` — ручные требования, activation, surface policies, hides, visible-prefix freeze, local projection и materializer;
+- `docs/architecture/personalization-data-ownership.md` — владелец данных и permission/localization boundaries;
+- `docs/product-model/README.md` и релевантные существующие analysis/MeasurementQuestion записи — путь от наблюдения к решению, не новая бюрократия.
+
+Старый `NO-GO`, missing RPC или исторический PASS не выдавай за свежий production verdict без проверки. Сохраняй совместимые прежние требования, обновляй только конкретно устаревшую часть. Ручной requirements.md и первичные исследования не переписывать автоматически. Legacy two-root ALB и host fallback из старых этапов не оживлять как обязательный текущий build path: #621 использует единый Kaggle builder и существующий bucket. Инварианты свежести, целостности, privacy и проверяемого rollback при этом не отменяются.
+
+### Сети действительно работают в двух направлениях
+
+```text
+Product/Auth/Search: browser → Supabase
+                 OR browser → Yandex relay → тот же Supabase
+
+Optional analytics: browser → Yandex ingest → YDB
+                 OR browser → Supabase Edge blind bridge → тот же ingest/YDB
+```
+
+Это не двусторонняя репликация БД и не универсальная fallback-цепочка. Product route health отделён от analytics. Shared upstream outage не лечится вторым proxy, 200 gateway не доказывает downstream commit. Selected-once не повторяется после ambiguous dispatch; safe-read и proven idempotent replay имеют свои правила. Не рисуй один общий «интернет/Яндекс работает» indicator.
+
+В UI предусмотри working/queued/local-only/committed/partially-committed/unknown/failed состояния именно для затронутого действия; sidecar failure не отменяет primary success. Audio media и маленькие JSON operations имеют разные route caps. Availability manifest — публичная подсказка, не personal quota и не гарантия соединения конкретного браузера. Общая система островов не становится ещё одним transport client.
+
+## 3. Найденные прежние материалы Floating Island
 
 ### LoveKGD Design System
 
-Репозиторий `onedayonemasterpiece/lovekgd-design-system`.
+Репозиторий `onedayonemasterpiece/lovekgd-design-system`:
 
-1. PR #47, ветка `docs/floating-control-islands-reference`. На последнем проверенном чтении HEAD `774bcf0659915dffa16431847d408b2a6a6f2302`; свежий remote HEAD и комментарии важнее этого указателя.
-2. `docs/research/floating-control-islands-2026-08/README.md`.
-3. В той же папке: `planned-design-pattern.md`, `planned-pattern.json`, `source-manifest.json`, `screen-observations.json`, `assets/reference-board.svg`, `assets/anatomy.svg`. Найди и отличи ранние non-source-faithful варианты от source-informed материалов.
-4. Stable identity уже существует: `pattern.detached-chrome-control-islands`. Не создавай новый одноимённый паттерн под другим ID.
-5. PR #39 и `docs/design-system-planned-patterns-checklist.md` в фактической ветке этого PR. Поиск по main не показывает все документы открытых веток.
-6. Активная нормализация: ветка `integration/launch-normalized-sot-penpot-20260902`, документы `docs/launch-normalization/README.md`, `STATUS.md`, `PARALLEL-WINDOWS.md`, действующий `contracts/launch-normalized-ui.v1.yaml`.
-7. Действующий A=S=P-контракт: `docs/product-governance/astro-sot-penpot-conformance.md`; статус и актуальную ревизию прочитай, не принимай старую ссылку за нынешний production verdict.
+1. PR #47, ветка `docs/floating-control-islands-reference`; проверенный ранее HEAD `774bcf0659915dffa16431847d408b2a6a6f2302`. Читать current remote HEAD/comments, не фиксироваться на исторической отметке.
+2. `docs/research/floating-control-islands-2026-08/README.md`, `planned-design-pattern.md`, `planned-pattern.json`, `source-manifest.json`, `screen-observations.json`, `assets/reference-board.svg`, `assets/anatomy.svg`. Отдели ранние non-source-faithful эскизы от source-informed пакета.
+3. Существующая identity: **`pattern.detached-chrome-control-islands`**. Не создавать одноимённый второй паттерн.
+4. PR #39 и `docs/design-system-planned-patterns-checklist.md` в фактической ветке PR; default-branch search не видит все незамерженные материалы.
+5. Активная нормализация: `integration/launch-normalized-sot-penpot-20260902`, `docs/launch-normalization/README.md`, `STATUS.md`, `PARALLEL-WINDOWS.md`, `contracts/launch-normalized-ui.v1.yaml`. Разреши актуальную версию перед изменениями.
+6. `docs/product-governance/astro-sot-penpot-conformance.md` — действующее правило A=S=P, не пересказ по памяти.
 
-Пакет #47 вырос из шести референсных экранов: Kimi, Telegram list/conversation и media/library-композиции. Они показывают раздельные leading/context/utility islands, composer, navigation dock и persistent-state dock. Это источники принципов, не готовые макеты нашего сайта. Сырые скриншоты намеренно не лежат в репозитории из-за личного/стороннего содержимого: не публикуй их без необходимости и разрешения. Неизвестные оригиналы не реконструируй как якобы исходные.
+Шесть прежних референсов показывали разные leading/context/utility islands и bottom architectures. Это источник принципов, не наш финальный дизайн. Сырые скриншоты с личным/сторонним содержимым намеренно не публиковались в Git. Не реконструируй неизвестный оригинал и не переноси private reference в public artifact без основания.
 
-### Продукт, Astro и текущая работа
+### Astro и текущая работа
 
-Репозиторий `onedayonemasterpiece/events-bot-new`.
+В `events-bot-new`:
 
-1. `AGENTS.md`, `docs/README.md`, `docs/routes.yml` и применимые skills. Используй их для маршрутизации, не копируй весь governance в новый документ.
-2. Issue #621: текущее тело и релевантные новые комментарии/owner corrections; active branch/candidate разрешай из actual STATUS. Исторические ветки `integration/ui-normalization-launch-20260902` и `agent/static-site-single-kaggle-contract` — точки поиска, не указание изменить обе.
-3. В #621 есть конкретный handoff островов: comment `5550659316`. Он связывает новую систему с общими family owners, но не меняет текущий normalization gate.
-4. `docs/features/static-site-pages/mobile-shell.md`, фактические EventLayout/header/drawer/BottomNav/Toast, ListingDiscoveryRail, общий keyboard/navigation controller, AdaptiveEventCardGrid/MediaFrame и актуальная карта архетипов. Найди реальные пути, версии и consumers; не объявляй универсальный controller существующим только из названия.
-5. PR #587, ветка `docs/agent-assisted-event-discovery-20260826`: `docs/features/static-site-pages/smart-vector-search/agent-assisted-event-discovery.md`, особенно §0 и §6–9. Проверенный correction checkpoint `bce0a4ae06d75651aff09ef3657d8272113b2267`; прочитай current HEAD.
-6. Дочерняя техническая спецификация голоса `docs/features/static-site-pages/smart-vector-search/voice-search-solution-v1.md`, когда она присутствует в текущей ветке. Её поля интеграции с оболочкой — контракт потребителя, не право голосового поиска владеть всем сайтом.
-7. Стратегия `docs/operations/static-site-autotest-strategy.md`, реестр `docs/testing/static-site-autotest-scenarios.v1.yml`, существующий browser harness и CI.
+- `AGENTS.md`, `docs/README.md`, `docs/routes.yml`, применимые skills;
+- #621: текущее тело, релевантные owner corrections/comments, actual integration branch из текущего STATUS. Комментарий `5550659316` содержит прежний bounded island handoff; последующие комментарии могут уточнять его;
+- `docs/features/static-site-pages/mobile-shell.md`; реальные EventLayout/header/drawer/BottomNav/Toast, ListingDiscoveryRail, keyboard/navigation, AdaptiveEventCardGrid/MediaFrame, route-to-archetype map. Найди actual paths/versions/consumers, не угадывай по названиям;
+- PR #587, `docs/agent-assisted-event-discovery-20260826`: `docs/features/static-site-pages/smart-vector-search/agent-assisted-event-discovery.md` и `voice-search-solution-v1.md`. Читай current HEAD с последним release-integration расширением, не старую редакцию `62c54ce` как завершённое видение;
+- `docs/operations/static-site-autotest-strategy.md`, `docs/testing/static-site-autotest-scenarios.v1.yml`, existing browser harness/CI.
 
-### Голосовые и другие предыдущие решения
+### Исходные голосовые
 
-В `onedayonemasterpiece/idea-hub` прочитай полные расшифровки, не только модельные разделы «Решения»:
+В `onedayonemasterpiece/idea-hub`, папка `inbox/voice/2026/09/`, прочитай полные расшифровки, не только auto-summary:
 
-- `inbox/voice/2026/09/voice-20260905-002114-a0677098.md` — сквозное UI-review, исчезающий контекст, шапка/полки;
-- `voice-20260905-003237-8a342775.md` в той же папке — Search, сетка, карточки, клавиатура;
-- `voice-20260905-092949-7ab7703f.md` — голосовой поиск и Floating Island;
-- `voice-20260905-094341-67f72ad8.md` — thin runtime;
-- `voice-20260905-094737-dfa8cdc1.md` — доступность и экономный манифест.
+`voice-20260905-002114-a0677098.md`, `voice-20260905-003237-8a342775.md`, `voice-20260905-092949-7ab7703f.md`, `voice-20260905-094341-67f72ad8.md`, `voice-20260905-094737-dfa8cdc1.md`.
 
-Проверь более ранние материалы по `floating island`, `floating control`, `detached chrome`, шапке, одиночным полкам, voice composer и dock в обеих рабочих ветках и idea-hub. Составь короткую карту «источник → принятое правило / гипотеза / отклонено / устарело». Не расширяй работу на все проекты пользователя.
+Адресно расширь поиск на более ранние floating/detached chrome/header/shelf/dock/voice решения обеих репозиторных веток и idea-hub. Короткая карта: источник → принято / гипотеза / отклонено / устарело → целевой владелец. Не расширяй работу на все проекты пользователя.
 
-## Важная корректировка последовательности
+## 4. Корректировка старого sequencing gate
 
-В старом `planned-design-pattern.md` написано: «Проектирование pattern начинается только когда ...» закрыт общий AS-IS/parity gate. Нынешнее поручение владельца — начать комплексное проектирование сейчас.
+Старый planned-design-pattern откладывал само проектирование до общего AS-IS/parity PASS. Нынешнее поручение разрешает сейчас сбор решений, документальную архитектуру, mapping и изолированные review-предложения.
 
-Зафиксируй адресную поправку «было → стало»: сбор решений, документальная архитектура, mapping и изолированные review-предложения разрешены сейчас; внедрение, финальное принятие визуальных variants и A=S=P claims требуют доказанного baseline соответствующих целевых consumers. Нельзя останавливать всю умную работу до нормализации всего сайта, но нельзя и объявлять этот gate пройденным. Другие проверки не отменяются. Не переписывай shared STATUS или чужую runtime-ветку ради такой поправки.
+Зафиксируй «было → стало» адресно. Принятие визуальных variants, реализация и A=S=P claims требуют доказанного baseline соответствующих целевых consumers; весь сайт нельзя объявлять нормализованным заранее. Нельзя остановить документальную работу лишь из-за незавершённого общего gate. При этом не переписывай чужой STATUS и не снимай остальные guards.
 
-## Обязательная глубина проектирования
+## 5. Глубина проектирования
 
-### 1. Применимость по всему сайту
+### Применимость по всему публичному сайту
 
-Из фактической карты routes/archetypes составь consumer matrix. Покрой имеющиеся главную/HeroTalk, дату/выходные, обычные и фильтрованные подборки, одиночные и много-полочные страницы, поиск и ленту ответов, event detail/галерею/CTA, персональную поверхность и остальные найденные архетипы. Число архетипов не угадывай по старым «17».
+Из реальной карты составь consumer matrix: home/HeroTalk, дата/выходные, обычные/фильтрованные подборки, одиночные и много-полочные страницы, Search/answer feed, event detail/gallery/CTA, personal/favorites/hidden recovery и прочие найденные пользовательские архетипы. Число не угадывай по старым «17». Служебные, lab/admin/diagnostic страницы не включай в пользовательскую нормализацию; они могут быть только test/evidence surfaces.
 
-Для каждого: user job, affected regions, existing owner, применимо/неприменимо/пока неизвестно, desktop/mobile, scroll/keyboard/modal состояния, данные/fixtures, migration boundary. Различай одну полку на странице и страницу из нескольких полок. Не своди все страницы к `/podborki/besplatnye-sobytiya/`.
+На каждый consumer: Job/outcome, affected regions, current owner, применимо/неприменимо/unresolved, desktop/mobile, сценарии, fixtures, measured/accepted constraints и migration boundary. Одна полка на странице и несколько полок — разные композиции. «Бесплатно» не становится единственным приёмочным архетипом.
 
-### 2. Четыре слоя системы
+### Геометрия, роли и компоненты
 
-Отдельно спроектируй surface primitive, composition, control semantics и layout/runtime behavior. Различай страницу, floating-поверхность, sticky-заголовок и actual control; одни скругления не создают ни новый компонент, ни новую семантику.
+Раздели четыре слоя: material/radius/elevation; композиция; семантика кнопок/chips/ввода/nav; runtime anchoring/scroll/keyboard/occlusion. Reuse/new-version decision основано на actual family mapping, не округлости.
 
-Назови единых владельцев и границы использования существующих компонентов. Composer, navigation dock и persistent-state dock остаются различными композициями. Выясни, где event CTA и nav взаимно исключаются по действующему контракту, а где совместимы. Не добавляй несуществующий mini-player как обязательную функцию сайта: это пример другой архитектуры, не backlog сам по себе.
+Опиши top/bottom/side slots, measured occupied rectangles, safe-area, compact/expanded, слой/приоритет, минимально полезную площадь контента, скрытие/замену/возврат. Existing event CTA vs nav exclusivity сохраняется до explicit совместимого решения. Референс mini-player не создаёт обязательную новую функцию сайта.
 
-### 3. Геометрия и приоритеты
+Проверь portrait/landscape, desktop, маленькую effective-height, zoom/large text, drawer/modal/auth/consent, gallery, toast, keyboard/VisualViewport, SSR/hydration и вложенные scroll containers. Last-card actions и stop recording достижимы; отсутствуют невидимые full-screen hit planes, layout loops и controls, уезжающие под пальцем. Предпочтение CSS-first с небольшим shared controller, не generic оконному менеджеру.
 
-Опиши договор ролей, top/bottom/side anchoring, measured occlusion rects, slots, safe areas, компактность, stack/layer policy, overflow и минимально полезную площадь контента. Предложи стартовые значения только как проверяемые defaults. Нужны portrait/landscape, desktop, маленькая effective-height, zoom/large text, раскрытый drawer/modal/auth/consent, gallery, toast, keyboard/VisualViewport и SSR/hydration.
+### Состояния, профиль и движение контента
 
-Проверь последние карточки/CTA, отсутствие невидимого hit-plane, движение под пальцем, layout loops, вложенные scroll-контейнеры, доступность stop recording. Не превращай систему в drag-and-drop desktop window manager. CSS-first с минимальным наблюдением — предпочтение, а не запрет аргументированного другого решения.
+Явные переходы flow/sticky/fixed, expanded/compact, focus, route/Back, loading/degraded/error/unknown, activation/projection/local-only/committed. Надёжное подключение — обязанность существующего транспорта, но его правдивые состояния отображает эта система.
 
-### 4. Состояния и взаимодействия
+Календарь сохраняет хронологию, тематическая подборка eligibility и слабый ниже-viewport rerank, «Для меня» сильную персонализацию, Search явный запрос выше профиля. Общий exact hide/undo работает даже в прошлых voice sections; нельзя восстановить скрытое из immutable history как обычную карточку. Карточка с текущим взаимодействием и видимый префикс не прыгают при обновлении projection. Actual unobscured viewport важен и для rerank boundary, и для exposure. Informational activation notice не заменяет постоянную ссылку на Правила и не превращается в новый обязательный checkbox.
 
-Нужны явные переходы in-flow/sticky/fixed, expanded/compact, loading/error/degraded, focus/active input, route change, scroll direction, reduce motion и восстановление Back. Должна быть понятна семантика конкурирующих входящих событий, а не только набор статических screenshots.
+### Голосовой потребитель
 
-Заголовки ответов: готовая выборка → новый самостоятельный раздел; история сохраняется; активный sticky title заменяется границами разделов и восстанавливается при прокрутке вверх. Весь длинный вопрос/ответ не приклеивается. Новый результат открывается у своего заголовка один раз, чтение истории не перехватывается поздним ответом.
+Capture и processing независимы, догон принимается. Search владеет intent/history/parent/result-set, сетью и прикладными receipts; shell — расположением и слоями. Просматриваемый раздел не является автоматически базой уточнения. Заголовки разделов становятся sticky в своих границах, заменяют друг друга, при обратной прокрутке восстанавливаются. Весь вопрос/ответ не приклеивается.
 
-### 5. Граница с голосовым поиском
+По explicit submit — один переход к новому заголовку; чтение истории не перехватывается поздним ответом. Ошибка/лимит не удаляет composer/контекст. При необходимости исправь минимальный Search↔Shell contract вместе с owning doc; не создавай второй профиль, ASR или limiter ради layout.
 
-Голос — один потребитель общей системы. Capture и processing независимы; догон разрешён. Composer сообщает текущую базовую выборку, recording/stop/pending/error и target section; общая оболочка решает размещение, слои и клавиатуру. Прокрутка сама не меняет смысл «из них»; explicit refinement старой выборки сохраняет parent reference. Сетевой ответ не скрывает кнопки внезапно.
+### Статистика и её продуктовый смысл
 
-Не проектируй вторую память, ASR-сервис или лимитер: поведение поиска принадлежит #587. Не меняй его API молча; нужное расхождение оформи минимальным совместимым diff и ссылкой между владельцами.
+Для затронутых capabilities сформулируй несколько конкретных MeasurementQuestions: сохраняется ли контекст, достигаются ли CTA, мешают ли острова просмотру, помогает ли продолжение поиска. На каждый: eligible population, actual exposure, engagement, conversion, denominator, guardrails, факт/receipt, owner/query/readout и решение, которое можно принять.
 
-### 6. A=S=P и owner review
+Дедупликация: переход heading flow→sticky не новая page view; возврат карточки в viewport и повтор в разных answers не добавляют уникальных событий к общему cards-to-value. Section-local observations не суммируются как глобальные уникальные. Рендер≠видимость: shared shell сообщает occupied rectangles, actual served-list order согласуется с bounded presentation receipt. Оpaque section_id не подменяет served_list_id. Одна CTA голосом/клавиатурой/мышью — один факт с modality, не три conversions.
 
-Для целевых variants нужны один Event Corpus, viewport/UI-state fixtures и versioned component dependencies; source-first изменение должно попадать в Astro, SoT и native Penpot без ручных visual forks. Не требуй от статического Penpot доказать сетевую гонку. Раздели визуальную parity, runtime behavior и real-device certification.
+Optional analytics требует своего consent, не блокирует UX и не активирует профиль. Raw speech/query/LLM response/DOM text/profile/keystrokes/coordinates не уходят в общий поток. Weak summaries входят в shared budgets, не новый POST на каждый scroll/audio tick. Primary commit и analytics projection различаются. Dashboard/query должен показывать coverage/lag/недостаточность выборки; hotspot/assisted path не causal uplift. Existing action map остаётся отдельной default-OFF campaign с настоящим zero-cost OFF, не always-on частью островов.
 
-Выбери небольшое репрезентативное множество страниц и конфликтных состояний, обоснуй покрытие всей consumer matrix. Подготовь paired baseline/candidate review, реальные страницы и материалы для генераций владельца; не подменяй это абстрактными телефонами. При доступном Penpot сохраняй исследовательские материалы на отдельной явно обозначенной review-page, только из проверенных источников, не меняя canonical components. При отсутствии доступа подготовь воспроизводимый materialization input и не выдумывай file/page IDs.
+### A=S=P и owner review
 
-### 7. Автотесты и внедрение
+Один frozen Event Corpus + sanitized synthetic profile/activation/projection/consent/UI-state/viewport fixtures + versioned components. Реальные частные profiles в Penpot не экспортируются. Visual parity, network/behavior tests и physical-device certification — отдельные доказательства.
 
-Дай Given/When/Then, owner, level и точное evidence для каждого критичного поведения. Расширяй существующий реестр и GitHub-hosted CI. Нужны geometry/occlusion/sticky succession, scroll anchors, фокус/клавиатура, scale/zoom/landscape, reduced motion, touch hit targets, multi-island combinations, notifications/modal precedence, Back, source→projection parity. Не ограничивайся grep наличия токена и не требуй full Cartesian product всех состояний; используй явные риск-сочетания.
+Подготовь малое репрезентативное множество real page variants, покрывающее все классы конфликтов в consumer matrix, paired baseline/candidate и материалы для генераций/голосового owner review. При доступном Penpot исследовательские материалы — на явно обозначенной review-page из проверенных источников; canonical components не менять на этом этапе. Без доступа — воспроизводимый materialization input и честные missing bindings, не придуманные IDs.
 
-Опиши staging/migration/rollback по consumers без второго builder. Опубликованный preview — только текущий единый Kaggle StaticSiteBuilder и existing bucket/MCP path. Local diagnostic не выдавать за owner review. Self-hosted GitHub runner не добавлять.
+### Автотесты и release
 
-## Какие артефакты должны остаться
+Given/When/Then с уровнем и ожидаемым evidence: geometry/occlusion/sticky succession, keyboard/editing/focus/Back/zoom, notifications/modal, async response anchors, profile refresh без скачков, hide/undo между поверхностями, consent-off нулевые optional writes, distinct network failures/partial ACK, served-list/DOM reconciliation, aggregate denominator/test-pollution и action-map OFF. Не ограничиваться grep токена. Не требовать полный Cartesian product: выбери явные high-risk combinations.
 
-Продолжи #47 и существующий planned-pattern owner, если fresh-read не показал более нового канонического места. Не создавай параллельный паттерн/контур. Достаточен один пакет в существующей feature/pattern-папке: текущая спецификация, consumer/state/acceptance mapping в подходящей существующей форме и конкретный integration handoff. Машиночитаемые поля вводи там, где их действительно будет читать validator/materializer; не делай YAML-дубликат каждого абзаца.
+Используй existing scenario registry и GitHub-hosted CI, real fault-injection server/test sink и test DB где это предмет проверки. Qwen frozen dialogues — материал Search, не отдельный analytics framework. Mobile viewport не native iPhone. Self-hosted runner не добавлять. Все published previews — существующий единый Kaggle builder/bucket path; local diagnostic не получает owner-review/A=S=P credit.
 
-Новые требования имеют одного владельца; #39, индекс/роутинг и #621 получают ссылки и bounded integration note, не копии всего документа. Продуктовые смыслы в events-bot-new, общая визуальная/компонентная система в lovekgd-design-system, Penpot — связанная проекция. Сохрани адресную историю owner corrections и отличай принятые требования от твоих предложений.
+## 6. Сохраняемый результат и маршрутизация
 
-После записи проверь exact remote commit и current branch, локальные ссылки и отсутствие потерянных прошлых решений. Не называй постановку задачи реализацией, контракт-тест runtime-тестом или schema validation визуальной приёмкой.
+Продолжи #47 и существующий pattern owner, если fresh-read не обнаружил новый authoritative successor. Один компактный пакет: система/consumer-state mapping/acceptance и конкретный integration handoff; machine-readable поля только когда их будет читать validator/materializer. Не дублируй каждый абзац в YAML и не создавай новый управляющий контур.
 
-## Критерий завершения этого окна
+Роли данных: product meaning в events-bot-new; общие visual/component contracts в lovekgd-design-system; native Penpot — проекция; transport, analytics, profile и release остаются у прежних владельцев. Индексы/#39/#621/voice docs получают нужные ссылки и короткие compatibility notes, не копии всей спецификации. Сохранённые ранее решения не выбрасываются только потому, что новый документ короче или новее.
 
-Независимый разработчик должен по пакету понимать: где система применяется, кто чем владеет, какие острова могут сосуществовать, как считаются занятые области, что происходит при скролле/клавиатуре/модальном окне/новом ответе, какие данные и события передаются, как проверить и как безопасно мигрировать. Не должно оставаться «потом придумать всю логику». Непроверенные environment bindings и необходимые owner visual choices перечисли точно, с выбранным рабочим вариантом для остальной работы.
+Проверь actual remote commit/current branch, ссылки и что новые requirements явно отличаются от engineering proposals и проверенных implementation facts. Не объявляй схему runtime test, документ — реализацией или source commit — production release.
 
-В финале дай: сохранённый canonical пакет и commit, ключевые принятые/предложенные решения, реально выполненные проверки и их границы, готовый первый пакет для реализации. Не заканчивай предложением снова провести аудит или вопросом, продолжать ли уже порученную работу.
+## 7. Критерий завершения окна
+
+Из результата независимый разработчик понимает, где система применяется, кто чем владеет, как острова сосуществуют, как сохраняются ввод/действие/контекст при скролле/клавиатуре/сетевом сбое, как они взаимодействуют с персонализацией, какие наблюдения допустимы и как доказать полезность. Есть ясный первый вертикальный implementation slice и его regression gates, а не требование потом заново спроектировать всю логику.
+
+Численные недоказанные настройки и необходимые owner visual choices перечислены конкретно, с рабочим вариантом для остальной работы. Обязательные environment/authorization gates сохраняются, но не служат поводом остановить независимую документальную работу.
+
+В финале: canonical package/commit, ключевые решения/исправленные расхождения, реальные проверки и границы, первый законченный пакет реализации. Не заканчивай вопросом, продолжать ли уже порученную работу, или обещанием фонового выполнения.
