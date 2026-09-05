@@ -1260,3 +1260,11 @@ horizontal/stale negative fixtures guard the ≤20% fallback; no new image proof
 is inferred for the real corpus. FI occupied-space records include the actual
 section/control rectangles and reuse the existing menu-summary identity rather
 than an empty-space-spanning top-band box.
+
+The full-preview gate validates actual Popular shell markers, retained H1/H2 and
+the shared section-context handoff; it no longer requires the superseded sticky
+IntersectionObserver/sentinel implementation. Exact7458 compiled on Kaggle24 but
+failed this stale post-build source assertion, so it was not published. The failed
+run removed its transient dist before archiving; the checked artifact is absent,
+so a checker-fixed successor requires a new same-corpus build, not an unchecked
+upload or false resume of a nonexistent archive.

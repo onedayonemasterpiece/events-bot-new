@@ -103,3 +103,17 @@ test('occupied-space bridge reports each visible Popular island participant, not
   assert.match(selectors, /\['mobile-brand','\.mobile-discovery-menu__summary'\]/u);
   assert.doesNotMatch(selectors, /\['(?:top-band|global-menu)'/u);
 });
+
+
+test('full preview gate accepts the shared FI shell and rejects missing section/controls instead of requiring retired observers', async () => {
+  const { assertPopularSectionContext } = await import('../scripts/popular-occurrence-contract.mjs');
+  const { readFile } = await import('node:fs/promises');
+  const groupSource = await readFile(new URL('../src/components/listings/PopularMobileGroupContext.astro', import.meta.url), 'utf8');
+  const layoutSource = await readFile(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
+  const html = '<body data-floating-islands="popular"><div data-floating-top-band></div><nav data-islands-eligible-controls></nav><details data-top-band-menu></details><h1>Популярное</h1><h2>Часто делятся</h2></body>';
+  assert.doesNotThrow(() => assertPopularSectionContext({groupSource,layoutSource,html}));
+  for (const token of ['data-floating-islands="popular"','data-islands-eligible-controls','data-top-band-menu','<h2>']) {
+    assert.throws(() => assertPopularSectionContext({groupSource,layoutSource,html:html.replace(token,'')}));
+  }
+  assert.throws(() => assertPopularSectionContext({groupSource:groupSource.replaceAll('kenigevents:section-context','retired-event'),layoutSource,html}));
+});

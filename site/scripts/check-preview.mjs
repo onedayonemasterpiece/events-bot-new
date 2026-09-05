@@ -9,7 +9,7 @@ import busData from '../src/data/busTransportSchedules.json' with { type: 'json'
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import { resolveMobileListingRailMediaItems } from '../src/lib/mobileListingRailMedia.mjs';
 import { localPreviewRuntimePath } from './preview-asset-path.mjs';
-import { assertPopularOccurrenceCollapse } from './popular-occurrence-contract.mjs';
+import { assertPopularOccurrenceCollapse, assertPopularSectionContext } from './popular-occurrence-contract.mjs';
 import { assertRequiredPreviewBrowserJourney, staticSpecimenCandidates } from './check-browser-release-gate.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
@@ -529,9 +529,12 @@ for (const gestureContract of ['pinchDistance', "matchMedia('(max-width: 720px)'
   if (!densitySource.includes(gestureContract)) throw new Error(`Popular V26 pinch/context contract misses ${gestureContract}`);
 }
 const groupContextSource = readFileSync(join(siteDir, 'src/components/listings/PopularMobileGroupContext.astro'), 'utf8');
-for (const stickyContract of ['IntersectionObserver', 'data-popular-group-sentinel', "querySelectorAll('[data-popular-mobile-layout] [data-popular-behavior-group]')", 'observer.observe(group)', "matchMedia('(max-width: 720px)')", "addEventListener('listing:density-change'", "classList.toggle('is-stuck'", 'getBoundingClientRect']) {
-  if (!groupContextSource.includes(stickyContract)) throw new Error(`Popular V26 sticky group context misses ${stickyContract}`);
-}
+assertPopularSectionContext({
+  groupSource: groupContextSource,
+  layoutSource: readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8'),
+  html: popularHtml,
+});
+
 for (const scenario of templateContract.lab_scenarios) {
   const scenarioHtml = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
   if (!scenarioHtml.includes(`data-event-template-contract="${templateContract.contract_id}"`)) {

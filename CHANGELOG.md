@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Full-preview post-build validation now checks the approved Popular shared-shell contract and real heading/control markers instead of requiring the retired sticky IntersectionObserver implementation.
 - Protected vertical crop evidence now survives Free/related serialization and reaches static/hydrated flow and packed renderers under reviewed-bounded permission; missing/stale/horizontal proof fails closed.
 - Popular now uses the existing shell for schematic top-band locators, city controls and global menu; modal fade completion updates the same lower-stack state, including prefixed previews.
 - Browser fixture cleanup now closes its server if browser startup fails.

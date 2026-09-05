@@ -33,3 +33,17 @@ export function assertPopularOccurrenceCollapse({ desktopIds, temporalLabels, ev
     }
   });
 }
+
+/** Validate FI-P1's shared shell contract, not the retired sticky observer implementation. */
+export function assertPopularSectionContext({ groupSource, layoutSource, html }) {
+  for (const token of ['kenigevents:section-context', '[data-popular-behavior-group] .ke-popular-behavior__head h2', "addEventListener('listing:density-change'", 'getBoundingClientRect']) {
+    if (!groupSource.includes(token)) throw new Error(`Popular section context misses ${token}`);
+  }
+  for (const token of ['kenigevents:section-context', 'data-floating-section-context', 'data-floating-controls-slot']) {
+    if (!layoutSource.includes(token)) throw new Error(`Popular shared shell misses ${token}`);
+  }
+  for (const token of ['data-floating-islands="popular"', 'data-floating-top-band', 'data-islands-eligible-controls', 'data-top-band-menu']) {
+    if (!html.includes(token)) throw new Error(`Popular rendered shell misses ${token}`);
+  }
+  if (!/<h1\b/u.test(html) || !/<h2\b/u.test(html)) throw new Error('Popular must retain real H1/H2 in document flow');
+}
