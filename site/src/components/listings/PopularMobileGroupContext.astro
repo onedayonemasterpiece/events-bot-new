@@ -1,49 +1,44 @@
-<span hidden data-ds-component="PopularMobileGroupContext" data-ds-version="1"></span>
+<span hidden data-ds-component="PopularMobileGroupContext" data-ds-version="2"></span>
 
+<!-- FI-P1: section headings remain real H2s in document flow. This owner only
+     publishes the currently read section to EventLayout's shared top band. -->
 <script>
-  function initPopularMobileGroupContext() {
+  function initPopularSectionContext() {
     document.querySelectorAll('[data-date-listing="popular"]').forEach((surface) => {
       if (surface.dataset.popularGroupContextReady === 'true') return;
-      const mobile = window.matchMedia('(max-width: 720px)');
-      const sentinels = Array.from(surface.querySelectorAll('[data-popular-group-sentinel]'));
-      const groups = Array.from(surface.querySelectorAll('[data-popular-mobile-layout] [data-popular-behavior-group]'));
-      if (sentinels.length === 0) return;
       surface.dataset.popularGroupContextReady = 'true';
-
-      const stickyTop = () => {
-        const value = getComputedStyle(surface).getPropertyValue('--ke-popular-group-sticky-top');
-        return Number.parseFloat(value) || 8;
+      let frame = 0;
+      const visible = (node) => {
+        const box = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return box.width > 2 && box.height > 2 && style.display !== 'none' && style.visibility !== 'hidden';
       };
-
       const refresh = () => {
-        const top = stickyTop();
-        sentinels.forEach((sentinel) => {
-          const group = sentinel.closest('[data-popular-behavior-group]');
-          const head = group?.querySelector('.ke-popular-behavior__head');
-          const layout = group?.closest('[data-popular-mobile-layout]');
-          if (!group || !head || !layout) return;
-          const active = mobile.matches && !layout.hidden;
-          const stuck = active
-            && sentinel.getBoundingClientRect().top <= top + 0.5;
-          head.classList.toggle('is-stuck', stuck);
-        });
+        frame = 0;
+        const headerBottom = document.querySelector('.site-header')?.getBoundingClientRect().bottom || 0;
+        const heads = [...surface.querySelectorAll('[data-popular-behavior-group] .ke-popular-behavior__head h2')]
+          .filter(visible);
+        if (!heads.length) return;
+        const boundary = headerBottom + 12;
+        const active = heads.filter((head) => head.getBoundingClientRect().top <= boundary).at(-1) || heads[0];
+        const group = active.closest('[data-popular-behavior-group]');
+        const title = (active.textContent || '').replace(/\s+/gu, ' ').trim();
+        if (!title || !group) return;
+        surface.dataset.floatingSectionScope = group.dataset.popularReason || '';
+        document.dispatchEvent(new CustomEvent('kenigevents:section-context', {
+          detail: { title, target: active, scopeId: group.dataset.popularReason || '' },
+        }));
       };
-
-      const observer = new IntersectionObserver(refresh, {
-        root: null,
-        rootMargin: `-${Math.ceil(stickyTop())}px 0px 0px 0px`,
-        threshold: [0, 1],
-      });
-      sentinels.forEach((sentinel) => observer.observe(sentinel));
-      groups.forEach((group) => observer.observe(group));
-      const queueRefresh = () => window.requestAnimationFrame(refresh);
-      window.addEventListener('resize', queueRefresh, { passive: true });
-      mobile.addEventListener?.('change', queueRefresh);
-      surface.addEventListener('listing:density-change', queueRefresh);
-      refresh();
+      const schedule = () => {
+        if (!frame) frame = requestAnimationFrame(refresh);
+      };
+      window.addEventListener('scroll', schedule, { passive: true });
+      window.addEventListener('resize', schedule, { passive: true });
+      surface.addEventListener('listing:density-change', schedule);
+      requestAnimationFrame(refresh);
     });
   }
 
-  initPopularMobileGroupContext();
-  document.addEventListener('astro:page-load', initPopularMobileGroupContext);
+  initPopularSectionContext();
+  document.addEventListener('astro:page-load', initPopularSectionContext);
 </script>

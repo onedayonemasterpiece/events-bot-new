@@ -46,3 +46,51 @@ test('prelaunch scroll lock is isolated and footer keeps the four-destination do
   assert.match(footer, /padding: var\(--ke-footer-padding-top\) 0 calc\(var\(--ke-footer-padding-bottom\) \+ var\(--ke-lower-surface-offset, 0px\) \+ 24px\);/u);
   for (const destination of ['Афиша', 'Даты', 'Поиск', 'Для меня']) assert.match(nav, new RegExp(`label: '${destination}'`, 'u'));
 });
+
+test('Popular FI-P1 composes one existing top band without cloning headings or controls', async () => {
+  const [layout, rail, popular, context, menu] = await Promise.all([
+    read('src/layouts/EventLayout.astro'),
+    read('src/components/listings/ListingDiscoveryRail.astro'),
+    read('src/components/listings/PopularListingSurface.astro'),
+    read('src/components/listings/PopularMobileGroupContext.astro'),
+    read('src/components/Reference4MobileMenu.astro'),
+  ]);
+
+  assert.match(layout, /const requestedRoutePath = Astro\.url\.pathname\.replace\(/u);
+  assert.match(layout, /const canonicalBasePath = BASE_PATH === '\/' \? '' : BASE_PATH\.replace\(/u);
+  assert.match(layout, /requestedRoutePath\.startsWith\(`\$\{canonicalBasePath\}\/`\)/u);
+  assert.match(layout, /requestedRoutePath\.slice\(canonicalBasePath\.length\) \|\| '\/'/u);
+  assert.match(layout, /const hasFloatingIslandsPopular = headerCurrent === 'popular' && routePath === '\/populyarnoe';/u);
+  assert.match(layout, /data-floating-islands=\{hasFloatingIslandsPopular \? 'popular' : undefined\}/u);
+  assert.match(layout, /data-floating-top-band/u);
+  assert.match(layout, /data-floating-section-context/u);
+  assert.match(layout, /data-floating-controls-slot/u);
+  assert.match(layout, /moveRailToTopBand/u);
+  assert.match(layout, /restoreRail/u);
+  assert.match(layout, /kenigevents:section-context/u);
+  assert.match(rail, /data-islands-eligible-controls=\{topBandCandidate \? '' : undefined\}/u);
+  assert.match(popular, /topBandCandidate/u);
+  assert.match(context, /kenigevents:section-context/u);
+  assert.doesNotMatch(context, /position:\s*sticky/u);
+  assert.match(menu, /data-top-band-menu/u);
+  assert.match(menu, /mobile-discovery-menu__top-band-label/u);
+});
+
+test('Popular top-band rail is constrained to its shared slot instead of overflowing menu space', async () => {
+  const layout = await read('src/layouts/EventLayout.astro');
+  assert.match(layout, /site-header__controls-slot > \.ke-listing-discovery-rail \{[^}]*min-width: 0;[^}]*max-width: 100%;[^}]*width: 100%;/u);
+  assert.match(layout, /site-header__controls-slot \.ke-city-filter \{[^}]*width: 100%;[^}]*min-width: 0;/u);
+});
+
+test('top-band menu returns focus to its existing trigger on Escape', async () => {
+  const menu = await read('src/components/Reference4MobileMenu.astro');
+  assert.match(menu, /event\.key !== 'Escape'/u);
+  assert.match(menu, /summary\?\.focus\(\{ preventScroll: true \}\)/u);
+});
+
+test('lower stack remeasures an opacity-faded modal when its transition settles', async () => {
+  const layout = await read('src/layouts/EventLayout.astro');
+  assert.match(layout, /const syncLowerStackAfterMotion=.*scheduleLowerStack\(\)/su);
+  assert.match(layout, /document\.addEventListener\('transitionend',syncLowerStackAfterMotion,true\)/u);
+  assert.match(layout, /document\.addEventListener\('transitioncancel',syncLowerStackAfterMotion,true\)/u);
+});

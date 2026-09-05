@@ -10,8 +10,9 @@ interface Props {
     date: string;
     weekday: string;
   };
+  topBandCandidate?: boolean;
 }
-const { cities, total, label, hasTime = true, dateContext } = Astro.props;
+const { cities, total, label, hasTime = true, dateContext, topBandCandidate = false } = Astro.props;
 ---
 <div
   class:list={[
@@ -23,6 +24,7 @@ const { cities, total, label, hasTime = true, dateContext } = Astro.props;
   data-ds-version="5"
   data-listing-discovery-rail
   data-has-time={hasTime ? 'true' : 'false'}
+  data-islands-eligible-controls={topBandCandidate ? '' : undefined}
 >
   <div class="ke-listing-discovery-rail__inner">
     {dateContext ? (
