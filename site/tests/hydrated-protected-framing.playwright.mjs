@@ -88,6 +88,7 @@ try {
     .related_static.map((item) => String(item.event_id)));
   const catalogTotal = catalogIds.length;
   const initialIds = await page.locator('[data-free-collection-grid] > [data-event-card]:not([hidden])').evaluateAll((cards) => cards.map((card) => card.dataset.eventId));
+  const representativeDetailHref = await page.locator('[data-free-collection-grid] > [data-event-card]:not([hidden])').first().getAttribute('data-card-href');
   assert.equal(initialIds.length, 12);
   for (let attempt=0; attempt<16; attempt+=1) {
     const before = await page.locator('[data-free-collection-grid] > [data-event-card]:not([hidden])').count();
@@ -100,6 +101,17 @@ try {
   assert.equal(new Set(allIds).size, catalogTotal);
   assert.deepEqual(allIds, catalogIds);
   assert.deepEqual(allIds.slice(0,initialIds.length), initialIds);
+  const detailErrors = [];
+  const detailPage = await browser.newPage({ viewport:{width:1440,height:900} });
+  detailPage.on('pageerror', (error) => detailErrors.push(error.message));
+  await detailPage.goto(new URL(representativeDetailHref, origin).href, { waitUntil:'domcontentloaded' });
+  await detailPage.waitForFunction(() => typeof window.KenigEventsPlanRelatedCardRows === 'function'
+    && typeof window.KenigEventsPackRelatedCardRows === 'function'
+    && typeof window.KenigEventsRelatedCardMediaFrameBinding === 'function');
+  await detailPage.waitForSelector('[data-discovery-feed]');
+  await detailPage.waitForTimeout(500);
+  assert.deepEqual(detailErrors, []);
+  await detailPage.close();
   const positive = await render('positive');
   const accepted = positive.cards.find(({id}) => id===101);
   assert.ok(positive.plan.every(({layout}) => layout.framingStatus==='satisfied' && layout.rowRatio===1));
