@@ -1,391 +1,354 @@
 # Голосовой разговорный поиск — техническая спецификация v1
 
-Дата: 2026-09-05. Статус: **спроектированное решение для implementation review; runtime не реализован этим документом**. Владелец продуктового поведения — [agent-assisted-event-discovery.md](agent-assisted-event-discovery.md); обычного Search — [README.md](README.md). Этот файл владеет техническими деталями голоса/диалога, а не вторым поиском, профилем, общим UI-shell или лимитером.
+> 2026-09-05, редакция после восстановления связей «Плана релиза». **Implementation-review specification, не runtime/deployment PASS.**
+> Продуктовый владелец: [agent-assisted-event-discovery.md](agent-assisted-event-discovery.md). Действующий Search: [README.md](README.md).
+> Обязательная общесистемная зависимость: [release-integration.md](../../static-personal-announcements/release-integration.md). Она связывает транспорт, статистику, продуктовые решения, профиль и текущий релиз без создания второго владельца этих систем.
 
-Документ закрывает переход от гипотезы к решению: конкретный путь обработки, поля операций, правила конкурентности, данные/сроки, ошибки, интеграция, тесты и последовательность реализации. Имена новых HTTP endpoints/модулей ниже — выбранный проект v1, не утверждение об их текущем существовании. Технические defaults помечены как предлагаемые; изменение существующих общих правил требует адресного совместимого diff, а не скрытого обхода.
+## 0. Изменение относительно первого v1
 
-## 1. Принятый продукт и границы v1
+Первый v1 на `62c54ce42786eecc5b380ea3dba002af78df8fd0` задавал полезные API/receipts/ordered-dogon/history boundaries, но недостаточно связывал их с июльско-августовской общей архитектурой. Эта редакция сохраняет их и уточняет:
 
-Голос и текст — два входа одного разговорного поиска. Полезный результат — лента самостоятельных разделов: название выборки → исходный вопрос → краткий/раскрываемый ответ → обычные EventCards. Последующий завершённый ответ не стирает предыдущий. Фактический вопрос об адресе/транспорте может дать explanation-раздел без карточек. Во время обработки пользователь может добавлять речь.
+- отдельный worker origin не означает отдельный transport client; browser access подключается к existing capability/route policy;
+- JSON/control и audio media имеют разные route envelopes; прежние 8 MiB нельзя считать стандартным relay-compatible request;
+- voice section/result set не заменяет фактический served list, analytics session или durable профиль;
+- уже принятые activation, exact-hide/undo, surface policy, local projection и scheduled materializer действуют и здесь;
+- статистика имеет producer → accepted sink → aggregate → readout → reviewed decision, а не только перечень метрик;
+- static/voice/analytics success, main commit, deployed feature и измеренный outcome не смешиваются.
 
-V1 включает: интерпретацию естественного запроса; последовательные уточнения и исправления; ограничения и отрицания; ленту ответов с независимой пагинацией; выбор старого раздела для уточнения; восстановление после сетевого/процессного сбоя; понятные состояния; короткую память и opt-in возврат к истории; динамическое управление доступом к ресурсу.
+Новые имена/поля/значения ниже — проект реализации, не утверждение об existing deployed endpoints. Числовые defaults допускают проверку/изменение без новых искусственных ограничений естественной речи. Shared requirements, security и ресурсные пределы не обходятся.
 
-V1 не включает: автономную регистрацию/покупку, произвольные инструменты/MCP-петли, фоновое бесконечное прослушивание, обязательную озвучку ответов, новую подписочную платформу, профиль по одному голосовому упоминанию, открытый web research. Сохранение/календарь/реакции используют существующие CTA. Голосовые изменяющие команды — последующий пакет с отдельными подтверждениями, а не ещё один необъявленный action executor.
+## 1. Продукт и границы
 
-Auth-only остаётся текущей политикой. Гость видит возможность и обычную навигацию, но не запускает audio upload/ASR/Search; после входа нужен явный submit. Иные голосовые лимиты не означают неявное разрешение гостевых запросов.
+Голос и текст — два входа одного разговорного поиска. Результат: самостоятельный раздел «название выборки → исходный вопрос → полезный краткий/раскрываемый ответ → обычные EventCards». Завершённый раздел сохраняется при новом ответе. Factual адрес/транспорт может дать explanation без карточек. Пока идёт сеть, можно добавлять речь.
 
-## 2. Прочитанная база и точные места интеграции
+V1 включает корректировки/отрицания, сужение и расширение поиска, независимую пагинацию разделов, возврат к старому разделу для уточнения, восстановление обработки, понятную доступность, короткую память, разрешённую историю и динамический admission.
 
-Продуктовая correction-версия: PR #587, `bce0a4ae06d75651aff09ef3657d8272113b2267`. Existing runtime/source pointers проверены на `b8f463f5c35fa62befcfed171a7a8a0886af20f7`; перед кодовой интеграцией читать current main и active integration branch, не откатывать их к этим SHA.
+Не включены универсальные tools/MCP loops, покупки/регистрация агентом, гарантированное background listening, озвучка каждого ответа, новая подписочная система или профиль из каждой поисковой фразы. Save/calendar/reactions используют existing CTA/domain commands. Голосовые изменяющие команды — следующий отдельный безопасный срез.
 
-| Существующее место | Использование в v1 |
+Текущий Search остаётся для eligible авторизованных пользователей: проверять принятую site-user-identity eligibility, не только наличие JWT. Focus anonymous Supabase session не становится автоматически verified account. Гость не выполняет cost-bearing upload/ASR/Search; после login нет autosubmit. Account login не активирует interest profile и не выдаёт optional analytics consent.
+
+## 2. Источники и места интеграции
+
+Source review: `main@b8f463f5c35fa62befcfed171a7a8a0886af20f7`, product correction `bce0a4ae06d75651aff09ef3657d8272113b2267`, первый v1 `62c54ce42786eecc5b380ea3dba002af78df8fd0`. Перед coding integration читать current main/active branches, не откатывать их к этим указателям.
+
+| Existing owner/source | Использование |
 |---|---|
-| `site/src/components/AuthorizedEventSearch.astro` | Существующий Search entry/Auth/result presentation. Новый режим не обрезает речь по legacy maxlength 180. |
-| `site/src/lib/staticSiteAuth.ts` | Единственная identity/session; без отдельного login-клиента ассистента. |
-| `site/src/lib/backendOperationCatalog.ts` | Добавить явные voice operations/capability; неизвестные операции по-прежнему fail closed. |
-| `site/src/lib/resilientDataClient.ts`, `resilientSupabaseTransport.ts` | Переиспользовать семантику selected-once/safe-read; текущий transport специфичен для Supabase, значит новый origin требует явного route adapter, а не произвольной подстановки URL. |
-| `supabase/functions/event-search/index.ts` | Выделить общий domain retrieval/validation/presentation adapter. Старый endpoint продолжает работать с прежним wire contract. |
-| `supabase/functions/event-search/google-quota.ts` | Тот же project/model ledger и reserve→mark_sent→finalize. При выделении shared owner оставить compatibility re-export, не копию реализации. |
-| `supabase/functions/event-search/occurrence-families.ts` | Стабильная группировка повторов/сеансов до отображения и логической пагинации. |
-| `docs/architecture/personalization-data-ownership.md` | Supabase владеет identity/consent/current profile; YDB не второй профиль; аудио не raw telemetry. |
-| `docs/operations/static-site-autotest-strategy.md`, `docs/testing/static-site-autotest-scenarios.v1.yml` | Единые уровни и реестр; план из §15 переносится сюда по мере реализации. |
-| `.github/workflows/ci.yaml`, `search-production-health.yml`, `site/e2e/search/` | Расширение действующих тестов, не новая QA-платформа. |
+| `site/src/components/AuthorizedEventSearch.astro` | Search entry, Auth и canonical results; legacy maxlength 180 не применяется молча к transcript. |
+| `site/src/lib/staticSiteAuth.ts` | Единственная identity/session; eligibility/anonymous-upgrade не дублируются. |
+| `site/src/lib/backendOperationCatalog.ts` | Явные assistant operations/caps/replay semantics; unknown operations fail closed. |
+| `resilientDataClient.ts`, `resilientSupabaseTransport.ts` рядом | Единые правила route health и retry; новый origin требует явного фиксированного adapter, не произвольной подстановки URL. |
+| `supabase/functions/event-search/index.ts` | Shared domain retrieval/validation/presentation выделяется с injected dependencies; старый endpoint/wire contract сохраняется. |
+| `supabase/functions/event-search/google-quota.ts` | Existing project/model reserve→mark_sent→provider→finalize. При выделении общего owner — compatibility export, не копия ledger. |
+| `supabase/functions/event-search/occurrence-families.ts` | Canonical repeats/family collapse и pagination. |
+| [Transport contract](../../unsigned-personalization/production-integration.md), [Yandex resilience](../../../operations/yandex-dependency-resilience.md) | Capability health, exact relay routes, ACK, selected-once и proven replay. |
+| [Personalization blueprint](../personalizaion/personalization-to-be.md), [ручные требования](../personalizaion/requirements.md) | Activation, query priority, current hide/undo, profile projection и sensitive/campaign guards. |
+| [Data ownership](../../../architecture/personalization-data-ownership.md) | Supabase current profile/identity, YDB analytics sidecar, shared storage/permission/localization boundaries. |
+| [Analytics](../analytics/README.md), [Product model](../../../product-model/README.md) | Actors/sessions/facts/metrics, independent purposes, MeasurementQuestion и reviewed decision. |
+| [Release umbrella](../../static-personal-announcements/README.md), [План релиза](../release-plan.md) | Полнота F1–F17, current-data/candidate/release dependencies, не isolated voice launch. |
+| [Autotest strategy](../../../operations/static-site-autotest-strategy.md), [registry](../../../testing/static-site-autotest-scenarios.v1.yml), existing CI/Search harness | Общие L0–L3 и исполняемые сценарии; без второго framework. |
 
-Уже существующий `operation.get` в my-data-hub нельзя автоматически считать пользовательским API сайта: это иной control plane и иной permission scope. Для публичной функции нужны описанные здесь owner-scoped receipts.
+`my-data-hub.operation.get` — control-plane API с иной identity, не готовый пользовательский receipt endpoint сайта. Название analytics adapter или RPC в документации не доказывает, что он уже развёрнут.
 
-## 3. Выбранная архитектура
+## 3. Архитектура исполнения и подключения
 
 ```text
-Static Astro + existing Auth + shared shell
-  → selected first-party voice origin
-  → authenticated bounded intake
-  → durable utterance receipt + temporary audio spool
-  → ordered worker in that same service
-       → shared limiter → approved Lite interpretation
-       → validated IntentPatch
-       → shared Search domain / Supabase pgvector + filters
-       → optional bounded grounded Lite presenter
-       → atomic answer-section commit
-  ← buffered JSON receipts / bounded delta reads / canonical card projections
+Static Astro / existing Auth / shared shell and operation transport
+ → selected healthy assistant route
+ → bounded authenticated intake + durable receipt + temporary audio spool
+ → ordered worker
+      → shared limiter → allowed Lite interpreter
+      → validated IntentPatch + current explicit-state/profile policy
+      → shared Search domain / Supabase corpus and hard filters
+      → optional grounded Lite presenter
+      → atomic section + result membership commit
+ ← bounded JSON receipt/delta + canonical card projections
+
+User CTA → existing primary command/ACK
+       ├→ immediate overlay / later profile materialization
+       └→ eligible async analytics projection
 ```
 
-Размещение — отдельный небольшой сервис на Devstand, при условии проверки его публичной доступности и эксплуатации. Это обычный first-party сервис, не Codex/DevCoveer/MCP agent. Не размещать audio/LLM обработку в Fly web. Kaggle используется для offline fixtures и действующего published-preview build, не как синхронный backend пользовательского запроса.
+Предпочтительное размещение worker — отдельный небольшой first-party TypeScript service на Devstand, после проверки доступности/эксплуатации; один deployment unit с worker, без Redis/Kafka/второго Postgres или coding-agent вызова на каждый запрос. Lease/receipt authority — существующий approved primary, не только process RAM. Внешние вызовы вне DB transactions. Общая domain extraction сохраняет старые consumers и не делает server HTTP call самому себе.
 
-Предпочтительный implementation shape: TypeScript service и worker с инъекцией Auth/DB/limiter/provider/retrieval adapters; один deployment unit, без Redis/Kafka, второго Postgres на Devstand или новой оркестрационной платформы. Worker claim хранится в уже используемом Supabase, не только в памяти процесса. Common Search domain извлекается из Edge-обработчика с явными dependencies вместо Deno.env внутри pure logic; Edge и service вызывают его, а не HTTP-сами-себя.
+Fly web остаётся thin. Kaggle — offline Qwen fixtures и existing published-preview builder, не online voice backend. Сервис проверяет JWT signature/issuer/audience/expiry и eligibility до privileged DB; owner никогда не принимается из client user_id. TLS, exact origin/CORS, fixed upstream allowlist, bounded decoder/body/timeouts; CORS не заменяет authorization/CSRF. Provider/service keys не в браузере.
 
-Auth проверяется до privileged DB. Сервис использует существующий first-party JWT-validation путь; обязательны signature/issuer/audience/expiry, проверенный subject, точный Origin/CORS allowlist, TLS, request size/time limits. Никаких service-role/provider keys в браузере. Cookie-путь, если появится, требует той же CSRF/origin политики; CORS не является проверкой владельца.
+### 3.1. Общие маршруты не заменяются голосовым клиентом
 
-### API Search нельзя переиспользовать слепо
+Product/Auth/Data/Search могут использовать direct Supabase либо Yandex relay к тому же upstream. Analytics имеет другое направление: direct Yandex ingest либо Supabase Edge blind bridge к тому же YDB analytics ingest. Это не репликация/универсальное кольцо прокси. Detailed contract — [release integration §3](../../static-personal-announcements/release-integration.md#3-стабильное-подключение-действительно-два-направления).
 
-Нельзя отправить весь transcript в legacy `event-search` и молча обрезать его до 180 символов. Semantic query для embedding может быть компактным представлением цели; строгие условия передаются отдельным типизированным объектом и применяются доменным слоем. Извлечение общего сервиса сохраняет старые consumers; новая policy `voice_search` не должна дважды списываться как обычный пользовательский Search и как голосовой ход. Actual embedding/model attempts учитываются отдельно в общем ledger.
+Новые `assistant.control` и `assistant.audio-upload` capabilities регистрируются в существующей policy с actual routes/caps и no-side-effect nonce/body probes. Direct-first-party и выбранный fixed alternate требуют отдельной проверки, а не объявления из схемы. Один маленький health GET не доказывает upload/download/decode. Analytics failure не quarantine-ит Search/Auth. 429 даёт cooldown, не alternate bypass; upstream outage не лечится повтором через тот же upstream.
 
-## 4. Доменная модель
+Selected-once путь выбирается до dispatch; ambiguous response не отправляет тело второй раз. Safe-read и idempotent replay имеют свой contract. Последний реальный успех обновляет capability health, idle per-tab pings не нужны. Публичный CDN status — coarse hint; personal quota и локальная доступность проверяются отдельно.
 
-### Идентификаторы и версии
+### 3.2. Audio envelope — исправление первого v1
+
+[Yandex API Gateway](https://yandex.cloud/en/docs/api-gateway/concepts/limits) на проверке 2026-09-05 ограничивает request/response **2.5 MB**. Прежние 8 MiB допустимы лишь как separately proven direct-only ceiling/aggregate spool, не стандартный relay request. Первоначальный безопасный target transport segment — ≤1 MiB **итогового wire body**, включая envelope/multipart/base64 и минимальный downstream limit. Actual adapter gate проверяет bytes, не только MIME/длительность.
+
+Длинная речь не обрезается по пределу gateway: recording формирует independently decodable segments с общей logical-utterance identity, порядком и audio timeline. Технические части не считаются новыми пользовательскими поисками. Control submission запускает processing только по полностью принятому validated segment manifest. Не делать ASR-вызов на каждую transport-часть лишь из-за её размера.
+
+При direct-only media path он явно классифицирован и тестируется как direct-only; текст/receipts могут иметь working alternate независимо. Supabase analytics blind bridge не становится audio proxy автоматически: permission/data-flow и server caps должны быть приняты отдельно. Heavy transcoding/ASR в relay не размещается; [Edge limits](https://supabase.com/docs/guides/functions/limits) и timeout всего dialogue нельзя игнорировать.
+
+## 4. Доменная модель и версии
 
 | Поле | Смысл |
 |---|---|
-| `conversation_id` | Серверный UUID; owner определяется только Auth. |
-| `epoch` | Монотонная граница reset/delete/закрытия текущей управляющей сессии; старые результаты не могут применяться после неё. |
-| `writer_id`, `client_sequence` | Серверно выданная identity текущего writer и последовательность ввода; не identity пользователя. |
-| `utterance_id` | Стабильный UUID одной принятой реплики; одновременно ключ её receipt. |
-| `previous_utterance_id` | Зависимость от предыдущего ещё обрабатываемого фрагмента; допускает приём до его расшифровки. |
-| `draft_id` | Один строящийся раздел текущей цепочки уточнений. |
-| `context_revision` | CAS-версия структурированного намерения. |
-| `accepted_through`, `processed_through` | Непрерывно принятый/интерпретированный префикс последовательности, не максимум всех увиденных номеров. |
-| `section_id`, `parent_section_id` | Самостоятельный ответ и база уточнения; история хронологическая, не tree UI. |
-| `result_set_id`, `membership_revision` | Зафиксированная логическая выборка и её состав. |
-| `catalog_revision`, `corpus_revision`, `policy_version` | Версии данных и исполнения; входят в evidence/cache signatures. |
+| `conversation_id` | Server UUID, owner из проверенной identity. |
+| `epoch` | Reset/delete/управляющая граница; late replies не применяются в новом epoch. |
+| `writer_id`, `client_sequence`, `previous_utterance_id` | Проверенный writer, порядок и зависимость; это не identity человека. |
+| `utterance_id`, `draft_id` | Логическая реплика и один строящийся ответ её revision chain. |
+| `audio_manifest_id`, `segment_id`, `segment_index` | Транспортные части реплики; idempotent input identity, не дополнительные ходы. |
+| `context_revision`, `accepted_through`, `processed_through` | CAS и непрерывные high-watermarks, не максимум полученных sequence. |
+| `section_id`, `parent_section_id`, `revision_of` | Хронологическая история и явная база уточнения/исправления. |
+| `result_set_id`, `membership_revision` | Зафиксированная логическая выборка; не то же, что фактически увидено. |
+| `served_list_id`, `presentation_receipt_id` | Existing bounded record фактического порядка/контекста представления; не новый профиль и не public raw history. |
+| `catalog_revision`, `corpus_revision`, `profile_revision`, `model_version`, `policy_version` | Совместимость данных/ранжирования/исполнения и cache evidence. |
 
-Различать `viewed_section_id`, `refinement_base_section_id` и `pending_draft_id`. Первый меняется при прокрутке; второй — по понятному действию пользователя; третий — состоянием обработки. Они не заменяют друг друга.
+Различать viewed section, refinement base и pending draft. Scroll меняет только первое. Existing analytics session/actor definitions не зависят от conversation IDs/TTL; новая беседа не обязательно новая аналитическая сессия.
 
-### IntentState
+### IntentState / IntentPatch
 
-Один bounded объект содержит `semantic_goal`, `when`, `where`, `budget`, `formats`, `themes`, `audience`, `exclusions`, `soft_preferences`, `rejected_event_ids` и provenance по каждому изменённому полю. Бюджет различает `free`, `max_amount` и `unconstrained`; unknown price не free. Время — ISO границы с timezone и исходным anchor высказывания. Locality/venue IDs разрешает host по существующей taxonomy, не произвольный ID от LLM.
+Bounded object: semantic goal, when, where, budget/currency, formats/themes/audience, exclusions, soft preferences, rejected IDs, scope/provenance полей. Hard conditions проверяются host. Time — absolute ISO anchor + timezone исходной реплики; locale машины не определяет даты события. ID места разрешается trusted taxonomy, не сочиняется моделью.
 
-IntentPatch допускает только разрешённые поля и операции `set`, `clear`, `add`, `remove`. Для одиночного поля `set` заменяет прежнее значение. «Не Светлогорск, а Калининград» — замена, не невозможный AND. «Можно платно до пятисот» снимает free и задаёт сумму. «И без концертов» добавляет исключение. В одном patch дубли/конфликтующие операции для одного singleton поля отвергаются, а не решаются случайным порядком ключей JSON.
-
-Scope запроса: `new_search`, `refine_selection`, `continue_draft`, `explain_selection`, `explain_event`. Определённый пользователем explicit target приоритетнее догадки модели. «Начнём заново» сбрасывает текущие ограничения, но не удаляет исторические разделы; «Удалить историю» — отдельное явное действие.
+Closed patches: set/clear/add/remove по allowlisted fields. Singleton set заменяет прежнее значение; конфликтующие операции не разрешаются случайным JSON key order. «Не Светлогорск, а Калининград» заменяет город; «можно платно до пятисот» снимает free; «без концертов» добавляет исключение. Unknown price не free. Scope: new_search/refine_selection/continue_draft/explain_selection/explain_event. Explicit target приоритетнее model guess. Start-new-task не равен delete-history.
 
 ### AnswerSection
 
-`kind=results|explanation|mixed`; `status=draft|ready|empty|error`. Ready explanation не получает пустую grid и статус zero results. Поля: title, исходный user_query, effective intent, answer blocks, parent, ordered membership, own pagination cursor, versions, created_at, expiry, generation/degraded markers. Failure state не маскируется под пустую успешную выборку.
+Kind results/explanation/mixed; state draft/ready/empty/error. Fields title, user_query, effective intent, parent, answer blocks, result membership/cursor, versions, timestamps/expiry/degraded reason. Ready explanation без событий не empty search. Safe blocks text/event_group/event_annotation/location/map_actions/suggested_replies/uncertainty; prose не arbitrary HTML/URL. Card facts и actions — trusted projections. fact_id помогает проверке, но JSON/schema/наличие ссылки не доказывает истинности предложения.
 
-Допустимые блоки: `text`, `event_group`, `event_annotation`, `location`, `map_actions`, `suggested_replies`, `uncertainty`. Text — безопасный ограниченный Markdown subset; HTML/произвольные ссылки запрещены. ID события/места/action принадлежит allowlist фактов текущей операции. Factual annotations ссылаются на host-provided `fact_id`; ссылка сама по себе не доказывает, что предложение верно, поэтому числа/цены/время/адрес рендерятся из typed facts, а смысловое качество проходит независимые fixtures/live checks.
+## 5. HTTP и операция принятия ввода
 
-## 5. HTTP contract v1
+Проект prefix `/v1/assistant`, contract `voice-search.v1`. Origin/routes — разрешённый config, не client URL. Private responses no-store; transcript/history не в query string и не индексируемом публичном URL. Body/response/request time budgets заданы по capability.
 
-Префикс: `/v1/assistant`. Это новый explicit capability в существующем OperationCatalog. Точные origin/route bindings выбираются из deployment config; произвольный client URL не принимается. Version header/body — `voice-search.v1`. Все ответы private/no-store, кроме публичного status manifest. Разделы не публикуются как индексируемые URL; query/transcript не помещаются в query string.
-
-| Операция | Вход/ответ | Повторы |
-|---|---|---|
-| `POST /conversations` | request UUID, retention choice; возвращает conversation, epoch, writer, effective policy | Идемпотентное создание с Auth-owned key, 0 providers. |
-| `POST /conversations/{id}/utterances` | multipart: metadata JSON + один audio blob ИЛИ JSON text; 202 receipt после durable acceptance | `selected-once`; тот же ID/body возвращает тот же receipt, не новый запуск. |
-| `GET /conversations/{id}/utterances/{uid}` | receipt/status, stage, safe error, applicable revision, changed text if requested | safe-read; предназначен в том числе для ambiguous POST. |
-| `GET /conversations/{id}/updates?after_revision=N` | bounded delta всех pending операций и новых section headers, not-modified marker | safe-read; один poll на активную беседу, не по запросу на каждую карточку/реплику. |
-| `GET /conversations/{id}/sections?cursor=C` | страница исторических разделов, без полной истории за один запрос | safe-read; owner/epoch-aware cursor. |
-| `GET /conversations/{id}/sections/{sid}/events?cursor=C` | следующая страница данного result set, canonical card projections | safe-read; cursor нельзя применить к другому section/user. |
-| `POST /conversations/{id}/control` | request UUID + enum `cancel_draft|start_new_task|resume_section|reset_context` | Идемпотентные host actions, не LLM tool executor. |
-| `DELETE /conversations/{id}` | request UUID; logical deny immediately + purge receipt | Идемпотентно, 0 providers; поздние ответы не воскрешают удалённое. |
-
-Metadata обязательна: utterance_id, epoch, writer_id, client_sequence, previous_utterance_id/null, target (new/section/draft ID), client_created_at, locale, input kind. Для audio: SHA-256 bytes, declared MIME, byte size, duration, sample rate/channels. Всё сверяется сервером по содержимому и decoder probe с ограничением ресурсов. Хэш тела для idempotency — серверный HMAC нормализованной metadata и фактических audio/text bytes; секрет в аналитике не раскрывается. Подмена того же ID другим payload даёт 409.
-
-`client_created_at` помогает понять относительную дату, но не авторизует запрос и не назначает TTL. Серверное received_at авторитетно; неправдоподобный сдвиг часов фиксируется и уточняется для значимой даты. Effective timezone по умолчанию Europe/Kaliningrad; иной явно выбранный контекст хранится отдельно от timezone компьютера/CI.
-
-Receipt содержит: utterance_id, receipt_revision, accepted bool, phase, conversation epoch, accepted/processed prefix, draft/section refs, optional retry_after_ms, safe error code. `accepted=true` означает durable intake, НЕ найденные события и НЕ гарантию будущей доступности провайдера.
-
-### Ошибки
-
-| HTTP/code | Поведение UI/сервера |
+| Операция | Результат и semantics |
 |---|---|
-| 401 `auth_required|session_expired` | Вход/восстановление; никаких автоматических платных повторов после него. |
-| 404 `not_found` | Чужой и отсутствующий ресурс не раскрываются по-разному. Один 404 не является доказательством, что прошлый запрос никогда не был отправлен провайдеру. |
-| 409 `payload_conflict|writer_conflict|epoch_conflict|base_conflict` | Получить состояние; сохранить локальное дополнение; не overwrite чужой revision. |
-| 410 `context_expired|selection_expired|receipt_expired` | Видимый resume/new-search выбор, а не тайное применение старых условий. |
-| 413/415/422 | Слишком большой/неподдержанный/битый ввод; до provider; исходник не изображается обработанным. |
-| 429 `user_capacity|global_capacity` | Различать причины, не сбрасывать историю; next retry только по валидному admission. |
-| 503 `limiter_unavailable|service_unavailable|provider_policy_blocked` | Provider fail closed; обычная навигация остаётся доступной. |
-| receipt `outcome_unknown` | Отдельное состояние неопределённого внешнего исполнения. Не бесконечный spinner и не автоматический второй provider call. |
+| POST `/conversations` | Idempotent request UUID → conversation/epoch/writer/effective policy; 0 providers. |
+| PUT `/conversations/{id}/audio/{manifest_id}/segments/{segment_id}` | Proven idempotent bounded input upload; immutable same-ID/same-bytes, mismatch409; durable part receipt; 0 providers. Fixed owner/epoch/TTL/caps. |
+| POST `/conversations/{id}/utterances` | Logical text ИЛИ immutable accepted audio-manifest reference; selected-once → 202 durable queued receipt; не ASR success. Small inline audio разрешён только как тот же envelope/capability, не bypass. |
+| GET `/conversations/{id}/utterances/{uid}` | Safe-read receipt/stage/version/error/section refs; для reconciliation ambiguous submit. |
+| GET `/conversations/{id}/updates?after_revision=N` | Один bounded delta reader активной беседы, not-modified marker; не poll каждой карточки. |
+| GET `/conversations/{id}/sections?cursor=C` | Пагинация private history, не full history на каждый запрос. |
+| GET `/conversations/{id}/sections/{sid}/events?cursor=C` | Страница именно этого result set, current visibility overlay и valid projections; cursor owner/scope-bound. |
+| POST `/conversations/{id}/control` | Idempotent request+enum cancel_draft/start_new_task/resume_section/reset_context; не LLM action executor. |
+| DELETE `/conversations/{id}` | Immediate logical deny + bounded purge receipt, idempotent, 0 providers. |
 
-При timeout после отправки клиент читает receipt. Повтор upload того же UID допускается только после authoritative состояния `upload_incomplete`/`never_dispatched` и атомарной проверки сервера. Глобальное переключение транспортов ради rescue POST запрещено. Explicit повтор после unknown создаёт новое осознанное действие с `retry_of`; UI не обещает, что первая попытка не стоила ресурса.
+Audio part metadata: manifest/segment IDs, index, codec/rate/channels, declared/actual bytes, exact capture start/end offsets, checksum; manifest закрывается с ordered segment hashes/total duration. Неполные, пересекающиеся без разрешённого overlap, foreign или изменённые parts не queued. Exact audio overlap/pre-roll policy удаляет только дубли границы, не короткие слова/отрицания. Closing/reusing manifest после dispatch не меняет уже принятое содержимое. PUT replay безопасен из-за server uniqueness и **0 provider effects**, не потому что запрос маленький. Unreferenced parts очищаются по TTL, общий actor/spool admission предотвращает storage abuse.
 
-## 6. State machine, догон и перезапуск
+Utterance metadata: UID/epoch/writer/sequence/predecessor, explicit target new/section/draft, client time/locale, input kind, text или closed audio manifest. Server HMAC normalized payload, не user-supplied checksum как security proof. Same UID/same payload возвращает existing receipt; другая body409. Server received_at владеет retention; client clock помогает интерпретации даты, значимый неправдоподобный сдвиг требует уточнения. Default event timezone Europe/Kaliningrad.
+
+Receipt: UID/revision/accepted/phase/epoch/high-watermarks/draft or section refs/optional retry_after/safe code. `accepted` только durable intake. Rendering receipt не доказывает exposure. `presentation_applied` означает применение версии, не product success.
+
+401 auth required/expired; чужой/отсутствующий resource404 без identity leak; 409 payload/writer/epoch/base conflict; 410 context/selection/receipt expired; 413/415/422 input envelope/codec/validation; 429 user/global capacity; 503 limiter/service/policy unavailable. `outcome_unknown` — видимый отдельный receipt state.
+
+После потерянного POST response читать receipt, не rescue POST другим origin. Одиночный404 не доказывает отсутствие отправки. Cost-bearing replay допускается только по authoritative never-dispatched proof/атомарному existing contract либо как явное новое действие `retry_of` после объяснения unknown. Клиент не обещает, что первая попытка ничего не стоила.
+
+## 6. Догон, конкуренция и crash recovery
 
 ```text
 receiving → queued → interpreting → interpreted → retrieving → presenting → completed
                  ↘ waiting_capacity ↗
-terminal alternatives: rejected / failed / outcome_unknown / cancelled
+alternatives: rejected / failed / outcome_unknown / cancelled
 ```
 
-У `completed` отдельно указано `presentation_applied`; ранее интерпретированная реплика может быть superseded для выдачи, не будучи потерянной из контекста. Cancellation до dispatch и после dispatch различаются в receipt и limiter evidence.
+1. Auth/owner/epoch/capacity до privileged work. Audio parts считаются принятыми только после durable closed bytes/hash; complete logical manifest + short transaction переводит utterance в queued. Открытый stream не accepted.
+2. Один writer per conversation по умолчанию; обычные вкладки имеют разные conversations. Read-only просмотр истории не writer takeover. Продолжение в новой вкладке/устройстве требует проверенного writer/CAS transition, не голосовой биометрии.
+3. U2, пришедшая раньше U1, ждёт missing predecessor; high-watermark продвигается только по непрерывному префиксу. Skip/cancel отдельной реплики — явный marker, не молчаливая потеря.
+4. Worker claims короткую lease с fencing token. Внешние вызовы не в transaction. Lease expiry не разрешает повтор неизвестного provider dispatch; stage attempt UID/outcome в общем ledger.
+5. Interpret последовательно с правильной base revision. Несколько ещё не отправленных logical additions можно coalesce; транспортные segments одного manifest сначала собираются/валидируются и не порождают отдельные поисковые смыслы.
+6. Retrieval/presenter принадлежат последнему полному intent prefix/revision. Новое accepted дополнение делает старую выдачу неприменимой, но не удаляет transcript/условия/usage прежних реплик.
+7. Atomic section commit проверяет owner/epoch/fence, accepted/processed prefix, draft/current context и совместимые data versions. Unique draft publication исключает дубли. U2 принято до commit → уточняется один draft; после commit → новая section. Это линейная server граница, не скорость DOM repaint.
+8. Клиент принимает монотонные revision только своего epoch, section ID dedupe сохраняет один append после reconnect. Lost network delivery после commit возвращает existing section.
 
-1. Intake проверяет Auth, owner, epoch, writer и capacity; создаёт receiving receipt до длительной обработки тела, ограниченно пишет временное аудио. После закрытого файла/контрольной суммы и короткого DB commit переводит в queued и только тогда отвечает 202. Незавершённое тело — не queued.
-2. Один writer на беседу по умолчанию. Две вкладки получают разные conversation IDs. Открытие старой беседы read-only безопасно; для продолжения новый writer явно приобретает ownership epoch/CAS, старый writer прекращает mutations. Не связывать пользователя голосовым отпечатком.
-3. Out-of-order U2 может ожидать U1, но `accepted_through` продвигается только по непрерывному префиксу. Gap даёт видимое missing-input состояние; сервер не пропускает потерянное «бесплатно» и не применяет отдельно «из них». Отменить отдельную реплику — явный skip marker, а не исчезновение sequence.
-4. Worker берёт короткую DB lease с fencing token; внешние вызовы идут вне транзакции. Lease expiry сама по себе не разрешает повтор provider call. Для каждой стадии хранится общий limiter request UID и outcome.
-5. Interpret U1, затем U2 с правильной базой. Неотправленные соседние дополнения можно batch-обработать в одном Lite-запросе с сохранением UID/order. Уже отправленный контент не пересылается на каждую паузу.
-6. После interpretation берётся последний непрерывный префикс текущего draft. Retrieval/presenter получают именно его intent revision. Новое принятое дополнение отменяет применимость старого результата, но не его provider accounting и не текст U1.
-7. Section commit — короткая транзакция: owner/epoch/fencing совпадают, processed_through покрывает требуемый accepted prefix, draft не superseded, context_revision и data revision проверены. Unique draft publication гарантирует один section. Если U2 атомарно принято до commit, U1-result не публикуется; если после commit — возникает следующий раздел. Это точная граница коалесценции, а не зависимость от времени перерисовки DOM.
-8. Клиент применяет только монотонные receipt revisions своего epoch; section_id dedupe исключает повторный append после reconnect. Server commit уже сохраняет ответ даже при потере HTTP-доставки. Поисковая секция не определяется видимостью spinner.
+Контрольные cases: догон во время ASR и retrieval; два completion в обратном порядке; duplicate payload; U1 failure блокирует dependent U2 без потери её accepted input; old-section refinement даёт новый chronological S3 с parent=S1; target во время записи фиксируется и не переключается молча при scroll; правка уже опубликованного вопроса создаёт revision_of, не переписывает потомков.
 
-### Контрольные гонки
+Crash до queued допускает повтор idempotent input без provider. После pure read можно перечитать compatible snapshot. После mark_sent и до saved provider outcome — unknown, no blind rerun/refund-as-unsent. После persisted model result продолжить следующую стадию без повторного ASR. После section commit/до client ACK — read existing result. Epoch/delete побеждает late callbacks. Exactly-once внешнего провайдера не обещается; local effects дедуплицируются и uncertainty учитывается консервативно.
 
-- U1 ещё в ASR; U2 принята: два receipts, один draft; смысл U1 не теряется.
-- U1 в retrieval; U2 принята: U1 retrieval может завершиться, но не примениться; новый поиск использует полный intent.
-- U1 завершён; U2 — уточнение: S1 immutable, S2 с parent=S1.
-- S1/S2 видны; пользователь выбирает уточнение S1: S3 в конце, parent=S1; scroll не меняет target.
-- Во время записи выбран иной раздел: target фиксируется в момент начала фрагмента; UI показывает старую базу до завершения/отмены либо предлагает явное переключение, не переадресует произнесённое молча.
-- Ошибка ASR U1, U2 зависит от неё: U2 остаётся принятой, но blocked_on_previous; пользователь исправляет недостающий текст. Нет догадки о потерянном условии.
-- Редактирование уже опубликованного вопроса создаёт новый answer с `revision_of`, не переписывает историю/потомков без спроса.
+## 7. Retrieval, история и факты
 
-### Crash semantics
+Validated intent → hard-filter eligibility/current exclusions → semantic ranking → occurrence-family collapse → stable membership → pages. Legacy top-K нельзя объявлять полной выборкой без проверки покрытия. Compact embedding query не обрезает hard conditions: они отдельные typed fields.
 
-После receiving/spool crash: проверка закрытого файла и hash, незавершённый intake допускает повтор того же UID только до provider dispatch. После pure retrieval crash: безопасный повтор чтения с сохранением revision. После mark_sent/до сохранённого provider outcome: unknown; не освобождать лимит как unsent и не делать blind rerun. После полученного и сохранённого provider outcome: продолжить последующую стадию без повторного ASR. После section commit/до ответа клиенту: вернуть уже существующий section.
+`result_set_id` включает ещё не отрисованные страницы; хранит ordered IDs, минимальные eligibility facts и versions, не full Event/media/vector copy. «Из них на побережье» фильтрует все parent members; «можно платно» — явное расширение universe и новое название/выборка. Просроченный/невоспроизводимый snapshot требует visible refresh по прежним условиям, не тихой подмены текущей БД. Предлагаемый technical ceiling 4096 members допускает изменение; при его достижении membership_complete=false и честное описание ограниченного набора, не полнота по умолчанию.
 
-Exactly-once внешний вызов при аварии между провайдером и DB не обещается. Гарантируются durable local identity, не более одного применения результата и консервативный учёт неопределённого dispatch. Удаление беседы/смена epoch всегда побеждает поздний callback.
+Immutable record хранит решение/состав прошлого ответа, **не замораживает пользовательские права/скрытия/жизненный цикл события**. Current exact-hide/undo применяется ко всем sections; скрытая карточка не возвращается из history/exploration. Допустимо компактное скрытое состояние без новой card exposure, restore через существующий recovery action. Отмена/изменение цены/удаление события помечается актуальным overlay/tombstone; CTA перепроверяет current state. Профиль не переписывает задним числом сгенерированную прозу; полный refresh создаёт новую объяснимую выдачу.
 
-## 7. Поиск, полнота выборки и достоверность
+Interpreter получает closed schema, active structured base, маленький recent tail, input/time/locale, не весь raw profile и не admin tools. Presenter получает фактические candidates/IDs/fact IDs. Простой ответ может быть deterministic; содержательное объяснение после retrieval может требовать ещё один Lite call. One-call target не запрещает полезный ответ и не разрешает описывать ещё неизвестные факты. Existing verifier/presenter переиспользуется без двойного списания product Search+voice. Embedding и каждый фактический model attempt отдельно через общий limiter. Lite policy не наследует Flash/Pro/Gemma escalation скрыто.
 
-Порядок: validated intent → hard-filter eligibility → semantic ranking в согласованном корпусе → occurrence-family collapse → result membership → page projection. Если текущий retrieval сначала ограничивает top-K, доказать отсутствие потери hard-filter результатов на контрольных примерах; не утверждать полноту всего каталога по случайным K candidates.
+Malformed/invented IDs/URLs/claims отвергаются. Structured output не truth proof; цены/адреса/времена/маршрутные actions из trusted fields. Нет infinite repair chain. Unknown price не free, unknown transport не придуманное расписание. Known address/проезд можно дать без ожидания полного геокаталога, с existing provenance. Mention/advertisement не endorsement «Культурной чайки». Evidence gaps не блокируют основной discovery, но ограничивают соответствующий ответ.
 
-`result_set_id` фиксирует полную логическую выборку текущего поиска, включая ещё не отрисованные страницы. Хранится ordered membership всех найденных подходящих canonical occurrence/family IDs плюс минимальные факты, по которым принято решение, policy/catalog/taxonomy revisions. Не копируется весь Event, медиа, embedding или canonical event DB.
+## 8. Capture, UX и отсутствие информационного голода
 
-`refine_selection` означает подмножество этого membership. Простое новое ограничение фильтрует весь parent set, не только первый экран. `new_search` может искать шире. «А можно и платно?» при снятии free — расширение: показать новую формулировку и искать по изменённым условиям, а не ограничиваться старым free-only membership. Host валидирует вид операции; неоднозначное расширение не делается тайно.
+Независимые автоматы capture off/permission/listening/speech/paused/error и work idle/uploading/queued/interpreting/searching/answering/ready/error/unknown. Visible foreground mic-session включается явно; VAD boundary может отправить полную фразу, пока capture продолжает принимать догон. Stop останавливает tracks. Inactivity/hidden/pagehide/logout/revoked permission прекращают capture; flush при системном уничтожении процесса не гарантируется. Accepted server state восстанавливается независимо от микрофона.
 
-Если snapshot отсутствует/устарел либо новое semantic условие невозможно корректно проверить по сохранённым фактам, дать явный «Обновить поиск по этим условиям». Не обещать воспроизведение прежней выборки через текущую изменяемую БД. Safety ceiling членства — configurable, стартовый ориентир 4096 IDs; достижение потолка помечает `membership_complete=false`, а не выдаёт top-K за всю выборку. В этом случае «из них» ограничено честно описанной найденной частью или запускает явное расширение. Это технический размер результата, не лимит диалога.
+Первый проверяемый backend: getUserMedia → AudioWorklet bounded ring → локальный VAD → независимые WAV/PCM16 mono16kHz segments с правильным resampling. Не переименовывать raw rate устройства. Допустимо переиспользовать уже пригодный MediaRecorder/Opus/AAC adapter после тех же тестов; timeslice blob не считается самостоятельным декодируемым audio автоматически. Не строить одновременно два обязательных recording engine и не переносить transcoding в Fly.
 
-Отображение истории сохраняет её состав и факты ответа. Card projections могут быть актуализированы отдельно с меткой изменения; отменённое/удалённое событие получает tombstone/status overlay, а не исчезает без следа. Любое текущее действие проверяет live state. Старое «бесплатно» после исправления цены не показывается как актуальная гарантия: важное изменение сразу отмечается; для новых рекомендаций нужен согласованный свежий snapshot.
+Калибровочные proposals: pre-roll250ms, post-roll350ms, end-of-phrase1200ms, inactive mic30s. VAD не semantic end; сохранить тихое «не» важнее агрессивного вырезания всех пауз. Endpoint limit не sentence limit: segment size по §3.2, logical voiced group ориентир180s/aggregate8MiB, pending audio RAM16MiB. При approaching capacity закрыть валидную часть и продолжить chain, если admission позволяет; при невозможности принять новое — честно остановить запись, не потерять принятое. Значения проверяемые, не уже принятые жёсткие allowances.
 
-Explanation выбирает факты только из canonical event/location/transport evidence. Для адреса не ждать полного геокаталога, если trusted address уже есть. Название, stop ID, расписание, время пути и расстояние — разные поля; модель не выводит неизвестное из знакомого названия города. «Рекомендует Культурная чайка» допустимо только по подтверждённому endorsement, не mention/advertisement. Незавершённый source directory не блокирует основной voice-search v1.
+PCM16/16k mono = 32 000 bytes/s; 30s ≈0,96MB до envelope. Wire size определяет более раннюю границу; base64/multipart учитываются фактически. Audio не в Supabase Storage/Realtime и не в generic12KiB text outbox; transport adapter/data-flow явно описан. Persisted browser audio очередь не добавляется молча. Text limit proposal8192 символов даёт явную validation error, не silent180char truncation.
 
-### Модельные стадии
+First result — общие skeletons; при уточнении completed sections остаются. Labels: «Ищу события. Можно дополнить», «Дополнение принято», «Не удалось распознать первую фразу», «Ответ готов ниже». No fake percentages/pretend streaming ASR. Aria/live/keyboard/reduced motion согласуются с shared shell; duplicate announcements исключаются. Небольшой полезный ответ раскрывается; важная оговорка не прячется мелким шрифтом.
 
-Interpreter получает роль и closed schema, текущую structured base, небольшую историю, locale/time anchor и входное text/audio. Возвращает transcript, scope proposal, IntentPatch, нужное уточнение/unsupported. Не получает admin tools, SQL или provider secrets. Event descriptions всегда данные, не system instructions.
+## 9. Общая оболочка и персонализированная выдача
 
-Presenter получает только validated input и bounded retrieved facts, allowlisted IDs/fact IDs. Для стандартной выборки достаточно шаблонного резюме; для содержательного совета/транспорта допустим отдельный Lite-вызов. Не принуждать к одному вызову, если это означает выдумывание ещё не полученных фактов. Не наследовать Gemma overflow старого verifier в voice policy без owner decision; embedding остаётся существующей отдельной policy.
+System owner — `pattern.detached-chrome-control-islands`, DS #47, [отдельное проектирование](../design-system/window-prompts/20260905-floating-islands-system-design.md). Search не задаёт global z-index, brand tokens и второй layout engine.
 
-Structured output проверяется как синтаксически, так и семантически: JSON schema не доказывает фактическую точность. Provider поддерживает только свою часть JSON Schema; canonical runtime validator полнее provider prompt schema. Невалидный ответ не запускает бесконечную repair chain: полезные canonical results показываются с честным degraded status; незавершённый intent просит одно необходимое уточнение.
+Предлагаемый adapter: Search передаёт role voice_composer/answer_context, instance/section IDs, expanded/focused/recording, reachable stop/status, measured size и focus restore target; shell возвращает occupied rects, effective insets/viewport, layout/layer/expansion policy. Semantic intents select_refinement_base/reveal_section/announce_status типизированы, не generic произвольный event bus.
 
-## 8. Capture и пользовательские состояния
+Section heading sticky только внутри своего раздела ниже actual top occupancy, следующий заменяет предыдущий; flow/sticky один semantic heading, не pin всей прозы. One reveal нового draft-heading по submit; пользовательский scroll к истории отменяет auto-follow, late result даёт «Новый ответ ↓». Anchor section+element+relativeoffset сохраняется после image load/Подробнее/old pagination/Back. Stop и последний CTA доступны, controls не уезжают под пальцем. Scrolling не меняет refinement base.
 
-Два автомата независимы: `capture=off|permission|listening|speech|paused|error`; `work=idle|uploading|queued|interpreting|searching|answering|ready|error|unknown`. Слушаю не означает «модель уже распознала»; queued не означает готово.
+### 9.1. Existing personalization policy — обязательный вход
 
-Основной режим v1: явное нажатие запускает видимую foreground voice-session. VAD отмечает речь и конец фразы; после отправки фразы микрофон может принимать догон без ожидания сети. Видимая кнопка stop завершает сессию и tracks. При inactivity, hidden/pagehide, logout или потере permission захват прекращается; сервис не обещает, что браузер даст flush при каждом системном уничтожении процесса. Уже принятый сервером контекст восстанавливается независимо от микрофона.
+Use current explicit overlay и последнюю совместимую `profile_projection`, а не second assistant profile. Activation и localization eligibility проверяются по existing primary contract. `personalization_started_at` может возникнуть от разрешённых meaningful actions; обычный voice query/scroll/share не первый activation. «Запомни, что люблю джаз» — предложение explicit interest-profile-change, не автоматическая запись из любого упоминания жанра. Profile/analytics/history/communications имеют разные разрешения; optional analytics denial не выключает уже eligible personalization.
 
-Предпочтительный минимальный capture backend: getUserMedia → AudioWorklet bounded PCM ring → проверяемый локальный VAD → самостоятельные WAV-фразы, mono PCM16, 16 kHz после проверенного resampling. Так pre-roll не теряет начало «не», каждая фраза декодируема и длинная тишина не передаётся. Raw sample rate устройства нельзя только переименовать в 16 kHz. VAD/переходы одинаковы для тестового WAV и микрофона; energy gate сам по себе не считать доказанным качественным VAD.
+Порядок приоритетов: lifecycle/security/explicit hides → surface eligibility и текущий явный query/context → разрешённые мягкие preference/ranking. Calendar chronology не переделывается; theme collections слабее ForMe; voice не исключение из hard-hide. Personalization может быть выключена/холодная/compatible/stale/degraded; эти состояния видимы без выдуманной фразы «я учёл интересы», когда projection не применялась.
 
-Это инженерный выбор для первого проверяемого пути, не запрет более экономного native Opus/AAC: при наличии уже пригодного web-recording модуля предпочесть его после тех же boundary tests. Native MediaRecorder adapter должен доказать MIME negotiation и декодируемость целого utterance; произвольные timeslice chunks не всегда независимые файлы. Не добавлять одновременно два обязательных capture backend. Клиентская компрессия после доказанного capture рассматривается по uplink/CPU measurements, не как причина переносить transcoding в Fly.
+Explicit current action применяется быстро своим shared command; derived profile считается scheduled/threshold materializer, не LLM при открытии и не после каждого сообщения. Opportunistic ETag/next_refresh refresh не блокирует initial render/local scoring и не создаёт новый профиль на каждую беседу. Pending actions проходят existing primary/replay guards; объявление idempotent дизайна не меняет фактический selected-once saved-state endpoint без server-proof.
 
-Стартовые калибровочные значения: pre-roll 250 ms, post-roll 350 ms, конец фразы после 1200 ms без речи, завершение бездействующей mic-session после 30 s с явным статусом. Они конфигурируемы и проверяются на отрицаниях/паузах, не являются принятыми владельцем SLA. VAD не определяет смысловое окончание вопроса; последующая речь присоединяется по правилам draft.
+Уже видимый префикс/активная карточка не пересортировываются при новой projection. Offscreen update работает по usable viewport с actual occlusion, stable anchor и общий served-list record. Global hide/undo §7 остаётся immediate overlay даже для прошлых sections. Sensitive topics и artifact/promo hunting не превращаются в долговременные facets; short/mid/long interest horizons принадлежат model contract, не history TTL.
 
-Технические ceilings v1 для rehearsal: 180 s voiced audio и 8 MiB на самостоятельный upload; 16 MiB pending browser audio. При подходе к границе — закрыть валидный сегмент и продолжить цепочку, если capacity есть; ни слово, ни blob не обрезать молча. На фоне заполненной очереди ясно остановить mic и сохранить уже принятое. In-memory blobs живут отдельно от 64 KiB общего persistent browser-state бюджета; долговечная offline audio очередь по умолчанию отсутствует.
+## 10. Хранилище и память
 
-WAV имеет цену uplink: mono PCM16 16 kHz = 32 000 B/s, 30 s ≈ 0,96 MB до headers/base64. Это расчёт, не замер. Аудио идёт напрямую в выбранный voice origin, не в Supabase Storage/Realtime и не через Fly. Встроенные caption/конечная расшифровка допускают ручное исправление; 8192 characters text ceiling отличается от legacy 180 и даёт явную ошибку, не truncation.
+Primary — существующий approved personalization/identity store с сохранением localization gate. Логические entities: conversation; utterance/receipt; answer section; result members. Дополнительные audio-part receipts могут быть ограниченной частью receipt/spool manifest, не обязательной пятой большой БД. При наличии равнозначных existing entities расширить их, не дублировать.
 
-Первый ответ использует общие skeletons; уточнение сохраняет старые sections. Статус обновляется по фактической стадии. Нет fake percent, притворного streaming transcript или дублирующих aria-live announcements. Типичный текст: «Ищу события. Можно дополнить», «Дополнение принято», «Не удалось распознать первую фразу», «Ответ готов ниже».
+Conversation owner/epoch/writer/revisions; utterance UID/sequence/predecessor/hash/phase/fence/attemptrefs/error/transcript/audio pointer; section parent/intent/prose/versions/expiry; members IDs/rank/minimal eligibility facts/card references. Unique UID, writer-sequence и one-publication-per-draft; section membership/cursor owner-safe. Indexed queued work/expiry/ownerupdated/sectionrank. Ни full profiles, ни eventmedia/vectors здесь не дублируются.
 
-## 9. Граница с системой островов
+Raw tables private, browser direct DML нет; exposed views/RPC restricted grants/RLS, security-definer fixedsearch_path, service-role route own owner checks. Payloaduser_id/user_metadata не authority. Crossuser parent/cursor, malformed keys и raw logs — negative tests реальными ролями. Authkeys вне 64KiB app storage eviction. Temporary audio private restricted spool+TTL; deletion нет публичных raw URLs.
 
-Сквозной владелец — `pattern.detached-chrome-control-islands` в lovekgd-design-system, исходный PR #47. Полный design handoff: [20260905-floating-islands-system-design.md](../design-system/window-prompts/20260905-floating-islands-system-design.md). Этот Search не определяет глобальные координаты, visual tokens или порядок всех chrome layers.
+Proposed defaults для проверки, не новая общая retention policy:
 
-Минимальный adapter contract, имена предлагаемые:
-
-```text
-Search → Shell:
-  role=voice_composer / answer_context
-  instance_id, scope_section_id, expanded, input_focused
-  recording, stop_action_available, status_kind
-  measured_size, preferred_placement, restore_focus_target
-
-Shell → Search:
-  effective_top_inset, effective_bottom_inset
-  occupied_rects, viewport_rect, layout_mode
-  layer_role, permitted_expansion, overlay_interaction_state
-
-Semantic events:
-  select_refinement_base(section_id)
-  request_reveal_section(section_id, reason=submit|explicit_jump)
-  announce_status(text, category)
-```
-
-Только общая система разрешает конфликт с nav/header/CTA/drawer/consent/toast/keyboard. Не вводить универсальный глобальный event bus с произвольными payloads: это маленький typed adapter над фактическим shell API. Названия согласует окно островов без изменения смысла доменных полей.
-
-Заголовок section-contained sticky ниже занятой верхней области; следующий заменяет предыдущий, обратный scroll восстанавливает старый. Pin только компактный title/context, не длинный вопрос/ответ. Один semantic heading, без focusable дубля. Composer не закрывает последний CTA и не перемещает stop под пальцем.
-
-По submit создаётся draft boundary и один переход к его заголовку. Scroll anchor — `section_id + element_id + relative_offset`, не только абсолютный Y. Если после submit пользователь прокрутил историю, автоматическое следование отменяется до explicit jump; новый ответ даёт «Новый ответ ↓». Поздние изображения/Подробнее/пагинация старого section и Back не сбрасывают выбранное место. Чтение истории не меняет refinement target.
-
-Обычно достаточно 2–4 содержательных предложений и раскрытия подробностей, но нельзя скрывать важную неопределённость/условие регистрации ради compactness. Не уменьшать шрифт вместо правильного ограничения композиции.
-
-## 10. Хранилище, владение, память
-
-Выбран primary — существующий Supabase personalization owner. Предлагаются четыре логические сущности в private schema: conversation; utterance/operation receipt; answer section; result members. При наличии равнозначной уже действующей receipt/entity таблицы расширить её, задокументировав mapping, а не добавлять дубль.
-
-- Conversation: owner, epoch, writer, high-watermarks, latest section, active intent/revision, activity/expiry/retention choice.
-- Utterance: UID, conversation/writer/seq, predecessor, payload HMAC, phase, lease/fence, attempt refs, safe error, temporary audio pointer, transcript на разрешённый срок.
-- Section: committed answer/intent/parent/versions, protected original question, optional revision_of, pagination metadata/expiry.
-- ResultMember: section, canonical occurrence/family IDs, rank, bounded eligibility facts, trusted card reference. Unique(section, member identity), без полного Event/media/vector.
-
-Unique constraints: (conversation, writer, client_sequence), UID, one committed publication per draft. Индексы owner+updated_at, queued next_attempt_at, expiry, section+rank. Foreign ownership и ancestry проверяются транзакционно; нельзя указать чужую parent section даже со своим conversation_id. Нет межпользовательских branch-links.
-
-Raw tables не выдаются browser напрямую. Для exposed RPC/views — явные grants, RLS и security boundary. Privileged role обходит RLS, поэтому она требует собственного owner check; security-definer функции имеют фиксированный search_path и restricted execute. DB security тестируется реальными ролями, не grep исходников.
-
-### Предлагаемая retention policy v1
-
-| Данные | Выбранный default для реализации/проверки |
+| Слой | Срок/поведение |
 |---|---|
-| Неявный active task | 30 min бездействия или смена локального дня — переход в needs_resume, не уничтожение видимой истории. |
-| Без включённой истории | Server conversation доступна только в active session; expiry не позднее 24 h от создания; после inactivity удаление по retention worker. |
-| Включённая история | Committed sections/исходные вопросы/минимальные membership facts до 7 суток; явное resume обновляет задачу, а не бесконечно продлевает жизнь каждой старой реплики. |
-| Внутренний хвост реплик | Последние 6 реплик либо 12 KiB model-context, с сохранением structural constraints; эти пределы не урезают видимую историю. |
-| Аудио | Удалить после durable transcript или отмены; absolute safety TTL 1 h для error/spool; без opt-in архивирования. |
-| Dedupe evidence | Компактные UID/seq/digest/attempt refs до завершения retention conversation. После очистки full receipt high-watermark всё ещё запрещает повторно исполнить старый seq. |
-| Профиль | Existing lifecycle, только явные подтверждённые preferences/действия; общий reset/delete не копируется. |
+| Implicit active intent | 30min inactivity/смена локального дня → needs_resume, не стирание видимой ленты. |
+| История выключена | Active-session data, absolute expiry не позднее24h; конкретный inactivity purge не должен неожиданно уничтожить pending accepted work. |
+| История включена | Sections/questions/minimum membership до7days; resume не продлевает любую старую реплику бесконечно. |
+| Model context | Последние6 реплик либо12KiB, сохраняя structured constraints; это не видимый history cap. |
+| Audio | Удалить после durable transcript/cancel, absolute safety TTL1h для spool/error; не implicit archive. |
+| Dedupe | UID/seq/digest/attempt refs до завершения conversation retention; compact high-watermark запрещает повтор oldseq после compaction. |
+| Profile/purpose data | Существующий профильный lifecycle/горизонты и отдельные purpose policies, не этот history TTL. |
 
-Это предлагаемые числовые defaults для review, не уже применённые/утверждённые лимиты. UI consent/history control должен точно отражать, что исходный вопрос хранится вместе с section; удаление processing transcript при сохранённой копии вопроса не называется полным удалением текста.
+Logical expiry/delete блокирует чтение немедленно; bounded purge target≤1h с alert, backups/provider retention отдельно. Сохранённая user_query в section всё ещё текст: удаление processing transcript не равно удалению всех копий. Logout останавливает capture/writer и доступную локальную проекцию, но не отменяет opt-in account history; newidentity не получает late callbacks. Reset profile, new search и delete history — разные controls. Старое «завтра» anchored к исходной дате; resume перепроверяет дату/актуальность, не сдвигает молча.
 
-Logical expiry/deletion отсекает чтение немедленно, purge выполняется bounded job; target lag ≤1 h с alert. Backup/провайдер retention описывается отдельно: удаление local spool не доказывает удаления у внешнего сервиса. На logout mic/локальная доступная проекция и writer прекращаются; opt-in история аккаунта не уничтожается, но старый callback не появляется в новой identity. На delete отзываются pointers и очищаются live caches; anonymized aggregates следуют существующей политике.
+Existing shared browser outbox16records/12KiB/24h/5attempts и total64KiB не увеличивается из-за analytics legacy7day proposal; применить пересечение применимых budgets. Browser delivery TTL не равен server analytics/history retention. Нельзя вытеснить явное несинхронизированное state без честного terminal/recovery состояния.
 
-«Завтра» сохраняет исходный absolute anchor. Возобновление через день показывает дату и проверяет актуальность; нет автоматического сдвига на ещё один день. История≠active context≠постоянный профиль. Не нужен vector memory index или голосовой биометрический идентификатор.
+## 11. Ресурсы, egress и кэш
 
-## 11. Ресурсная политика и egress
+Один provider ledger, отдельная generous dynamic voice product policy. Cheap auth/abuse/size → duplicate lookup → fair logical-action admission → lease → reserve конкретного provider stage → mark_sent→call→finalize. Segments одного input и retries receipt не новые user questions; все реальные provider attempts учитываются. Accepted bytes/utterances не уничтожаются из-за снижения policy. Emergency stop честный и отдельно от refund.
 
-Один shared provider ledger; отдельная `voice_search` product allowance допускает щедрый динамический доступ. Две цели одновременно: использовать свободный разрешённый ресурс и не дать одному клиенту захватить весь interactive queue.
+Policy pure function над approved config/headroom RPM/TPM/RPD/spend/queue/activeusers/stagecost. `effective_user_burst=min(approved_user_ceiling,base_burst+fair_share_of_spare_capacity)`. Hysteresis не даёт мигания из-за одного slowcall; borrowing снижается при pressure, discretionary batch/tests уступают interactive на safe boundaries, aging/round-robin сохраняют вход новым людям. Numericceilings из actualsharedusage, не произвольных «трёх поисков». Queue/stage deadlines не оставляют бесконечный spinner. Qwen CPU slots/runtime отдельный resource dimension, не GeminiRPM.
 
-Порядок admission: cheap abuse/input/auth check → duplicate receipt lookup → пользовательский token bucket по рабочим cost units → fair queue/lease → reserve конкретного provider stage → mark_sent → call → finalize actual. Дубликат не создаёт новый product charge. Согласованные technical fragments одной принятой реплики не становятся отдельными «поисками». Actual sent calls учитываются всегда; сообщения UI о remaining не подменяют серверное решение.
+Supabase egress включает DB→service; no fullhistory/membership/vectors на каждый poll. Propose delta poll1.5s→6sbackoff+jitter только pending foreground conversation, bounded cache/no sensitive sharedentries. Pageidle не постоянный healthpoll. 50kturns×8KiBstate≈0.41GB и ×50KiBresults≈2.56GB — только иллюстративный расчёт; добавить receipts/Auth/bridge/profile/stats и actual responsebytes. Freequota не presumed sparecapacity.
 
-Начальная реализация policy — pure decision function над версиями config и snapshots: remaining RPM/TPM/RPD, spend headroom, active users/queue, estimated stage cost, oldest wait. `effective_user_burst = min(approved_user_ceiling, base_burst + fair_share_of_spare_capacity)`. При pressure прекращается заимствование свободной ёмкости, deferred discretionary batch/test jobs уступают interactive на границах admission. Новые пользователи получают обслуживание через round-robin/aging, не только старые долгие диалоги.
+Cache identity: intent + parentmembership signature + catalog/corpus/taxonomy/prompt/policy + timeanchor/locale + applied profile/explicit-state revision. Query hashHMAC. Private output partitionedпоowner, publiccache не rawquestions или personalprose. Degradedshortcache снижает повторный расход при outage. Profile change не неявный historyrewrite; exacthideoverlay всегда current.
 
-Hysteresis: переход в pressure требует нескольких плохих наблюдений, выход — устойчивого восстановления; исходные windows/thresholds задаются versioned config и fake-clock tests. Стартовые user/RPM/spend numbers заполняются из фактического headroom и разрешённого бюджета перед enablement — не из придуманного числа «три поиска». Нельзя резервировать неограниченное будущее диалога. Lowering policy не откатывает accepted text/context или уже выданную lease, кроме явной emergency safety остановки с честным status.
+## 12. Статистика и критерии результата
 
-Stage timeouts и queue deadline ограничены; при превышении work становится failed/waiting user action, не висит вечно. Cost-bearing retry после неизвестного исхода не автоматический. CI concurrency ограничивает CI, но не заменяет cross-system limiter. Qwen CPU slots/runtime — другой измеритель ресурса; общий policy layer не притворяется, что CPU расходует Gemini RPM.
+Владелец definitions/consent/envelope/retention — [Analytics](../analytics/README.md). Feature измеряется только после actual terminal readout, не по названию отправленного события. [Release integration §§4–5](../../static-personal-announcements/release-integration.md#4-статистика-что-именно-доходит-до-владельца) задаёт общие стыки, no competing pipeline.
 
-Supabase egress бюджетируется по actual response bytes всех service classes, в том числе DB→voice service. Не отправлять полный history, membership, vectors или карточные медиа на каждый статус. Delta polling только активной беседы: начальный интервал 1,5 s с backoff до 6 s, jitter, остановка в hidden/terminal; лёгкий process cache обслуживает повторные version reads, не меняя owner boundary. При потере процесса polling продолжает читать authoritative receipt через bounded DB path.
+| Вопрос | Наблюдение и denominator | Решение |
+|---|---|---|
+| Помог голос найти событие? | eligible/exposed actor population → event_value/intent_action; отказ в capacity, correction/abandonment/latency отдельно | Развивать либо исправлять actual bottleneck, не максимизировать число реплик. |
+| Работает уточнение? | accepted refinement → rendered/seen result → useful action; сравнение при сопоставимых corpus/eligibility | Менять intent/retrieval/presentation. Causal uplift только зарегистрированный holdout. |
+| Не мешает история/остров? | real exposed controls/sections, accidental jumps/errors, downstream CTA; QAocclusion рядом | Менять navigation/layout, не countsticky transitions. |
+| Применение профиля полезно? | compatible/static coverage, cards-to-value, diversity/hide; registered experiment | Менять surface/model policy, не выводить эффект из selfselection. |
+| Надёжно сохранено и учтено? | primary ACK → optionalprojection → sinkreceipt → aggregate/readout coverage | Исправлять конкретный маршрут/этап без ложного productfailure. |
 
-Пример стоимости памяти — расчёт, не измерение: 50 000 ходов × 8 KiB исходящего состояния ≈0,41 GB; ×50 KiB карточной выдачи ≈2,56 GB. К этому добавляются receipt reads, Auth, cache/прочий трафик. Перед release нужны замеры bytes/turn, p95 payload, retention row counts, purge lag и cache hits. Небольшой текст не повод обещать отсутствие расхода.
+Единицы: записан звук ≠ accepted utterance ≠ model response ≠ rendered answer ≠ seen answer ≠ полезное действие. Denied opportunities не исключаются молча из картины доступности; essential aggregates без actor tracking не смешиваются с consented conversion denominator.
 
-## 12. Кэш и доступность
+Cardexposure по общему session×surface×event правилу, не новый uniqueevent для каждой section. Section-local analysis отдельно. Flow→sticky однойшапки, повтор viewport и Back не pageview. Фактический servedorder/scorepolicy/profile/corpus/experiment привязан к existing served-list/presentationreceipt; section_id не подменяет его. Occlusion от sharedshell учитывает visibleportion без rawcoordinate tracking.
 
-Cache key Search включает effective normalized intent, parent-membership signature для subset, catalog/corpus/taxonomy/prompt/policy versions, locale/time anchor и profile revision при персонализации. Query hash — HMAC, не угадываемый plain SHA. Общий cache не содержит чужих вопросов/личных answer sections; private result cache partitioned по проверенному owner. Transient degraded cache отдельно маркирован, чтобы outage не размножал одинаковые попытки.
+Strongstate/actionфакты из canonical store, weakvisibility/hints/depth из consented compact summaries, operationalrouting/usage из отдельного минимального evidence. Одна voice/touch/keyboard CTA + retry = одинprimaryfact с modality. Save/calendar durable state един; ICSexport не внешний import, ticketclick не purchase/attendance. Суммарные TG/VK/siteobservations не uniquepeople. `/general_stats` не заменяет productdashboard.
 
-Предлагаемый новый status object: `/data/assistant-availability.v1.json` в существующем CDN/bucket. Поля: schema_version, enabled, state available/degraded/unavailable/unknown, checked_at, valid_until, minimum_client_contract, optional coarse retry_after. Никаких JWT, raw errors, key aliases, personal quota.
+Optionalstats: существующий accumulator/outbox → Yandexingest либо Supabaseblindbridge → одинidempotentsink/YDB → dailyaggregates/privateownerreport. BridgeнеrawSupabaserows и не analyticsSOR. PrimaryACK/asyncoutbox отделены от YDBдоступности; failureprojection не повторяет productcommand. End-to-end terminaltests доказываютsinkreceipt, не просто HTTP200proxy.
 
-Лёгкий service/health observer публикует status, не запускает Astro rebuild. Стартовый update/cache интервал 30 s, valid_until 90 s; потеря publisher превращает состояние в unknown, а не сохраняет green. Shallow process health отдельно от возраста последнего deep canary; manifest не изображает каждую проверку настоящим ASR запросом. Existing protected health workflow проверяет глубокий путь реже через общий лимитер. Не использовать GitHub cron как точный 30-second realtime ticker.
+WeakUIsummary входит в общий≤3batches/session/bytebudget; no request на VADframe, каждуюreplica,scrolltick,stickytransition. Publicanalyticsне rawaudio/query/modelanswer/DOMtext/fullprofile/tokens/privateURLs/precisecoordinates. Productanalyticsconsentотдельный: без него0optionalobservations, но Searchиeligibleprofile работают. Stableanalyticsactor не прячется подessential. Test/preview/bots/synthetic отделены поexistingenvelope; многократныеQwen/CIruns не улучшают userretention.
 
-Браузеры читают CDN с кэшем, без cache-busting и per-tab direct Devstand ping; личный допуск проверяется сервером при submit. На активном разговоре outage не удаляет composer/историю; доступен текст либо обычные фильтры. Vector-only fallback обещается только когда сам retrieval действительно доступен, не при любом provider outage.
+Каждый readout имеет query/expectednumerator/denominator/coverage/version/purpose/guardrails. Missingorlatebatch — gap/INSUFFICIENT_DATA, не нулевойинтерес. Assistedsequence не causal. Reviewed finding/options/decision/followup идут в existingProductAtlasanalysis, не rawstream/profile. Optionalactionmap остаётся default-OFFcampaign и не обучаетпрофиль.
 
-## 13. Security, privacy и эксплуатационные prerequisites
+## 13. Доступность, privacy и эксплуатация
 
-Публичное enablement отдельно требует проверки provider eligibility, возрастной/региональной применимости, режима обработки реального аудио и data-flow/localization обязательств. Предыдущий обзор не заменяет проверку конкретного договора/проекта. Не обходить ограничения перемещением URL, чужими ключами или скрытой сменой модели. Разработка на synthetic/mocked данных не доказывает public admission.
+Proposed `/data/assistant-availability.v1.json` в existingCDN/bucket: schema/flag/coarsestate/checked_at/valid_until/clientcontract/globalretryhint, безpersonalquota/secrets. Lightpublisher/observer не Astrorebuild; initial30supdate/cache,90svalidity — тестовыепараметры. Expiredpublisher→unknown; deepliveASRcanaryотдельно отshallowhealth. GitHubcronне30secondheartbeat.
 
-Threat cases: чужой conversation/section UID; forged owner; replay sequence; payload substitution; raw Markdown/HTML injection; prompt instructions из события; rogue map URL; giant/decompression audio; resource exhaustion; leaked client logs; сохранённая история на общем устройстве; compromised privileged RPC. Ограничить decoder CPU/wall time, MIME sniffing, CORS, content security, upstream destinations и вывод внутренних ошибок. VAD не DDoS-защита.
+BrowserCDNcache безcachebusting/directper-tabpings. Activecomposer/история не исчезают наoutage; correctfallbackпоcapability. Vector-onlyнеобещается при недоступномupstreamembedding/retrieval. Локальный сбой не глобальныйYandexoutage.
 
-Deployment config manifest перед включением обязан содержать verified service origin/health, Auth issuer/audience, existing DB/limiter bindings, model policy capability, voice allowance ceilings, exact code/prompt/schema/corpus revisions и purge/alert настройки. Отсутствующий обязательный binding держит voice flag OFF. Это конкретная эксплуатационная проверка, не необходимость заново придумать архитектуру.
+Publicenablement требует actual serviceorigin/supervisor/health, Auth/eligibility, DB+limiterbindings, approvedmodelcapabilities/provider/data-processing/region/audience/localization, routecaps/probes, actualbudget, schema/prompt/corpus/UIversions, purge/alert. Незавершённыйbinding держитflagOFF; mockeddevelopment неblocked целиком. Не обходитьprohibitionключами/proxy/geography или hiddenmodel. History/voiceprivacy отдельно отpublicpersonalpageforwardablelink.
 
-Наблюдаемость: stage duration, queue, accepted/processed gap, duplicate/rejected counts, stale result suppressions, provider actual usage, outcome_unknown, egress, purge lag, end-to-end first useful event. Без raw audio/text/токенов в public logs/общей аналитике. Prompt/corpus/version IDs позволяют воспроизвести тест, не публикуя персональные данные.
+Threats: foreignconversation/parent/cursor, payloadsubstitution/replay, anonymousprivilegeupgrade, sourcepromptinjection/HTML/rogueURL, decompression/giantaudio, spoolabuse, rawlogs/generaldeviceleaks. BounddecoderCPU/wallclock, redactlogs, checktruecodec/bytes, scopefixedrelay. VAD/CORS неantiabuseproof. Sourcecode/blockdiagramsнеlegalcomplianceevidence.
 
-## 14. Пакеты реализации и границы записи
+## 14. Пакеты реализации и rollout
 
-| Пакет | Содержание | Где и кто | Definition of done |
-|---|---|---|---|
-| A — contract core | Type definitions, IntentPatch validator, timeline reducer, fake-clock policy decision, fixtures | ChatGPT, feature branch; будущие `site/src/lib/assistant/`/shared domain files | Реальные unit/property tests, в том числе отрицательные; без провайдеров. |
-| B — durable intake | Owner-scoped endpoints, DB migrations/RPC/lease/receipts, queue/restart, existing limiter adapter | Кодовый агент, proposed `services/site-assistant/` + current Supabase migration conventions | Test DB grant/RLS/CAS/crash tests; zero bypass; signed-in text dialogue работает в test environment. |
-| C — audio/UI vertical slice | Один capture backend/VAD, actual upload, transcript editing, dogn, canonical renderer, shared-shell adapter | ChatGPT для bounded source; агент для browser/runtime integration | WAV fake mic проходит настоящий capture; delayed/duplicate paths; никакого page-local card/layout fork. |
-| D — acoustic quality | Frozen Qwen corpus и маленький human holdout; protected live provider tests | ChatGPT+my-data-hub для Qwen; existing CI live lane | Exact artifacts, verified words/slots, provider accounting; no budget ≠ PASS. |
-| E — system/release | Согласованный island contract, SoT/native Penpot states, mobile lifecycle, staged deploy/rollback | Текущие family owners/#621 и integration agent | Один Kaggle published preview, exact release tuple, applicable L0–L3 evidence. |
+| Пакет | Результат | Исполнение и доказательство |
+|---|---|---|
+| A — core contracts | IntentPatch/timeline/resource-policy, sourceowner mapping, measurement fixtures | ChatGPT; actual unit/property/fake-clock/aggregate oracle, no providers. |
+| B — durable paths | Registeredcontrol/media routes, owner-scoped intake/DBleases/receipts, limiter/sharedsearch integration | Кодовый агент; realtestDB/HTTPfaultmatrix, oneeffect, no rawkeys/bypasses. |
+| C — useful UI journey | Capture/VAD/transcript/dogon/history + canonicalcards/sharedshell + currenthide/profileoverlay | Boundedsource ChatGPT и actualbrowserintegration агент; realfakeaudio→upload, orderedrace, stabletargets. |
+| D — acoustic and measurement | FrozenQwen/humanholdout, permittedliveASR, sink→aggregate→readout onsynthetictestidentity | ExistingprotectedCI/my-data-hub; actualcounts/versions, nobudget≠PASS. |
+| E — system/release | Samecorpus/profile/state SoT/nativePenpot, mobilecritical, oneKagglepreview, releasebindings | Currentfamilyowners/#621/release; evidenceдляцелевогосреза, неслучайногоdemo. |
 
-Это не разрешение текущему окну запустить B–E, применить миграции или изменить STATUS. Source work не зависит от полного redesign островов: до готового общесистемного адаптера модуль работает с существующим inline Search, сохраняя те же semantics. Новый временный floating mock не становится baseline.
+Это не разрешение данного документа на live calls/migrations/deploy. Sourcecore может работать внутри existinginlineSearch до принятия полногоislandlayout, без канонизации временногоfloatingmock. Commonfoundations/STATUS не редактируются параллельно.
 
-Миграции additive: private tables/RPC/grants, default-OFF capability, backfill не нужен. Сначала backend compatible/readable старым UI, затем новый client flag; не удалять старые Search contracts. Rollback выключает новое intake, завершает/честно останавливает уже принятое, оставляет receipt/history read/delete и старую навигацию; не drop DB и не переносить provider работу в Fly. Published candidate rollback — существующий release process.
+Additivemigrations/flags; старыйSearchсовместим, backfillголосовойистории ненужен. Сначалаподготовленныйbackend иvalidroutes, затемclientflag. Rollbackостанавливаетnewintake, завершаетлибо честнотерминирует acceptedwork, сохраняетreceipt/read/delete иstaticnavigation; неdropDB/повторproviders/переносLLMвFly. Publishedcandidate — currentoneKagglepath, нестарыйfutureALB автоматически. F1–F17 и datafreshness/primaryaction/releaseguardsне исчезают.
+
+Первый вертикальный slice: eligibleuser ищет «бесплатно» → уточняет «из них на побережье» → скрываетсобытие → открываетобычнуюподборкубезвозвратаскрытого → получает durableaction/profileoverlay и воспроизводимыйtestreadout. При analyticsdenied продуктработает с0optionalwrites; приYDBdownprimaryуспехнеотменён; приlostACKнетduplicate.
 
 ## 15. Автотестовый контракт
 
-Это тест-план решения, а не утверждение о существующих тестах. Scenario IDs ниже — stable proposals для existing registry; до реализации статус planned. Given/When/Then обязателен в исполняемых тестах, а не только в YAML.
+**План, не пройденные тесты.** Existing registry — единственный executable список. Ниже32 ранее выбранных ID сохраняются; новые seams используют mapping [release-integration §8](../../static-personal-announcements/release-integration.md#8-автотесты-стыков), не второйQAframework.
 
-| ID | Given → When → Then | Уровень |
-|---|---|---|
-| voice.auth_gate | Guest → submit → 0 uploads/providers/Search; login не auto-submit | L0/L1 |
-| voice.patch_semantics | free/Svetlogorsk → «до пятисот, в Калининграде» → replace, не AND/unknown-free | L0 + quality |
-| voice.sequence_gap | U2 приходит раньше U1 → worker → не обходит gap и не теряет условия | DB integration |
-| voice.dogon_asr | U1 ASR задержана → U2 принята → оба receipts, correct ordered context | L0/DB/L1 |
-| voice.dogon_search | U1 retrieval задержан → U2 accepted до commit → старый result не применяется | DB/L1 |
-| voice.commit_race | U2 и commit конкурентны → линейный порядок → один корректный draft/новый section, без дублей | DB integration |
-| voice.history_append | S1 ready → refine → S2 с parent=S1; S1 content unchanged | L0/L1 |
-| voice.old_base | S1/S2 → scroll к S1 → target прежний; explicit refine S1 → S3 parent=S1 | L1 |
-| voice.ordinal_binding | Сказано «второе» по S1 → завершилась S2 → выбран ID из reference set S1 | L0/DB |
-| voice.parent_complete | Подходящий coast event на второй странице S1 → refine → включён | Retrieval integration |
-| voice.expand_vs_subset | free-only S1 → «можно платно» → explicit new universe; не fake subset | L0/quality |
-| voice.stale_membership | Expired/incomplete parent → refine → честный bounded/refresh path | DB/L1 |
-| voice.current_actions | Historical card изменилась/отменена → CTA → current validation/notice | Integration |
-| voice.idempotency | Same UID+body twice → один intake/effect; другой body →409 | DB |
-| voice.unknown_dispatch | Crash после mark_sent → restart → unknown, 0 blind provider repeats | Integration |
-| voice.spool_recovery | Incomplete/closed audio, DB crash → restart → bounded recovery/orphan purge | Integration |
-| voice.epoch_and_delete | Reset/delete/logout → late completion → нет воскресшего ответа/identity leak | DB/L1 |
-| voice.writer_conflict | Две вкладки к одной беседе → concurrent write → CAS/explicit takeover | DB/L1 |
-| voice.retention | Expiry/control delete → read/purge/replay → deny, purge bounded, старый seq не перезапускается | DB |
-| voice.capture_negation | Тихое «не», пауза/начало слова → VAD/capture → отрицание в real audio сохранено | L1/live |
-| voice.capture_lifecycle | Permission revoke/hidden/offline → capture → tracks stopped/честный partial state | L1/L2/L3 |
-| voice.codec_and_size | Invalid MIME/giant file/wrong declared rate → intake → reject до provider | Unit/integration |
-| voice.elastic_capacity | Spare/pressure/recovery fake clock → policy → borrow/fairness/hysteresis, не ложный tiny cap | L0/integration |
-| voice.shared_accounting | Site+test contend same project → dispatch → общий hard ceiling, cancel-sent не unsent | Integration |
-| voice.manifest | Publisher пропал/личный limit → CDN UI → expiry unknown, нет personal data/global outage lie | L0/L1 |
-| voice.status_truth | Capture+queue+ASR одновременно → UI → независимые честные labels, no fake percent | L1 |
-| voice.scroll_anchor | Submit, затем чтение истории/late images → completion → position retained/new answer control | L1 |
-| voice.island_geometry | Header+context+nav+composer+keyboard → interaction → stop/CTA видны, sticky succession корректна | L1/L2 |
-| voice.explanation_only | Вопрос адреса → factual response → ready explanation, не пустой grid/zero result | L0/L1/live |
-| voice.grounding_security | Foreign ID/HTML/source prompt injection/unknown price → output → reject/unknown, no arbitrary tools | Unit/integration/live |
-| voice.same_corpus | Один frozen corpus+state → Astro/SoT/Penpot → совпадающие canonical content/components | Existing parity gates |
-| voice.real_quality | Frozen audio/independent labels → actual permitted Lite+retrieval → slot/negation/event outcome scored | Protected live |
+| ID | Given → When → Then |
+|---|---|
+| voice.auth_gate | Guest/anonymoussession vs eligibleaccount → submit/login → onlyallowedcalls, noautosubmit. |
+| voice.patch_semantics | free/Svetlogorsk → maxprice/Kaliningrad → replace, notAND. |
+| voice.sequence_gap | U2beforeU1 → worker → no missingconstraintskip. |
+| voice.dogon_asr | U1slowASR→U2accepted→bothreceipts/correctorderedcontext. |
+| voice.dogon_search | U1slowretrieval→U2beforecommit→staleresultnotapplied. |
+| voice.commit_race | concurrentU2/commit→one linear draft/newsection outcome, noduplicates. |
+| voice.history_append | S1ready→refine→S2parentS1, originaldecisionunchanged. |
+| voice.old_base | scrollS1→baseunchanged; explicitrefineS1→S3parentS1. |
+| voice.ordinal_binding | «второе» referencedS1→S2ready→IDизS1. |
+| voice.parent_complete | qualifyingeventnextpage→subset→included, notfirstscreenonly. |
+| voice.expand_vs_subset | freeparent→«платно»→explicitexpansion. |
+| voice.stale_membership | expired/incompleteparent→refine→boundednotice/refresh. |
+| voice.current_actions | historicalcancelled/hidden/changedprice→render/CTA→currentoverlay/validation, nohide resurrection. |
+| voice.idempotency | UID+samebody→oneeffect; changedbody→409; mediapartreplay→0provider. |
+| voice.unknown_dispatch | crashaftermark_sent→restart→unknown, noblindrerun. |
+| voice.spool_recovery | partial/closedparts/missingmanifest→restart→safeinputrecovery/purge, neverprematureASR. |
+| voice.epoch_and_delete | reset/delete/logout→latecompletion→noleak/resurrection. |
+| voice.writer_conflict | twowriters→CAS→explicitconflict/takeover. |
+| voice.retention | expiry→read/purge/replay→deny/purge/nooldseqexecution. |
+| voice.capture_negation | quiet«не»/boundary/pause→capture→wordpreserved; transportchunks donotaltermeaning. |
+| voice.capture_lifecycle | revoked/hidden/offline→tracksstop/honestpartialstate. |
+| voice.codec_and_size | badcodec/giantbody/crossroutecap→rejectbeforeprovider; validsegmentsrecoverwholeinput. |
+| voice.elastic_capacity | spare/pressure/recovery→fairborrow/hysteresis, nounnecessarytinycap. |
+| voice.shared_accounting | website+CIcontend→singleproviderceiling; cancel-sentnotunsent. |
+| voice.manifest | stale/localfailure→unknown/coarsehint, noprivatequota/globalfailurelie. |
+| voice.status_truth | capture+pending→independenthonestlabels, nofalseACK/percentage. |
+| voice.scroll_anchor | submit+historyreading+lateimage→anchorretained, newanswercontrol. |
+| voice.island_geometry | header/context/nav/composer/keyboard→reachableCTA/stop/stickysuccession/frozenvisibleprefix. |
+| voice.explanation_only | addressquery→readyfacts, noemptygridfalsezero. |
+| voice.grounding_security | foreignID/rawHTML/sourceinstruction/unknownprice→reject/unknown, notools. |
+| voice.same_corpus | frozenEventCorpus+sanitizedprofile/activation/consent/state→Astro/SoT/Penpotconsistent. |
+| voice.real_quality | frozenaudio+independentoracle→permittedLite/retrieval→slots/negations/outcomes scored. |
 
-PR lane в GitHub-hosted Actions: pure tests + isolated actual Postgres/RPC roles + Playwright. Mocks только у provider boundary; Media capture/upload/DOM идут по реальному коду. Chromium fake WAV input доказывает браузерный capture, не iPhone microphone. Firefox/WebKit проверяют поддержанные пути отдельно; L2/L3 отличают native permissions/PWA/lock от viewport emulation. Никакого self-hosted runner.
+Обязательные дополнительные seam assertions: actualdirect/relay/bothdown/upstreamfaults; reverseanalyticsbridge→same sinkreceipt; disposaltelemetrynotroutehealth; consentoff+activationindependence; currentglobalhide/calendar/surfacepolicy; ETagrefreshwithoutUIjump; rendered-vs-seen/sectiondedupe/servedorder; authoritativeCTAprojectionno duplicate; aggregateoracle/denominator/coverage/testpollution; sharedbudgetTTLintersection; zero-costactionmapOFF; exactrelease/corpusconsumption. Reuse existing IDs/gates гдеониужеесть, newIDsтольковcanonicalregistry.
 
-Набор устойчивых trace fixtures замораживает now/timezone, IDs, corpus, input и контролируемый порядок завершения сетевых запросов. L0 проверяет reducer/policy; L1 проверяет actual DOM/geometry. Search operations security требует реального test DB с ролями и negative rows. Исходные grep/schema checks не заменяют их.
+GitHub-hosted PRlane: unit/property/schema/PII/fakeclock плюс isolatedactualPostgresroles/CAS и faultinjectionHTTPserver; Playwrightнаactualcapture/upload/DOM/geometry. Mockтолькоproviderboundary, не alluserjourney. ChromiumfakeWAVнеphysicaliPhone; Firefox/WebKitпроверятьподдержанныеadapterpaths, L2/L3поnativepermissions/PWA/lock/hardware. Никакогоself-hostedrunner.
 
-Live lane — existing protected workflow/manual release qualification, synthetic test users, checked-out trusted SHA, minimum permissions, pinned fixture hashes, shared limiter и bounded batch. Fork PRs без live secrets; pull_request_target не исполняет недоверенный PR с секретами. Cache smoke и cold-ASR path считаются отдельно. `SKIPPED_NO_BUDGET`, `BLOCKED_PROVIDER_POLICY` и failed capture не PASS.
+Protectedlive: trustedSHA+sessionfixture+testidentity/sink+boundedsharedlimiter, no rawsecretsfromfork/pull_request_target. ColdASRотдельноcachedsmoke. SKIPPED_NO_BUDGET/BLOCKED_PROVIDER_POLICY/failedcaptureнеPASS. Terminal evidence связываетcode/schema/prompt/model/profile/corpus/fixture/UIversions, receivedoutcomes и readout; docgrepнеDBsecurity/liveacceptance.
 
 ### Qwen corpus
 
-Reuse `idea-hub/skills/voice-file-qwen3-tts/` и его BASELINE/LONGFORM-BASELINE/RUNBOOK; подтверждённый ранее resource `zigomaro/yazyki-rossii-qwen3-tts-cpu-0901-r2/2` — donor, не новая Search-run запись. Для Search fixtures одна notebook family/стабильный slug, CPU baseline, versioned outputs. Не перезаписывать чужую лекционную задачу и не менять dependency stack без причины.
+Reuse idea-hub `skills/voice-file-qwen3-tts/{SKILL.md,BASELINE.yaml,LONGFORM-BASELINE.yaml,RUNBOOK.md}` и проверенныйраньше donor `zigomaro/yazyki-rossii-qwen3-tts-cpu-0901-r2/2`. Дляsearch однаstable notebookfamily сversionedCPUoutputs, неoverwriteлекционнойjob/сменазависимостейбезоснования. Новыеrunsданнымдокументомнезапущены.
 
-Первая матрица: примерно 30 смысловых сценариев, 2 разрешённых голоса, 3 акустических условия; сначала небольшой smoke, затем полный batch. Это размер покрытия, не обязательный расход квоты. Expected intent/result constraints размечаются до синтеза; отдельно проверяется, что аудио действительно произнесло заданное, особенно «не», суммы и города. Не использовать output тестируемого ASR как единственный эталон. Real-human holdout не публиковать без consent; speaker cloning не подразумевается разрешённым автоматически.
+Пример стартовойматрицы30semanticcases×2разрешённыхголоса×3условия, сначалаsmoke; этоcoverageproposal, необязательныйрасход. Independentexpectedmeaning **до**TTS, verifiedspokenwords после. Quietnegation/numbers/localnames/continuoussplit/dogon/oldsection/transportquestions. TestASRнеединственныйoracle. Humanholdoutсconsent, nocloning/publicvoicesimplicitly.
 
-Fixture manifest: clip SHA/duration/codec, source/model/notebook version, transcript intended+verified, expected IntentPatch и negative constraints, reference time/timezone, corpus revision, dialogue predecessor/timing и consent provenance. Noise/compression derivatives помечаются и не заменяют clean baseline. В Git manifest+малый smoke; большие binaries в versioned artifact storage, не ephemeral latest Actions artifact. Qwen не перегенерируется на каждый PR.
+Manifest: exactclipSHA/codec/duration/rate, intended+verifiedtranscript, expectedpatch/negativeconditions, timestamps/predecessors, frozennow/timezone/corpus/profile/activation/consent, model/notebook/sourceversion иrights. Marknoisy/compressedderivatives, сохранятьclean. Gitmanifest+smallsmoke, largeimmutableartifactsнеephemerallatestActionsartifact. НеперегенерироватьприкаждомPR.
 
-## 16. Приёмка, ограничения доказательств и конкретные оставшиеся bindings
+## 16. Приёмка и реальные границы
 
-Документальная приёмка: API/данные/ошибки/переходы/реализационные пакеты согласованы и связаны с единственными владельцами. Runtime release дополнительно требует implemented unit/DB/browser tests, разрешённого live provider subset, mobile-critical evidence, same-corpus UI states, actual source+backend+prompt+policy+corpus release tuple. Нет выдуманного SLA или PASS из факта сохранения Markdown.
+Документальнаяприёмка — совместимыеAPI/данные/статистика/профиль/ошибки/пакеты сединымивладельцами. Runtime требуетреальныхtests иvalidenvironmentbindings. Interfaceavailability/sourcecommit/model200/видимаякарточка поотдельностинедоказывают end-to-end discovery.
 
-До enablement заполнить только конкретные environment/quality bindings: фактический service origin и supervisor; caller доступа к shared limiter; проверенную модель/capabilities и provider/data-processing admission; реальные numeric allowance/headroom; approved Event Corpus selection для acoustic fixtures; общий island adapter и visual variants. Архитектура не оставляет эти пункты поводом заново исследовать весь продукт: packages A/B и mock integration могут выполняться независимо, public voice остаётся OFF до своих gates.
+Осталосьпроверитьконкретно: serviceorigin/supervisor, actualcontrol/mediaalternate/envelopes, Auth/limiter/DBprivileges, permittedprovider/dataflow, numericcapacity, existingprofileprojection/materializer/sourcebindings, permittedanalyticsingest/readout, approvedfixturecorpus, общаяislandAPI/visualstates. Необъявлятьmissingplatformdeployed; одновременноpurecore/fixtureworkможетидтибезpublicenablement.
 
-Ключевые метрики: existing discovery/intent success и time-to-first-value; дополнительно lost utterances=0, stale applied answers=0, duplicate user effects=0 в тестовом корпусе, unknown factual claims, correction/abandonment, queue/latency, tokens/audio seconds/egress на успешный выбор, capacity left unused при ошибочных отказах. Количество отправленных ИИ сообщений не является продуктовой победой.
+Ключевыеguards вacceptance: nolostacceptedutterance, nostaleappliedanswer, noduplicateprimaryeffect, noprivacy/foreignidentityleak, noglobalhideresurrection, correctfacts/denominators/coverage. Productoutcome — successfuldiscovery/intentaction иtime/cards-to-value, рядомcost/queue/egress/diversity. ЧислорепликИИнеNorthStar.
 
-### Первичные внешние технические источники
+### Технические первичные ссылки
 
-Проверены 2026-09-05; перед изменением зависимостей/provider deployment проверять текущую документацию снова:
-
-- [AudioWorklet и secure context](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet).
-- [MediaRecorder dataavailable и ограничения timeslice/lifecycle](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/dataavailable_event).
-- [Gemini audio input](https://ai.google.dev/gemini-api/docs/audio) и [structured output](https://ai.google.dev/gemini-api/docs/structured-output).
-- [Supabase RLS/grants/privileged-role boundary](https://supabase.com/docs/guides/database/postgres/row-level-security).
-- [GitHub Actions token permissions](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token).
-
-Спецификация не запускает эти API, не применяет SQL и не создаёт audio fixtures. Она задаёт проверяемое решение и границы следующей реализации.
+[AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet), [MediaRecorder lifecycle/chunks](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/dataavailable_event), [Gemini audio](https://ai.google.dev/gemini-api/docs/audio), [structured output](https://ai.google.dev/gemini-api/docs/structured-output), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Yandex gateway limits](https://yandex.cloud/en/docs/api-gateway/concepts/limits), [Edge limits](https://supabase.com/docs/guides/functions/limits). Проверятьактуальностьприизмененииadapter/provider. ЭтадокументациянеприменяетSQL, непубликуетсайт и незапускаетмодели.
