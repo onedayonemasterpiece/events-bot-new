@@ -544,6 +544,19 @@
           "event": "kenigevents:lower-surface-state",
           "geometry": "clipped_disjoint_rectangles",
           "owns_network_or_served_identity": false
+        },
+        "floating_islands": {
+          "scope": "popular_schematic_top_band",
+          "route_identity": "BASE_PATH_relative",
+          "section_event": "kenigevents:section-context",
+          "controls": "move_existing_eligible_ListingDiscoveryRail_after_H1_restore_on_return",
+          "headings": "real_H1_H2_remain_in_flow",
+          "bottom_navigation": "four_destinations_desktop_and_mobile",
+          "modal_settlement": [
+            "mutation",
+            "transitionend",
+            "transitioncancel"
+          ]
         }
       }
     },
@@ -2948,7 +2961,11 @@
           "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "islands_handoff": "data-islands-eligible-controls",
+        "ownership": "existing_controls_moved_not_cloned"
+      }
     },
     {
       "id": "ListingPageHeader",
@@ -3120,7 +3137,11 @@
           "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "section_event": "kenigevents:section-context",
+        "islands_mode": "publish_actual_H2_without_second_sticky_floor"
+      }
     },
     {
       "id": "WeekendEditorialTimeline",
@@ -3409,7 +3430,11 @@
           "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "top_band_menu": "same_disclosure_desktop_on_popular",
+        "focus": "Escape_and_close_return_to_summary"
+      }
     },
     {
       "id": "SiteFooter",

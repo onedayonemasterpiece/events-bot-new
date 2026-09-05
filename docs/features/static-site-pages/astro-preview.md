@@ -1241,3 +1241,15 @@ a satisfied initial10, not a claim that all tail rows are feasible. No evidence
 is invented to activate the 20% fallback. The previously suspected mobile Free
 8745 source960×1280 paints naturally in364×485.328px; total horizontal rounding
 residue0.003906px is not a visible band (public26fb, not event-detail substitution).
+
+FI-P1 uses the existing EventLayout header on Popular: one desktop top band
+contains page/active-shelf locators, the original city controls and the existing
+global menu. Actual H1/H2 stay in flow; no Popular medallion is invented. Mobile
+uses the same page context with current shelf instead of another sticky heading
+floor. Both retain the four-destination lower island. The existing lower-stack
+writer resynchronizes at modal transition end/cancel, because class mutations
+alone can observe opacity0 and leave stale ready/modal state. Prefix-relative
+route identity is resolved once against BASE_PATH, including immutable previews.
+
+Browser test setup closes its static fixture server even if Chromium launch fails;
+missing browser binaries must not leave the focused packet hanging after failure.

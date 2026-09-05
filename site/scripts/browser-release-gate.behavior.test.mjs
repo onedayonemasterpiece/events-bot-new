@@ -63,8 +63,9 @@ test('sold-out current-event Enter stays inert and announces unavailability', as
     </script>`);
   const { chromium } = await import('playwright');
   const server = await startReleaseServer(root);
-  const browser = await chromium.launch(browserLaunchOptions());
+  let browser = null;
   try {
+    browser = await chromium.launch(browserLaunchOptions());
     const page = await browser.newPage({ viewport:{ width:1280, height:900 } });
     await page.goto(server.origin, { waitUntil:'domcontentloaded' });
     await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
@@ -77,7 +78,7 @@ test('sold-out current-event Enter stays inert and announces unavailability', as
     );
     assert.equal(await page.locator('.desktop-prototype__primary-action').getAttribute('aria-disabled'), 'true');
   } finally {
-    await browser.close();
+    if (browser) await browser.close();
     await server.close();
   }
 });

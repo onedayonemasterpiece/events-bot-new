@@ -14,6 +14,8 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Popular now uses the existing shell for schematic top-band locators, city controls and global menu; modal fade completion updates the same lower-stack state, including prefixed previews.
+- Browser fixture cleanup now closes its server if browser startup fails.
 - Free and related feeds now compose compatible rows from the entire eligible pool before pagination, preserving IDs and the painted prefix; OCR fallback requires current protected-text evidence as well as the 20% budget.
 - Home passes the complete eligible pool to shared row planning before its 30-card limit and no longer reshuffles visible cards on local feedback.
 - Family SoT identity validation ignores CSS selector mentions and validates the actual component root.
