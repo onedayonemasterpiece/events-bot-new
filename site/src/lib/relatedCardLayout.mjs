@@ -56,6 +56,31 @@ function normalizedObjectPosition(value) {
   return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '';
 }
 
+function validNormalizedBox(box) {
+  if (!box || typeof box !== 'object') return false;
+  const [x, y, width, height] = [box.x, box.y, box.w, box.h].map(Number);
+  return [x, y, width, height].every(Number.isFinite)
+    && x >= 0 && y >= 0 && width > 0 && height > 0
+    && x + width <= 1.000001 && y + height <= 1.000001;
+}
+
+function currentClassifiedGeometry(asset) {
+  return asset?.geometry_status === 'classified'
+    && asset?.geometry_coordinate_space === 'normalized_0_1'
+    && typeof asset?.current_pixel_sha256 === 'string'
+    && asset.current_pixel_sha256.length > 0
+    && asset.current_pixel_sha256 === asset.geometry_pixel_sha256;
+}
+
+function currentProtectedBoxes(asset) {
+  if (!currentClassifiedGeometry(asset)) return [];
+  return [
+    ...(Array.isArray(asset?.ocr_boxes) ? asset.ocr_boxes : []),
+    ...(Array.isArray(asset?.face_boxes) ? asset.face_boxes : []),
+    asset?.valuable_region,
+  ].filter(validNormalizedBox);
+}
+
 function applyReviewedMediaOverride(asset) {
   if (!asset?.src) return asset;
   const reviewed = REVIEWED_MEDIA_OVERRIDES.find((entry) => (
@@ -125,8 +150,13 @@ function visualFallbackObjectPosition(item) {
   const focal = display?.focal_point || candidate?.focal_point || item?.focal_point || asset?.focal_point || {};
   const x = Number(focal?.x ?? display?.focal_x ?? candidate?.focal_x ?? item?.focal_x);
   const y = Number(focal?.y ?? display?.focal_y ?? candidate?.focal_y ?? item?.focal_y);
-  const safeX = Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : .5;
-  const safeY = Number.isFinite(y) ? Math.min(1, Math.max(0, y)) : .5;
+  const boxes = currentProtectedBoxes(asset);
+  const boxCenter = boxes.length ? {
+    x:(Math.min(...boxes.map((box) => Number(box.x))) + Math.max(...boxes.map((box) => Number(box.x) + Number(box.w)))) / 2,
+    y:(Math.min(...boxes.map((box) => Number(box.y))) + Math.max(...boxes.map((box) => Number(box.y) + Number(box.h)))) / 2,
+  } : null;
+  const safeX = Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : boxCenter?.x ?? .5;
+  const safeY = Number.isFinite(y) ? Math.min(1, Math.max(0, y)) : boxCenter?.y ?? .5;
   return `${Math.round(safeX * 100)}% ${Math.round(safeY * 100)}%`;
 }
 
@@ -160,17 +190,12 @@ function cropFraction(sourceRatio, targetRatio) {
   return Math.max(0, 1 - Math.min(sourceRatio / targetRatio, targetRatio / sourceRatio));
 }
 
-function verifiedDocumentTextCrop(asset, targetAspect) {
+function verifiedDocumentTextCrop(asset, targetAspect, { verticalOnly = true } = {}) {
   const sourceAspect = finiteRatio(Number(asset?.width) / Number(asset?.height), 0);
   // The owner-approved scarcity exception is vertical only: the target may be
   // wider than the source (trim top/bottom), never narrower (trim the sides).
-  if (!(sourceAspect > 0) || targetAspect + EPSILON < sourceAspect) return null;
-  const currentGeometry = asset?.geometry_status === 'classified'
-    && asset?.geometry_coordinate_space === 'normalized_0_1'
-    && typeof asset?.current_pixel_sha256 === 'string'
-    && asset.current_pixel_sha256.length > 0
-    && asset.current_pixel_sha256 === asset.geometry_pixel_sha256;
-  if (asset?.image_text_mode !== 'ocr_text' || asset?.safe_crop !== true || !currentGeometry) return null;
+  if (!(sourceAspect > 0) || (verticalOnly && targetAspect + EPSILON < sourceAspect)) return null;
+  if (asset?.image_text_mode !== 'ocr_text' || asset?.safe_crop !== true || !currentClassifiedGeometry(asset)) return null;
   if (!Array.isArray(asset?.ocr_boxes) || asset.ocr_boxes.length === 0) return null;
   const crop = solveProtectedCrop({
     sourceWidth:asset.width,
@@ -179,6 +204,23 @@ function verifiedDocumentTextCrop(asset, targetAspect) {
     boxes:asset.ocr_boxes,
   });
   return crop.fit === 'cover' ? crop : null;
+}
+
+function bestEffortProtectedCrop(asset, targetAspect) {
+  const boxes = currentProtectedBoxes(asset);
+  if (!boxes.length) return null;
+  const crop = solveProtectedCrop({
+    sourceWidth:asset?.width,
+    sourceHeight:asset?.height,
+    targetAspect,
+    boxes,
+  });
+  return crop.fit === 'cover' ? crop : null;
+}
+
+function cropBudgetStatus(value) {
+  if (!Number.isFinite(value)) return 'unknown';
+  return value <= MAX_DOCUMENT_CROP + EPSILON ? 'within-preferred' : 'exceeds-preferred';
 }
 
 export function relatedCardCropProofPayload(asset) {
@@ -206,7 +248,9 @@ export function relatedCardMediaFrameBinding(decision) {
     objectPosition:fit === 'cover' && requestedPosition ? requestedPosition : '50% 50%',
     cropPermission:fit === 'contain'
       ? 'forbidden'
-      : mediaTreatment.startsWith('document-') ? 'reviewed-bounded' : 'allowed',
+      : mediaTreatment === 'document-fallback-cover'
+        ? 'fallback-minimal'
+        : mediaTreatment.startsWith('document-') ? 'reviewed-bounded' : 'allowed',
   };
 }
 
@@ -215,17 +259,66 @@ export function relatedCardMediaFrameBinding(decision) {
  * A crop-area limit is not evidence that OCR text survives the crop.
  * Document media remains whole unless current source-bound OCR boxes prove a
  * vertical crop; an exact-ratio cover is uncropped and is still allowed. The
- * 20% maximum remains a ceiling, not permission to trim unlocated text.
- * Direct callers and packRelatedCardRows share this fail-closed boundary.
+ * The preferred 20% budget remains a strict-candidate ceiling and a fallback
+ * diagnostic; it is not a final-fallback veto that can reintroduce fields.
+ * Direct callers remain fail-closed; row planners opt into the final fallback
+ * only after strict natural/protected grouping is exhausted.
  */
-export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = relatedCardMediaGeometry(item)) {
+export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = relatedCardMediaGeometry(item), options = {}) {
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);
   const normalizedTargetAspect = finiteRatio(targetAspect, mediaRatio);
   const potentialCoverCrop = cropFraction(mediaRatio, normalizedTargetAspect);
   if (geometry?.documentMedia) {
+    if (options.finalFallbackCover === true) {
+      if (geometry?.dimensionsKnown !== false && potentialCoverCrop <= EPSILON) {
+        return {
+          mediaKind:'document',
+          mediaTreatment:'document-safe-cover',
+          fit:'cover',
+          objectPosition:'50% 50%',
+          cropReason:'document_uncropped',
+          potentialCoverCrop,
+          coverCrop:0,
+          cropSafety:'uncropped',
+          cropBudgetStatus:'within-preferred',
+        };
+      }
+      const protectedCrop = verifiedDocumentTextCrop(geometry?.asset, normalizedTargetAspect, { verticalOnly:false });
+      if (protectedCrop) {
+        return {
+          mediaKind:'document',
+          mediaTreatment:'document-protected-cover',
+          fit:'cover',
+          objectPosition:protectedCrop.objectPosition,
+          cropReason:'protected_text_regions_fit',
+          potentialCoverCrop:geometry?.dimensionsKnown === false ? null : potentialCoverCrop,
+          coverCrop:geometry?.dimensionsKnown === false ? null : potentialCoverCrop,
+          cropWindow:protectedCrop.cropWindow,
+          cropSafety:'protected-text',
+          cropBudgetStatus:cropBudgetStatus(geometry?.dimensionsKnown === false ? null : potentialCoverCrop),
+        };
+      }
+      const guidedCrop = bestEffortProtectedCrop(geometry?.asset, normalizedTargetAspect);
+      const objectPosition = guidedCrop?.objectPosition || visualFallbackObjectPosition(item);
+      const hasExplicitFocal = objectPosition !== '50% 50%';
+      return {
+        mediaKind:'document',
+        mediaTreatment:'document-fallback-cover',
+        fit:'cover',
+        objectPosition,
+        cropReason:guidedCrop
+          ? 'fallback_minimal_crop_geometry_guided'
+          : hasExplicitFocal ? 'fallback_minimal_crop_focal_guided' : 'fallback_minimal_crop_unverified_text',
+        potentialCoverCrop:geometry?.dimensionsKnown === false ? null : potentialCoverCrop,
+        coverCrop:geometry?.dimensionsKnown === false ? null : potentialCoverCrop,
+        ...(guidedCrop?.cropWindow ? { cropWindow:guidedCrop.cropWindow } : {}),
+        cropSafety:'unverified-text',
+        cropBudgetStatus:cropBudgetStatus(geometry?.dimensionsKnown === false ? null : potentialCoverCrop),
+      };
+    }
     // Unknown classification and explicit classifier errors have no positive
     // crop evidence. Even known pixel dimensions cannot turn them into the
-    // bounded-cover OCR exception: they remain whole on every EventCard.
+    // bounded-cover OCR exception during strict grouping.
     if (geometry?.imageTextMode === 'unknown' || geometry?.semanticStatus === 'error') {
       return {
         mediaKind:'document',
@@ -278,8 +371,8 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
         };
       }
       // image_text_mode alone classifies the asset; it does not locate its
-      // text. A bounded crop is enabled only by current, normalized OCR boxes.
-      // Never substitute a photo valuable_region for protected text proof.
+      // text. Strict grouping accepts a crop only with current OCR boxes; the
+      // later final fallback carries a separate unverified-text classification.
       return {
         mediaKind:'document',
         mediaTreatment:'document-contain',
@@ -597,39 +690,46 @@ function optimizeRows(selected, rowSize, mediaTreatment, preserveOrder = false) 
 
 /**
  * Layout may choose geometry, not remove admitted events. If no complete
- * intrinsic-ratio partition exists, keep the ranked prefix and anchor each
- * incompatible row to one factual natural ratio. Documents stay whole through
- * the same media resolver; the row is diagnostic evidence, not acceptance.
+ * intrinsic/protected partition exists, keep the ranked prefix and balance
+ * each incompatible row's extreme ratios. Every loaded source covers that
+ * shared frame; unverified text risk and preferred-budget overflow stay visible
+ * as diagnostics rather than being hidden behind painted fields.
  */
-function containedFallbackRows(selected, rowSize, mediaTreatment) {
+function minimumCropFallbackRows(selected, rowSize, mediaTreatment) {
   const rows = [];
   for (let offset = 0; offset < selected.length; offset += rowSize) {
     const entries = selected.slice(offset, offset + rowSize);
     let plan = rowPlan(entries, mediaTreatment);
     if (!plan) {
-      // Preserve the first factual document whole rather than inventing a 5:4
-      // document frame. Other incompatible sources stay fail-closed, and the
-      // row is explicitly UNSATISFIED with its smallest measured conflict.
+      // Natural/protected grouping has been exhausted. Balance the extreme
+      // document ratios to minimize the worst crop, then fill every loaded
+      // frame. Unverified text risk remains explicit on each decision; it is
+      // not misrepresented as source-bound OCR proof.
       const naturalAnchor = entries.find((entry) => (
         entry.documentMedia && entryResourcePresent(entry) && entry.dimensionsKnown !== false
       ));
       const knownRatios = entries.filter((entry) => entryResourcePresent(entry) && entry.documentMedia && entry.dimensionsKnown !== false).map((entry) => entry.ratio);
-      // This is CONTAIN, not a crop window: balance unused area between the
-      // narrowest and widest whole sources instead of making every neighbour
-      // inherit the tallest source's blank bands.
       const targetRatio = knownRatios.length
         ? Math.sqrt(Math.min(...knownRatios) * Math.max(...knownRatios))
         : naturalAnchor?.ratio || PREFERRED_VISUAL_RATIO;
-      const decisions = entries.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
+      const decisions = entries.map((entry) => resolveRelatedCardMediaTreatment(
+        entry.item,
+        targetRatio,
+        entry,
+        { finalFallbackCover:true },
+      ));
       plan = {
         targetRatio,
-        rowMode:'document-natural-conflict-contained',
+        rowMode:'fallback-minimal-cover',
         decisions,
         cost:estimatedChromeCost(entries) + (1 / targetRatio),
         visualCrop:decisions.filter(({ mediaKind }) => mediaKind === 'visual')
           .reduce((sum, decision) => sum + decision.coverCrop, 0),
-        framingStatus:'unsatisfied',
-        framingConflict:rowFramingConflict(entries),
+        documentCrop:decisions.filter(({ mediaKind }) => mediaKind === 'document')
+          .reduce((sum, decision) => sum + Number(decision.coverCrop || 0), 0),
+        framingStatus:'satisfied',
+        framingConflict:null,
+        framingRisk:rowFramingConflict(entries),
         paintedFields:decisions.map((decision, index) => decisionPaintedFields(entries[index], targetRatio, decision)),
       };
     }
@@ -653,6 +753,7 @@ function materializeRow(row, rowIndex, presentation) {
       ...plan.decisions[index],
       framingStatus:plan.framingStatus,
       framingConflict:plan.framingConflict,
+      framingRisk:plan.framingRisk || null,
       paintedFields:plan.paintedFields[index],
       rowWorstCrop:0,
       rowCost:plan.cost,
@@ -703,7 +804,7 @@ function bestFeasibleCombination(entries, size, mediaTreatment) {
 function refineFlexibleAllocation(rows, residue, rowSize, mediaTreatment) {
   const ordered = (entries) => [...entries].sort((a, b) => a.ratio - b.ratio || a.originalIndex - b.originalIndex);
   const score = (entries) => {
-    const gaps = containedFallbackRows(ordered(entries), rowSize, mediaTreatment).flatMap(({ entries, plan }) =>
+    const gaps = minimumCropFallbackRows(ordered(entries), rowSize, mediaTreatment).flatMap(({ entries, plan }) =>
       entries.filter((entry) => entryResourcePresent(entry) && entry.dimensionsKnown !== false)
         .map((entry) => cropFraction(entry.ratio, plan.targetRatio)));
     return [Math.max(0, ...gaps), gaps.reduce((sum, gap) => sum + gap, 0)];
@@ -741,7 +842,7 @@ function refineFlexibleAllocation(rows, residue, rowSize, mediaTreatment) {
  * Plan one complete eligible pool before choosing the initially visible rows.
  * Exact natural-ratio document buckets are exhausted first, visual media fill
  * the cheapest bucket remainders, and only genuine residue reaches the
- * explicit UNSATISFIED tail. Every source item occurs exactly once.
+ * explicit minimum-crop fallback tail. Every source item occurs exactly once.
  */
 export function planRelatedCardRows(items, options = {}) {
   const requestedRowSize = Number(options.rowSize ?? 3);
@@ -829,16 +930,15 @@ export function planRelatedCardRows(items, options = {}) {
 
   satisfiedRows.sort((left, right) => Math.min(...left.entries.map((entry) => entry.originalIndex))
     - Math.min(...right.entries.map((entry) => entry.originalIndex)));
-  // No protected-text proof exists for the remaining rows. Keep them
-  // unaccepted, but cluster adjacent natural ratios so their reported conflict
-  // is the safest measurable residue rather than an arbitrary source-order
-  // pairing. Unknown geometry stays last and never acquires a crop claim.
+  // No strict natural/protected partition exists for the remaining rows.
+  // Cluster adjacent natural ratios before applying the honest minimum-crop
+  // fallback. Unknown geometry stays last and never acquires a numeric claim.
   unresolved.sort((left, right) => {
     const leftRatio = left.dimensionsKnown === false ? Number.POSITIVE_INFINITY : left.ratio;
     const rightRatio = right.dimensionsKnown === false ? Number.POSITIVE_INFINITY : right.ratio;
     return leftRatio - rightRatio || left.originalIndex - right.originalIndex;
   });
-  const conflictRows = containedFallbackRows(unresolved, rowSize, mediaTreatment);
+  const conflictRows = minimumCropFallbackRows(unresolved, rowSize, mediaTreatment);
   const rows = [...satisfiedRows, ...conflictRows, ...(finalRow ? [finalRow] : [])];
   return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex, presentation));
 }
@@ -848,9 +948,9 @@ export function planRelatedCardRows(items, options = {}) {
  * remainder, then use bitmask dynamic programming to minimize the sum of
  * normalized full-card row heights.
  * Reordering is intentional and deterministic within the feasible intrinsic
- * partitions unless preserveOrder is requested. If none exists, contained
- * rows preserve the admitted prefix and publish an exact UNSATISFIED conflict;
- * that content-preserving fallback is not an accepted no-fields composition.
+ * partitions unless preserveOrder is requested. If none exists, balanced
+ * cover rows preserve the admitted prefix, minimize worst crop and publish
+ * unverified text risk without reintroducing painted fields.
  */
 export function packRelatedCardRows(items, options = {}) {
   const requestedLimit = Number(options.limit ?? items.length);
@@ -867,7 +967,7 @@ export function packRelatedCardRows(items, options = {}) {
   const selected = items.slice(0, targetCount)
     .map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
   const rows = optimizeRows(selected, rowSize, mediaTreatment, options.preserveOrder === true)
-    || containedFallbackRows(selected, rowSize, mediaTreatment);
+    || minimumCropFallbackRows(selected, rowSize, mediaTreatment);
   return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex, presentation));
 }
 

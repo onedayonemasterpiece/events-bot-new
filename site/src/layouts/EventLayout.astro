@@ -4731,7 +4731,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             objectPosition:relatedLayout?.objectPosition,
           });
           const objectPosition = requestedBinding.objectPosition;
-          const fit = kind === 'unknown' ? 'contain' : requestedFit;
+          const fit = relatedLayout ? requestedFit : kind === 'unknown' ? 'contain' : requestedFit;
           const cropPermission = fit === 'contain'
             ? 'forbidden'
             : requestedBinding.cropPermission;
@@ -4819,7 +4819,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         function applyRuntimeRelatedLayout(card, relatedLayout) {
           if (!(card instanceof HTMLElement)) return;
-          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowRatio', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCropReason', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost', 'labFit', 'labObjectPosition', 'labFramingStatus', 'labFramingConflict'];
+          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowRatio', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCropReason', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost', 'labFit', 'labObjectPosition', 'labCropPermission', 'labFramingStatus', 'labFramingConflict', 'labFramingRisk', 'labCropSafety', 'labCropBudgetStatus'];
           for (const key of relatedKeys) delete card.dataset[key];
           delete card.dataset.cardMediaPresentation;
           delete card.dataset.cardMediaTreatment;
@@ -4847,8 +4847,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           setRuntimeCardDataset(card, 'labCropReason', relatedLayout.cropReason);
           setRuntimeCardDataset(card, 'labFit', relatedLayout.fit);
           setRuntimeCardDataset(card, 'labObjectPosition', relatedLayout.objectPosition);
+          setRuntimeCardDataset(card, 'labCropPermission', window.KenigEventsRelatedCardMediaFrameBinding(relatedLayout).cropPermission);
           setRuntimeCardDataset(card, 'labFramingStatus', relatedLayout.framingStatus);
           setRuntimeCardDataset(card, 'labFramingConflict', relatedLayout.framingConflict);
+          setRuntimeCardDataset(card, 'labFramingRisk', relatedLayout.framingRisk);
+          setRuntimeCardDataset(card, 'labCropSafety', relatedLayout.cropSafety);
+          setRuntimeCardDataset(card, 'labCropBudgetStatus', relatedLayout.cropBudgetStatus);
           numericDataset('labCoverCrop', relatedLayout.coverCrop, 4);
           numericDataset('labPotentialCoverCrop', relatedLayout.potentialCoverCrop, 4);
           numericDataset('labRowWorstCrop', relatedLayout.rowWorstCrop, 4);
@@ -4866,10 +4870,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (mediaShell instanceof HTMLElement) {
             const resourceState = mediaShell.dataset.mediaFrameResourceState;
             if (resourceState === 'broken' || resourceState === 'fallback') return;
-            const semanticKind = mediaShell.dataset.mediaFrameKind;
-            const authoritativeFit = semanticKind === 'unknown'
-              ? 'contain'
-              : relatedLayout.fit === 'cover' ? 'cover' : 'contain';
+            const authoritativeFit = relatedLayout.fit === 'cover' ? 'cover' : 'contain';
             const objectPosition = String(relatedLayout.objectPosition || '50% 50%');
             mediaShell.classList.toggle('event-card__media-shell--document', authoritativeFit !== 'cover');
             mediaShell.classList.toggle('event-card__media-shell--cover', authoritativeFit === 'cover');

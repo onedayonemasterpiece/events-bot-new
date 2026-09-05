@@ -332,6 +332,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
           cards.forEach((card) => {
             card.style.removeProperty('--adaptive-flow-row-media-ratio');
             delete card.dataset.adaptiveFlowFramingStatus;
+            delete card.dataset.adaptiveFlowFramingRisk;
           });
           for (let offset = 0; offset < cards.length; offset += renderedColumns) {
             const row = cards.slice(offset, offset + renderedColumns);
@@ -372,7 +373,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
                   plannedRatio,
                   fit,
                   card.dataset.labObjectPosition || '50% 50%',
-                  fit === 'contain' ? 'forbidden' : treatment.startsWith('document-') ? 'reviewed-bounded' : 'allowed',
+                  card.dataset.labCropPermission || (fit === 'contain' ? 'forbidden' : treatment.startsWith('document-') ? 'reviewed-bounded' : 'allowed'),
                   card.dataset.labCropReason || 'planned_flow_frame',
                 );
                 card.dataset.adaptiveFlowFramingStatus = 'satisfied';
@@ -384,16 +385,19 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
             const mismatch = anchor && documents.find((entry) => Number.isFinite(entry.ratio)
               && Math.abs(entry.ratio - anchor.ratio) > 1e-9);
             if (unknown || mismatch) {
-              const conflict = unknown
+              const risk = unknown
                 ? `document-natural-ratio-unknown:${unknown.card.dataset.eventId || 'unknown'}@${unknown.dimensions}`
                 : `document-natural-ratio-mismatch:${anchor.card.dataset.eventId || 'unknown'}@${anchor.dimensions}=${anchor.ratio.toFixed(8)}|${mismatch.card.dataset.eventId || 'unknown'}@${mismatch.dimensions}=${mismatch.ratio.toFixed(8)}`;
-              conflicts.push(conflict);
+              const knownRatios = documents.map((entry) => entry.ratio).filter((ratio) => Number.isFinite(ratio) && ratio > 0);
+              const targetRatio = knownRatios.length
+                ? Math.sqrt(Math.min(...knownRatios) * Math.max(...knownRatios))
+                : 5 / 4;
               row.forEach((card) => {
-                card.dataset.adaptiveFlowFramingStatus = 'unsatisfied';
+                card.dataset.adaptiveFlowFramingStatus = 'satisfied';
+                card.dataset.adaptiveFlowFramingRisk = risk;
                 const document = documents.find((entry) => entry.card === card);
-                if (document && Number.isFinite(document.ratio) && document.ratio > 0) {
-                  applyFlowFrame(card, document.ratio, 'contain', '50% 50%', 'forbidden', 'document_natural_conflict');
-                }
+                if (document) applyFlowFrame(card, targetRatio, 'cover', card.dataset.labObjectPosition || '50% 50%', 'fallback-minimal', 'fallback_minimal_crop_runtime_reconcile');
+                else applyFlowFrame(card, targetRatio, 'cover', card.dataset.labObjectPosition || '50% 50%', 'allowed', card.dataset.labCropReason || 'visual_row_cover');
               });
               continue;
             }
@@ -467,9 +471,9 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] { --adaptive-event-card-columns: 5; }
   .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] { --adaptive-event-card-columns: 6; }
 
-  /* Flow preserves ranked DOM order. A row receives a shared frame only when
-     its loaded documents prove one natural ratio; incompatible rows retain
-     their sources and expose UNSATISFIED diagnostics instead of 5:4 fields. */
+  /* Flow preserves ranked DOM order. Natural/protected rows keep their planned
+     ratio; a genuine incompatible residue receives the shared planner's
+     minimum-crop cover rather than painted fields. */
   .adaptive-event-card-grid--flow > :global(.event-card) {
     grid-template-rows: subgrid;
   }

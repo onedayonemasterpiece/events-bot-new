@@ -120,11 +120,17 @@ try {
   assert.ok(accepted.crop>0 && accepted.crop<=.200001 && Math.abs(accepted.unused)<1e-6 && accepted.protectedInside);
 
   const horizontal = await render('horizontal');
-  const horizontalRejected = horizontal.cards.find(({id})=>id===203);
-  assert.deepEqual([horizontalRejected.fit,horizontalRejected.permission,horizontalRejected.computedFit],['contain','forbidden','contain']);
+  const horizontalFallback = horizontal.cards.find(({id})=>id===201);
+  const horizontalProtected = horizontal.cards.find(({id})=>id===203);
+  assert.deepEqual([horizontalFallback.fit,horizontalFallback.permission,horizontalFallback.computedFit],['cover','fallback-minimal','cover']);
+  assert.deepEqual([horizontalProtected.fit,horizontalProtected.permission,horizontalProtected.computedFit],['cover','reviewed-bounded','cover']);
+  assert.ok(Math.abs(horizontalFallback.unused)<1e-6 && Math.abs(horizontalProtected.unused)<1e-6);
+  assert.equal(horizontal.plan.find(({id})=>id===201).layout.cropSafety,'unverified-text');
+  assert.equal(horizontal.plan.find(({id})=>id===203).layout.cropSafety,'protected-text');
   const stale = await render('stale');
-  const staleRejected = stale.cards.find(({id})=>id===303);
-  assert.deepEqual([staleRejected.fit,staleRejected.permission,staleRejected.computedFit],['contain','forbidden','contain']);
+  const staleFallback = stale.cards.find(({id})=>id===303);
+  assert.deepEqual([staleFallback.fit,staleFallback.permission,staleFallback.computedFit],['cover','fallback-minimal','cover']);
+  assert.ok(Math.abs(staleFallback.unused)<1e-6);
   assert.notEqual(stale.plan.find(({id})=>id===303).layout.mediaTreatment,'document-protected-cover');
 
   await page.setViewportSize({width:390,height:844});

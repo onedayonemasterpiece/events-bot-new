@@ -53,12 +53,12 @@ test('one reusable local helper fully rebinds runtime EventCard MediaFrame evide
   }
 });
 
-test('runtime binding classifies actual media as visual, document or unknown without collapsing unknown', () => {
+test('runtime binding keeps unknown semantics while honoring an explicit planned fallback cover', () => {
   const binder = functionSource('bindRuntimeEventCardMediaFrame', 'applyRuntimeRelatedLayout');
 
   assert.match(binder, /const kind = imageTextMode === 'visual_only'\s*\? 'visual'\s*:\s*imageTextMode === 'ocr_text' \? 'document' : 'unknown'/u);
   assert.match(binder, /shell\.dataset\.mediaFrameKind = imageUrl \? kind : 'fallback'/u);
-  assert.match(binder, /const fit = kind === 'unknown' \? 'contain' : requestedFit/u);
+  assert.match(binder, /const fit = relatedLayout \? requestedFit : kind === 'unknown' \? 'contain' : requestedFit/u);
   assert.doesNotMatch(binder, /imageTextMode\s*!==\s*'visual_only'\s*\?\s*'document'/u);
 });
 
@@ -121,12 +121,14 @@ test('both runtime entrypoints consume the same rebinding and no inline fit owne
   assert.match(layoutBinding, /mediaShell\.style\.setProperty\('--media-frame-object-position', objectPosition\)/u);
   assert.match(layoutBinding, /if \(resourceState === 'broken' \|\| resourceState === 'fallback'\) return/u);
   assert.doesNotMatch(layoutBinding, /mediaShell\.dataset\.mediaFrameKind\s*=/u);
-  assert.match(layoutBinding, /const authoritativeFit = semanticKind === 'unknown'\s*\? 'contain'\s*:\s*relatedLayout\.fit === 'cover' \? 'cover' : 'contain'/u);
+  assert.match(layoutBinding, /const authoritativeFit = relatedLayout\.fit === 'cover' \? 'cover' : 'contain'/u);
   assert.match(layoutBinding, /mediaShell\.dataset\.mediaFrameRatio = rowRatio\.toFixed\(5\)/u);
   assert.match(layoutBinding, /mediaShell\.style\.setProperty\('--media-frame-ratio', rowRatio\.toFixed\(5\)\)/u);
+  assert.match(layoutBinding, /setRuntimeCardDataset\(card, 'labCropPermission', window\.KenigEventsRelatedCardMediaFrameBinding\(relatedLayout\)\.cropPermission\)/u);
 
-  // The unknown-only fail-closed gate must not remove accepted visual or
-  // reviewed-bounded document cover from the shared layout decision.
+  // An explicit shared plan is authoritative even when semantic classification
+  // is unknown; the binding still publishes fallback-minimal rather than
+  // misrepresenting that crop as reviewed.
   assert.match(layoutBinding, /window\.KenigEventsRelatedCardMediaFrameBinding\(\{[\s\S]*mediaTreatment:relatedLayout\.mediaTreatment,[\s\S]*\}\)\.cropPermission/u);
 
   assert.match(layout, /window\.KenigEventsCreateEventCard = createEventCardElement/u);
@@ -136,7 +138,9 @@ test('both runtime entrypoints consume the same rebinding and no inline fit owne
 
 test('server and hydrated cards carry one source-bound protected framing contract', () => {
   assert.match(eventCard, /relatedCardMediaFrameBinding\(cardCrop\)/u);
+  assert.match(eventCard, /const relatedMediaDecision = desktopRelatedCrop\s*\? \(desktopRelatedLayout \|\| resolveRelatedCardMediaTreatment\(event, cardTargetAspect\)\)/u);
   assert.match(eventCard, /mediaTreatment: 'document-safe-cover' \| 'document-protected-cover'/u);
+  assert.match(eventCard, /data-lab-crop-permission=\{desktopRelatedLayout \? cardFrameBinding\.cropPermission : undefined\}/u);
   assert.match(adaptiveGrid, /desktopRelatedLayout=\{layout\}/u);
   assert.match(adaptiveGrid, /dataset\.labFramingStatus === 'satisfied'/u);
   assert.equal((eventsSource.match(/\.\.\.relatedCardCropProofPayload\(primaryAsset\)/gu) || []).length, 2);

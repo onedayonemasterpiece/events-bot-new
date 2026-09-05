@@ -57,10 +57,11 @@ test('AR-05: a 20% area budget alone cannot authorize cutting unlocated OCR text
   assert.equal(decision.coverCrop, 0);
 });
 
-test('owner 8673 public corpus reports its irreconcilable natural-frame rows without loss or irregular widths', () => {
+test('owner 8673 public corpus fills final fallback rows without loss or irregular widths', () => {
   // Exact IDs and decoded source dimensions measured on the immutable public
   // 2fe28b1f8 owner candidate. Visual-only items may cover; documents may not
-  // crop because this corpus carries no located OCR/text-safe crop evidence.
+  // group naturally first, then use the explicitly approved minimum-crop
+  // fallback because this historical slice has no located OCR boxes.
   const items = [
     publicImage(8667, 1280, 854),
     publicImage(8215, 2048, 886, 'visual_only'),
@@ -77,12 +78,15 @@ test('owner 8673 public corpus reports its irreconcilable natural-frame rows wit
 
   assert.deepEqual(ids(packed), ids(items.map((item) => ({ item }))));
   assert.deepEqual(rowGroups(packed).map((row) => row.length), [3, 3, 3, 1]);
-  assert.ok(packed.some(({ layout }) => layout.framingStatus === 'unsatisfied'));
-  assert.ok(packed.some(({ layout }) => layout.paintedFields === true));
-  assert.deepEqual([...new Set(packed.map(({ layout }) => layout.framingConflict).filter(Boolean))], [
-    'document-natural-ratio-mismatch:8742@874x1280=0.68281250|8080@1810x2560=0.70703125',
-    'document-natural-ratio-mismatch:8724@1811x2560=0.70742187|8747@960x1280=0.75000000',
-  ]);
+  assert.ok(packed.every(({ layout }) => layout.framingStatus === 'satisfied'));
+  assert.ok(packed.every(({ layout }) => layout.paintedFields !== true));
+  assert.deepEqual([...new Set(packed.map(({ layout }) => layout.framingConflict).filter(Boolean))], []);
+  assert.ok(packed.filter(({ layout }) => layout.mediaKind === 'document' && layout.coverCrop > 0).every(({ layout }) => (
+    layout.fit === 'cover'
+    && layout.mediaTreatment === 'document-fallback-cover'
+    && layout.cropReason.startsWith('fallback_minimal_crop_')
+    && relatedCardMediaFrameBinding(layout).cropPermission === 'fallback-minimal'
+  )));
   for (const row of rowGroups(packed)) {
     assert.equal(new Set(row.map(({ layout }) => layout.rowRatio.toFixed(8))).size, 1);
     assert.equal(new Set(row.map(({ layout }) => layout.framingStatus)).size, 1);
@@ -106,11 +110,11 @@ test('owner 8673 full 30-candidate authority exhausts compatible rows before its
   assert.deepEqual(ids(planned), ids(corpus.map((item) => ({ item }))));
   assert.equal(new Set(planned.map(({ item }) => item.id)).size, 30);
   assert.ok(planned.slice(0, 10).every(({ layout }) => layout.framingStatus === 'satisfied'));
-  assert.equal(planned.filter(({ layout }) => layout.framingStatus === 'unsatisfied').length, 6);
+  assert.equal(planned.filter(({ layout }) => layout.framingStatus === 'unsatisfied').length, 0);
   const worstUnused = Math.max(...planned.filter(({ item }) => item.image_assets[0].width > 0 && item.image_assets[0].height > 0).map(({ item, layout }) => layout.fit === 'cover' ? 0 : 1 - Math.min(
     item.image_assets[0].width / item.image_assets[0].height / layout.rowRatio,
     layout.rowRatio / (item.image_assets[0].width / item.image_assets[0].height))));
-  assert.ok(worstUnused < .3, 'Whole-pool refinement must not freeze the old residual identities');
+  assert.equal(worstUnused, 0, 'Loaded final-fallback media must not retain painted fields');
 });
 
 test('full-pool selection uses later natural buckets before admitting a conflicting initial prefix', () => {
@@ -123,7 +127,8 @@ test('full-pool selection uses later natural buckets before admitting a conflict
   const planned = planRelatedCardRows(corpus, { rowSize:3, presentation:'flow' });
   assert.deepEqual(ids(planned), corpus.map(({ id }) => id));
   assert.ok(planned.slice(0, 9).every(({ layout }) => layout.framingStatus === 'satisfied'));
-  assert.ok(planned.slice(-3).every(({ layout }) => layout.framingStatus === 'unsatisfied'));
+  assert.ok(planned.slice(-3).every(({ layout }) => layout.framingStatus === 'satisfied'));
+  assert.ok(planned.slice(-3).every(({ layout }) => layout.fit === 'cover'));
 });
 
 test('current normalized OCR boxes authorize only a proven bounded vertical cover', () => {
@@ -196,7 +201,7 @@ test('Free first public row resolves to its shared 1810x2560 natural frame in st
   assert.ok(packed.every(({ layout }) => layout.paintedFields === false));
 });
 
-test('Free stable-order incompatible row reports the smallest measured conflict without dropping events', () => {
+test('Free stable-order incompatible row uses a minimum-crop fallback without dropping events', () => {
   const items = [
     publicImage(8080, 1810, 2560),
     publicImage(8564, 2560, 1706, 'visual_only'),
@@ -205,12 +210,14 @@ test('Free stable-order incompatible row reports the smallest measured conflict 
   const packed = packRelatedCardRows(items, { rowSize:3, preserveOrder:true });
 
   assert.deepEqual(packed.map(({ item }) => item.id), [8080, 8564, 8308]);
-  assert.ok(packed.every(({ layout }) => layout.framingStatus === 'unsatisfied'));
-  assert.ok(packed.every(({ layout }) => layout.framingConflict
-    === 'document-natural-ratio-mismatch:8080@1810x2560=0.70703125|8308@2560x2560=1.00000000'));
-  assert.equal(packed.find(({ item }) => item.id === 8080).layout.paintedFields, true);
-  assert.ok(packed.filter(({ item }) => item.id !== 8564).every(({ layout }) => layout.fit === 'contain' && layout.coverCrop === 0));
-  assert.equal(packed.find(({ item }) => item.id === 8308).layout.paintedFields, true);
+  assert.ok(packed.every(({ layout }) => layout.framingStatus === 'satisfied'));
+  assert.ok(packed.every(({ layout }) => layout.framingConflict === null));
+  assert.ok(packed.every(({ layout }) => layout.fit === 'cover' && layout.paintedFields === false));
+  assert.ok(packed.filter(({ item }) => item.id !== 8564).every(({ layout }) => (
+    layout.mediaTreatment === 'document-fallback-cover'
+    && layout.cropSafety === 'unverified-text'
+    && relatedCardMediaFrameBinding(layout).cropPermission === 'fallback-minimal'
+  )));
 });
 
 test('control: equal-ratio documents still form a deterministic full row', () => {
@@ -295,27 +302,76 @@ test('AR-02: unsafe/stale/text assets stay text-only; eligible photos retain the
 });
 
 
-test('flexible fillers protect an isolated aspect instead of being exhausted on an early near-match', () => {
+test('flexible fillers protect an isolated aspect before fallback cover is used', () => {
   const corpus = [publicImage(1,700,1000),publicImage(2,710,1000),publicImage(3,720,1000),
     publicImage(4,1400,1000),publicImage(5,1200,1000,'visual_only'),publicImage(6,1200,1000,'visual_only')];
   const result = planRelatedCardRows(corpus, {rowSize:3});
   assert.deepEqual(ids(result), [1,2,3,4,5,6]);
-  const accepted = result.filter(({layout}) => layout.framingStatus === 'satisfied');
-  assert.deepEqual(ids(accepted), [4,5,6]);
+  const naturallyAccepted = result.filter(({layout}) => layout.rowMode !== 'fallback-minimal-cover');
+  assert.deepEqual(ids(naturallyAccepted), [4,5,6]);
   for (const {item,layout} of result.filter(({item}) => item.id <= 3)) {
     const ratio = item.image_assets[0].width/item.image_assets[0].height;
     assert.ok(1-Math.min(ratio/layout.rowRatio,layout.rowRatio/ratio)<.015);
-    assert.equal(layout.fit,'contain');
-    assert.equal(layout.coverCrop,0);
-    assert.equal(layout.framingStatus,'unsatisfied', 'Small remaining fields are not falsely certified');
+    assert.equal(layout.fit,'cover');
+    assert.ok(layout.coverCrop > 0);
+    assert.equal(layout.framingStatus,'satisfied');
+    assert.equal(layout.cropSafety,'unverified-text');
   }
   assert.deepEqual(planRelatedCardRows(corpus,{rowSize:3}),result);
 });
 
-test('unavoidable whole-image fallback minimizes maximum blank area, never crops protected text', () => {
+test('unavoidable cover fallback balances the extreme ratios and leaves no fields', () => {
   const corpus=[publicImage(1,800,1000),publicImage(2,1000,1000),publicImage(3,1200,1000)];
   const result=packRelatedCardRows(corpus,{rowSize:3,preserveOrder:true});
   const target=Math.sqrt(.8*1.2);
   assert.deepEqual(result.map(({item})=>item.id),[1,2,3]);
-  assert.ok(result.every(({layout})=>Math.abs(layout.rowRatio-target)<1e-9 && layout.fit==='contain' && layout.coverCrop===0));
+  assert.ok(result.every(({layout})=>Math.abs(layout.rowRatio-target)<1e-9 && layout.fit==='cover' && layout.paintedFields===false));
+  assert.ok(Math.abs(result[0].layout.coverCrop - result[2].layout.coverCrop) < 1e-12);
+  assert.ok(result.filter(({layout})=>layout.coverCrop>0).every(({layout}) => (
+    layout.cropSafety === 'unverified-text'
+    && relatedCardMediaFrameBinding(layout).cropPermission === 'fallback-minimal'
+  )));
+});
+
+test('final fallback uses current face geometry for position without claiming OCR text safety', () => {
+  const hash = 'd'.repeat(64);
+  const guided = publicImage('guided-source', 800, 1000, 'unknown');
+  guided.image_assets[0] = {
+    ...guided.image_assets[0],
+    current_pixel_sha256:hash,
+    geometry_pixel_sha256:hash,
+    geometry_status:'classified',
+    geometry_coordinate_space:'normalized_0_1',
+    face_boxes:[{ x:.72, y:.06, w:.16, h:.18 }],
+  };
+  const result = packRelatedCardRows([
+    guided,
+    publicImage('square-a', 1000, 1000),
+    publicImage('square-b', 1000, 1000),
+  ], { rowSize:3, preserveOrder:true });
+  const fallback = result.find(({ item }) => item === guided).layout;
+  assert.equal(fallback.fit, 'cover');
+  assert.equal(fallback.cropReason, 'fallback_minimal_crop_geometry_guided');
+  assert.notEqual(fallback.objectPosition, '50% 50%');
+  assert.equal(fallback.cropSafety, 'unverified-text');
+  assert.equal(relatedCardMediaFrameBinding(fallback).cropPermission, 'fallback-minimal');
+});
+
+test('Day of Guryevsk source geometry uses shared minimum-crop fallback without an event-id exception', () => {
+  // Source dimensions and title are from the 592a owner screenshot corpus.
+  // This fixture records renderer behavior, not a claim that unlocated poster
+  // text is guaranteed safe. No production event id participates in policy.
+  const dayOfGuryevsk = publicImage('day-guryevsk-source', 1708, 961, 'ocr_text');
+  dayOfGuryevsk.title = 'Концерт группы Bearwolf';
+  const result = packRelatedCardRows([
+    dayOfGuryevsk,
+    publicImage('portrait-source', 800, 1000),
+    publicImage('square-source', 1000, 1000),
+  ], { rowSize:3, preserveOrder:true });
+  const fallback = result.find(({ item }) => item.title === 'Концерт группы Bearwolf').layout;
+  assert.ok(result.every(({ layout }) => layout.fit === 'cover' && layout.paintedFields === false));
+  assert.equal(fallback.mediaTreatment, 'document-fallback-cover');
+  assert.equal(fallback.cropSafety, 'unverified-text');
+  assert.equal(fallback.cropBudgetStatus, 'exceeds-preferred');
+  assert.equal(relatedCardMediaFrameBinding(fallback).cropPermission, 'fallback-minimal');
 });

@@ -19,7 +19,7 @@ interface DesktopRelatedLayout {
   rowColumn: number;
   rowMode: string;
   mediaKind: 'document' | 'visual';
-  mediaTreatment: 'document-safe-cover' | 'document-protected-cover' | 'document-contain' | 'visual-cover';
+  mediaTreatment: 'document-safe-cover' | 'document-protected-cover' | 'document-fallback-cover' | 'document-contain' | 'visual-cover';
   fit: 'contain' | 'cover';
   objectPosition: string;
   cropReason: string;
@@ -29,6 +29,9 @@ interface DesktopRelatedLayout {
   rowCost: number;
   framingStatus?: 'satisfied' | 'unsatisfied';
   framingConflict?: string | null;
+  framingRisk?: string | null;
+  cropSafety?: 'uncropped' | 'protected-text' | 'unverified-text';
+  cropBudgetStatus?: 'within-preferred' | 'exceeds-preferred' | 'unknown';
   presentation?: 'flow' | 'packed';
 }
 interface Props {
@@ -88,7 +91,7 @@ const cardTargetAspect = desktopRelatedCrop
 // cards consume the resulting serialized decision.
 const mobileMediaDecision = mobileFlowMedia ? resolveMobileEventCardMedia(event) : null;
 const relatedMediaDecision = desktopRelatedCrop
-  ? resolveRelatedCardMediaTreatment(event, cardTargetAspect)
+  ? (desktopRelatedLayout || resolveRelatedCardMediaTreatment(event, cardTargetAspect))
   : mobileMediaDecision;
 const documentMedia = desktopRelatedCrop
   ? relatedMediaDecision?.mediaKind === 'document'
@@ -185,8 +188,12 @@ const EVENT_CARD_RESERVED_ROOT_ATTRIBUTES = new Set([
   'data-lab-row-cost',
   'data-lab-fit',
   'data-lab-object-position',
+  'data-lab-crop-permission',
   'data-lab-framing-status',
   'data-lab-framing-conflict',
+  'data-lab-framing-risk',
+  'data-lab-crop-safety',
+  'data-lab-crop-budget-status',
 ]);
 const safeRootAttributes = Object.fromEntries(
   Object.entries(rootAttributes).filter(([name, value]) => (
@@ -235,8 +242,12 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
   data-lab-row-cost={desktopRelatedLayout?.rowCost.toFixed(5)}
   data-lab-fit={desktopRelatedLayout ? cardFrameBinding.fit : undefined}
   data-lab-object-position={desktopRelatedLayout ? cardFrameBinding.objectPosition : undefined}
+  data-lab-crop-permission={desktopRelatedLayout ? cardFrameBinding.cropPermission : undefined}
   data-lab-framing-status={desktopRelatedLayout?.framingStatus}
   data-lab-framing-conflict={desktopRelatedLayout?.framingConflict || undefined}
+  data-lab-framing-risk={desktopRelatedLayout?.framingRisk || undefined}
+  data-lab-crop-safety={desktopRelatedLayout?.cropSafety}
+  data-lab-crop-budget-status={desktopRelatedLayout?.cropBudgetStatus}
   style={desktopRelatedLayout ? `--lab-media-ratio:${intrinsicMediaRatio.toFixed(5)};--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)}` : undefined}
   tabindex="0"
   aria-label={`${event.title}: ${dateLabel}`}
