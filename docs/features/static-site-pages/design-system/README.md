@@ -61,6 +61,15 @@ controls poison a real media shell and span a singleton across all columns;
 neither equal outer rectangles nor an ineffective flex override proves PASS.
 Focused fixtures are diagnostics, not same-snapshot real acceptance.
 
+## AR-11 semantic reading correction
+
+The existing production keyboard router now traverses title → visible prose
+paragraphs → practical summary → related cards with ArrowDown. ArrowUp from
+the first related row returns through the reading stops. Existing editable,
+modifier/composition, dialog and gallery guards remain; no global scroll-jump
+or new router is introduced. Source tests are diagnostic; exact5370 browser
+reading/action evidence and the same-snapshot candidate remain required.
+
 ## Existing owners and reverse impact
 
 Do not add a second registry, checker, design system or build pipeline.

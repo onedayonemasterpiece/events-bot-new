@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Desktop event ArrowDown follows title, rendered prose paragraphs, practical summary and related cards; ArrowUp reverses the reading route with existing input/dialog guards.
 - Owner-review candidate: shared card row tracks align media/body/actions, retain ordinary remainder widths, preserve contained poster text and constrain narrow-column action overflow. Browser regressions now reject internal-boundary drift.
 
 ### Fixed — owner review, 2026-09-05 (unpublished)
