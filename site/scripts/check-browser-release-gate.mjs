@@ -140,6 +140,12 @@ export function assertOwnerTitleMetrics(title, width) {
   invariant(!title.occludedBy?.length, `H1 is covered by chrome: ${(title.occludedBy || []).join(',')}`);
 }
 
+export function assertOwnerSectionMetrics(section, width) {
+  const expected = ownerTypography.owner_review_roles.section_title.viewports[String(width)];
+  invariant(expected, `no section-title expectation for ${width}`);
+  for (const [key,value] of Object.entries(expected)) invariant(Math.abs(Number.parseFloat(section.style?.[key])-value)<0.12, `same-role H2 ${key} mismatch: ${section.text}`);
+}
+
 export function assertRegularGridWidths(grid) {
   invariant(grid.scrollWidth <= grid.clientWidth + 1, 'event-card grid has internal horizontal overflow');
   if (!grid.cards.length) return;
@@ -193,6 +199,7 @@ export async function measureOwnerReviewPage(page) {
     };
     const headings = [...document.querySelectorAll('h1,h2,h3')].filter(visible).slice(0,100).map(e=>({
       tag:e.tagName,text:e.textContent.trim(),class:e.className,box:box(e),style:style(e),
+      sectionRole:e.matches('.ke-popular-behavior__head:not(.is-stuck) h2,.free-collection__results > h2,.ex-group__heading h2,.ex-tail-callout h2,.unusual-page__empty h2'),
       scrollWidth:e.scrollWidth,clientWidth:e.clientWidth,...titleVisibility(e),
       parent:{class:e.parentElement.className,box:box(e.parentElement),style:style(e.parentElement)},
     }));
@@ -244,6 +251,17 @@ export async function assertOwnerReviewPages(page, origin, basePath = '', { rout
         const titles = report.headings.filter(h=>h.tag === 'H1');
         invariant(titles.length === 1, `${route} must have one visible page title, got ${titles.length}`);
         assertOwnerTitleMetrics(titles[0], width);
+        for (const section of report.headings.filter(h=>h.sectionRole)) assertOwnerSectionMetrics(section,width);
+        const sectionNode=page.locator('.ke-popular-behavior__head:not(.is-stuck) h2,.free-collection__results > h2,.ex-group__heading h2,.ex-tail-callout h2,.unusual-page__empty h2').first();
+        if(await sectionNode.count()) {
+          const previous=await sectionNode.getAttribute('style');
+          await sectionNode.evaluate(e=>e.style.setProperty('font-size','17px','important'));
+          const poisoned=(await measureOwnerReviewPage(page)).headings.find(h=>h.sectionRole);
+          let rejected=false;try {assertOwnerSectionMetrics(poisoned,width);} catch {rejected=true;}
+          await sectionNode.evaluate((e,old)=>old===null?e.removeAttribute('style'):e.setAttribute('style',old),previous);
+          invariant(rejected,'section gate accepted an overriding local font size');
+          report.negativeSectionOverrideRejected=true;
+        }
         invariant(report.documentWidth <= width + 1, `${route} document overflows`);
         invariant(report.logoHref === `${basePath}/`, `${route} brand leaves the product home`);
         for (const row of report.cardRows) invariant(row.scrollWidth <= row.clientWidth + 1, `${route} internal card row overflows`);
@@ -287,16 +305,18 @@ export async function assertSchematicPageContext(page, origin, route, artifactDi
       window.scrollTo(0,Math.max(500,(title?.getBoundingClientRect().bottom || 0)+150));
     });
     await page.waitForFunction(()=>document.body.dataset.floatingContext==='visible');
+    await page.waitForTimeout(400); // Document the settled shell transition.
     const state=await page.locator('[data-floating-page-context]').evaluate(e=>{
       const rect=e.getBoundingClientRect(),button=e.querySelector('button'),b=button.getBoundingClientRect();
       const summary=document.querySelector('.mobile-discovery-menu__summary'),m=summary?.getBoundingClientRect();
       return {x:rect.x,y:rect.y,width:rect.width,height:rect.height,button:{x:b.x,y:b.y,width:b.width,height:b.height},
-        label:button.getAttribute('aria-label'),home:e.querySelector('a')?.getAttribute('href'),
+        label:button.getAttribute('aria-label'),home:e.querySelector('a')?.getAttribute('href'),background:getComputedStyle(e).backgroundColor,
         overlapsMenu:m?.width>0 && Math.min(b.right,m.right)>Math.max(b.left,m.left)+1 && Math.min(b.bottom,m.bottom)>Math.max(b.top,m.top)+1};
     });
     invariant(state.button.width>=44 && state.button.height>=44,'Floating context lost a 44px target');
     invariant(state.x>=0 && state.x+state.width<=width+1,'Floating context escapes the viewport');
     invariant(!state.overlapsMenu,'Floating context covers the mobile menu');
+    invariant(/^rgb\(/.test(state.background),'Schematic context must have an opaque canonical backing');
     invariant(state.label && /Наверх/.test(state.label),'Floating context has no useful accessible label');
     invariant(state.home===expectedHome,'Floating context lost product Home');
     if(artifactDir){mkdirSync(artifactDir,{recursive:true});await page.screenshot({path:join(artifactDir,`floating-${width}-${route.replaceAll('/','_')}.png`)});}

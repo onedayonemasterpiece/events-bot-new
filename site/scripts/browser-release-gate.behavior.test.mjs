@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   browserLaunchOptions,
   assertOwnerTitleMetrics,
+  assertOwnerSectionMetrics,
   assertRegularGridWidths,
   BROWSER_GATE_ACTION_TIMEOUT_MS,
   BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
@@ -345,4 +346,11 @@ test('same-role oracle rejects chrome occlusion and ancestor clipping', () => {
   assert.doesNotThrow(()=>assertOwnerTitleMetrics(title,390));
   assert.throws(()=>assertOwnerTitleMetrics({...title,occludedBy:['mobile-discovery-menu__summary']},390), /covered by chrome/u);
   assert.throws(()=>assertOwnerTitleMetrics({...title,clippedBy:['festival-hero']},390), /clipped by an ancestor/u);
+});
+
+// Same section role, irrespective of route palette or archetype composition.
+test('same-role sections reject locally shrunken type despite intact markers',()=>{
+ const section={text:'Раздел',style:{fontSize:'40px',fontWeight:'900',lineHeight:'42px',letterSpacing:'-1.4px'}};
+ assert.doesNotThrow(()=>assertOwnerSectionMetrics(section,1440));
+ assert.throws(()=>assertOwnerSectionMetrics({...section,style:{...section.style,fontSize:'21.6px'}},1440),/same-role H2/);
 });

@@ -153,7 +153,35 @@
         "ExhibitionsPersonalSurface",
         "FreeCollectionSurface",
         "UnusualListingSurface",
-        "PersonalFeedSlot"
+        "PersonalFeedSlot",
+        "PopularBehaviorSections"
+      ],
+      "viewports": {
+        "1440": {
+          "fontSize": 40,
+          "fontWeight": 900,
+          "lineHeight": 42.0,
+          "letterSpacing": -1.4
+        },
+        "390": {
+          "fontSize": 28,
+          "fontWeight": 900,
+          "lineHeight": 29.4,
+          "letterSpacing": -0.98
+        },
+        "1920": {
+          "fontSize": 40,
+          "fontWeight": 900,
+          "lineHeight": 42.0,
+          "letterSpacing": -1.4
+        }
+      },
+      "excluded_roles": [
+        "time-marker",
+        "festival-month-index",
+        "card-title",
+        "sticky-compact-context",
+        "footer"
       ]
     },
     "palette": "Retain explicit content themes; a page must not recolor shared shell/controls through body inheritance.",
