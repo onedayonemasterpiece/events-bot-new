@@ -593,6 +593,27 @@ def split_time(value: Any) -> tuple[str | None, str | None, str | None]:
     return start, end, display
 
 
+def source_time_is_default(row: sqlite3.Row | dict[str, Any]) -> bool:
+    """Read the persisted time-precision flag without inferring from text."""
+    if not row_has_key(row, "time_is_default"):
+        return False
+    value = row_get(row, "time_is_default")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value or "").strip().lower() in {"1", "true", "yes"}
+
+
+def public_event_time_projection(
+    value: Any, *, time_is_default: bool
+) -> tuple[str | None, str | None, str | None]:
+    """Expose a parsed time only when the source says it is not a default."""
+    if time_is_default:
+        return None, None, None
+    return split_time(value)
+
+
 def explicit_event_duration_minutes(*values: Any) -> int | None:
     """Extract only a source-labeled event duration, never infer one from prose."""
     for value in values:
@@ -2629,7 +2650,10 @@ def build_event(
     address = clean_place(row["location_address"])
     start_date = normalize_date(row["date"]) or current_date
     end_date = normalize_date(row["end_date"])
-    start_time, time_end, display_time = split_time(row["time"])
+    time_is_default = source_time_is_default(row)
+    start_time, time_end, display_time = public_event_time_projection(
+        row["time"], time_is_default=time_is_default
+    )
     description = str(
         occurrence["description"]
         if occurrence_conflict and occurrence
@@ -2685,6 +2709,7 @@ def build_event(
         # export an explicit untrusted record and therefore fail closed.
         **structured_semantic_record,
         "starts_at": starts_at,
+        "time_is_default": time_is_default,
         "start_date": start_date,
         "start_time": start_time,
         "end_date": end_date,

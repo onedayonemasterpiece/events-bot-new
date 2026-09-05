@@ -158,6 +158,8 @@ export interface PreviewEvent {
   status_label: string;
   lifecycle_status: string;
   starts_at: string | null;
+  /** True when the source persisted a placeholder time; public time fields are null. */
+  time_is_default?: boolean;
   start_date: string;
   start_time: string | null;
   end_date: string | null;
