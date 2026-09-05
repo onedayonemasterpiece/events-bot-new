@@ -1119,10 +1119,10 @@
           "attribute": "state",
           "source_regex": "data-ds-state=\\{surfaceState\\}",
           "values": [
-            "timed",
-            "exhibitions",
+            "loading",
             "populated",
-            "empty"
+            "empty",
+            "error"
           ]
         }
       ],

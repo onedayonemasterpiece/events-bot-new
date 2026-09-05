@@ -7,11 +7,11 @@
   "source_root": "site/src",
   "source_inventory_sha256": "6d4a6a3c3ea9419d0928a0f8304658de4529f49a4b0ae2f5d48bd7edc0e09119",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "7aef80358e61b88b199aa5cae5ed676f5dcbfcf880c11f0e703567cc01c7d9fb",
+  "astro_family_graph_sha256": "89d9753bb52384f3068c2d972a1f5c24af1226139872e32c9c496af249f0dd0f",
   "summary": {
     "token_count": 2532,
     "definition_count": 2848,
-    "consumer_count": 3579,
+    "consumer_count": 3581,
     "alias_edge_count": 895,
     "family_count": 109
   },
@@ -59765,7 +59765,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4497,
+          "line": 4498,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -59793,7 +59793,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4496,
+          "line": 4497,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60477,7 +60477,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5827,
+          "line": 5828,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61326,7 +61326,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4495,
+          "line": 4496,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61335,7 +61335,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4532,
+          "line": 4533,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61344,7 +61344,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4577,
+          "line": 4578,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62351,7 +62351,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5783,
+          "line": 5784,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62377,7 +62377,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5781,
+          "line": 5782,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62403,7 +62403,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5780,
+          "line": 5781,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -108692,6 +108692,18 @@
         {
           "token": "--ke-color-text-inverse",
           "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2050,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2054,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
           "line": 2361,
           "has_fallback": false
         },
@@ -110686,6 +110698,18 @@
           "token": "--ke-color-copy-action-error-mark-foreground",
           "path": "site/src/components/design-system/CopyAction.astro",
           "line": 201,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2050,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2054,
           "has_fallback": false
         },
         {
@@ -171944,7 +171968,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4573,
+          "line": 4574,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172674,7 +172698,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4494,
+          "line": 4495,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172683,7 +172707,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4531,
+          "line": 4532,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172692,7 +172716,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4597,
+          "line": 4598,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172809,7 +172833,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4493,
+          "line": 4494,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172818,7 +172842,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4532,
+          "line": 4533,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172827,7 +172851,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4576,
+          "line": 4577,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -174263,7 +174287,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5745,
+          "line": 5746,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",

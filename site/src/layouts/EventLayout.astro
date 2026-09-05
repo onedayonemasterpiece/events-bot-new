@@ -4165,6 +4165,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const count = root?.querySelector('[data-free-collection-result-count]');
           const button = feed.parentElement?.querySelector('[data-discovery-load-more]');
           feed.dataset.freeCollectionState = state;
+          if (root) root.dataset.dsState = ['ready','exhausted'].includes(state) ? 'populated' : state;
           feed.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
           if (button) {
             button.disabled = state === 'loading';
