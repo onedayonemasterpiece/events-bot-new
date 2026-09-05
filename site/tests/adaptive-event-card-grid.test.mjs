@@ -119,6 +119,9 @@ test('packed grid keeps row geometry and layering but delegates MediaFrame anato
   const shell = /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media-shell\) \{([\s\S]*?)\n  \}/u.exec(adaptive)?.[1] || '';
   const image = /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media\) \{([\s\S]*?)\n  \}/u.exec(adaptive)?.[1] || '';
 
+  assert.match(adaptive, /\.adaptive-event-card-grid--packed > :global\(\.event-card\[data-lab-related-card\]\) \{[\s\S]*grid-row: auto;[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) minmax\(58px, auto\) minmax\(56px, auto\);/u);
+  assert.doesNotMatch(adaptive, /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\]\) \{[\s\S]*grid-template-rows: subgrid;/u);
+  assert.match(adaptive, /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media-link\) \{[\s\S]*display: block;[\s\S]*aspect-ratio: var\(--lab-row-media-ratio\);/u);
   assert.match(shell, /height: auto !important/u);
   assert.match(shell, /aspect-ratio: var\(--lab-row-media-ratio\) !important/u);
   assert.match(shell, /background: #d2c5b7/u);

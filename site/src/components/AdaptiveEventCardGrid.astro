@@ -384,11 +384,20 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
     white-space: normal;
   }
 
-  .adaptive-event-card-grid--packed :global([data-lab-related-card]) {
+  /* Packed rows receive one ratio from relatedCardLayout. They must keep
+     that media link in the card's own grid: an absolute MediaFrame cannot
+     size the outer subgrid row without overlapping the following anatomy. */
+  .adaptive-event-card-grid--packed > :global(.event-card[data-lab-related-card]) {
     height: auto;
-    grid-template-rows: subgrid;
+    grid-row: auto;
+    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
   }
-  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-link) { display: block; }
+  /* The link is the first subgrid item. Give it the packer-selected shared
+     row ratio so absolute MediaFrame content participates in row sizing. */
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-link) {
+    display: block;
+    aspect-ratio: var(--lab-row-media-ratio);
+  }
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-shell) {
     height: auto !important;
     aspect-ratio: var(--lab-row-media-ratio) !important;
