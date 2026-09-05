@@ -29,6 +29,7 @@ export const F0_A0_STATIC_INSPECTION_CONTRACT = Object.freeze({
     runtime_layout_variables: Object.freeze([
       '--ex-media-column',
       '--ex-row-gap',
+      '--ex-row-radius',
       '--ex-surface-start',
       '--ex-rail-color',
     ]),

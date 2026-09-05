@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Consumer-closure checks recognize the approved exhibition shared-card radius alias and reject private literal substitutions; frozen preview runtime is unchanged.
 - Shared card framing now uses minimal cover as the final no-fields fallback after full-pool grouping, with honest unverified-crop diagnostics and natural mobile frames. Exhibition large corners consume common card/hero roles; redundant desktop Today/Tomorrow/Date pills are hidden without changing mobile navigation.
 
 

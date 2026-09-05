@@ -62,3 +62,5 @@ geometry without bands; constrained geometry uses the explicit final fallback,
 not semantic reclassification. Existing 5297/6823 regressions retain this photo
 identity; expired routes are not resurrected for tests. Inspect actual rendered
 bounds and focal positioning, not source declarations alone.
+
+The consumer-closure checker permits `--ex-row-radius` only as a binding to `--ke-shape-radius-card`; a literal private radius is rejected. This checker update does not alter the frozen real-candidate runtime.

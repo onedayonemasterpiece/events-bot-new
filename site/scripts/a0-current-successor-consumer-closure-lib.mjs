@@ -18,6 +18,7 @@ export const A0_CONSUMER_CLOSURE_PATHS = [
 export const EXHIBITIONS_RUNTIME_VARIABLES = [
   '--ex-media-column',
   '--ex-row-gap',
+  '--ex-row-radius',
   '--ex-surface-start',
   '--ex-rail-color',
 ];
@@ -562,7 +563,8 @@ export function assertA0ConsumerPostconditions(path, source) {
         assert.ok(!source.includes(`${alias}:`), `${path} retains private declaration ${alias}`);
         assert.ok(!source.includes(`var(${alias})`), `${path} retains private use ${alias}`);
       }
-      assert.deepEqual(cssCustomPropertyNames(source), [...EXHIBITIONS_RUNTIME_VARIABLES].sort(), `${path} must retain exactly the four approved runtime-layout variables`);
+      assert.match(source, /--ex-row-radius:\s*var\(--ke-shape-radius-card\);/u, 'exhibition shape alias must consume the canonical card role');
+      assert.deepEqual(cssCustomPropertyNames(source), [...EXHIBITIONS_RUNTIME_VARIABLES].sort(), `${path} must retain exactly the approved layout and shared-shape variables`);
       for (const token of EXHIBITIONS_REQUIRED_CENTRAL_BINDINGS) assert.ok(source.includes(`var(${token})`), `${path} misses central binding ${token}`);
       for (const token of EXHIBITIONS_REQUIRED_FR0_BINDINGS) assert.ok(source.includes(`var(${token})`), `${path} misses FR0 binding ${token}`);
       const visibleStyleSource = [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)]

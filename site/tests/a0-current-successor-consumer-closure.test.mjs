@@ -203,3 +203,10 @@ test('focus route transforms publish runtime state without changing participatio
   assert.match(hub, /clearFocusParticipationMarker/u);
   assert.match(hub, /marker\?\.status === 'active' \? 'available' : 'locked'/u);
 });
+
+// Owner-approved shared shape binding is allowed, not a license for local radii.
+test('exhibition closure rejects a private literal substituted for the shared card radius', async () => {
+  const path = 'site/src/components/ExhibitionsPersonalSurface.astro';
+  const source = transformA0Consumer(path, await read(path));
+  assert.throws(() => assertA0ConsumerPostconditions(path, source.replace('--ex-row-radius:var(--ke-shape-radius-card);', '--ex-row-radius:7px;')), /canonical card role/u);
+});
