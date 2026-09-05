@@ -1,5 +1,5 @@
 <div class="mobile-toast-region" data-mobile-toast-region aria-label="Уведомления" hidden>
-  <div class="mobile-toast" data-mobile-toast data-kind="info">
+  <div class="mobile-toast" data-mobile-toast data-app-lower-surface="notification" data-kind="info">
     <p class="mobile-toast__message" data-mobile-toast-message></p>
     <div class="mobile-toast__controls">
       <button class="mobile-toast__action" data-mobile-toast-action type="button" hidden></button>
@@ -68,6 +68,7 @@
       current = null;
       region.hidden = true;
       countdown.classList.remove('is-running', 'is-paused');
+      delete toast.dataset.appLowerLifecycle;
       polite.textContent = '';
       assertive.textContent = '';
       renderNext();
@@ -97,6 +98,7 @@
       remaining = entry.duration || 0;
       region.hidden = false;
       toast.dataset.kind = entry.type;
+      toast.dataset.appLowerLifecycle = entry.duration === null ? 'persistent' : 'passive';
       message.textContent = entry.message;
       action.hidden = !entry.action;
       action.textContent = entry.action?.label || '';
@@ -142,7 +144,14 @@
     host.KenigEventsToast = api;
     window.addEventListener('kenigevents:toast', (event) => show((event as CustomEvent<ToastInput>).detail), { signal });
     close.addEventListener('click', () => dismiss(), { signal });
-    action.addEventListener('click', () => { const callback = current?.action?.callback; dismiss(); callback?.(); }, { signal });
+    action.addEventListener('click', () => {
+      // Capture this entry's generation before rendering the next queue item.
+      // An action belongs to the entry the person activated, never its successor.
+      const actionGeneration = generation;
+      const callback = current?.action?.callback;
+      dismiss(actionGeneration);
+      callback?.();
+    }, { signal });
     region.addEventListener('pointerenter', () => pause('pointer'), { signal });
     region.addEventListener('pointerleave', () => resume('pointer'), { signal });
     region.addEventListener('focusin', () => pause('focus'), { signal });
@@ -158,6 +167,12 @@
       region.classList.toggle('is-drawer-obscured', open);
       open ? pause('drawer') : resume('drawer');
     }, { signal });
+    window.addEventListener('kenigevents:lower-surface-state', (event) => {
+      const detail = (event as CustomEvent<{ modalOpen?:boolean }>).detail;
+      const modalOpen = detail?.modalOpen === true;
+      region.classList.toggle('is-modal-obscured', modalOpen);
+      modalOpen ? pause('lower-surface-modal') : resume('lower-surface-modal');
+    }, { signal });
     window.addEventListener('pagehide', () => {
       generation += 1; clearTimer(); queue.length = 0; current = null; controller.abort();
       if (host.KenigEventsToast === api) delete host.KenigEventsToast;
@@ -168,16 +183,15 @@
 <style is:global>
   .mobile-toast-region {
     position:fixed; z-index:60;
-    top:calc(var(--mobile-top-chrome-bottom) + var(--mobile-header-handle-overhang, 24px) + 8px);
+    bottom:calc(var(--ke-lower-surface-offset, 0px) + max(12px, env(safe-area-inset-bottom)));
     left:max(12px,env(safe-area-inset-left)); right:max(12px,env(safe-area-inset-right));
     max-width:560px; margin-inline:auto; pointer-events:none;
   }
   .mobile-toast-region[hidden] { display:none; }
-  .mobile-toast-region.is-drawer-obscured { opacity:0; visibility:hidden; }
-  .mobile-toast { position:relative; min-height:56px; max-height:72px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; overflow:hidden; padding:8px 8px 8px 14px; border:1px solid var(--ke-color-toast-border); border-radius:var(--ke-toast-radius); background:var(--ke-color-toast-surface); color:var(--ke-color-toast-text); box-shadow:var(--ke-elevation-toast); pointer-events:auto; }
-  .mobile-toast[data-kind="success"] { border-color:var(--ke-color-toast-success-border); }
-  .mobile-toast[data-kind="error"] { border-color:var(--ke-color-toast-error-border); }
-  .mobile-toast__message { min-width:0; max-height:2.7em; margin:0; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.88rem; font-weight:760; line-height:1.35; }
+  .mobile-toast-region.is-drawer-obscured,.mobile-toast-region.is-modal-obscured { opacity:0; visibility:hidden; }
+  /* The shared lower-surface shell owns notification paint and elevation. */
+  .mobile-toast { position:relative; min-height:56px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; overflow:hidden; padding:8px 8px 8px 14px; pointer-events:auto; }
+  .mobile-toast__message { min-width:0; margin:0; overflow-wrap:anywhere; font-size:.88rem; font-weight:760; line-height:1.35; }
   .mobile-toast__controls { display:flex; align-items:center; }
   .mobile-toast__action,.mobile-toast__close { min-width:var(--ke-toast-control-size); min-height:var(--ke-toast-control-size); border:0; background:transparent; color:var(--ke-color-toast-action); font:850 .82rem/1 inherit; cursor:pointer; }
   .mobile-toast__close { font-size:var(--ke-toast-close-icon-size); font-weight:500; }

@@ -109,7 +109,7 @@ test('accepted donor edge gestures and hollow-to-filled system heart states are 
     'pointermove',
     'pointercancel',
     'data-rail-confirm-negative',
-    'data-rail-action-toast',
+    'KenigEventsToast',
   ]) assert.match(surface, new RegExp(token, 'u'), token);
   assert.match(surface, /progress >= \.86 && dx >= 140/u);
   assert.match(surface, /physical >= 120/u);
@@ -135,7 +135,13 @@ test('negative swipe consent is device-local, fail-closed and granted only after
   assert.match(surface, /const commitSwipeNegative = \(row\) => \{\s*if \(hasNegativeSwipeConsent\(\)\) \{\s*void commitNegative\(row\);/u);
   assert.match(surface, /void commitNegative\(row, \{ rememberSwipeConsent:true \}\)/u);
   assert.match(surface, /следующие свайпы будут отмечать события без подтверждения\. Любую отметку можно отменить/u);
+  assert.match(surface, /const detail = \{[\s\S]*dedupeKey:'mobile-rail-action',[\s\S]*action:undo \? \{ label:'Отменить', callback:undo \} : null/u);
+  assert.match(surface, /window\.KenigEventsToast\?\.show[\s\S]*else window\.dispatchEvent\(new CustomEvent\('kenigevents:toast', \{ detail \}\)\)/u);
   assert.match(surface, /showToast\('Событие отмечено как неинтересное', \(\) => \{\s*negative\.click\(\)/u);
+  assert.doesNotMatch(surface, /data-rail-action-toast|toastUndo|toastTimer/u, 'rail must not retain a parallel expiring undo toast');
+  assert.match(surface, /const closeConfirm = \(\{ restoreFocus = true \} = \{\}\) => \{[\s\S]*opener\.focus\(\{ preventScroll:true \}\)/u);
+  assert.match(surface, /event\.key === 'Escape' && confirm && !confirm\.hidden/u);
+  assert.match(surface, /data-app-lower-surface="confirmation" data-app-lower-lifecycle="persistent"/u);
   assert.doesNotMatch(surface, /data-rail-confirm-cancel[\s\S]{0,180}rememberNegativeSwipeConsent/u);
 });
 

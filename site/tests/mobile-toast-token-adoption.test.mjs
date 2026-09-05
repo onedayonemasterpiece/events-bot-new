@@ -24,9 +24,13 @@ test('mobile toast consumes its established shell roles', async () => {
     '--ke-toast-close-icon-size',
   ]) {
     assert.match(shell, new RegExp(`${token}:`, 'u'), `${token} must remain shell-owned`);
-    assert.match(toast, new RegExp(`var\\(${token}\\)`, 'u'), `${token} must be consumed by the toast`);
   }
 
-  assert.doesNotMatch(toast, /rgba\(121,48,20,\.18\)|#fffdf8|#221a14|0 14px 34px rgba\(72,45,25,\.18\)|rgba\(38,120,72,\.32\)|rgba\(164,59,47,\.36\)|#793014|#a54821/iu);
+  assert.match(toast, /data-app-lower-surface="notification"/u);
+  for (const token of ['--ke-color-toast-action', '--ke-color-toast-progress', '--ke-toast-control-size', '--ke-toast-close-icon-size']) {
+    assert.match(toast, new RegExp(`var\\(${token}\\)`, 'u'), `${token} remains a local control/timing consumer`);
+  }
+  assert.doesNotMatch(toast, /border:1px solid var\(--ke-color-toast-border\)|box-shadow:var\(--ke-elevation-toast\)/u,
+    'lower notification paint is owned by the shared shell');
   assert.doesNotMatch(toast, /\.mobile-toast__action,.mobile-toast__close\s*\{[^}]*\b(?:min-width:44px|min-height:44px)/su);
 });

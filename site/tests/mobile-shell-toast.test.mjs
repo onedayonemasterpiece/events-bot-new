@@ -12,7 +12,7 @@ test('EventLayout is the single mobile shell owner with canonical route mapping'
   assert.match(layout, /import MobileBottomNav/u);
   assert.match(layout, /import MobileToastRegion/u);
   assert.match(layout, /import Reference4MobileMenu/u);
-  assert.match(layout, /<Reference4MobileMenu current=\{drawerCurrent\} discoveryBases=\{mobileDiscoveryBases\} badge=\{headerBadge\} \/>/u);
+  assert.match(layout, /<Reference4MobileMenu current=\{drawerCurrent\} discoveryBases=\{mobileDiscoveryBases\} badge=\{sharedHeaderBadge\} \/>/u);
   assert.match(layout, /<\/header>\s*<MobileToastRegion\s*\/>/u, 'toast region must immediately follow the header');
   assert.match(layout, /resolvedMobileBottomMode === 'nav' && <MobileBottomNav current=\{mobileSection\} \/>/u);
   assert.match(layout, /\/(?:\\\/)?\(\?:poisk\|podborki\)/u);
@@ -69,6 +69,11 @@ test('toast API owns bounded FIFO replacement, persistence and stale timers', as
   assert.match(toast, /duration:persistent \? null/u);
   assert.match(toast, /Number\(source\.duration\) \|\| 5000/u);
   assert.match(toast, /expectedGeneration !== generation/u);
+  assert.match(toast, /const actionGeneration = generation;[\s\S]*dismiss\(actionGeneration\);[\s\S]*callback\?\.\(\)/u,
+    'an action must dismiss only the entry it was rendered for');
+  assert.match(toast, /data-app-lower-surface="notification"/u);
+  assert.match(toast, /toast\.dataset\.appLowerLifecycle = entry\.duration === null \? 'persistent' : 'passive'/u);
+  assert.match(toast, /kenigevents:lower-surface-state[\s\S]*is-modal-obscured[\s\S]*pause\('lower-surface-modal'\)[\s\S]*resume\('lower-surface-modal'\)/u);
   assert.match(toast, /pagehide[\s\S]*clearTimer\(\)[\s\S]*controller\.abort\(\)/u);
 });
 
@@ -78,8 +83,8 @@ test('toast pauses actual time and countdown and honors safe/reduced-motion geom
   for (const reason of ['pointer', 'focus', 'touch', 'window', 'visibility', 'drawer']) {
     assert.match(toast, new RegExp(`(?:pause|resume)\\('${reason}'\\)`));
   }
-  assert.match(toast, /top:calc\(var\(--mobile-top-chrome-bottom\) \+ var\(--mobile-header-handle-overhang, 24px\) \+ 8px\)/u);
-  assert.match(toast, /max-height:72px/u);
+  assert.match(toast, /bottom:calc\(var\(--ke-lower-surface-offset, 0px\) \+ max\(12px, env\(safe-area-inset-bottom\)\)\)/u);
+  assert.doesNotMatch(toast, /max-height:72px|mobile-toast__message[^\n]*-webkit-line-clamp/u, 'lower notices must not clip long messages');
   assert.match(toast, /min-width:var\(--ke-toast-control-size\); min-height:var\(--ke-toast-control-size\)/u);
   assert.match(toast, /transform-origin:left/u);
   assert.match(toast, /@keyframes mobile-toast-retreat \{ to \{ transform:scaleX\(0\); \} \}/u);
