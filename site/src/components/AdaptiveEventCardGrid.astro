@@ -8,7 +8,7 @@ type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
 type ResponsiveStrategy = 'fixed' | 'progressive' | 'stack';
 type AdaptiveGridLive = 'off' | 'polite' | 'assertive';
 type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' | 'all-direct' | 'initial';
-type AdaptiveGridRemainderVariant = 'complete' | `stretch-${number}-of-${number}`;
+type AdaptiveGridRemainderVariant = 'complete' | `regular-${number}-of-${number}`;
 
 export interface AdaptiveEventCardItemRoot {
   className?: string;
@@ -76,7 +76,7 @@ const {
 
 const remainderVariantFor = (count: number, size: number): AdaptiveGridRemainderVariant => {
   const remainder = count % size;
-  return remainder === 0 ? 'complete' : `stretch-${remainder}-of-${size}`;
+  return remainder === 0 ? 'complete' : `regular-${remainder}-of-${size}`;
 };
 const numericRowSize = Number(requestedRowSize);
 const rowSize = Math.max(1, Math.min(6, Math.floor(Number.isFinite(numericRowSize) ? numericRowSize : 3)));
@@ -211,7 +211,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   ]}
   data-ds-component="AdaptiveEventCardGrid"
   data-ds-family="AdaptiveEventCardGrid"
-  data-ds-version="1"
+  data-ds-version="2"
   data-ds-variant={gridVariant}
   data-ds-state={gridState}
   data-adaptive-event-card-grid
@@ -221,7 +221,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-adaptive-grid-media-treatment={mode === 'packed' ? mediaTreatment : undefined}
   data-adaptive-grid-card-root="EventCard"
   data-adaptive-grid-layout-engine="flex-lines"
-  data-adaptive-grid-remainder-policy="stretch"
+  data-adaptive-grid-remainder-policy="regular-column"
   data-adaptive-grid-remainder-variant={initialRemainderVariant}
   data-adaptive-grid-responsive={responsive}
   data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"
@@ -296,7 +296,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
         const runtimeRemainderCount = count % runtimeRowSize;
         const runtimeRemainderVariant = runtimeRemainderCount === 0
           ? 'complete'
-          : `stretch-${runtimeRemainderCount}-of-${runtimeRowSize}`;
+          : `regular-${runtimeRemainderCount}-of-${runtimeRowSize}`;
         if (sourcePolicy === 'mirror-rendered') {
           grid.dataset.adaptiveGridSourceCount = String(count);
           grid.dataset.adaptiveGridSourceOrder = order;
@@ -341,15 +341,15 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
     min-width: 0;
     max-width: 100%;
     height: auto;
-    flex-grow: 1;
+    flex-grow: 0;
     flex-shrink: 1;
   }
   .adaptive-event-card-grid[data-adaptive-grid-row-size="1"] > :global(.event-card) { flex-basis: 100%; }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="2"] > :global(.event-card) { flex-basis: calc(50% - var(--adaptive-event-card-gap)); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="3"] > :global(.event-card) { flex-basis: calc(33.333333% - var(--adaptive-event-card-gap)); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="4"] > :global(.event-card) { flex-basis: calc(25% - var(--adaptive-event-card-gap)); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] > :global(.event-card) { flex-basis: calc(20% - var(--adaptive-event-card-gap)); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] > :global(.event-card) { flex-basis: calc(16.666667% - var(--adaptive-event-card-gap)); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="2"] > :global(.event-card) { flex-basis: calc((100% - 1 * var(--adaptive-event-card-gap)) / 2); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="3"] > :global(.event-card) { flex-basis: calc((100% - 2 * var(--adaptive-event-card-gap)) / 3); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="4"] > :global(.event-card) { flex-basis: calc((100% - 3 * var(--adaptive-event-card-gap)) / 4); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] > :global(.event-card) { flex-basis: calc((100% - 4 * var(--adaptive-event-card-gap)) / 5); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] > :global(.event-card) { flex-basis: calc((100% - 5 * var(--adaptive-event-card-gap)) / 6); }
 
   .adaptive-event-card-grid--packed :global([data-lab-related-card]) {
     height: auto;
@@ -388,7 +388,7 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
       [data-adaptive-grid-row-size="5"],
       [data-adaptive-grid-row-size="6"]
     ) > :global(.event-card) {
-      flex-basis: calc(50% - var(--adaptive-event-card-gap));
+      flex-basis: calc((100% - 1 * var(--adaptive-event-card-gap)) / 2);
     }
   }
 

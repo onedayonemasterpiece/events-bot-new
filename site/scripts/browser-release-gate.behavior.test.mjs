@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   browserLaunchOptions,
+  assertOwnerTitleMetrics,
+  assertRegularGridWidths,
   BROWSER_GATE_ACTION_TIMEOUT_MS,
   BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
   assertRecommendationGeometry,
@@ -171,7 +173,7 @@ const successfulReport = {
     cold_and_pointer_keyboard: 'ok',
     gallery_cross_document: 'ok',
     footer_shortcuts: 'ok',
-    festival_calendar: 'ok',
+    festival_calendar: 'ok', owner_semantic_roles: 'ok',
   },
 };
 
@@ -316,4 +318,22 @@ test('R01 hero crop canaries cover every generated visual-only desktop family/fi
   const split = page('portrait-2', 'split', 'viewport-cover');
   const ocr = page('poster-3', 'split', 'viewport-contain', 'ocr_text');
   assert.deepEqual(staticHeroCropCandidates(root, basePath, [duplicateEditorial, split, ocr, dog]), [dog, split]);
+});
+
+
+test('same-role H1 oracle rejects page-local size even when family markers exist', () => {
+  const title = {text:'Выставки',box:{x:32,y:100,width:600,height:68},scrollWidth:600,clientWidth:600,
+    style:{fontFamily:'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',fontSize:'73.6px',lineHeight:'67.712px',fontWeight:'950',letterSpacing:'-4.416px'}};
+  assert.doesNotThrow(()=>assertOwnerTitleMetrics(title,1440));
+  for (const [key,value] of [['fontSize','100.8px'],['fontWeight','700'],['lineHeight','83.664px'],['letterSpacing','-7.056px']]) {
+    assert.throws(()=>assertOwnerTitleMetrics({...title,style:{...title.style,[key]:value},family:'CanonicalHeading'},1440),/same-role H1/u);
+  }
+});
+
+test('grid oracle rejects stretched final rows and internal overflow without document overflow', () => {
+  const card = (id,x,y) => ({id,x,y,width:300,height:400,scrollWidth:300,clientWidth:300});
+  const grid = {box:{x:0,y:0,width:940,height:820},clientWidth:940,scrollWidth:940,cards:[card(1,0,0),card(2,320,0),card(3,640,0),card(4,0,420)]};
+  assert.doesNotThrow(()=>assertRegularGridWidths(grid));
+  assert.throws(()=>assertRegularGridWidths({...grid,cards:[...grid.cards.slice(0,3),{...grid.cards[3],width:940}]}),/partial row stretches/u);
+  assert.throws(()=>assertRegularGridWidths({...grid,scrollWidth:1000}),/internal horizontal/u);
 });

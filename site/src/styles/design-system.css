@@ -199,7 +199,7 @@
 .ke-listing-head__date,
 .ke-listing-head__count { margin: 0; color: var(--ke-color-muted); }
 .ke-listing-head__date { font-size: var(--ke-font-size-100); font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }
-.ke-listing-head h1 { margin: var(--ke-space-2) 0; font-size: var(--ke-font-size-700); line-height: 0.92; letter-spacing: -0.06em; }
+.ke-listing-head h1 { margin: var(--ke-space-2) 0; font: var(--ke-type-h1); letter-spacing: var(--ke-type-h1-letter); }
 .ke-listing-head__count { font-size: var(--ke-font-size-200); }
 .ke-listing-date-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ke-space-2); }
 .ke-listing-date-nav a {
@@ -382,7 +382,6 @@
 @media (max-width: 720px) {
   .ke-listing-shell { width: min(100% - 24px, var(--ke-content-wide-max)); }
   .ke-listing-head { padding-top: var(--ke-space-10); }
-  .ke-listing-head h1 { font-size: clamp(2.6rem, 16vw, 4.2rem); }
   .ke-listing-date-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ke-listing-date-nav a { justify-content: center; padding-inline: var(--ke-space-2); }
   .ke-filter-chip { flex: 0 0 auto; }
@@ -1034,11 +1033,11 @@
   --ke-listing-media-height: 180px;
   min-width: 0;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 16px;
   padding-top: 14px;
-  overflow-x: auto;
+  overflow-x: visible;
   overscroll-behavior-inline: contain;
 }
 .ke-popular-behavior__row .ke-listing-card {
@@ -1114,7 +1113,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .ke-listing-discovery-rail .ke-time-nav a { min-height: 48px; }
   .listing-filter--floating { right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); left: 12px; justify-content: center; transform: none; }
   body.is-footer-visible .listing-filter--floating { transform: translateY(120%); }
-  .ke-popular-behavior__row { overflow-x: auto; scroll-snap-type: x mandatory; }
+  .ke-popular-behavior__row { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x mandatory; }
   .ke-popular-behavior__row .ke-listing-card { flex: 0 0 min(78vw, 320px); scroll-snap-align: start; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1149,7 +1148,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     padding: 32px 0 10px;
   }
   .ke-popular-listing .ke-listing-head h1 {
-    font-size: clamp(3.2rem, 14vw, 3.7rem);
+    font: var(--ke-type-h1);
     overflow-wrap: normal;
     word-break: normal;
   }

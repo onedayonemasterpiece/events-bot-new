@@ -827,16 +827,9 @@ export function initKeyboardEventNavigation(options = {}) {
         recordShortcutUse('related_boundary_focus');
         return;
       }
-      if (downGesture?.released && event.timeStamp - downGesture.at <= 430) {
-        event.preventDefault();
-        resetDownGesture();
-        focusFirstCard();
-        recordShortcutUse('related_jump');
-        return;
-      }
+      // Owner AR12: ordinary/repeated Down reads the event in order. A timing
+      // gesture must not silently skip its description and practical details.
       resetDownGesture();
-      downGesture = { at: event.timeStamp, released: false };
-      downGestureTimer = scheduleTimeout(resetDownGesture, 430);
       // Keep the platform meaning (one ordinary scroll step), but perform the
       // step explicitly. Chromium can otherwise drop the first default scroll
       // while a fullscreen gallery is finishing its close transition.

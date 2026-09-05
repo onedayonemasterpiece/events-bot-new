@@ -20,7 +20,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   id="main"
   class="ex-page"
   data-ds-family="ExhibitionsPersonalSurface"
-  data-ds-version="1"
+  data-ds-version="2"
   data-ds-variant="ranked-personal-catalog"
   data-ds-state={newItems.length + priorityItems.length + tailItems.length > 0 ? 'personal all-topics populated' : 'personal all-topics empty'}
     data-ke-foundation-consumer="exhibitions-personal-surface"
@@ -164,10 +164,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   </main>
 
 <style is:global>
-  body:has(.ex-page) { background:var(--ke-color-exhibitions-background); color:var(--ke-color-exhibitions-text); }
-  body:has(.ex-page)::before { display:none; }
-  body:has(.ex-page)>.site-header { z-index:60; }
-  body:has(.ex-page) a:focus-visible, body:has(.ex-page) button:focus-visible { outline:var(--ke-exhibitions-focus-width) solid var(--ke-color-exhibitions-blue); outline-offset:var(--ke-exhibitions-focus-offset); }
+  .ex-page a:focus-visible, .ex-page button:focus-visible { outline:var(--ke-exhibitions-focus-width) solid var(--ke-color-exhibitions-blue); outline-offset:var(--ke-exhibitions-focus-offset); }
   .ex-page { min-height:100dvh; padding:0; overflow-x:clip; background:radial-gradient(circle at 52% -14%,var(--ke-color-exhibitions-blue-glow),transparent 35rem),radial-gradient(circle at 8% 34%,var(--ke-color-exhibitions-orange-glow),transparent 28rem),var(--ke-color-exhibitions-background); color:var(--ke-color-exhibitions-text); font-size:var(--ke-exhibitions-page-font-size); line-height:var(--ke-exhibitions-page-line); }
   .ex-page button,.ex-page a { touch-action:manipulation; }
   .ex-skip { position:fixed; z-index:var(--ke-exhibitions-skip-layer); top:.8rem; left:.8rem; transform:translateY(-160%); padding:.75rem 1rem; border-radius:6px; background:var(--ke-color-exhibitions-text); color:var(--ke-color-exhibitions-background); font-weight:800; }
@@ -177,12 +174,12 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   .ex-shell { width:min(var(--ke-exhibitions-shell-max),calc(100% - var(--ke-exhibitions-shell-gutter))); margin:0 auto; padding:var(--ke-exhibitions-shell-padding-start) 0 var(--ke-exhibitions-shell-padding-end); }
   .ex-intro { display:flex; align-items:end; justify-content:space-between; gap:2rem; padding-bottom:2rem; border-bottom:1px solid var(--ke-color-exhibitions-border); }
   .ex-kicker,.ex-group__eyebrow { margin:0 0 .45rem; color:var(--ke-color-exhibitions-blue); font-size:.72rem; font-weight:900; letter-spacing:.13em; text-transform:uppercase; }
-  .ex-intro h1 { margin:0; font-size:clamp(3rem,7vw,6.8rem); line-height:.83; letter-spacing:-.07em; }
+  .ex-intro h1 { margin:0; font:var(--ke-type-h1); letter-spacing:var(--ke-type-h1-letter); }
   .ex-lead { max-width:58ch; margin:1rem 0 0; color:var(--ke-color-exhibitions-muted); font-size:clamp(1rem,1.5vw,1.2rem); }
   .ex-intro__summary { flex:0 0 auto; display:grid; grid-template-columns:repeat(3,auto); gap:1px; border:1px solid var(--ke-color-exhibitions-border); border-radius:6px; overflow:hidden; background:var(--ke-color-exhibitions-border); }
   .ex-intro__summary span { min-width:var(--ke-exhibitions-summary-item-min-width); display:grid; gap:.12rem; padding:.78rem 1rem; background:var(--ke-color-exhibitions-surface); color:var(--ke-color-exhibitions-muted); font-size:.75rem; }
   .ex-intro__summary strong { color:var(--ke-color-exhibitions-text); font-size:1.24rem; }
-  .ex-controls { position:sticky; z-index:30; top:0; display:grid; grid-template-columns:auto 1fr auto; gap:1rem; align-items:center; min-height:var(--ke-exhibitions-controls-min-height); margin-bottom:1rem; padding:.75rem 0; border-bottom:1px solid var(--ke-color-exhibitions-border); background:var(--ke-color-exhibitions-sticky-surface); backdrop-filter:blur(16px); }
+  .ex-controls { position:sticky; z-index:30; top:var(--ke-site-header-bar-height); display:grid; grid-template-columns:auto 1fr auto; gap:1rem; align-items:center; min-height:var(--ke-exhibitions-controls-min-height); margin-bottom:1rem; padding:.75rem 0; border-bottom:1px solid var(--ke-color-exhibitions-border); background:var(--ke-color-exhibitions-sticky-surface); backdrop-filter:blur(16px); }
   .ex-mode { display:flex; padding:3px; border:1px solid var(--ke-color-exhibitions-border); border-radius:7px; background:var(--ke-color-exhibitions-mode-surface); }
   .ex-mode button { min-height:44px; display:flex; align-items:center; gap:.5rem; padding:.55rem .9rem; border:0; border-radius:4px; background:transparent; color:var(--ke-color-exhibitions-muted); font:inherit; font-weight:850; cursor:pointer; }
   .ex-mode button[aria-checked="true"] { background:var(--ke-color-exhibitions-raised); color:var(--ke-color-exhibitions-text); box-shadow:inset 0 0 0 1px var(--ke-color-exhibitions-mode-selected-line); }
@@ -199,7 +196,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   .ex-results { scroll-margin-top:150px; }
   .ex-group { padding:2.25rem 0; border-bottom:1px solid var(--ke-color-exhibitions-border); }
   .ex-group__heading { display:flex; align-items:end; justify-content:space-between; gap:2rem; margin-bottom:1rem; }
-  .ex-group__heading h2,.ex-tail-callout h2 { margin:0; font-size:clamp(1.75rem,3vw,2.7rem); line-height:1; }
+  .ex-group__heading h2,.ex-tail-callout h2 { margin:0; font:var(--ke-type-h2); letter-spacing:var(--ke-type-h2-letter); }
   .ex-group__heading p:not(.ex-group__eyebrow),.ex-tail-callout p:not(.ex-group__eyebrow) { max-width:68ch; margin:.55rem 0 0; color:var(--ke-color-exhibitions-muted); font-size:.9rem; }
   .ex-mark-seen,.ex-tail-toggle,.ex-tail-more,.ex-empty button { min-height:44px; padding:.55rem .85rem; border:1px solid var(--ke-color-exhibitions-action-border); border-radius:5px; background:var(--ke-color-exhibitions-raised); color:var(--ke-color-exhibitions-text); font:inherit; font-weight:800; cursor:pointer; }
   .ex-mark-seen { border-color:transparent; background:transparent; color:var(--ke-color-exhibitions-muted); font-size:.78rem; font-weight:720; text-decoration:underline; text-decoration-color:var(--ke-color-exhibitions-action-underline); text-underline-offset:.22em; }
@@ -494,8 +491,8 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   }
   @media (max-width:820px) {
     .ex-help-open span { position:absolute; width:1px; height:1px; overflow:hidden; }
-    .ex-shell { width:min(100% - 1.25rem,680px); padding-top:7.25rem; padding-bottom:6rem; }
-    .ex-intro h1 { font-size:clamp(3.4rem,19vw,5.2rem); }
+    .ex-live { bottom:calc(var(--mobile-bottom-stack-h) + var(--ke-space-2)); }
+    .ex-shell { width:min(100% - 1.25rem,680px); padding-top:var(--ke-space-section); padding-bottom:6rem; }
     .ex-intro__summary { width:100%; grid-template-columns:repeat(3,1fr); }
     .ex-intro__summary span { min-width:0; padding:.65rem; }
     .ex-controls { top:0; grid-template-columns:1fr; margin-inline:-.625rem; padding:.6rem; }
@@ -573,7 +570,6 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
     const liveMessage = root.querySelector('[data-live-message]');
     const liveUndo = root.querySelector('[data-live-undo]');
     const deckLive = root.querySelector('[data-deck-live]');
-    const badges = () => Array.from(document.querySelectorAll('[data-header-badge="exhibitions"]'));
     const personalNote = root.querySelector('[data-personal-note]');
     const visibleCount = root.querySelector('[data-visible-count]');
     const empty = root.querySelector('[data-empty]');
@@ -1018,6 +1014,9 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
       } catch { return emptyState(); }
     };
     let state = readState();
+    ['likes','negative','likedTags','seenNew'].forEach(key => {
+      state[key] = Array.isArray(state[key]) ? [...new Set(state[key].map(String))] : [];
+    });
     const currentLikes = () => [...new Set(Array.isArray(state.likes) ? state.likes.map(String) : [])];
     const rebuildLikedTags = () => {
       state.likes = currentLikes();
@@ -1106,21 +1105,8 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
     };
 
     const updateBadge = () => {
-      const count = unseenRelevantNewRows().length;
-      badges().forEach((badge) => {
-        if (!(badge instanceof HTMLElement)) return;
-        const badgeCount = badge.querySelector('[data-header-badge-count]');
-        if (!(badgeCount instanceof HTMLElement)) return;
-        badge.classList.remove('is-soft');
-        if (count > 0) {
-          badge.hidden = false;
-          badgeCount.textContent = `${count} ${count === 1 ? 'новая' : 'новых'}`;
-        } else if (!state.hasVisitedExhibitions && Number(state.siteVisits || 0) >= 5) {
-          badge.hidden = false;
-          badge.classList.add('is-soft');
-          badgeCount.textContent = 'загляните';
-        } else badge.hidden = true;
-      });
+      // EventLayout owns the same projection + browser unread badge on all routes.
+      window.dispatchEvent(new Event('ke:exhibitions-state-changed'));
       syncNewState();
     };
     const markSeen = (row) => {

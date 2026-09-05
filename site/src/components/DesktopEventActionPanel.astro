@@ -121,7 +121,7 @@ const shareFileName = `kenigevents-${event.slug}`;
       data-share-admission={admissionLabel}
       aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}
       title="Поделиться"
-    ><Icon name="share" /><strong data-share-count>{sharesCount}</strong></button>
+    ><Icon name="share" /><span data-desktop-share-label>Поделиться</span><strong data-share-count>{sharesCount}</strong></button>
     <button
       type="button"
       class="desktop-prototype__icon-action feedback-button--like"
@@ -308,7 +308,9 @@ const shareFileName = `kenigevents-${event.slug}`;
     .desktop-prototype__phone-toast { transition:opacity .16s ease, transform .16s ease; }
   }
   :global(.desktop-prototype__primary-action.is-disabled) { opacity: .7; }
-  .desktop-prototype__action-row { display: flex; gap: .45rem; }
+  .desktop-prototype__action-row { display: flex; flex-wrap: wrap; gap: .45rem; }
+  :global(.desktop-prototype__icon-action[data-native-share]) { padding-inline: var(--ke-space-3); }
+  [data-desktop-share-label] { font: var(--ke-type-label); white-space: nowrap; }
   :global(.desktop-prototype__icon-action) {
     min-width: 52px;
     min-height: 52px;

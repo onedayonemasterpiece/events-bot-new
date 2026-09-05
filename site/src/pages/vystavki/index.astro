@@ -8,13 +8,9 @@ const currentDate = getCurrentDate();
 // Keep the established public read path: its date filtering, occurrence-card
 // collapse and exporter suppression run before the presentation projection.
 const projection = projectExhibitionsPersonal(getOngoingExhibitionEvents(), currentDate);
-const newLabel = projection.newItems.length === 1 ? 'новая' : 'новых';
 const canonicalUrl = absoluteUrl('/vystavki/');
 const title = `Выставки в Калининграде и области | ${SITE_NAME}`;
 const description = `Текущие и ближайшие выставки: новые открытия, важные события и длинные форматы по состоянию на ${currentDate}.`;
-const headerBadge = projection.newItems.length
-  ? { key: 'exhibitions' as const, text: `${projection.newItems.length} ${newLabel}` }
-  : undefined;
 ---
 
 <EventLayout
@@ -23,13 +19,13 @@ const headerBadge = projection.newItems.length
   canonicalUrl={canonicalUrl}
   structuredData={[]}
   headerCurrent="exhibitions"
-  headerBadge={headerBadge}
-  heroChrome="immersive"
+  mobileSection="afisha"
+  mobileBottomMode="nav"
 >
   <div
     data-ds-family="ExhibitionsRouteComposition"
-    data-ds-version="1"
-    data-ds-variant="personal-immersive"
+    data-ds-version="2"
+    data-ds-variant="personal-catalog"
     data-ds-state={projection.items.length ? 'populated' : 'empty'}
   >
     <ExhibitionsPersonalSurface projection={projection} />

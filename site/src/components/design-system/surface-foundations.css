@@ -59,13 +59,13 @@
   --ke-type-display-home-letter: -0.075em;
   --ke-type-display-home: var(--ke-type-h1-weight) var(--ke-type-display-home-size) / var(--ke-type-display-home-line) var(--ke-font-family-sans);
 
-  --ke-type-display-unusual-size: clamp(4rem, 10vw, 8.5rem);
-  --ke-type-display-unusual-line: 0.78;
-  --ke-type-display-unusual-letter: -0.075em;
+  --ke-type-display-unusual-size: var(--ke-type-h1-size);
+  --ke-type-display-unusual-line: var(--ke-type-h1-line);
+  --ke-type-display-unusual-letter: var(--ke-type-h1-letter);
   --ke-type-display-unusual: var(--ke-type-h1-weight) var(--ke-type-display-unusual-size) / var(--ke-type-display-unusual-line) var(--ke-font-family-sans);
 
-  --ke-type-display-collection-size: clamp(2.8rem, 6vw, 5.8rem);
-  --ke-type-display-collection-line: 0.9;
+  --ke-type-display-collection-size: var(--ke-type-h1-size);
+  --ke-type-display-collection-line: var(--ke-type-h1-line);
   --ke-type-display-collection-letter: var(--ke-type-h1-letter);
   --ke-type-display-collection: var(--ke-type-h1-weight) var(--ke-type-display-collection-size) / var(--ke-type-display-collection-line) var(--ke-font-family-sans);
 
@@ -186,12 +186,12 @@
   --ke-color-personal-feed-surface: #f5ede2;
   --ke-color-personal-feed-media-placeholder: var(--ke-color-surface-media-placeholder);
   --ke-color-personal-feed-contain-band: var(--ke-color-surface-media-contain);
-  --ke-personal-feed-container: var(--ke-container-content);
+  --ke-personal-feed-container: min(var(--ke-container-content), 65rem);
   --ke-personal-feed-grid-gap: var(--ke-space-card-grid-gap);
   --ke-personal-feed-radius-compact: var(--ke-shape-radius-hero-compact);
   --ke-personal-feed-section-padding: clamp(2rem, 4vw, 4.5rem);
   --ke-personal-feed-section-padding-inline-min: var(--ke-space-lg);
-  --ke-personal-feed-heading-size: clamp(2rem, 4vw, 4rem);
+  --ke-personal-feed-heading-size: var(--ke-type-h2-size);
 
   /* Shared focus-group shell/panel/dialog roles. */
   --ke-color-focus-panel-surface: var(--ke-color-background-surface-strong);

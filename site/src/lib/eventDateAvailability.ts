@@ -130,6 +130,15 @@ export function kaliningradDate(now: Date = new Date()): string {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+/** Resolve a captured preview against its recorded clock, never the viewer's day.
+ * Missing reference means live production; a malformed supplied clock fails closed. */
+export function reviewRuntimeDate(referenceIso: string | undefined, now: Date = new Date()): string {
+  if (!referenceIso) return kaliningradDate(now);
+  const reference = new Date(referenceIso);
+  if (!Number.isFinite(reference.getTime())) throw new Error('Invalid review reference clock');
+  return kaliningradDate(reference);
+}
+
 /**
  * An immutable /segodnya/ page may outlive its build date. Redirect only when
  * the generated manifest proves that the actual date has a static route;

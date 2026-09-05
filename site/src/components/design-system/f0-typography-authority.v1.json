@@ -1,8 +1,8 @@
 {
   "schema": "kenigevents.f0-typography-authority.v1",
-  "status": "ACTIVE_CURRENT_SOURCE_BASELINE",
+  "status": "ACTIVE_OWNER_CORRECTION_NOT_VISUAL_ACCEPTANCE",
   "scope": "launch-critical Astro UI typography authority and A=S=P binding",
-  "authority_kind": "existing-behavior-normalization-not-new-font-selection",
+  "authority_kind": "owner-corrected-same-role-normalization-not-new-font-selection",
   "family": {
     "primary": "Inter",
     "fallbacks": [
@@ -100,5 +100,63 @@
       "no unexpected network font request or font-face substitution is required by the current source baseline"
     ]
   },
-  "pm0_item_11_state": "PARTIAL_UNTIL_CONSUMER_BYPASSES_ARE_REMOVED_AND_N0_ACCEPTS_THE_ASTRO_THIN_S_PENPOT_MAPPING"
+  "pm0_item_11_state": "PARTIAL_UNTIL_CONSUMER_BYPASSES_ARE_REMOVED_AND_N0_ACCEPTS_THE_ASTRO_THIN_S_PENPOT_MAPPING",
+  "owner_review_roles": {
+    "decision": "owner-audioreview-20260905",
+    "same_role_policy": "Compare declared semantic roles and fixed expected metrics, not each route against its own captured baseline.",
+    "page_title": {
+      "source": "--ke-type-h1",
+      "mobile_max_width": 759,
+      "viewports": {
+        "1440": {
+          "fontSize": 73.6,
+          "lineHeight": 67.712,
+          "fontWeight": 950,
+          "letterSpacing": -4.416
+        },
+        "1920": {
+          "fontSize": 73.6,
+          "lineHeight": 67.712,
+          "fontWeight": 950,
+          "letterSpacing": -4.416
+        },
+        "390": {
+          "fontSize": 36,
+          "lineHeight": 33.84,
+          "fontWeight": 920,
+          "letterSpacing": -1.98
+        }
+      },
+      "routes": [
+        "/segodnya/",
+        "/zavtra/",
+        "/vyhodnye/",
+        "/vystavki/",
+        "/populyarnoe/",
+        "/festivali/",
+        "/neobychnoe/",
+        "/kluby-po-interesam/",
+        "/podborki/besplatnye-sobytiya/",
+        "/podborki/besplatno-s-detmi/",
+        "/podborki/"
+      ]
+    },
+    "excluded_roles": {
+      "HomeHeroTalk": "editorial narrative, not listing page title",
+      "event_detail": "event name can use an explicit editorial hero role",
+      "EventCard": "card title, not a section title",
+      "service_and_lab": "outside product normalization"
+    },
+    "section_title": {
+      "source": "--ke-type-h2",
+      "consumers": [
+        "ExhibitionsPersonalSurface",
+        "FreeCollectionSurface",
+        "UnusualListingSurface",
+        "PersonalFeedSlot"
+      ]
+    },
+    "palette": "Retain explicit content themes; a page must not recolor shared shell/controls through body inheritance.",
+    "claim": "Source contract only. Require compiled computed styles, negative override control and personal visual review."
+  }
 }

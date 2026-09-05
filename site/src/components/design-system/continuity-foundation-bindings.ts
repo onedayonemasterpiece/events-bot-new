@@ -26,7 +26,7 @@ export const CONTINUITY_FOUNDATION_BINDINGS = [
     owner: 'M0', kind: 'spacing',
     current: 'clamp(.85rem,1.6vw,1.25rem)',
     replacement: 'var(--ke-adaptive-card-grid-gap)',
-    browserExpectation: 'flow and packed rows preserve current wrapping and remainder stretch',
+    browserExpectation: 'flow and packed rows preserve current wrapping and regular-width remainder',
     negativeControl: 'no second grid selector or consumer-local gap owner is introduced',
   },
   {

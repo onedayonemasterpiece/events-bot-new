@@ -307,3 +307,18 @@ export function projectExhibitionsPersonal(
     suppressed,
   };
 }
+
+
+/** One unread-navigation model for every route, including SSR and restored tabs.
+ * These are browser-local unread/interest decisions, not public reaction counts. */
+export const EXHIBITIONS_STATE_KEY = 'ke_exhibitions_prototype_v1';
+export function exhibitionsUnreadBadge(newIds: readonly (number | string)[], stored: unknown) {
+  const state = stored && typeof stored === 'object' ? stored as Record<string, unknown> : {};
+  const ids = (value: unknown) => new Set(Array.isArray(value) ? value.map(String) : []);
+  const seen = ids(state.seenNew);
+  const negative = ids(state.negative);
+  const count = [...new Set(newIds.map(String))].filter(id => !seen.has(id) && !negative.has(id)).length;
+  const soft = !count && state.hasVisitedExhibitions !== true && Number(state.siteVisits || 0) >= 5;
+  return { count, hidden: !count && !soft, soft,
+    text: count ? `${count} ${count === 1 ? 'новая' : 'новых'}` : soft ? 'загляните' : '' };
+}

@@ -299,3 +299,15 @@
 :where(img.ke-icon-role, svg.social-icon.ke-icon-role) {
   object-fit: contain;
 }
+
+/* Owner audio review 2026-09-05: page titles share a role across archetypes.
+ * Keep the already accepted compact rail role at the shared mobile boundary.
+ * HeroTalk narrative and event/card titles are separate, explicit roles. */
+@media (max-width: 759px) {
+  :root {
+    --ke-type-h1-size: var(--ke-type-h1-compact-size);
+    --ke-type-h1-line: var(--ke-type-h1-compact-line);
+    --ke-type-h1-weight: var(--ke-type-h1-compact-weight);
+    --ke-type-h1-letter: var(--ke-type-h1-compact-letter);
+  }
+}

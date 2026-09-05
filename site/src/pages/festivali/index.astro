@@ -127,6 +127,9 @@ for (const month of monthSections) {
     throw new Error(`Festival timeline could not safely pack every ${month.label} item`);
   }
 }
+const periodLabel = monthSections.length
+  ? monthSections.length === 1 ? monthSections[0].label : `${monthSections[0].label}—${monthSections.at(-1)!.label.toLowerCase()}`
+  : 'Период уточняется';
 const structuredData = [{
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -138,7 +141,6 @@ const structuredData = [{
   url: canonicalUrl,
   inLanguage: 'ru-RU',
   dateModified: lastReviewed,
-  lastReviewed,
   keywords: [
     'фестивали Калининградской области',
     'фестивали Калининграда 2026',
@@ -227,14 +229,14 @@ const structuredData = [{
   >
     <section class="festival-hero" aria-labelledby="festival-title">
       <div class="festival-hero__copy">
-        <p class="festival-eyebrow">Календарь на 2026 год · июль—декабрь</p>
+        <p class="festival-eyebrow">Календарь на 2026 год · {periodLabel.toLowerCase()}</p>
         <h1 id="festival-title">Фестивали <em>Калининградской области</em></h1>
         <p>{pageSummary}</p>
       </div>
       <dl class="festival-hero__facts" aria-label="Коротко о календаре">
         <div><dt>Фестивалей</dt><dd>{resolvedItems.length}</dd></div>
-        <div><dt>Период</dt><dd>Июль—декабрь</dd></div>
-        <div><dt>Проверено</dt><dd>{lastReviewedLabel}</dd></div>
+        <div><dt>Период</dt><dd>{periodLabel}</dd></div>
+        <div><dt>Обновлено</dt><dd>{lastReviewedLabel}</dd></div>
       </dl>
     </section>
 
@@ -528,7 +530,7 @@ const structuredData = [{
   .festival-hero h1 em {
     display: block;
     color: var(--primary);
-    font-size: 0.72em;
+    font-size: inherit;
     font-style: normal;
     font-weight: inherit;
   }
@@ -1066,7 +1068,7 @@ const structuredData = [{
       max-width: 100%;
       overflow-wrap: normal;
       word-break: normal;
-      font-size: clamp(2.35rem, 12vw, 4rem);
+      font-size: var(--ke-type-h1-size);
     }
     .festival-hero__copy > p:last-child { margin-top: 0.9rem; font-size: 0.92rem; }
     .festival-hero__facts {

@@ -20,7 +20,7 @@ const headingId = `personal-feed-${context}-title`;
 <section
   class:list={['section-card', 'personal-feed-section', 'ke-personal-feed-slot', { 'personal-feed-section--event-detail': isEventDetail }]}
   data-ds-family="PersonalFeedSlot"
-  data-ds-version="1"
+  data-ds-version="2"
   data-ds-variant={context}
   data-ds-state={isEventDetail ? 'pending' : 'dormant'}
   data-personal-feed-section
@@ -87,6 +87,9 @@ const headingId = `personal-feed-${context}-title`;
 </script>
 
 <style>
+  .personal-feed-section { max-width:min(100%,var(--ke-personal-feed-container)); margin-inline:auto; }
+  .personal-feed-section h2 { font:var(--ke-type-h2); letter-spacing:var(--ke-type-h2-letter); }
+
   .personal-feed-section[hidden] {
     display: none;
   }

@@ -23,9 +23,9 @@
   --ke-clubs-intro-padding-inline: clamp(1rem, 5vw, 4rem);
   --ke-clubs-intro-heading-max: 22ch;
   --ke-clubs-intro-heading-margin: 0.1rem 0 0.8rem;
-  --ke-clubs-intro-heading-size: clamp(2rem, 4.4vw, 3.65rem);
-  --ke-clubs-intro-heading-line: 1.05;
-  --ke-clubs-intro-heading-letter: -0.035em;
+  --ke-clubs-intro-heading-size: var(--ke-type-h1-size);
+  --ke-clubs-intro-heading-line: var(--ke-type-h1-line);
+  --ke-clubs-intro-heading-letter: var(--ke-type-h1-letter);
   --ke-clubs-intro-lead-max: 66ch;
   --ke-color-clubs-intro-lead: #3d3935;
   --ke-clubs-intro-lead-size: clamp(1rem, 1.6vw, 1.18rem);
@@ -71,7 +71,7 @@
   --ke-clubs-mobile-intro-padding-block: 1.3rem;
   --ke-clubs-mobile-intro-padding-inline: var(--ke-space-lg);
   --ke-clubs-mobile-heading-max: 15ch;
-  --ke-clubs-mobile-heading-size: clamp(1.85rem, 9vw, 2.55rem);
+  --ke-clubs-mobile-heading-size: var(--ke-type-h1-size);
   --ke-clubs-mobile-lead-size: var(--ke-type-body-size);
 
   /* Retained close pairs:

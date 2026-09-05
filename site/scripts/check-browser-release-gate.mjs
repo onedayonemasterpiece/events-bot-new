@@ -15,6 +15,7 @@ const REQUIRED_CHECKS = Object.freeze([
   'gallery_cross_document',
   'footer_shortcuts',
   'festival_calendar',
+  'owner_semantic_roles',
 ]);
 export const BROWSER_GATE_ACTION_TIMEOUT_MS = 8_000;
 export const BROWSER_GATE_NAVIGATION_TIMEOUT_MS = 12_000;
@@ -117,6 +118,139 @@ export function recordBrowserVisualSuccess(manifestPath, report) {
   writeFileSync(temporary, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
   renameSync(temporary, path);
   return manifest;
+}
+
+// This is part of the existing release gate. The role contract is independent
+// of the captured page: per-route screenshots must not become their own oracle.
+const ownerTypography = JSON.parse(readFileSync(join(SITE_DIR, 'src/components/design-system/f0-typography-authority.v1.json'), 'utf8'));
+export function assertOwnerTitleMetrics(title, width) {
+  const expected = ownerTypography.owner_review_roles.page_title.viewports[String(width)];
+  invariant(expected, `no owner typography expectation for ${width}px`);
+  for (const [key, value] of Object.entries(expected)) {
+    const actual = Number.parseFloat(title.style?.[key]);
+    invariant(Number.isFinite(actual) && Math.abs(actual - value) <= 0.12,
+      `same-role H1 ${key}: ${actual} != ${value} at ${width}px (${title.text || ''})`);
+  }
+  const normalize = value => String(value).replace(/["']/gu, '').replace(/\s+/gu, '').toLowerCase();
+  invariant(normalize(title.style.fontFamily) === normalize(ownerTypography.family.css_stack), 'same-role H1 has a different family authority');
+  invariant(title.box.width > 0 && title.box.height > 0, 'H1 is not visible');
+  invariant(title.box.x >= -1 && title.box.x + title.box.width <= width + 1, 'H1 leaves its viewport');
+  invariant(title.scrollWidth <= title.clientWidth + 1, 'H1 clips/overflows its content');
+}
+
+export function assertRegularGridWidths(grid) {
+  invariant(grid.scrollWidth <= grid.clientWidth + 1, 'event-card grid has internal horizontal overflow');
+  if (!grid.cards.length) return;
+  const first = grid.cards[0];
+  for (const card of grid.cards) {
+    invariant(Math.abs(card.width - first.width) <= 2, 'partial row stretches beyond an ordinary column');
+    invariant(card.width > 40 && card.x >= grid.box.x - 1 && card.x + card.width <= grid.box.x + grid.box.width + 1, 'card escapes its grid');
+    invariant(card.scrollWidth <= card.clientWidth + 1, 'card has internal horizontal overflow');
+  }
+  const rows = [];
+  for (const card of grid.cards) {
+    let row = rows.find(row => Math.abs(row[0].y - card.y) <= 2);
+    if (!row) { row = []; rows.push(row); }
+    row.push(card);
+  }
+  for (const row of rows) {
+    invariant(Math.max(...row.map(card => card.height)) - Math.min(...row.map(card => card.height)) <= 2,
+      'cards in the same rendered row have different heights');
+  }
+}
+
+/** Computed styles and geometry, not token/family marker existence. */
+export async function measureOwnerReviewPage(page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  return page.evaluate(() => {
+    const visible = e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+    const box = e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; };
+    const style = e => {
+      const s = getComputedStyle(e);
+      return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','color','backgroundColor','backgroundImage','marginTop','marginBottom','paddingTop','paddingBottom','paddingLeft','paddingRight','gap','maxWidth'].map(k=>[k,s[k]]));
+    };
+    const headings = [...document.querySelectorAll('h1,h2,h3')].filter(visible).slice(0,100).map(e=>({
+      tag:e.tagName,text:e.textContent.trim(),class:e.className,box:box(e),style:style(e),
+      scrollWidth:e.scrollWidth,clientWidth:e.clientWidth,
+      parent:{class:e.parentElement.className,box:box(e.parentElement),style:style(e.parentElement)},
+    }));
+    const grids = [...document.querySelectorAll('[data-adaptive-event-card-grid]')].filter(visible).map(e=>({
+      box:box(e),clientWidth:e.clientWidth,scrollWidth:e.scrollWidth,
+      policy:e.dataset.adaptiveGridRemainderPolicy,state:e.dataset.adaptiveGridRemainderVariant,
+      runtime:e.dataset.adaptiveGridRuntimeState,sourceCount:e.dataset.adaptiveGridSourceCount,
+      renderedCount:e.dataset.adaptiveGridRenderedCount,
+      cards:[...e.children].filter(c=>c.matches('[data-event-card]') && visible(c)).map(c=>({
+        id:c.dataset.eventId,...box(c),clientWidth:c.clientWidth,scrollWidth:c.scrollWidth,
+      })),
+    }));
+    const cardRows = [...document.querySelectorAll('.ke-listing-row,.ke-listing-cards,.ke-popular-listing__row')].filter(visible).map(e=>({class:e.className,box:box(e),clientWidth:e.clientWidth,scrollWidth:e.scrollWidth}));
+    const header = document.querySelector('.site-header');
+    const nav = document.querySelector('.site-nav a:not([aria-current="page"])');
+    return {url:location.href,viewport:{width:innerWidth,height:innerHeight},
+      documentWidth:document.documentElement.scrollWidth,headings,grids,cardRows,
+      header:header ? {box:box(header),style:style(header)} : null,
+      regularNav:nav ? {style:style(nav)} : null,
+      logoHref:document.querySelector('.site-header__brand-tag')?.getAttribute('href'),
+      mobileBottom:[...document.querySelectorAll('[data-mobile-bottom-nav],.mobile-bottom-nav')].filter(visible).map(e=>({box:box(e),links:[...e.querySelectorAll('a')].map(a=>({href:a.getAttribute('href'),text:a.textContent.trim()}))})),
+    };
+  });
+}
+
+/** The same function is used by the full release gate and a focused CI
+ * diagnostic. A subset is explicitly partial, never full review acceptance. */
+export async function assertOwnerReviewPages(page, origin, basePath = '', { routes, artifactDir = '', captureOnly = false } = {}) {
+  const required = ownerTypography.owner_review_roles.page_title.routes;
+  const selected = routes || required;
+  const reports = [];
+  for (const width of [1440,390,1920]) {
+    await page.setViewportSize({width,height:width === 390 ? 844 : width === 1440 ? 900 : 1080});
+    for (const route of selected) {
+      const response = await page.goto(`${origin}${basePath}${route}`, {waitUntil:'domcontentloaded'});
+      invariant(response?.ok(), `owner-review route failed: ${route}`);
+      const report = await measureOwnerReviewPage(page);
+      report.route = route;
+      // Screenshot is retained even when the first real metric rejects a page.
+      if (artifactDir) {
+        mkdirSync(artifactDir,{recursive:true});
+        const name = `${width}-${route.replace(/[^a-z0-9_-]+/giu,'_')}`;
+        report.screenshot = `${name}.png`;
+        await page.screenshot({path:join(artifactDir,report.screenshot),fullPage:false,animations:'disabled'});
+        writeFileSync(join(artifactDir,`${name}.json`),JSON.stringify(report,null,2));
+      }
+      const errors = [];
+      try {
+        const titles = report.headings.filter(h=>h.tag === 'H1');
+        invariant(titles.length === 1, `${route} must have one visible page title, got ${titles.length}`);
+        assertOwnerTitleMetrics(titles[0], width);
+        invariant(report.documentWidth <= width + 1, `${route} document overflows`);
+        invariant(report.logoHref === `${basePath}/`, `${route} brand leaves the product home`);
+        for (const row of report.cardRows) invariant(row.scrollWidth <= row.clientWidth + 1, `${route} internal card row overflows`);
+        for (const grid of report.grids) assertRegularGridWidths(grid);
+        if (width === 390 && route === '/vystavki/') {
+          invariant(report.mobileBottom.length > 0, 'Exhibitions lost mobile bottom navigation');
+          invariant(report.mobileBottom.some(n=>n.links.length >= 3), 'Exhibitions navigation has no useful actions');
+        }
+        // A real negative control changes computed CSS while leaving every
+        // family/token marker in place. The same assertion MUST reject it.
+        await page.locator('h1:visible').first().evaluate(e=>e.style.setProperty('font-size','111px','important'));
+        const poisoned = (await measureOwnerReviewPage(page)).headings.find(h=>h.tag==='H1');
+        let rejected = false;
+        try { assertOwnerTitleMetrics(poisoned,width); } catch { rejected = true; }
+        invariant(rejected,'same-role gate accepted an overriding local font size');
+        report.negativeOverrideRejected = true;
+      } catch(error) { errors.push(String(error.message || error)); }
+      report.errors = errors;
+      reports.push(report);
+    }
+  }
+  const result = {complete:required.every(route=>selected.includes(route)),scope:selected, reports,
+    ok:reports.every(r=>r.errors.length === 0), errors:reports.flatMap(r=>r.errors.map(error=>({route:r.route,width:r.viewport.width,error})))};
+  if (artifactDir) writeFileSync(join(artifactDir,'owner-semantic-review.json'),JSON.stringify(result,null,2));
+  if (!captureOnly) invariant(result.ok, JSON.stringify(result.errors));
+  return result;
 }
 
 function mimeType(path) {
@@ -437,11 +571,11 @@ export async function assertRecommendationGeometry(page, selector, expectedCount
         invariant(item.objectFit === 'cover', `bounded document card ${item.id} does not cover its frame`);
         invariant(item.unusedFrameRatio <= 0.001, `bounded document card ${item.id} leaves ${(item.unusedFrameRatio * 100).toFixed(1)}% of its media frame unused`);
         invariant(item.coverCrop <= 0.2001, `card ${item.id} exceeds the 20% document crop contract: cover=${item.coverCrop}`);
-        invariant(item.actualCrop <= 0.205, `card ${item.id} visually crops ${item.actualCrop}`);
+        invariant(item.actualCrop <= 0.001, `card ${item.id} crops unlocated document text: ${item.actualCrop}`);
       } else {
         invariant(item.treatment === 'document-contain' && item.objectFit === 'contain', `fail-closed document card ${item.id} has invalid ${item.treatment}/${item.objectFit}`);
         invariant(
-          ['semantic_error_fail_closed', 'unknown_media_fail_closed', 'document_dimensions_unknown'].includes(item.cropReason),
+          ['semantic_error_fail_closed', 'unknown_media_fail_closed', 'document_dimensions_unknown', 'document_text_crop_unproven', 'document_crop_budget_exceeded'].includes(item.cropReason),
           `document card ${item.id} contains without a fail-closed reason: ${item.cropReason || '(missing)'}`,
         );
         invariant(item.coverCrop === 0, `fail-closed document card ${item.id} exposes a numeric crop claim`);
@@ -975,7 +1109,7 @@ async function runBrowserGate({ root, basePath, manifest, origin, browser, artif
       const routeRelated = await assertRecommendationGeometry(page, '[data-related-start] [data-event-card]', 3);
       const routeContinuation = await assertRecommendationGeometry(page, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]', 1);
       invariant(routeContinuation.length <= 6, `Ещё события is unbounded on ${route}: ${routeContinuation.length}`);
-      invariant([...routeRelated, ...routeContinuation].some((item) => item.mediaKind === 'document' && item.objectFit === 'cover' && item.actualCrop <= 0.205), `crop canary ${route} has no bounded-cover document card`);
+      invariant([...routeRelated, ...routeContinuation].some((item) => item.mediaKind === 'document'), `crop canary ${route} has no document card`);
       related.push(...routeRelated);
       continuation.push(...routeContinuation);
       if (artifactDir) {
@@ -1037,11 +1171,15 @@ async function runBrowserGate({ root, basePath, manifest, origin, browser, artif
       festivalCalendarExpectedCount(manifest),
     );
     checks.festival_calendar = 'ok';
+    const ownerReview = await assertOwnerReviewPages(page, origin, basePath, {artifactDir});
+    invariant(ownerReview.complete, 'owner role review is partial');
+    checks.owner_semantic_roles = 'ok';
     console.log('[browser-release-gate] festival_calendar=ok');
     return {
       ok: true, checks,
       specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes, hero_routes:heroRoutes },
       hero_gallery:heroGallery,
+      owner_review:ownerReview,
       keyboard:keyboardReports,
       spatial_keyboard:spatialKeyboard,
       festival_calendar:festivalCalendar,

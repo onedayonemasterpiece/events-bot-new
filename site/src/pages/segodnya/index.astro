@@ -3,7 +3,7 @@ import EventLayout from '../../layouts/EventLayout.astro';
 import DateListingSurface from '../../components/listings/DateListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import '../../components/design-system/foundations.css';
-import { absoluteUrl, getCurrentDate, getPreviewBuild, getTodayPrimaryEvents, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, getCurrentDate, getPreviewBuild, getTodayPrimaryEvents, IS_PRODUCTION_FAMILY, SITE_NAME, withBase } from '../../lib/events';
 import { getStaticEventDateManifest } from '../../lib/staticEventDates';
 
 const currentDate = getCurrentDate();
@@ -19,11 +19,12 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'nume
     <aside
       class="today-review-notice"
       data-ds-family="TodayReviewGuard"
-      data-ds-version="1"
+      data-ds-version="2"
       data-ds-variant="review-date"
       data-ds-state="idle"
       data-today-review-guard
       data-build-date={currentDate}
+      data-reference-clock={IS_PRODUCTION_FAMILY ? undefined : build.generated_at}
       data-date-route-prefix={withBase('/date-')}
       data-site-name={SITE_NAME}
       hidden
@@ -62,14 +63,14 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'nume
 </style>
 
 <script>
-  import { kaliningradDate, resolveTodayReview } from '../../lib/eventDateAvailability';
+  import { reviewRuntimeDate, resolveTodayReview } from '../../lib/eventDateAvailability';
 
   const guard = document.querySelector('[data-today-review-guard]');
   const manifestNode = document.getElementById('event-date-availability');
   if (guard && manifestNode?.textContent) {
     try {
       const manifest = JSON.parse(manifestNode.textContent);
-      const runtimeDate = kaliningradDate();
+      const runtimeDate = reviewRuntimeDate(guard.dataset.referenceClock);
       const availableDates = manifest.dates
         .filter((item) => item?.has_events)
         .map((item) => String(item.date));

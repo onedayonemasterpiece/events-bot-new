@@ -6,6 +6,7 @@ import {
   eventDateManifest,
   eventDateRouteDates,
   kaliningradDate,
+  reviewRuntimeDate,
   resolveTodayReview,
 } from '../src/lib/eventDateAvailability.ts';
 
@@ -92,4 +93,15 @@ test('generated event-date manifest retains enabled and disabled calendar days',
     { date:'2026-07-28', has_events:true },
     { date:'2026-07-29', has_events:false },
   ]);
+});
+
+
+test('immutable review uses the manifest clock while live production retains midnight correction', () => {
+  const wall = new Date('2026-09-05T12:00:00Z');
+  const captured = reviewRuntimeDate('2026-09-04T22:53:39+02:00', wall);
+  assert.equal(captured, '2026-09-04');
+  assert.equal(resolveTodayReview('2026-09-04', captured, ['2026-09-05']).state, 'current');
+  assert.equal(reviewRuntimeDate(undefined, wall), '2026-09-05');
+  assert.equal(resolveTodayReview('2026-09-04', reviewRuntimeDate(undefined, wall), ['2026-09-05']).state, 'redirect');
+  assert.throws(() => reviewRuntimeDate('not-a-clock', wall), /Invalid review reference clock/u);
 });

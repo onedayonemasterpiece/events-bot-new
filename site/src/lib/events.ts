@@ -214,7 +214,7 @@ export function withBase(path: string): string {
 }
 
 export function siteHomeHref(query = ''): string {
-  return withBase(`${IS_PRODUCTION_FAMILY ? '/' : '/__preview/'}${query}`);
+  return withBase(`/${query}`);
 }
 
 export function siteHomeAbsoluteUrl(query = ''): string {

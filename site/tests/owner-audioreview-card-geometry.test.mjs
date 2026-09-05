@@ -65,3 +65,13 @@ test('control: empty input and explicit limit remain bounded', () => {
   assert.deepEqual(pack(items, { limit: 0 }), []);
   assert.deepEqual(ids(pack(items, { limit: 2 })), [1, 2]);
 });
+
+
+test('shared exhibition unread count is identical across routes and excludes seen/rejected items', async () => {
+  const { exhibitionsUnreadBadge } = await import('../src/lib/exhibitionsPersonal.ts');
+  assert.deepEqual(exhibitionsUnreadBadge([1,2,3,3], null), {count:3,hidden:false,soft:false,text:'3 новых'});
+  assert.deepEqual(exhibitionsUnreadBadge([1,2,3], {seenNew:['1'],negative:[2]}), {count:1,hidden:false,soft:false,text:'1 новая'});
+  assert.deepEqual(exhibitionsUnreadBadge([1], {seenNew:['1'],hasVisitedExhibitions:true,siteVisits:7}), {count:0,hidden:true,soft:false,text:''});
+  assert.deepEqual(exhibitionsUnreadBadge([], {siteVisits:5}), {count:0,hidden:false,soft:true,text:'загляните'});
+  assert.equal(exhibitionsUnreadBadge([1], {seenNew:42,negative:'bad'}).count, 1);
+});

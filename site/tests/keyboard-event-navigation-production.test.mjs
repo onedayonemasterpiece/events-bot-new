@@ -56,7 +56,7 @@ test('prototype and production share the exact extracted V7 router', async () =>
   assert.match(router, /Source contract: d0027a53/u);
   assert.match(router, /export function initKeyboardEventNavigation\(options = \{\}\)/u);
   assert.match(router, /gallery_close_down/u);
-  assert.match(router, /downGesture\?\.released && event\.timeStamp - downGesture\.at <= 430/u);
+  assert.doesNotMatch(router, /downGesture\?\.released && event\.timeStamp - downGesture\.at <= 430/u, 'ordinary Down cannot skip event content');
   assert.match(router, /\['KeyL', 'KeyK', 'KeyS', 'Enter'\]\.includes\(event\.code\)[\s\S]*bodyRecoveryArmed && bodyTarget/u);
   assert.match(router, /\['KeyC', 'KeyP'\]\.includes\(event\.code\)[\s\S]*bodyTarget[\s\S]*coldBodyHeroEntryArmed \|\| bodyRecoveryArmed \|\| galleryHandoffArmed/u);
   assert.match(router, /if \(event\.code === 'KeyC'\) void copyDescription\(\{ keyboard:true \}\);[\s\S]*else void copyPoster\(\{ keyboard:true \}\)/u);

@@ -199,7 +199,7 @@
         "responsive-progressive",
         "responsive-stack",
         "remainder-complete",
-        "remainder-stretch-r-of-n",
+        "remainder-regular-r-of-n",
         "runtime-managed",
         "populated",
         "empty"
@@ -212,7 +212,7 @@
       ],
       "duplicate_identity": "event-id:source-index",
       "layout_engine": "flex-lines",
-      "remainder_contract": "complete | stretch-N-of-M",
+      "remainder_contract": "complete | regular-N-of-M",
       "penpot_master_target": "M0 / AdaptiveEventCardGrid"
     }
   ],

@@ -204,7 +204,7 @@
     },
     {
       "id": "AdaptiveEventCardGrid",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/AdaptiveEventCardGrid.astro",
       "style_owners": [
         "site/src/components/AdaptiveEventCardGrid.astro"
@@ -232,7 +232,7 @@
         "runtime-managed",
         "runtime-visible-only",
         "remainder-complete",
-        "remainder-stretch-N-of-M",
+        "remainder-regular-N-of-M",
         "populated",
         "empty"
       ],
@@ -275,7 +275,7 @@
             "runtime-managed",
             "runtime-visible-only",
             "remainder-complete",
-            "remainder-stretch-N-of-M",
+            "remainder-regular-N-of-M",
             "populated",
             "empty"
           ]
@@ -405,7 +405,7 @@
     },
     {
       "id": "ExhibitionsPersonalSurface",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/ExhibitionsPersonalSurface.astro",
       "style_owners": [
         "site/src/components/ExhibitionsPersonalSurface.astro"
@@ -443,7 +443,7 @@
     },
     {
       "id": "EventLayout",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro"
@@ -594,7 +594,7 @@
     },
     {
       "id": "TodayReviewGuard",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/pages/segodnya/index.astro",
       "style_owners": [
         "site/src/pages/segodnya/index.astro"
@@ -871,11 +871,11 @@
     },
     {
       "id": "ExhibitionsRouteComposition",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/pages/vystavki/index.astro",
       "style_owners": [],
       "variants": [
-        "personal-immersive"
+        "personal-catalog"
       ],
       "states": [
         "populated",
@@ -1522,7 +1522,7 @@
     },
     {
       "id": "DesktopEventActionPanel",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/DesktopEventActionPanel.astro",
       "style_owners": [
         "site/src/components/DesktopEventActionPanel.astro"
@@ -2228,7 +2228,7 @@
     },
     {
       "id": "PersonalFeedSlot",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/PersonalFeedSlot.astro",
       "style_owners": [
         "site/src/components/PersonalFeedSlot.astro"
@@ -2856,19 +2856,39 @@
     },
     {
       "id": "ListingPageHeader",
-      "version": 1,
+      "version": 3,
       "astro_root": "site/src/components/listings/ListingPageHeader.astro",
-      "style_owners": [],
-      "variants": [],
-      "states": [],
-      "nested_families": [],
+      "style_owners": [
+        "site/src/styles/design-system.css"
+      ],
+      "variants": [
+        "today",
+        "tomorrow",
+        "weekend",
+        "popular",
+        "date"
+      ],
+      "states": [
+        "ready"
+      ],
+      "nested_families": [
+        "Foundations"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
       "explicit_override_exceptions": [
         {
-          "kind": "identity_attribute_absent",
-          "reason": "This canonical production owner publishes its existing data-ds-component identity or has no diagnostic marker; this SoT batch does not change product markup."
+          "kind": "dynamic_identity",
+          "attribute": "variant",
+          "source_regex": "data-ds-variant=\\{current\\}",
+          "values": [
+            "today",
+            "tomorrow",
+            "weekend",
+            "popular",
+            "date"
+          ]
         }
       ],
       "penpot_binding": null
@@ -3276,7 +3296,7 @@
     },
     {
       "id": "Reference4MobileMenu",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/Reference4MobileMenu.astro",
       "style_owners": [
         "site/src/components/Reference4MobileMenu.astro"

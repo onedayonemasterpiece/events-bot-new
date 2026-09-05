@@ -64,10 +64,10 @@
   --ke-festival-eyebrow-size: 0.68rem;
   --ke-festival-eyebrow-weight: var(--ke-type-label-strong-weight);
   --ke-festival-eyebrow-letter: 0.12em;
-  --ke-festival-heading-size: clamp(2.4rem, 3.25vw, 3.6rem);
-  --ke-festival-heading-weight: var(--ke-type-h4-weight);
-  --ke-festival-heading-line: 0.94;
-  --ke-festival-heading-letter: -0.055em;
+  --ke-festival-heading-size: var(--ke-type-h1-size);
+  --ke-festival-heading-weight: var(--ke-type-h1-weight);
+  --ke-festival-heading-line: var(--ke-type-h1-line);
+  --ke-festival-heading-letter: var(--ke-type-h1-letter);
   --ke-festival-copy-size: clamp(0.88rem, 1.05vw, 0.98rem);
   --ke-festival-copy-line: 1.42;
   --ke-color-festival-hairline: rgba(121, 48, 20, 0.12);

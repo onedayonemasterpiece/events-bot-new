@@ -42,11 +42,11 @@ test('AdaptiveEventCardGrid clamps inputs and exposes the exact diagnostics cont
   for (const marker of [
     'data-ds-component="AdaptiveEventCardGrid"',
     'data-ds-family="AdaptiveEventCardGrid"',
-    'data-ds-version="1"',
+    'data-ds-version="2"',
     'data-adaptive-event-card-grid',
     'data-adaptive-grid-card-root="EventCard"',
     'data-adaptive-grid-layout-engine="flex-lines"',
-    'data-adaptive-grid-remainder-policy="stretch"',
+    'data-adaptive-grid-remainder-policy="regular-column"',
   ]) assert.ok(adaptive.includes(marker), `missing ${marker}`);
   assert.match(adaptive, /data-adaptive-grid-remainder-variant=\{initialRemainderVariant\}/u);
   assert.match(adaptive, /data-optimized-event-card-grid=\{legacyOptimizedContract \? '' : undefined\}/u);
@@ -97,18 +97,18 @@ test('Wave 2 responsive strategies and legacy adapter mapping remain explicit', 
   assert.doesNotMatch(legacy, /<style>|packRelatedCardRows|<EventCard\b/u);
 });
 
-test('AdaptiveEventCardGrid flex lines fill complete and named final rows without phantom tracks', async () => {
+test('AdaptiveEventCardGrid flex lines fill full rows while preserving ordinary column widths on remainder rows', async () => {
   const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
 
   assert.match(adaptive, /\.cards-grid\.adaptive-event-card-grid \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*gap: var\(--adaptive-event-card-gap\);/u);
-  assert.match(adaptive, /\.adaptive-event-card-grid > :global\(\.event-card\) \{[\s\S]*flex-grow: 1;[\s\S]*flex-shrink: 1;/u);
+  assert.match(adaptive, /\.adaptive-event-card-grid > :global\(\.event-card\) \{[\s\S]*flex-grow: 0;[\s\S]*flex-shrink: 1;/u);
   for (let rowSize = 1; rowSize <= 6; rowSize += 1) {
     assert.match(adaptive, new RegExp(`data-adaptive-grid-row-size="${rowSize}"`, 'u'));
   }
   assert.match(adaptive, /data-adaptive-grid-row-size="1"[^\n]*flex-basis: 100%/u);
-  assert.match(adaptive, /data-adaptive-grid-row-size="2"[^\n]*flex-basis: calc\(50% - var\(--adaptive-event-card-gap\)\)/u);
-  assert.ok(adaptive.includes("type AdaptiveGridRemainderVariant = 'complete' | `stretch-${number}-of-${number}`;"));
-  assert.match(adaptive, /return remainder === 0 \? 'complete' : `stretch-\$\{remainder\}-of-\$\{size\}`/u);
+  assert.match(adaptive, /data-adaptive-grid-row-size="2"[^\n]*flex-basis: calc\(\(100% - 1 \* var\(--adaptive-event-card-gap\)\) \/ 2\)/u);
+  assert.ok(adaptive.includes("type AdaptiveGridRemainderVariant = 'complete' | `regular-${number}-of-${number}`;"));
+  assert.match(adaptive, /return remainder === 0 \? 'complete' : `regular-\$\{remainder\}-of-\$\{size\}`/u);
   assert.match(adaptive, /grid\.dataset\.adaptiveGridRemainderVariant = runtimeRemainderVariant/u);
   assert.match(adaptive, /`remainder-\$\{runtimeRemainderVariant\}`/u);
   assert.doesNotMatch(adaptive, /grid-template-columns:\s*repeat/u);
@@ -139,7 +139,7 @@ test('normalized component families and MediaFrame diagnostics retain exact vers
   ]);
 
   for (const [source, family, version] of [
-    [adaptive, 'AdaptiveEventCardGrid', '1'],
+    [adaptive, 'AdaptiveEventCardGrid', '2'],
     [card, 'EventCard', '2'],
     [listing, 'ListingEventCard', '9'],
     [rail, 'EventMediaRail', '1'],
