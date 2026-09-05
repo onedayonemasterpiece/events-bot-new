@@ -1152,3 +1152,15 @@ distinguishes loaded from total with Russian forms. The source-bound structural
 projection labels five inspected entries as a sample, not the catalog total.
 This corrects the owner-rejected composition; historical two-group proofs are
 not acceptance evidence for the new page. Production is not promoted.
+
+### Immutable Kaggle SQLite input (2026-09-05)
+
+Remote export passes `--db-immutable` only after snapshot identity/hash validation.
+SQLite `mode=ro` alone can still require WAL/SHM sidecars on a WAL-format database;
+`immutable=1` reads the validated, self-contained file on Kaggle's read-only mount.
+The default local/live database path remains ordinary read-only and never infers
+immutability. A nonempty adjacent WAL rejects immutable mode. This avoids copying
+private DB data into published Kaggle outputs. See SQLite's documented contract:
+https://www.sqlite.org/wal.html#read_only_databases .
+The d1cc5c7d3 review run failed at this read before Astro generation; no artifact
+was published. Its snapshot bytes and UI are retained for the tooling successor.

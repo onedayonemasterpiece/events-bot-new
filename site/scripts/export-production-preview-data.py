@@ -6371,9 +6371,23 @@ def build_collection_product_output(
     }
 
 
+def open_preview_database(db_path: Path, *, immutable: bool = False) -> sqlite3.Connection:
+    """Read a snapshot; immutable is explicit and never inferred for a live DB."""
+    db_path = db_path.expanduser().resolve()
+    if immutable:
+        wal = Path(f"{db_path}-wal")
+        if wal.exists() and wal.stat().st_size:
+            raise ValueError("immutable snapshot must be self-contained, not require a WAL")
+    uri = f"{db_path.as_uri()}?mode=ro" + ("&immutable=1" if immutable else "")
+    con = sqlite3.connect(uri, uri=True)
+    con.row_factory = sqlite3.Row
+    return con
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
+    parser.add_argument("--db-immutable", action="store_true", help="Validated self-contained immutable snapshot on a read-only mount; never a live database")
     parser.add_argument("--output-dir", default="site/src/data")
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--catalog-mode", choices=["slice", "full"], default="slice")
@@ -6533,8 +6547,7 @@ def main() -> int:
     SKIP_IMAGE_PROBES = bool(args.skip_image_probes)
 
     db_path = Path(args.db).expanduser().resolve()
-    con = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
-    con.row_factory = sqlite3.Row
+    con = open_preview_database(db_path, immutable=args.db_immutable)
     include_ids = [int(part) for part in args.include_ids.split(",") if part.strip().isdigit()]
     if args.catalog_mode == "full":
         # Full production export is a single deterministic catalog query; the

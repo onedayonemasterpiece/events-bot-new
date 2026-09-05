@@ -570,7 +570,10 @@ def export_preview_data_if_configured(config: dict) -> None:
     if not db_path:
         raise FileNotFoundError(f'Kaggle export requested but sqlite DB not found: {db_filename}')
     # Kaggle input datasets are immutable/read-only. The exporter is read-only,
-    # so copying this database into /kaggle/working only wastes space and causes
+    # WAL-mode snapshots additionally require SQLite immutable=1: mode=ro alone
+    # may try to create -shm/-wal beside the input file. Hash validation precedes
+    # this explicit exporter mode; live databases never receive it.
+    # Copying this database into /kaggle/working only wastes space and causes
     # Kaggle to publish the private projection back as an output artifact.
     db_path = db_path.resolve()
     snapshot = validate_snapshot_input(db_path, config)
@@ -613,6 +616,7 @@ def export_preview_data_if_configured(config: dict) -> None:
         'python3',
         str(exporter),
         '--db', str(db_path),
+        '--db-immutable',
         '--limit', str(config.get('limit') or 50),
         '--current-date', str(clock['effective_date']),
         '--output-dir', str(SITE_DIR / 'src/data'),

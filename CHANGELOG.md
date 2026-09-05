@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Kaggle opens validated self-contained SQLite snapshots as immutable, so WAL-format databases work on read-only dataset mounts without copying private data into outputs.
 - Free listing header uses ordinary heading/spacing roles instead of the retired oversized landing; graphite related-card share controls retain inverse contrast.
 - Free events use one ordinary filtered listing and shared personalization/loading; strict confirmed-free eligibility and loaded/total counts persist through runtime transitions.
 - Packed related-card hydration waits for its geometry owner; release checks reject media/body overlap. Exhibitions inline runtime stays executable JavaScript.
