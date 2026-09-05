@@ -65,7 +65,7 @@ No production data or configuration changed at initial triage.
 
 ## Corrective / Follow-up Actions
 
-- [ ] Restore disk headroom without touching live databases.
+- [x] Restore disk headroom without touching live databases.
 - [ ] Prevent batch carrier consumption during infrastructure admission failure.
 - [ ] Requeue exact affected carriers and verify same-day catch-up.
 - [ ] Budget live DB growth, historical backups, and health/admission thresholds.
@@ -91,3 +91,61 @@ Open; no fix deployed, no catch-up completed.
 - No deploy, requeue or production cleanup yet. Same-day catch-up remains required.
 
 - Fix pushed: `60731f5a21f3e13556f502abd78b770052983181`; PR https://github.com/onedayonemasterpiece/events-bot-new/pull/637. Not deployed.
+
+## Approved production cleanup (2026-09-05, ~09:12 UTC)
+
+Operator approved archiving/removing the three historical backups. Downloaded
+all three locally and verified SHA-256 against production immediately before
+unlinking. Checked /proc open descriptors and zero-length backup WAL files.
+Removed only the three exact .bak files and their unused -wal/-shm sidecars.
+
+- Removed 456,863,744 logical bytes (~436 MiB).
+- /data free increased from 419,098,624 to 875,970,560 bytes (~835 MiB).
+- Local artifacts retain all three backups plus backup-manifest.json.
+- Evidence: cleanup.py/.txt, inventory.py/.txt, extra.py/.txt.
+- /healthz: ok=true, ready=true, db=ok, disk status ok; scratch write probe ok.
+- SQLite quick_check: ok. No VACUUM: freelist is only 46 pages (~184 KiB).
+
+### Additional storage audit (no additional deletion)
+
+- /data/backups/pre-static-collections-20260801T165142Z.sqlite.gz:
+  59,669,371 bytes, candidate for archive-first removal.
+- /data/incident_backups/R13-festival-calendar-predeploy-20260726T200141Z.sqlite.gz:
+  70,380,981 bytes, candidate for archive-first removal.
+- Combined additional historical backup candidates: ~124 MiB.
+- /data/static_site_snapshots: ~156 MiB, two September 4 snapshots; retained
+  because current issue621 work may still need them.
+- /data/guide_monitoring_results: ~82 MiB, fresh latest runs; retained.
+- /data/guide_media: dry-run scanned 321 files / 260,881,754 bytes, 268 existing
+  protected files, 53 too recent, zero deletion candidates and no stale DB refs.
+- /data/runtime_logs: ~60 MiB bounded rotations, retained for incident evidence.
+- Live DB ~1.14 GiB is actual allocated data, not recoverable free-page bloat.
+
+### Queue restoration and release gap
+
+Exact 321 incident-evidenced failed carriers returned to pending; intentional
+exclusions and other technical failures untouched. Readback: pending=321.
+Preimage saved on prod at
+/data/incident_backups/INC-2026-09-05-vk-storage-requeue-preimage.json.
+Evidence: requeue.py/.txt.
+
+PR #637 remains undeployed: python-ci failed in
+test_four_image_schedule_runs_one_prepare_commit_operation_in_order with
+InvalidArgumentsError (1 failed, 567 passed in the MCP gate); the other two
+CI jobs passed. Full failure evidence saved as ci-failure.txt.
+Release governance requires merged main plus green CI for the standard deploy.
+The VK-specific local suite remains 66 passed, exit 0.
+
+Bounded catch-up could not start through the available Telegram E2E account:
+production @events_love39_bot replied "Not authorized" (command 35820, reply
+35821). Production identity was verified using getMe on the Fly runtime.
+
+The local .env bot token instead resolves to @eventsbotTestBot. An initial
+command was mistakenly sent there (35818); no reply was observed, a stop
+command was sent and the original command deleted. The readback process was
+stopped before reconnecting to the same E2E session. No successful test-bot
+execution is claimed. Evidence: local-env-target-mismatch.txt and catchup.txt.
+
+321 restored rows remain pending for the production scheduler (observed next
+slot 10:00 UTC). Requeue is NOT catch-up completion. Do not close this incident
+until actual terminal results and the deployment gate are verified.
