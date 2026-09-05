@@ -87,6 +87,7 @@ Open; no fix deployed, no catch-up completed.
   before the change (bounded/unbounded queue claim attempted), then passed.
 - Relevant test command:
   `python -m pytest tests/test_vk_auto_queue_import.py tests/test_vk_default_time.py -q --disable-warnings`;
-  result 66 passed in 26.80s. Pytest printed completion but process retained
-  background resources; this is not a clean process-exit proof.
+  result 66 passed in 26.80s; process exit code 0 verified.
 - No deploy, requeue or production cleanup yet. Same-day catch-up remains required.
+
+- Fix pushed: `60731f5a21f3e13556f502abd78b770052983181`; PR https://github.com/onedayonemasterpiece/events-bot-new/pull/637. Not deployed.
