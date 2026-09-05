@@ -9,9 +9,9 @@
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
   "astro_family_graph_sha256": "6a7b29b20f7063ef67d85c87f2887db62e68120cb193f0b294c3b5f91542afca",
   "summary": {
-    "token_count": 2494,
-    "definition_count": 2772,
-    "consumer_count": 3526,
+    "token_count": 2497,
+    "definition_count": 2785,
+    "consumer_count": 3521,
     "alias_edge_count": 720,
     "family_count": 109
   },
@@ -60209,6 +60209,104 @@
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
     },
+    "--adaptive-event-card-columns": {
+      "definitions": [
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 349,
+          "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"1\"]",
+          "kind": "css",
+          "value": "1",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 350,
+          "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"2\"]",
+          "kind": "css",
+          "value": "2",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 351,
+          "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"3\"]",
+          "kind": "css",
+          "value": "3",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 352,
+          "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"4\"]",
+          "kind": "css",
+          "value": "4",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 353,
+          "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"5\"]",
+          "kind": "css",
+          "value": "5",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 354,
+          "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"6\"]",
+          "kind": "css",
+          "value": "6",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 413,
+          "scope": "@media (max-width: 1023px) > .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size]",
+          "kind": "css",
+          "value": "1",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 424,
+          "scope": "@media (max-width: 960px) > .adaptive-event-card-grid--responsive-progressive:is( [data-adaptive-grid-row-size=\"3\"], [data-adaptive-grid-row-size=\"4\"], [data-adaptive-grid-row-size=\"5\"], [data-adaptive-grid-row-size=\"6\"] )",
+          "kind": "css",
+          "value": "2",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 430,
+          "scope": "@media (max-width: 620px) > .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size]",
+          "kind": "css",
+          "value": "1",
+          "aliases": [],
+          "token": "--adaptive-event-card-columns"
+        }
+      ],
+      "aliases_to": [],
+      "aliases_from": [],
+      "direct_consumers": [
+        {
+          "token": "--adaptive-event-card-columns",
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 335,
+          "has_fallback": true
+        }
+      ],
+      "component_set": "components-02ffec46e9e0016c",
+      "astro_family_set": "families-d5ad89d7b87bde06",
+      "production_route_set": "routes-d690b48482e738de"
+    },
     "--adaptive-event-card-gap": {
       "definitions": [
         {
@@ -60228,42 +60326,6 @@
           "token": "--adaptive-event-card-gap",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
           "line": 336,
-          "has_fallback": false
-        },
-        {
-          "token": "--adaptive-event-card-gap",
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 348,
-          "has_fallback": false
-        },
-        {
-          "token": "--adaptive-event-card-gap",
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 349,
-          "has_fallback": false
-        },
-        {
-          "token": "--adaptive-event-card-gap",
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 350,
-          "has_fallback": false
-        },
-        {
-          "token": "--adaptive-event-card-gap",
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 351,
-          "has_fallback": false
-        },
-        {
-          "token": "--adaptive-event-card-gap",
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 352,
-          "has_fallback": false
-        },
-        {
-          "token": "--adaptive-event-card-gap",
-          "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 391,
           "has_fallback": false
         }
       ],
@@ -63234,6 +63296,34 @@
       "component_set": "components-3d9ef90164e94aee",
       "astro_family_set": "families-7b21d2f6a80b0791",
       "production_route_set": "routes-d2a23eda312acc84"
+    },
+    "--flow": {
+      "definitions": [
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 364,
+          "scope": "@media (min-width: 621px)",
+          "kind": "css",
+          "value": "not([data-adaptive-grid-row-size=\"1\"]):not(.adaptive-event-card-grid--responsive-stack)",
+          "aliases": [],
+          "token": "--flow"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 368,
+          "scope": "@media (min-width: 621px)",
+          "kind": "css",
+          "value": "not([data-adaptive-grid-row-size=\"1\"]):not(.adaptive-event-card-grid--responsive-stack)",
+          "aliases": [],
+          "token": "--flow"
+        }
+      ],
+      "aliases_to": [],
+      "aliases_from": [],
+      "direct_consumers": [],
+      "component_set": "components-02ffec46e9e0016c",
+      "astro_family_set": "families-d5ad89d7b87bde06",
+      "production_route_set": "routes-d690b48482e738de"
     },
     "--fragment-delay": {
       "definitions": [
@@ -159100,7 +159190,7 @@
         {
           "token": "--lab-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 361,
+          "line": 394,
           "has_fallback": false
         }
       ],
@@ -160971,7 +161061,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 354,
+          "line": 387,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card]) {",
@@ -160980,7 +161070,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 358,
+          "line": 391,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-link) { display: block",
@@ -160989,7 +161079,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 359,
+          "line": 392,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-shell) {",
@@ -160998,7 +161088,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 364,
+          "line": 397,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media) {",
@@ -161007,7 +161097,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 369,
+          "line": 402,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media-shell) {",
@@ -161016,7 +161106,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 372,
+          "line": 405,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media) { background: transparent !important",
@@ -161025,7 +161115,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 373,
+          "line": 406,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-card-authoritative-fit=\"contain\"]) { background: #15110f",
@@ -161034,7 +161124,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 374,
+          "line": 407,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__body) { min-height: 0",
@@ -161043,7 +161133,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 375,
+          "line": 408,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__utility-row) { min-height: 58px",
@@ -161052,7 +161142,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 376,
+          "line": 409,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px",
@@ -163521,12 +163611,40 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 385,
+          "line": 418,
           "scope": "@media (max-width: 960px)",
           "kind": "css",
           "value": "is(",
           "aliases": [],
           "token": "--responsive-progressive"
+        }
+      ],
+      "aliases_to": [],
+      "aliases_from": [],
+      "direct_consumers": [],
+      "component_set": "components-02ffec46e9e0016c",
+      "astro_family_set": "families-d5ad89d7b87bde06",
+      "production_route_set": "routes-d690b48482e738de"
+    },
+    "--responsive-stack": {
+      "definitions": [
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 375,
+          "scope": "@media (min-width: 1024px)",
+          "kind": "css",
+          "value": "not([data-adaptive-grid-row-size=\"1\"])",
+          "aliases": [],
+          "token": "--responsive-stack"
+        },
+        {
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 377,
+          "scope": "@media (min-width: 1024px)",
+          "kind": "css",
+          "value": "not([data-adaptive-grid-row-size=\"1\"])",
+          "aliases": [],
+          "token": "--responsive-stack"
         }
       ],
       "aliases_to": [],

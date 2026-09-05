@@ -331,8 +331,8 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(var(--adaptive-event-card-columns, 3), minmax(0, 1fr));
     gap: var(--adaptive-event-card-gap);
     align-items: stretch;
   }
@@ -341,19 +341,52 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
     min-width: 0;
     max-width: 100%;
     height: auto;
-    flex-grow: 0;
-    flex-shrink: 1;
+    grid-row: span 4;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    row-gap: 0;
   }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="1"] > :global(.event-card) { flex-basis: 100%; }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="2"] > :global(.event-card) { flex-basis: calc((100% - 1 * var(--adaptive-event-card-gap)) / 2); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="3"] > :global(.event-card) { flex-basis: calc((100% - 2 * var(--adaptive-event-card-gap)) / 3); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="4"] > :global(.event-card) { flex-basis: calc((100% - 3 * var(--adaptive-event-card-gap)) / 4); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] > :global(.event-card) { flex-basis: calc((100% - 4 * var(--adaptive-event-card-gap)) / 5); }
-  .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] > :global(.event-card) { flex-basis: calc((100% - 5 * var(--adaptive-event-card-gap)) / 6); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="1"] { --adaptive-event-card-columns: 1; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="2"] { --adaptive-event-card-columns: 2; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="3"] { --adaptive-event-card-columns: 3; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="4"] { --adaptive-event-card-columns: 4; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] { --adaptive-event-card-columns: 5; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] { --adaptive-event-card-columns: 6; }
+
+  /* AR-04: flow is an admission/runtime strategy, not permission for each
+     desktop card to choose a different media/body track. Reuse the compact
+     5:4 visual frame already owned by relatedCardLayout. Document fit stays
+     contain; the one-column mobile composition keeps its natural poster. */
+  .adaptive-event-card-grid--flow > :global(.event-card) {
+    grid-template-rows: subgrid;
+  }
+  @media (min-width: 621px) {
+    .adaptive-event-card-grid--flow:not([data-adaptive-grid-row-size="1"]):not(.adaptive-event-card-grid--responsive-stack)
+      > :global(.event-card .event-card__media-shell) {
+      aspect-ratio: 5 / 4;
+    }
+    .adaptive-event-card-grid--flow:not([data-adaptive-grid-row-size="1"]):not(.adaptive-event-card-grid--responsive-stack)
+      > :global(.event-card .event-card__media) {
+      position: absolute;
+      inset: 0;
+    }
+  }
+  @media (min-width: 1024px) {
+    .adaptive-event-card-grid--flow.adaptive-event-card-grid--responsive-stack:not([data-adaptive-grid-row-size="1"])
+      > :global(.event-card .event-card__media-shell) { aspect-ratio: 5 / 4; }
+    .adaptive-event-card-grid--flow.adaptive-event-card-grid--responsive-stack:not([data-adaptive-grid-row-size="1"])
+      > :global(.event-card .event-card__media) { position: absolute; inset: 0; }
+  }
+  .adaptive-event-card-grid :global(.event-card__body) { align-content: start; }
+  .adaptive-event-card-grid :global(.event-card__utility-row) { min-width: 0; }
+  .adaptive-event-card-grid :global(.event-card__utility-row .feedback-button--negative) {
+    min-width: 0;
+    white-space: normal;
+  }
 
   .adaptive-event-card-grid--packed :global([data-lab-related-card]) {
     height: auto;
-    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
+    grid-template-rows: subgrid;
   }
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-link) { display: block; }
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-shell) {
@@ -376,8 +409,8 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px; }
 
   @media (max-width: 1023px) {
-    .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size] > :global(.event-card) {
-      flex-basis: 100%;
+    .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size] {
+      --adaptive-event-card-columns: 1;
     }
   }
 
@@ -387,14 +420,14 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
       [data-adaptive-grid-row-size="4"],
       [data-adaptive-grid-row-size="5"],
       [data-adaptive-grid-row-size="6"]
-    ) > :global(.event-card) {
-      flex-basis: calc((100% - 1 * var(--adaptive-event-card-gap)) / 2);
+    ) {
+      --adaptive-event-card-columns: 2;
     }
   }
 
   @media (max-width: 620px) {
-    .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size] > :global(.event-card) {
-      flex-basis: 100%;
+    .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size] {
+      --adaptive-event-card-columns: 1;
     }
   }
 </style>

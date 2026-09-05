@@ -175,6 +175,13 @@ export function assertRegularGridWidths(grid) {
   for (const row of rows) {
     invariant(Math.max(...row.map(card => card.height)) - Math.min(...row.map(card => card.height)) <= 2,
       'cards in the same rendered row have different heights');
+    if (row.length > 1) {
+      for (const key of ['mediaBottom', 'bodyTop', 'utilityTop', 'feedbackTop']) {
+        invariant(row.every(card => Number.isFinite(card[key])), `card internal ${key} geometry is missing`);
+        invariant(Math.max(...row.map(card => card[key])) - Math.min(...row.map(card => card[key])) <= 2,
+          `cards in the same rendered row have different ${key} boundaries`);
+      }
+    }
   }
 }
 
@@ -229,6 +236,10 @@ export async function measureOwnerReviewPage(page) {
       renderedCount:e.dataset.adaptiveGridRenderedCount,
       cards:[...e.children].filter(c=>c.matches('[data-event-card]') && visible(c)).map(c=>({
         id:c.dataset.eventId,...box(c),clientWidth:c.clientWidth,scrollWidth:c.scrollWidth,
+        mediaBottom:c.querySelector('[data-card-media-shell]')?.getBoundingClientRect().bottom,
+        bodyTop:c.querySelector('.event-card__body')?.getBoundingClientRect().top,
+        utilityTop:c.querySelector('.event-card__utility-row')?.getBoundingClientRect().top,
+        feedbackTop:c.querySelector('.event-card__feedback')?.getBoundingClientRect().top,
       })),
     }));
     const cardRows = [...document.querySelectorAll('.ke-listing-row,.ke-listing-cards,.ke-popular-listing__row')].filter(visible).map(e=>({class:e.className,box:box(e),clientWidth:e.clientWidth,scrollWidth:e.scrollWidth}));
@@ -449,11 +460,21 @@ export async function assertHomeFeedColumnStates(page,origin,route='/',artifactD
         const card=page.locator('[data-home-feed-grid] > [data-home-feed-item]:visible').first();
         const originalStyle=await card.getAttribute('style');
         try {
-          await card.evaluate(e=>e.style.setProperty('flex-basis','100%','important'));
+          await card.evaluate(e=>e.style.setProperty('grid-column','1 / -1','important'));
           const poisoned=(await measureOwnerReviewPage(page)).grids[0];
           let rejected=false;try {assertRegularGridWidths(poisoned);} catch {rejected=true;}
           invariant(poisoned.cards[0].width>grid.cards[0].width*2 && rejected,'Grid gate accepted a stretched singleton');
         } finally {await card.evaluate((e,s)=>s===null?e.removeAttribute('style'):e.setAttribute('style',s),originalStyle);}
+      }
+      if(count===4) {
+        const shell=page.locator('[data-home-feed-grid] > [data-home-feed-item]:visible [data-card-media-shell]').first();
+        const old=await shell.getAttribute('style');
+        try {
+          await shell.evaluate(e=>e.style.setProperty('height',`${e.getBoundingClientRect().height+31}px`,'important'));
+          const poisoned=(await measureOwnerReviewPage(page)).grids[0];
+          let rejected=false;try {assertRegularGridWidths(poisoned);} catch {rejected=true;}
+          invariant(rejected,'Grid gate accepted a poisoned internal media boundary');
+        } finally {await shell.evaluate((e,s)=>s===null?e.removeAttribute('style'):e.setAttribute('style',s),old);}
       }
       if(artifactDir && [1,4].includes(count)) {
         await page.locator('[data-home-feed-grid]').scrollIntoViewIfNeeded();

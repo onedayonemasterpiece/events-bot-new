@@ -333,7 +333,7 @@ test('same-role H1 oracle rejects page-local size even when family markers exist
 });
 
 test('grid oracle rejects stretched final rows and internal overflow without document overflow', () => {
-  const card = (id,x,y) => ({id,x,y,width:300,height:400,scrollWidth:300,clientWidth:300});
+  const card = (id,x,y) => ({id,x,y,width:300,height:400,scrollWidth:300,clientWidth:300,mediaBottom:y+200,bodyTop:y+200,utilityTop:y+290,feedbackTop:y+348});
   const grid = {rowSize:3,responsive:'progressive',viewportWidth:1440,columnGap:20,contentWidth:940,box:{x:0,y:0,width:940,height:820},clientWidth:940,scrollWidth:940,cards:[card(1,0,0),card(2,320,0),card(3,640,0),card(4,0,420)]};
   assert.doesNotThrow(()=>assertRegularGridWidths(grid));
   assert.throws(()=>assertRegularGridWidths({...grid,cards:[...grid.cards.slice(0,3),{...grid.cards[3],width:940}]}),/partial row stretches/u);
@@ -367,4 +367,17 @@ test('ordinary-column oracle rejects a stretched singleton with no complete refe
 test('breadcrumb chrome occlusion is a navigation failure even when H1 is clear',()=>{
   assert.doesNotThrow(()=>assertOwnerBreadcrumbVisibility([{text:'Афиша',occludedBy:[]}]));
   assert.throws(()=>assertOwnerBreadcrumbVisibility([{text:'Афиша',occludedBy:['site-header__brand-tag']}]),/breadcrumb navigation is covered/);
+});
+
+
+test('AR-04 rejects unequal internal media tracks despite identical outer cards', () => {
+  const card={x:0,y:0,width:300,height:600,clientWidth:300,scrollWidth:300,
+    mediaBottom:240,bodyTop:240,utilityTop:490,feedbackTop:548};
+  const grid={box:{x:0,width:620},clientWidth:620,scrollWidth:620,contentWidth:620,
+    rowSize:2,viewportWidth:1440,columnGap:20,responsive:'progressive',
+    cards:[card,{...card,x:320}]};
+  assert.doesNotThrow(()=>assertRegularGridWidths(grid));
+  for(const key of ['mediaBottom','bodyTop','utilityTop','feedbackTop']) {
+    assert.throws(()=>assertRegularGridWidths({...grid,cards:[card,{...card,x:320,[key]:card[key]+30}]}),/boundaries/);
+  }
 });

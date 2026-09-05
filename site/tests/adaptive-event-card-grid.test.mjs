@@ -91,27 +91,27 @@ test('Wave 2 responsive strategies and legacy adapter mapping remain explicit', 
   assert.match(adaptive, /@media \(max-width: 1023px\)[\s\S]*adaptive-event-card-grid--responsive-stack/u);
   assert.match(adaptive, /@media \(max-width: 960px\)[\s\S]*adaptive-event-card-grid--responsive-progressive/u);
   assert.match(adaptive, /@media \(max-width: 620px\)[\s\S]*adaptive-event-card-grid--responsive-progressive/u);
-  assert.match(adaptive, /adaptive-event-card-grid--responsive-stack\[data-adaptive-grid-row-size\] > :global\(\.event-card\)/u);
-  assert.match(adaptive, /adaptive-event-card-grid--responsive-progressive\[data-adaptive-grid-row-size\] > :global\(\.event-card\)/u);
+  assert.match(adaptive, /adaptive-event-card-grid--responsive-stack\[data-adaptive-grid-row-size\]/u);
+  assert.match(adaptive, /adaptive-event-card-grid--responsive-progressive\[data-adaptive-grid-row-size\]/u);
   assert.match(legacy, /responsive=\{responsiveMobile \? 'stack' : 'fixed'\}/u);
   assert.doesNotMatch(legacy, /<style>|packRelatedCardRows|<EventCard\b/u);
 });
 
-test('AdaptiveEventCardGrid flex lines fill full rows while preserving ordinary column widths on remainder rows', async () => {
+test('AdaptiveEventCardGrid shared tracks fill full rows while preserving ordinary column widths on remainder rows', async () => {
   const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
 
-  assert.match(adaptive, /\.cards-grid\.adaptive-event-card-grid \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*gap: var\(--adaptive-event-card-gap\);/u);
-  assert.match(adaptive, /\.adaptive-event-card-grid > :global\(\.event-card\) \{[\s\S]*flex-grow: 0;[\s\S]*flex-shrink: 1;/u);
+  assert.match(adaptive, /\.cards-grid\.adaptive-event-card-grid \{[\s\S]*display: grid;[\s\S]*grid-template-columns: repeat\(var\(--adaptive-event-card-columns, 3\), minmax\(0, 1fr\)\);[\s\S]*gap: var\(--adaptive-event-card-gap\);/u);
+  assert.match(adaptive, /\.adaptive-event-card-grid > :global\(\.event-card\) \{[\s\S]*grid-row: span 4;[\s\S]*grid-template-rows: subgrid;/u);
   for (let rowSize = 1; rowSize <= 6; rowSize += 1) {
     assert.match(adaptive, new RegExp(`data-adaptive-grid-row-size="${rowSize}"`, 'u'));
   }
-  assert.match(adaptive, /data-adaptive-grid-row-size="1"[^\n]*flex-basis: 100%/u);
-  assert.match(adaptive, /data-adaptive-grid-row-size="2"[^\n]*flex-basis: calc\(\(100% - 1 \* var\(--adaptive-event-card-gap\)\) \/ 2\)/u);
+  assert.match(adaptive, /data-adaptive-grid-row-size="1"[^\n]*--adaptive-event-card-columns: 1/u);
+  assert.match(adaptive, /data-adaptive-grid-row-size="2"[^\n]*--adaptive-event-card-columns: 2/u);
   assert.ok(adaptive.includes("type AdaptiveGridRemainderVariant = 'complete' | `regular-${number}-of-${number}`;"));
   assert.match(adaptive, /return remainder === 0 \? 'complete' : `regular-\$\{remainder\}-of-\$\{size\}`/u);
   assert.match(adaptive, /grid\.dataset\.adaptiveGridRemainderVariant = runtimeRemainderVariant/u);
   assert.match(adaptive, /`remainder-\$\{runtimeRemainderVariant\}`/u);
-  assert.doesNotMatch(adaptive, /grid-template-columns:\s*repeat/u);
+  assert.doesNotMatch(adaptive, /repeat\(\s*auto-fit/u);
 });
 
 test('packed grid keeps row geometry and layering but delegates MediaFrame anatomy', async () => {

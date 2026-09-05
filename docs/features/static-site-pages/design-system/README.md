@@ -44,6 +44,23 @@ are useful diagnostics, **not** proof of the rejected real snapshot after repair
 Full published successors use only the existing Kaggle builder/publisher.
 Production root, stable ICS and Penpot are not changed by these diagnostics.
 
+## AR-04/05 shared internal tracks (candidate v2 correction)
+
+AdaptiveEventCardGrid v2 remains the unaccepted owner-review candidate. Its
+four card anatomy tracks now use CSS subgrid, so media/body/utility/feedback
+boundaries align across a rendered row, including runtime-reordered/inserted
+cards. Normal explicit columns retain singleton width; no auto-fit stretching
+or removal of admitted events. Multi-column flow uses the existing compact5:4
+frame from relatedCardLayout; OCR/unknown documents remain contained, and
+single-column mobile retains intrinsic poster geometry. The grid constrains
+intrinsic child widths and allows the negative-action label to wrap instead of
+forcing horizontal overflow at the621px seam. Packed media policy is unchanged.
+
+The existing browser gate measures all four internal boundaries. Negative
+controls poison a real media shell and span a singleton across all columns;
+neither equal outer rectangles nor an ineffective flex override proves PASS.
+Focused fixtures are diagnostics, not same-snapshot real acceptance.
+
 ## Existing owners and reverse impact
 
 Do not add a second registry, checker, design system or build pipeline.

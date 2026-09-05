@@ -13,6 +13,9 @@ public festival/club counts and native Penpot acceptance remain open.
 
 ## [Unreleased]
 
+### Fixed
+- Owner-review candidate: shared card row tracks align media/body/actions, retain ordinary remainder widths, preserve contained poster text and constrain narrow-column action overflow. Browser regressions now reject internal-boundary drift.
+
 ### Fixed — owner review, 2026-09-05 (unpublished)
 - Reuse the section H2 role in Home's feed and reserve shared breadcrumb
   clearance below the overhanging desktop brand on the free collection.
