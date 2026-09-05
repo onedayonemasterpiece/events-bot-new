@@ -32,3 +32,21 @@ test('ListingPageHeader hides screenshot date chips only on desktop date-family 
   assert.match(desktopRule, /\.ke-listing-head\[data-ds-variant="date"\] \.ke-listing-date-nav \{ display:none; \}/u);
   assert.doesNotMatch(desktopRule, /data-ds-variant="(?:weekend|popular)"/u);
 });
+
+ test('listing cards use shared no-fields fallback rather than a local contain override', async () => {
+ const source = await read('src/components/listings/ListingEventCard.astro');
+ const css = await read('src/styles/design-system.css');
+ assert.match(source, /const mediaFrameFit = image.asset \? 'cover' : 'contain'/u);
+ assert.match(source, /'fallback-minimal'/u);
+ assert.match(source, /'unverified-text'/u);
+ assert.doesNotMatch(css, /ke-listing-card:not\([^\n]+object-fit: contain/u);
+ assert.match(source, /mediaFrame.dataset.mediaFrameFit = 'contain'/u);
+ });
+
+test('natural mobile rail dimensions retain no-fields rendering and truthful fallback permission', async () => {
+ const source = await read('src/components/listings/MobileListingRailRow.astro');
+ assert.match(source, /data-media-frame-fit="cover"/u);
+ assert.match(source, /natural_rounding_fallback:/u);
+ assert.match(source, /'fallback-minimal'/u);
+ assert.match(source, /--media-width:\$\{railMedia.width\}px/u);
+});

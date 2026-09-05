@@ -64,3 +64,7 @@ identity; expired routes are not resurrected for tests. Inspect actual rendered
 bounds and focal positioning, not source declarations alone.
 
 The consumer-closure checker permits `--ex-row-radius` only as a binding to `--ke-shape-radius-card`; a literal private radius is rejected. The generated token-impact graph includes these shared shape consumers. These checker/graph updates do not alter the frozen real-candidate runtime.
+
+ListingEventCard uses natural ratio allocation first and shared cover for a loaded image when flex/identity-rail geometry or derivative rounding differs. It marks this as `fallback-minimal` / `unverified-text`, preserves semantic kind and object position, and has no competing route-level contain CSS. Broken/missing media remains a truthful fallback. This closes the separate Today/Tomorrow/Date listing consumer, not only adaptive recommendation cards.
+
+MobileListingRailRow also keeps the resolver's authored natural dimensions but uses cover to absorb source/thumbnail and integer-width rounding without subpixel bands. Its natural fallback is labeled `natural_rounding_fallback` / `fallback-minimal`, not a claim of OCR proof. Resource failure still switches to the common fallback state.

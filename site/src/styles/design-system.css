@@ -284,9 +284,7 @@
 .ke-listing-card[data-listing-density="weekend"][data-listing-image-mode="visual-crop"][data-listing-crop-adaptive="true"] { max-width: calc(var(--ke-listing-media-height) * 1.65); }
 .ke-listing-card__media { position: relative; width: 100%; height: var(--ke-listing-media-height); display: block; overflow: hidden; border-radius: var(--ke-radius-md); background: var(--ke-color-canvas-soft); text-decoration: none; }
 .ke-listing-card__media img { width: 100%; height: 100%; object-position: var(--ke-listing-object-position); }
-.ke-listing-card[data-listing-image-mode="photo-crop"] .ke-listing-card__media img,
-.ke-listing-card[data-listing-image-mode="visual-crop"] .ke-listing-card__media img { object-fit: cover; }
-.ke-listing-card:not([data-listing-image-mode="photo-crop"]):not([data-listing-image-mode="visual-crop"]) .ke-listing-card__media img { object-fit: contain; }
+/* MediaFrame owns loaded fit and broken-resource fallback; no route-level override. */
 .ke-listing-card__fallback { width: 100%; height: 100%; display: grid; place-items: center; padding: var(--ke-space-4); color: var(--ke-color-brand-800); font-size: var(--ke-font-size-100); font-weight: 900; letter-spacing: 0.08em; text-align: center; text-transform: uppercase; }
 .ke-listing-card__copy { width: 100%; display: grid; gap: var(--ke-space-1); padding-top: var(--ke-space-2); }
 .ke-listing-card[data-listing-row-end] .ke-listing-card__copy { width: min(440px, calc(100% + var(--ke-listing-row-tail, 0px))); }

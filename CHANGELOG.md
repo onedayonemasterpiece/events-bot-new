@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Listing cards now also fill their frames after natural-ratio allocation; shared MediaFrame replaces a competing route-level contain rule that left small bands on Today/Tomorrow/Date. Mobile rails retain natural dimensions while absorbing thumbnail rounding without bands. Missing/broken resource behavior is preserved.
 - Token-impact graph and consumer-closure checks recognize the approved exhibition shared-card radius alias and reject private literal substitutions; frozen preview runtime is unchanged.
 - Shared card framing now uses minimal cover as the final no-fields fallback after full-pool grouping, with honest unverified-crop diagnostics and natural mobile frames. Exhibition large corners consume common card/hero roles; redundant desktop Today/Tomorrow/Date pills are hidden without changing mobile navigation.
 

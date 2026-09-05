@@ -46,14 +46,15 @@ const mediaFrameKind = !image.asset
       : image.asset.image_text_mode === 'ocr_text'
         ? 'document'
         : 'unknown';
-const mediaFrameFit = image.mode.endsWith('-crop') ? 'cover' : 'contain';
+// Natural geometry is preferred, but flex rounding/identity rails must not create fields.
+const mediaFrameFit = image.asset ? 'cover' : 'contain';
 const mediaFrameCropReason = !image.asset
   ? 'listing_fallback'
   : image.asset.media_semantic_status === 'error'
-    ? 'semantic_error_fail_closed'
+    ? 'listing_minimal_fallback:unverified_semantics'
     : image.adaptiveCrop
       ? `listing_reviewed_crop:${image.asset.listing_crop_evidence || 'classified_safe_crop'}`
-      : `listing_natural:${image.mode}`;
+      : `listing_minimal_fallback:${image.mode}`;
 const derivatives = [...(image.asset?.thumbnail_sources || [])]
   .filter((item) => item.src && item.width > 0 && item.height > 0)
   .sort((left, right) => left.width - right.width);
@@ -171,7 +172,7 @@ const mediaFrameRole = mediaFrameKind === 'fallback'
   ? 'fallback'
   : image.asset?.media_role || event.image_media_role || 'unknown_document';
 const mediaFrameCropPermission = mediaFrameFit === 'cover'
-  ? image.adaptiveCrop ? 'reviewed' : 'allowed'
+  ? image.adaptiveCrop ? 'reviewed' : image.mode.endsWith('-crop') ? 'allowed' : 'fallback-minimal'
   : 'forbidden';
 const mediaFrameInitialResourceState = imageUrl ? 'pending' : 'fallback';
 const style = [
@@ -253,6 +254,7 @@ const socialProofLabel = [
       data-media-frame-kind={mediaFrameKind}
       data-media-frame-fit={mediaFrameFit}
       data-media-frame-crop-permission={mediaFrameCropPermission}
+      data-media-frame-crop-safety={mediaFrameCropPermission === 'fallback-minimal' ? 'unverified-text' : undefined}
       data-media-frame-ratio={mediaFrameRatio}
       data-media-frame-source-ratio={mediaFrameSourceRatio}
       data-media-frame-object-position={mediaFrameObjectPosition}

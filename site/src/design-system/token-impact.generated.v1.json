@@ -63459,7 +63459,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1523,
+          "line": 1521,
           "scope": "@media (max-width: 720px)",
           "kind": "css",
           "value": ":before,",
@@ -63468,7 +63468,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1524,
+          "line": 1522,
           "scope": "@media (max-width: 720px)",
           "kind": "css",
           "value": ":after {",
@@ -69409,19 +69409,19 @@
         {
           "token": "--ke-color-accent-700",
           "path": "site/src/styles/design-system.css",
-          "line": 348,
+          "line": 346,
           "has_fallback": false
         },
         {
           "token": "--ke-color-accent-700",
           "path": "site/src/styles/design-system.css",
-          "line": 368,
+          "line": 366,
           "has_fallback": false
         },
         {
           "token": "--ke-color-accent-700",
           "path": "site/src/styles/design-system.css",
-          "line": 517,
+          "line": 515,
           "has_fallback": false
         }
       ],
@@ -78571,37 +78571,37 @@
         {
           "token": "--ke-color-brand-600",
           "path": "site/src/styles/design-system.css",
-          "line": 309,
+          "line": 307,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-600",
           "path": "site/src/styles/design-system.css",
-          "line": 310,
+          "line": 308,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-600",
           "path": "site/src/styles/design-system.css",
-          "line": 347,
+          "line": 345,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-600",
           "path": "site/src/styles/design-system.css",
-          "line": 367,
+          "line": 365,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-600",
           "path": "site/src/styles/design-system.css",
-          "line": 495,
+          "line": 493,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-600",
           "path": "site/src/styles/design-system.css",
-          "line": 675,
+          "line": 673,
           "has_fallback": false
         }
       ],
@@ -79219,25 +79219,25 @@
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 1026,
+          "line": 1024,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 1026,
+          "line": 1024,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 1196,
+          "line": 1194,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 1221,
+          "line": 1219,
           "has_fallback": false
         },
         {
@@ -79273,49 +79273,49 @@
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 295,
+          "line": 293,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 308,
+          "line": 306,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 495,
+          "line": 493,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 496,
+          "line": 494,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 516,
+          "line": 514,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 715,
+          "line": 713,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 727,
+          "line": 725,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-700",
           "path": "site/src/styles/design-system.css",
-          "line": 894,
+          "line": 892,
           "has_fallback": false
         }
       ],
@@ -80181,19 +80181,19 @@
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 1026,
+          "line": 1024,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 1200,
+          "line": 1198,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 1496,
+          "line": 1494,
           "has_fallback": false
         },
         {
@@ -80223,31 +80223,31 @@
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 290,
+          "line": 288,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 303,
+          "line": 301,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 531,
+          "line": 529,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 536,
+          "line": 534,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-800",
           "path": "site/src/styles/design-system.css",
-          "line": 689,
+          "line": 687,
           "has_fallback": false
         }
       ],
@@ -81202,37 +81202,37 @@
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 1014,
+          "line": 1012,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 1014,
+          "line": 1012,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 1015,
+          "line": 1013,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 1084,
+          "line": 1082,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 1290,
+          "line": 1288,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 1459,
+          "line": 1457,
           "has_fallback": false
         },
         {
@@ -81244,55 +81244,55 @@
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 315,
+          "line": 313,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 441,
+          "line": 439,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 512,
+          "line": 510,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 581,
+          "line": 579,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 960,
+          "line": 958,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 970,
+          "line": 968,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 971,
+          "line": 969,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 978,
+          "line": 976,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas",
           "path": "site/src/styles/design-system.css",
-          "line": 978,
+          "line": 976,
           "has_fallback": false
         }
       ],
@@ -81470,19 +81470,19 @@
         {
           "token": "--ke-color-canvas-soft",
           "path": "site/src/styles/design-system.css",
-          "line": 357,
+          "line": 355,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas-soft",
           "path": "site/src/styles/design-system.css",
-          "line": 358,
+          "line": 356,
           "has_fallback": false
         },
         {
           "token": "--ke-color-canvas-soft",
           "path": "site/src/styles/design-system.css",
-          "line": 788,
+          "line": 786,
           "has_fallback": false
         }
       ],
@@ -84008,7 +84008,13 @@
         {
           "token": "--ke-color-control-inverse",
           "path": "site/src/styles/design-system.css",
-          "line": 341,
+          "line": 339,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-control-inverse",
+          "path": "site/src/styles/design-system.css",
+          "line": 348,
           "has_fallback": false
         },
         {
@@ -84021,12 +84027,6 @@
           "token": "--ke-color-control-inverse",
           "path": "site/src/styles/design-system.css",
           "line": 352,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-control-inverse",
-          "path": "site/src/styles/design-system.css",
-          "line": 354,
           "has_fallback": false
         }
       ],
@@ -84101,7 +84101,7 @@
         {
           "token": "--ke-color-control-inverse-bg",
           "path": "site/src/styles/design-system.css",
-          "line": 353,
+          "line": 351,
           "has_fallback": false
         }
       ],
@@ -84152,7 +84152,7 @@
         {
           "token": "--ke-color-control-inverse-hover",
           "path": "site/src/styles/design-system.css",
-          "line": 351,
+          "line": 349,
           "has_fallback": false
         }
       ],
@@ -84803,7 +84803,7 @@
         {
           "token": "--ke-color-control-inverse-line",
           "path": "site/src/styles/design-system.css",
-          "line": 346,
+          "line": 344,
           "has_fallback": false
         }
       ],
@@ -85034,19 +85034,19 @@
         {
           "token": "--ke-color-copy",
           "path": "site/src/styles/design-system.css",
-          "line": 1017,
+          "line": 1015,
           "has_fallback": false
         },
         {
           "token": "--ke-color-copy",
           "path": "site/src/styles/design-system.css",
-          "line": 1024,
+          "line": 1022,
           "has_fallback": false
         },
         {
           "token": "--ke-color-copy",
           "path": "site/src/styles/design-system.css",
-          "line": 1489,
+          "line": 1487,
           "has_fallback": false
         },
         {
@@ -85058,25 +85058,25 @@
         {
           "token": "--ke-color-copy",
           "path": "site/src/styles/design-system.css",
-          "line": 608,
+          "line": 606,
           "has_fallback": false
         },
         {
           "token": "--ke-color-copy",
           "path": "site/src/styles/design-system.css",
-          "line": 703,
+          "line": 701,
           "has_fallback": false
         },
         {
           "token": "--ke-color-copy",
           "path": "site/src/styles/design-system.css",
-          "line": 712,
+          "line": 710,
           "has_fallback": false
         },
         {
           "token": "--ke-color-copy",
           "path": "site/src/styles/design-system.css",
-          "line": 917,
+          "line": 915,
           "has_fallback": false
         }
       ],
@@ -93528,7 +93528,7 @@
         {
           "token": "--ke-color-focus",
           "path": "site/src/styles/design-system.css",
-          "line": 1500,
+          "line": 1498,
           "has_fallback": false
         },
         {
@@ -93546,13 +93546,13 @@
         {
           "token": "--ke-color-focus",
           "path": "site/src/styles/design-system.css",
-          "line": 691,
+          "line": 689,
           "has_fallback": false
         },
         {
           "token": "--ke-color-focus",
           "path": "site/src/styles/design-system.css",
-          "line": 883,
+          "line": 881,
           "has_fallback": false
         }
       ],
@@ -97907,31 +97907,31 @@
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 1014,
+          "line": 1012,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 1014,
+          "line": 1012,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 1015,
+          "line": 1013,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 1273,
+          "line": 1271,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 1476,
+          "line": 1474,
           "has_fallback": false
         },
         {
@@ -97949,61 +97949,61 @@
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 294,
+          "line": 292,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 320,
+          "line": 318,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 355,
+          "line": 353,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 356,
+          "line": 354,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 494,
+          "line": 492,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 494,
+          "line": 492,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 970,
+          "line": 968,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 971,
+          "line": 969,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 978,
+          "line": 976,
           "has_fallback": false
         },
         {
           "token": "--ke-color-ink",
           "path": "site/src/styles/design-system.css",
-          "line": 978,
+          "line": 976,
           "has_fallback": false
         }
       ],
@@ -100393,43 +100393,43 @@
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1020,
+          "line": 1018,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1021,
+          "line": 1019,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1025,
+          "line": 1023,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1036,
+          "line": 1034,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1081,
+          "line": 1079,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1221,
+          "line": 1219,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1287,
+          "line": 1285,
           "has_fallback": false
         },
         {
@@ -100441,7 +100441,7 @@
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 1457,
+          "line": 1455,
           "has_fallback": false
         },
         {
@@ -100501,37 +100501,37 @@
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 302,
+          "line": 300,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 440,
+          "line": 438,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 528,
+          "line": 526,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 580,
+          "line": 578,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 761,
+          "line": 759,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/styles/design-system.css",
-          "line": 762,
+          "line": 760,
           "has_fallback": false
         }
       ],
@@ -103830,31 +103830,31 @@
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 1012,
+          "line": 1010,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 1016,
+          "line": 1014,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 1022,
+          "line": 1020,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 1039,
+          "line": 1037,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 1184,
+          "line": 1182,
           "has_fallback": false
         },
         {
@@ -103890,13 +103890,19 @@
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 296,
+          "line": 294,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 305,
+          "line": 303,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-muted",
+          "path": "site/src/styles/design-system.css",
+          "line": 317,
           "has_fallback": false
         },
         {
@@ -103908,31 +103914,31 @@
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 321,
+          "line": 332,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 334,
+          "line": 356,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 358,
+          "line": 362,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 364,
+          "line": 531,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 533,
+          "line": 540,
           "has_fallback": false
         },
         {
@@ -103944,79 +103950,73 @@
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 544,
+          "line": 616,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 618,
+          "line": 657,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 659,
+          "line": 683,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 685,
+          "line": 721,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 723,
+          "line": 724,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 726,
+          "line": 751,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 753,
+          "line": 754,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 756,
+          "line": 759,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 761,
+          "line": 760,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 762,
+          "line": 872,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 874,
+          "line": 878,
           "has_fallback": false
         },
         {
           "token": "--ke-color-muted",
           "path": "site/src/styles/design-system.css",
-          "line": 880,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-muted",
-          "path": "site/src/styles/design-system.css",
-          "line": 937,
+          "line": 935,
           "has_fallback": false
         }
       ],
@@ -110298,19 +110298,19 @@
         {
           "token": "--ke-color-surface-inverse",
           "path": "site/src/styles/design-system.css",
-          "line": 341,
+          "line": 339,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-inverse",
           "path": "site/src/styles/design-system.css",
-          "line": 366,
+          "line": 364,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-inverse",
           "path": "site/src/styles/design-system.css",
-          "line": 534,
+          "line": 532,
           "has_fallback": false
         }
       ],
@@ -111962,7 +111962,7 @@
         },
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 188,
+          "line": 189,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${medallion.background",
@@ -111971,7 +111971,7 @@
         },
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 188,
+          "line": 189,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${medallion.ring",
@@ -112007,7 +112007,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "scope": ".ke-listing-card__medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -112018,7 +112018,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "scope": ".ke-listing-card__medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -112029,7 +112029,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 473,
+          "line": 471,
           "scope": ".ke-listing-card__identity-medallion, .ke-listing-card__free-medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -112040,7 +112040,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 474,
+          "line": 472,
           "scope": ".ke-listing-card__identity-medallion, .ke-listing-card__free-medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -112932,7 +112932,7 @@
         {
           "token": "--ke-color-surface-strong",
           "path": "site/src/styles/design-system.css",
-          "line": 1025,
+          "line": 1023,
           "has_fallback": false
         },
         {
@@ -112986,43 +112986,43 @@
         {
           "token": "--venue-medallion-bg",
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "has_fallback": false
         },
         {
           "token": "--venue-medallion-ring",
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-strong",
           "path": "site/src/styles/design-system.css",
-          "line": 321,
+          "line": 319,
           "has_fallback": false
         },
         {
           "token": "--venue-medallion-ring",
           "path": "site/src/styles/design-system.css",
-          "line": 481,
+          "line": 479,
           "has_fallback": false
         },
         {
           "token": "--venue-medallion-bg",
           "path": "site/src/styles/design-system.css",
-          "line": 483,
+          "line": 481,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-strong",
           "path": "site/src/styles/design-system.css",
-          "line": 494,
+          "line": 492,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-strong",
           "path": "site/src/styles/design-system.css",
-          "line": 916,
+          "line": 914,
           "has_fallback": false
         }
       ],
@@ -120452,7 +120452,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1097,
+          "line": 1095,
           "scope": "@media (min-width: 1760px) > :root",
           "kind": "css",
           "value": "1720px",
@@ -120461,7 +120461,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 557,
+          "line": 555,
           "scope": ":root",
           "kind": "css",
           "value": "1600px",
@@ -120477,19 +120477,19 @@
         {
           "token": "--ke-content-listing-max",
           "path": "site/src/styles/design-system.css",
-          "line": 1149,
+          "line": 1147,
           "has_fallback": false
         },
         {
           "token": "--ke-content-listing-max",
           "path": "site/src/styles/design-system.css",
-          "line": 567,
+          "line": 565,
           "has_fallback": false
         },
         {
           "token": "--ke-content-listing-max",
           "path": "site/src/styles/design-system.css",
-          "line": 585,
+          "line": 583,
           "has_fallback": false
         }
       ],
@@ -120633,25 +120633,25 @@
         {
           "token": "--ke-content-wide-max",
           "path": "site/src/styles/design-system.css",
-          "line": 342,
+          "line": 340,
           "has_fallback": false
         },
         {
           "token": "--ke-content-wide-max",
           "path": "site/src/styles/design-system.css",
-          "line": 391,
+          "line": 389,
           "has_fallback": false
         },
         {
           "token": "--ke-content-wide-max",
           "path": "site/src/styles/design-system.css",
-          "line": 438,
+          "line": 436,
           "has_fallback": false
         },
         {
           "token": "--ke-content-wide-max",
           "path": "site/src/styles/design-system.css",
-          "line": 439,
+          "line": 437,
           "has_fallback": false
         }
       ],
@@ -121735,19 +121735,19 @@
         {
           "token": "--ke-ease-standard",
           "path": "site/src/styles/design-system.css",
-          "line": 1259,
+          "line": 1257,
           "has_fallback": false
         },
         {
           "token": "--ke-ease-standard",
           "path": "site/src/styles/design-system.css",
-          "line": 1259,
+          "line": 1257,
           "has_fallback": false
         },
         {
           "token": "--ke-ease-standard",
           "path": "site/src/styles/design-system.css",
-          "line": 1259,
+          "line": 1257,
           "has_fallback": false
         }
       ],
@@ -137002,19 +137002,19 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1264,
+          "line": 1262,
           "has_fallback": false
         },
         {
@@ -137965,7 +137965,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
@@ -137977,13 +137977,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1264,
+          "line": 1262,
           "has_fallback": false
         },
         {
@@ -138133,19 +138133,19 @@
         {
           "token": "--ke-font-size-100",
           "path": "site/src/styles/design-system.css",
-          "line": 290,
+          "line": 288,
           "has_fallback": false
         },
         {
           "token": "--ke-font-size-100",
           "path": "site/src/styles/design-system.css",
-          "line": 308,
+          "line": 306,
           "has_fallback": false
         },
         {
           "token": "--ke-font-size-100",
           "path": "site/src/styles/design-system.css",
-          "line": 364,
+          "line": 362,
           "has_fallback": false
         }
       ],
@@ -138667,13 +138667,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1264,
+          "line": 1262,
           "has_fallback": false
         }
       ],
@@ -138906,7 +138906,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -142593,13 +142593,13 @@
         {
           "token": "--ke-icon-size-action",
           "path": "site/src/styles/design-system.css",
-          "line": 490,
+          "line": 488,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-action",
           "path": "site/src/styles/design-system.css",
-          "line": 490,
+          "line": 488,
           "has_fallback": false
         }
       ],
@@ -143155,19 +143155,19 @@
         {
           "token": "--ke-icon-size-control",
           "path": "site/src/styles/design-system.css",
-          "line": 494,
+          "line": 492,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-control",
           "path": "site/src/styles/design-system.css",
-          "line": 497,
+          "line": 495,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-control",
           "path": "site/src/styles/design-system.css",
-          "line": 497,
+          "line": 495,
           "has_fallback": false
         }
       ],
@@ -143780,61 +143780,61 @@
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 1437,
+          "line": 1435,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 1442,
+          "line": 1440,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 1443,
+          "line": 1441,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 1504,
+          "line": 1502,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 1505,
+          "line": 1503,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 447,
+          "line": 445,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 447,
+          "line": 445,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 887,
+          "line": 885,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 892,
+          "line": 890,
           "has_fallback": false
         },
         {
           "token": "--ke-icon-size-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 892,
+          "line": 890,
           "has_fallback": false
         }
       ],
@@ -144376,7 +144376,7 @@
         {
           "token": "--ke-listing-card-gap-block",
           "path": "site/src/styles/design-system.css",
-          "line": 370,
+          "line": 368,
           "has_fallback": false
         }
       ],
@@ -144408,13 +144408,13 @@
         {
           "token": "--ke-listing-card-gap-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 370,
+          "line": 368,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-card-gap-inline",
           "path": "site/src/styles/design-system.css",
-          "line": 537,
+          "line": 535,
           "has_fallback": false
         }
       ],
@@ -144426,7 +144426,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 426,
+          "line": 424,
           "scope": ":root",
           "kind": "css",
           "value": "56px",
@@ -144435,7 +144435,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 427,
+          "line": 425,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-city-rail-height) + var(--ke-listing-time-nav-height))",
@@ -144448,7 +144448,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 547,
+          "line": 545,
           "scope": "@media (max-width: 980px) > :root",
           "kind": "css",
           "value": "52px",
@@ -144457,7 +144457,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 562,
+          "line": 560,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-discovery-height))",
@@ -144488,19 +144488,19 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1001,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 359,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 361,
+          "line": 376,
           "has_fallback": false
         },
         {
@@ -144510,19 +144510,19 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-listing-city-rail-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 432,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-city-rail-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 448,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-listing-sticky-stack-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 380,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-city-rail-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 434,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-city-rail-height",
           "path": "site/src/styles/design-system.css",
           "line": 450,
           "has_fallback": false
@@ -144536,37 +144536,37 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 454,
+          "line": 504,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 506,
+          "line": 729,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 731,
+          "line": 734,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 736,
+          "line": 951,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 953,
+          "line": 994,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 996,
+          "line": 999,
           "has_fallback": false
         }
       ],
@@ -144578,7 +144578,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 312,
+          "line": 310,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "20px",
@@ -144587,7 +144587,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 387,
+          "line": 385,
           "scope": "@media (max-width: 980px) > .ke-weekend-board",
           "kind": "css",
           "value": "12px",
@@ -144596,7 +144596,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 504,
+          "line": 502,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-column-gap)",
@@ -144616,7 +144616,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 950,
+          "line": 948,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-column-gap)",
@@ -144640,19 +144640,25 @@
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 308,
+          "line": 306,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 314,
+          "line": 312,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 324,
+          "line": 322,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-weekend-column-gap",
+          "path": "site/src/styles/design-system.css",
+          "line": 323,
           "has_fallback": false
         },
         {
@@ -144662,15 +144668,21 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-weekend-column-gap",
+          "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 327,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-column-gap",
+          "path": "site/src/styles/design-system.css",
+          "line": 374,
           "has_fallback": false
         },
         {
@@ -144682,49 +144694,37 @@
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 376,
+          "line": 508,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 378,
+          "line": 521,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 510,
+          "line": 956,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 523,
+          "line": 987,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 958,
+          "line": 991,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 989,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-column-gap",
-          "path": "site/src/styles/design-system.css",
-          "line": 993,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-column-gap",
-          "path": "site/src/styles/design-system.css",
-          "line": 998,
+          "line": 996,
           "has_fallback": false
         }
       ],
@@ -144736,7 +144736,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1110,
+          "line": 1108,
           "scope": "@media (max-width: 980px) > :root",
           "kind": "css",
           "value": "96px",
@@ -144745,7 +144745,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1147,
+          "line": 1145,
           "scope": "@media (max-width: 720px) > .ke-popular-listing",
           "kind": "css",
           "value": "48px",
@@ -144754,7 +144754,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 427,
+          "line": 425,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-city-rail-height) + var(--ke-listing-time-nav-height))",
@@ -144767,7 +144767,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 560,
+          "line": 558,
           "scope": ":root",
           "kind": "css",
           "value": "52px",
@@ -144776,7 +144776,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 562,
+          "line": 560,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-discovery-height))",
@@ -144807,19 +144807,19 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1001,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 359,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 361,
+          "line": 376,
           "has_fallback": false
         },
         {
@@ -144831,7 +144831,7 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 380,
+          "line": 450,
           "has_fallback": false
         },
         {
@@ -144843,43 +144843,43 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 454,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-sticky-stack-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 506,
+          "line": 504,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-discovery-height",
           "path": "site/src/styles/design-system.css",
-          "line": 578,
+          "line": 576,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 731,
+          "line": 729,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 736,
+          "line": 734,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 953,
+          "line": 951,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 996,
+          "line": 994,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-sticky-stack-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 999,
           "has_fallback": false
         }
       ],
@@ -144891,7 +144891,7 @@
       "definitions": [
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 178,
+          "line": 179,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${mediaFrameRatio",
@@ -144905,31 +144905,25 @@
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 1052,
+          "line": 1050,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 1053,
+          "line": 1051,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 1355,
+          "line": 1353,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 1356,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-image-ratio",
-          "path": "site/src/styles/design-system.css",
-          "line": 282,
+          "line": 1354,
           "has_fallback": false
         },
         {
@@ -144941,31 +144935,37 @@
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 457,
+          "line": 282,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 458,
+          "line": 455,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 469,
+          "line": 456,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 769,
+          "line": 467,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-image-ratio",
           "path": "site/src/styles/design-system.css",
-          "line": 770,
+          "line": 767,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-image-ratio",
+          "path": "site/src/styles/design-system.css",
+          "line": 768,
           "has_fallback": false
         }
       ],
@@ -144977,7 +144977,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1002,
+          "line": 1000,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "var(--ke-weekend-media-height)",
@@ -144988,7 +144988,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1041,
+          "line": 1039,
           "scope": ".ke-popular-behavior__row",
           "kind": "css",
           "value": "180px",
@@ -144997,7 +144997,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1097,
+          "line": 1095,
           "scope": "@media (min-width: 1760px) > :root",
           "kind": "css",
           "value": "232px",
@@ -145006,7 +145006,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1099,
+          "line": 1097,
           "scope": "@media (min-width: 1760px) > .ke-popular-behavior__row",
           "kind": "css",
           "value": "190px",
@@ -145015,7 +145015,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1340,
+          "line": 1338,
           "scope": "@media (max-width: 720px) > .ke-popular-listing [data-popular-representation=\"mobile-adaptive\"] .ke-popular-behavior__row",
           "kind": "css",
           "value": "clamp(118px, 33.7vw, 145px)",
@@ -145024,7 +145024,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 335,
+          "line": 333,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "clamp(148px, 8.7vw, 176px)",
@@ -145033,7 +145033,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 381,
+          "line": 379,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "clamp(178px,min(9.5vw,21svh),198px)",
@@ -145042,7 +145042,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 525,
+          "line": 523,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "clamp(178px, min(9.5vw, 21svh), 198px)",
@@ -145051,7 +145051,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 537,
+          "line": 535,
           "scope": ".ke-popular-flow",
           "kind": "css",
           "value": "clamp(196px, 11vw, 216px)",
@@ -145060,7 +145060,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 558,
+          "line": 556,
           "scope": ":root",
           "kind": "css",
           "value": "221px",
@@ -145085,31 +145085,43 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
+          "line": 1002,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 1003,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
           "line": 1004,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1005,
+          "line": 1050,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1006,
+          "line": 1051,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1052,
+          "line": 1054,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1053,
+          "line": 1055,
           "has_fallback": false
         },
         {
@@ -145121,25 +145133,25 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1057,
+          "line": 1353,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1058,
+          "line": 1354,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1355,
+          "line": 1366,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1356,
+          "line": 1367,
           "has_fallback": false
         },
         {
@@ -145151,25 +145163,13 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1369,
+          "line": 1373,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1370,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 1375,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 1401,
+          "line": 1399,
           "has_fallback": false
         },
         {
@@ -145205,55 +145205,67 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 420,
+          "line": 418,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 421,
+          "line": 419,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 457,
+          "line": 455,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 458,
+          "line": 456,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 461,
+          "line": 459,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 466,
+          "line": 464,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 469,
+          "line": 467,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 769,
+          "line": 767,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 770,
+          "line": 768,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 773,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 774,
           "has_fallback": false
         },
         {
@@ -145265,55 +145277,43 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 776,
+          "line": 778,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 777,
+          "line": 785,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 780,
+          "line": 802,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 787,
+          "line": 927,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 804,
+          "line": 930,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 929,
+          "line": 931,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
           "line": 932,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 933,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 934,
           "has_fallback": false
         }
       ],
@@ -145325,7 +145325,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1351,
+          "line": 1349,
           "scope": "@media (max-width: 720px) > .ke-popular-listing [data-popular-representation=\"mobile-adaptive\"] .ke-listing-card",
           "kind": "css",
           "value": "0px",
@@ -145334,7 +145334,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1362,
+          "line": 1360,
           "scope": "@media (max-width: 720px) > .ke-popular-listing [data-popular-representation=\"mobile-adaptive\"] .ke-listing-card[data-listing-proof-placement=\"rail\"][data-listing-side-identity-count=\"0\"]",
           "kind": "css",
           "value": "28px",
@@ -145343,7 +145343,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1365,
+          "line": 1363,
           "scope": "@media (max-width: 720px) > .ke-popular-listing [data-popular-representation=\"mobile-adaptive\"] .ke-listing-card:not([data-listing-side-identity-count=\"0\"])",
           "kind": "css",
           "value": "44px",
@@ -145357,13 +145357,25 @@
         {
           "token": "--ke-listing-mobile-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1355,
+          "line": 1353,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-mobile-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1356,
+          "line": 1354,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-mobile-tail-width",
+          "path": "site/src/styles/design-system.css",
+          "line": 1366,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-mobile-tail-width",
+          "path": "site/src/styles/design-system.css",
+          "line": 1367,
           "has_fallback": false
         },
         {
@@ -145375,31 +145387,19 @@
         {
           "token": "--ke-listing-mobile-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1369,
+          "line": 1397,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-mobile-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1370,
+          "line": 1398,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-mobile-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1399,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-mobile-tail-width",
-          "path": "site/src/styles/design-system.css",
-          "line": 1400,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-mobile-tail-width",
-          "path": "site/src/styles/design-system.css",
-          "line": 1405,
+          "line": 1403,
           "has_fallback": false
         }
       ],
@@ -145411,7 +145411,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 563,
+          "line": 561,
           "scope": ":root",
           "kind": "css",
           "value": "220ms cubic-bezier(.2,.8,.2,1)",
@@ -145425,49 +145425,49 @@
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 1087,
+          "line": 1085,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 1087,
+          "line": 1085,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 609,
+          "line": 607,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 664,
+          "line": 662,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 676,
+          "line": 674,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 832,
+          "line": 830,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 832,
+          "line": 830,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-motion",
           "path": "site/src/styles/design-system.css",
-          "line": 877,
+          "line": 875,
           "has_fallback": false
         }
       ],
@@ -145479,7 +145479,7 @@
       "definitions": [
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 179,
+          "line": 180,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${mediaFrameObjectPosition",
@@ -145519,13 +145519,13 @@
         {
           "token": "--ke-listing-row-tail",
           "path": "site/src/styles/design-system.css",
-          "line": 292,
+          "line": 290,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-row-tail",
           "path": "site/src/styles/design-system.css",
-          "line": 794,
+          "line": 792,
           "has_fallback": true
         }
       ],
@@ -145551,13 +145551,13 @@
         {
           "token": "--ke-listing-singleton-envelope",
           "path": "site/src/styles/design-system.css",
-          "line": 796,
+          "line": 794,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-singleton-envelope",
           "path": "site/src/styles/design-system.css",
-          "line": 796,
+          "line": 794,
           "has_fallback": false
         }
       ],
@@ -145583,7 +145583,7 @@
         {
           "token": "--ke-listing-singleton-visual",
           "path": "site/src/styles/design-system.css",
-          "line": 797,
+          "line": 795,
           "has_fallback": false
         }
       ],
@@ -145595,7 +145595,7 @@
       "definitions": [
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 184,
+          "line": 185,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${image.asset.height",
@@ -145614,7 +145614,7 @@
       "definitions": [
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 183,
+          "line": 184,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${image.asset.width",
@@ -145633,7 +145633,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 427,
+          "line": 425,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-city-rail-height) + var(--ke-listing-time-nav-height))",
@@ -145646,7 +145646,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 562,
+          "line": 560,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-discovery-height))",
@@ -145680,19 +145680,19 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1001,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 359,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 361,
+          "line": 376,
           "has_fallback": false
         },
         {
@@ -145704,7 +145704,7 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 380,
+          "line": 450,
           "has_fallback": false
         },
         {
@@ -145716,37 +145716,37 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 454,
+          "line": 504,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 506,
+          "line": 729,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 731,
+          "line": 734,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 736,
+          "line": 951,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 953,
+          "line": 994,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 996,
+          "line": 999,
           "has_fallback": false
         }
       ],
@@ -145758,7 +145758,7 @@
       "definitions": [
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 180,
+          "line": 181,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${tailWidth",
@@ -145772,31 +145772,43 @@
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
+          "line": 1002,
+          "has_fallback": true
+        },
+        {
+          "token": "--ke-listing-tail-width",
+          "path": "site/src/styles/design-system.css",
+          "line": 1003,
+          "has_fallback": true
+        },
+        {
+          "token": "--ke-listing-tail-width",
+          "path": "site/src/styles/design-system.css",
           "line": 1004,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1005,
+          "line": 1050,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1006,
+          "line": 1051,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1052,
+          "line": 1054,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1053,
+          "line": 1055,
           "has_fallback": true
         },
         {
@@ -145808,49 +145820,49 @@
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1057,
+          "line": 455,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 1058,
+          "line": 456,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 457,
+          "line": 459,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 458,
+          "line": 464,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 461,
+          "line": 767,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 466,
+          "line": 768,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 769,
+          "line": 773,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 770,
+          "line": 774,
           "has_fallback": true
         },
         {
@@ -145862,37 +145874,25 @@
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 776,
+          "line": 778,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 777,
+          "line": 800,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 780,
+          "line": 801,
           "has_fallback": true
         },
         {
           "token": "--ke-listing-tail-width",
           "path": "site/src/styles/design-system.css",
-          "line": 802,
-          "has_fallback": true
-        },
-        {
-          "token": "--ke-listing-tail-width",
-          "path": "site/src/styles/design-system.css",
-          "line": 803,
-          "has_fallback": true
-        },
-        {
-          "token": "--ke-listing-tail-width",
-          "path": "site/src/styles/design-system.css",
-          "line": 899,
+          "line": 897,
           "has_fallback": true
         }
       ],
@@ -145904,7 +145904,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 312,
+          "line": 310,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "clamp(104px, 8vw, 120px)",
@@ -145913,7 +145913,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 387,
+          "line": 385,
           "scope": "@media (max-width: 980px) > .ke-weekend-board",
           "kind": "css",
           "value": "88px",
@@ -145922,7 +145922,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 504,
+          "line": 502,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-time-gutter)",
@@ -145942,7 +145942,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 950,
+          "line": 948,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-time-gutter)",
@@ -145966,19 +145966,25 @@
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 308,
+          "line": 306,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-time-column",
           "path": "site/src/styles/design-system.css",
-          "line": 314,
+          "line": 312,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-time-column",
           "path": "site/src/styles/design-system.css",
-          "line": 324,
+          "line": 322,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-weekend-time-column",
+          "path": "site/src/styles/design-system.css",
+          "line": 323,
           "has_fallback": false
         },
         {
@@ -145988,15 +145994,33 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-weekend-time-column",
+          "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 327,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-time-gutter",
+          "path": "site/src/styles/design-system.css",
+          "line": 374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-time-gutter",
+          "path": "site/src/styles/design-system.css",
+          "line": 374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-time-gutter",
+          "path": "site/src/styles/design-system.css",
+          "line": 374,
           "has_fallback": false
         },
         {
@@ -146008,61 +146032,37 @@
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 376,
+          "line": 507,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 376,
+          "line": 521,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 376,
+          "line": 955,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 378,
+          "line": 987,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 509,
+          "line": 991,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-time-gutter",
           "path": "site/src/styles/design-system.css",
-          "line": 523,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-time-gutter",
-          "path": "site/src/styles/design-system.css",
-          "line": 957,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-time-gutter",
-          "path": "site/src/styles/design-system.css",
-          "line": 989,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-time-gutter",
-          "path": "site/src/styles/design-system.css",
-          "line": 993,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-time-gutter",
-          "path": "site/src/styles/design-system.css",
-          "line": 997,
+          "line": 995,
           "has_fallback": false
         }
       ],
@@ -146074,7 +146074,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 427,
+          "line": 425,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-city-rail-height) + var(--ke-listing-time-nav-height))",
@@ -146087,7 +146087,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 562,
+          "line": 560,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-discovery-height))",
@@ -146125,12 +146125,6 @@
       ],
       "direct_consumers": [
         {
-          "token": "--ke-listing-sticky-stack-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 1001,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-listing-time-nav-height",
           "path": "site/src/styles/design-system.css",
           "line": 276,
@@ -146139,25 +146133,31 @@
         {
           "token": "--ke-listing-time-nav-height",
           "path": "site/src/styles/design-system.css",
-          "line": 314,
+          "line": 312,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-time-nav-height",
           "path": "site/src/styles/design-system.css",
-          "line": 341,
+          "line": 339,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 361,
+          "line": 359,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-sticky-stack-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 376,
           "has_fallback": false
         },
         {
@@ -146169,7 +146169,7 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 380,
+          "line": 450,
           "has_fallback": false
         },
         {
@@ -146181,37 +146181,37 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 454,
+          "line": 504,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 506,
+          "line": 729,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 731,
+          "line": 734,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 736,
+          "line": 951,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 953,
+          "line": 994,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 996,
+          "line": 999,
           "has_fallback": false
         }
       ],
@@ -157471,7 +157471,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1148,
+          "line": 1146,
           "scope": "@media (max-width: 720px) > .ke-popular-listing",
           "kind": "css",
           "value": "max(8px, env(safe-area-inset-top))",
@@ -157485,7 +157485,7 @@
         {
           "token": "--ke-popular-group-sticky-top",
           "path": "site/src/styles/design-system.css",
-          "line": 1229,
+          "line": 1227,
           "has_fallback": false
         }
       ],
@@ -158976,31 +158976,31 @@
         {
           "token": "--ke-radius-pill",
           "path": "site/src/styles/design-system.css",
-          "line": 321,
+          "line": 319,
           "has_fallback": false
         },
         {
           "token": "--ke-radius-pill",
           "path": "site/src/styles/design-system.css",
-          "line": 346,
+          "line": 344,
           "has_fallback": false
         },
         {
           "token": "--ke-radius-pill",
           "path": "site/src/styles/design-system.css",
-          "line": 366,
+          "line": 364,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-radius-pill",
+          "path": "site/src/styles/design-system.css",
+          "line": 532,
           "has_fallback": false
         },
         {
           "token": "--ke-radius-pill",
           "path": "site/src/styles/design-system.css",
           "line": 534,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-radius-pill",
-          "path": "site/src/styles/design-system.css",
-          "line": 536,
           "has_fallback": false
         }
       ],
@@ -159057,7 +159057,7 @@
         {
           "token": "--ke-radius-sm",
           "path": "site/src/styles/design-system.css",
-          "line": 406,
+          "line": 404,
           "has_fallback": false
         }
       ],
@@ -160595,13 +160595,13 @@
         {
           "token": "--ke-shadow-1",
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "has_fallback": false
         },
         {
           "token": "--ke-shadow-1",
           "path": "site/src/styles/design-system.css",
-          "line": 484,
+          "line": 482,
           "has_fallback": false
         }
       ],
@@ -160904,7 +160904,7 @@
         {
           "token": "--ke-shadow-3",
           "path": "site/src/styles/design-system.css",
-          "line": 534,
+          "line": 532,
           "has_fallback": false
         }
       ],
@@ -163118,7 +163118,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 427,
+          "line": 425,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-city-rail-height) + var(--ke-listing-time-nav-height))",
@@ -163131,7 +163131,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 562,
+          "line": 560,
           "scope": ":root",
           "kind": "css",
           "value": "calc(var(--ke-site-header-bar-height) + var(--ke-listing-discovery-height))",
@@ -163231,12 +163231,6 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-listing-sticky-stack-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 1001,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-site-header-height",
           "path": "site/src/styles/design-system.css",
           "line": 248,
@@ -163251,19 +163245,25 @@
         {
           "token": "--ke-site-header-bar-height",
           "path": "site/src/styles/design-system.css",
-          "line": 341,
+          "line": 339,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 361,
+          "line": 359,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-sticky-stack-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 376,
           "has_fallback": false
         },
         {
@@ -163273,19 +163273,19 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-site-header-bar-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 429,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-site-header-bar-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 448,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-listing-sticky-stack-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 380,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-site-header-bar-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 431,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-site-header-bar-height",
           "path": "site/src/styles/design-system.css",
           "line": 450,
           "has_fallback": false
@@ -163299,43 +163299,43 @@
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 454,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-sticky-stack-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 506,
+          "line": 504,
           "has_fallback": false
         },
         {
           "token": "--ke-site-header-bar-height",
           "path": "site/src/styles/design-system.css",
-          "line": 575,
+          "line": 573,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 731,
+          "line": 729,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 736,
+          "line": 734,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 953,
+          "line": 951,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-sticky-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 996,
+          "line": 994,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-sticky-stack-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 999,
           "has_fallback": false
         }
       ],
@@ -163387,7 +163387,7 @@
         {
           "token": "--ke-site-header-stack-height",
           "path": "site/src/styles/design-system.css",
-          "line": 314,
+          "line": 312,
           "has_fallback": false
         }
       ],
@@ -164510,19 +164510,19 @@
         {
           "token": "--ke-space-1",
           "path": "site/src/styles/design-system.css",
-          "line": 291,
+          "line": 289,
           "has_fallback": false
         },
         {
           "token": "--ke-space-1",
           "path": "site/src/styles/design-system.css",
-          "line": 343,
+          "line": 341,
           "has_fallback": false
         },
         {
           "token": "--ke-space-1",
           "path": "site/src/styles/design-system.css",
-          "line": 402,
+          "line": 400,
           "has_fallback": false
         }
       ],
@@ -164561,7 +164561,7 @@
         {
           "token": "--ke-space-10",
           "path": "site/src/styles/design-system.css",
-          "line": 392,
+          "line": 390,
           "has_fallback": false
         }
       ],
@@ -164612,7 +164612,7 @@
         {
           "token": "--ke-space-12",
           "path": "site/src/styles/design-system.css",
-          "line": 385,
+          "line": 383,
           "has_fallback": false
         }
       ],
@@ -164864,49 +164864,49 @@
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 291,
+          "line": 289,
           "has_fallback": false
         },
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "has_fallback": false
         },
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "has_fallback": false
         },
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 334,
+          "line": 332,
           "has_fallback": false
         },
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 340,
+          "line": 338,
           "has_fallback": false
         },
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 359,
+          "line": 357,
           "has_fallback": false
         },
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 364,
+          "line": 362,
           "has_fallback": false
         },
         {
           "token": "--ke-space-2",
           "path": "site/src/styles/design-system.css",
-          "line": 394,
+          "line": 392,
           "has_fallback": false
         }
       ],
@@ -165107,31 +165107,37 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/styles/design-system.css",
-          "line": 303,
+          "line": 301,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/styles/design-system.css",
-          "line": 316,
+          "line": 314,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/styles/design-system.css",
-          "line": 340,
+          "line": 338,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/styles/design-system.css",
-          "line": 360,
+          "line": 358,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/styles/design-system.css",
-          "line": 378,
+          "line": 376,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
+          "path": "site/src/styles/design-system.css",
+          "line": 396,
           "has_fallback": false
         },
         {
@@ -165143,19 +165149,13 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/styles/design-system.css",
-          "line": 400,
+          "line": 401,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/styles/design-system.css",
-          "line": 403,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-space-3",
-          "path": "site/src/styles/design-system.css",
-          "line": 452,
+          "line": 450,
           "has_fallback": false
         }
       ],
@@ -166491,13 +166491,13 @@
         {
           "token": "--ke-space-4",
           "path": "site/src/styles/design-system.css",
-          "line": 290,
+          "line": 288,
           "has_fallback": false
         },
         {
           "token": "--ke-space-4",
           "path": "site/src/styles/design-system.css",
-          "line": 342,
+          "line": 340,
           "has_fallback": false
         }
       ],
@@ -166607,13 +166607,13 @@
         {
           "token": "--ke-space-5",
           "path": "site/src/styles/design-system.css",
-          "line": 302,
+          "line": 300,
           "has_fallback": false
         },
         {
           "token": "--ke-space-5",
           "path": "site/src/styles/design-system.css",
-          "line": 312,
+          "line": 310,
           "has_fallback": false
         }
       ],
@@ -166712,13 +166712,13 @@
         {
           "token": "--ke-space-6",
           "path": "site/src/styles/design-system.css",
-          "line": 339,
+          "line": 337,
           "has_fallback": false
         },
         {
           "token": "--ke-space-6",
           "path": "site/src/styles/design-system.css",
-          "line": 569,
+          "line": 567,
           "has_fallback": false
         }
       ],
@@ -166829,13 +166829,13 @@
         {
           "token": "--ke-space-8",
           "path": "site/src/styles/design-system.css",
-          "line": 339,
+          "line": 337,
           "has_fallback": false
         },
         {
           "token": "--ke-space-8",
           "path": "site/src/styles/design-system.css",
-          "line": 569,
+          "line": 567,
           "has_fallback": false
         }
       ],
@@ -169930,7 +169930,7 @@
         {
           "token": "--ke-type-card-title-weight",
           "path": "site/src/styles/design-system.css",
-          "line": 294,
+          "line": 292,
           "has_fallback": true
         }
       ],
@@ -171298,7 +171298,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -171811,7 +171811,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -172083,7 +172083,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -172320,7 +172320,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -172718,7 +172718,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -172950,7 +172950,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -173146,7 +173146,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/styles/design-system.css",
-          "line": 1159,
+          "line": 1157,
           "has_fallback": false
         },
         {
@@ -173236,13 +173236,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1264,
+          "line": 1262,
           "has_fallback": false
         }
       ],
@@ -173316,13 +173316,13 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/styles/design-system.css",
-          "line": 1265,
+          "line": 1263,
           "has_fallback": false
         }
       ],
@@ -173412,13 +173412,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1264,
+          "line": 1262,
           "has_fallback": false
         }
       ],
@@ -173530,13 +173530,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1264,
+          "line": 1262,
           "has_fallback": false
         }
       ],
@@ -173656,13 +173656,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1038,
+          "line": 1036,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/styles/design-system.css",
-          "line": 1264,
+          "line": 1262,
           "has_fallback": false
         }
       ],
@@ -175287,7 +175287,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 312,
+          "line": 310,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "20px",
@@ -175296,7 +175296,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 387,
+          "line": 385,
           "scope": "@media (max-width: 980px) > .ke-weekend-board",
           "kind": "css",
           "value": "12px",
@@ -175305,7 +175305,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 504,
+          "line": 502,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-column-gap)",
@@ -175316,7 +175316,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 950,
+          "line": 948,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-column-gap)",
@@ -175334,25 +175334,25 @@
         {
           "token": "--ke-weekend-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 314,
+          "line": 312,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-column-gap",
           "path": "site/src/styles/design-system.css",
-          "line": 324,
+          "line": 322,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-weekend-column-gap",
+          "path": "site/src/styles/design-system.css",
+          "line": 323,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-column-gap",
           "path": "site/src/styles/design-system.css",
           "line": 325,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-weekend-column-gap",
-          "path": "site/src/styles/design-system.css",
-          "line": 327,
           "has_fallback": false
         }
       ],
@@ -175364,7 +175364,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 317,
+          "line": 315,
           "scope": ".ke-weekend-day__head--sat",
           "kind": "css",
           "value": "#fff3e6",
@@ -175373,7 +175373,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 318,
+          "line": 316,
           "scope": ".ke-weekend-day__head--sun",
           "kind": "css",
           "value": "#f3f5ee",
@@ -175387,7 +175387,7 @@
         {
           "token": "--ke-weekend-day-bg",
           "path": "site/src/styles/design-system.css",
-          "line": 316,
+          "line": 314,
           "has_fallback": false
         }
       ],
@@ -175399,7 +175399,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 561,
+          "line": 559,
           "scope": ":root",
           "kind": "css",
           "value": "61px",
@@ -175413,25 +175413,25 @@
         {
           "token": "--ke-weekend-heads-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1001,
+          "line": 953,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-heads-height",
           "path": "site/src/styles/design-system.css",
-          "line": 955,
+          "line": 954,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-heads-height",
           "path": "site/src/styles/design-system.css",
-          "line": 956,
+          "line": 994,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-heads-height",
           "path": "site/src/styles/design-system.css",
-          "line": 996,
+          "line": 999,
           "has_fallback": false
         }
       ],
@@ -175443,7 +175443,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1002,
+          "line": 1000,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "var(--ke-weekend-media-height)",
@@ -175454,7 +175454,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1041,
+          "line": 1039,
           "scope": ".ke-popular-behavior__row",
           "kind": "css",
           "value": "180px",
@@ -175463,7 +175463,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1097,
+          "line": 1095,
           "scope": "@media (min-width: 1760px) > :root",
           "kind": "css",
           "value": "188px",
@@ -175472,7 +175472,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1097,
+          "line": 1095,
           "scope": "@media (min-width: 1760px) > :root",
           "kind": "css",
           "value": "232px",
@@ -175481,7 +175481,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1099,
+          "line": 1097,
           "scope": "@media (min-width: 1760px) > .ke-popular-behavior__row",
           "kind": "css",
           "value": "190px",
@@ -175490,7 +175490,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1340,
+          "line": 1338,
           "scope": "@media (max-width: 720px) > .ke-popular-listing [data-popular-representation=\"mobile-adaptive\"] .ke-popular-behavior__row",
           "kind": "css",
           "value": "clamp(118px, 33.7vw, 145px)",
@@ -175499,7 +175499,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 335,
+          "line": 333,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "clamp(148px, 8.7vw, 176px)",
@@ -175508,7 +175508,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 381,
+          "line": 379,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "clamp(178px,min(9.5vw,21svh),198px)",
@@ -175517,7 +175517,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 525,
+          "line": 523,
           "scope": ".ke-weekend-time-cell .ke-time-group__flow",
           "kind": "css",
           "value": "clamp(178px, min(9.5vw, 21svh), 198px)",
@@ -175526,7 +175526,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 537,
+          "line": 535,
           "scope": ".ke-popular-flow",
           "kind": "css",
           "value": "clamp(196px, 11vw, 216px)",
@@ -175535,7 +175535,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 558,
+          "line": 556,
           "scope": ":root",
           "kind": "css",
           "value": "221px",
@@ -175544,7 +175544,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 559,
+          "line": 557,
           "scope": ":root",
           "kind": "css",
           "value": "178px",
@@ -175569,31 +175569,43 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
+          "line": 1002,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 1003,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
           "line": 1004,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1005,
+          "line": 1050,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1006,
+          "line": 1051,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1052,
+          "line": 1054,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1053,
+          "line": 1055,
           "has_fallback": false
         },
         {
@@ -175605,25 +175617,25 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1057,
+          "line": 1353,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1058,
+          "line": 1354,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1355,
+          "line": 1366,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1356,
+          "line": 1367,
           "has_fallback": false
         },
         {
@@ -175635,25 +175647,13 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1369,
+          "line": 1373,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 1370,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 1375,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 1401,
+          "line": 1399,
           "has_fallback": false
         },
         {
@@ -175689,55 +175689,67 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 420,
+          "line": 418,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 421,
+          "line": 419,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 457,
+          "line": 455,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 458,
+          "line": 456,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 461,
+          "line": 459,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 466,
+          "line": 464,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 469,
+          "line": 467,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 769,
+          "line": 767,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 770,
+          "line": 768,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 773,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-listing-media-height",
+          "path": "site/src/styles/design-system.css",
+          "line": 774,
           "has_fallback": false
         },
         {
@@ -175749,55 +175761,43 @@
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 776,
+          "line": 778,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 777,
+          "line": 785,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 780,
+          "line": 802,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 787,
+          "line": 927,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 804,
+          "line": 930,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
-          "line": 929,
+          "line": 931,
           "has_fallback": false
         },
         {
           "token": "--ke-listing-media-height",
           "path": "site/src/styles/design-system.css",
           "line": 932,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 933,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-listing-media-height",
-          "path": "site/src/styles/design-system.css",
-          "line": 934,
           "has_fallback": false
         }
       ],
@@ -175809,7 +175809,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 312,
+          "line": 310,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "clamp(104px, 8vw, 120px)",
@@ -175818,7 +175818,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 387,
+          "line": 385,
           "scope": "@media (max-width: 980px) > .ke-weekend-board",
           "kind": "css",
           "value": "88px",
@@ -175827,7 +175827,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 504,
+          "line": 502,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-time-gutter)",
@@ -175838,7 +175838,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 950,
+          "line": 948,
           "scope": ".ke-weekend-board",
           "kind": "css",
           "value": "var(--ke-listing-time-gutter)",
@@ -175856,25 +175856,25 @@
         {
           "token": "--ke-weekend-time-column",
           "path": "site/src/styles/design-system.css",
-          "line": 314,
+          "line": 312,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-time-column",
           "path": "site/src/styles/design-system.css",
-          "line": 324,
+          "line": 322,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-weekend-time-column",
+          "path": "site/src/styles/design-system.css",
+          "line": 323,
           "has_fallback": false
         },
         {
           "token": "--ke-weekend-time-column",
           "path": "site/src/styles/design-system.css",
           "line": 325,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-weekend-time-column",
-          "path": "site/src/styles/design-system.css",
-          "line": 327,
           "has_fallback": false
         }
       ],
@@ -175953,7 +175953,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1510,
+          "line": 1508,
           "scope": "@media (max-width: 720px)",
           "kind": "css",
           "value": ":before {",
@@ -176615,7 +176615,7 @@
         },
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 182,
+          "line": 183,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${mediaFrameObjectPosition",
@@ -176624,7 +176624,7 @@
         },
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 371,
+          "line": 373,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -176797,7 +176797,7 @@
         },
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 181,
+          "line": 182,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${mediaFrameRatio",
@@ -176973,7 +176973,7 @@
       "definitions": [
         {
           "path": "site/src/styles/design-system.css",
-          "line": 1145,
+          "line": 1143,
           "scope": "@media (max-width: 720px)",
           "kind": "css",
           "value": "not([hidden]) { display: grid",
@@ -181606,7 +181606,7 @@
       "definitions": [
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 188,
+          "line": 189,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${medallion.background",
@@ -181615,7 +181615,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "scope": ".ke-listing-card__medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -181626,7 +181626,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 473,
+          "line": 471,
           "scope": ".ke-listing-card__identity-medallion, .ke-listing-card__free-medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -181644,13 +181644,13 @@
         {
           "token": "--venue-medallion-bg",
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "has_fallback": false
         },
         {
           "token": "--venue-medallion-bg",
           "path": "site/src/styles/design-system.css",
-          "line": 483,
+          "line": 481,
           "has_fallback": false
         }
       ],
@@ -181662,7 +181662,7 @@
       "definitions": [
         {
           "path": "site/src/components/listings/ListingEventCard.astro",
-          "line": 188,
+          "line": 189,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${medallion.ring",
@@ -181671,7 +181671,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "scope": ".ke-listing-card__medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -181682,7 +181682,7 @@
         },
         {
           "path": "site/src/styles/design-system.css",
-          "line": 474,
+          "line": 472,
           "scope": ".ke-listing-card__identity-medallion, .ke-listing-card__free-medallion",
           "kind": "css",
           "value": "var(--ke-color-surface-strong)",
@@ -181700,13 +181700,13 @@
         {
           "token": "--venue-medallion-ring",
           "path": "site/src/styles/design-system.css",
-          "line": 297,
+          "line": 295,
           "has_fallback": false
         },
         {
           "token": "--venue-medallion-ring",
           "path": "site/src/styles/design-system.css",
-          "line": 481,
+          "line": 479,
           "has_fallback": false
         }
       ],

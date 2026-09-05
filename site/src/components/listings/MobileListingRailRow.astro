@@ -57,7 +57,7 @@ const mediaFrameRole = (railMedia: (typeof railMediaItems)[number]) => (
   railMedia.asset?.media_role || event.image_media_role || 'unknown_document'
 );
 const mediaFrameCropPermission = (railMedia: (typeof railMediaItems)[number]) => railMedia.fit === 'contain'
-  ? 'forbidden'
+  ? 'fallback-minimal'
   : railMedia.reason.includes('safe_visual')
     ? 'reviewed'
     : 'allowed';
@@ -131,12 +131,13 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
               data-media-frame-surface="mobile-listing-rail"
               data-media-frame-role={mediaFrameRole(railMedia)}
               data-media-frame-kind={mediaFrameKind(railMedia)}
-              data-media-frame-fit={railMedia.fit}
+              data-media-frame-fit="cover"
               data-media-frame-crop-permission={mediaFrameCropPermission(railMedia)}
               data-media-frame-ratio={railMedia.ratio}
               data-media-frame-object-position={railMedia.objectPosition}
               data-media-frame-focal-position={railMedia.objectPosition}
-              data-media-frame-crop-reason={railMedia.reason}
+              data-media-frame-crop-reason={railMedia.fit === 'contain' ? `natural_rounding_fallback:${railMedia.reason}` : railMedia.reason}
+              data-media-frame-crop-safety={railMedia.fit === 'contain' ? 'unverified-text' : undefined}
               data-media-frame-clip="frame"
               data-media-frame-radius="surface"
               data-media-frame-fill="true"
