@@ -49,7 +49,8 @@ test('app-owned media viewers declare persistent lower-surface semantics', async
     assert.match(source, /data-app-lower-surface="media"\s+data-app-lower-lifecycle="persistent"/u);
   }
   assert.match(desktop, /\.desktop-portrait-viewer__topbar\s*\{[\s\S]*background:var\(--ke-color-background-surface\);[\s\S]*border-bottom:var\(--ke-shape-border-hairline\) solid var\(--ke-color-border-default\)/u);
-  assert.match(exhibitions, /\.ex-gallery\s*\{[^}]*background:var\(--ke-color-background-surface\);[^}]*color:var\(--ke-color-text-primary\)/u);
+  assert.match(exhibitions, /\.ex-gallery\s*\{[^}]*background:var\(--ke-color-exhibitions-gallery-surface\);[^}]*color:var\(--ke-color-text-primary\)/u);
+  assert.match(await read('src/components/design-system/product-theme-foundations.css'), /--ke-color-exhibitions-gallery-surface:\s*var\(--ke-color-background-surface\)/u);
   assert.match(exhibitions, /\.ex-gallery__stage img\s*\{[^}]*object-fit:contain/u);
 });
 
