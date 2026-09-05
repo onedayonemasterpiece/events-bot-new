@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2532,
     "definition_count": 2848,
-    "consumer_count": 3573,
+    "consumer_count": 3575,
     "alias_edge_count": 895,
     "family_count": 109
   },
@@ -59188,7 +59188,7 @@
       "definitions": [
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -59199,7 +59199,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -59210,7 +59210,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -59221,7 +59221,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -59232,7 +59232,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -59243,7 +59243,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -59254,7 +59254,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -59265,7 +59265,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -59276,7 +59276,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -59301,7 +59301,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -59369,7 +59369,7 @@
       "definitions": [
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 208,
+          "line": 207,
           "scope": "@media (min-width: 680px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height-wide)",
@@ -59380,7 +59380,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 240,
+          "line": 238,
           "scope": "@media (max-width: 620px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -59391,7 +59391,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 282,
+          "line": 280,
           "scope": "@media (max-width: 360px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-narrow-row-height)",
@@ -59402,7 +59402,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 87,
+          "line": 86,
           "scope": ".partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -59422,7 +59422,7 @@
         {
           "token": "--cell-h",
           "path": "site/src/pages/partners/index.astro",
-          "line": 90,
+          "line": 89,
           "has_fallback": false
         }
       ],
@@ -93888,13 +93888,13 @@
         {
           "token": "--ke-color-text-primary",
           "path": "site/src/pages/partners/index.astro",
-          "line": 109,
+          "line": 108,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-primary",
           "path": "site/src/pages/partners/index.astro",
-          "line": 113,
+          "line": 112,
           "has_fallback": false
         },
         {
@@ -99157,19 +99157,19 @@
         {
           "token": "--muted",
           "path": "site/src/components/FavoritesSurface.astro",
-          "line": 294,
+          "line": 293,
+          "has_fallback": false
+        },
+        {
+          "token": "--muted",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 335,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/components/FavoritesSurface.astro",
           "line": 336,
-          "has_fallback": false
-        },
-        {
-          "token": "--muted",
-          "path": "site/src/components/FavoritesSurface.astro",
-          "line": 337,
           "has_fallback": false
         },
         {
@@ -99727,13 +99727,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/pages/partners/index.astro",
-          "line": 201,
+          "line": 200,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/pages/partners/index.astro",
-          "line": 83,
+          "line": 82,
           "has_fallback": false
         },
         {
@@ -111273,13 +111273,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/pages/partners/index.astro",
-          "line": 201,
+          "line": 200,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/pages/partners/index.astro",
-          "line": 83,
+          "line": 82,
           "has_fallback": false
         }
       ],
@@ -111881,13 +111881,13 @@
         {
           "token": "--ke-color-text-primary",
           "path": "site/src/pages/partners/index.astro",
-          "line": 109,
+          "line": 108,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-primary",
           "path": "site/src/pages/partners/index.astro",
-          "line": 113,
+          "line": 112,
           "has_fallback": false
         }
       ],
@@ -117502,25 +117502,25 @@
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 145,
+          "line": 144,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 145,
+          "line": 144,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 178,
+          "line": 177,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 178,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -132515,6 +132515,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-font-family-sans",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 385,
@@ -132919,6 +132925,12 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
           "line": 700,
           "has_fallback": false
         },
@@ -132944,6 +132956,12 @@
           "token": "--ke-font-family-sans",
           "path": "site/src/pages/fokus-gruppa/index.astro",
           "line": 112,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -133388,6 +133406,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-font-family-sans",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 385,
@@ -133792,6 +133816,12 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
           "line": 700,
           "has_fallback": false
         },
@@ -133871,6 +133901,12 @@
           "token": "--ke-font-sans",
           "path": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
           "line": 157,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -134756,6 +134792,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -134764,6 +134806,12 @@
           "token": "--ke-type-display-unusual",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
           "has_fallback": false
         },
         {
@@ -134800,6 +134848,12 @@
           "token": "--ke-clubs-mobile-heading-size",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 190,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -145332,7 +145386,7 @@
         {
           "token": "--ke-partner-caption-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 136,
+          "line": 135,
           "has_fallback": false
         }
       ],
@@ -145353,7 +145407,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145364,7 +145418,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -145375,7 +145429,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -145386,7 +145440,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145397,7 +145451,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -145408,7 +145462,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -145419,7 +145473,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -145430,7 +145484,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -145441,7 +145495,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -145459,7 +145513,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -145480,7 +145534,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145491,7 +145545,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -145502,7 +145556,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -145513,7 +145567,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145524,7 +145578,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -145535,7 +145589,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -145546,7 +145600,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -145557,7 +145611,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -145568,7 +145622,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -145586,7 +145640,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -145607,7 +145661,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145618,7 +145672,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -145629,7 +145683,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -145640,7 +145694,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145651,7 +145705,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -145662,7 +145716,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -145673,7 +145727,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -145684,7 +145738,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -145695,7 +145749,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -145713,7 +145767,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -145734,7 +145788,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145745,7 +145799,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -145756,7 +145810,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -145767,7 +145821,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -145778,7 +145832,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -145789,7 +145843,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -145800,7 +145854,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -145811,7 +145865,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -145822,7 +145876,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -145840,7 +145894,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -145866,7 +145920,7 @@
         {
           "token": "--ke-partner-focus-alpha",
           "path": "site/src/pages/partners/index.astro",
-          "line": 119,
+          "line": 118,
           "has_fallback": false
         }
       ],
@@ -145892,7 +145946,7 @@
         {
           "token": "--ke-partner-focus-offset",
           "path": "site/src/pages/partners/index.astro",
-          "line": 120,
+          "line": 119,
           "has_fallback": false
         }
       ],
@@ -145918,7 +145972,7 @@
         {
           "token": "--ke-partner-focus-radius",
           "path": "site/src/pages/partners/index.astro",
-          "line": 121,
+          "line": 120,
           "has_fallback": false
         }
       ],
@@ -145944,7 +145998,7 @@
         {
           "token": "--ke-partner-focus-width",
           "path": "site/src/pages/partners/index.astro",
-          "line": 119,
+          "line": 118,
           "has_fallback": false
         }
       ],
@@ -145970,7 +146024,7 @@
         {
           "token": "--ke-partner-hover-offset",
           "path": "site/src/pages/partners/index.astro",
-          "line": 117,
+          "line": 116,
           "has_fallback": false
         }
       ],
@@ -145991,7 +146045,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146002,7 +146056,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -146013,7 +146067,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146024,7 +146078,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -146035,7 +146089,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -146046,7 +146100,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -146057,7 +146111,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -146068,7 +146122,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -146079,7 +146133,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -146097,19 +146151,19 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-height",
           "path": "site/src/pages/partners/index.astro",
-          "line": 143,
+          "line": 142,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-height",
           "path": "site/src/pages/partners/index.astro",
-          "line": 163,
+          "line": 162,
           "has_fallback": false
         }
       ],
@@ -146130,7 +146184,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146141,7 +146195,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -146152,7 +146206,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146163,7 +146217,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -146174,7 +146228,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -146185,7 +146239,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -146196,7 +146250,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -146207,7 +146261,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -146218,7 +146272,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -146236,13 +146290,13 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-height-compact",
           "path": "site/src/pages/partners/index.astro",
-          "line": 170,
+          "line": 169,
           "has_fallback": false
         }
       ],
@@ -146263,7 +146317,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146274,7 +146328,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -146285,7 +146339,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146296,7 +146350,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -146307,7 +146361,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -146318,7 +146372,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -146329,7 +146383,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -146340,7 +146394,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -146351,7 +146405,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -146369,13 +146423,13 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-height-tall",
           "path": "site/src/pages/partners/index.astro",
-          "line": 156,
+          "line": 155,
           "has_fallback": false
         }
       ],
@@ -146396,7 +146450,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146407,7 +146461,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -146418,7 +146472,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -146429,7 +146483,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -146440,7 +146494,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -146451,7 +146505,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -146462,7 +146516,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -146473,7 +146527,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -146484,7 +146538,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -146502,13 +146556,13 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-height-tall-desktop",
           "path": "site/src/pages/partners/index.astro",
-          "line": 222,
+          "line": 221,
           "has_fallback": false
         }
       ],
@@ -146534,19 +146588,19 @@
         {
           "token": "--ke-partner-logo-height-wide",
           "path": "site/src/pages/partners/index.astro",
-          "line": 149,
+          "line": 148,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-height-wide",
           "path": "site/src/pages/partners/index.astro",
-          "line": 226,
+          "line": 225,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-height-wide",
           "path": "site/src/pages/partners/index.astro",
-          "line": 229,
+          "line": 228,
           "has_fallback": false
         }
       ],
@@ -146572,7 +146626,7 @@
         {
           "token": "--ke-partner-logo-height-wide-desktop",
           "path": "site/src/pages/partners/index.astro",
-          "line": 225,
+          "line": 224,
           "has_fallback": false
         }
       ],
@@ -146598,13 +146652,13 @@
         {
           "token": "--ke-partner-logo-width-compact",
           "path": "site/src/pages/partners/index.astro",
-          "line": 169,
+          "line": 168,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-logo-width-compact",
           "path": "site/src/pages/partners/index.astro",
-          "line": 228,
+          "line": 227,
           "has_fallback": false
         }
       ],
@@ -146630,7 +146684,7 @@
         {
           "token": "--ke-partner-logo-width-tall",
           "path": "site/src/pages/partners/index.astro",
-          "line": 157,
+          "line": 156,
           "has_fallback": false
         }
       ],
@@ -146656,7 +146710,7 @@
         {
           "token": "--ke-partner-logo-width-tall-desktop",
           "path": "site/src/pages/partners/index.astro",
-          "line": 223,
+          "line": 222,
           "has_fallback": false
         }
       ],
@@ -146682,7 +146736,7 @@
         {
           "token": "--ke-partner-logo-width-wide",
           "path": "site/src/pages/partners/index.astro",
-          "line": 148,
+          "line": 147,
           "has_fallback": false
         }
       ],
@@ -146708,7 +146762,7 @@
         {
           "token": "--ke-partner-meta-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 186,
+          "line": 185,
           "has_fallback": false
         }
       ],
@@ -146734,7 +146788,7 @@
         {
           "token": "--ke-partner-meta-letter",
           "path": "site/src/pages/partners/index.astro",
-          "line": 204,
+          "line": 203,
           "has_fallback": false
         }
       ],
@@ -146760,7 +146814,7 @@
         {
           "token": "--ke-partner-meta-line",
           "path": "site/src/pages/partners/index.astro",
-          "line": 187,
+          "line": 186,
           "has_fallback": false
         }
       ],
@@ -146786,7 +146840,7 @@
         {
           "token": "--ke-partner-meta-max",
           "path": "site/src/pages/partners/index.astro",
-          "line": 199,
+          "line": 198,
           "has_fallback": false
         }
       ],
@@ -146812,7 +146866,7 @@
         {
           "token": "--ke-partner-meta-size",
           "path": "site/src/pages/partners/index.astro",
-          "line": 202,
+          "line": 201,
           "has_fallback": false
         }
       ],
@@ -146838,7 +146892,7 @@
         {
           "token": "--ke-partner-meta-weight",
           "path": "site/src/pages/partners/index.astro",
-          "line": 203,
+          "line": 202,
           "has_fallback": false
         }
       ],
@@ -146859,7 +146913,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -146870,7 +146924,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -146881,7 +146935,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -146892,7 +146946,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -146903,7 +146957,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -146914,7 +146968,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -146925,7 +146979,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -146936,7 +146990,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -146947,7 +147001,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -146965,7 +147019,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -146986,7 +147040,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -146997,7 +147051,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -147008,7 +147062,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -147019,7 +147073,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -147030,7 +147084,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -147041,7 +147095,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -147052,7 +147106,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -147063,7 +147117,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -147074,7 +147128,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -147092,7 +147146,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -147113,7 +147167,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -147124,7 +147178,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -147135,7 +147189,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -147146,7 +147200,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -147157,7 +147211,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -147168,7 +147222,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -147179,7 +147233,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -147190,7 +147244,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -147201,7 +147255,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -147219,7 +147273,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -147245,7 +147299,7 @@
         {
           "token": "--ke-partner-mobile-logo-height",
           "path": "site/src/pages/partners/index.astro",
-          "line": 249,
+          "line": 247,
           "has_fallback": false
         }
       ],
@@ -147266,7 +147320,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -147277,7 +147331,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -147288,7 +147342,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -147299,7 +147353,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -147310,7 +147364,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -147321,7 +147375,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -147332,7 +147386,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -147343,7 +147397,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -147354,7 +147408,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -147372,13 +147426,13 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-mobile-logo-height-compact",
           "path": "site/src/pages/partners/index.astro",
-          "line": 262,
+          "line": 260,
           "has_fallback": false
         }
       ],
@@ -147399,7 +147453,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -147410,7 +147464,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -147421,7 +147475,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -147432,7 +147486,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -147443,7 +147497,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -147454,7 +147508,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -147465,7 +147519,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -147476,7 +147530,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -147487,7 +147541,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -147505,13 +147559,13 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-mobile-logo-height-tall",
           "path": "site/src/pages/partners/index.astro",
-          "line": 269,
+          "line": 267,
           "has_fallback": false
         }
       ],
@@ -147532,7 +147586,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -147543,7 +147597,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -147554,7 +147608,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -147565,7 +147619,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -147576,7 +147630,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -147587,7 +147641,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -147598,7 +147652,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -147609,7 +147663,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -147620,7 +147674,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -147638,19 +147692,19 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-mobile-logo-height-wide",
           "path": "site/src/pages/partners/index.astro",
-          "line": 250,
+          "line": 248,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-mobile-logo-height-wide",
           "path": "site/src/pages/partners/index.astro",
-          "line": 255,
+          "line": 253,
           "has_fallback": false
         }
       ],
@@ -147676,7 +147730,7 @@
         {
           "token": "--ke-partner-mobile-logo-width-compact",
           "path": "site/src/pages/partners/index.astro",
-          "line": 261,
+          "line": 259,
           "has_fallback": false
         }
       ],
@@ -147702,7 +147756,7 @@
         {
           "token": "--ke-partner-mobile-logo-width-tall",
           "path": "site/src/pages/partners/index.astro",
-          "line": 270,
+          "line": 268,
           "has_fallback": false
         }
       ],
@@ -147728,7 +147782,7 @@
         {
           "token": "--ke-partner-mobile-meta-max",
           "path": "site/src/pages/partners/index.astro",
-          "line": 274,
+          "line": 272,
           "has_fallback": false
         }
       ],
@@ -147754,7 +147808,7 @@
         {
           "token": "--ke-partner-mobile-meta-size",
           "path": "site/src/pages/partners/index.astro",
-          "line": 278,
+          "line": 276,
           "has_fallback": false
         }
       ],
@@ -147780,7 +147834,7 @@
         {
           "token": "--ke-partner-mobile-meta-viewport-max",
           "path": "site/src/pages/partners/index.astro",
-          "line": 274,
+          "line": 272,
           "has_fallback": false
         }
       ],
@@ -147806,7 +147860,7 @@
         {
           "token": "--ke-partner-mobile-text-logo-size",
           "path": "site/src/pages/partners/index.astro",
-          "line": 277,
+          "line": 275,
           "has_fallback": false
         }
       ],
@@ -147836,25 +147890,25 @@
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 145,
+          "line": 144,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 145,
+          "line": 144,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 178,
+          "line": 177,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-motion",
           "path": "site/src/pages/partners/index.astro",
-          "line": 178,
+          "line": 177,
           "has_fallback": false
         }
       ],
@@ -147875,7 +147929,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 133,
+          "line": 132,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -147886,7 +147940,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 153,
+          "line": 152,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall)",
@@ -147897,7 +147951,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 161,
+          "line": 160,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-wide)",
@@ -147908,7 +147962,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 166,
+          "line": 165,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height)",
@@ -147919,7 +147973,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 219,
+          "line": 218,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-caption-height-tall-desktop)",
@@ -147930,7 +147984,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 253,
+          "line": 251,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-wide)",
@@ -147941,7 +147995,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 258,
+          "line": 256,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-compact)",
@@ -147952,7 +148006,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 266,
+          "line": 264,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-caption-height-tall)",
@@ -147963,7 +148017,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 288,
+          "line": 286,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-caption-height-tall)",
@@ -147981,7 +148035,7 @@
         {
           "token": "--caption-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -148002,7 +148056,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -148013,7 +148067,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -148024,7 +148078,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -148035,7 +148089,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -148046,7 +148100,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -148057,7 +148111,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -148068,7 +148122,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -148079,7 +148133,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -148090,7 +148144,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -148108,13 +148162,13 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         },
         {
           "token": "--ke-partner-narrow-logo-height-tall",
           "path": "site/src/pages/partners/index.astro",
-          "line": 290,
+          "line": 288,
           "has_fallback": false
         }
       ],
@@ -148140,7 +148194,7 @@
         {
           "token": "--ke-partner-narrow-meta-size",
           "path": "site/src/pages/partners/index.astro",
-          "line": 291,
+          "line": 289,
           "has_fallback": false
         }
       ],
@@ -148166,7 +148220,7 @@
         {
           "token": "--ke-partner-text-logo-letter",
           "path": "site/src/pages/partners/index.astro",
-          "line": 176,
+          "line": 175,
           "has_fallback": false
         }
       ],
@@ -148192,7 +148246,7 @@
         {
           "token": "--ke-partner-text-logo-line",
           "path": "site/src/pages/partners/index.astro",
-          "line": 177,
+          "line": 176,
           "has_fallback": false
         }
       ],
@@ -148218,7 +148272,7 @@
         {
           "token": "--ke-partner-text-logo-size",
           "path": "site/src/pages/partners/index.astro",
-          "line": 174,
+          "line": 173,
           "has_fallback": false
         }
       ],
@@ -148244,7 +148298,7 @@
         {
           "token": "--ke-partner-text-logo-weight",
           "path": "site/src/pages/partners/index.astro",
-          "line": 175,
+          "line": 174,
           "has_fallback": false
         }
       ],
@@ -148296,7 +148350,7 @@
         {
           "token": "--ke-partners-copy-max",
           "path": "site/src/pages/partners/index.astro",
-          "line": 82,
+          "line": 81,
           "has_fallback": false
         }
       ],
@@ -148322,7 +148376,7 @@
         {
           "token": "--ke-partners-grid-column-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 92,
+          "line": 91,
           "has_fallback": false
         }
       ],
@@ -148348,13 +148402,13 @@
         {
           "token": "--ke-partners-grid-columns-mobile",
           "path": "site/src/pages/partners/index.astro",
-          "line": 241,
+          "line": 239,
           "has_fallback": false
         },
         {
           "token": "--ke-partners-grid-columns-mobile",
           "path": "site/src/pages/partners/index.astro",
-          "line": 89,
+          "line": 88,
           "has_fallback": false
         }
       ],
@@ -148380,7 +148434,7 @@
         {
           "token": "--ke-partners-grid-columns-wide",
           "path": "site/src/pages/partners/index.astro",
-          "line": 209,
+          "line": 208,
           "has_fallback": false
         }
       ],
@@ -148406,7 +148460,7 @@
         {
           "token": "--ke-partners-grid-row-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 93,
+          "line": 92,
           "has_fallback": false
         }
       ],
@@ -148427,7 +148481,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 208,
+          "line": 207,
           "scope": "@media (min-width: 680px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height-wide)",
@@ -148438,7 +148492,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 240,
+          "line": 238,
           "scope": "@media (max-width: 620px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -148449,7 +148503,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 282,
+          "line": 280,
           "scope": "@media (max-width: 360px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-narrow-row-height)",
@@ -148460,7 +148514,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 87,
+          "line": 86,
           "scope": ".partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -148478,7 +148532,7 @@
         {
           "token": "--cell-h",
           "path": "site/src/pages/partners/index.astro",
-          "line": 90,
+          "line": 89,
           "has_fallback": false
         }
       ],
@@ -148499,7 +148553,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 208,
+          "line": 207,
           "scope": "@media (min-width: 680px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height-wide)",
@@ -148510,7 +148564,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 240,
+          "line": 238,
           "scope": "@media (max-width: 620px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -148521,7 +148575,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 282,
+          "line": 280,
           "scope": "@media (max-width: 360px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-narrow-row-height)",
@@ -148532,7 +148586,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 87,
+          "line": 86,
           "scope": ".partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -148550,7 +148604,7 @@
         {
           "token": "--cell-h",
           "path": "site/src/pages/partners/index.astro",
-          "line": 90,
+          "line": 89,
           "has_fallback": false
         }
       ],
@@ -148598,14 +148652,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-partners-heading-letter",
-          "path": "site/src/pages/partners/index.astro",
-          "line": 77,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
@@ -148624,14 +148671,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-partners-heading-line",
-          "path": "site/src/pages/partners/index.astro",
-          "line": 78,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
@@ -148728,14 +148768,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-partners-heading-size",
-          "path": "site/src/pages/partners/index.astro",
-          "line": 76,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
@@ -148758,7 +148791,7 @@
         {
           "token": "--ke-partners-mobile-column-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 242,
+          "line": 240,
           "has_fallback": false
         }
       ],
@@ -148784,7 +148817,7 @@
         {
           "token": "--ke-partners-mobile-container-padding",
           "path": "site/src/pages/partners/index.astro",
-          "line": 234,
+          "line": 233,
           "has_fallback": false
         }
       ],
@@ -148810,7 +148843,7 @@
         {
           "token": "--ke-partners-mobile-copy-size",
           "path": "site/src/pages/partners/index.astro",
-          "line": 238,
+          "line": 236,
           "has_fallback": false
         }
       ],
@@ -148836,7 +148869,7 @@
         {
           "token": "--ke-partners-mobile-crumbs-margin-bottom",
           "path": "site/src/pages/partners/index.astro",
-          "line": 235,
+          "line": 234,
           "has_fallback": false
         }
       ],
@@ -148862,7 +148895,7 @@
         {
           "token": "--ke-partners-mobile-heading-margin-bottom",
           "path": "site/src/pages/partners/index.astro",
-          "line": 236,
+          "line": 235,
           "has_fallback": false
         }
       ],
@@ -148884,14 +148917,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-partners-mobile-heading-size",
-          "path": "site/src/pages/partners/index.astro",
-          "line": 237,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1d2aaa489688c9b3",
       "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
@@ -148914,7 +148940,7 @@
         {
           "token": "--ke-partners-mobile-padding-bottom",
           "path": "site/src/pages/partners/index.astro",
-          "line": 233,
+          "line": 232,
           "has_fallback": false
         }
       ],
@@ -148940,7 +148966,7 @@
         {
           "token": "--ke-partners-mobile-row-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 243,
+          "line": 241,
           "has_fallback": false
         }
       ],
@@ -148966,7 +148992,7 @@
         {
           "token": "--ke-partners-narrow-column-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 283,
+          "line": 281,
           "has_fallback": false
         }
       ],
@@ -148992,7 +149018,7 @@
         {
           "token": "--ke-partners-narrow-row-gap",
           "path": "site/src/pages/partners/index.astro",
-          "line": 284,
+          "line": 282,
           "has_fallback": false
         }
       ],
@@ -149013,7 +149039,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 208,
+          "line": 207,
           "scope": "@media (min-width: 680px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height-wide)",
@@ -149024,7 +149050,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 240,
+          "line": 238,
           "scope": "@media (max-width: 620px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -149035,7 +149061,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 282,
+          "line": 280,
           "scope": "@media (max-width: 360px) > .partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-narrow-row-height)",
@@ -149046,7 +149072,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 87,
+          "line": 86,
           "scope": ".partners-grid",
           "kind": "css",
           "value": "var(--ke-partners-grid-row-height)",
@@ -149064,7 +149090,7 @@
         {
           "token": "--cell-h",
           "path": "site/src/pages/partners/index.astro",
-          "line": 90,
+          "line": 89,
           "has_fallback": false
         }
       ],
@@ -166940,8 +166966,20 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
           "has_fallback": false
         },
         {
@@ -166954,6 +166992,12 @@
           "token": "--ke-type-h1",
           "path": "site/src/pages/dlya-menya/index.astro",
           "line": 139,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -167138,6 +167182,12 @@
         },
         {
           "token": "--ke-type-h1-letter",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 288,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -167163,6 +167213,12 @@
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-letter",
+          "path": "site/src/layouts/EventLayout.astro",
           "line": 700,
           "has_fallback": false
         },
@@ -167182,6 +167238,12 @@
           "token": "--ke-clubs-intro-heading-letter",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 112,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-letter",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 77,
           "has_fallback": false
         },
         {
@@ -167387,6 +167449,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -167412,6 +167480,12 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
           "line": 700,
           "has_fallback": false
         },
@@ -167431,6 +167505,12 @@
           "token": "--ke-clubs-intro-heading-line",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 111,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -167629,6 +167709,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -167649,6 +167735,12 @@
           "token": "--ke-type-display-unusual",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
           "has_fallback": false
         },
         {
@@ -167685,6 +167777,12 @@
           "token": "--ke-clubs-mobile-heading-size",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 190,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -167854,6 +167952,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -167885,6 +167989,12 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
           "line": 700,
           "has_fallback": false
         },
@@ -167904,6 +168014,12 @@
           "token": "--ke-type-h1-weight",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 110,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -168026,6 +168142,12 @@
         },
         {
           "token": "--ke-type-h1-letter",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 288,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -168034,6 +168156,12 @@
           "token": "--ke-type-display-unusual-letter",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-letter",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
           "has_fallback": false
         },
         {
@@ -168058,6 +168186,12 @@
           "token": "--ke-clubs-intro-heading-letter",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 112,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-letter",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 77,
           "has_fallback": false
         },
         {
@@ -168234,6 +168368,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -168242,6 +168382,12 @@
           "token": "--ke-type-display-unusual",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
           "has_fallback": false
         },
         {
@@ -168266,6 +168412,12 @@
           "token": "--ke-clubs-intro-heading-line",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 111,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -168436,6 +168588,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -168444,6 +168602,12 @@
           "token": "--ke-type-display-unusual",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
           "has_fallback": false
         },
         {
@@ -168480,6 +168644,12 @@
           "token": "--ke-clubs-mobile-heading-size",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 190,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -168620,6 +168790,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 287,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 129,
           "has_fallback": false
@@ -168634,6 +168810,12 @@
           "token": "--ke-type-display-unusual",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 91,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2434,
           "has_fallback": false
         },
         {
@@ -168658,6 +168840,12 @@
           "token": "--ke-type-h1-weight",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 110,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
+          "path": "site/src/pages/partners/index.astro",
+          "line": 76,
           "has_fallback": false
         },
         {
@@ -171701,7 +171889,7 @@
       "definitions": [
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 132,
+          "line": 131,
           "scope": ".partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -171712,7 +171900,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 152,
+          "line": 151,
           "scope": ".partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall)",
@@ -171723,7 +171911,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 160,
+          "line": 159,
           "scope": ".partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height)",
@@ -171734,7 +171922,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 165,
+          "line": 164,
           "scope": ".partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-compact)",
@@ -171745,7 +171933,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 218,
+          "line": 217,
           "scope": "@media (min-width: 980px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-logo-height-tall-desktop)",
@@ -171756,7 +171944,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 252,
+          "line": 250,
           "scope": "@media (max-width: 620px) > .partner-tile--wide.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-wide)",
@@ -171767,7 +171955,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 257,
+          "line": 255,
           "scope": "@media (max-width: 620px) > .partner-tile--compact.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-compact)",
@@ -171778,7 +171966,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 265,
+          "line": 263,
           "scope": "@media (max-width: 620px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-mobile-logo-height-tall)",
@@ -171789,7 +171977,7 @@
         },
         {
           "path": "site/src/pages/partners/index.astro",
-          "line": 287,
+          "line": 285,
           "scope": "@media (max-width: 360px) > .partner-tile--tall.partner-tile--with-meta",
           "kind": "css",
           "value": "var(--ke-partner-narrow-logo-height-tall)",
@@ -171814,7 +172002,7 @@
         {
           "token": "--logo-frame",
           "path": "site/src/pages/partners/index.astro",
-          "line": 134,
+          "line": 133,
           "has_fallback": false
         }
       ],
@@ -172950,19 +173138,19 @@
         {
           "token": "--muted",
           "path": "site/src/components/FavoritesSurface.astro",
-          "line": 294,
+          "line": 293,
+          "has_fallback": false
+        },
+        {
+          "token": "--muted",
+          "path": "site/src/components/FavoritesSurface.astro",
+          "line": 335,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/components/FavoritesSurface.astro",
           "line": 336,
-          "has_fallback": false
-        },
-        {
-          "token": "--muted",
-          "path": "site/src/components/FavoritesSurface.astro",
-          "line": 337,
           "has_fallback": false
         },
         {
@@ -173383,13 +173571,13 @@
         {
           "token": "--partner-accent",
           "path": "site/src/pages/partners/index.astro",
-          "line": 119,
+          "line": 118,
           "has_fallback": false
         },
         {
           "token": "--partner-accent",
           "path": "site/src/pages/partners/index.astro",
-          "line": 173,
+          "line": 172,
           "has_fallback": false
         }
       ],
@@ -173415,19 +173603,19 @@
         {
           "token": "--partner-col-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 100,
+          "line": 211,
           "has_fallback": true
         },
         {
           "token": "--partner-col-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 212,
+          "line": 244,
           "has_fallback": true
         },
         {
           "token": "--partner-col-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 246,
+          "line": 99,
           "has_fallback": true
         }
       ],
@@ -173453,7 +173641,7 @@
         {
           "token": "--partner-col-start",
           "path": "site/src/pages/partners/index.astro",
-          "line": 212,
+          "line": 211,
           "has_fallback": true
         }
       ],
@@ -173479,13 +173667,13 @@
         {
           "token": "--partner-mobile-col-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 100,
+          "line": 244,
           "has_fallback": true
         },
         {
           "token": "--partner-mobile-col-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 246,
+          "line": 99,
           "has_fallback": true
         }
       ],
@@ -173511,13 +173699,13 @@
         {
           "token": "--partner-mobile-col-start",
           "path": "site/src/pages/partners/index.astro",
-          "line": 100,
+          "line": 244,
           "has_fallback": true
         },
         {
           "token": "--partner-mobile-col-start",
           "path": "site/src/pages/partners/index.astro",
-          "line": 246,
+          "line": 99,
           "has_fallback": true
         }
       ],
@@ -173543,13 +173731,13 @@
         {
           "token": "--partner-mobile-row-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 101,
+          "line": 100,
           "has_fallback": true
         },
         {
           "token": "--partner-mobile-row-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 247,
+          "line": 245,
           "has_fallback": true
         }
       ],
@@ -173575,13 +173763,13 @@
         {
           "token": "--partner-mobile-row-start",
           "path": "site/src/pages/partners/index.astro",
-          "line": 101,
+          "line": 100,
           "has_fallback": true
         },
         {
           "token": "--partner-mobile-row-start",
           "path": "site/src/pages/partners/index.astro",
-          "line": 247,
+          "line": 245,
           "has_fallback": true
         }
       ],
@@ -173607,19 +173795,19 @@
         {
           "token": "--partner-row-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 101,
+          "line": 100,
           "has_fallback": true
         },
         {
           "token": "--partner-row-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 213,
+          "line": 212,
           "has_fallback": true
         },
         {
           "token": "--partner-row-span",
           "path": "site/src/pages/partners/index.astro",
-          "line": 247,
+          "line": 245,
           "has_fallback": true
         }
       ],
@@ -173645,7 +173833,7 @@
         {
           "token": "--partner-row-start",
           "path": "site/src/pages/partners/index.astro",
-          "line": 213,
+          "line": 212,
           "has_fallback": true
         }
       ],

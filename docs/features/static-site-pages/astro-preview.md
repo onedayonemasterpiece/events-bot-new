@@ -1176,3 +1176,9 @@ inside its unique desktop root: a className on AdaptiveEventCardGrid does not
 inherit DesktopEventPage's scope attribute. Real CDN no-JS Home checks wait for
 stylesheet load before asserting first-scene visibility; DOMContentLoaded alone
 can count all unstyled scenes. This is a readiness correction, not an exemption.
+
+The ordinary page-title browser packet includes Search, Favorites, Partners and
+Partnership as well as the original twelve routes. Favorites and Partners no
+longer retain a separate local H1 scale; standalone Search uses the shared
+compact role at the same mobile breakpoint. Entity/card/editorial/form headings
+keep their distinct semantic roles; no title copy or route behavior is changed.

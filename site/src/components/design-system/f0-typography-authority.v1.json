@@ -139,7 +139,11 @@
         "/kluby-po-interesam/",
         "/podborki/besplatnye-sobytiya/",
         "/podborki/besplatno-s-detmi/",
-        "/podborki/"
+        "/podborki/",
+        "/poisk/",
+        "/izbrannoe/",
+        "/partners/",
+        "/partnerstvo/"
       ]
     },
     "excluded_roles": {

@@ -73,9 +73,8 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
   .partners-heading h1 {
     margin: 0;
     max-width: var(--ke-partners-heading-max);
-    font-size: var(--ke-partners-heading-size);
-    letter-spacing: var(--ke-partners-heading-letter);
-    line-height: var(--ke-partners-heading-line);
+    font: var(--ke-type-h1);
+    letter-spacing: var(--ke-type-h1-letter);
   }
   .partners-heading p {
     margin: 0;
@@ -234,7 +233,6 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
     .page-shell--compact { padding-inline: var(--ke-partners-mobile-container-padding); }
     .crumbs { margin-bottom: var(--ke-partners-mobile-crumbs-margin-bottom); }
     .partners-heading { margin-bottom: var(--ke-partners-mobile-heading-margin-bottom); }
-    .partners-heading h1 { font-size: var(--ke-partners-mobile-heading-size); }
     .partners-heading p:not(.eyebrow) { font-size: var(--ke-partners-mobile-copy-size); }
     .partners-grid {
       --cell-h: var(--ke-partners-grid-row-height);

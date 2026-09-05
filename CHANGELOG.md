@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Ordinary Favorites/Partners titles and mobile Search now share the site H1 hierarchy; the browser role packet covers all four omitted Search/Favorites/partner routes.
 - Related-card inverse Share foreground crosses the actual Astro child scope; no-JS Home smoke waits for its CDN stylesheet before counting visible scenes.
 - Kaggle sparse/no-provider previews forward confirmed-club release gates to both exporter and Astro instead of depending on an optional secret bundle.
 - Kaggle opens validated self-contained SQLite snapshots as immutable, so WAL-format databases work on read-only dataset mounts without copying private data into outputs.

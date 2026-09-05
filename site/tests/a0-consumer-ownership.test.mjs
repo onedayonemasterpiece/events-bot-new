@@ -81,7 +81,7 @@ test('partners route consumes the complete partnership registry instead of ownin
   for (const token of [
     '--ke-partners-page-padding-bottom',
     '--ke-partners-container',
-    '--ke-partners-heading-size',
+    '--ke-type-h1',
     '--ke-partners-grid-columns-mobile',
     '--ke-partners-grid-row-height-wide',
     '--ke-partner-focus-alpha',
