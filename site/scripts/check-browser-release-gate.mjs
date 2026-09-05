@@ -431,7 +431,8 @@ export async function assertRestoredHomeHero(page, origin, route='/', artifactDi
     const p=await reduced.newPage();await p.goto(origin+route,{waitUntil:'domcontentloaded'});
     await p.waitForFunction(()=>document.querySelector('[data-home-hero-talk]')?.dataset.playback==='reduced-motion');
     invariant(await p.locator('[data-home-hero-controls]').isHidden(),'Reduced-motion user has an unnecessary play/pause control');
-    const n=await nojs.newPage();await n.goto(origin+route,{waitUntil:'domcontentloaded'});
+    const n=await nojs.newPage();await n.goto(origin+route,{waitUntil:'load'});
+    await n.evaluate(()=>document.fonts.ready); // No runtime readiness signal without JS; wait for the real CDN stylesheet.
     invariant(await n.locator('[data-home-hero-scene]:visible').count()===1,'No-JS Home has no usable first scene');
     invariant(await n.locator('[data-home-hero-scene]:visible a').count()>0,'No-JS Home lost its event link');
     if(artifactDir){await p.screenshot({path:join(artifactDir,'home-reduced-motion.png')});await n.screenshot({path:join(artifactDir,'home-no-js.png')});}

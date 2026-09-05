@@ -1170,3 +1170,9 @@ Remote export also carries the two public Interest Club release gates through
 secret bundles. Exporter and Astro consume the same allowlisted values; explicit
 `0` remains a rollback. Sparse/no-provider builds must not silently disable the
 confirmed-club projection. The nonempty real-preview artifact gate is unchanged.
+
+The owner-review inverse related-card action rule crosses the child Astro scope
+inside its unique desktop root: a className on AdaptiveEventCardGrid does not
+inherit DesktopEventPage's scope attribute. Real CDN no-JS Home checks wait for
+stylesheet load before asserting first-scene visibility; DOMContentLoaded alone
+can count all unstyled scenes. This is a readiness correction, not an exemption.

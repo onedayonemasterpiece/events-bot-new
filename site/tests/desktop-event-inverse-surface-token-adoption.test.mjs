@@ -26,6 +26,14 @@ test('desktop event inverse surfaces consume canonical background roles', async 
 
 test('graphite related-card share action keeps the canonical inverse foreground', async () => {
   const desktopEvent = await read('src/components/DesktopEventPage.astro');
-  assert.match(desktopEvent, /\[data-desktop-clean-event\] \.desktop-clean-related__grid :global\(\.event-card--split-actions \.event-card__feedback--under \.feedback-button--share\) \{ color:var\(--ke-color-text-inverse\); \}/u);
+  assert.match(desktopEvent, /:global\(\[data-desktop-clean-event\] \.desktop-clean-related__grid \.event-card--split-actions \.event-card__feedback--under \.feedback-button--share\) \{ color:var\(--ke-color-text-inverse\); \}/u);
   assert.match(desktopEvent, /feedback-button--share:hover\),[\s\S]*?color:var\(--ke-color-text-inverse\);/u);
+});
+
+// AdaptiveEventCardGrid owns a different Astro scope; parent scoped selectors
+// cannot reach the className passed to that component. Keep the unique root
+// boundary inside :global as well, not just the descendant button.
+test('inverse action rule crosses the child component scope at its owned root', async () => {
+  const source = await read('src/components/DesktopEventPage.astro');
+  assert.doesNotMatch(source, /\[data-desktop-clean-event\] \.desktop-clean-related__grid :global\(/u);
 });
