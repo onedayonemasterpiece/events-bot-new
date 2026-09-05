@@ -124,8 +124,11 @@ node --test tests/test_current_ui_free_collection_structural_projection.mjs
 
 A packet for the rejected SHA is not a packet for corrected source. Regenerate
 against the next same-snapshot published candidate without inventing Penpot
-shape IDs. Native Penpot materialization is not required before this review,
-but A=S=P cannot be claimed without a checked P round-trip.
+shape IDs. Contract v1.14 requires four bounded native catalog pages (Icons, Medallions,
+Artifacts, Windows/Notifications), owned by the designated external MATERIALS
+writer. CODE supplies exact bindings/projection; it does not claim native
+materialization from Git JSON. Full-page Penpot reconstruction is not required,
+and A=S=P cannot be claimed without the checked round-trip.
 
 ## Historical implementation detail
 
@@ -192,3 +195,7 @@ Explicit source-related IDs are preserved separately from calendar occurrence
 IDs. A multi-day exhibition and an explicitly typed guided tour do not become
 alternate dates of each other. This narrow consistency guard is not a general
 semantic certification of every historical linked-event family.
+
+Lower media chrome exposes its title once; its aria-hidden duplicate image
+caption no longer overlaps the counter, and the window title can wrap rather
+than being forced into a single truncated line.

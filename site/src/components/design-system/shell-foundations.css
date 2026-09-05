@@ -245,3 +245,13 @@ body[data-primary-island="true"] .mobile-sticky-cta {
   border-radius: var(--ke-shape-radius-control);
   background: var(--ke-color-background-surface);
 }
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__event-title {
+  min-width: 0;
+  flex: 1;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  margin-inline: 0;
+}
+/* The aria-hidden duplicate caption must not cover the real counter or image. */
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__caption { display: none; }
