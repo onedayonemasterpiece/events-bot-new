@@ -157,10 +157,6 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
       </div>
       <p class="ex-gallery__count" data-gallery-count aria-live="polite"></p>
     </dialog>
-    <div class="ex-live" data-live>
-      <span data-live-message role="status" aria-live="polite" aria-atomic="true"></span>
-      <button type="button" data-live-undo hidden>Отменить</button>
-    </div>
     <p class="ex-deck-live" data-deck-live role="status" aria-live="polite" aria-atomic="true"></p>
   </main>
 
@@ -466,11 +462,6 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   .ex-gallery__error { position:relative; z-index:2; margin:0; color:var(--ke-color-exhibitions-muted); }
   .ex-gallery__stage button { border:var(--ke-shape-border-hairline) solid var(--ke-color-inverse-control-border); background:var(--ke-color-exhibitions-gallery-navigation-surface); color:var(--ke-color-inverse-control); font-size:var(--ke-exhibitions-gallery-arrow-icon-size); cursor:pointer; }
   .ex-gallery__count { margin:0; padding:.7rem; color:var(--ke-color-text-muted); font:var(--ke-type-metadata); text-align:center; }
-  .ex-live { position:fixed; left:50%; bottom:1rem; z-index:80; transform:translate3d(-50%,8px,0); min-width:min(420px,calc(100% - 2rem)); display:flex; align-items:center; justify-content:center; gap:.8rem; margin:0; padding:.7rem 1rem; border:1px solid var(--ke-color-exhibitions-live-line); border-radius:6px; background:var(--ke-color-exhibitions-live-surface); color:var(--ke-color-exhibitions-text,var(--ke-color-exhibitions-green)); text-align:center; box-shadow:var(--ke-elevation-exhibitions-live); opacity:0; visibility:hidden; pointer-events:none; transition:opacity 160ms ease-in,transform 190ms ease-in,visibility 0s linear 190ms; }
-  .ex-live.is-visible { transform:translate3d(-50%,0,0); opacity:1; visibility:visible; transition:opacity 240ms ease-out,transform 320ms var(--ke-exhibitions-ease-cinematic),visibility 0s; }
-  .ex-live [data-live-message] { opacity:1; transform:translate3d(0,0,0); transition:opacity 160ms ease-out,transform 240ms var(--ke-exhibitions-ease-cinematic); }
-  .ex-live.is-updating [data-live-message] { opacity:0; transform:translate3d(0,4px,0); }
-  .ex-live [data-live-undo] { min-height:36px; padding:.35rem .65rem; border:1px solid var(--ke-color-exhibitions-live-undo-line); border-radius:4px; background:var(--ke-color-exhibitions-live-undo-surface); color:var(--ke-color-exhibitions-text); font:inherit; font-size:.78rem; font-weight:800; cursor:pointer; pointer-events:auto; }
   .ex-deck-live { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
   @keyframes ex-gallery-in { from { opacity:0; transform:translate3d(0,14px,0) scale(.982); } to { opacity:1; transform:translate3d(0,0,0) scale(1); } }
   @keyframes ex-gallery-out { from { opacity:1; transform:translate3d(0,0,0) scale(1); } to { opacity:0; transform:translate3d(0,8px,0) scale(.988); } }
@@ -492,7 +483,6 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   }
   @media (max-width:820px) {
     .ex-help-open span { position:absolute; width:1px; height:1px; overflow:hidden; }
-    .ex-live { bottom:calc(var(--mobile-bottom-stack-h) + var(--ke-space-2)); }
     .ex-shell { width:min(100% - 1.25rem,680px); padding-top:var(--ke-space-section); padding-bottom:6rem; }
     .ex-intro__summary { width:100%; grid-template-columns:repeat(3,1fr); }
     .ex-intro__summary span { min-width:0; padding:.65rem; }
@@ -568,9 +558,6 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
         .map((row) => row.querySelector('[data-row-focus]'))
         .filter((node) => node instanceof HTMLElement);
     };
-    const live = root.querySelector('[data-live]');
-    const liveMessage = root.querySelector('[data-live-message]');
-    const liveUndo = root.querySelector('[data-live-undo]');
     const deckLive = root.querySelector('[data-deck-live]');
     const personalNote = root.querySelector('[data-personal-note]');
     const visibleCount = root.querySelector('[data-visible-count]');
@@ -1003,7 +990,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
       transition.updateCallbackDone.catch(() => {});
       transition.finished.catch(() => {});
     };
-    let liveTimer; let liveShowTimer; let liveClearTimer;
+    const toastHost = window as typeof window & { KenigEventsToast?: { show:(detail:unknown) => unknown } };
     let mode = 'personal';
     let category = 'Все темы';
     const tagsFor = (row) => String(row.dataset.tags || '').split(',').filter(Boolean);
@@ -1028,49 +1015,17 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
     const writeState = () => { try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {} };
     writeState();
 
-    let liveUndoAction = null;
-    const hideAnnouncement = () => {
-      if (!(live instanceof HTMLElement) || !(liveMessage instanceof HTMLElement)) return;
-      window.clearTimeout(liveShowTimer);
-      window.clearTimeout(liveClearTimer);
-      live.classList.remove('is-visible','is-updating');
-      liveUndoAction = null;
-      const clear = () => {
-        if (live.classList.contains('is-visible')) return;
-        liveMessage.textContent = '';
-        if (liveUndo instanceof HTMLButtonElement) liveUndo.hidden = true;
-      };
-      if (reducedMotion.matches) clear();
-      else liveClearTimer = window.setTimeout(clear,190);
-    };
     const announce = (message,options = {}) => {
-      if (!(live instanceof HTMLElement) || !(liveMessage instanceof HTMLElement)) return;
-      const hasUndo = typeof options.undo === 'function';
-      window.clearTimeout(liveTimer);
-      window.clearTimeout(liveShowTimer);
-      window.clearTimeout(liveClearTimer);
-      const commit = () => {
-        liveMessage.textContent = message;
-        liveUndoAction = hasUndo ? options.undo : null;
-        if (liveUndo instanceof HTMLButtonElement) liveUndo.hidden = !liveUndoAction;
-        live.classList.remove('is-updating');
-        live.classList.add('is-visible');
-        if (options.focusUndo && liveUndoAction && liveUndo instanceof HTMLButtonElement) liveUndo.focus({ preventScroll:true });
+      const undo = typeof options.undo === 'function' ? options.undo : null;
+      const detail = {
+        message,
+        type:'info',
+        dedupeKey:'exhibitions-personal-action',
+        action:undo ? { label:'Отменить', callback:undo } : null,
       };
-      if (live.classList.contains('is-visible') && liveMessage.textContent && !reducedMotion.matches) {
-        live.classList.add('is-updating');
-        liveShowTimer = window.setTimeout(commit,160);
-      } else commit();
-      liveTimer = window.setTimeout(() => {
-        if (live.contains(document.activeElement)) focusRowLink(root.querySelector('[data-list-section="new"] [data-row-focus]'));
-        hideAnnouncement();
-      },hasUndo ? 7000 : 3200);
+      if (toastHost.KenigEventsToast?.show) toastHost.KenigEventsToast.show(detail);
+      else window.dispatchEvent(new CustomEvent('kenigevents:toast', { detail }));
     };
-    liveUndo?.addEventListener('click',() => {
-      const undo = liveUndoAction;
-      hideAnnouncement();
-      if (typeof undo === 'function') undo();
-    });
     const hasProfile = () => currentLikes().length >= PROFILE_MIN_LIKES && Array.isArray(state.likedTags) && state.likedTags.length > 0;
     const matchesProfile = (row) => tagsFor(row).some((tag) => state.likedTags.includes(tag)) || state.likes.includes(row.dataset.eventId);
     const profileScore = (row) => tagsFor(row).filter((tag) => state.likedTags.includes(tag)).length;

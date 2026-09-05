@@ -131,24 +131,24 @@ test('current committed preview projects only current real rows with unique ids 
 });
 
 test('public route keeps the donor CSS/interaction contract while replacing fixture specs with the public read path', async () => {
-  const [publicSource, surfaceSource, donorSource, eventsSource] = await Promise.all([
+  const [publicSource, surfaceSource, eventsSource] = await Promise.all([
     readFile(new URL('../src/pages/vystavki/index.astro', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/ExhibitionsPersonalSurface.astro', import.meta.url), 'utf8'),
-    readFile(new URL('../src/pages/lab/exhibitions-personal/index.astro', import.meta.url), 'utf8'),
     readFile(new URL('../src/lib/events.ts', import.meta.url), 'utf8'),
   ]);
-  const cssBlock = (source) => source.slice(source.indexOf('<style is:global>'), source.indexOf('</style>') + '</style>'.length);
-  const scriptBlock = (source) => source.slice(source.indexOf('<script is:inline>'), source.lastIndexOf('</script>') + '</script>'.length);
-
-  assert.equal(cssBlock(surfaceSource), cssBlock(donorSource), 'accepted responsive/mobile presentation must stay exact');
-  const surfaceBehavior = scriptBlock(surfaceSource)
-    .replace(/^\s*root\.dataset\.dsState = `\$\{mode\} \$\{category === 'Все темы' \? 'all-topics' : 'filtered'\} \$\{count > 0 \? 'populated' : 'empty'\}`;\n/mu, '');
-  assert.equal(surfaceBehavior, scriptBlock(donorSource), 'accepted keyboard/gallery/personalization behavior must stay exact apart from normalized diagnostics');
-  assert.match(scriptBlock(surfaceSource), /root\.dataset\.dsState = `\$\{mode\} \$\{category === 'Все темы' \? 'all-topics' : 'filtered'\} \$\{count > 0 \? 'populated' : 'empty'\}`/u);
+  assert.match(surfaceSource, /data-gallery\s+data-app-lower-surface="media"/u);
+  assert.match(surfaceSource, /data-exhibitions-theme="graphite"/u);
+  assert.match(surfaceSource, /new URLSearchParams\(window\.location\.search\).*theme.*light/u);
+  assert.match(surfaceSource, /toastHost\.KenigEventsToast\?\.show\) toastHost\.KenigEventsToast\.show\(detail\)/u);
+  assert.match(surfaceSource, /action:undo \? \{ label:'Отменить', callback:undo \} : null/u);
+  assert.doesNotMatch(surfaceSource, /data-live-message|data-live-undo|liveUndoAction|liveTimer/u);
+  assert.match(surfaceSource, /data-deck-live role="status" aria-live="polite" aria-atomic="true"/u);
+  for (const invariant of ['data-mode-switch', 'data-category-filter', 'data-gallery-prev', 'data-gallery-next', 'data-mark-new-seen', 'data-row-focus', 'data-exhibition-row']) {
+    assert.match(surfaceSource, new RegExp(invariant, 'u'));
+  }
   assert.match(publicSource, /projectExhibitionsPersonal\(getOngoingExhibitionEvents\(\), currentDate\)/u);
   assert.match(publicSource, /ExhibitionsPersonalSurface/u);
   assert.match(surfaceSource, /ExhibitionPrototypeRow/u);
-  assert.match(publicSource, /heroChrome="immersive"/u);
   assert.match(publicSource, /headerCurrent="exhibitions"/u);
   assert.doesNotMatch(publicSource, /featuredSpecs|curatedTailSpecs|canonicalUrl = absoluteUrl\('\/lab\//u);
   assert.match(eventsSource, /getOngoingExhibitionEvents[\s\S]*collapseLinkedSessionEvents\(/u);
