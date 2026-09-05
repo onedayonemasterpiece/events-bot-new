@@ -1,0 +1,79 @@
+name: Floating Islands focused diagnostic
+on:
+  push:
+    branches: [work/floating-islands-owner-preview-20260905]
+permissions:
+  contents: read
+concurrency:
+  group: islands-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: popular
+            route: /populyarnoe/
+          - name: free
+            route: /podborki/besplatnye-sobytiya/
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install the existing frozen dependencies
+        run: npm --prefix site ci --no-audit --no-fund
+      - name: Source and pure-policy checks
+        run: |
+          mkdir -p "$RUNNER_TEMP/islands-evidence"
+          node --test site/tests/floating-islands-review.test.mjs site/tests/floating-islands-recovery.test.mjs | tee "$RUNNER_TEMP/islands-evidence/unit.tap"
+          node --check site/e2e/islands/review.mjs
+          node --check site/e2e/islands/recovery.mjs
+          git diff --check
+      - name: Generate one Astro route through the canonical focused runner
+        env:
+          ROUTE: ${{ matrix.route }}
+          CASE: ${{ matrix.name }}
+        run: |
+          npm --prefix site run local:focused -- \
+            --route "$ROUTE" --fixture \
+            --build-id "preview-islands-ci-${GITHUB_RUN_ID}-${CASE}" \
+            --output-root "$RUNNER_TEMP/islands-generated" \
+            --result-json "$RUNNER_TEMP/islands-evidence/generation.json" \
+            --no-smoke --no-serve
+      - name: Install Chromium for focused UI checks
+        run: cd site && npx playwright install --with-deps chromium
+      - name: Check generated pages and preserved brand and dock
+        env:
+          CASE: ${{ matrix.name }}
+        run: |
+          node site/e2e/islands/review.mjs \
+            "$RUNNER_TEMP/islands-generated/preview-islands-ci-${GITHUB_RUN_ID}-${CASE}/__preview/local-focused-receipt.json" \
+            "$RUNNER_TEMP/islands-evidence"
+      - name: Check resize recovery, original controls, cleanup and asset failure
+        if: success() || failure()
+        env:
+          CASE: ${{ matrix.name }}
+        run: |
+          test -f "$RUNNER_TEMP/islands-evidence/generation.json"
+          node site/e2e/islands/recovery.mjs \
+            "$RUNNER_TEMP/islands-generated/preview-islands-ci-${GITHUB_RUN_ID}-${CASE}/__preview/local-focused-receipt.json" \
+            "$RUNNER_TEMP/islands-evidence"
+      - name: Keep safe diagnostics only, never publish or upload fonts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: islands-diagnostic-${{ matrix.name }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/islands-evidence/*.json
+            ${{ runner.temp }}/islands-evidence/*.png
+            ${{ runner.temp }}/islands-evidence/*.tap
+          retention-days: 7
+          if-no-files-found: error
