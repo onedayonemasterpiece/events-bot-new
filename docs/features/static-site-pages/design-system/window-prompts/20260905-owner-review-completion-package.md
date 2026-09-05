@@ -1,8 +1,9 @@
 # KenigEvents — завершить видимую унификацию и вернуть материалы в Penpot
 
-Обновлено: 2026-09-05 после уточнения владельца. Постановки для ручного запуска,
-не отчёт о выполнении. Исходный immutable-пакет393a8e8 предшествует этому
-уточнению; уже запущенные задачи продолжаются, а не создаются заново.
+Обновлено: 2026-09-05 после уточнения владельца и принятия нижней навигации
+в формате floating island на мобильном и десктопе. Постановки для ручного
+запуска, не отчёт о выполнении. Исходный immutable-пакет393a8e8 предшествует
+уточнению,64784c01 — принятию навигации; задачи продолжаются, не создаются заново.
 
 Выполняй общую часть и только выбранную роль: CODE, VISUAL, DATA, MATERIALS
 или REVIEW. CODE — ручной кодовый агент в VS Code/терминале. Остальные —
@@ -20,12 +21,12 @@
 Нормативный владелец — `onedayonemasterpiece/lovekgd-design-system`, ветка
 `integration/launch-normalized-sot-penpot-20260902`:
 - `AGENTS.md`, `docs/product-governance/astro-sot-penpot-conformance.md`;
-- `contracts/launch-normalized-ui.v1.yaml` v1.13.0 или проверенный successor;
+- `contracts/launch-normalized-ui.v1.yaml` v1.14.0 или проверенный successor;
   особенно `owner_visible_normalization_clarification`, review stage и build topology;
 - `docs/launch-normalization/STATUS.md`;
 - `docs/launch-normalization/owner-audioreview-20260905.md`, теперь AR-01–AR-18.
 
-DS checkpoint после уточнения: `9c8b9ed6aad7016911c10c89b17f3cf9b3e1cd26`.
+DS checkpoint после принятия навигации: `b31653708a878040d9415b26679aa4c1a2f5b888`.
 Открой current heads: точка выше не разрешает reset или игнорирование новых
 решений. Требования не переопределять этим пакетом/комментарием/планом.
 
@@ -128,11 +129,16 @@ manual close, очереди/дедупликацию, ошибки, отмен�
 background tab, reduced motion, повторный вызов и отсутствие потери состояния.
 Не имитируй native OS/browser permission/share/auth screens.
 
-AR-18 — явное решение до cutover desktop primary navigation. Рекомендация
-о компактном нижнем dock в контракте ещё не owner-approved. Не выбирай молча.
-Состав/назначение/labels/icons/current-state, primary vs contextual navigation
-и размещение согласуются с floating context и notifications. Не делай три
-перекрывающихся независимых нижних панели. Floating Island skin пока схематичен.
+AR-18 — решение принято владельцем: нижняя основная навигация в формате
+floating island на мобильном и десктопе. Больше не ожидай выбора «нужна ли
+нижняя навигация на desktop». Реализуй общий состав/назначение/labels/icons/
+current-state с адаптивной шириной и отступом острова от краёв; desktop-вариант
+компактный, мобильный — тоже остров, не приклеенная к краям полоса.
+Primary vs contextual navigation и размещение согласуются с floating context
+и notifications; не делай три перекрывающихся независимых нижних панели.
+Навигация не исчезает по notification timer. Сейчас реализуются структура,
+действия, состояния и доступность; окончательный skin остаётся для отдельного
+генеративного ревью владельца. Принятое решение не равно выполненной миграции.
 
 ### Замкнутый цикл и итог
 
@@ -194,8 +200,9 @@ semantic color combinations. Смысл — устранить, а не клас
 но одна её историческая реализация не оправдывает всю отдельную палитру.
 Не выдавай массовое сохранение исходных значений за нормализацию.
 Для reactions различай presentation и entity action/count semantics.
-Согласуй нижние окна и desktop navigation с AR-17/18 и DATA; единственное
-неразрешимое существенное решение вынеси конкретно, не отправляй владельца
+Согласуй нижние окна с AR-17 и DATA, а нижнюю floating-island навигацию на обоих
+устройствах считай уже принятым AR-18. Не открывай заново разрешённый выбор.
+Другие неразрешимые существенные решения вынеси конкретно, не отправляй владельца
 анализировать компоненты. Финальный skin Floating Island не проектируй.
 
 Результат#621: конкретная матрица и рекомендуемые минимальные изменения,
@@ -242,7 +249,9 @@ binding. При противоречии IDs сначала разреши ег�
 отрази реальную композицию artwork/frame; для артефактов состояния не активируют
 саму функцию в продукте. Для нижних окон — реальные short/long, success/error,
 interactive/timed/persistent, focus/paused/loading states и desktop/mobile.
-Планы будущих состояний явно отделяй от существующей реализации.
+Планы будущих состояний явно отделяй от существующей реализации. Нижняя
+навигация на обоих устройствах принята в формате floating island; согласуй
+её соседство с окнами по source CODE, без выбора нового финального skin.
 
 Не рисуй похожие значки/глифы и не выдавай стену PNG за восстановленный каталог.
 Донор восстанавливает материал, но не делает старый вариант новой authority.
@@ -266,7 +275,9 @@ snapshot/clock/slice. Нет successor — нет приёмки по rejected b
 product archetypes, shared role consistency, reaction states, color combinations,
 spacing/wraps, internal media/body geometry/remainders/media cases, event5370,
 loading/return/Home/keyboard, нижние окна/timer/forms/focus и весь navigation/
-island/notification stack. Проверяй реальные применимые hydrated consumers;
+island/notification stack. Отдельно проверь принятую floating-island навигацию
+на desktop и mobile: общие действия и состояния, адаптивная геометрия и отсутствие
+перекрытий. Проверяй реальные применимые hydrated consumers;
 fixtures и persistence не смешивать. Не создавать публичные реакции или
 почту вне предусмотренного тестового режима.
 
