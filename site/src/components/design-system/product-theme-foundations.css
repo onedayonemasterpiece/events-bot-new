@@ -35,130 +35,117 @@
   --ke-personalization-consent-icon-size: var(--ke-icon-size-action);
   --ke-personalization-motion: 180ms ease;
 
-  /* Exhibitions prototype intentionally has a self-contained dark product
-     family. It must not be mapped onto warm inverse controls. */
-  --ke-color-exhibitions-background: #0d0f10;
-  --ke-color-exhibitions-surface: #101214;
-  --ke-color-exhibitions-raised: #17191c;
-  --ke-color-exhibitions-border: #2d3134;
-  --ke-color-exhibitions-text: #f4f4f2;
-  --ke-color-exhibitions-muted: #a8adb2;
-  --ke-color-exhibitions-blue: #54acf7;
-  --ke-color-exhibitions-orange: #f18224;
-  --ke-color-exhibitions-red: #ef4b58;
-  --ke-color-exhibitions-gray: #9da2a6;
-  --ke-color-exhibitions-yellow: #efc12b;
-  --ke-color-exhibitions-purple: #a97bf4;
-  --ke-color-exhibitions-green: #92cb70;
-  --ke-color-exhibitions-kbd-line: #50555a;
-  --ke-color-exhibitions-kbd-line-strong: #777d82;
-  --ke-color-exhibitions-kbd-surface: #202326;
-  --ke-color-exhibitions-kbd-text: #e9ecee;
-  --ke-color-exhibitions-kbd-shadow: #050607;
-  --ke-color-exhibitions-mode-surface: #08090a;
-  --ke-color-exhibitions-mode-selected-line: #3a3f43;
-  --ke-color-exhibitions-sticky-surface: rgba(13, 15, 16, 0.96);
-  --ke-color-exhibitions-blue-glow: rgba(84, 172, 247, 0.14);
-  --ke-color-exhibitions-orange-glow: rgba(241, 130, 36, 0.07);
+  /* Exhibitions: graphite compatibility aliases resolve to shared product roles.
+     Deck/gallery media remains an inverse functional stage; page chrome is not a
+     separate near-black palette. */
+  --ke-color-exhibitions-background: var(--ke-exhibitions-lightcmp-background);
+  --ke-color-exhibitions-surface: var(--ke-exhibitions-lightcmp-surface);
+  --ke-color-exhibitions-raised: var(--ke-exhibitions-lightcmp-raised);
+  --ke-color-exhibitions-border: var(--ke-exhibitions-lightcmp-border);
+  --ke-color-exhibitions-text: var(--ke-exhibitions-lightcmp-text);
+  --ke-color-exhibitions-muted: var(--ke-exhibitions-lightcmp-muted);
+  --ke-color-exhibitions-blue: var(--ke-color-action-primary);
+  --ke-color-exhibitions-orange: var(--ke-color-status-warning-foreground);
+  --ke-color-exhibitions-red: var(--ke-color-status-danger-foreground);
+  --ke-color-exhibitions-gray: var(--ke-color-text-muted);
+  --ke-color-exhibitions-yellow: var(--ke-color-status-warning-foreground);
+  --ke-color-exhibitions-purple: var(--ke-color-action-accent);
+  --ke-color-exhibitions-green: var(--ke-color-status-success-foreground);
+  --ke-color-exhibitions-kbd-line: var(--ke-exhibitions-lightcmp-kbd-line);
+  --ke-color-exhibitions-kbd-line-strong: var(--ke-exhibitions-lightcmp-kbd-line-strong);
+  --ke-color-exhibitions-kbd-surface: var(--ke-exhibitions-lightcmp-kbd-surface);
+  --ke-color-exhibitions-kbd-text: var(--ke-exhibitions-lightcmp-kbd-text);
+  --ke-color-exhibitions-kbd-shadow: var(--ke-exhibitions-lightcmp-kbd-shadow);
+  --ke-color-exhibitions-mode-surface: var(--ke-exhibitions-lightcmp-mode-surface);
+  --ke-color-exhibitions-mode-selected-line: var(--ke-exhibitions-lightcmp-mode-selected-line);
+  --ke-color-exhibitions-sticky-surface: var(--ke-exhibitions-lightcmp-sticky-surface);
+  --ke-color-exhibitions-blue-glow: color-mix(in srgb, var(--ke-color-action-primary) 14%, transparent);
+  --ke-color-exhibitions-orange-glow: color-mix(in srgb, var(--ke-color-status-warning-foreground) 7%, transparent);
   --ke-exhibitions-ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
   --ke-exhibitions-ease-emphasis: cubic-bezier(0.22, 1.28, 0.36, 1);
   --ke-exhibitions-motion-fast: 240ms;
   --ke-exhibitions-motion-base: 420ms;
   --ke-exhibitions-container: 1320px;
   --ke-exhibitions-control-min: var(--ke-size-touch-target);
-  --ke-exhibitions-control-radius: 6px;
-  --ke-exhibitions-mode-radius: 7px;
+  --ke-exhibitions-control-radius: var(--ke-shape-radius-control);
+  --ke-exhibitions-mode-radius: var(--ke-shape-radius-control);
   --ke-exhibitions-gallery-arrow-icon-size: var(--ke-icon-size-control);
   --ke-exhibitions-action-icon-size: var(--ke-icon-size-control);
   --ke-exhibitions-signal-icon-size: var(--ke-icon-size-inline);
-
-  /* Organizer medallion background/ring values injected from the manifest are
-     identity media data. The fallback values below remain technical defaults. */
-  --ke-color-exhibitions-medallion-fallback-surface: #17191b;
-  --ke-color-exhibitions-medallion-fallback-ring: #697178;
-
-  /* Remaining visible exhibitions states. F0 owns their palette/elevation
-     identity; A0 owns selector migration and FR0 owns frame/crop/fit anatomy. */
-  --ke-color-exhibitions-title-hover: #ffffff;
-  --ke-color-exhibitions-timeline-brand-faint: rgba(84, 172, 247, 0.1);
-  --ke-color-exhibitions-timeline-brand-fainter: rgba(84, 172, 247, 0.045);
-  --ke-color-exhibitions-timeline-white-faint: rgba(255, 255, 255, 0.05);
-  --ke-color-exhibitions-timeline-mobile-mid: #6d767d;
-  --ke-color-exhibitions-timeline-mobile-end: #555e64;
-  --ke-color-exhibitions-timeline-mobile-white: rgba(255, 255, 255, 0.08);
-  --ke-elevation-exhibitions-timeline: 0 0 8px var(--ke-color-exhibitions-timeline-white-faint), 0 0 14px var(--ke-color-exhibitions-timeline-brand-fainter);
-  --ke-elevation-exhibitions-timeline-mobile: 0 0 9px var(--ke-color-exhibitions-timeline-mobile-white), 0 0 16px var(--ke-color-exhibitions-timeline-brand-faint);
-
-  --ke-color-exhibitions-row-halo-strong: rgba(84, 172, 247, 0.18);
-  --ke-color-exhibitions-row-halo-soft: rgba(84, 172, 247, 0.05);
-  --ke-color-exhibitions-row-edge-line: rgba(255, 255, 255, 0.46);
-  --ke-color-exhibitions-row-edge-brand: rgba(84, 172, 247, 0.58);
-  --ke-elevation-exhibitions-row-edge-hover: drop-shadow(0 0 9px rgba(84, 172, 247, 0.28));
-  --ke-elevation-exhibitions-row-edge-keyboard: drop-shadow(0 0 10px rgba(84, 172, 247, 0.34));
+  --ke-color-exhibitions-medallion-fallback-surface: var(--ke-color-background-inverse-raised);
+  --ke-color-exhibitions-medallion-fallback-ring: var(--ke-color-inverse-control-border);
+  --ke-color-exhibitions-title-hover: var(--ke-exhibitions-lightcmp-title-hover);
+  --ke-color-exhibitions-timeline-brand-faint: color-mix(in srgb, var(--ke-color-action-primary) 10%, transparent);
+  --ke-color-exhibitions-timeline-brand-fainter: color-mix(in srgb, var(--ke-color-action-primary) 5%, transparent);
+  --ke-color-exhibitions-timeline-white-faint: color-mix(in srgb, var(--ke-color-text-inverse) 5%, transparent);
+  --ke-color-exhibitions-timeline-mobile-mid: var(--ke-color-inverse-control-border);
+  --ke-color-exhibitions-timeline-mobile-end: color-mix(in srgb, var(--ke-color-inverse-control-border) 70%, var(--ke-color-background-inverse));
+  --ke-color-exhibitions-timeline-mobile-white: color-mix(in srgb, var(--ke-color-text-inverse) 8%, transparent);
+  --ke-elevation-exhibitions-timeline: var(--ke-elevation-card);
+  --ke-elevation-exhibitions-timeline-mobile: var(--ke-elevation-card);
+  --ke-color-exhibitions-row-halo-strong: color-mix(in srgb, var(--ke-color-action-primary) 18%, transparent);
+  --ke-color-exhibitions-row-halo-soft: color-mix(in srgb, var(--ke-color-action-primary) 5%, transparent);
+  --ke-color-exhibitions-row-edge-line: color-mix(in srgb, var(--ke-color-text-inverse) 46%, transparent);
+  --ke-color-exhibitions-row-edge-brand: color-mix(in srgb, var(--ke-color-action-primary) 58%, transparent);
+  --ke-elevation-exhibitions-row-edge-hover: var(--ke-elevation-card);
+  --ke-elevation-exhibitions-row-edge-keyboard: var(--ke-elevation-overlay);
   --ke-color-exhibitions-rail-dot-border: var(--ke-color-exhibitions-background);
-  --ke-elevation-exhibitions-rail-dot: 0 0 0 1px color-mix(in srgb, var(--ex-rail-color), white 10%), 0 0 15px color-mix(in srgb, var(--ex-rail-color), transparent 16%);
-  --ke-elevation-exhibitions-rail-dot-mobile: 0 0 0 1px var(--ex-rail-color), 0 0 16px color-mix(in srgb, var(--ex-rail-color), transparent 10%), 0 0 28px color-mix(in srgb, var(--ex-rail-color), transparent 52%);
-
-  /* Frame-state colours are supplied to the FR0 consumer contract. These
-     variables do not grant F0 ownership of dimensions, fit, crop or stacking. */
-  --ke-color-exhibitions-deck-frame-line: rgba(220, 229, 236, 0.62);
-  --ke-color-exhibitions-deck-frame-surface: #0b0d0e;
-  --ke-elevation-exhibitions-deck-frame: inset -1px 0 0 rgba(255, 255, 255, 0.14), 4px 0 12px -3px rgba(0, 0, 0, 0.82), 0 6px 18px rgba(0, 0, 0, 0.3);
-  --ke-elevation-exhibitions-deck-overlay: inset -1px 0 0 rgba(255, 255, 255, 0.22), inset 1px 0 0 rgba(255, 255, 255, 0.08);
-  --ke-color-exhibitions-deck-stack-line: rgba(230, 238, 244, 0.8);
-  --ke-elevation-exhibitions-deck-stack: inset -1px 0 0 rgba(255, 255, 255, 0.22), calc(7px - var(--deck-depth, 1) * 0.8px) 0 calc(18px - var(--deck-depth, 1) * 1.6px) -2px rgba(0, 0, 0, 0.94), 0 8px 20px rgba(0, 0, 0, 0.42);
-  --ke-color-exhibitions-skeleton-start: #171a1d;
-  --ke-color-exhibitions-skeleton-mid: #252a2e;
-  --ke-color-exhibitions-depth-start: #343a3f;
-  --ke-color-exhibitions-depth-mid: #202428;
-  --ke-color-exhibitions-depth-end: #15181a;
-  --ke-color-exhibitions-depth-line: rgba(202, 211, 218, 0.36);
-  --ke-color-exhibitions-depth-surface: #23272b;
-  --ke-elevation-exhibitions-depth-overlay: inset -1px 0 rgba(255, 255, 255, 0.13), inset 1px 0 rgba(255, 255, 255, 0.05);
-  --ke-elevation-exhibitions-medallion: 0 4px 12px rgba(0, 0, 0, 0.48), 0 0 0 2px rgba(8, 10, 11, 0.6);
-  --ke-color-exhibitions-deck-frame-line-hover: rgba(235, 244, 250, 0.84);
-  --ke-elevation-exhibitions-deck-frame-hover: inset -1px 0 0 rgba(255, 255, 255, 0.2), 5px 0 14px -3px rgba(0, 0, 0, 0.88), 0 6px 18px rgba(0, 0, 0, 0.36);
-  --ke-elevation-exhibitions-deck-stack-hover: inset -1px 0 0 rgba(255, 255, 255, 0.3), 7px 0 18px -2px rgba(0, 0, 0, 0.96), 0 8px 22px rgba(0, 0, 0, 0.46);
-  --ke-elevation-exhibitions-deck-filter-hover: drop-shadow(0 0 11px rgba(84, 172, 247, 0.12));
-
-  --ke-color-exhibitions-deck-count-line: rgba(255, 255, 255, 0.42);
-  --ke-color-exhibitions-deck-count-surface: rgba(7, 9, 10, 0.9);
-  --ke-color-exhibitions-deck-count-text: #f4f7f8;
-  --ke-elevation-exhibitions-deck-count: 0 4px 14px rgba(0, 0, 0, 0.78), 0 0 0 4px rgba(7, 9, 10, 0.42), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 22px rgba(84, 172, 247, 0.16);
-
-  --ke-color-exhibitions-reason-surface: #20262c;
-  --ke-color-exhibitions-reason-new-surface: #3c1d20;
-  --ke-color-exhibitions-reason-new-text: #ff8e98;
-  --ke-color-exhibitions-tag-surface: #211c2b;
-  --ke-color-exhibitions-tag-text: #c2a6fa;
-  --ke-color-exhibitions-action-surface: #121416;
-  --ke-color-exhibitions-action-hover-line: rgba(187, 222, 249, 0.72);
-  --ke-elevation-exhibitions-action-hover: 0 0 14px rgba(84, 172, 247, 0.13);
-  --ke-color-exhibitions-like-selected-line: #d86273;
-  --ke-color-exhibitions-like-selected-surface: #32171d;
-  --ke-color-exhibitions-like-selected-text: #ff788c;
-  --ke-color-exhibitions-reject-selected-line: #72777b;
-  --ke-color-exhibitions-reject-selected-surface: #2b2e30;
-  --ke-color-exhibitions-reject-selected-text: #e0e2e4;
-  --ke-color-exhibitions-rejected-row-surface: #17191a;
-  --ke-color-exhibitions-hidden-control-line: #565b5f;
-  --ke-color-exhibitions-hidden-control-surface: #232629;
-  --ke-color-exhibitions-tail-line: #292d30;
-  --ke-color-exhibitions-empty-line: #4c5257;
-
-  --ke-color-exhibitions-gallery-line: #4b5156;
-  --ke-color-exhibitions-gallery-surface: #0c0e0f;
-  --ke-elevation-exhibitions-gallery: 0 28px 100px rgba(0, 0, 0, 0.72);
-  --ke-color-exhibitions-gallery-backdrop: rgba(0, 0, 0, 0.84);
-  --ke-color-exhibitions-gallery-control-surface: #17191b;
-  --ke-color-exhibitions-gallery-stage-surface: #070809;
-  --ke-color-exhibitions-gallery-navigation-surface: #111416;
-  --ke-color-exhibitions-live-line: #4d5358;
-  --ke-color-exhibitions-live-surface: #191c1e;
-  --ke-elevation-exhibitions-live: 0 12px 34px rgba(0, 0, 0, 0.45);
-  --ke-color-exhibitions-live-undo-line: #656c72;
-  --ke-color-exhibitions-live-undo-surface: #272b2e;
-
+  --ke-elevation-exhibitions-rail-dot: var(--ke-elevation-card);
+  --ke-elevation-exhibitions-rail-dot-mobile: var(--ke-elevation-card);
+  --ke-color-exhibitions-deck-frame-line: var(--ke-color-inverse-control-border);
+  --ke-color-exhibitions-deck-frame-surface: var(--ke-color-background-inverse);
+  --ke-elevation-exhibitions-deck-frame: var(--ke-elevation-card);
+  --ke-elevation-exhibitions-deck-overlay: inset 0 0 0 var(--ke-shape-border-hairline) var(--ke-color-inverse-control-border);
+  --ke-color-exhibitions-deck-stack-line: var(--ke-color-inverse-control-border);
+  --ke-elevation-exhibitions-deck-stack: var(--ke-elevation-overlay);
+  --ke-color-exhibitions-skeleton-start: var(--ke-color-background-inverse);
+  --ke-color-exhibitions-skeleton-mid: var(--ke-color-background-inverse-raised);
+  --ke-color-exhibitions-depth-start: var(--ke-color-background-inverse-raised);
+  --ke-color-exhibitions-depth-mid: var(--ke-color-background-inverse);
+  --ke-color-exhibitions-depth-end: var(--ke-color-background-inverse);
+  --ke-color-exhibitions-depth-line: var(--ke-color-inverse-control-border);
+  --ke-color-exhibitions-depth-surface: var(--ke-color-background-inverse-raised);
+  --ke-elevation-exhibitions-depth-overlay: var(--ke-elevation-card);
+  --ke-elevation-exhibitions-medallion: var(--ke-elevation-card);
+  --ke-color-exhibitions-deck-frame-line-hover: var(--ke-color-control-inverse);
+  --ke-elevation-exhibitions-deck-frame-hover: var(--ke-elevation-overlay);
+  --ke-elevation-exhibitions-deck-stack-hover: var(--ke-elevation-overlay);
+  --ke-elevation-exhibitions-deck-filter-hover: var(--ke-elevation-card);
+  --ke-color-exhibitions-deck-count-line: var(--ke-color-inverse-control-border);
+  --ke-color-exhibitions-deck-count-surface: var(--ke-color-background-inverse);
+  --ke-color-exhibitions-deck-count-text: var(--ke-color-text-inverse);
+  --ke-elevation-exhibitions-deck-count: var(--ke-elevation-card);
+  --ke-color-exhibitions-reason-surface: var(--ke-color-background-inverse-raised);
+  --ke-color-exhibitions-reason-new-surface: color-mix(in srgb, var(--ke-color-status-danger-foreground) 24%, var(--ke-color-background-inverse));
+  --ke-color-exhibitions-reason-new-text: var(--ke-color-status-danger-foreground);
+  --ke-color-exhibitions-tag-surface: color-mix(in srgb, var(--ke-color-action-accent) 20%, var(--ke-color-background-inverse));
+  --ke-color-exhibitions-tag-text: var(--ke-color-action-accent);
+  --ke-color-exhibitions-action-surface: var(--ke-exhibitions-lightcmp-action-surface);
+  --ke-color-exhibitions-action-hover-line: var(--ke-exhibitions-lightcmp-action-hover-line);
+  --ke-elevation-exhibitions-action-hover: var(--ke-elevation-card);
+  --ke-color-exhibitions-like-selected-line: var(--ke-color-action-primary);
+  --ke-color-exhibitions-like-selected-surface: var(--ke-exhibitions-lightcmp-like-selected-surface);
+  --ke-color-exhibitions-like-selected-text: var(--ke-exhibitions-lightcmp-like-selected-text);
+  --ke-color-exhibitions-reject-selected-line: var(--ke-color-status-danger-foreground);
+  --ke-color-exhibitions-reject-selected-surface: var(--ke-exhibitions-lightcmp-reject-selected-surface);
+  --ke-color-exhibitions-reject-selected-text: var(--ke-exhibitions-lightcmp-reject-selected-text);
+  --ke-color-exhibitions-rejected-row-surface: var(--ke-exhibitions-lightcmp-rejected-row-surface);
+  --ke-color-exhibitions-hidden-control-line: var(--ke-exhibitions-lightcmp-hidden-control-line);
+  --ke-color-exhibitions-hidden-control-surface: var(--ke-exhibitions-lightcmp-hidden-control-surface);
+  --ke-color-exhibitions-tail-line: var(--ke-exhibitions-lightcmp-tail-line);
+  --ke-color-exhibitions-empty-line: var(--ke-exhibitions-lightcmp-empty-line);
+  --ke-color-exhibitions-gallery-line: var(--ke-color-border-default);
+  --ke-color-exhibitions-gallery-surface: var(--ke-color-background-surface);
+  --ke-elevation-exhibitions-gallery: var(--ke-elevation-overlay);
+  --ke-color-exhibitions-gallery-backdrop: color-mix(in srgb, var(--ke-color-background-inverse) 84%, transparent);
+  --ke-color-exhibitions-gallery-control-surface: var(--ke-color-background-surface-strong);
+  --ke-color-exhibitions-gallery-stage-surface: var(--ke-color-background-inverse);
+  --ke-color-exhibitions-gallery-navigation-surface: var(--ke-color-inverse-control-background);
+  --ke-color-exhibitions-live-line: var(--ke-exhibitions-lightcmp-live-line);
+  --ke-color-exhibitions-live-surface: var(--ke-exhibitions-lightcmp-live-surface);
+  --ke-elevation-exhibitions-live: var(--ke-elevation-overlay);
+  --ke-color-exhibitions-live-undo-line: var(--ke-exhibitions-lightcmp-live-undo-line);
+  --ke-color-exhibitions-live-undo-surface: var(--ke-exhibitions-lightcmp-live-undo-surface);
   /* Focus connectivity diagnostic. This warm receipt family is operational UI,
      not a new brand palette. */
   --ke-color-connectivity-text: #33261e;
@@ -196,4 +183,70 @@
      - exhibitions gallery/deck/live blacks stay distinct because they mark
        modal stage, framed media depth and transient receipt hierarchy;
      - connectivity success/error are probe outcomes, not generic form badges. */
+
+  /* Same-component light comparison indirection. */
+  --ke-exhibitions-lightcmp-background: var(--ke-color-background-inverse);
+  --ke-exhibitions-lightcmp-surface: var(--ke-color-background-inverse);
+  --ke-exhibitions-lightcmp-raised: var(--ke-color-background-inverse-raised);
+  --ke-exhibitions-lightcmp-border: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-text: var(--ke-color-text-inverse);
+  --ke-exhibitions-lightcmp-muted: color-mix(in srgb, var(--ke-color-text-inverse) 70%, transparent);
+  --ke-exhibitions-lightcmp-sticky-surface: color-mix(in srgb, var(--ke-color-background-inverse) 96%, transparent);
+  --ke-exhibitions-lightcmp-mode-surface: var(--ke-color-background-inverse);
+  --ke-exhibitions-lightcmp-mode-selected-line: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-kbd-line: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-kbd-line-strong: var(--ke-color-control-inverse);
+  --ke-exhibitions-lightcmp-kbd-surface: var(--ke-color-background-inverse-raised);
+  --ke-exhibitions-lightcmp-kbd-text: var(--ke-color-text-inverse);
+  --ke-exhibitions-lightcmp-kbd-shadow: var(--ke-color-background-inverse);
+  --ke-exhibitions-lightcmp-title-hover: var(--ke-color-text-inverse);
+  --ke-exhibitions-lightcmp-action-surface: var(--ke-color-background-inverse-raised);
+  --ke-exhibitions-lightcmp-action-hover-line: var(--ke-color-action-primary);
+  --ke-exhibitions-lightcmp-like-selected-surface: color-mix(in srgb, var(--ke-color-action-primary) 28%, var(--ke-color-background-inverse));
+  --ke-exhibitions-lightcmp-like-selected-text: var(--ke-color-text-inverse);
+  --ke-exhibitions-lightcmp-reject-selected-surface: color-mix(in srgb, var(--ke-color-status-danger-foreground) 24%, var(--ke-color-background-inverse));
+  --ke-exhibitions-lightcmp-reject-selected-text: var(--ke-color-text-inverse);
+  --ke-exhibitions-lightcmp-rejected-row-surface: var(--ke-color-background-inverse-raised);
+  --ke-exhibitions-lightcmp-hidden-control-line: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-hidden-control-surface: var(--ke-color-background-inverse-raised);
+  --ke-exhibitions-lightcmp-tail-line: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-empty-line: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-live-line: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-live-surface: var(--ke-color-background-inverse-raised);
+  --ke-exhibitions-lightcmp-live-undo-line: var(--ke-color-inverse-control-border);
+  --ke-exhibitions-lightcmp-live-undo-surface: var(--ke-color-background-inverse);
+}
+
+/* `?theme=light` only changes role resolution on the same exhibitions surface. */
+:root:has(.ex-page[data-exhibitions-theme="light"]) {
+  --ke-exhibitions-lightcmp-background: var(--ke-color-background-page);
+  --ke-exhibitions-lightcmp-surface: var(--ke-color-background-surface);
+  --ke-exhibitions-lightcmp-raised: var(--ke-color-background-surface-strong);
+  --ke-exhibitions-lightcmp-border: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-text: var(--ke-color-text-primary);
+  --ke-exhibitions-lightcmp-muted: var(--ke-color-text-muted);
+  --ke-exhibitions-lightcmp-sticky-surface: color-mix(in srgb,var(--ke-color-background-page) 96%,transparent);
+  --ke-exhibitions-lightcmp-mode-surface: var(--ke-color-background-subtle);
+  --ke-exhibitions-lightcmp-mode-selected-line: var(--ke-color-border-brand-emphasis);
+  --ke-exhibitions-lightcmp-kbd-line: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-kbd-line-strong: var(--ke-color-border-brand-emphasis);
+  --ke-exhibitions-lightcmp-kbd-surface: var(--ke-color-background-surface-strong);
+  --ke-exhibitions-lightcmp-kbd-text: var(--ke-color-text-primary);
+  --ke-exhibitions-lightcmp-kbd-shadow: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-title-hover: var(--ke-color-action-primary-strong);
+  --ke-exhibitions-lightcmp-action-surface: var(--ke-color-background-surface-strong);
+  --ke-exhibitions-lightcmp-action-hover-line: var(--ke-color-action-primary);
+  --ke-exhibitions-lightcmp-like-selected-surface: color-mix(in srgb,var(--ke-color-action-primary) 14%,var(--ke-color-background-surface));
+  --ke-exhibitions-lightcmp-like-selected-text: var(--ke-color-action-primary-ink);
+  --ke-exhibitions-lightcmp-reject-selected-surface: var(--ke-color-status-danger-background);
+  --ke-exhibitions-lightcmp-reject-selected-text: var(--ke-color-status-danger-foreground);
+  --ke-exhibitions-lightcmp-rejected-row-surface: var(--ke-color-background-subtle);
+  --ke-exhibitions-lightcmp-hidden-control-line: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-hidden-control-surface: var(--ke-color-background-surface-strong);
+  --ke-exhibitions-lightcmp-tail-line: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-empty-line: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-live-line: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-live-surface: var(--ke-color-background-surface-strong);
+  --ke-exhibitions-lightcmp-live-undo-line: var(--ke-color-border-default);
+  --ke-exhibitions-lightcmp-live-undo-surface: var(--ke-color-background-surface);
 }
