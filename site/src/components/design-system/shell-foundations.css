@@ -139,3 +139,44 @@
      - Reference4 glass layers are retained because their alpha order constructs
        the accepted stitched-skin depth and cannot collapse to one flat surface. */
 }
+
+/* AR-17: one lower-surface grammar. Lifecycle remains owned by each existing
+   dialog/toast; this does not turn a form or confirmation into a timed toast. */
+:root {
+  --ke-lower-surface-offset: 0px;
+  --ke-lower-keyboard-offset: 0px;
+  --ke-lower-surface-radius: var(--ke-shape-radius-focus-panel);
+}
+body[data-lower-surface-state] [data-app-lower-surface][data-app-lower-lifecycle] {
+  box-sizing: border-box;
+  border: 1px solid var(--ke-color-toast-border);
+  border-radius: var(--ke-lower-surface-radius);
+  background: var(--ke-color-background-surface);
+  color: var(--ke-color-text-primary);
+  box-shadow: var(--ke-elevation-overlay);
+  max-height: calc(var(--ke-lower-visible-height, 100dvh) - 24px - env(safe-area-inset-bottom));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+body[data-lower-surface-state] dialog[data-app-lower-surface][data-app-lower-lifecycle] {
+  position: fixed;
+  inset: auto 0 calc(12px + env(safe-area-inset-bottom) + var(--ke-lower-keyboard-offset));
+  width: min(var(--ke-focus-dialog-max, 680px), calc(100% - 24px));
+  margin: 0 auto;
+}
+body[data-lower-surface-state] [data-app-lower-surface][data-app-lower-lifecycle] :is(button, [role="button"]) { min-height: var(--ke-control-min, 44px); }
+body [data-personalization-consent][data-app-lower-surface] {
+  bottom: calc(12px + env(safe-area-inset-bottom) + var(--ke-lower-surface-offset));
+}
+body[data-lower-surface-state="modal"] :is(.mobile-bottom-nav,.mobile-sticky-cta,[data-floating-page-context]) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body[data-lower-surface-state] [data-app-lower-surface="notification"][data-app-lower-lifecycle] {
+  max-height: calc(var(--ke-lower-visible-height, 100dvh) - max(0px, calc(var(--ke-lower-surface-offset) - var(--ke-lower-keyboard-offset))) - 24px);
+}
+body[data-lower-surface-state] [data-app-lower-surface="notification"] .mobile-toast__controls {
+  position: sticky; top: 0; align-self: start;
+  background: var(--ke-color-background-surface);
+}

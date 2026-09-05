@@ -129,7 +129,7 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
   </button>
 </div>
 <div class="calendar-sheet" data-calendar-sheet hidden aria-hidden="true">
-  <section class="calendar-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-calendar-title">
+  <section data-app-lower-surface="calendar" data-app-lower-lifecycle="persistent" class="calendar-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-calendar-title">
     <header>
       <div><h2 id="mobile-calendar-title">Выбрать дату</h2><p>{selectedLabel} · события до {availability.furthestEventDate}</p></div>
       <button type="button" data-calendar-close aria-label="Закрыть">×</button>
@@ -208,6 +208,14 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
     trigger?.addEventListener('click', openSheet);
     close?.addEventListener('click', closeSheet);
     sheet?.addEventListener('click', (event) => { if (event.target === sheet) closeSheet(); });
-    addEventListener('keydown', (event) => { if (event.key === 'Escape' && !sheet?.hidden) closeSheet(); });
+    addEventListener('keydown', (event) => {
+      if (!sheet || sheet.hidden) return;
+      if (event.key === 'Escape') { event.preventDefault(); closeSheet(); }
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(sheet.querySelectorAll('button:not(:disabled),a[href],[tabindex="0"]')).filter(node => node.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    });
   });
 </script>

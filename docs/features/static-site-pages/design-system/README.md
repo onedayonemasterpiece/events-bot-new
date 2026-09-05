@@ -148,3 +148,26 @@ exercises 1/2/3/4/5/7/10 existing Home cards after local-profile filtering.
 That runtime fixture is not an organic cloud-personalized feed. Full
 same-snapshot Kaggle acceptance and the open owner-review register remain
 required; no palette completion or A=S=P is inferred from this diagnostic.
+
+### Owner review: shared lower surfaces (AR-17, implementation in progress)
+
+`EventLayout` owns measured navigation/keyboard clearance and modal visibility
+for the existing lower surfaces on desktop and mobile. Native form/detail
+dialogs, mobile calendar/confirmation panels and consent use the existing
+shared shell paint; interactive state is retained, not timed away.
+The ordinary `/dlya-menya/` page title now uses the same H1 role; its compact
+account/form H2 remains a distinct functional role.
+`MobileToastRegion` remains the notification owner (queue, deduplication,
+interaction/background pauses). Passive info/success keep a visible countdown;
+actions/errors remain until used or dismissed. Mobile rail undo uses this owner
+instead of a second expiring local toast. Modal visibility pauses notifications
+and hides lower navigation/context rather than stacking over the form.
+Repeated ready-state events do not restart toast lifetime; reduced-motion
+notifications show remaining seconds without an animated bar. Custom calendar
+and confirmation dialogs wrap Tab focus and preserve Escape/focus return.
+Focused compiled-date diagnostics verified lower calendar placement, modal
+notification suspension and long notices at390/1440/1920. Browser contract
+tests also exercise oversized text with native dialogs; neither is real-candidate
+acceptance. Media-viewer migration, complete real-browser coverage and same-snapshot
+publication remain open; these bindings alone do not close AR-17. Desktop
+primary navigation remains unchanged pending AR-18 owner choice.

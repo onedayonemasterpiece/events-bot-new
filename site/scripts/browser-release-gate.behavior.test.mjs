@@ -393,3 +393,36 @@ test('semantic reading selector chooses heading rather than action metadata', as
     assert.equal(await page.locator('main').evaluate((e,sel)=>e.querySelector(sel).tagName,selector),'H1');
   } finally {await browser.close();}
 });
+
+test('existing lower shell keeps native forms and long notifications clear of navigation', async () => {
+  const layout=readFileSync(new URL('../src/layouts/EventLayout.astro',import.meta.url),'utf8');
+  const begin=layout.indexOf('// AR-17: the existing shell owns');
+  const end=layout.indexOf('const syncExhibitionsBadge',begin);
+  assert.ok(begin>0 && end>begin);
+  const {transform}=await import('esbuild');
+  const runtime=(await transform(layout.slice(begin,end),{loader:'ts'})).code;
+  const css=readFileSync(new URL('../src/components/design-system/shell-foundations.css',import.meta.url),'utf8');
+  const {chromium}=await import('playwright');
+  const browser=await chromium.launch(browserLaunchOptions());
+  try {
+    for(const [width,height] of [[390,844],[1440,900],[1920,1080]]){
+      const page=await browser.newPage({viewport:{width,height}});
+      await page.setContent(`<style>:root{--ke-color-background-surface:#fffdf8;--ke-color-text-primary:#221a14;--ke-shape-radius-focus-panel:24px;--ke-control-min:44px}body{margin:0}.mobile-bottom-nav{position:fixed;bottom:0;height:64px;width:100%}.mobile-toast-region{position:fixed;bottom:calc(var(--ke-lower-surface-offset) + 12px);left:12px;right:12px}.mobile-toast__controls{height:44px}dialog{padding:12px}</style><style>${css}</style><nav class="mobile-bottom-nav">Nav</nav><div class="mobile-toast-region"><div data-app-lower-surface="notification" data-app-lower-lifecycle="persistent"><div class="mobile-toast__controls"><button>Close</button></div><p>${'Long notice '.repeat(1500)}</p></div></div><dialog data-app-lower-surface="form" data-app-lower-lifecycle="persistent"><form><input value="retained text"><button type="button">Close</button></form></dialog>`);
+      await page.addScriptTag({content:runtime});
+      const metrics=await page.locator('[data-app-lower-surface="notification"]').evaluate(e=>{const b=e.getBoundingClientRect();return{top:b.top,bottom:b.bottom,color:getComputedStyle(e).backgroundColor}});
+      assert.ok(metrics.top>=0,`long notice starts inside ${width}`);
+      assert.ok(metrics.bottom<=height-64,`long notice clears nav at ${width}`);
+      assert.equal(metrics.color,'rgb(255, 253, 248)');
+      await page.locator('dialog').evaluate(e=>e.showModal());
+      await page.waitForFunction(()=>document.body.dataset.lowerSurfaceState==='modal');
+      assert.equal(await page.locator('.mobile-bottom-nav').isVisible(),false);
+      const dialog=await page.locator('dialog').boundingBox();
+      assert.ok(Math.abs(dialog.y+dialog.height-(height-12))<=1,'form bottom placement');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(()=>document.body.dataset.lowerSurfaceState==='ready');
+      assert.equal(await page.locator('input').inputValue(),'retained text');
+      assert.equal(await page.locator('.mobile-bottom-nav').isVisible(),true);
+      await page.close();
+    }
+  } finally {await browser.close();}
+});

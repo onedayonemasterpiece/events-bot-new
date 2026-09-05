@@ -2569,6 +2569,50 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         });
         updateContext();
       }
+      // AR-17: the existing shell owns the measured lower stack. Surface
+      // runtimes keep their queue/modality/actions; they consume one offset.
+      {
+        let scheduled = false;
+        let lastLowerState = '';
+        const visible = (node: Element) => {
+          const box=node.getBoundingClientRect(), style=getComputedStyle(node);
+          return box.width>0 && box.height>0 && style.display!=='none'
+            && style.visibility!=='hidden' && Number(style.opacity)!==0;
+        };
+        const updateLowerStack = () => {
+          scheduled=false;
+          const viewport=window.visualViewport;
+          const keyboardOffset=Math.max(0,innerHeight-(viewport?.height || innerHeight)-(viewport?.offsetTop || 0));
+          const modalOpen=[...document.querySelectorAll('dialog[open],[aria-modal="true"],details[data-mobile-discovery-menu][open]')].some(visible);
+          const nextState=modalOpen?'modal':'ready';
+          if(document.body.dataset.lowerSurfaceState!==nextState)document.body.dataset.lowerSurfaceState=nextState;
+          const occupied=[...document.querySelectorAll('.mobile-bottom-nav,.mobile-sticky-cta')]
+            .filter(visible).map(node=>Math.max(0,innerHeight-node.getBoundingClientRect().top));
+          const offset=Math.ceil(Math.max(keyboardOffset,...occupied,0));
+          for(const [key,value] of [['--ke-lower-surface-offset',offset],['--ke-lower-keyboard-offset',Math.ceil(keyboardOffset)],['--ke-lower-visible-height',Math.floor(viewport?.height || innerHeight)]]) {
+            const cssValue=`${value}px`;
+            if(document.body.style.getPropertyValue(String(key))!==cssValue)document.body.style.setProperty(String(key),cssValue);
+          }
+          const stateKey=`${modalOpen}:${offset}`;
+          if(stateKey!==lastLowerState){
+            lastLowerState=stateKey;
+            window.dispatchEvent(new CustomEvent('kenigevents:lower-surface-state',{detail:{modalOpen,offset}}));
+          }
+        };
+        const scheduleLowerStack=()=>{if(!scheduled){scheduled=true;requestAnimationFrame(updateLowerStack);}};
+        window.addEventListener('resize',scheduleLowerStack,{passive:true});
+        window.addEventListener('scroll',scheduleLowerStack,{passive:true});
+        window.addEventListener('pageshow',scheduleLowerStack);
+        window.visualViewport?.addEventListener('resize',scheduleLowerStack,{passive:true});
+        window.visualViewport?.addEventListener('scroll',scheduleLowerStack,{passive:true});
+        document.addEventListener('toggle',scheduleLowerStack,true);
+        const observer=new MutationObserver(scheduleLowerStack);
+        observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','hidden','class','aria-hidden']});
+        const observeLowerStack=()=>observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','hidden','class','aria-hidden']});
+        window.addEventListener('pagehide',()=>observer.disconnect());
+        window.addEventListener('pageshow',observeLowerStack);
+        updateLowerStack();
+      }
       const syncExhibitionsBadge = () => {
         let ids: Array<number | string> = [];
         let stored: unknown = null;
@@ -3078,6 +3122,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (banner) return banner;
           banner = document.createElement('div');
           banner.className = 'personalization-consent';
+          banner.dataset.appLowerSurface = 'consent';
+          banner.dataset.appLowerLifecycle = 'persistent';
           banner.dataset.personalizationConsent = 'true';
           banner.setAttribute('role', 'dialog');
           banner.setAttribute('aria-live', 'polite');

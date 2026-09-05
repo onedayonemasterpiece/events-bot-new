@@ -320,6 +320,12 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
       void commitNegative(row, { rememberSwipeConsent:true });
     });
     document.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab' && confirm && !confirm.hidden) {
+        const controls = Array.from(confirm.querySelectorAll('button:not(:disabled)'));
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
       if (event.key === 'Escape' && confirm && !confirm.hidden) {
         event.preventDefault();
         closeConfirm();

@@ -67,7 +67,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
     серверной проверки активного участника.
   </p>
 
-  <dialog class="focus-feedback__dialog" data-feedback-dialog aria-labelledby={`${idPrefix}-dialog-title`}>
+  <dialog data-app-lower-surface="form" data-app-lower-lifecycle="persistent" class="focus-feedback__dialog" data-feedback-dialog aria-labelledby={`${idPrefix}-dialog-title`}>
     <div class="focus-feedback__sheet">
       <header class="focus-feedback__header">
         <div>
