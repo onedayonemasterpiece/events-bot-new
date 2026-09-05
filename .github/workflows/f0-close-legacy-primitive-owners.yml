@@ -1,18 +1,10 @@
-name: F0 owner-review evidence
-# Existing F0 runner, now read-only. It neither repairs source nor publishes a
-# site. Full real previews remain exclusively on the canonical Kaggle path.
+name: F0 owner-review visible-consumer correction
 on:
-  workflow_dispatch:
   push:
     branches: [work/owner-audioreview-card-geometry-20260905]
-    paths:
-      - .github/workflows/f0-close-legacy-primitive-owners.yml
-      - site/src/**
-      - site/scripts/check-browser-release-gate.mjs
-      - site/scripts/browser-release-gate.behavior.test.mjs
-      - site/tests/owner-audioreview-card-geometry.test.mjs
+    paths: [.github/workflows/f0-close-legacy-primitive-owners.yml]
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: f0-owner-review-evidence-${{ github.ref }}
   cancel-in-progress: false
@@ -23,26 +15,79 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.16.0'
-      - name: Install exact lockfile dependencies
+      - name: Apply one diagnosed harness correction and update the existing stage routing
         run: |
           mkdir -p artifacts/owner-review
-          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
-          cd site && npm ci --no-audit --no-fund
-      - name: Verify existing SoT and execute source regressions
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code 9f5f59c52fc442990f6e08622ed58c173249a039 HEAD -- site
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('site/scripts/check-browser-release-gate.mjs');s=p.read_text()
+          old="const sectionNode=page.locator('.ke-popular-behavior__head:not(.is-stuck) h2,.free-collection__results > h2,.ex-group__heading h2,.ex-tail-callout h2,.unusual-page__empty h2').first();"
+          new="const sectionNode=page.locator('.ke-popular-behavior__head:not(.is-stuck) h2:visible,.free-collection__results > h2:visible,.ex-group__heading h2:visible,.ex-tail-callout h2:visible,.unusual-page__empty h2:visible').first();"
+          assert s.count(old)==1;s=s.replace(old,new)
+          old="          let rejected=false;try {assertOwnerSectionMetrics(poisoned,width);} catch {rejected=true;}"
+          new="          invariant(poisoned && Number.parseFloat(poisoned.style.fontSize)===17,'negative H2 control did not reach the measured visible consumer');\n"+old
+          assert s.count(old)==1;p.write_text(s.replace(old,new))
+          p=Path('docs/features/static-site-pages/design-system/launch-normalization-48h.md');s=p.read_text()
+          title='# Нормализация UI — исполняемый Astro-маршрут\n'
+          assert s.startswith(title)
+          current='''
+          ## Current — reopened after owner audio review, 2026-09-05
+          
+          Владелец отверг итог `8b1bb81298bfca2fe2aaa3ceb7e5f654748b301f`.
+          Прежний completion в #621 comment 5546939304 больше не является
+          доказательством межстраничной согласованности. Продолжение исправлений:
+          `work/owner-audioreview-card-geometry-20260905`; integration target прежний.
+          Текущие evidence и остаток — в существующих DS STATUS и
+          `docs/launch-normalization/owner-audioreview-20260905.md`; ссылки в README.
+          Source/fixture diagnostics не заменяют следующий exact real Kaggle Preview.
+          Дальнейший текст сохраняет правила программы и историческое состояние
+          до аудиоревью; прежнее ожидание ревью не означает приёмку исправлений.
+          
+          '''
+          p.write_text(title+current+s[len(title):])
+          p=Path('CHANGELOG.md');s=p.read_text();p.write_text('''## 2026-09-05 — owner audio-review correction (not production)
+          
+          Restored semantic H1/H2 roles and current-data Hero Talk scenes; fixed
+          partial-row stretching, product Home, exhibitions mobile navigation,
+          global new-count ownership, preview clock, share label and ArrowDown
+          reading behavior. Added schematic page context in the existing shell.
+          Existing browser gate now checks computed roles, negative controls,
+          clipping/occlusion, card geometry and real interaction states.
+          Same-snapshot Kaggle publication, complete real event continuation,
+          public festival/club counts and native Penpot acceptance remain open.
+          
+          '''+s)
+          PY
+          git show e932b0d416e257721979e1d033059095fb5b3f44:.github/workflows/f0-close-legacy-primitive-owners.yml > .github/workflows/f0-close-legacy-primitive-owners.yml
+      - name: Source and SoT regressions before saving
         run: |
+          cd site && npm ci --no-audit --no-fund && cd ..
           node site/scripts/check-astro-family-sot.mjs > artifacts/owner-review/family-check.json
+          node site/scripts/check-token-impact-sot.mjs > artifacts/owner-review/token-check.json
           node --experimental-strip-types --test site/tests/owner-audioreview-card-geometry.test.mjs site/tests/adaptive-event-card-grid.test.mjs site/tests/unusual-listing-typography-token-adoption.test.mjs site/tests/event-date-availability.test.mjs site/tests/keyboard-event-navigation-production.test.mjs > artifacts/owner-review/source-regressions.tap
+      - name: Save the exact correction and restore the read-only workflow in the same commit
+        run: |
+          test "$(git ls-remote origin refs/heads/work/owner-audioreview-card-geometry-20260905 | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site/scripts/check-browser-release-gate.mjs docs/features/static-site-pages/design-system/launch-normalization-48h.md CHANGELOG.md .github/workflows/f0-close-legacy-primitive-owners.yml
+          git diff --cached --check
+          git commit -m 'test(ui): poison the visible section consumer and reopen current stage docs'
+          git push origin HEAD:refs/heads/work/owner-audioreview-card-geometry-20260905
+          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
       - name: Install Chromium
         working-directory: site
         run: npx playwright install --with-deps chromium
-      - name: Execute existing browser-gate regression suite
+      - name: Execute existing browser regression suite
         run: node --experimental-strip-types --test site/scripts/browser-release-gate.behavior.test.mjs > artifacts/owner-review/browser-regressions.tap
-      - name: Compile isolated page classes and capture role and behavior evidence
+      - name: Inspect compiled existing page-class diagnostics, not a published build
         env:
           PUBLIC_SITE_MODE: preview
           PUBLIC_PREVIEW_BUILD_ID: local-owner-review
@@ -60,7 +105,6 @@ jobs:
           const out=`artifacts/owner-review/after-${kind}`;mkdirSync(out,{recursive:true});
           const server=await startReleaseServer('site/dist'),browser=await chromium.launch(),page=await browser.newPage();
           page.setDefaultTimeout(12000);page.setDefaultNavigationTimeout(45000);
-          const pageErrors=[];page.on('pageerror',e=>pageErrors.push(String(e)));
           let report;
           try {
             report=await assertOwnerReviewPages(page,server.origin,'',{routes,artifactDir:out,captureOnly:true});
@@ -71,28 +115,27 @@ jobs:
             report ||= {ok:false,errors:[]};report.ok=false;report.errors.push({step:'browser-actions',error:String(error.stack||error)});
             await page.screenshot({path:`${out}/failure.png`});
           } finally {
-            report ||= {ok:false,errors:[{error:'No report'}]};report.page_errors=pageErrors;
-            report.source_sha=process.env.GITHUB_SHA;
+            report ||= {ok:false,errors:[{error:'No report'}]};
+            report.source_sha=(await import('node:child_process')).execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
             writeFileSync(`artifacts/owner-review/${kind}-result.json`,JSON.stringify(report,null,2));
             await browser.close();await server.close();
           }
           JS
           done
-      - name: Record diagnostic provenance, not an acceptance receipt
+      - name: Export remote-readable source and test evidence
         if: always()
         run: |
           mkdir -p artifacts/owner-review
+          git archive --format=tar HEAD site docs .codex/skills AGENTS.md .github CHANGELOG.md | gzip > artifacts/owner-review/source.tar.gz
           git rev-parse HEAD > artifacts/owner-review/checked-out-sha.txt
-          git diff --exit-code
-          printf '%s\n' 'Compiled committed-fixture diagnostics only. No real-snapshot build, publication, production change or Penpot check. Owner acceptance remains reopened.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
+          echo 'Focused fixture diagnostics only. Not same-snapshot acceptance; no publication or Penpot change.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: owner-review-evidence-${{ github.sha }}
+          name: owner-review-visible-consumer-${{ github.sha }}
           path: artifacts/owner-review/
           retention-days: 14
-          if-no-files-found: error
-      - name: Reject captured role or behavior defects
+      - name: Reject any captured mismatch
         run: |
           python - <<'PY'
           import json,pathlib
