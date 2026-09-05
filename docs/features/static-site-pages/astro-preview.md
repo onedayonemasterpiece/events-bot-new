@@ -1203,3 +1203,5 @@ existing transport failure isolation checks are retained. Free mobile's in-flow
 page medallion is doubled without scaling all medallions or covering card text.
 The next same-corpus Kaggle handoff must use the product Home URL as its primary
 link. Source changes/test packets are not deployed runtime or independent acceptance.
+
+Home no longer adds a second page-local top gap before Hero Talk; existing shell/brand clearance remains the shell owner. This is not a new Hero or palette.

@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Removed Home’s duplicate page-local top spacer before Hero Talk; shell retains ownership of brand/header clearance.
 - Owner follow-up: shared lighter card typography (including listing titles), read-only actual shell occupied rectangles, and larger in-flow Free mobile page identity; framing acceptance now checks painted bounds and text/ID safety together.
 - Ordinary Favorites/Partners titles and mobile Search now share the site H1 hierarchy; the browser role packet covers all four omitted Search/Favorites/partner routes.
 - Related-card inverse Share foreground crosses the actual Astro child scope; no-JS Home smoke waits for its CDN stylesheet before counting visible scenes.
