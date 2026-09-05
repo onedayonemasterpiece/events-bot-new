@@ -47,7 +47,7 @@ Production root, stable ICS and Penpot are not changed by these diagnostics.
 ## AR-04/05 shared internal tracks (candidate v2 correction)
 
 AdaptiveEventCardGrid v2 remains the unaccepted owner-review candidate. Its
-four card anatomy tracks now use CSS subgrid, so media/body/utility/feedback
+four card anatomy tracks now use CSS subgrid (`grid-subgrid` diagnostics), so media/body/utility/feedback
 boundaries align across a rendered row, including runtime-reordered/inserted
 cards. Normal explicit columns retain singleton width; no auto-fit stretching
 or removal of admitted events. Multi-column flow uses the existing compact5:4
@@ -67,8 +67,11 @@ The existing production keyboard router now traverses title → visible prose
 paragraphs → practical summary → related cards with ArrowDown. ArrowUp from
 the first related row returns through the reading stops. Existing editable,
 modifier/composition, dialog and gallery guards remain; no global scroll-jump
-or new router is introduced. Source tests are diagnostic; exact5370 browser
-reading/action evidence and the same-snapshot candidate remain required.
+or new router is introduced. Source tests are diagnostic; the same-snapshot candidate remains required. A real5370 focused probe exposed
+`data-event-title` metadata on the action panel before the H1; the router now
+selects `h1[data-event-title]`, with an executable DOM-collision regression.
+Diagnostic module replay reaches H1 → four paragraphs → practical → first
+related card at1440/1920; this is not independent candidate acceptance.
 
 ## Existing owners and reverse impact
 

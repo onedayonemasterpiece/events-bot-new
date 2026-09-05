@@ -45,7 +45,7 @@ test('AdaptiveEventCardGrid clamps inputs and exposes the exact diagnostics cont
     'data-ds-version="2"',
     'data-adaptive-event-card-grid',
     'data-adaptive-grid-card-root="EventCard"',
-    'data-adaptive-grid-layout-engine="flex-lines"',
+    'data-adaptive-grid-layout-engine="grid-subgrid"',
     'data-adaptive-grid-remainder-policy="regular-column"',
   ]) assert.ok(adaptive.includes(marker), `missing ${marker}`);
   assert.match(adaptive, /data-adaptive-grid-remainder-variant=\{initialRemainderVariant\}/u);

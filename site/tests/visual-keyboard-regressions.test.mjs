@@ -77,7 +77,8 @@ test('visual-only photos retain the accepted compact cover contract when bbox me
     imageEvent(3, 1600, 1000, stale),
   ], { rowSize:3, mediaTreatment:'hybrid' });
 
-  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='visual').every(({layout})=>layout.fit==='cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='document' && layout.potentialCoverCrop>0).every(({layout})=>layout.fit==='contain' && layout.coverCrop===0), 'unlocated poster text cannot inherit area-only crop permission');
   assert.ok(packed.every(({ layout }) => layout.mediaTreatment === 'visual-cover'));
   assert.ok(packed.every(({ layout }) => layout.cropReason.startsWith('visual_only_focal_fallback:')));
   assert.ok(packed[0].layout.rowRatio >= 1 && packed[0].layout.rowRatio <= 4 / 3);
@@ -96,7 +97,8 @@ test('the Dog-page photo canaries cannot regress to contain bands and may reorde
   assert.deepEqual(packed.map(({ layout }) => layout.mediaTreatment), [
     'visual-cover', 'visual-cover', 'visual-cover', 'visual-cover',
   ]);
-  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='visual').every(({layout})=>layout.fit==='cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='document' && layout.potentialCoverCrop>0).every(({layout})=>layout.fit==='contain' && layout.coverCrop===0), 'unlocated poster text cannot inherit area-only crop permission');
   assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio <= 8 / 5));
   assert.deepEqual(new Set(packed.map(({ item }) => item.id)), new Set([5757, 6586, 6318, 6652]),
     'packing may reorder cards but must preserve the selected set');
@@ -117,7 +119,8 @@ test('6686 visual-only recommendation trio stays a compact horizontal equal-heig
 
   assert.deepEqual(packed.map(({ item }) => item.id), [6764, 7023, 7022]);
   assert.ok(packed.every(({ layout }) => layout.mediaKind === 'visual'));
-  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='visual').every(({layout})=>layout.fit==='cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='document' && layout.potentialCoverCrop>0).every(({layout})=>layout.fit==='contain' && layout.coverCrop===0), 'unlocated poster text cannot inherit area-only crop permission');
   assert.ok(packed.every(({ layout }) => layout.rowIndex === 0));
   assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio < 1.3),
     `expected the compact 5:4 neighbourhood, got ${packed[0]?.layout.rowRatio}`);
@@ -306,7 +309,7 @@ test('optimizer may place the first OCR item in the final remainder to keep full
   assert.equal(packed.find(({ item }) => item.id === 10)?.layout.rowIndex, 1, 'source anchor may move to the final remainder');
 });
 
-test('incompatible ranked OCR prefix uses a bounded alternate instead of opening a middle hole', () => {
+test('incompatible ranked OCR prefix retains every admitted identity without middle holes', () => {
   const document = (id, width, height) => imageEvent(id, width, height, { image_text_mode:'ocr_text' });
   const packed = packRelatedCardRows([
     document(20, 500, 1000),
@@ -320,7 +323,7 @@ test('incompatible ranked OCR prefix uses a bounded alternate instead of opening
   assert.equal(packed.length, 6, 'one bounded alternate preserves the finite six-card surface');
   assert.deepEqual([...new Set(packed.map(({ layout }) => layout.rowIndex))]
     .map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length), [3, 3]);
-  assert.ok([20, 21, 22].some((id) => !packed.some(({ item }) => item.id === id)), 'one incompatible OCR candidate is replaced, not put in a singleton middle row');
+  assert.deepEqual(packed.map(({item})=>item.id), [20,21,22,23,24,25], 'layout must not replace admitted events with alternates');
 });
 
 test('captured Dog-page production payloads reject the exact 22%/32% photo-band regression', () => {
@@ -359,7 +362,8 @@ test('global row optimizer separates incompatible OCR ratios and keeps every doc
   assert.notEqual(tallRow, squareRow, 'incompatible OCR posters must be placed in different rows');
   assert.equal(new Set(packed.map(({ layout }) => layout.rowIndex)).size, 2, 'enumeration finds the two-row global minimum instead of greedy overflow');
   assert.ok([...new Set(packed.map(({ layout }) => layout.rowIndex))].every((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length === 3));
-  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='visual').every(({layout})=>layout.fit==='cover'));
+  assert.ok(packed.filter(({layout})=>layout.mediaKind==='document' && layout.potentialCoverCrop>0).every(({layout})=>layout.fit==='contain' && layout.coverCrop===0), 'unlocated poster text cannot inherit area-only crop permission');
   assert.ok(packed.filter(({ layout }) => layout.mediaKind === 'document').every(({ layout }) => layout.coverCrop <= 0.2 + 1e-9));
   assert.ok(new Set(packed.map(({ layout }) => layout.rowCost)).size >= 1, 'optimizer serializes its page-height objective');
 
@@ -388,6 +392,9 @@ test('global row optimizer separates incompatible OCR ratios and keeps every doc
         continue;
       }
       if (plan.length !== 3 || new Set(plan.map(({ layout }) => layout.rowIndex)).size !== 1) continue;
+      // The fallback preserves admission when no compatible partition exists;
+      // it is not an intrinsic-ratio candidate in this optimizer search.
+      if (plan.some(({layout})=>layout.rowMode==='document-mixed-contained')) continue;
       const tailIds = new Set(tail.map((item) => item.id));
       best = Math.min(best, plan[0].layout.rowCost + exhaustiveMinimum(rest.filter((item) => !tailIds.has(item.id))));
     }
@@ -411,8 +418,8 @@ test('related and personal continuation surfaces cannot override EventCard fit',
   assert.doesNotMatch(desktop, /data-lab-media-treatment="[^"]+"[^}]*object-fit:/su);
   assert.doesNotMatch(personal, /data-lab-media-treatment="[^"]+"[^}]*object-fit:/su);
   assert.doesNotMatch(personal, /data-lab-media-kind="visual"[^}]*object-fit:\s*cover/su);
-  assert.match(layout, /image\.style\.objectFit = authoritativeFit/u);
-  assert.match(layout, /relatedLayout\?\.cropReason \|\| 'responsive_target_unknown'/u);
+  assert.match(layout, /mediaShell\.dataset\.mediaFrameFit = authoritativeFit/u);
+  assert.match(layout, /relatedLayout\.cropReason \|\| 'responsive_target_unknown'/u);
 });
 
 test('gallery handoff accepts only an exact same-origin event destination', () => {

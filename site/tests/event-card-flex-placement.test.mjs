@@ -19,10 +19,10 @@ test('EventCard keeps row diagnostics but does not write obsolete grid placement
   assert.doesNotMatch(card, /grid-row:\$\{desktopRelatedLayout\.rowIndex/u);
   assert.doesNotMatch(card, /grid-column:\$\{desktopRelatedLayout\.rowColumn/u);
 
-  assert.match(adaptive, /data-adaptive-grid-layout-engine="flex-lines"/u);
-  assert.match(adaptive, /display: flex;/u);
-  assert.match(adaptive, /flex-wrap: wrap;/u);
-  assert.doesNotMatch(adaptive, /grid-template-columns:\s*repeat/u);
+  assert.match(adaptive, /data-adaptive-grid-layout-engine="grid-subgrid"/u);
+  assert.match(adaptive, /display: grid;/u);
+  assert.match(adaptive, /grid-template-rows: subgrid;/u);
+  assert.doesNotMatch(adaptive, /repeat\(\s*auto-fit/u);
 });
 
 test('A0 may retain or remove the bounded runtime placement bridge without losing row diagnostics', async () => {

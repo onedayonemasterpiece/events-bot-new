@@ -229,6 +229,7 @@ test('AdaptiveEventCardGrid occupancy, cardinality and remainder defects are M0;
       remainderPolicy: 'phantom-track',
       rootContentWidth: 1000,
       finalLineWidthSum: 740,
+      expectedFinalLineWidth: 660,
       documentOverflow: 20,
       equalHeightApplies: true,
       equalHeightDelta: 4,
@@ -318,4 +319,16 @@ test('machine-readable overlay aligns with executable seams and canonical PM0-37
   assert.equal(matrix.rollback.product_behavior_effect, 'none');
   assert.equal(matrix.execution_boundary.replaces_existing_release_gate, false);
   assert.equal(matrix.execution_boundary.replaces_canonical_a0_v0_matrix, false);
+});
+
+
+test('owner correction accepts ordinary-width remainder, rejects stretched/missing geometry evidence', () => {
+  const grid={visible:true,mode:'flow',layoutEngine:'grid-subgrid',display:'grid',
+    rowSize:3,renderedCount:4,directVisibleChildCount:4,allChildrenCanonical:true,
+    remainderCount:1,remainderVariant:'regular-1-of-3',remainderPolicy:'regular-column',
+    rootContentWidth:940,expectedFinalLineWidth:300,finalLineWidthSum:300,
+    documentOverflow:0,equalHeightApplies:true,equalHeightDelta:0,flowOrder:'1,2,3,4',sourceOrder:'1,2,3,4'};
+  assert.equal(classify(document({adaptiveGrids:[grid]})).defects.length,0);
+  assert.ok(defect(classify(document({adaptiveGrids:[{...grid,finalLineWidthSum:940}]})), 'ADAPTIVE_GRID_FINAL_LINE_OCCUPANCY_DRIFT'));
+  assert.ok(defect(classify(document({adaptiveGrids:[{...grid,expectedFinalLineWidth:undefined}]})), 'ADAPTIVE_GRID_ORDINARY_WIDTH_EVIDENCE_MISSING'));
 });

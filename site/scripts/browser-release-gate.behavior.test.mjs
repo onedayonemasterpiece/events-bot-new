@@ -381,3 +381,15 @@ test('AR-04 rejects unequal internal media tracks despite identical outer cards'
     assert.throws(()=>assertRegularGridWidths({...grid,cards:[card,{...card,x:320,[key]:card[key]+30}]}),/boundaries/);
   }
 });
+
+
+test('semantic reading selector chooses heading rather than action metadata', async () => {
+  const {chromium}=await import('playwright');const browser=await chromium.launch(browserLaunchOptions());
+  try {
+    const page=await browser.newPage();
+    await page.setContent('<main><aside data-event-title="Точка и линия"></aside><h1 data-event-title>Точка и линия</h1><img data-event-title="Точка и линия"></main>');
+    const source=readFileSync(new URL('../src/lib/keyboardEventNavigation.mjs',import.meta.url),'utf8');
+    const selector=/const title = root\.querySelector\('([^']+)'\)/u.exec(source)[1];
+    assert.equal(await page.locator('main').evaluate((e,sel)=>e.querySelector(sel).tagName,selector),'H1');
+  } finally {await browser.close();}
+});

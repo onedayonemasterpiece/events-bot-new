@@ -211,7 +211,7 @@
         "rendered count/order"
       ],
       "duplicate_identity": "event-id:source-index",
-      "layout_engine": "flex-lines",
+      "layout_engine": "grid-subgrid",
       "remainder_contract": "complete | regular-N-of-M",
       "penpot_master_target": "M0 / AdaptiveEventCardGrid"
     }

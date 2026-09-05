@@ -34,8 +34,8 @@ test('AdaptiveEventCardGrid is the sole card-grid diagnostics and remainder owne
 
   assert.match(source, /data-ds-component="AdaptiveEventCardGrid"/u);
   assert.match(source, /data-ds-family="AdaptiveEventCardGrid"/u);
-  assert.match(source, /data-ds-version="1"/u);
-  assert.match(source, /data-adaptive-grid-layout-engine="flex-lines"/u);
+  assert.match(source, /data-ds-version="2"/u);
+  assert.match(source, /data-adaptive-grid-layout-engine="grid-subgrid"/u);
   assert.equal(occurrences(source, 'data-adaptive-grid-diagnostics-owner='), 1,
     'AdaptiveEventCardGrid must publish one diagnostics writer declaration');
   assert.match(source, /data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"/u);
@@ -56,16 +56,16 @@ test('AdaptiveEventCardGrid is the sole card-grid diagnostics and remainder owne
   assert.match(source, /const itemRootFor = \(item: PreviewEvent, sourceIndex: number\)[\s\S]*itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\]/u);
   assert.match(source, /data-adaptive-grid-item-root-contract=\{hasItemRoots \? 'event-id-or-event-id-source-index'/u);
 
-  assert.ok(source.includes("type AdaptiveGridRemainderVariant = 'complete' | `stretch-${number}-of-${number}`;"));
+  assert.ok(source.includes("type AdaptiveGridRemainderVariant = 'complete' | `regular-${number}-of-${number}`;"));
   assert.match(source, /const remainderVariantFor = \(count: number, size: number\): AdaptiveGridRemainderVariant/u);
-  assert.match(source, /return remainder === 0 \? 'complete' : `stretch-\$\{remainder\}-of-\$\{size\}`;/u);
+  assert.match(source, /return remainder === 0 \? 'complete' : `regular-\$\{remainder\}-of-\$\{size\}`;/u);
   assert.match(source, /grid\.dataset\.adaptiveGridRemainderVariant = runtimeRemainderVariant/u);
   assert.match(source, /grid\.dataset\.adaptiveGridRenderedCount = String\(count\)/u);
   assert.match(source, /grid\.dataset\.adaptiveGridRenderedOrder = order/u);
 
-  assert.match(source, /display: flex;/u);
-  assert.match(source, /flex-wrap: wrap;/u);
-  assert.doesNotMatch(source, /grid-template-columns\s*:/u,
+  assert.match(source, /display: grid;/u);
+  assert.match(source, /grid-template-rows: subgrid;/u);
+  assert.doesNotMatch(source, /repeat\(\s*auto-fit/u,
     'canonical adaptive rows must not reintroduce phantom CSS-grid tracks');
   assert.match(source, /adaptive-event-card-grid--responsive-stack\[data-adaptive-grid-row-size\]/u);
   assert.match(source, /adaptive-event-card-grid--responsive-progressive\[data-adaptive-grid-row-size\]/u);

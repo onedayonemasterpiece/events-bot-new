@@ -48,7 +48,7 @@ test('EventLayout names its shell and leaves canonical MediaFrame in charge of f
     read('src/components/MobileEventProductionStyles.astro'),
   ]);
 
-  assert.match(layout, /data-ds-family="EventLayout" data-ds-version="1"/u);
+  assert.match(layout, /data-ds-family="EventLayout" data-ds-version="2"/u);
   assert.doesNotMatch(layout, /\.event-card__media-shell[^}]*overflow:\s*hidden/u);
   assert.doesNotMatch(layout, /\.event-card__media-shell[^}]*\.event-card__media\s*\{[^}]*object-fit/u);
   assert.doesNotMatch(layout, /\.event-hero[^}]*\.event-hero__image\s*\{[^}]*object-fit/u);

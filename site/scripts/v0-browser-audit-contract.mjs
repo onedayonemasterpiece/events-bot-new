@@ -80,7 +80,7 @@ export const isNonProductAuditRoute = (input = {}) => {
 const remainder = (count, rowSize) => {
   const size = Math.max(1, Math.floor(number(rowSize, 1)));
   const rest = Math.max(0, Math.floor(number(count))) % size;
-  return { count:rest, variant:rest === 0 ? 'complete' : `stretch-${rest}-of-${size}` };
+  return { count:rest, variant:rest === 0 ? 'complete' : `regular-${rest}-of-${size}` };
 };
 
 export function classifyObservation(observation = {}) {
@@ -139,10 +139,11 @@ export function classifyObservation(observation = {}) {
 
     for (const grid of document.adaptiveGrids || []) if (visible(grid)) {
       const expected = remainder(grid.renderedCount, grid.rowSize);
-      if (lower(grid.layoutEngine) !== 'flex-lines' || lower(grid.display) !== 'flex' || lower(grid.flexWrap) !== 'wrap') add(document, 'ADAPTIVE_GRID_LAYOUT_ENGINE_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { layoutEngine:grid.layoutEngine, display:grid.display, flexWrap:grid.flexWrap });
+      if (lower(grid.layoutEngine) !== 'grid-subgrid' || lower(grid.display) !== 'grid') add(document, 'ADAPTIVE_GRID_LAYOUT_ENGINE_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { layoutEngine:grid.layoutEngine, display:grid.display, flexWrap:grid.flexWrap });
       if (grid.allChildrenCanonical === false || number(grid.renderedCount) !== number(grid.directVisibleChildCount)) add(document, 'ADAPTIVE_GRID_CHILD_CARDINALITY_DRIFT', OWNERS.components, SELECTORS.adaptiveGridCards, { renderedCount:number(grid.renderedCount), directVisibleChildCount:number(grid.directVisibleChildCount), allChildrenCanonical:grid.allChildrenCanonical });
-      if (number(grid.remainderCount) !== expected.count || grid.remainderVariant !== expected.variant || lower(grid.remainderPolicy) !== 'stretch') add(document, 'ADAPTIVE_GRID_REMAINDER_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { expected, actual:{ count:number(grid.remainderCount), variant:grid.actualVariant, policy:grid.actualPolicy } });
-      if (Number.isFinite(Number(grid.finalLineWidthSum)) && Math.abs(number(grid.finalLineWidthSum) - number(grid.rootContentWidth)) > 1) add(document, 'ADAPTIVE_GRID_FINAL_LINE_OCCUPANCY_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { finalLineWidthSum:number(grid.finalLineWidthSum), rootContentWidth:number(grid.rootContentWidth) });
+      if (number(grid.remainderCount) !== expected.count || grid.remainderVariant !== expected.variant || lower(grid.remainderPolicy) !== 'regular-column') add(document, 'ADAPTIVE_GRID_REMAINDER_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { expected, actual:{ count:number(grid.remainderCount), variant:grid.actualVariant, policy:grid.actualPolicy } });
+      if (Number.isFinite(Number(grid.finalLineWidthSum)) && !Number.isFinite(Number(grid.expectedFinalLineWidth))) add(document, 'ADAPTIVE_GRID_ORDINARY_WIDTH_EVIDENCE_MISSING', OWNERS.components, SELECTORS.adaptiveGrid);
+      if (Number.isFinite(Number(grid.finalLineWidthSum)) && Number.isFinite(Number(grid.expectedFinalLineWidth)) && Math.abs(number(grid.finalLineWidthSum) - number(grid.expectedFinalLineWidth)) > 1) add(document, 'ADAPTIVE_GRID_FINAL_LINE_OCCUPANCY_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { finalLineWidthSum:number(grid.finalLineWidthSum), rootContentWidth:number(grid.rootContentWidth) });
       if (number(grid.documentOverflow) > 1) add(document, 'ADAPTIVE_GRID_DOCUMENT_OVERFLOW', OWNERS.components, SELECTORS.adaptiveGrid, { documentOverflow:number(grid.documentOverflow) });
       if (grid.equalHeightApplies === true && number(grid.equalHeightDelta) > 1) add(document, 'ADAPTIVE_GRID_EQUAL_HEIGHT_DRIFT', OWNERS.components, SELECTORS.adaptiveGridCards, { equalHeightDelta:number(grid.equalHeightDelta) });
       if (grid.mode === 'flow' && grid.flowOrder !== grid.sourceOrder) add(document, 'ADAPTIVE_GRID_FLOW_ORDER_DRIFT', OWNERS.components, SELECTORS.adaptiveGrid, { flowOrder:grid.flowOrder, sourceOrder:grid.sourceOrder });
@@ -195,7 +196,7 @@ export const auditContract = freeze({
   productScope:PRODUCT_SCOPE,
   executionBoundary:freeze({ startsBrowser:false, browserExecutor:'my-browser-bridge-or-existing-release-gate', existingLocalReleaseGate:'site/scripts/check-browser-release-gate.mjs', replacesExistingReleaseGate:false, replacesCanonicalA0V0Matrix:false }),
   flowControl:freeze({ fr0CutoverRequiredBeforeFramingWrites:true, fr0MustNotDelayAlreadyReadySuccessor:true }),
-  gates:freeze({ documentOverflowTolerancePx:1, controlMinimumPx:44, equalHeightTolerancePx:1, finalLineOccupancyTolerancePx:1, desktopNavigationBreakpointPx:981, safeBlankRelTokens:freeze(['noopener','noreferrer']), canonicalIdentityAttributes:freeze(['data-ds-family','data-ds-version','data-ds-variant','data-ds-state']), mediaFrameContract:'v1', adaptiveGridLayoutEngine:'flex-lines', adaptiveGridRemainderPolicy:'stretch' }),
+  gates:freeze({ documentOverflowTolerancePx:1, controlMinimumPx:44, equalHeightTolerancePx:1, finalLineOccupancyTolerancePx:1, desktopNavigationBreakpointPx:981, safeBlankRelTokens:freeze(['noopener','noreferrer']), canonicalIdentityAttributes:freeze(['data-ds-family','data-ds-version','data-ds-variant','data-ds-state']), mediaFrameContract:'v1', adaptiveGridLayoutEngine:'grid-subgrid', adaptiveGridRemainderPolicy:'regular-column' }),
 });
 
 const classifyIndex = process.argv.indexOf('--classify');

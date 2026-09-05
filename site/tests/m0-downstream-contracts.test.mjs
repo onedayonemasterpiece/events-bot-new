@@ -111,10 +111,10 @@ test('AdaptiveEventCardGrid and Optimized adapter preserve one diagnostics write
   ]) assert.ok(adaptive.includes(field), `missing grid field: ${field}`);
   assert.match(adaptive, /itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\]/u);
   assert.match(adaptive, /data-adaptive-grid-remainder-variant=/u);
-  assert.match(adaptive, /stretch-\$\{remainder\}-of-\$\{size\}/u);
-  assert.match(adaptive, /data-adaptive-grid-layout-engine="flex-lines"/u);
-  assert.match(adaptive, /flex-wrap: wrap/u);
-  assert.doesNotMatch(adaptive, /grid-template-columns\s*:/u);
+  assert.match(adaptive, /regular-\$\{remainder\}-of-\$\{size\}/u);
+  assert.match(adaptive, /data-adaptive-grid-layout-engine="grid-subgrid"/u);
+  assert.match(adaptive, /grid-template-rows: subgrid/u);
+  assert.doesNotMatch(adaptive, /repeat\(\s*auto-fit/u);
   assert.match(adaptive, /adaptive-event-card-grid--responsive-stack\[data-adaptive-grid-row-size\]/u);
   assert.match(adaptive, /adaptive-event-card-grid--responsive-progressive\[data-adaptive-grid-row-size\]/u);
 

@@ -774,7 +774,7 @@ export function initKeyboardEventNavigation(options = {}) {
     // and injected copy actions are useful, but are not the requested reading
     // order. The live DOM decides which long/short layout is visible.
     const readingStops = () => {
-      const title = root.querySelector('[data-event-title]');
+      const title = root.querySelector('h1[data-event-title]');
       const prose = Array.from(doc.querySelectorAll(
         '.desktop-clean-description__lead, .desktop-clean-description__text p',
       ));

@@ -140,3 +140,11 @@ test('browser regression wrapper is engine-configurable and asserts no autofocus
   assert.match(gate, /key: "ы"/u, 'Cyrillic physical KeyS remains covered');
   assert.match(gate, /Gallery ArrowDown must close without scrolling/u);
 });
+
+
+test('AR-11 title stop excludes action-panel and media data-event-title metadata', async () => {
+  const source=await read('src/lib/keyboardEventNavigation.mjs');
+  assert.match(source,/root\.querySelector\('h1\[data-event-title\]'\)/u);
+  assert.doesNotMatch(source,/root\.querySelector\('\[data-event-title\]'\)/u);
+
+});
