@@ -23,3 +23,9 @@ test('read-only bridge, lifecycle cleanup and asset fallback are present',()=>{
   assert.doesNotMatch(s,/forceInline|\bfetch\s*\(|localStorage\.|sessionStorage\./);
   for(const required of ['panelBottomInset','pointercancel','compositionend','resize?.disconnect()','changes.disconnect()','image.naturalWidth',"image.addEventListener('error'",'marker.replaceWith(fieldset)'])assert.ok(s.includes(required),required);
 });
+test('compact controls form one block; inline fallback releases only its rail',()=>{
+  const css=readFileSync(new URL('../src/styles/floating-islands-review.css',import.meta.url),'utf8');
+  assert.match(css,/\[data-fi-city-root\]\[data-fi-city-mode="compact"\]\s*\{[^}]*display:block;[^}]*width:100%;[^}]*height:auto;/);
+  assert.match(css,/\[data-fi-city-rail\]:has\(\[data-fi-city-placement="inline"\]\)\s*\{[^}]*position:static;[^}]*top:auto;[^}]*height:auto;/);
+  assert.doesNotMatch(css,/\.mobile-bottom-nav|site-header__brand-tag|mobile-discovery-menu__summary/);
+});
