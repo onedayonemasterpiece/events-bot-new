@@ -107,3 +107,24 @@ def test_real_preview_clock_mismatch_is_rejected_before_archiving():
             raise AssertionError('clock drift accepted')
     builder.validate_preview_clock({'currentDate': '2027-06-04', 'referenceIso': 'golden-owned'}, clock, 'golden')
     assert 'validate_preview_clock(preview_manifest, build_clock, preview_data_mode)' in inspect.getsource(builder.main)
+
+
+def test_public_club_gates_reach_remote_export_and_astro_without_secrets():
+    builder = load_builder()
+    for value in ('1', '0'):
+        config = {'interest_club_build_env': {
+            'ENABLE_INTEREST_CLUB_STATIC_PROJECTION': value,
+            'PUBLIC_INTEREST_CLUBS_ENABLED': value,
+            'UNRELATED_SECRET': 'must-not-forward',
+        }}
+        env = {}
+        builder.apply_interest_club_build_env(env, config)
+        assert env == {'ENABLE_INTEREST_CLUB_STATIC_PROJECTION': value,
+                       'PUBLIC_INTEREST_CLUBS_ENABLED': value}
+    env = {'PUBLIC_INTEREST_CLUBS_ENABLED': '0'}
+    builder.apply_interest_club_build_env(env, {})
+    assert env == {'PUBLIC_INTEREST_CLUBS_ENABLED': '0'}
+    assert 'apply_interest_club_build_env(export_env, config)' in inspect.getsource(builder.export_preview_data_if_configured)
+    assert 'apply_interest_club_build_env(env, config)' in inspect.getsource(builder.main)
+    runner = (ROOT / 'scripts/run_static_site_builder_kaggle.py').read_text()
+    assert "'interest_club_build_env': {key: value for key, value in preview_export_env(args).items()" in runner

@@ -1555,6 +1555,9 @@ def stage_kernel_and_dataset(
         'search_corpus_receipt_filename': (
             'event-search-corpus-receipt.json' if search_receipt_source else None
         ),
+        # Public release gates must travel even without a provider secret bundle.
+        'interest_club_build_env': {key: value for key, value in preview_export_env(args).items()
+            if key in {'ENABLE_INTEREST_CLUB_STATIC_PROJECTION', 'PUBLIC_INTEREST_CLUBS_ENABLED'}},
         'export_in_kaggle': bool(args.export_in_kaggle),
         'sqlite_db_filename': None,
         'related_cache_filename': 'event_related_chain_cache.json',

@@ -680,7 +680,9 @@ def export_preview_data_if_configured(config: dict) -> None:
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})
-    run(cmd, cwd=SITE_DIR, env=os.environ.copy())
+    export_env = os.environ.copy()
+    apply_interest_club_build_env(export_env, config)
+    run(cmd, cwd=SITE_DIR, env=export_env)
     search_receipt_filename = str(
         config.get('search_corpus_receipt_filename') or ''
     ).strip()
@@ -1096,6 +1098,14 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
     env['PUBLIC_AUTHORIZED_SEARCH_TRANSPORT'] = search_transport
 
 
+def apply_interest_club_build_env(env: dict[str, str], config: dict) -> None:
+    """Carry only public club gates identically into exporter and Astro."""
+    configured = config.get('interest_club_build_env') or {}
+    for key in ('ENABLE_INTEREST_CLUB_STATIC_PROJECTION', 'PUBLIC_INTEREST_CLUBS_ENABLED'):
+        if key in configured:
+            env[key] = str(configured[key])
+
+
 def apply_public_interest_clubs_env(env: dict[str, str]) -> None:
     """Copy the decrypted public club release flag into Astro's build env.
 
@@ -1274,6 +1284,7 @@ def main() -> int:
             )
         apply_public_authorized_search_env(env, config)
         apply_public_interest_clubs_env(env)
+        apply_interest_club_build_env(env, config)
         apply_secret_candidate_research_env(env, config)
         env = ensure_node22(env)
 

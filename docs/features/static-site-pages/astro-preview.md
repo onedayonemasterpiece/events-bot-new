@@ -1164,3 +1164,9 @@ private DB data into published Kaggle outputs. See SQLite's documented contract:
 https://www.sqlite.org/wal.html#read_only_databases .
 The d1cc5c7d3 review run failed at this read before Astro generation; no artifact
 was published. Its snapshot bytes and UI are retained for the tooling successor.
+
+Remote export also carries the two public Interest Club release gates through
+`interest_club_build_env` in the existing input config, independently of provider
+secret bundles. Exporter and Astro consume the same allowlisted values; explicit
+`0` remains a rollback. Sparse/no-provider builds must not silently disable the
+confirmed-club projection. The nonempty real-preview artifact gate is unchanged.
