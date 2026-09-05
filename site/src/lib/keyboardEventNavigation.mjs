@@ -23,6 +23,28 @@ function rectIntersection(rect, viewportWidth, viewportHeight) {
   };
 }
 
+/**
+ * Returns the adjacent semantic reading destination without coupling the
+ * router to DOM order. `stops` is deliberately supplied by the rendered page:
+ * title, prose paragraphs and the practical summary are different reading
+ * roles, while recommendation cards retain their own visual-grid navigation.
+ */
+export function semanticReadingDestination(stops, current, direction) {
+  const ordered = Array.from(stops || []).filter(Boolean);
+  if (direction !== -1 && direction !== 1) return null;
+  const index = ordered.indexOf(current);
+  const destination = index + direction;
+  return index >= 0 && destination >= 0 && destination < ordered.length ? ordered[destination] : null;
+}
+
+/** Guards shared by every semantic reading transition. */
+export function semanticReadingNavigationAllowed({
+  defaultPrevented = false, isComposing = false, altKey = false, ctrlKey = false,
+  metaKey = false, shiftKey = false, editing = false, dialogOpen = false,
+} = {}) {
+  return !(defaultPrevented || isComposing || altKey || ctrlKey || metaKey || shiftKey || editing || dialogOpen);
+}
+
 /** Pure ownership policy used by the router and focused regression tests. */
 export function footerViewportShortcutOwnership({ footerRect, targetRect = null, targetKind, viewportWidth, viewportHeight }) {
   if (targetKind === 'footer') return true;
@@ -747,6 +769,39 @@ export function initKeyboardEventNavigation(options = {}) {
       if (first) focusCard(first);
     };
 
+    // AR-11: ArrowDown reads the event's semantic sequence.  Do not derive
+    // this from document-wide focusables: utility controls, transport widgets
+    // and injected copy actions are useful, but are not the requested reading
+    // order. The live DOM decides which long/short layout is visible.
+    const readingStops = () => {
+      const title = root.querySelector('[data-event-title]');
+      const prose = Array.from(doc.querySelectorAll(
+        '.desktop-clean-description__lead, .desktop-clean-description__text p',
+      ));
+      const practical = Array.from(doc.querySelectorAll('.desktop-clean-practical'));
+      return [title, ...prose, ...practical]
+        .filter((element, index, values) => element instanceof win.HTMLElement && isVisible(element) && values.indexOf(element) === index);
+    };
+    const prepareReadingStop = (element, role) => {
+      if (!(element instanceof win.HTMLElement)) return;
+      setManagedAttribute(element, 'tabindex', '-1');
+      setManagedAttribute(element, 'data-keyboard-reading-stop', role);
+    };
+    const focusReadingStop = (element) => {
+      if (!(element instanceof win.HTMLElement)) return false;
+      const stops = readingStops();
+      const index = stops.indexOf(element);
+      if (index < 0) return false;
+      prepareReadingStop(element, index === 0 ? 'title' : element.matches('.desktop-clean-practical') ? 'practical' : 'paragraph');
+      element.focus({ preventScroll: true });
+      element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      return true;
+    };
+    const focusFirstReadingStop = () => focusReadingStop(readingStops()[0]);
+    const readingStopFor = (node) => node instanceof win.Element
+      ? node.closest('[data-keyboard-reading-stop]')
+      : null;
+
     const enterContinuation = () => {
       const first = visualZoneCards('continuation')[0];
       if (first) {
@@ -807,12 +862,6 @@ export function initKeyboardEventNavigation(options = {}) {
       }).observe(relatedSection, { childList: true, subtree: true });
     }
 
-    const relatedBoundaryIsVisible = () => {
-      if (!(relatedSection instanceof win.HTMLElement)) return false;
-      const rect = relatedSection.getBoundingClientRect();
-      return rect.top >= 0 && rect.top <= win.innerHeight - 24;
-    };
-
     const resetDownGesture = () => {
       win.clearTimeout(downGestureTimer);
       downGestureTimer = null;
@@ -820,21 +869,15 @@ export function initKeyboardEventNavigation(options = {}) {
     };
 
     const handleSurfaceArrowDown = (event) => {
-      if (relatedBoundaryIsVisible()) {
-        event.preventDefault();
-        resetDownGesture();
-        focusFirstCard();
-        recordShortcutUse('related_boundary_focus');
-        return;
-      }
-      // Owner AR12: ordinary/repeated Down reads the event in order. A timing
-      // gesture must not silently skip its description and practical details.
+      // Start at the title even if the related boundary happens to be visible:
+      // AR-11 is a reading route, not a viewport-dependent card shortcut.
       resetDownGesture();
-      // Keep the platform meaning (one ordinary scroll step), but perform the
-      // step explicitly. Chromium can otherwise drop the first default scroll
-      // while a fullscreen gallery is finishing its close transition.
       event.preventDefault();
-      win.scrollBy({ top: Math.max(40, Math.min(72, win.innerHeight * 0.075)), left: 0, behavior: 'instant' });
+      if (!focusFirstReadingStop()) {
+        // Events without a rendered reading body retain the useful existing
+        // card entry instead of trapping ArrowDown on the action surface.
+        focusFirstCard();
+      }
     };
 
     const nearestCardInRow = (current, row) => {
@@ -851,7 +894,7 @@ export function initKeyboardEventNavigation(options = {}) {
       if (rowIndex < 0) return null;
       const targetRowIndex = rowIndex + direction;
       if (targetRowIndex < 0) {
-        if (zone === 'related') return surface;
+        if (zone === 'related') return readingStops().at(-1) || surface;
         const relatedRows = rowsFor(zoneCards('related'));
         return nearestCardInRow(current, relatedRows.at(-1));
       }
@@ -1073,7 +1116,11 @@ export function initKeyboardEventNavigation(options = {}) {
     }, true);
 
     listen(doc, 'keydown', (event) => {
-      if (!desktopKeyboard.matches || event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isEditing(event.target)) return;
+      if (!desktopKeyboard.matches || !semanticReadingNavigationAllowed({
+        defaultPrevented:event.defaultPrevented, isComposing:event.isComposing,
+        altKey:event.altKey, ctrlKey:event.ctrlKey, metaKey:event.metaKey,
+        shiftKey:event.shiftKey, editing:isEditing(event.target),
+      })) return;
       if (!activateForIntent(event)) return;
       const target = event.target;
       if (!(target instanceof win.HTMLElement)) return;
@@ -1168,8 +1215,7 @@ export function initKeyboardEventNavigation(options = {}) {
 
       if (event.code === 'ArrowDown' && (target === doc.body || target === doc.documentElement)) {
         event.preventDefault();
-        focusFirstCard();
-        recordShortcutUse('related_reentry');
+        if (!focusFirstReadingStop()) focusFirstCard();
         return;
       }
 
@@ -1226,6 +1272,20 @@ export function initKeyboardEventNavigation(options = {}) {
           } else {
             runAction(scope, event);
           }
+        }
+        return;
+      }
+
+      const readingStop = readingStopFor(target);
+      if (readingStop instanceof win.HTMLElement && (event.code === 'ArrowDown' || event.code === 'ArrowUp')) {
+        event.preventDefault();
+        const destination = semanticReadingDestination(readingStops(), readingStop, event.code === 'ArrowDown' ? 1 : -1);
+        if (destination) {
+          focusReadingStop(destination);
+        } else if (event.code === 'ArrowDown') {
+          focusFirstCard();
+        } else {
+          focusSurfaceTop();
         }
         return;
       }
@@ -1346,6 +1406,8 @@ export function initKeyboardEventNavigation(options = {}) {
             suppressGalleryUntilArrowUpRelease = true;
             focusSurfaceTop();
             recordShortcutUse('return_event_top');
+          } else if (readingStops().includes(neighbor)) {
+            focusReadingStop(neighbor);
           } else if (neighbor === continuationSection) {
             enterContinuation();
           } else {

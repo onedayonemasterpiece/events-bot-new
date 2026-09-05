@@ -68,6 +68,24 @@ test('prototype and production share the exact extracted V7 router', async () =>
   assert.doesNotMatch(router, /surface\.focus\(\{ preventScroll: true \}\);\s*\n\s*\}/u, 'module must not end with prototype autofocus');
 });
 
+test('AR-11 router uses the rendered event reading roles rather than scroll or double-Down shortcuts', async () => {
+  const [router, desktop] = await Promise.all([
+    read('src/lib/keyboardEventNavigation.mjs'),
+    read('src/components/DesktopEventPage.astro'),
+  ]);
+  assert.match(desktop, /data-event-title/u);
+  assert.match(desktop, /desktop-clean-description__lead[\s\S]*desktop-clean-description__text prose/u);
+  assert.match(desktop, /desktop-clean-practical/u);
+  assert.match(desktop, /data-related-start/u);
+  assert.match(router, /const readingStops = \(\) => \{[\s\S]*desktop-clean-description__lead, \.desktop-clean-description__text p[\s\S]*desktop-clean-practical/u);
+  assert.match(router, /const handleSurfaceArrowDown = \(event\) => \{[\s\S]*focusFirstReadingStop\(\)/u);
+  assert.doesNotMatch(router, /handleSurfaceArrowDown[\s\S]{0,700}scrollBy\(/u, 'surface Down must not be generic scrolling');
+  assert.match(router, /semanticReadingDestination\(readingStops\(\), readingStop, event\.code === 'ArrowDown' \? 1 : -1\)/u);
+  assert.match(router, /if \(zone === 'related'\) return readingStops\(\)\.at\(-1\) \|\| surface/u, 'first card row reverses into the practical summary');
+  assert.match(router, /semanticReadingNavigationAllowed\(\{[\s\S]*editing:isEditing\(event\.target\)/u);
+  assert.match(router, /if \(dialogIsOpen\(\)\) return;/u);
+});
+
 test('keyboard visual feedback delegates to the one layout toast while SR status remains local', async () => {
   const prototype = await read('src/components/KeyboardEventNavigationPrototype.astro');
   const router = await read('src/lib/keyboardEventNavigation.mjs');

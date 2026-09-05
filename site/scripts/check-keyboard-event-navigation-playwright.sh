@@ -105,42 +105,30 @@ async page => {
   assert(await page.locator(".desktop-clean-description__text + [data-event-content-copy-actions]").count() === 1, "Copy controls must follow the full description text");
   assert(await page.locator("[data-copy-event-poster][aria-keyshortcuts=P] kbd", { hasText: "P" }).count() === 1, "Poster control must visibly and accessibly expose P");
 
-  // A single Down remains native; a released second Down within 430 ms jumps.
-  await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
-  const beforeSingleDown = await page.evaluate(() => scrollY);
-  await page.keyboard.press("ArrowDown");
-  await page.waitForTimeout(80);
-  report.singleDown = { before: beforeSingleDown, after: await page.evaluate(() => scrollY), active: await activeState() };
-  assert(report.singleDown.after > report.singleDown.before && report.singleDown.active.surface, "One Down must keep focus and perform native scrolling");
-  await page.keyboard.press("Escape");
+  // AR-11: Down follows title → every rendered prose paragraph → practical
+  // summary → related cards. It is not a scroll amount or timing gesture.
   await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
   await page.keyboard.press("ArrowDown");
-  await page.waitForTimeout(520);
-  await page.keyboard.press("ArrowDown");
-  report.slowDoubleDown = await activeState();
-  assert(report.slowDoubleDown.surface && !report.slowDoubleDown.cardRoot, "A slow second Down must remain ordinary native scrolling");
-  await page.keyboard.press("Escape");
-  await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
-  await page.keyboard.press("ArrowDown");
-  await page.waitForTimeout(40);
-  await page.keyboard.press("ArrowDown");
-  report.doubleDown = await activeState();
-  assert(report.doubleDown.cardRoot, "Two separate quick Down presses must focus the first related card");
+  assert(await page.locator("[data-keyboard-reading-stop=title]:focus").count() === 1, "First Down must focus the event title");
+  const expectedReadingStops = await page.evaluate(() => [
+    ...document.querySelectorAll(".desktop-clean-description__lead, .desktop-clean-description__text p, .desktop-clean-practical"),
+  ].filter((node) => {
+    const style = getComputedStyle(node);
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+  }).length);
+  for (let index = 0; index < expectedReadingStops; index += 1) await page.keyboard.press("ArrowDown");
+  report.semanticReading = await activeState();
+  assert(report.semanticReading.cardRoot, "Down after practical summary must enter the first related card");
 
-  // First-row Up returns to the real page top and a held repeat cannot open the gallery.
-  const firstCard = page.locator(cardSelector).first();
-  await firstCard.focus();
-  await firstCard.evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", key: "ArrowUp", bubbles: true, cancelable: true })));
-  await page.locator(surfaceSelector).evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", key: "ArrowUp", repeat: true, bubbles: true, cancelable: true })));
-  await page.waitForTimeout(50);
-  report.returnTop = await page.evaluate(() => ({
-    surface: document.activeElement?.hasAttribute?.("data-keyboard-event-surface"),
-    rootTop: document.querySelector("[data-desktop-clean-event]")?.getBoundingClientRect().top,
-    scrollY: window.scrollY,
-    galleryOpen: Boolean(document.querySelector("[data-hero-gallery]:not([hidden]).is-open")),
-  }));
-  assert(report.returnTop.surface && report.returnTop.scrollY <= 64 && report.returnTop.rootTop >= -8 && !report.returnTop.galleryOpen, `Up from first row failed: ${JSON.stringify(report.returnTop)}`);
-  await page.locator(surfaceSelector).evaluate((node) => node.dispatchEvent(new KeyboardEvent("keyup", { code: "ArrowUp", key: "ArrowUp", bubbles: true })));
+  // Reverse the same semantic route: the first related row returns to the
+  // practical summary, then paragraphs, title and finally the action surface.
+  await page.keyboard.press("ArrowUp");
+  assert(await page.locator("[data-keyboard-reading-stop=practical]:focus").count() === 1, "Up from first card must focus practical summary");
+  for (let index = 0; index < expectedReadingStops - 1; index += 1) await page.keyboard.press("ArrowUp");
+  assert(await page.locator("[data-keyboard-reading-stop=title]:focus").count() === 1, "Reverse reading must reach title before hero controls");
+  await page.keyboard.press("ArrowUp");
+  assert((await activeState()).surface, "Up from title must return to the event action surface");
 
   // Closed hero arrows support both multi-image and single-image templates.
   const heroBefore = await page.locator("[data-clean-hero-image]").getAttribute("src");
@@ -172,10 +160,8 @@ async page => {
   assert(await page.evaluate((before) => window.scrollY === before, galleryDownScroll), "A held gallery Down must not leak into a page step after focus restoration");
   await page.keyboard.up("ArrowDown");
   assert(await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("ke_keyboard_shortcut_daily_v2") || '{"days":{}}').days).flat().includes("gallery_close_down")), "Completed gallery ArrowDown close must record one compact daily fact");
-  const afterGalleryDown = await page.evaluate(() => window.scrollY);
   await page.keyboard.press("ArrowDown");
-  await page.waitForTimeout(60);
-  assert((await activeState()).surface && await page.evaluate((before) => window.scrollY > before, afterGalleryDown), "A new Down after gallery close must perform one ordinary page step");
+  assert(await page.locator("[data-keyboard-reading-stop=title]:focus").count() === 1, "A new Down after gallery close must restart semantic reading at the title");
   await page.evaluate(() => { window.scrollTo({ top: 0, behavior: "instant" }); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
 
   // Escape remains an equivalent gallery exit and Enter/Space activate the
@@ -186,10 +172,8 @@ async page => {
   await waitFor("gallery Escape close", () => !document.querySelector("[data-hero-gallery].is-open"));
   await waitFor("gallery Escape focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
-  const postEscapeDownBefore = await page.evaluate(() => window.scrollY);
   await page.keyboard.press("ArrowDown");
-  await page.waitForTimeout(60);
-  assert((await activeState()).surface && await page.evaluate((before) => window.scrollY > before, postEscapeDownBefore), "Native Down must resume immediately after gallery Escape");
+  assert(await page.locator("[data-keyboard-reading-stop=title]:focus").count() === 1, "Semantic Down must resume immediately after gallery Escape");
   await page.keyboard.press("Escape");
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await page.keyboard.press("ArrowUp");

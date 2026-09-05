@@ -13,6 +13,8 @@ import {
 import {
   footerViewportShortcutOwnership,
   keyboardGalleryDestination,
+  semanticReadingDestination,
+  semanticReadingNavigationAllowed,
   visualCardRows,
 } from '../src/lib/keyboardEventNavigation.mjs';
 
@@ -483,4 +485,30 @@ test('router persists one bounded gallery handoff and consumes it for body arrow
   assert.match(router, /footerViewportShortcutOwnership/u);
   assert.match(router, /if \(!legacyBase\) return;[\s\S]*anchor\.href = normalize\(anchor\.href\)/u,
     'root continuation cards must retain the same relative canonical links as static cards');
+});
+
+
+test('AR-11 semantic reading order advances only between adjacent rendered roles', () => {
+  const title = { role:'title' };
+  const paragraphOne = { role:'paragraph-1' };
+  const paragraphTwo = { role:'paragraph-2' };
+  const practical = { role:'practical' };
+  const stops = [title, paragraphOne, paragraphTwo, practical];
+
+  assert.equal(semanticReadingDestination(stops, title, 1), paragraphOne);
+  assert.equal(semanticReadingDestination(stops, paragraphOne, 1), paragraphTwo);
+  assert.equal(semanticReadingDestination(stops, paragraphTwo, 1), practical);
+  assert.equal(semanticReadingDestination(stops, practical, 1), null, 'cards are entered only after practical summary');
+  assert.equal(semanticReadingDestination(stops, practical, -1), paragraphTwo);
+  assert.equal(semanticReadingDestination(stops, title, -1), null, 'reverse navigation returns to the event surface');
+  assert.equal(semanticReadingDestination(stops, { role:'outside' }, 1), null);
+  assert.equal(semanticReadingDestination(stops, title, 0), null);
+});
+
+test('AR-11 semantic reading navigation leaves editable, modified, composing and dialog-owned keys alone', () => {
+  assert.equal(semanticReadingNavigationAllowed(), true);
+  for (const guard of [
+    { defaultPrevented:true }, { isComposing:true }, { altKey:true }, { ctrlKey:true },
+    { metaKey:true }, { shiftKey:true }, { editing:true }, { dialogOpen:true },
+  ]) assert.equal(semanticReadingNavigationAllowed(guard), false, JSON.stringify(guard));
 });
