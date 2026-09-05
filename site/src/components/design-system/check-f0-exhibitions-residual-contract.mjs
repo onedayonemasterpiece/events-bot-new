@@ -15,6 +15,7 @@ const foundationsCss = readRepo('site/src/components/design-system/foundations.c
 const foundationsTs = readRepo('site/src/components/design-system/foundations.ts');
 const semanticIcon = readRepo('site/src/components/design-system/SemanticIcon.astro');
 const exhibitions = readRepo(bindings.consumer);
+const sharedToast = readRepo('site/src/components/MobileToastRegion.astro');
 const closureScriptPath = 'site/scripts/apply-a0-current-successor-consumer-closure.mjs';
 const closureLibraryPath = 'site/scripts/a0-current-successor-consumer-closure-lib.mjs';
 const closureScript = [closureScriptPath, closureLibraryPath]
@@ -129,6 +130,13 @@ assert.deepEqual(inventory.technical_visible_color_exceptions, [
   { value: '#000', context: 'CSS mask alpha composition only' },
 ]);
 assert.equal(bindings.rollback.unit, 'F0-RB-EXHIBITIONS-RESIDUAL-THEME');
+assert.equal(inventory.shared_runtime_evidence?.consumer, bindings.consumer);
+assert.equal(inventory.shared_runtime_evidence?.shared_owner, 'site/src/components/MobileToastRegion.astro');
+assert.match(exhibitions, /KenigEventsToast\?\.show\) toastHost\.KenigEventsToast\.show\(detail\)/u);
+assert.doesNotMatch(exhibitions, /data-live-message|data-live-undo|liveUndoAction|liveTimer/u);
+assert.match(sharedToast, /persistent \? null/u);
+assert.match(sharedToast, /action:\{ label:string; callback/);
+
 
 const styleSource = [...exhibitions.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/giu)]
   .map((match) => match[1])

@@ -181,7 +181,7 @@ test('exhibitions transform preserves all accepted behavior hooks', async () => 
     'data-gallery-prev',
     'data-gallery-next',
     'data-tail-toggle',
-    'data-live-undo',
+    'KenigEventsToast',
     'data-row-focus',
     'data-exhibition-row',
   ]) assert.match(source, new RegExp(hook, 'u'));

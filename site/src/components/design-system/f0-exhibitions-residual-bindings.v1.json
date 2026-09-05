@@ -359,13 +359,14 @@
       "negative_control": "text arrow glyph duplicates are absent"
     },
     {
-      "id": "EX-LIVE-RECEIPT",
-      "selector": ".ex-live, .ex-live [data-live-undo]",
-      "kind": "color_elevation",
-      "current": "#4d5358/#191c1e/black .45 and #656c72/#272b2e",
-      "replacement": "--ke-color-exhibitions-live-* and --ke-elevation-exhibitions-live",
+      "id": "EX-SHARED-TOAST-ACTION",
+      "selector": "ExhibitionsPersonalSurface announce() → window.KenigEventsToast.show()",
+      "kind": "shared_runtime_notification",
+      "current": "local .ex-live / data-live-undo timer and visual receipt",
+      "replacement": "MobileToastRegion KenigEventsToast action API; action notification is persistent and the shared host owns timer/dismissal",
       "consumer_owner": "A0",
-      "browser_expectation": "transient receipt and undo control retain current contrast"
+      "browser_expectation": "ordinary notices use the shared host; Undo remains actionable until user action or explicit dismissal",
+      "negative_control": "no .ex-live, data-live-undo, liveTimer or liveUndoAction remains in the product consumer"
     }
   ],
   "technical_exceptions": [
@@ -376,12 +377,23 @@
       "consumer_owner": "A0"
     },
     {
-      "values": ["--media-position", "--media-ratio", "--deck-depth", "--deck-saturation", "--deck-brightness", "--deck-contrast", "--deck-blur"],
+      "values": [
+        "--media-position",
+        "--media-ratio",
+        "--deck-depth",
+        "--deck-saturation",
+        "--deck-brightness",
+        "--deck-contrast",
+        "--deck-blur"
+      ],
       "reason": "runtime media/deck measurement state",
       "consumer_owner": "FR0"
     },
     {
-      "values": ["--medallion-ring", "--medallion-bg"],
+      "values": [
+        "--medallion-ring",
+        "--medallion-bg"
+      ],
       "reason": "bounded organizer identity media inputs with F0 fallback tokens",
       "consumer_owner": "FR0"
     }
@@ -402,7 +414,12 @@
   "browser_matrix": {
     "owner": "V0",
     "route": "/vystavki/",
-    "viewports": [375, 620, 1024, 1440],
+    "viewports": [
+      375,
+      620,
+      1024,
+      1440
+    ],
     "states": [
       "personal and all modes",
       "category filter selected",
@@ -410,7 +427,7 @@
       "deck loading/loaded/error/depth-tail",
       "liked and rejected rows",
       "gallery open/closing",
-      "live undo receipt",
+      "shared persistent Undo notification",
       "reduced motion"
     ],
     "negative_probes": [
@@ -431,7 +448,14 @@
   "penpot": {
     "variable_set": "F0-EXHIBITIONS-THEME-V1",
     "linked_instance": "ExhibitionsPersonalSurface@1/ranked-personal-catalog",
-    "state_variants": ["personal", "all", "liked", "rejected", "gallery-open", "empty"],
+    "state_variants": [
+      "personal",
+      "all",
+      "liked",
+      "rejected",
+      "gallery-open",
+      "empty"
+    ],
     "frame_master_owner": "FR0",
     "materialization_status": "SPEC_ONLY_NOT_MATERIALIZED"
   },

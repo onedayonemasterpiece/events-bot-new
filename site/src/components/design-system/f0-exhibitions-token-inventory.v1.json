@@ -21,7 +21,6 @@
     "--ke-color-exhibitions-gray",
     "--ke-color-exhibitions-yellow",
     "--ke-color-exhibitions-purple",
-    "--ke-color-exhibitions-green",
     "--ke-color-exhibitions-kbd-line",
     "--ke-color-exhibitions-kbd-line-strong",
     "--ke-color-exhibitions-kbd-surface",
@@ -112,11 +111,6 @@
     "--ke-color-exhibitions-gallery-control-surface",
     "--ke-color-exhibitions-gallery-stage-surface",
     "--ke-color-exhibitions-gallery-navigation-surface",
-    "--ke-color-exhibitions-live-line",
-    "--ke-color-exhibitions-live-surface",
-    "--ke-elevation-exhibitions-live",
-    "--ke-color-exhibitions-live-undo-line",
-    "--ke-color-exhibitions-live-undo-surface",
     "--ke-exhibitions-page-font-size",
     "--ke-exhibitions-page-line",
     "--ke-exhibitions-focus-width",
@@ -164,7 +158,6 @@
       "--ke-color-exhibitions-gray",
       "--ke-color-exhibitions-yellow",
       "--ke-color-exhibitions-purple",
-      "--ke-color-exhibitions-green",
       "--ke-color-exhibitions-kbd-line",
       "--ke-color-exhibitions-mode-surface",
       "--ke-color-exhibitions-sticky-surface",
@@ -195,9 +188,6 @@
       "--ke-color-exhibitions-gallery-surface",
       "--ke-color-exhibitions-gallery-backdrop",
       "--ke-color-exhibitions-gallery-navigation-surface",
-      "--ke-color-exhibitions-live-line",
-      "--ke-color-exhibitions-live-surface",
-      "--ke-elevation-exhibitions-live",
       "--ke-exhibitions-signal-icon-size",
       "--ke-exhibitions-action-icon-size",
       "--ke-exhibitions-gallery-arrow-icon-size"
@@ -266,5 +256,18 @@
     }
   ],
   "source_execution_claimed": false,
-  "materialization_claimed": false
+  "materialization_claimed": false,
+  "shared_runtime_evidence": {
+    "consumer": "site/src/components/ExhibitionsPersonalSurface.astro",
+    "shared_owner": "site/src/components/MobileToastRegion.astro",
+    "contract": "KenigEventsToast.show({ message, type, dedupeKey, action })",
+    "action_lifecycle": "persistent action notification; shared host owns dismissal and timer policy",
+    "retired_local_owner": [
+      ".ex-live",
+      "[data-live-message]",
+      "[data-live-undo]",
+      "liveTimer",
+      "liveUndoAction"
+    ]
+  }
 }
