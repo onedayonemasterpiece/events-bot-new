@@ -218,6 +218,9 @@ export interface PreviewEvent {
   popularity_reason_codes?: Array<'fast_growth' | 'frequently_shared' | 'discussed' | 'multi_source'>;
   popularity_signal_score?: number;
   pushkin_card: boolean;
+  /** Explicit source links that are related but not necessarily alternate dates. */
+  related_event_ids?: number[];
+  /** Reciprocal, calendar-equivalent subset of related_event_ids. */
   other_date_ids: number[];
   source_prod_id: number;
   data_quality_notes: string[];

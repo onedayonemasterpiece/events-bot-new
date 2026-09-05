@@ -2751,6 +2751,14 @@ def build_event(
         "description_html": markdownish_to_html(description) or f"<p>{html.escape(summary or title)}</p>",
         "topics": topics,
         "pushkin_card": bool(row["pushkin_card"]),
+        # Keep every explicit source relation separately from date-equivalent
+        # occurrences. A consumer may surface a linked programme/discovery card
+        # without representing it as another calendar date of this event.
+        "related_event_ids": sorted({
+            int(item)
+            for item in read_json(row_get(row, "linked_event_ids"), [])
+            if str(item).isdigit() and int(item) != event_id
+        }),
         "other_date_ids": sorted({
             int(item)
             for item in read_json(row_get(row, "linked_event_ids"), [])
@@ -5204,12 +5212,43 @@ def build_related(
     }
 
 
-def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
-    """Keep only mutual links inside the exported eligible catalog.
+def is_long_running_exhibition(event: dict[str, Any]) -> bool:
+    """Use only the structured type and explicit date range for this guard."""
+    start_date = normalize_date(event.get("start_date"))
+    end_date = normalize_date(event.get("end_date"))
+    return (
+        clean_text(event.get("event_type")).casefold() == "выставка"
+        and bool(start_date and end_date and end_date > start_date)
+    )
 
-    Canonical rows may retain links to past/ineligible occurrences.  Those
-    source links remain in SQLite, but a static release must not emit dangling
-    or one-way graph edges that point outside its immutable catalog.
+
+def is_guided_tour(event: dict[str, Any]) -> bool:
+    """The exporter trusts the canonical event_type; it never classifies titles."""
+    return clean_text(event.get("event_type")).casefold() == "экскурсия"
+
+
+def occurrence_relation_is_calendar_equivalent(
+    left: dict[str, Any], right: dict[str, Any]
+) -> bool:
+    """Reject the structured exhibition-to-tour relation from date navigation.
+
+    Mutual ``linked_event_ids`` remain the sole positive occurrence relation
+    evidence. This is deliberately a narrow negative guard, not an attempt to
+    infer series identity from matching titles, venues, or event types.
+    """
+    return not (
+        (is_long_running_exhibition(left) and is_guided_tour(right))
+        or (is_long_running_exhibition(right) and is_guided_tour(left))
+    )
+
+
+def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
+    """Keep calendar-equivalent mutual links inside the exported catalog.
+
+    ``related_event_ids`` retains every explicit source relation, including
+    past/ineligible records, while ``other_date_ids`` is a reciprocal calendar
+    navigation graph only. Canonical rows may retain links to past/ineligible
+    occurrences, but those cannot become dangling public date edges.
     """
 
     by_id = {int(event["id"]): event for event in events}
@@ -5225,7 +5264,11 @@ def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
         event["other_date_ids"] = sorted(
             linked_id
             for linked_id in raw_links[event_id]
-            if linked_id in by_id and event_id in raw_links.get(linked_id, set())
+            if (
+                linked_id in by_id
+                and event_id in raw_links.get(linked_id, set())
+                and occurrence_relation_is_calendar_equivalent(event, by_id[linked_id])
+            )
         )
 
 
