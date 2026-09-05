@@ -20,3 +20,10 @@ test('shared EventCard selectors consume card roles, no per-route heavy weights'
  }
  assert.match(layout,/\.feedback-button \{[^}]*font-weight: var\(--ke-type-card-action-weight\)/);
 });
+
+test('typography checker follows rejected-baseline status and only the actual mobile heading alias scope',()=>{
+ const checker=read('../src/components/design-system/check-f0-typography-authority.mjs');
+ assert.ok(checker.includes("assert.equal(authority.status, 'ACTIVE_OWNER_CORRECTION_NOT_VISUAL_ACCEPTANCE'"));
+ assert.ok(checker.includes('&& insideMobileScope'));
+ assert.ok(checker.includes('assert.ok(!previous || responsiveHeadingAlias'));
+});

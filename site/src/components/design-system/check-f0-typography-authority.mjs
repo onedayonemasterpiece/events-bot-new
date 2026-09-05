@@ -11,7 +11,7 @@ const primitiveCss = readRepo(authority.family.primitive_owner.path);
 const foundationsCss = readRepo(authority.family.semantic_owner.path);
 
 assert.equal(authority.schema, 'kenigevents.f0-typography-authority.v1');
-assert.equal(authority.status, 'ACTIVE_CURRENT_SOURCE_BASELINE');
+assert.equal(authority.status, 'ACTIVE_OWNER_CORRECTION_NOT_VISUAL_ACCEPTANCE', 'the owner-rejected baseline cannot be silently reaccepted');
 assert.equal(authority.family.owner_approval_claimed, false, 'source normalization must not invent an owner font decision');
 assert.equal(authority.delivery.repository_font_binaries_are_launch_ui_authority, false);
 assert.deepEqual(authority.delivery.authoritative_asset_paths, []);
@@ -62,8 +62,18 @@ for (const path of designSystemCss) {
   assert.doesNotMatch(source, /@font-face\b/iu, `${relative(path)} must not introduce a font delivery authority`);
   for (const match of source.matchAll(/(--ke-type-[a-z0-9-]+-weight)\s*:\s*([^;]+);/giu)) {
     const [, token, rawValue] = match;
-    assert.ok(!weightDeclarations.has(token), `duplicate semantic weight owner: ${token}`);
     const value = rawValue.trim();
+    const previous = weightDeclarations.get(token);
+    const mobileScope = /@media \(max-width: 759px\)\s*\{\s*:root\s*\{([^}]+)\}/u.exec(source);
+    const insideMobileScope = mobileScope && match.index >= mobileScope.index && match.index < mobileScope.index + mobileScope[0].length;
+    const responsiveHeadingAlias = token === '--ke-type-h1-weight'
+      && previous?.path === relative(path)
+      && relative(path) === authority.family.semantic_owner.path
+      && value === 'var(--ke-type-h1-compact-weight)'
+      && insideMobileScope
+      && (mobileScope[1].match(/--ke-type-h1-weight\s*:/gu) || []).length === 1;
+    assert.ok(!previous || responsiveHeadingAlias, `duplicate semantic weight owner: ${token}`);
+    if (responsiveHeadingAlias) continue;
     assert.ok(
       /^\d{3}$/u.test(value) || /^var\(--ke-type-[a-z0-9-]+-weight\)$/u.test(value),
       `non-explicit semantic weight ${token}: ${value}`,

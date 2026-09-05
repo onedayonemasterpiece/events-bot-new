@@ -1218,3 +1218,5 @@ The8673 related set has7 documents in5 distinct ratios across4 rows; no full
 uncropped equal-width/equal-height partition exists under current restrictions.
 These bounded unresolved cases prevent blanket framing acceptance. Variable-width
 rows would be a product change and are not silently enabled.
+
+The existing typography-authority checker now validates owner-correction status and the explicitly scoped mobile H1 alias; it no longer mistakes that responsive binding for a second owner. Duplicate owner checks remain active.

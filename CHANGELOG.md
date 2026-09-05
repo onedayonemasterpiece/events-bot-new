@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Typography authority checker now recognizes the active owner-correction status and the single existing mobile H1 alias without allowing duplicate token owners.
 - Framing uses natural ratios for feasible document rows and reports exact incompatible sets without dropping events or treating protective letterboxing as accepted output.
 - Preserved full desktop/mobile brand through scroll, restored Today navigation, removed the rejected mobile All collections entry, scoped prelaunch scroll locking, and kept both desktop/mobile bottom islands with footer-owned clearance.
 - Removed Home’s duplicate page-local top spacer before Hero Talk; shell retains ownership of brand/header clearance.
