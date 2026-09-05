@@ -73,13 +73,16 @@ test('toast API owns bounded FIFO replacement, persistence and stale timers', as
     'an action must dismiss only the entry it was rendered for');
   assert.match(toast, /data-app-lower-surface="notification"/u);
   assert.match(toast, /toast\.dataset\.appLowerLifecycle = entry\.duration === null \? 'persistent' : 'passive'/u);
-  assert.match(toast, /kenigevents:lower-surface-state[\s\S]*is-modal-obscured[\s\S]*pause\('lower-surface-modal'\)[\s\S]*resume\('lower-surface-modal'\)/u);
+  assert.match(toast, /syncLowerSurfaceState[\s\S]*is-modal-obscured[\s\S]*pause\('lower-surface-modal'\)[\s\S]*resume\('lower-surface-modal'\)/u);
   assert.match(toast, /pagehide[\s\S]*clearTimer\(\)[\s\S]*controller\.abort\(\)/u);
 });
 
 test('toast pauses actual time and countdown and honors safe/reduced-motion geometry', async () => {
   const toast = await read('src/components/MobileToastRegion.astro');
   assert.match(toast, /remaining = Math\.max\(0, remaining - \(performance\.now\(\) - startedAt\)\)/u);
+  assert.match(toast, /if \(!pauseReasons\.delete\(reason\)\) return;/u, 'repeat resume events must not restart the timer');
+  assert.match(toast, /if \(document\.hidden\) pause\('visibility'\);[\s\S]*syncLowerSurfaceState\(document\.body\.dataset\.lowerSurfaceState === 'modal'\)/u);
+  assert.match(toast, /data-mobile-toast-time[\s\S]*Ещё \$\{Math\.max\(1, Math\.ceil\(remaining \/ 1000\)\)\} с/u);
   for (const reason of ['pointer', 'focus', 'touch', 'window', 'visibility', 'drawer']) {
     assert.match(toast, new RegExp(`(?:pause|resume)\\('${reason}'\\)`));
   }
@@ -107,4 +110,44 @@ test('shared producers avoid duplicate keyboard and phone announcements', async 
   assert.match(layout, /shareStatusEpochs\.get\(button\) !== epoch/u);
   assert.doesNotMatch(layout, /window as any/u, 'inline EventLayout runtime must stay browser-valid JavaScript');
   assert.doesNotMatch(layout, /authorized-search[^\n]+KenigEventsToast|KenigEventsToast[^\n]+authorized-search/u);
+});
+
+class RuntimeTarget {
+  #listeners = new Map();
+  addEventListener(type, listener) { const listeners = this.#listeners.get(type) || []; listeners.push(listener); this.#listeners.set(type, listeners); }
+  dispatchEvent(event) { event.currentTarget = this; for (const listener of this.#listeners.get(event.type) || []) listener(event); }
+}
+const element = () => {
+  const target = new RuntimeTarget(); const classes = new Set();
+  target.hidden = false; target.textContent = ''; target.dataset = {}; target.style = { setProperty() {} };
+  target.classList = { add: (...values) => values.forEach((value) => classes.add(value)), remove: (...values) => values.forEach((value) => classes.delete(value)), toggle: (value, force) => { const enabled = force === undefined ? !classes.has(value) : force; if (enabled) classes.add(value); else classes.delete(value); return enabled; }, contains: (value) => classes.has(value) };
+  target.contains = () => false; Object.defineProperty(target, 'offsetWidth', { get: () => 1 }); return target;
+};
+const toastRuntime = async ({ reducedMotion = false, hidden = false, modal = false } = {}) => {
+  const { stripTypeScriptTypes } = await import('node:module'); const vm = await import('node:vm');
+  const source = await read('src/components/MobileToastRegion.astro'); const script = source.match(/<script>([\s\S]*?)<\/script>/u)?.[1];
+  assert.ok(script, 'toast component must contain its client runtime');
+  let now = 0; let nextTimer = 1; const timers = new Map();
+  const clock = { setTimeout(callback, delay) { const id = nextTimer++; timers.set(id, { callback, at: now + delay }); return id; }, clearTimeout(id) { timers.delete(id); }, advance(milliseconds) { const until = now + milliseconds; while (true) { const due = [...timers.entries()].filter(([, timer]) => timer.at <= until).sort(([, left], [, right]) => left.at - right.at)[0]; if (!due) break; const [id, timer] = due; timers.delete(id); now = timer.at; timer.callback(); } now = until; } };
+  const region = element(); const toast = element(); const message = element(); const action = element(); const close = element(); const countdown = element(); const time = element(); const polite = element(); const assertive = element();
+  const inside = new Map([['[data-mobile-toast]', toast], ['[data-mobile-toast-message]', message], ['[data-mobile-toast-action]', action], ['[data-mobile-toast-close]', close], ['[data-mobile-toast-countdown]', countdown], ['[data-mobile-toast-time]', time]]);
+  region.querySelector = (selector) => inside.get(selector) || null;
+  const document = new RuntimeTarget(); document.hidden = hidden; document.body = { dataset: { lowerSurfaceState: modal ? 'modal' : 'ready' } }; document.querySelector = (selector) => ({ '[data-mobile-toast-region]': region, '[data-mobile-toast-status]': polite, '[data-mobile-toast-alert]': assertive }[selector] || null);
+  const window = new RuntimeTarget(); window.setTimeout = clock.setTimeout; window.clearTimeout = clock.clearTimeout;
+  const context = { window, document, performance: { now: () => now }, matchMedia: () => ({ matches: reducedMotion }), requestAnimationFrame: (callback) => callback(), setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, AbortController, console };
+  vm.runInNewContext(stripTypeScriptTypes(script, { mode: 'transform' }), context);
+  return { window, document, region, toast, countdown, time, clock };
+};
+
+test('toast runtime does not extend passive lifetime on repeated ready state and preserves it through a modal', async () => {
+  const runtime = await toastRuntime(); runtime.window.KenigEventsToast.show({ message: 'Сохранено', duration: 1000 }); runtime.clock.advance(300);
+  for (let index = 0; index < 4; index += 1) runtime.window.dispatchEvent({ type: 'kenigevents:lower-surface-state', detail: { modalOpen: false } });
+  runtime.clock.advance(699); assert.equal(runtime.region.hidden, false, 'the original timer remains active before its deadline'); runtime.clock.advance(1); assert.equal(runtime.region.hidden, true, 'repeat ready events must not re-arm a passive toast');
+  runtime.window.KenigEventsToast.show({ message: 'Сохранено снова', duration: 1000 }); runtime.clock.advance(300); runtime.window.dispatchEvent({ type: 'kenigevents:lower-surface-state', detail: { modalOpen: true } }); assert.equal(runtime.region.classList.contains('is-modal-obscured'), true);
+  runtime.clock.advance(2000); assert.equal(runtime.region.hidden, false, 'modal pause retains the passive toast'); runtime.window.dispatchEvent({ type: 'kenigevents:lower-surface-state', detail: { modalOpen: false } }); runtime.clock.advance(699); assert.equal(runtime.region.hidden, false); runtime.clock.advance(1); assert.equal(runtime.region.hidden, true, 'resume consumes only the pre-modal remaining time');
+});
+test('toast runtime synchronizes hidden/modal startup and gives reduced-motion users truthful remaining time', async () => {
+  const startup = await toastRuntime({ hidden: true, modal: true }); startup.window.KenigEventsToast.show({ message: 'Фоновое', duration: 1000 }); startup.clock.advance(2000); assert.equal(startup.region.hidden, false, 'initial hidden/modal state pauses before the first toast');
+  startup.document.hidden = false; startup.document.dispatchEvent({ type: 'visibilitychange' }); startup.window.dispatchEvent({ type: 'kenigevents:lower-surface-state', detail: { modalOpen: false } }); startup.clock.advance(1000); assert.equal(startup.region.hidden, true);
+  const reduced = await toastRuntime({ reducedMotion: true }); reduced.window.KenigEventsToast.show({ message: 'Без анимации', duration: 1500 }); assert.equal(reduced.time.hidden, false); assert.equal(reduced.time.textContent, 'Ещё 2 с'); reduced.clock.advance(1000); assert.equal(reduced.time.textContent, 'Ещё 1 с', 'the owner timer updates reduced-motion remaining time'); reduced.clock.advance(500); assert.equal(reduced.region.hidden, true);
 });

@@ -2,6 +2,7 @@
   <div class="mobile-toast" data-mobile-toast data-app-lower-surface="notification" data-kind="info">
     <p class="mobile-toast__message" data-mobile-toast-message></p>
     <div class="mobile-toast__controls">
+      <span class="mobile-toast__time" data-mobile-toast-time aria-hidden="true" hidden></span>
       <button class="mobile-toast__action" data-mobile-toast-action type="button" hidden></button>
       <button class="mobile-toast__close" data-mobile-toast-close type="button" aria-label="Закрыть уведомление">×</button>
     </div>
@@ -28,9 +29,10 @@
   const action = region?.querySelector<HTMLButtonElement>('[data-mobile-toast-action]');
   const close = region?.querySelector<HTMLButtonElement>('[data-mobile-toast-close]');
   const countdown = region?.querySelector<HTMLElement>('[data-mobile-toast-countdown]');
+  const time = region?.querySelector<HTMLElement>('[data-mobile-toast-time]');
   const polite = document.querySelector<HTMLElement>('[data-mobile-toast-status]');
   const assertive = document.querySelector<HTMLElement>('[data-mobile-toast-alert]');
-  if (region && toast && message && action && close && countdown && polite && assertive) {
+  if (region && toast && message && action && close && countdown && time && polite && assertive) {
     const controller = new AbortController();
     const { signal } = controller;
     const queue:ToastEntry[] = [];
@@ -52,8 +54,15 @@
       const target = entry.type === 'error' ? assertive : polite;
       requestAnimationFrame(() => { if (current?.id === entry.id) target.textContent = entry.message; });
     };
+    const setReducedMotionTime = () => {
+      const timedEntry = current?.duration !== null && reducedMotion.matches;
+      time.hidden = !timedEntry;
+      if (timedEntry) time.textContent = `Ещё ${Math.max(1, Math.ceil(remaining / 1000))} с`;
+      else time.textContent = '';
+    };
     const setCountdown = (entry:ToastEntry) => {
       countdown.hidden = entry.duration === null;
+      setReducedMotionTime();
       countdown.classList.remove('is-running', 'is-paused');
       countdown.style.setProperty('--mobile-toast-duration', `${remaining}ms`);
       if (entry.duration !== null && !reducedMotion.matches) {
@@ -68,6 +77,8 @@
       current = null;
       region.hidden = true;
       countdown.classList.remove('is-running', 'is-paused');
+      time.hidden = true;
+      time.textContent = '';
       delete toast.dataset.appLowerLifecycle;
       polite.textContent = '';
       assertive.textContent = '';
@@ -78,7 +89,16 @@
       if (!current || current.duration === null || pauseReasons.size) return;
       startedAt = performance.now();
       const ownGeneration = generation;
-      timer = window.setTimeout(() => dismiss(ownGeneration), remaining);
+      const tick = () => {
+        if (!current || ownGeneration !== generation || current.duration === null || pauseReasons.size) return;
+        remaining = Math.max(0, remaining - (performance.now() - startedAt));
+        if (remaining <= 0) dismiss(ownGeneration);
+        else {
+          setReducedMotionTime();
+          armTimer();
+        }
+      };
+      timer = window.setTimeout(reducedMotion.matches ? tick : () => dismiss(ownGeneration), reducedMotion.matches ? Math.min(1000, remaining) : remaining);
       countdown.classList.remove('is-paused');
     };
     const pause = (reason:string) => {
@@ -86,11 +106,16 @@
       pauseReasons.add(reason);
       if (current?.duration !== null && timer) remaining = Math.max(0, remaining - (performance.now() - startedAt));
       clearTimer();
+      setReducedMotionTime();
       countdown.classList.add('is-paused');
     };
     const resume = (reason:string) => {
-      pauseReasons.delete(reason);
+      if (!pauseReasons.delete(reason)) return;
       if (!pauseReasons.size) armTimer();
+    };
+    const syncLowerSurfaceState = (modalOpen:boolean) => {
+      region.classList.toggle('is-modal-obscured', modalOpen);
+      modalOpen ? pause('lower-surface-modal') : resume('lower-surface-modal');
     };
     const render = (entry:ToastEntry) => {
       generation += 1;
@@ -169,10 +194,10 @@
     }, { signal });
     window.addEventListener('kenigevents:lower-surface-state', (event) => {
       const detail = (event as CustomEvent<{ modalOpen?:boolean }>).detail;
-      const modalOpen = detail?.modalOpen === true;
-      region.classList.toggle('is-modal-obscured', modalOpen);
-      modalOpen ? pause('lower-surface-modal') : resume('lower-surface-modal');
+      syncLowerSurfaceState(detail?.modalOpen === true);
     }, { signal });
+    if (document.hidden) pause('visibility');
+    syncLowerSurfaceState(document.body.dataset.lowerSurfaceState === 'modal');
     window.addEventListener('pagehide', () => {
       generation += 1; clearTimer(); queue.length = 0; current = null; controller.abort();
       if (host.KenigEventsToast === api) delete host.KenigEventsToast;
@@ -193,6 +218,7 @@
   .mobile-toast { position:relative; min-height:56px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; overflow:hidden; padding:8px 8px 8px 14px; pointer-events:auto; }
   .mobile-toast__message { min-width:0; margin:0; overflow-wrap:anywhere; font-size:.88rem; font-weight:760; line-height:1.35; }
   .mobile-toast__controls { display:flex; align-items:center; }
+  .mobile-toast__time { padding-inline:4px; color:var(--ke-color-toast-action); font:700 .72rem/1 inherit; white-space:nowrap; }
   .mobile-toast__action,.mobile-toast__close { min-width:var(--ke-toast-control-size); min-height:var(--ke-toast-control-size); border:0; background:transparent; color:var(--ke-color-toast-action); font:850 .82rem/1 inherit; cursor:pointer; }
   .mobile-toast__close { font-size:var(--ke-toast-close-icon-size); font-weight:500; }
   .mobile-toast__countdown { position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--ke-color-toast-progress); transform:scaleX(1); transform-origin:left; }
@@ -201,6 +227,6 @@
   @keyframes mobile-toast-retreat { to { transform:scaleX(0); } }
   @media (prefers-reduced-motion:reduce) {
     .mobile-toast-region,.mobile-toast { transition:none!important; animation:none!important; }
-    .mobile-toast__countdown { animation:none!important; transform:scaleX(1); }
+    .mobile-toast__countdown { display:none; animation:none!important; transform:scaleX(1); }
   }
 </style>
