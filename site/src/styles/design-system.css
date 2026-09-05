@@ -219,6 +219,14 @@
 .ke-listing-date-nav a:hover { border-color: var(--ke-color-brand-600); background: var(--ke-color-canvas-soft); }
 .ke-listing-date-nav a[aria-current="page"] { border-color: var(--ke-color-brand-700); background: var(--ke-color-brand-700); color: var(--ke-color-surface-strong); }
 
+/* Desktop screenshots for direct date-family routes keep the document title
+   and the shared shell destinations, rather than repeating date chips. */
+@media (min-width: 981px) {
+  .ke-listing-head[data-ds-variant="today"] .ke-listing-date-nav,
+  .ke-listing-head[data-ds-variant="tomorrow"] .ke-listing-date-nav,
+  .ke-listing-head[data-ds-variant="date"] .ke-listing-date-nav { display:none; }
+}
+
 .ke-listing-controls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--ke-space-3); padding-block: var(--ke-space-5); border-bottom: 1px solid var(--ke-color-line); }
 .ke-city-filter { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--ke-space-2); margin: 0; padding: 0; border: 0; }
 .ke-city-filter--direct { flex: 1 1 100%; }
