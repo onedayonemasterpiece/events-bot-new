@@ -1,5 +1,5 @@
-/* Candidate-only consumer styles. No brand/header/menu/foundation mutation.
-   All paint/typography roles reuse the current foundations. */
+/* Preview-only contextual surfaces. Branded menu and lower navigation are not restyled.
+   The rejected broad desktop dock was removed after owner review. */
 html[data-fi-review] [data-fi-city-root] { min-width:0; max-width:100%; }
 html[data-fi-review] [data-fi-city-rail] { background:transparent; border-color:transparent; }
 html[data-fi-review] .fi-city-toggle {
@@ -54,7 +54,6 @@ html[data-fi-review] .fi-city-panel__note { color:var(--ke-color-text-muted); fo
 html[data-fi-review] .fi-city-toggle:focus-visible,
 html[data-fi-review] .fi-city-panel button:focus-visible,
 html[data-fi-review] .ke-filter-chip:has(input:focus-visible) { outline:2px solid var(--ke-color-focus-ring); outline-offset:2px; }
-/* A single existing page-context action, not a second heading/button tree. */
 html[data-fi-review] [data-fi-free-context] {
   flex:0 0 auto; align-self:flex-start; width:64px; max-width:64px; gap:0;
   margin-block-start:4px; background:transparent; right:auto;
@@ -69,33 +68,6 @@ html[data-fi-review] [data-fi-free-context] button {
   box-shadow:var(--ke-elevation-card);
 }
 html[data-fi-review] [data-fi-free-mark] { display:block; width:100%; height:100%; object-fit:contain; }
-/* Desktop is a separate responsive presentation of the same four destinations.
-   No display/position/z-index override: existing CTA/modal suppression wins. */
-@media(min-width:1024px) {
-  html[data-fi-review] .mobile-bottom-nav {
-    width:min(640px,calc(100% - 48px)); min-height:80px;
-    padding:var(--ke-space-2); gap:var(--ke-space-2);
-    border:var(--ke-shape-border-strong) solid var(--ke-color-action-primary-strong);
-    border-radius:var(--ke-shape-radius-panel);
-    background:var(--ke-color-background-surface-strong); box-shadow:var(--ke-elevation-popover);
-  }
-  html[data-fi-review] .mobile-bottom-nav a {
-    min-height:60px; display:flex; align-items:center; justify-content:center;
-    gap:var(--ke-space-2); padding:var(--ke-space-2);
-    border-radius:var(--ke-shape-radius-control); font:var(--ke-type-label);
-    color:var(--ke-color-text-primary);
-  }
-  html[data-fi-review] .mobile-bottom-nav__icon {
-    width:40px; height:40px; border-radius:var(--ke-shape-radius-control);
-  }
-  html[data-fi-review] .mobile-bottom-nav .ke-icon-role { --ke-icon-size:var(--fi-nav-feature-size); }
-  html[data-fi-review] .mobile-bottom-nav a[aria-current="page"] {
-    background:var(--ke-color-action-primary-strong); color:var(--ke-color-text-inverse);
-  }
-  html[data-fi-review] .mobile-bottom-nav a[aria-current="page"] .mobile-bottom-nav__icon { background:transparent; }
-  html[data-fi-review] .mobile-bottom-nav a:hover:not([aria-current="page"]) { background:var(--ke-color-background-subtle); }
-  html[data-fi-review] [data-fi-dock-clearance] { height:32px; }
-}
 @media(max-width:360px) {
   html[data-fi-review] [data-fi-city-mode="compact"] .ke-city-filter { grid-template-columns:minmax(0,1fr); }
 }
