@@ -327,7 +327,7 @@ const primaryMediaFrameImageErrorHandler = `const frame=this.closest('[data-medi
   </div>
 </section>
 {hasGallery && (
-  <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-efficient-portrait-viewer={efficientPortraitViewer ? 'true' : undefined} data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
+  <div class="hero-gallery" id={heroGalleryId} data-hero-gallery data-app-lower-surface="media" data-app-lower-lifecycle="persistent" data-efficient-portrait-viewer={efficientPortraitViewer ? 'true' : undefined} data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={heroGalleryTitleId} tabindex="-1" hidden>
     <div class="hero-gallery__chrome" aria-hidden="true"></div>
     <div class="hero-gallery__topbar">
       <a class="hero-gallery__brand" href={siteHomeHref()} aria-label="Перейти к афише Полюбить Калининград Анонсы">

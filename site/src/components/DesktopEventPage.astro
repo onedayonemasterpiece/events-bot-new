@@ -615,7 +615,7 @@ const descriptionHtml = (event.description_html || '')
   </section>
 
   {splitPortraitViewer && splitViewerImages.length > 0 && (
-    <div class="desktop-portrait-viewer" data-efficient-viewer role="dialog" aria-modal="true" aria-hidden="true" aria-label={`Быстрый просмотр изображений: ${event.title}`} hidden>
+    <div class="desktop-portrait-viewer" data-efficient-viewer data-app-lower-surface="media" data-app-lower-lifecycle="persistent" role="dialog" aria-modal="true" aria-hidden="true" aria-label={`Быстрый просмотр изображений: ${event.title}`} hidden>
       <div class="desktop-portrait-viewer__topbar">
         <div class="desktop-portrait-viewer__heading">
           <strong>{event.title}</strong>
@@ -656,7 +656,7 @@ const descriptionHtml = (event.description_html || '')
   )}
 
   {photoCount > 0 && (
-    <div class="hero-gallery" id={galleryId} data-hero-gallery data-desktop-gallery-dismiss="true" data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={galleryTitleId} tabindex="-1" hidden>
+    <div class="hero-gallery" id={galleryId} data-hero-gallery data-desktop-gallery-dismiss="true" data-app-lower-surface="media" data-app-lower-lifecycle="persistent" data-active-index="0" role="dialog" aria-modal="true" aria-labelledby={galleryTitleId} tabindex="-1" hidden>
       <div class="hero-gallery__chrome" aria-hidden="true"></div>
       <div class="hero-gallery__topbar">
         <a class="hero-gallery__brand" href={siteHomeHref()} aria-label="Перейти к афише Полюбить Калининград Анонсы"><AnnouncementsLockup variant="desktop" class="hero-gallery__lockup" /></a>
@@ -2357,8 +2357,8 @@ const descriptionHtml = (event.description_html || '')
       inset:0;
       display:grid;
       grid-template-rows:64px minmax(0,1fr);
-      background:#171412;
-      color:#fffaf2;
+      background:var(--ke-color-background-inverse);
+      color:var(--ke-color-text-inverse);
     }
     .desktop-portrait-viewer__topbar {
       z-index:2;
@@ -2366,21 +2366,21 @@ const descriptionHtml = (event.description_html || '')
       align-items:center;
       justify-content:space-between;
       padding:0 clamp(20px,3vw,48px);
-      background:rgba(23,20,18,.96);
-      border-bottom:1px solid rgba(255,255,255,.12);
+      background:var(--ke-color-background-surface);
+      border-bottom:var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
     }
     .desktop-portrait-viewer__heading { min-width:0; display:flex; align-items:baseline; gap:clamp(.75rem,1.4vw,1.4rem); }
-    .desktop-portrait-viewer__heading strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1rem; }
-    .desktop-portrait-viewer__heading time { flex:none; color:#d8c9bd; font-size:.84rem; font-weight:780; font-variant-numeric:tabular-nums; }
-    .desktop-portrait-viewer__quality-note { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#a99b91; font-size:.75rem; }
+    .desktop-portrait-viewer__heading strong { min-width:0; overflow:hidden; color:var(--ke-color-text-primary); text-overflow:ellipsis; white-space:nowrap; font:var(--ke-type-body-strong-weight) 1rem / var(--ke-type-body-line) var(--ke-font-family-sans); }
+    .desktop-portrait-viewer__heading time { flex:none; color:var(--ke-color-text-muted); font:var(--ke-type-metadata); font-variant-numeric:tabular-nums; }
+    .desktop-portrait-viewer__quality-note { min-width:0; overflow:hidden; color:var(--ke-color-text-muted); text-overflow:ellipsis; white-space:nowrap; font:var(--ke-type-metadata); }
     .desktop-portrait-viewer__topbar button {
       width:46px;
       height:46px;
       padding:0;
-      border:0;
+      border:var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
       border-radius:50%;
-      background:rgba(255,255,255,.1);
-      color:#fff;
+      background:var(--ke-color-background-surface-strong);
+      color:var(--ke-color-text-primary);
       font-size:2rem;
       cursor:pointer;
     }

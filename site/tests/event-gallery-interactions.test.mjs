@@ -40,6 +40,19 @@ test('gallery reduced motion, inactive controls and dialog focus are hardened', 
   assert.match(desktop, /data-hero-gallery-counter role="status" aria-live="polite" aria-atomic="true"/u);
 });
 
+test('app-owned media viewers declare persistent lower-surface semantics', async () => {
+  const mobileHero = await read('src/components/EventHero.astro');
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const exhibitions = await read('src/components/ExhibitionsPersonalSurface.astro');
+
+  for (const source of [mobileHero, desktop, exhibitions]) {
+    assert.match(source, /data-app-lower-surface="media"\s+data-app-lower-lifecycle="persistent"/u);
+  }
+  assert.match(desktop, /\.desktop-portrait-viewer__topbar\s*\{[\s\S]*background:var\(--ke-color-background-surface\);[\s\S]*border-bottom:var\(--ke-shape-border-hairline\) solid var\(--ke-color-border-default\)/u);
+  assert.match(exhibitions, /\.ex-gallery\s*\{[^}]*background:var\(--ke-color-background-surface\);[^}]*color:var\(--ke-color-text-primary\)/u);
+  assert.match(exhibitions, /\.ex-gallery__stage img\s*\{[^}]*object-fit:contain/u);
+});
+
 test('closed desktop hero owns unmodified arrows only while hovered or focused', async () => {
   const desktop = await read('src/components/DesktopEventPage.astro');
   const canaries = JSON.parse(await read('tests/fixtures/event-gallery-interaction-canaries.json'));

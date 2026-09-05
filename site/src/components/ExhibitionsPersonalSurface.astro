@@ -140,7 +140,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
       </section>
     </div>
 
-    <dialog class="ex-gallery" data-gallery aria-labelledby="gallery-title">
+    <dialog class="ex-gallery" data-gallery data-app-lower-surface="media" data-app-lower-lifecycle="persistent" aria-labelledby="gallery-title">
       <div class="ex-gallery__bar">
         <div><p>Фотографии выставки</p><h2 id="gallery-title" data-gallery-heading></h2></div>
         <button type="button" data-gallery-close aria-label="Закрыть галерею">Закрыть <kbd aria-hidden="true">Esc</kbd></button>
@@ -450,21 +450,21 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   .ex-empty { margin:2rem 0; padding:2rem; border:1px dashed var(--ke-color-exhibitions-empty-line); border-radius:6px; text-align:center; }
   .ex-empty h2 { margin:0; }
   .ex-empty p { color:var(--ke-color-exhibitions-muted); }
-  .ex-gallery { width:min(1120px,calc(100% - 2rem)); max-width:none; max-height:calc(100dvh - 2rem); padding:0; border:1px solid var(--ke-color-exhibitions-gallery-line); border-radius:7px; background:var(--ke-color-exhibitions-gallery-surface); color:var(--ke-color-exhibitions-text); box-shadow:var(--ke-elevation-exhibitions-gallery); }
+  .ex-gallery { width:min(1120px,calc(100% - 2rem)); max-width:none; max-height:calc(100dvh - 2rem); padding:0; border:var(--ke-shape-border-hairline) solid var(--ke-color-border-default); border-radius:var(--ke-shape-radius-panel); background:var(--ke-color-background-surface); color:var(--ke-color-text-primary); box-shadow:var(--ke-elevation-overlay); }
   .ex-gallery[open] { animation:ex-gallery-in var(--ke-exhibitions-motion-base) var(--ke-exhibitions-ease-cinematic) both; }
   .ex-gallery.is-closing { animation:ex-gallery-out 240ms var(--ke-exhibitions-ease-cinematic) both; }
   .ex-gallery::backdrop { background:var(--ke-color-exhibitions-gallery-backdrop); backdrop-filter:blur(5px); animation:ex-backdrop-in var(--ke-exhibitions-motion-base) var(--ke-exhibitions-ease-cinematic) both; }
   .ex-gallery.is-closing::backdrop { animation:ex-backdrop-out 240ms var(--ke-exhibitions-ease-cinematic) both; }
-  .ex-gallery__bar { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.2rem; border-bottom:1px solid var(--ke-color-exhibitions-border); }
-  .ex-gallery__bar p { margin:0; color:var(--ke-color-exhibitions-muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; }
-  .ex-gallery__bar h2 { margin:.1rem 0 0; font-size:clamp(1rem,2vw,1.5rem); }
-  .ex-gallery__bar button { min-height:44px; padding:.5rem .75rem; border:1px solid var(--ke-color-exhibitions-action-border); border-radius:4px; background:var(--ke-color-exhibitions-gallery-control-surface); color:var(--ke-color-exhibitions-text); font:inherit; cursor:pointer; }
+  .ex-gallery__bar { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.2rem; border-bottom:var(--ke-shape-border-hairline) solid var(--ke-color-border-default); }
+  .ex-gallery__bar p { margin:0; color:var(--ke-color-text-muted); font:var(--ke-type-metadata); letter-spacing:var(--ke-type-metadata-letter); text-transform:uppercase; }
+  .ex-gallery__bar h2 { margin:.1rem 0 0; font:var(--ke-type-h4); letter-spacing:var(--ke-type-h4-letter); }
+  .ex-gallery__bar button { min-height:var(--ke-size-touch-target); padding:.5rem .75rem; border:var(--ke-shape-border-hairline) solid var(--ke-color-border-default); border-radius:var(--ke-shape-radius-control); background:var(--ke-color-background-surface-strong); color:var(--ke-color-text-primary); font:var(--ke-type-label); cursor:pointer; }
   .ex-gallery__stage { min-height:min(72dvh,760px); display:grid; grid-template-columns:60px 1fr 60px; align-items:stretch; background:var(--ke-color-exhibitions-gallery-stage-surface); }
   .ex-gallery__media { position:relative; min-width:0; height:min(72dvh,760px); display:grid; place-items:center; overflow:hidden; background:var(--ke-color-exhibitions-gallery-stage-surface); }
   .ex-gallery__stage img { position:relative; z-index:0; width:100%; height:100%; object-fit:contain; background:var(--ke-color-exhibitions-gallery-stage-surface); }
   .ex-gallery__error { position:relative; z-index:2; margin:0; color:var(--ke-color-exhibitions-muted); }
-  .ex-gallery__stage button { border:0; background:var(--ke-color-exhibitions-gallery-navigation-surface); color:var(--ke-color-exhibitions-text); font-size:var(--ke-exhibitions-gallery-arrow-icon-size); cursor:pointer; }
-  .ex-gallery__count { margin:0; padding:.7rem; color:var(--ke-color-exhibitions-muted); text-align:center; }
+  .ex-gallery__stage button { border:var(--ke-shape-border-hairline) solid var(--ke-color-inverse-control-border); background:var(--ke-color-inverse-control-background); color:var(--ke-color-inverse-control); font-size:var(--ke-exhibitions-gallery-arrow-icon-size); cursor:pointer; }
+  .ex-gallery__count { margin:0; padding:.7rem; color:var(--ke-color-text-muted); font:var(--ke-type-metadata); text-align:center; }
   .ex-live { position:fixed; left:50%; bottom:1rem; z-index:80; transform:translate3d(-50%,8px,0); min-width:min(420px,calc(100% - 2rem)); display:flex; align-items:center; justify-content:center; gap:.8rem; margin:0; padding:.7rem 1rem; border:1px solid var(--ke-color-exhibitions-live-line); border-radius:6px; background:var(--ke-color-exhibitions-live-surface); color:var(--ke-color-exhibitions-text,var(--ke-color-exhibitions-green)); text-align:center; box-shadow:var(--ke-elevation-exhibitions-live); opacity:0; visibility:hidden; pointer-events:none; transition:opacity 160ms ease-in,transform 190ms ease-in,visibility 0s linear 190ms; }
   .ex-live.is-visible { transform:translate3d(-50%,0,0); opacity:1; visibility:visible; transition:opacity 240ms ease-out,transform 320ms var(--ke-exhibitions-ease-cinematic),visibility 0s; }
   .ex-live [data-live-message] { opacity:1; transform:translate3d(0,0,0); transition:opacity 160ms ease-out,transform 240ms var(--ke-exhibitions-ease-cinematic); }
