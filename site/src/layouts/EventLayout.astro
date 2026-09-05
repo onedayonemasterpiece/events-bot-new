@@ -153,7 +153,7 @@ const HEADER_NAVIGATION = [
 ] as const;
 // Primary destinations live in the shared island; this is contextual discovery.
 const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) =>
-  item.key !== 'today' && item.key !== 'popular' && (item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED));
+  item.key !== 'popular' && (item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED));
 const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : mobileSection === 'personal' ? 'personal' : mobileSection === 'afisha' ? 'all' : null);
 ---
 <!doctype html>
@@ -291,13 +291,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .site-header__desktop-lockup .announcements-lockup__wordmark { display: block; width: 192px; height: auto; color: #fff; overflow: visible; }
       /* Schematic context inside the existing shell; Button owns control skin.
          No second navigation system or final island visual design. */
-      .site-header__context { display:flex; align-items:center; gap:.5rem; min-width:0; max-width:min(25vw,20rem); pointer-events:auto; background:var(--ke-color-background-header); }
+      .site-header__context { flex:0 1 min(25vw,20rem); display:flex; align-items:center; gap:.5rem; min-width:0; max-width:min(25vw,20rem); pointer-events:auto; background:var(--ke-color-background-header); }
       .site-header__context-home { flex:none; display:inline-flex; align-items:center; min-height:44px; font-weight:var(--ke-type-h3-weight); color:var(--ke-color-action-primary); }
       .site-header__context[hidden] { display:none; }
       .site-header__context > .ke-button { min-width:0; max-width:100%; }
       .site-header__context-title { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
       .site-header__context-label { flex:none; }
-      body[data-floating-context="visible"] .site-header__brand-tag { display:none; }
       @media(max-width:759px) {
         .site-header__context { position:fixed; top:calc(env(safe-area-inset-top) + 8px); left:142px; right:max(12px,env(safe-area-inset-right)); max-width:none; z-index:43; }
         .site-header__context-home { display:none; }
@@ -325,7 +324,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         white-space: nowrap;
       }
       .mobile-discovery-menu__links a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 0.28em; }
-      .site-nav { min-width: 0; display: flex; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; margin-left: auto; }
+      .site-nav { min-width: 0; flex: 1 1 auto; display: flex; gap: 4px; flex-wrap: nowrap; justify-content: flex-start; margin-left: auto; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
+      .site-nav::-webkit-scrollbar { display: none; }
       .site-nav a {
         position: relative;
         min-height: 44px;
@@ -341,6 +341,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         line-height: 1.1;
         text-decoration: none;
         white-space: nowrap;
+        flex: 0 0 auto;
       }
       .site-nav a::after { content: ""; position: absolute; left: 0.72rem; right: 0.72rem; bottom: 2px; height: 2px; border-radius: 999px; background: var(--primary); opacity: 0; transform: scaleX(0.55); transition: opacity 160ms ease, transform 160ms ease; }
       .site-nav a:hover { color: var(--text); background: #f5eadc; }

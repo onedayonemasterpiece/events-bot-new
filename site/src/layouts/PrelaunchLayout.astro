@@ -86,7 +86,7 @@ const structuredData = {
 };
 ---
 <!doctype html>
-<html lang="ru-RU">
+<html lang="ru-RU" class="prelaunch-document">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -138,7 +138,7 @@ const structuredData = {
     <meta name="color-scheme" content="dark" />
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)}></script>
     <style is:global>
-      :root {
+      html.prelaunch-document {
         color-scheme: dark;
         font-family: var(--ke-font-family-sans);
         font-synthesis: none;
@@ -150,15 +150,15 @@ const structuredData = {
         --prelaunch-copper-soft: #f0c89e;
       }
 
-      * { box-sizing: border-box; }
-      html {
+      html.prelaunch-document * { box-sizing: border-box; }
+      html.prelaunch-document {
         min-width: 320px;
         min-height: 100%;
         background: var(--prelaunch-bg);
         overscroll-behavior: none;
         touch-action: manipulation;
       }
-      body {
+      body[data-ds-family="PrelaunchLayout"] {
         min-width: 320px;
         min-height: 100vh;
         margin: 0;
@@ -168,13 +168,13 @@ const structuredData = {
         background: var(--prelaunch-bg);
         color: var(--prelaunch-text);
       }
-      button, input { font: inherit; }
-      button { -webkit-tap-highlight-color: transparent; }
-      a { color: inherit; }
-      img { display: block; max-width: 100%; }
-      ::selection { color: #15100b; background: var(--prelaunch-copper-soft); }
-      :focus-visible { outline: var(--ke-shape-border-strong) solid var(--prelaunch-copper-soft); outline-offset: var(--ke-space-xs); }
-      .prelaunch-skip {
+      html.prelaunch-document button, html.prelaunch-document input { font: inherit; }
+      html.prelaunch-document button { -webkit-tap-highlight-color: transparent; }
+      html.prelaunch-document a { color: inherit; }
+      html.prelaunch-document img { display: block; max-width: 100%; }
+      html.prelaunch-document ::selection { color: #15100b; background: var(--prelaunch-copper-soft); }
+      html.prelaunch-document :focus-visible { outline: var(--ke-shape-border-strong) solid var(--prelaunch-copper-soft); outline-offset: var(--ke-space-xs); }
+      html.prelaunch-document .prelaunch-skip {
         position: fixed;
         left: var(--ke-space-lg);
         top: var(--ke-space-lg);
@@ -186,7 +186,7 @@ const structuredData = {
         transform: translateY(-180%);
         transition: transform .2s ease;
       }
-      .prelaunch-skip:focus { transform: translateY(0); }
+      html.prelaunch-document .prelaunch-skip:focus { transform: translateY(0); }
     </style>
   </head>
   <body
