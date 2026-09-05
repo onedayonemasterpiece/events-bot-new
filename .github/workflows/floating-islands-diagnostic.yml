@@ -33,10 +33,11 @@ jobs:
       - name: Source and pure-policy checks
         run: |
           mkdir -p "$RUNNER_TEMP/islands-evidence"
-          node --test site/tests/floating-islands-review.test.mjs | tee "$RUNNER_TEMP/islands-evidence/unit.tap"
+          node --test site/tests/floating-islands-review.test.mjs site/tests/floating-islands-recovery.test.mjs | tee "$RUNNER_TEMP/islands-evidence/unit.tap"
           node --check site/e2e/islands/review.mjs
+          node --check site/e2e/islands/recovery.mjs
           git diff --check
-      - name: Generate one real Astro route through the canonical focused runner
+      - name: Generate one Astro route through the canonical focused runner
         env:
           ROUTE: ${{ matrix.route }}
           CASE: ${{ matrix.name }}
@@ -49,31 +50,23 @@ jobs:
             --no-smoke --no-serve
       - name: Install Chromium for focused UI checks
         run: cd site && npx playwright install --with-deps chromium
-      - name: Check generated pages and compare preserved brand and dock
+      - name: Check generated pages and preserved brand and dock
         env:
           CASE: ${{ matrix.name }}
         run: |
           node site/e2e/islands/review.mjs \
             "$RUNNER_TEMP/islands-generated/preview-islands-ci-${GITHUB_RUN_ID}-${CASE}/__preview/local-focused-receipt.json" \
             "$RUNNER_TEMP/islands-evidence"
-      - name: Read pinned public source for independent branch reconciliation
-        if: always() && matrix.name == 'popular'
+      - name: Check resize recovery, original controls, cleanup and asset failure
+        if: success() || failure()
+        env:
+          CASE: ${{ matrix.name }}
         run: |
-          git fetch --no-tags --depth=1 origin 46fc5268a1cc7ee2a35172a1c6dd4c02389bc8bd
-          python - <<'PY'
-          import hashlib,json,os,subprocess
-          from pathlib import Path
-          ref='46fc5268a1cc7ee2a35172a1c6dd4c02389bc8bd'
-          paths=['site/src/layouts/EventLayout.astro','site/src/components/Reference4MobileMenu.astro','site/src/components/listings/ListingDiscoveryRail.astro','site/src/components/listings/PopularMobileGroupContext.astro','site/src/components/listings/PopularListingSurface.astro','site/src/components/listings/ListingControls.astro','site/src/components/MobileBottomNav.astro','site/src/design-system/astro-family-registry.v1.json','site/src/design-system/astro-family-consumers.generated.v1.json','site/src/design-system/token-authority-registry.v1.json','site/scripts/generate-astro-family-consumer-graph.mjs','site/scripts/check-astro-family-sot.mjs','site/scripts/generate-token-impact-graph.mjs','site/src/data/design-system-production-surface-contract.v1.json','site/tests/owner-audioreview-shell.test.mjs','site/scripts/popular-occurrence-contract.mjs','CHANGELOG.md','docs/features/static-site-pages/design-system/README.md']
-          files=[]
-          for path in paths:
-              data=subprocess.check_output(['git','show',f'{ref}:{path}'])
-              files.append({'path':path,'blob':subprocess.check_output(['git','rev-parse',f'{ref}:{path}'],text=True).strip(),'sha256':hashlib.sha256(data).hexdigest(),'content':data.decode()})
-          packet={'sourceSha':ref,'executed':False,'purpose':'read-only public source reconciliation','files':files}
-          out=Path(os.environ['RUNNER_TEMP'])/'islands-evidence'/'source-readback.json'
-          out.write_text(json.dumps(packet,ensure_ascii=False),encoding='utf-8')
-          PY
-      - name: Keep diagnostics only; no publication, secrets or fonts
+          test -f "$RUNNER_TEMP/islands-evidence/generation.json"
+          node site/e2e/islands/recovery.mjs \
+            "$RUNNER_TEMP/islands-generated/preview-islands-ci-${GITHUB_RUN_ID}-${CASE}/__preview/local-focused-receipt.json" \
+            "$RUNNER_TEMP/islands-evidence"
+      - name: Keep safe diagnostics only, never publish or upload fonts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

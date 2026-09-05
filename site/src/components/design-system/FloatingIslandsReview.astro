@@ -6,30 +6,27 @@ import { BASE_PATH, IS_PRODUCTION } from '../../lib/events';
 import { reviewEnabled, REVIEW_VERSION } from '../../lib/floatingIslandsReview.mjs';
 const enabled = reviewEnabled(BASE_PATH, IS_PRODUCTION);
 ---
-{enabled && <>
-  <div hidden data-fi-review-seed data-fi-base={BASE_PATH}
-    data-ds-family="FloatingIslandsReview" data-ds-version="1"
-    data-ds-variant={REVIEW_VERSION} data-ds-state="candidate">
-    <template data-fi-city-template>
-      <button type="button" class="fi-city-toggle" data-fi-city-toggle hidden aria-expanded="false">
-        <SemanticIcon name="pin" role="control" />
-        <span data-fi-city-summary>Все города</span>
-        <SemanticIcon name="chevron-down" role="inline" />
-      </button>
-      <div class="fi-city-panel" data-fi-city-panel>
-        <div class="fi-city-panel__head">
-          <strong>Города</strong>
-          <button type="button" data-fi-city-close aria-label="Закрыть выбор городов" hidden>
-            <SemanticIcon name="close" role="control" />
-          </button>
-        </div>
-        <div data-fi-city-options></div>
-        <p class="fi-city-panel__note">Выбор применяется сразу</p>
+{enabled && <div hidden data-fi-review-seed data-fi-base={BASE_PATH}
+  data-ds-family="FloatingIslandsReview" data-ds-version="1"
+  data-ds-variant={REVIEW_VERSION} data-ds-state="candidate">
+  <template data-fi-city-template>
+    <button type="button" class="fi-city-toggle" data-fi-city-toggle hidden aria-expanded="false">
+      <SemanticIcon name="pin" role="control" />
+      <span data-fi-city-summary>Все города</span>
+      <SemanticIcon name="chevron-down" role="inline" />
+    </button>
+    <div class="fi-city-panel" data-fi-city-panel>
+      <div class="fi-city-panel__head">
+        <strong>Города</strong>
+        <button type="button" data-fi-city-close aria-label="Закрыть выбор городов" hidden>
+          <SemanticIcon name="close" role="control" />
+        </button>
       </div>
-    </template>
-  </div>
-  <div data-fi-dock-clearance aria-hidden="true"></div>
-</>}
+      <div data-fi-city-options></div>
+      <p class="fi-city-panel__note">Выбор применяется сразу</p>
+    </div>
+  </template>
+</div>}
 <script>
   import { initFloatingIslandsReview } from '../../lib/floatingIslandsReview.mjs';
   initFloatingIslandsReview();
