@@ -1,3 +1,14 @@
+## 2026-09-05 — owner audio-review correction (not production)
+
+Restored semantic H1/H2 roles and current-data Hero Talk scenes; fixed
+partial-row stretching, product Home, exhibitions mobile navigation,
+global new-count ownership, preview clock, share label and ArrowDown
+reading behavior. Added schematic page context in the existing shell.
+Existing browser gate now checks computed roles, negative controls,
+clipping/occlusion, card geometry and real interaction states.
+Same-snapshot Kaggle publication, complete real event continuation,
+public festival/club counts and native Penpot acceptance remain open.
+
 # Changelog
 
 ## [Unreleased]

@@ -252,11 +252,12 @@ export async function assertOwnerReviewPages(page, origin, basePath = '', { rout
         invariant(titles.length === 1, `${route} must have one visible page title, got ${titles.length}`);
         assertOwnerTitleMetrics(titles[0], width);
         for (const section of report.headings.filter(h=>h.sectionRole)) assertOwnerSectionMetrics(section,width);
-        const sectionNode=page.locator('.ke-popular-behavior__head:not(.is-stuck) h2,.free-collection__results > h2,.ex-group__heading h2,.ex-tail-callout h2,.unusual-page__empty h2').first();
+        const sectionNode=page.locator('.ke-popular-behavior__head:not(.is-stuck) h2:visible,.free-collection__results > h2:visible,.ex-group__heading h2:visible,.ex-tail-callout h2:visible,.unusual-page__empty h2:visible').first();
         if(await sectionNode.count()) {
           const previous=await sectionNode.getAttribute('style');
           await sectionNode.evaluate(e=>e.style.setProperty('font-size','17px','important'));
           const poisoned=(await measureOwnerReviewPage(page)).headings.find(h=>h.sectionRole);
+          invariant(poisoned && Number.parseFloat(poisoned.style.fontSize)===17,'negative H2 control did not reach the measured visible consumer');
           let rejected=false;try {assertOwnerSectionMetrics(poisoned,width);} catch {rejected=true;}
           await sectionNode.evaluate((e,old)=>old===null?e.removeAttribute('style'):e.setAttribute('style',old),previous);
           invariant(rejected,'section gate accepted an overriding local font size');
