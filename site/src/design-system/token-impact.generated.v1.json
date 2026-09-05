@@ -5,9 +5,9 @@
   "registry_version": "1.0.0",
   "registry_sha256": "4f991aff77086abe5e2c3027beb6b2050b9492c73d3ab624053b56087eb1e35a",
   "source_root": "site/src",
-  "source_inventory_sha256": "6c03a07e4d0c8defe78d1ae0162b439e87def5d9cbdd6a6328bfdfd83a94b94c",
+  "source_inventory_sha256": "6d4a6a3c3ea9419d0928a0f8304658de4529f49a4b0ae2f5d48bd7edc0e09119",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "6a7b29b20f7063ef67d85c87f2887db62e68120cb193f0b294c3b5f91542afca",
+  "astro_family_graph_sha256": "7aef80358e61b88b199aa5cae5ed676f5dcbfcf880c11f0e703567cc01c7d9fb",
   "summary": {
     "token_count": 2532,
     "definition_count": 2848,
@@ -59765,7 +59765,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4455,
+          "line": 4497,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -59793,7 +59793,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4454,
+          "line": 4496,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60477,7 +60477,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5771,
+          "line": 5827,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61326,7 +61326,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4453,
+          "line": 4495,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61335,7 +61335,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4490,
+          "line": 4532,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61344,7 +61344,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4535,
+          "line": 4577,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62351,7 +62351,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5727,
+          "line": 5783,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62377,7 +62377,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5725,
+          "line": 5781,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62403,7 +62403,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5724,
+          "line": 5780,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67774,7 +67774,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 172,
           "has_fallback": false
         },
         {
@@ -71588,13 +71588,13 @@
         {
           "token": "--ke-color-free-hero-start",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-color-free-results-surface",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 179,
+          "line": 174,
           "has_fallback": false
         },
         {
@@ -72891,7 +72891,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 172,
           "has_fallback": false
         },
         {
@@ -76545,7 +76545,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 172,
           "has_fallback": false
         },
         {
@@ -92091,7 +92091,7 @@
         {
           "token": "--ke-color-free-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 136,
+          "line": 131,
           "has_fallback": false
         }
       ],
@@ -92121,7 +92121,7 @@
         {
           "token": "--ke-color-free-hero-end",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 135,
           "has_fallback": false
         }
       ],
@@ -92147,7 +92147,7 @@
         {
           "token": "--ke-color-free-hero-glow",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 139,
+          "line": 134,
           "has_fallback": false
         }
       ],
@@ -92177,7 +92177,7 @@
         {
           "token": "--ke-color-free-hero-start",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 135,
           "has_fallback": false
         }
       ],
@@ -92216,7 +92216,7 @@
         {
           "token": "--ke-color-free-hero-end",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 135,
           "has_fallback": false
         }
       ],
@@ -92267,7 +92267,7 @@
         {
           "token": "--ke-color-free-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 136,
+          "line": 131,
           "has_fallback": false
         }
       ],
@@ -92293,7 +92293,7 @@
         {
           "token": "--ke-color-free-medallion-shadow",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 153,
+          "line": 148,
           "has_fallback": false
         }
       ],
@@ -92319,7 +92319,7 @@
         {
           "token": "--ke-color-free-medallion-shadow-strong",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 170,
+          "line": 165,
           "has_fallback": false
         }
       ],
@@ -92372,7 +92372,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 172,
           "has_fallback": false
         }
       ],
@@ -92402,7 +92402,7 @@
         {
           "token": "--ke-color-free-results-surface",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 179,
+          "line": 174,
           "has_fallback": false
         }
       ],
@@ -99872,13 +99872,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 184,
+          "line": 178,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 185,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -105788,13 +105788,13 @@
         {
           "token": "--ke-color-free-hero-start",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-color-free-results-surface",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 179,
+          "line": 174,
           "has_fallback": false
         },
         {
@@ -111664,13 +111664,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 184,
+          "line": 178,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 185,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -117896,7 +117896,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 171,
+          "line": 166,
           "has_fallback": false
         }
       ],
@@ -120337,7 +120337,7 @@
         {
           "token": "--ke-elevation-free-hero",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 141,
+          "line": 136,
           "has_fallback": false
         }
       ],
@@ -133161,13 +133161,13 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -134028,13 +134028,13 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -135060,7 +135060,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -135269,7 +135269,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -137424,7 +137424,7 @@
         {
           "token": "--ke-free-hero-gap",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 134,
+          "line": 129,
           "has_fallback": false
         }
       ],
@@ -137450,7 +137450,7 @@
         {
           "token": "--ke-free-hero-padding",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
+          "line": 130,
           "has_fallback": false
         }
       ],
@@ -137480,7 +137480,7 @@
         {
           "token": "--ke-free-hero-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 137,
+          "line": 132,
           "has_fallback": false
         }
       ],
@@ -137510,7 +137510,7 @@
         {
           "token": "--ke-free-hero-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 194,
+          "line": 188,
           "has_fallback": false
         }
       ],
@@ -137536,19 +137536,19 @@
         {
           "token": "--ke-free-medallion-hero-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 132,
+          "line": 127,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-hero-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 151,
+          "line": 146,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-hero-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 152,
+          "line": 147,
           "has_fallback": false
         }
       ],
@@ -137574,13 +137574,13 @@
         {
           "token": "--ke-free-medallion-hero-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 200,
+          "line": 194,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-hero-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 201,
+          "line": 195,
           "has_fallback": false
         }
       ],
@@ -137606,13 +137606,13 @@
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 166,
+          "line": 161,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 167,
+          "line": 162,
           "has_fallback": false
         }
       ],
@@ -137638,13 +137638,13 @@
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 206,
+          "line": 200,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 206,
+          "line": 200,
           "has_fallback": false
         }
       ],
@@ -137670,7 +137670,7 @@
         {
           "token": "--ke-free-motion-opacity",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 171,
+          "line": 166,
           "has_fallback": false
         }
       ],
@@ -137700,7 +137700,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 171,
+          "line": 166,
           "has_fallback": false
         }
       ],
@@ -137772,7 +137772,7 @@
         {
           "token": "--ke-free-results-padding",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 176,
+          "line": 171,
           "has_fallback": false
         }
       ],
@@ -137802,7 +137802,7 @@
         {
           "token": "--ke-free-results-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 178,
+          "line": 173,
           "has_fallback": false
         }
       ],
@@ -137832,7 +137832,7 @@
         {
           "token": "--ke-free-results-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 207,
+          "line": 201,
           "has_fallback": false
         }
       ],
@@ -137862,7 +137862,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 157,
+          "line": 152,
           "has_fallback": false
         }
       ],
@@ -137888,7 +137888,7 @@
         {
           "token": "--ke-free-sticky-layer-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 205,
+          "line": 199,
           "has_fallback": false
         }
       ],
@@ -137918,7 +137918,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 158,
+          "line": 153,
           "has_fallback": false
         }
       ],
@@ -137948,7 +137948,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 205,
+          "line": 199,
           "has_fallback": false
         }
       ],
@@ -140559,7 +140559,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 157,
+          "line": 152,
           "has_fallback": false
         },
         {
@@ -142729,7 +142729,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2593,
+          "line": 2594,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -157704,13 +157704,13 @@
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 136,
+          "line": 131,
           "has_fallback": false
         },
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 172,
           "has_fallback": false
         },
         {
@@ -158133,7 +158133,7 @@
         {
           "token": "--ke-free-results-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 178,
+          "line": 173,
           "has_fallback": false
         }
       ],
@@ -159060,7 +159060,7 @@
         {
           "token": "--ke-free-results-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 207,
+          "line": 201,
           "has_fallback": false
         },
         {
@@ -159123,7 +159123,7 @@
         {
           "token": "--ke-free-hero-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 137,
+          "line": 132,
           "has_fallback": false
         },
         {
@@ -159198,7 +159198,7 @@
         {
           "token": "--ke-free-hero-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 194,
+          "line": 188,
           "has_fallback": false
         },
         {
@@ -159610,7 +159610,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 158,
+          "line": 153,
           "has_fallback": false
         },
         {
@@ -160218,7 +160218,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 205,
+          "line": 199,
           "has_fallback": false
         },
         {
@@ -163408,7 +163408,7 @@
         {
           "token": "--ke-free-results-padding",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 176,
+          "line": 171,
           "has_fallback": false
         },
         {
@@ -166215,7 +166215,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         }
       ],
@@ -166245,7 +166245,7 @@
         {
           "token": "--ke-type-display-collection-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         }
       ],
@@ -166291,7 +166291,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         }
       ],
@@ -166337,7 +166337,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         }
       ],
@@ -167725,7 +167725,7 @@
         {
           "token": "--ke-type-display-collection-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -167968,7 +167968,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -168204,7 +168204,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -168423,7 +168423,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -168589,7 +168589,7 @@
         {
           "token": "--ke-type-display-collection-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -168797,7 +168797,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -168999,7 +168999,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -169183,7 +169183,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 145,
+          "line": 140,
           "has_fallback": false
         },
         {
@@ -169279,7 +169279,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -169353,7 +169353,7 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -169443,7 +169443,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -169549,7 +169549,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -169675,7 +169675,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 181,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -171944,7 +171944,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4531,
+          "line": 4573,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172674,7 +172674,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4452,
+          "line": 4494,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172683,7 +172683,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4489,
+          "line": 4531,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172692,7 +172692,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4555,
+          "line": 4597,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172809,7 +172809,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4451,
+          "line": 4493,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172818,7 +172818,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4490,
+          "line": 4532,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172827,7 +172827,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4534,
+          "line": 4576,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -174263,7 +174263,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5689,
+          "line": 5745,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",

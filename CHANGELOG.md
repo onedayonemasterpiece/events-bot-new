@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Free events use one ordinary filtered listing and shared personalization/loading; strict confirmed-free eligibility and loaded/total counts persist through runtime transitions.
 - Packed related-card hydration waits for its geometry owner; release checks reject media/body overlap. Exhibitions inline runtime stays executable JavaScript.
 - Lower media windows retain wrapped titles without a duplicate caption covering the counter.
 - Exhibitions shares graphite roles and offers same-page light comparison; shared floating navigation now covers both device sizes, with measured CTA/notification clearance.

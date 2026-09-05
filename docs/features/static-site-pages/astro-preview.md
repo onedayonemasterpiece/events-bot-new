@@ -1139,3 +1139,16 @@ The browser gate rejects both unequal internal boundaries and equal but collapse
 media/body anatomy. Exhibitions inline scripts are parsed as plain JavaScript
 in regression tests: TypeScript assertions in `is:inline` disable all interaction.
 These source tests are not independent review or evidence of a published candidate.
+
+### Free collection owner correction (2026-09-05, #621/5550253003)
+
+`/podborki/besplatnye-sobytiya/` is one ordinary `standard-free-listing`, not
+a timed/exhibition landing. Its complete confirmed-free pool reuses the shared
+catalog mapper, embeds a typed inline manifest, initially renders 12 cards and
+uses the existing EventLayout discovery controller for personalization and
+loading. The hard free constraint applies before ranking, appending and profile
+visibility; it never admits unknown/paid entries through fallback. Count metadata
+distinguishes loaded from total with Russian forms. The source-bound structural
+projection labels five inspected entries as a sample, not the catalog total.
+This corrects the owner-rejected composition; historical two-group proofs are
+not acceptance evidence for the new page. Production is not promoted.

@@ -94,7 +94,7 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
             'data-free-collection-eligibility':'confirmed-free',
           }}
         />
-        <button type="button" class="secondary-button free-collection__load-more" data-free-collection-load-more hidden>Показать ещё</button>
+        <button type="button" class="secondary-button free-collection__load-more" data-free-collection-load-more data-discovery-load-more hidden>Показать ещё</button>
       ) : (
         <p class="free-collection__empty">Сейчас в актуальной выгрузке нет событий с подтверждённым бесплатным входом.</p>
       )}

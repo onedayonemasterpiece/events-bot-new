@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "18eaec6d743cc89619a0bc0caf5b09e717cb06c15f204038bcc43bd194b2bec3",
+  "registry_sha256": "c7105d55b27d53c6b40116cc7aea237c0719ea60349de50bf4a21bdb85dc393e",
   "source_root": "site/src",
-  "import_inventory_sha256": "6c5febf1c57eba1b03dbfe1f3b59568eb0ef26df692bd5ca9a2db15d2433e078",
+  "import_inventory_sha256": "f64d0ffc687ef0e75533f210d21012e6c75a3b444c44f59566d6933c4c089fb7",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -280,6 +280,7 @@
       "site/src/lib/focus-personalization.test.ts",
       "site/src/lib/focus-personalization.ts",
       "site/src/lib/focus-pwa-install-controller.ts",
+      "site/src/lib/freeCollection.mjs",
       "site/src/lib/homeFeed.mjs",
       "site/src/lib/homeHeroTalk.ts",
       "site/src/lib/ics.ts",
@@ -295,6 +296,7 @@
       "site/src/lib/mobileListingRailMedia.mjs",
       "site/src/lib/onboarding/standard-placement-context.test.ts",
       "site/src/lib/onboarding/standard-placement-context.ts",
+      "site/src/lib/personalization/catalog.ts",
       "site/src/lib/personalization/contract.ts",
       "site/src/lib/personalization/legacy/legacy_characterization.profile-v1.test.ts",
       "site/src/lib/personalization/legacy/legacy_characterization.scorer-v1.test.ts",
@@ -384,8 +386,8 @@
   "summary": {
     "product_family_count": 107,
     "family_count": 109,
-    "source_file_count": 319,
-    "import_edge_count": 813,
+    "source_file_count": 321,
+    "import_edge_count": 819,
     "direct_consumer_edges": 274,
     "protocol_consumer_edges": 32,
     "runtime_factory_edges": 1,

@@ -2524,6 +2524,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {resolvedMobileBottomMode !== 'none' && <MobileBottomNav current={mobileSection} />}
 
     <script>
+      import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
       import { packRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
       import { selectEventContinuation } from '../lib/eventContinuation.mjs';
       import { composeEventShareImage } from '../lib/eventShareImage.mjs';
@@ -2638,6 +2639,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         if (event.key === EXHIBITIONS_STATE_KEY || event.key === null) syncExhibitionsBadge();
       });
       Object.assign(window, {
+        KenigEventsFreeCollectionCountMessage: freeCollectionCountMessage,
         KenigEventsPackRelatedCardRows: packRelatedCardRows,
         KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
         KenigEventsResolveMobileEventCardMedia: resolveMobileEventCardMedia,
@@ -3382,6 +3384,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         function isEligibleCandidate(candidate, manifest, profile) {
           if (!candidate) return false;
+          if (manifest?.eligibility_filter === 'confirmed-free' && candidate.is_free !== true) return false;
           const id = candidateId(candidate);
           if (id == null) return false;
           if (asId(id) === asId(currentEventId(manifest))) return false;
@@ -4123,21 +4126,60 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         async function ensureDiscoveryStore(feed) {
           const existing = discoveryStores.get(feed);
-          if (existing) return existing;
+          if (existing?.pending) return existing.pending;
+          if (existing?.manifest) return existing;
           const source = feed.dataset.discoverySrc;
-          const store = { manifest: null, ranked: [], fetched: false, autoLoaded: false };
+          const store = existing || { manifest: null, ranked: [], fetched: false, autoLoaded: false };
           discoveryStores.set(feed, store);
           if (!source) return store;
-          try {
-            const response = await fetch(source, { headers: { Accept: 'application/json' } });
-            if (!response.ok) return store;
-            const payload = await response.json();
-            store.manifest = normalizeManifest(payload, feed);
-            store.fetched = true;
-          } catch (_) {
-            store.fetched = false;
+          store.pending = Promise.resolve().then(async () => {
+            try {
+              let payload;
+              if (source.startsWith('#')) {
+                const node = document.getElementById(source.slice(1));
+                if (!node || node.type !== 'application/json') throw new Error('Missing inline discovery catalog');
+                payload = JSON.parse(node.textContent);
+              } else {
+                const response = await fetch(source, { headers: { Accept: 'application/json' } });
+                if (!response.ok) throw new Error('Discovery catalog unavailable');
+                payload = await response.json();
+              }
+              if (feed.dataset.freeCollectionEligibility === 'confirmed-free') {
+                // Reject legacy price-label inference and unknown admission.
+                if (!Array.isArray(payload.related_static)) throw new Error('Missing typed free catalog');
+                payload = {...payload, eligibility_filter:'confirmed-free',
+                  related_static:payload.related_static.filter(candidate => candidate.is_free === true)};
+              }
+              store.manifest = normalizeManifest(payload, feed);
+              store.fetched = true;
+            } catch (_) { store.fetched = false; }
+            finally { store.pending = null; }
+            return store;
+          });
+          return store.pending;
+        }
+
+        function updateFilteredFeedState(feed, store, state) {
+          if (feed.dataset.freeCollectionEligibility !== 'confirmed-free') return;
+          const root = feed.closest('[data-free-collection-surface]');
+          const count = root?.querySelector('[data-free-collection-result-count]');
+          const button = feed.parentElement?.querySelector('[data-discovery-load-more]');
+          feed.dataset.freeCollectionState = state;
+          feed.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+          if (button) {
+            button.disabled = state === 'loading';
+            button.textContent = state === 'error' ? 'Повторить загрузку' : 'Показать ещё';
           }
-          return store;
+          if (state === 'loading' || state === 'error') return;
+          const loaded = visibleFeedCardCount(feed);
+          const total = Math.max(loaded, toArray(store.ranked).length);
+          if (count) {
+            count.dataset.freeCollectionLoadedCount = String(loaded);
+            count.dataset.freeCollectionTotalCount = String(total);
+            if (typeof window.KenigEventsFreeCollectionCountMessage === 'function') {
+              count.textContent = window.KenigEventsFreeCollectionCountMessage(loaded, total);
+            }
+          }
         }
 
         function candidateById(store, eventId) {
@@ -4851,6 +4893,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function cardEligibleAfterProfile(card, store, profile, anchorEventId) {
+          if (store.manifest?.eligibility_filter === 'confirmed-free' && candidateById(store, card.dataset.eventId)?.is_free !== true) return false;
           if (!profile) return true;
           const id = asId(card.dataset.eventId);
           const isCurrentPagePlate = sessionPinnedNotInterested.has(id) || asId(anchorEventId) === id;
@@ -4965,22 +5008,33 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         async function syncFeedWithManifest(feed, options = {}) {
           const button = feed.parentElement?.querySelector('[data-discovery-load-more]');
+          const isFiltered = feed.dataset.freeCollectionEligibility === 'confirmed-free';
+          if (isFiltered && feed.dataset.freeCollectionState === 'loading') return;
+          updateFilteredFeedState(feed, null, 'loading');
           const store = await ensureDiscoveryStore(feed);
           if (!store.manifest) {
             syncCardsFeedbackState(activeProfile());
-            if (button) button.hidden = true;
+            if (button) button.hidden = !isFiltered;
+            updateFilteredFeedState(feed, store, 'error');
             return;
           }
           const profile = activeProfile(store.manifest);
           const hasLocalProfile = Boolean(profile);
           const algorithmId = hasLocalProfile ? LOCAL_FALLBACK_ALGORITHM_ID : STATIC_ALGORITHM_ID;
-          store.ranked = rankEventDetailRelated(store.manifest, profile, { maxSameCategory: 3, maxSameVenue: 2 });
+          store.ranked = isFiltered
+            ? collapseRankedOccurrenceFamilies(personalFeedProfileIsReady(profile)
+                ? rankPersonalFeedCandidates(store.manifest, profile)
+                : rankPopularFallbackCandidates(store.manifest, profile))
+            : rankEventDetailRelated(store.manifest, profile, { maxSameCategory: 3, maxSameVenue: 2 });
           feed.dataset.effectiveAlgorithmId = algorithmId;
           feed.dataset.surface = SURFACE_EVENT_DETAIL_RELATED;
           feed.dataset.layoutMode = relatedLayoutMode();
           feed.dataset.presentationMode = relatedPresentationMode(window.innerWidth || 1024);
           feed.dataset.algorithmId = algorithmId;
-          reorderExistingCards(feed, store.ranked, options.anchorEventId);
+          const readingAnchor = isFiltered && !options.automatic
+            ? feed.querySelector(':scope > [data-event-card]:last-child')?.dataset.eventId
+            : options.anchorEventId;
+          reorderExistingCards(feed, store.ranked, readingAnchor);
           feed.querySelectorAll(':scope > [data-event-card]').forEach((card) => {
             card.hidden = !cardEligibleAfterProfile(card, store, profile, options.anchorEventId);
             const item = cardRankedItem(card, store);
@@ -5009,7 +5063,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           context.servedListId = randomId('served');
           const summary = createServedListSummary(visibleRanked, store.manifest, context);
           servedListByFeed.set(feed, summary);
-          if (button) button.hidden = !hasMoreCandidates(feed, store);
+          const more = hasMoreCandidates(feed, store);
+          if (button) button.hidden = !more;
+          updateFilteredFeedState(feed, store, !visibleRanked.length ? 'empty' : more ? 'ready' : 'exhausted');
         }
 
         async function hydrateDiscoveryFeeds({ automatic = false, anchorEventId = null } = {}) {
