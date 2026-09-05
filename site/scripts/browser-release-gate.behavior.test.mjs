@@ -378,7 +378,7 @@ test('AR-04 rejects unequal internal media tracks despite identical outer cards'
     cards:[card,{...card,x:320}]};
   assert.doesNotThrow(()=>assertRegularGridWidths(grid));
   for(const key of ['mediaBottom','bodyTop','utilityTop','feedbackTop']) {
-    assert.throws(()=>assertRegularGridWidths({...grid,cards:[card,{...card,x:320,[key]:card[key]+30}]}),/boundaries/);
+    assert.throws(()=>assertRegularGridWidths({...grid,cards:[card,{...card,x:320,[key]:card[key]+30}]}),/boundaries|media overlaps its body/);
   }
 });
 
@@ -425,4 +425,53 @@ test('existing lower shell keeps native forms and long notifications clear of na
       await page.close();
     }
   } finally {await browser.close();}
+});
+
+
+test('equal collapsed rows cannot hide media overlapping every card body', () => {
+  const card=(id,x)=>({id,x,y:0,width:300,height:146,clientWidth:300,scrollWidth:300,mediaBottom:380,bodyTop:1,utilityTop:26,feedbackTop:90});
+  const grid={box:{x:0,y:0,width:940,height:146},clientWidth:940,scrollWidth:940,rowSize:3,viewportWidth:1920,responsive:'fixed',columnGap:20,contentWidth:940,cards:[card('a',0),card('b',320),card('c',640)]};
+  assert.throws(()=>assertRegularGridWidths(grid),/media overlaps its body/u);
+});
+
+test('packed hydration waits for deferred geometry rather than invalidating SSR row order', async () => {
+  const {runInNewContext}=await import('node:vm');
+  const source=readFileSync(new URL('../src/layouts/EventLayout.astro',import.meta.url),'utf8');
+  const start=source.indexOf('function reorderExistingCards('),end=source.indexOf('function appendDiscoveryEvents(',start);
+  assert.ok(start>0&&end>start);
+  const cards=[1,2,3].map(id=>({dataset:{eventId:String(id)}}));
+  const feed={dataset:{adaptiveGridMode:'packed',adaptiveGridRowSize:'3'},querySelectorAll:()=>[...cards],appendChild(card){cards.splice(cards.indexOf(card),1);cards.push(card);}};
+  const window={};
+  const reorder=runInNewContext(`(${source.slice(start,end).trim()})`,{window,asId:Number,applyRuntimeRelatedLayout:(card,layout)=>{card.layout=layout;}});
+  const ranked=[3,2,1].map((event_id,rank)=>({event_id,rank}));
+  reorder(feed,ranked,null);
+  assert.deepEqual(cards.map(c=>c.dataset.eventId),['1','2','3'],'missing geometry leaves valid SSR cards untouched');
+  window.KenigEventsRelatedCardMediaGeometry=()=>({});
+  window.KenigEventsPackRelatedCardRows=items=>[2,1,3].map((id,index)=>({item:items.find(i=>i.event_id===id),layout:{rowIndex:0,rowColumn:index}}));
+  reorder(feed,ranked,null);
+  assert.deepEqual(cards.map(c=>c.dataset.eventId),['2','1','3'],'ready geometry owns order and per-card row bindings together');
+  assert.deepEqual(cards.map(c=>c.layout.rowColumn),[0,1,2]);
+  assert.match(source,/dispatchEvent\(new Event\('kenigevents:card-geometry-ready'\)\)/u);
+  assert.match(source,/addEventListener\('kenigevents:card-geometry-ready',[\s\S]*applyFeedbackState/u);
+});
+
+
+test('packed feedback reranks only whole rows below the reading anchor', async () => {
+  const {runInNewContext}=await import('node:vm');
+  const source=readFileSync(new URL('../src/layouts/EventLayout.astro',import.meta.url),'utf8');
+  const start=source.indexOf('function reorderExistingCards('),end=source.indexOf('function appendDiscoveryEvents(',start);
+  const cards=[1,2,3,4,5,6,7,8].map((id,i)=>({dataset:{eventId:String(id)},layout:{rowIndex:Math.floor(i/3),rowColumn:i%3}}));
+  const prefix=cards.slice(0,3).map(c=>c.layout);
+  const feed={dataset:{adaptiveGridMode:'packed',adaptiveGridRowSize:'3'},querySelectorAll:()=>[...cards],appendChild(card){cards.splice(cards.indexOf(card),1);cards.push(card);}};
+  const window={KenigEventsRelatedCardMediaGeometry:()=>({}),KenigEventsPackRelatedCardRows:items=>items.map((item,i)=>({item,layout:{rowIndex:Math.floor(i/3),rowColumn:i%3}}))};
+  const reorder=runInNewContext(`(${source.slice(start,end).trim()})`,{window,asId:Number,applyRuntimeRelatedLayout:(card,layout)=>{card.layout=layout;}});
+  const ranked=[8,7,6,5,4,3,2,1].map((event_id,rank)=>({event_id,rank}));
+  reorder(feed,ranked,2);
+  assert.deepEqual(cards.map(c=>Number(c.dataset.eventId)),[1,2,3,8,7,6,5,4]);
+  assert.deepEqual(cards.slice(0,3).map(c=>c.layout),prefix);
+  assert.deepEqual(cards.map(c=>c.layout.rowIndex),[0,0,0,1,1,1,2,2]);
+  const before=JSON.stringify(cards);
+  window.KenigEventsPackRelatedCardRows=()=>[];
+  reorder(feed,ranked,2);
+  assert.equal(JSON.stringify(cards),before,'incomplete packing cannot corrupt existing tail');
 });

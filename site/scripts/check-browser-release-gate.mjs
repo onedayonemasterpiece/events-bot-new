@@ -165,6 +165,11 @@ export function assertRegularGridWidths(grid) {
     invariant(Math.abs(card.width-expectedWidth)<=2, 'card does not retain ordinary column width');
     invariant(card.width > 40 && card.x >= grid.box.x - 1 && card.x + card.width <= grid.box.x + grid.box.width + 1, 'card escapes its grid');
     invariant(card.scrollWidth <= card.clientWidth + 1, 'card has internal horizontal overflow');
+    if (['mediaBottom','bodyTop','utilityTop','feedbackTop'].every(key => Number.isFinite(card[key]))) {
+      invariant(card.mediaBottom >= card.y && card.mediaBottom <= card.bodyTop + 2, 'card media overlaps its body');
+      invariant(card.bodyTop <= card.utilityTop + 2 && card.utilityTop <= card.feedbackTop + 2, 'card anatomy rows are out of order');
+      invariant(card.feedbackTop <= card.y + card.height + 2, 'card actions escape the card bounds');
+    }
   }
   const rows = [];
   for (const card of grid.cards) {

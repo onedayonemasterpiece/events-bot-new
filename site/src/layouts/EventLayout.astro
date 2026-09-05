@@ -2646,6 +2646,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         KenigEventsComposeEventShareImage: composeEventShareImage,
         KenigEventsGetResilientDataClient: getResilientDataClient,
       });
+      window.dispatchEvent(new Event('kenigevents:card-geometry-ready'));
     </script>
     <script is:inline>
       (() => {
@@ -4861,6 +4862,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         function reorderExistingCards(feed, ranked, anchorEventId) {
           const cards = Array.from(feed.querySelectorAll(':scope > [data-event-card]'));
+          // Keep the valid SSR packed order until its deferred geometry owner
+          // is ready; ranking without repacking leaves stale row geometry.
+          if(feed.dataset.adaptiveGridMode === 'packed' &&
+            (typeof window.KenigEventsPackRelatedCardRows !== 'function' ||
+             typeof window.KenigEventsRelatedCardMediaGeometry !== 'function')) return;
           const rankMap = new Map(ranked.map((item) => [asId(item.event_id), item.rank]));
           const sortCards = (items) => items.sort((a, b) => {
             const ar = rankMap.has(asId(a.dataset.eventId)) ? rankMap.get(asId(a.dataset.eventId)) : 9999;
@@ -4902,6 +4908,27 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               // follow a temporarily displaced viewport anchor, which can jump
               // a mobile user several screens upward after a paginated-card
               // reaction. Only the not-yet-seen tail is eligible to rerank.
+              if (feed.dataset.adaptiveGridMode === 'packed') {
+                // Fence the entire clicked row: repacking half a row would
+                // move its visible media/body boundaries and scroll anchor.
+                const rowSize = Math.max(1, Number.parseInt(feed.dataset.adaptiveGridRowSize || '3', 10) || 3);
+                const prefixEnd = Math.min(cards.length, Math.ceil((anchorIndex + 1) / rowSize) * rowSize);
+                const tailById = new Map(cards.slice(prefixEnd).map(card => [asId(card.dataset.eventId), card]));
+                const tailRanked = ranked.filter(item => tailById.has(asId(item.event_id)));
+                if (tailRanked.length !== tailById.size) return;
+                const packed = window.KenigEventsPackRelatedCardRows(tailRanked, {
+                  limit:tailRanked.length, rowSize,
+                  mediaTreatment:feed.dataset.adaptiveGridMediaTreatment || 'hybrid',
+                  geometry:window.KenigEventsRelatedCardMediaGeometry,
+                });
+                if (packed.length !== tailById.size) return;
+                for (const {item, layout} of packed) {
+                  const card = tailById.get(asId(item.event_id));
+                  applyRuntimeRelatedLayout(card, {...layout, rowIndex:layout.rowIndex + prefixEnd / rowSize});
+                  feed.appendChild(card);
+                }
+                return;
+              }
               const tail = sortCards(cards.slice(anchorIndex + 1));
               tail.forEach((card) => feed.appendChild(card));
               return;
@@ -5003,6 +5030,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         window.applyFeedbackState = applyFeedbackState;
+        window.addEventListener('kenigevents:card-geometry-ready', () => {
+          applyFeedbackState({ skipDiscoveryHydration:false });
+        }, { once:true });
 
         async function controllerForCard(card) {
           const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot]');

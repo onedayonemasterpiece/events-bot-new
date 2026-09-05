@@ -1,3 +1,4 @@
+import { Script } from 'node:vm';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -152,4 +153,12 @@ test('public route keeps the donor CSS/interaction contract while replacing fixt
   assert.match(publicSource, /headerCurrent="exhibitions"/u);
   assert.doesNotMatch(publicSource, /featuredSpecs|curatedTailSpecs|canonicalUrl = absoluteUrl\('\/lab\//u);
   assert.match(eventsSource, /getOngoingExhibitionEvents[\s\S]*collapseLinkedSessionEvents\(/u);
+});
+
+
+test('product inline runtime is executable JavaScript, not untranspiled TypeScript', async () => {
+  const source = await readFile(new URL('../src/components/ExhibitionsPersonalSurface.astro', import.meta.url), 'utf8');
+  const scripts = [...source.matchAll(/<script\s+is:inline[^>]*>([\s\S]*?)<\/script>/gu)];
+  assert.ok(scripts.length > 0);
+  for (const [, script] of scripts) assert.doesNotThrow(() => new Script(script));
 });

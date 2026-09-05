@@ -990,7 +990,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
       transition.updateCallbackDone.catch(() => {});
       transition.finished.catch(() => {});
     };
-    const toastHost = window as typeof window & { KenigEventsToast?: { show:(detail:unknown) => unknown } };
+    const toastHost = window;
     let mode = 'personal';
     let category = 'Все темы';
     const tagsFor = (row) => String(row.dataset.tags || '').split(',').filter(Boolean);

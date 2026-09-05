@@ -1129,3 +1129,13 @@ The gate still validates every actual regular and exhibition card rendered by
 the collection.
 
 Local real-data focused runs pass the frozen DB as the canonical exporter `--db` plus snapshot identity/hash/size and clock. Page-class and exact-route filtering belong to the existing Astro adapter, not unsupported exporter flags. The CLI contract regression is `site/scripts/local-focused-preview.behavior.test.mjs`.
+
+### Owner-review packed/runtime regression (2026-09-05)
+
+Packed related cards retain SSR order until the deferred geometry owner is ready;
+its readiness signal reapplies ranking and row layout together. Packed media
+links reserve the shared row aspect ratio independently of flow subgrid tracks.
+The browser gate rejects both unequal internal boundaries and equal but collapsed
+media/body anatomy. Exhibitions inline scripts are parsed as plain JavaScript
+in regression tests: TypeScript assertions in `is:inline` disable all interaction.
+These source tests are not independent review or evidence of a published candidate.

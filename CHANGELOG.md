@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Packed related-card hydration waits for its geometry owner; release checks reject media/body overlap. Exhibitions inline runtime stays executable JavaScript.
 - Lower media windows retain wrapped titles without a duplicate caption covering the counter.
 - Exhibitions shares graphite roles and offers same-page light comparison; shared floating navigation now covers both device sizes, with measured CTA/notification clearance.
 - Kept source-related events separate from calendar occurrences, excluding guided tours from alternate dates of a long-running exhibition.
