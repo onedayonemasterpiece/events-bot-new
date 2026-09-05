@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2494,
     "definition_count": 2772,
-    "consumer_count": 3523,
+    "consumer_count": 3526,
     "alias_edge_count": 720,
     "family_count": 109
   },
@@ -5312,10 +5312,76 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-3bce50582ac40c57": [
+    "components-cff3951c2d453f0f": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
       "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/Breadcrumbs.astro",
+      "site/src/components/design-system/Badge.astro",
+      "site/src/components/design-system/Button.astro",
+      "site/src/components/design-system/CopyAction.astro",
+      "site/src/components/design-system/Field.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/design-system/StatePanel.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/ExhibitionsPersonalSurface.astro",
+      "site/src/components/FavoritesSurface.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/FocusGroupInviteIntake.astro",
+      "site/src/components/FocusGroupLabPanel.astro",
+      "site/src/components/FreeCollectionSurface.astro",
+      "site/src/components/GastronomyCollectionSurface.astro",
+      "site/src/components/HomeColdStartFeed.astro",
+      "site/src/components/HomeHeroTalk.astro",
+      "site/src/components/InterestClubCard.astro",
+      "site/src/components/InterestProfile.astro",
+      "site/src/components/listings/DateListingSurface.astro",
+      "site/src/components/listings/ExactTimeTimeline.astro",
+      "site/src/components/listings/ListingEventCard.astro",
+      "site/src/components/listings/MobileDateAccessory.astro",
+      "site/src/components/listings/MobileListingRailRow.astro",
+      "site/src/components/listings/MobileListingRailSurface.astro",
+      "site/src/components/listings/PopularBehaviorRows.astro",
+      "site/src/components/listings/PopularListingSurface.astro",
+      "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+      "site/src/components/listings/PopularMobileBehaviorRows.astro",
+      "site/src/components/listings/WeekendEditorialTimeline.astro",
+      "site/src/components/listings/WeekendListingSurface.astro",
+      "site/src/components/listings/WeekendTimeMatrix.astro",
+      "site/src/components/MobileBottomNav.astro",
+      "site/src/components/MobileSearchBottomNav.astro",
+      "site/src/components/PersonalFeedSlot.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/components/SocialIcon.astro",
+      "site/src/components/UnusualListingSurface.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
+    "components-fecbba26fd26852d": [
+      "site/src/components/AdaptiveEventCardGrid.astro",
+      "site/src/components/artifacts/ArtifactCollection.astro",
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/Breadcrumbs.astro",
       "site/src/components/CollectionCatalog.astro",
       "site/src/components/design-system/Badge.astro",
       "site/src/components/design-system/Button.astro",
@@ -5507,6 +5573,74 @@
       "site/src/components/FocusGroupInviteShare.astro",
       "site/src/components/HomeHeroTalk.astro",
       "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
+    "components-3bce50582ac40c57": [
+      "site/src/components/AdaptiveEventCardGrid.astro",
+      "site/src/components/artifacts/ArtifactCollection.astro",
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/CollectionCatalog.astro",
+      "site/src/components/design-system/Badge.astro",
+      "site/src/components/design-system/Button.astro",
+      "site/src/components/design-system/CopyAction.astro",
+      "site/src/components/design-system/Field.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/design-system/StatePanel.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/ExhibitionsPersonalSurface.astro",
+      "site/src/components/FavoritesSurface.astro",
+      "site/src/components/FocusEggCollectionCard.astro",
+      "site/src/components/FocusEggSavedListDemo.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/FocusGroupInviteIntake.astro",
+      "site/src/components/FocusGroupLabPanel.astro",
+      "site/src/components/FreeCollectionSurface.astro",
+      "site/src/components/GastronomyCollectionSurface.astro",
+      "site/src/components/HomeColdStartFeed.astro",
+      "site/src/components/HomeHeroTalk.astro",
+      "site/src/components/InterestClubCard.astro",
+      "site/src/components/InterestProfile.astro",
+      "site/src/components/listings/DateListingSurface.astro",
+      "site/src/components/listings/ExactTimeTimeline.astro",
+      "site/src/components/listings/ListingEventCard.astro",
+      "site/src/components/listings/MobileDateAccessory.astro",
+      "site/src/components/listings/MobileListingRailRow.astro",
+      "site/src/components/listings/MobileListingRailSurface.astro",
+      "site/src/components/listings/PopularBehaviorRows.astro",
+      "site/src/components/listings/PopularListingSurface.astro",
+      "site/src/components/listings/PopularMobileAdaptiveRows.astro",
+      "site/src/components/listings/PopularMobileBehaviorRows.astro",
+      "site/src/components/listings/WeekendEditorialTimeline.astro",
+      "site/src/components/listings/WeekendListingSurface.astro",
+      "site/src/components/listings/WeekendTimeMatrix.astro",
+      "site/src/components/MobileBottomNav.astro",
+      "site/src/components/MobileSearchBottomNav.astro",
+      "site/src/components/PersonalFeedSlot.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/components/SocialIcon.astro",
+      "site/src/components/UnusualListingSurface.astro",
       "site/src/layouts/EventLayout.astro",
       "site/src/pages/artefakty/index.astro",
       "site/src/pages/dlya-menya/index.astro",
@@ -5766,71 +5900,6 @@
     "components-7edfe0357add6e36": [
       "site/src/layouts/PrelaunchLayout.astro",
       "site/src/pages/index.astro"
-    ],
-    "components-cff3951c2d453f0f": [
-      "site/src/components/AdaptiveEventCardGrid.astro",
-      "site/src/components/artifacts/ArtifactCollection.astro",
-      "site/src/components/brand/AnnouncementsLockup.astro",
-      "site/src/components/Breadcrumbs.astro",
-      "site/src/components/design-system/Badge.astro",
-      "site/src/components/design-system/Button.astro",
-      "site/src/components/design-system/CopyAction.astro",
-      "site/src/components/design-system/Field.astro",
-      "site/src/components/design-system/Foundations.astro",
-      "site/src/components/design-system/StatePanel.astro",
-      "site/src/components/DesktopEventPage.astro",
-      "site/src/components/EventCard.astro",
-      "site/src/components/EventHero.astro",
-      "site/src/components/ExhibitionsPersonalSurface.astro",
-      "site/src/components/FavoritesSurface.astro",
-      "site/src/components/FocusGroupFeedback.astro",
-      "site/src/components/FocusGroupInviteIntake.astro",
-      "site/src/components/FocusGroupLabPanel.astro",
-      "site/src/components/FreeCollectionSurface.astro",
-      "site/src/components/GastronomyCollectionSurface.astro",
-      "site/src/components/HomeColdStartFeed.astro",
-      "site/src/components/HomeHeroTalk.astro",
-      "site/src/components/InterestClubCard.astro",
-      "site/src/components/InterestProfile.astro",
-      "site/src/components/listings/DateListingSurface.astro",
-      "site/src/components/listings/ExactTimeTimeline.astro",
-      "site/src/components/listings/ListingEventCard.astro",
-      "site/src/components/listings/MobileDateAccessory.astro",
-      "site/src/components/listings/MobileListingRailRow.astro",
-      "site/src/components/listings/MobileListingRailSurface.astro",
-      "site/src/components/listings/PopularBehaviorRows.astro",
-      "site/src/components/listings/PopularListingSurface.astro",
-      "site/src/components/listings/PopularMobileAdaptiveRows.astro",
-      "site/src/components/listings/PopularMobileBehaviorRows.astro",
-      "site/src/components/listings/WeekendEditorialTimeline.astro",
-      "site/src/components/listings/WeekendListingSurface.astro",
-      "site/src/components/listings/WeekendTimeMatrix.astro",
-      "site/src/components/MobileBottomNav.astro",
-      "site/src/components/MobileSearchBottomNav.astro",
-      "site/src/components/PersonalFeedSlot.astro",
-      "site/src/components/SiteFooter.astro",
-      "site/src/components/SocialIcon.astro",
-      "site/src/components/UnusualListingSurface.astro",
-      "site/src/layouts/EventLayout.astro",
-      "site/src/pages/artefakty/index.astro",
-      "site/src/pages/dlya-menya/index.astro",
-      "site/src/pages/festivali/index.astro",
-      "site/src/pages/fokus-gruppa/index.astro",
-      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-      "site/src/pages/index.astro",
-      "site/src/pages/izbrannoe/index.astro",
-      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
-      "site/src/pages/kluby-po-interesam/index.astro",
-      "site/src/pages/partners/index.astro",
-      "site/src/pages/partnerstvo/index.astro",
-      "site/src/pages/podborki/[slug]/index.astro",
-      "site/src/pages/podborki/index.astro",
-      "site/src/pages/poisk/index.astro",
-      "site/src/pages/segodnya/index.astro",
-      "site/src/pages/sobytiya/[slug].astro",
-      "site/src/pages/vystavki/index.astro",
-      "site/src/pages/zakrytaya-afisha/index.astro"
     ],
     "components-bd29898df071f614": [
       "site/src/components/AuthorizedEventSearch.astro",
@@ -68220,7 +68289,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 176,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -70599,13 +70668,13 @@
         {
           "token": "--ke-color-free-hero-start",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 139,
+          "line": 140,
           "has_fallback": false
         },
         {
           "token": "--ke-color-free-results-surface",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 178,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -71519,7 +71588,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 176,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -72941,13 +73010,13 @@
         {
           "token": "--primary-strong",
           "path": "site/src/components/Breadcrumbs.astro",
-          "line": 102,
+          "line": 106,
           "has_fallback": true
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/Breadcrumbs.astro",
-          "line": 78,
+          "line": 82,
           "has_fallback": true
         },
         {
@@ -74186,7 +74255,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 176,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -88254,7 +88323,7 @@
         {
           "token": "--ke-color-free-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
+          "line": 136,
           "has_fallback": false
         }
       ],
@@ -88284,7 +88353,7 @@
         {
           "token": "--ke-color-free-hero-end",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 139,
+          "line": 140,
           "has_fallback": false
         }
       ],
@@ -88310,7 +88379,7 @@
         {
           "token": "--ke-color-free-hero-glow",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 138,
+          "line": 139,
           "has_fallback": false
         }
       ],
@@ -88340,7 +88409,7 @@
         {
           "token": "--ke-color-free-hero-start",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 139,
+          "line": 140,
           "has_fallback": false
         }
       ],
@@ -88379,7 +88448,7 @@
         {
           "token": "--ke-color-free-hero-end",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 139,
+          "line": 140,
           "has_fallback": false
         }
       ],
@@ -88430,7 +88499,7 @@
         {
           "token": "--ke-color-free-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
+          "line": 136,
           "has_fallback": false
         }
       ],
@@ -88456,7 +88525,7 @@
         {
           "token": "--ke-color-free-medallion-shadow",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 152,
+          "line": 153,
           "has_fallback": false
         }
       ],
@@ -88482,7 +88551,7 @@
         {
           "token": "--ke-color-free-medallion-shadow-strong",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 169,
+          "line": 170,
           "has_fallback": false
         }
       ],
@@ -88535,7 +88604,7 @@
         {
           "token": "--ke-color-free-results-border",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 176,
+          "line": 177,
           "has_fallback": false
         }
       ],
@@ -88565,7 +88634,7 @@
         {
           "token": "--ke-color-free-results-surface",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 178,
+          "line": 179,
           "has_fallback": false
         }
       ],
@@ -94111,7 +94180,7 @@
         {
           "token": "--muted",
           "path": "site/src/components/Breadcrumbs.astro",
-          "line": 52,
+          "line": 56,
           "has_fallback": true
         },
         {
@@ -94375,13 +94444,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 183,
+          "line": 184,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 184,
+          "line": 185,
           "has_fallback": false
         },
         {
@@ -99627,13 +99696,13 @@
         {
           "token": "--ke-color-free-hero-start",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 139,
+          "line": 140,
           "has_fallback": false
         },
         {
           "token": "--ke-color-free-results-surface",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 178,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -102749,13 +102818,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 183,
+          "line": 184,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 184,
+          "line": 185,
           "has_fallback": false
         },
         {
@@ -108625,7 +108694,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 170,
+          "line": 171,
           "has_fallback": false
         }
       ],
@@ -110795,7 +110864,7 @@
         {
           "token": "--ke-elevation-free-hero",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 141,
           "has_fallback": false
         }
       ],
@@ -121283,17 +121352,17 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
           "has_fallback": false
         },
         {
-          "token": "--ke-type-feature-section",
+          "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
           "line": 143,
           "has_fallback": false
@@ -122108,17 +122177,17 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
           "has_fallback": false
         },
         {
-          "token": "--ke-type-feature-section",
+          "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
           "line": 143,
           "has_fallback": false
@@ -123104,7 +123173,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h2",
+          "path": "site/src/components/HomeColdStartFeed.astro",
+          "line": 143,
           "has_fallback": false
         },
         {
@@ -123307,7 +123382,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -125456,7 +125531,7 @@
         {
           "token": "--ke-free-hero-gap",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 133,
+          "line": 134,
           "has_fallback": false
         }
       ],
@@ -125482,7 +125557,7 @@
         {
           "token": "--ke-free-hero-padding",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 134,
+          "line": 135,
           "has_fallback": false
         }
       ],
@@ -125512,7 +125587,7 @@
         {
           "token": "--ke-free-hero-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 136,
+          "line": 137,
           "has_fallback": false
         }
       ],
@@ -125542,7 +125617,7 @@
         {
           "token": "--ke-free-hero-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 193,
+          "line": 194,
           "has_fallback": false
         }
       ],
@@ -125568,19 +125643,19 @@
         {
           "token": "--ke-free-medallion-hero-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 131,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-free-medallion-hero-size",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 150,
+          "line": 132,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-hero-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 151,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-free-medallion-hero-size",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 152,
           "has_fallback": false
         }
       ],
@@ -125606,13 +125681,13 @@
         {
           "token": "--ke-free-medallion-hero-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 199,
+          "line": 200,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-hero-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 200,
+          "line": 201,
           "has_fallback": false
         }
       ],
@@ -125638,13 +125713,13 @@
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 165,
+          "line": 166,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 166,
+          "line": 167,
           "has_fallback": false
         }
       ],
@@ -125670,13 +125745,13 @@
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 205,
+          "line": 206,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 205,
+          "line": 206,
           "has_fallback": false
         }
       ],
@@ -125702,7 +125777,7 @@
         {
           "token": "--ke-free-motion-opacity",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 170,
+          "line": 171,
           "has_fallback": false
         }
       ],
@@ -125732,7 +125807,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 170,
+          "line": 171,
           "has_fallback": false
         }
       ],
@@ -125804,7 +125879,7 @@
         {
           "token": "--ke-free-results-padding",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 175,
+          "line": 176,
           "has_fallback": false
         }
       ],
@@ -125834,7 +125909,7 @@
         {
           "token": "--ke-free-results-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 178,
           "has_fallback": false
         }
       ],
@@ -125864,7 +125939,7 @@
         {
           "token": "--ke-free-results-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 206,
+          "line": 207,
           "has_fallback": false
         }
       ],
@@ -125894,7 +125969,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 156,
+          "line": 157,
           "has_fallback": false
         }
       ],
@@ -125920,7 +125995,7 @@
         {
           "token": "--ke-free-sticky-layer-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 204,
+          "line": 205,
           "has_fallback": false
         }
       ],
@@ -125950,7 +126025,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 157,
+          "line": 158,
           "has_fallback": false
         }
       ],
@@ -125980,7 +126055,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 204,
+          "line": 205,
           "has_fallback": false
         }
       ],
@@ -128591,7 +128666,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 156,
+          "line": 157,
           "has_fallback": false
         },
         {
@@ -145083,13 +145158,13 @@
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
+          "line": 136,
           "has_fallback": false
         },
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 176,
+          "line": 177,
           "has_fallback": false
         },
         {
@@ -145512,7 +145587,7 @@
         {
           "token": "--ke-free-results-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 178,
           "has_fallback": false
         }
       ],
@@ -146391,7 +146466,7 @@
         {
           "token": "--ke-free-results-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 206,
+          "line": 207,
           "has_fallback": false
         },
         {
@@ -146454,7 +146529,7 @@
         {
           "token": "--ke-free-hero-radius",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 136,
+          "line": 137,
           "has_fallback": false
         },
         {
@@ -146529,7 +146604,7 @@
         {
           "token": "--ke-free-hero-radius-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 193,
+          "line": 194,
           "has_fallback": false
         },
         {
@@ -146921,6 +146996,12 @@
       "direct_consumers": [
         {
           "token": "--ke-site-header-bar-height",
+          "path": "site/src/components/Breadcrumbs.astro",
+          "line": 126,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-site-header-bar-height",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 182,
           "has_fallback": false
@@ -146928,7 +147009,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 157,
+          "line": 158,
           "has_fallback": false
         },
         {
@@ -147070,7 +147151,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-1de6c86c83f709a4",
+      "component_set": "components-cff3951c2d453f0f",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
     },
@@ -147140,8 +147221,15 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [],
-      "component_set": "components-1de6c86c83f709a4",
+      "direct_consumers": [
+        {
+          "token": "--ke-site-header-tag-height",
+          "path": "site/src/components/Breadcrumbs.astro",
+          "line": 126,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-cff3951c2d453f0f",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
     },
@@ -147529,7 +147617,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 204,
+          "line": 205,
           "has_fallback": false
         },
         {
@@ -148448,6 +148536,12 @@
       ],
       "direct_consumers": [
         {
+          "token": "--ke-space-2",
+          "path": "site/src/components/Breadcrumbs.astro",
+          "line": 126,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-space-sm",
           "path": "site/src/components/CollectionCatalog.astro",
           "line": 72,
@@ -148628,7 +148722,7 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-3bce50582ac40c57",
+      "component_set": "components-fecbba26fd26852d",
       "astro_family_set": "families-afb200c4aef94ca5",
       "production_route_set": "routes-e561c0806280701b"
     },
@@ -150701,7 +150795,7 @@
         {
           "token": "--ke-free-results-padding",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 175,
+          "line": 176,
           "has_fallback": false
         },
         {
@@ -153503,7 +153597,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         }
       ],
@@ -153533,7 +153627,7 @@
         {
           "token": "--ke-type-display-collection-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         }
       ],
@@ -153579,7 +153673,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         }
       ],
@@ -153625,7 +153719,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         }
       ],
@@ -154409,16 +154503,9 @@
         "--ke-type-h2-weight"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-feature-section",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-de6bf69e4decedd4",
-      "astro_family_set": "families-70bb80f36fa07657",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-feature-section-letter": {
@@ -154439,16 +154526,9 @@
         "--ke-type-h1-letter"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-feature-section-letter",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 144,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-de6bf69e4decedd4",
-      "astro_family_set": "families-70bb80f36fa07657",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-feature-section-line": {
@@ -154485,16 +154565,9 @@
       "aliases_from": [
         "--ke-type-feature-section"
       ],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-feature-section",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-de6bf69e4decedd4",
-      "astro_family_set": "families-70bb80f36fa07657",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-feature-section-size": {
@@ -154527,16 +154600,9 @@
       "aliases_from": [
         "--ke-type-feature-section"
       ],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-feature-section",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-de6bf69e4decedd4",
-      "astro_family_set": "families-70bb80f36fa07657",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-focus-dialog-heading": {
@@ -155035,13 +155101,7 @@
         {
           "token": "--ke-type-display-collection-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-type-feature-section-letter",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -155278,13 +155338,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-type-feature-section",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -155514,7 +155568,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -155727,7 +155781,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -155887,13 +155941,7 @@
         {
           "token": "--ke-type-display-collection-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-type-feature-section-letter",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -156095,13 +156143,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-type-feature-section",
-          "path": "site/src/components/HomeColdStartFeed.astro",
-          "line": 143,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -156297,7 +156339,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -156475,7 +156517,7 @@
         {
           "token": "--ke-type-display-collection",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 144,
+          "line": 145,
           "has_fallback": false
         },
         {
@@ -156565,7 +156607,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h2",
+          "path": "site/src/components/HomeColdStartFeed.astro",
+          "line": 143,
           "has_fallback": false
         },
         {
@@ -156633,7 +156681,13 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h2-letter",
+          "path": "site/src/components/HomeColdStartFeed.astro",
+          "line": 144,
           "has_fallback": false
         },
         {
@@ -156717,7 +156771,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h2",
+          "path": "site/src/components/HomeColdStartFeed.astro",
+          "line": 143,
           "has_fallback": false
         },
         {
@@ -156817,7 +156877,13 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h2",
+          "path": "site/src/components/HomeColdStartFeed.astro",
+          "line": 143,
           "has_fallback": false
         },
         {
@@ -156937,11 +157003,11 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
+          "line": 181,
           "has_fallback": false
         },
         {
-          "token": "--ke-type-feature-section",
+          "token": "--ke-type-h2",
           "path": "site/src/components/HomeColdStartFeed.astro",
           "line": 143,
           "has_fallback": false
@@ -160511,7 +160577,7 @@
         {
           "token": "--muted",
           "path": "site/src/components/Breadcrumbs.astro",
-          "line": 52,
+          "line": 56,
           "has_fallback": true
         },
         {
@@ -161949,13 +162015,13 @@
         {
           "token": "--primary-strong",
           "path": "site/src/components/Breadcrumbs.astro",
-          "line": 102,
+          "line": 106,
           "has_fallback": true
         },
         {
           "token": "--primary-strong",
           "path": "site/src/components/Breadcrumbs.astro",
-          "line": 78,
+          "line": 82,
           "has_fallback": true
         },
         {

@@ -13,6 +13,12 @@ public festival/club counts and native Penpot acceptance remain open.
 
 ## [Unreleased]
 
+### Fixed — owner review, 2026-09-05 (unpublished)
+- Reuse the section H2 role in Home's feed and reserve shared breadcrumb
+  clearance below the overhanging desktop brand on the free collection.
+- Extend the existing browser gate to reject breadcrumb occlusion and a
+  stretched singleton, and exercise actual Home DOM filtering for seven counts.
+
 - Fixed: local real-data focused generation now passes only supported canonical exporter arguments, retaining the immutable DB identity and clock while route/page-class selection remains in the Astro build filter.
 - Fixed: source-published component and route identities no longer pass SoT acceptance with unexplained empty variant/state metadata; existing source behavior and inline style ownership are described without new visual semantics.
 

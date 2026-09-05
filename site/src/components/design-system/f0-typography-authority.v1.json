@@ -154,7 +154,8 @@
         "FreeCollectionSurface",
         "UnusualListingSurface",
         "PersonalFeedSlot",
-        "PopularBehaviorSections"
+        "PopularBehaviorSections",
+        "HomeColdStartFeed"
       ],
       "viewports": {
         "1440": {

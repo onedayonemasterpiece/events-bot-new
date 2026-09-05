@@ -105,3 +105,17 @@ reconstruction hypotheses remain [at the rejected baseline](https://github.com/o
 They are history, not a current instruction to repeat reconstruction or restore
 accidental old values. Operational rules not superseded by the owner remain in
 `launch-normalization-48h.md` and the linked programme contract.
+
+
+### Owner review: remaining visual false positives (2026-09-05)
+
+The ordinary `HomeColdStartFeed` section title uses the shared H2 role; it is
+not part of Hero Talk's editorial exception. `Breadcrumbs.headerClearance`
+reserves the existing overhanging desktop brand in flush compositions;
+`FreeCollectionSurface` uses it instead of a page-local CSS override.
+The existing browser gate measures breadcrumb chrome occlusion, asserts a
+singleton against the declared ordinary column (not another card), and
+exercises 1/2/3/4/5/7/10 existing Home cards after local-profile filtering.
+That runtime fixture is not an organic cloud-personalized feed. Full
+same-snapshot Kaggle acceptance and the open owner-review register remain
+required; no palette completion or A=S=P is inferred from this diagnostic.

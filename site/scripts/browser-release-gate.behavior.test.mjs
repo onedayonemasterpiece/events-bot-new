@@ -7,6 +7,7 @@ import {
   browserLaunchOptions,
   assertOwnerTitleMetrics,
   assertOwnerSectionMetrics,
+  assertOwnerBreadcrumbVisibility,
   assertRegularGridWidths,
   BROWSER_GATE_ACTION_TIMEOUT_MS,
   BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
@@ -333,7 +334,7 @@ test('same-role H1 oracle rejects page-local size even when family markers exist
 
 test('grid oracle rejects stretched final rows and internal overflow without document overflow', () => {
   const card = (id,x,y) => ({id,x,y,width:300,height:400,scrollWidth:300,clientWidth:300});
-  const grid = {box:{x:0,y:0,width:940,height:820},clientWidth:940,scrollWidth:940,cards:[card(1,0,0),card(2,320,0),card(3,640,0),card(4,0,420)]};
+  const grid = {rowSize:3,responsive:'progressive',viewportWidth:1440,columnGap:20,contentWidth:940,box:{x:0,y:0,width:940,height:820},clientWidth:940,scrollWidth:940,cards:[card(1,0,0),card(2,320,0),card(3,640,0),card(4,0,420)]};
   assert.doesNotThrow(()=>assertRegularGridWidths(grid));
   assert.throws(()=>assertRegularGridWidths({...grid,cards:[...grid.cards.slice(0,3),{...grid.cards[3],width:940}]}),/partial row stretches/u);
   assert.throws(()=>assertRegularGridWidths({...grid,scrollWidth:1000}),/internal horizontal/u);
@@ -353,4 +354,17 @@ test('same-role sections reject locally shrunken type despite intact markers',()
  const section={text:'Раздел',style:{fontSize:'40px',fontWeight:'900',lineHeight:'42px',letterSpacing:'-1.4px'}};
  assert.doesNotThrow(()=>assertOwnerSectionMetrics(section,1440));
  assert.throws(()=>assertOwnerSectionMetrics({...section,style:{...section.style,fontSize:'21.6px'}},1440),/same-role H2/);
+});
+
+
+test('ordinary-column oracle rejects a stretched singleton with no complete reference row',()=>{
+  const grid={rowSize:3,responsive:'progressive',viewportWidth:1440,columnGap:20,contentWidth:940,box:{x:0,y:0,width:940,height:400},clientWidth:940,scrollWidth:940,cards:[{id:1,x:0,y:0,width:300,height:400,clientWidth:300,scrollWidth:300}]};
+  assert.doesNotThrow(()=>assertRegularGridWidths(grid));
+  assert.throws(()=>assertRegularGridWidths({...grid,cards:[{...grid.cards[0],width:940,clientWidth:940,scrollWidth:940}]}),/ordinary column width/);
+  assert.doesNotThrow(()=>assertRegularGridWidths({...grid,viewportWidth:390,cards:[{...grid.cards[0],width:940,clientWidth:940,scrollWidth:940}]}));
+});
+
+test('breadcrumb chrome occlusion is a navigation failure even when H1 is clear',()=>{
+  assert.doesNotThrow(()=>assertOwnerBreadcrumbVisibility([{text:'Афиша',occludedBy:[]}]));
+  assert.throws(()=>assertOwnerBreadcrumbVisibility([{text:'Афиша',occludedBy:['site-header__brand-tag']}]),/breadcrumb navigation is covered/);
 });

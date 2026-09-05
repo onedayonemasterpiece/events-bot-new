@@ -6,6 +6,8 @@ interface Props {
   current: string;
   display?: 'responsive' | 'desktop' | 'mobile';
   className?: string;
+  /** Reserve the existing overhanging brand only in a flush page composition. */
+  headerClearance?: boolean;
 }
 
 const {
@@ -13,6 +15,7 @@ const {
   current,
   display = 'responsive',
   className,
+  headerClearance = false,
 } = Astro.props;
 const parent = parents.at(-1);
 ---
@@ -21,6 +24,7 @@ const parent = parents.at(-1);
   class:list={['product-breadcrumbs', `product-breadcrumbs--${display}`, className]}
   aria-label="Хлебные крошки"
   data-product-breadcrumbs
+  data-breadcrumbs-header-clearance={headerClearance ? "true" : undefined}
   data-breadcrumbs-display={display}
 >
   <ol>
@@ -116,6 +120,11 @@ const parent = parents.at(-1);
   }
 
   @media (min-width: 1024px) {
+    /* The header bar is shorter than its brand tag. The shared breadcrumb
+       owner handles that clearance; consumers do not override its CSS. */
+    .product-breadcrumbs[data-breadcrumbs-header-clearance="true"] {
+      margin-top: max(.55rem, calc(var(--ke-site-header-tag-height) - var(--ke-site-header-bar-height) + var(--ke-space-2)));
+    }
     .product-breadcrumbs--mobile,
     .product-parent-link--mobile { display: none; }
   }

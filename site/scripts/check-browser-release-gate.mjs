@@ -150,8 +150,19 @@ export function assertRegularGridWidths(grid) {
   invariant(grid.scrollWidth <= grid.clientWidth + 1, 'event-card grid has internal horizontal overflow');
   if (!grid.cards.length) return;
   const first = grid.cards[0];
+  // Card-to-card equality cannot detect a stretched singleton. Derive the
+  // ordinary column from the declared composition and viewport instead.
+  const size=Number(grid.rowSize), viewport=Number(grid.viewportWidth);
+  invariant(Number.isInteger(size) && size>=1 && size<=6 && viewport>0, 'grid composition metadata is missing');
+  let columns=size;
+  if(grid.responsive==='stack' && viewport<=1023) columns=1;
+  if(grid.responsive==='progressive') columns=viewport<=620 ? 1 : viewport<=960 ? Math.min(size,2) : size;
+  const gap=Number(grid.columnGap),contentWidth=Number(grid.contentWidth);
+  invariant(Number.isFinite(gap) && gap>=0 && contentWidth>0, 'grid content geometry is missing');
+  const expectedWidth=(contentWidth-(columns-1)*gap)/columns;
   for (const card of grid.cards) {
     invariant(Math.abs(card.width - first.width) <= 2, 'partial row stretches beyond an ordinary column');
+    invariant(Math.abs(card.width-expectedWidth)<=2, 'card does not retain ordinary column width');
     invariant(card.width > 40 && card.x >= grid.box.x - 1 && card.x + card.width <= grid.box.x + grid.box.width + 1, 'card escapes its grid');
     invariant(card.scrollWidth <= card.clientWidth + 1, 'card has internal horizontal overflow');
   }
@@ -165,6 +176,12 @@ export function assertRegularGridWidths(grid) {
     invariant(Math.max(...row.map(card => card.height)) - Math.min(...row.map(card => card.height)) <= 2,
       'cards in the same rendered row have different heights');
   }
+}
+
+export function assertOwnerBreadcrumbVisibility(items) {
+  invariant(Array.isArray(items), 'breadcrumb measurements are missing');
+  for(const item of items) invariant(!item.occludedBy?.length,
+    `breadcrumb navigation is covered by chrome: ${item.text}`);
 }
 
 /** Computed styles and geometry, not token/family marker existence. */
@@ -181,7 +198,6 @@ export async function measureOwnerReviewPage(page) {
       return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','color','backgroundColor','backgroundImage','marginTop','marginBottom','paddingTop','paddingBottom','paddingLeft','paddingRight','gap','maxWidth'].map(k=>[k,s[k]]));
     };
     const titleVisibility = e => {
-      if (e.tagName !== 'H1') return {};
       const range = document.createRange(); range.selectNodeContents(e);
       const rects = [...range.getClientRects()].filter(r=>r.width>1 && r.height>1);
       const clippedBy = [];
@@ -199,12 +215,15 @@ export async function measureOwnerReviewPage(page) {
     };
     const headings = [...document.querySelectorAll('h1,h2,h3')].filter(visible).slice(0,100).map(e=>({
       tag:e.tagName,text:e.textContent.trim(),class:e.className,box:box(e),style:style(e),
-      sectionRole:e.matches('.ke-popular-behavior__head:not(.is-stuck) h2,.free-collection__results > h2,.ex-group__heading h2,.ex-tail-callout h2,.unusual-page__empty h2'),
+      sectionRole:e.matches('.ke-popular-behavior__head:not(.is-stuck) h2,.free-collection__results > h2,.ex-group__heading h2,.ex-tail-callout h2,.unusual-page__empty h2,#home-feed-title'),
       scrollWidth:e.scrollWidth,clientWidth:e.clientWidth,...titleVisibility(e),
       parent:{class:e.parentElement.className,box:box(e.parentElement),style:style(e.parentElement)},
     }));
     const grids = [...document.querySelectorAll('[data-adaptive-event-card-grid]')].filter(visible).map(e=>({
       box:box(e),clientWidth:e.clientWidth,scrollWidth:e.scrollWidth,
+      rowSize:Number(e.dataset.adaptiveGridRowSize),responsive:e.dataset.adaptiveGridResponsive,
+      viewportWidth:innerWidth,columnGap:Number.parseFloat(getComputedStyle(e).columnGap)||0,
+      contentWidth:e.clientWidth-(Number.parseFloat(getComputedStyle(e).paddingLeft)||0)-(Number.parseFloat(getComputedStyle(e).paddingRight)||0),
       policy:e.dataset.adaptiveGridRemainderPolicy,state:e.dataset.adaptiveGridRemainderVariant,
       runtime:e.dataset.adaptiveGridRuntimeState,sourceCount:e.dataset.adaptiveGridSourceCount,
       renderedCount:e.dataset.adaptiveGridRenderedCount,
@@ -217,6 +236,7 @@ export async function measureOwnerReviewPage(page) {
     const nav = document.querySelector('.site-nav a:not([aria-current="page"])');
     return {url:location.href,viewport:{width:innerWidth,height:innerHeight},
       documentWidth:document.documentElement.scrollWidth,headings,grids,cardRows,
+      breadcrumbs:[...document.querySelectorAll('[data-product-breadcrumbs],[data-product-parent-link]')].filter(visible).map(e=>({text:e.textContent.trim(),box:box(e),...titleVisibility(e)})),
       header:header ? {box:box(header),style:style(header)} : null,
       regularNav:nav ? {style:style(nav)} : null,
       logoHref:document.querySelector('.site-header__brand-tag')?.getAttribute('href'),
@@ -263,6 +283,7 @@ export async function assertOwnerReviewPages(page, origin, basePath = '', { rout
           invariant(rejected,'section gate accepted an overriding local font size');
           report.negativeSectionOverrideRejected=true;
         }
+        assertOwnerBreadcrumbVisibility(report.breadcrumbs);
         invariant(report.documentWidth <= width + 1, `${route} document overflows`);
         invariant(report.logoHref === `${basePath}/`, `${route} brand leaves the product home`);
         for (const row of report.cardRows) invariant(row.scrollWidth <= row.clientWidth + 1, `${route} internal card row overflows`);
@@ -333,7 +354,7 @@ export async function assertSchematicPageContext(page, origin, route, artifactDi
     await page.locator('[data-floating-page-context] button').click();
     await page.waitForFunction(()=>scrollY<2 && document.body.dataset.floatingContext==='at-title');
     invariant(await page.evaluate(()=>document.activeElement?.tagName==='H1' || document.activeElement?.hasAttribute('data-floating-context-label')),'Back-to-title lost keyboard focus');
-    reports.push({width,...state,menuSuspension:width===390?'checked':'not-applicable',returnToTitle:'checked'});
+    reports.push({viewportWidth:width,...state,menuSuspension:width===390?'checked':'not-applicable',returnToTitle:'checked'});
   }
   return reports;
 }
@@ -345,6 +366,9 @@ export async function assertRestoredHomeHero(page, origin, route='/', artifactDi
     await page.setViewportSize({width,height:width===390?844:width===1440?900:1080});
     await page.goto(origin+route,{waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>document.querySelector('[data-home-hero-talk]')?.dataset.ready==='true');
+    const section=await page.locator('#home-feed-title').evaluate(e=>{const s=getComputedStyle(e);return {text:e.textContent,style:{fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight,letterSpacing:s.letterSpacing}};});
+    assertOwnerSectionMetrics(section,width);
+
     const root=page.locator('[data-home-hero-talk]'), scenes=root.locator('[data-home-hero-scene]');
     const count=await scenes.count();invariant(count>0,'Current dataset produced no Hero Talk scenes');
     await page.evaluate(()=>document.activeElement?.blur?.());
@@ -382,8 +406,9 @@ export async function assertRestoredHomeHero(page, origin, route='/', artifactDi
       invariant(await pause.getAttribute('aria-pressed')==='true','Hero pause state is missing');
       invariant(await root.locator('.is-active').getAttribute('data-scene-index')===String(active),'Paused Hero keeps changing');
     }
-    reports.push({width,count,states});
+    reports.push({width,count,states,feedSectionRole:'checked'});
   }
+  const hydratedFeed=await assertHomeFeedColumnStates(page,origin,route,artifactDir);
   const reduced=await page.context().browser().newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'});
   const nojs=await page.context().browser().newContext({viewport:{width:390,height:844},javaScriptEnabled:false});
   try {
@@ -395,7 +420,51 @@ export async function assertRestoredHomeHero(page, origin, route='/', artifactDi
     invariant(await n.locator('[data-home-hero-scene]:visible a').count()>0,'No-JS Home lost its event link');
     if(artifactDir){await p.screenshot({path:join(artifactDir,'home-reduced-motion.png')});await n.screenshot({path:join(artifactDir,'home-no-js.png')});}
   } finally {await reduced.close();await nojs.close();}
-  return {reports,cycle:'observed',pause:'observed',reducedMotion:'checked',noJavaScript:'checked'};
+  return {reports,hydratedFeed,cycle:'observed',pause:'observed',reducedMotion:'checked',noJavaScript:'checked'};
+}
+
+/** Real committed Home nodes filtered by an explicit local-profile fixture.
+ * This does not claim an organic cloud-personalization/backend run. */
+export async function assertHomeFeedColumnStates(page,origin,route='/',artifactDir='') {
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto(origin+route,{waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>document.querySelector('[data-home-cold-start-feed]')?.dataset.homeFeedBound==='true');
+  const ids=await page.locator('[data-home-feed-grid] > [data-home-feed-item]').evaluateAll(nodes=>nodes.map(e=>e.dataset.eventId));
+  invariant(ids.length>=10,'Home fixture must provide at least ten admitted events');
+  const original=await page.evaluate(()=>localStorage.getItem('ke_personalization_profile'));
+  const states=[];
+  try {
+    for(const count of [1,2,3,4,5,7,10]) {
+      await page.evaluate(({ids,count})=>{
+        const profile={consent_ok:true,profile_version:'anon-profile-v1',feature_schema_version:'event-detail-related-v1',taxonomy_version:'event-taxonomy-v1',hidden_event_ids:ids.slice(count)};
+        localStorage.setItem('ke_personalization_profile',JSON.stringify(profile));
+        window.dispatchEvent(new StorageEvent('storage',{key:'ke_personalization_profile'}));
+      },{ids,count});
+      await page.waitForFunction(n=>Number(document.querySelector('[data-home-feed-grid]')?.dataset.adaptiveGridRenderedCount)===n,count);
+      const report=await measureOwnerReviewPage(page),grid=report.grids[0];
+      invariant(grid && grid.cards.length===count,'Hydrated Home lost an admitted event');
+      invariant(grid.cards.every((card,i)=>String(card.id)===ids[i]),'Hydrated Home changed its admitted order');
+      assertRegularGridWidths(grid);
+      if(count===1) {
+        const card=page.locator('[data-home-feed-grid] > [data-home-feed-item]:visible').first();
+        const originalStyle=await card.getAttribute('style');
+        try {
+          await card.evaluate(e=>e.style.setProperty('flex-basis','100%','important'));
+          const poisoned=(await measureOwnerReviewPage(page)).grids[0];
+          let rejected=false;try {assertRegularGridWidths(poisoned);} catch {rejected=true;}
+          invariant(poisoned.cards[0].width>grid.cards[0].width*2 && rejected,'Grid gate accepted a stretched singleton');
+        } finally {await card.evaluate((e,s)=>s===null?e.removeAttribute('style'):e.setAttribute('style',s),originalStyle);}
+      }
+      if(artifactDir && [1,4].includes(count)) {
+        await page.locator('[data-home-feed-grid]').scrollIntoViewIfNeeded();
+        await page.screenshot({path:join(artifactDir,`home-hydrated-${count}.png`)});
+      }
+      states.push({count,ids:grid.cards.map(c=>c.id),width:grid.cards[0].width,source:'local-profile-fixture-existing-DOM',singletonNegative:count===1?'rejected':'not-applicable'});
+    }
+  } finally {
+    await page.evaluate(value=>{if(value===null)localStorage.removeItem('ke_personalization_profile');else localStorage.setItem('ke_personalization_profile',value);window.dispatchEvent(new StorageEvent('storage',{key:'ke_personalization_profile'}));},original);
+  }
+  return states;
 }
 
 function mimeType(path) {
