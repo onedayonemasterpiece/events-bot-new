@@ -1261,6 +1261,17 @@ is inferred for the real corpus. FI occupied-space records include the actual
 section/control rectangles and reuse the existing menu-summary identity rather
 than an empty-space-spanning top-band box.
 
+The shared framing functions are published by EventLayout's deferred module
+through the existing `KenigEvents*` window bridge; the separate inline discovery
+controller must call that bridge rather than module-local identifiers. Initial
+inline feedback application therefore leaves discovery hydration deferred until
+`kenigevents:card-geometry-ready`. The executable browser regression first
+hydrates the actual Free feed from 12 to all 111 unique catalog IDs in exact
+catalog order with its visible prefix unchanged, then exercises the explicitly
+synthetic current-hash vertical-positive, stale/horizontal-negative and mobile
+natural-frame fixtures through the existing hydrated EventCard factory. The
+synthetic fixture is runtime regression evidence, not organic/V0 crop proof.
+
 The full-preview gate validates actual Popular shell markers, retained H1/H2 and
 the shared section-context handoff; it no longer requires the superseded sticky
 IntersectionObserver/sentinel implementation. Exact7458 compiled on Kaggle24 but

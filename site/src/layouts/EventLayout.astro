@@ -2882,6 +2882,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         KenigEventsFreeCollectionCountMessage: freeCollectionCountMessage,
         KenigEventsPackRelatedCardRows: packRelatedCardRows,
         KenigEventsPlanRelatedCardRows: planRelatedCardRows,
+        KenigEventsRelatedCardMediaFrameBinding: relatedCardMediaFrameBinding,
         KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
         KenigEventsResolveMobileEventCardMedia: resolveMobileEventCardMedia,
         KenigEventsRelatedCardPrimaryImageAsset: relatedCardPrimaryImageAsset,
@@ -4100,19 +4101,19 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (rowSize === 1 || ranked.length <= 1) return ranked.map((item, rank) => ({ ...item, source_rank:item.rank, rank }));
           const presentation = feed?.dataset.adaptiveGridMode === 'flow' ? 'flow' : 'packed';
           const planned = options.preserveOrder
-            ? packRelatedCardRows(ranked, {
+            ? window.KenigEventsPackRelatedCardRows(ranked, {
                 limit:ranked.length,
                 rowSize,
                 preserveOrder:true,
                 presentation,
                 mediaTreatment:feed?.dataset.adaptiveGridMediaTreatment || 'hybrid',
-                geometry:relatedCardMediaGeometry,
+                geometry:window.KenigEventsRelatedCardMediaGeometry,
               })
-            : planRelatedCardRows(ranked, {
+            : window.KenigEventsPlanRelatedCardRows(ranked, {
             rowSize,
             mediaTreatment:feed?.dataset.adaptiveGridMediaTreatment || 'hybrid',
             presentation,
-            geometry:relatedCardMediaGeometry,
+            geometry:window.KenigEventsRelatedCardMediaGeometry,
           });
           return planned.map(({ item, layout }, rank) => ({ ...item, source_rank:item.rank, rank, framing_layout:layout }));
         }
@@ -4724,7 +4725,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const requestedFit = relatedLayout
             ? (relatedLayout.fit === 'cover' ? 'cover' : 'contain')
             : (kind === 'visual' && !documentMedia ? 'cover' : 'contain');
-          const requestedBinding = relatedCardMediaFrameBinding({
+          const requestedBinding = window.KenigEventsRelatedCardMediaFrameBinding({
             fit:requestedFit,
             mediaTreatment:relatedLayout?.mediaTreatment || (kind === 'visual' ? 'visual-cover' : 'document-contain'),
             objectPosition:relatedLayout?.objectPosition,
@@ -4873,7 +4874,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             mediaShell.classList.toggle('event-card__media-shell--document', authoritativeFit !== 'cover');
             mediaShell.classList.toggle('event-card__media-shell--cover', authoritativeFit === 'cover');
             mediaShell.dataset.mediaFrameFit = authoritativeFit;
-            mediaShell.dataset.mediaFrameCropPermission = relatedCardMediaFrameBinding({
+            mediaShell.dataset.mediaFrameCropPermission = window.KenigEventsRelatedCardMediaFrameBinding({
               fit:authoritativeFit,
               mediaTreatment:relatedLayout.mediaTreatment,
               objectPosition,
@@ -6557,7 +6558,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         hydrateHeroParallax();
         hydrateDesktopEventReading();
         hydrateHeroGallery();
-        applyFeedbackState();
+        // The inline shell installs listeners before the deferred module bridge
+        // runs. Keep SSR feedback synchronous, but hydrate discovery only from
+        // the card-geometry-ready event after every shared planner/binder API
+        // above has been published on window.
+        applyFeedbackState({ skipDiscoveryHydration:true });
       })();
     </script>
   </body>

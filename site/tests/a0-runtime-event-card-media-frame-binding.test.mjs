@@ -127,7 +127,7 @@ test('both runtime entrypoints consume the same rebinding and no inline fit owne
 
   // The unknown-only fail-closed gate must not remove accepted visual or
   // reviewed-bounded document cover from the shared layout decision.
-  assert.match(layoutBinding, /relatedCardMediaFrameBinding\(\{[\s\S]*mediaTreatment:relatedLayout\.mediaTreatment,[\s\S]*\}\)\.cropPermission/u);
+  assert.match(layoutBinding, /window\.KenigEventsRelatedCardMediaFrameBinding\(\{[\s\S]*mediaTreatment:relatedLayout\.mediaTreatment,[\s\S]*\}\)\.cropPermission/u);
 
   assert.match(layout, /window\.KenigEventsCreateEventCard = createEventCardElement/u);
   assert.match(layout, /window\.KenigEventsRenderEventCard = \(\.\.\.args\) => createEventCardElement\(\.\.\.args\)\?\.outerHTML \|\| ''/u);
@@ -141,8 +141,13 @@ test('server and hydrated cards carry one source-bound protected framing contrac
   assert.match(adaptiveGrid, /dataset\.labFramingStatus === 'satisfied'/u);
   assert.equal((eventsSource.match(/\.\.\.relatedCardCropProofPayload\(primaryAsset\)/gu) || []).length, 2);
   assert.match(layout, /import \{[^}]*relatedCardMediaFrameBinding[^}]*\} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
+  assert.match(layout, /KenigEventsRelatedCardMediaFrameBinding: relatedCardMediaFrameBinding/u);
+  assert.equal((layout.match(/window\.KenigEventsRelatedCardMediaFrameBinding\(\{/gu) || []).length, 2);
+  assert.match(layout, /window\.KenigEventsPlanRelatedCardRows\(ranked,/u);
+  assert.match(layout, /window\.KenigEventsPackRelatedCardRows\(ranked,/u);
   assert.match(layout, /const presentation = feed\?\.dataset\.adaptiveGridMode === 'flow' \? 'flow' : 'packed'/u);
   assert.match(layout, /store\.ranked = composeRankedForFraming\(semanticallyRanked, feed, \{ preserveOrder:alreadyComposed \}\)/u);
+  assert.match(layout, /applyFeedbackState\(\{ skipDiscoveryHydration:true \}\)/u);
 });
 
 test('EventCard anatomy, actions and ranking entrypoints remain in the existing factory', () => {
