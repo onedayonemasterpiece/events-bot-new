@@ -51,6 +51,11 @@ try {
       let response=await page.goto(url+'?islands=off',{waitUntil:'networkidle'});
       await page.evaluate(()=>document.fonts.ready); await page.waitForTimeout(250);
       check('baseline-http',response?.status()===200);const baseline=await snapshot();await capture('baseline-top');
+      let baselineScrolled=null;
+      if(selection.exactRoute.includes('besplatnye-sobytiya')) {
+        await page.evaluate(()=>window.scrollTo(0,600));await page.waitForTimeout(150);
+        baselineScrolled=await snapshot();await capture('baseline-scrolled');
+      }
       response=await page.goto(url,{waitUntil:'networkidle'});
       await page.evaluate(()=>document.fonts.ready);await page.waitForTimeout(250);
       check('candidate-http',response?.status()===200);
@@ -88,6 +93,12 @@ try {
         check('free-equivalent-marker',await page.locator('[data-fi-free-mark]').count()===1);
         check('free-title-island-not-duplicated',await page.locator('[data-floating-page-title]').evaluate(el=>getComputedStyle(el).display==='none'));
         check('semantic-h1-retained',await page.locator('h1').count()>0);
+        const mark=await page.locator('[data-fi-free-mark]').boundingBox();
+        const island=await page.locator('[data-fi-free-context]').boundingBox();
+        check('free-mark-in-viewport',mark && mark.y>=0 && mark.x>=0 && mark.x+mark.width<=viewport.width && mark.y+mark.height<=viewport.height,mark);
+        check('no-empty-title-plane',mark && island && Math.abs(island.width-mark.width)<=1,{mark,island});
+        check('free-parent-transparent',await page.locator('[data-fi-free-context]').evaluate(el=>getComputedStyle(el).backgroundColor)==='rgba(0, 0, 0, 0)');
+        const afterScroll=await snapshot();check('brand-scroll-unchanged',JSON.stringify(baselineScrolled?.brand)===JSON.stringify(afterScroll.brand),{before:baselineScrolled?.brand,after:afterScroll.brand});
         await capture('free-scrolled');
       }
     } catch(error){check('execution',false,error.message);await capture('failure').catch(()=>{});}

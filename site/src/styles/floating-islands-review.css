@@ -55,6 +55,10 @@ html[data-fi-review] .fi-city-toggle:focus-visible,
 html[data-fi-review] .fi-city-panel button:focus-visible,
 html[data-fi-review] .ke-filter-chip:has(input:focus-visible) { outline:2px solid var(--ke-color-focus-ring); outline-offset:2px; }
 /* A single existing page-context action, not a second heading/button tree. */
+html[data-fi-review] [data-fi-free-context] {
+  flex:0 0 auto; align-self:flex-start; width:64px; max-width:64px; gap:0;
+  margin-block-start:4px; background:transparent; right:auto;
+}
 html[data-fi-review] [data-fi-free-context] .site-header__context-home,
 html[data-fi-review] [data-fi-free-context] .site-header__context-label,
 html[data-fi-review] [data-fi-free-context] [data-floating-page-title],
