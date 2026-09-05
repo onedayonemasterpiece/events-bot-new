@@ -2464,3 +2464,30 @@ async def test_vk_build_event_drafts_does_not_fail_on_ocr_errors(tmp_path, monke
         db=db,
     )
     assert drafts
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [25, 0])
+async def test_storage_admission_stops_batch_before_claim(tmp_path, monkeypatch, limit):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    def blocked(_db):
+        raise RuntimeError("vk_crawl_storage_admission_blocked:free_mb=400:min_free_mb=512")
+
+    async def no_claim(*args, **kwargs):
+        pytest.fail("storage-blocked batch must not claim a carrier")
+
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", blocked)
+    monkeypatch.setattr(vk_auto_queue.vk_review, "pick_next", no_claim)
+    bot = DummyBot()
+    report = await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=limit)
+    assert report.inbox_processed == 0
+    assert report.inbox_failed_technical == 0
+    assert any("storage_admission" in error for error in report.errors)
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT status, details_json FROM ops_run ORDER BY id DESC LIMIT 1")
+        status, details = await cur.fetchone()
+    assert status == "error"
+    assert json.loads(details)["skip_reason"] == "storage_admission"
+    assert any("512" in text for _, text in bot.messages)

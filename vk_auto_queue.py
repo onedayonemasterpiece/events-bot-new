@@ -1792,6 +1792,38 @@ async def run_vk_auto_import(
                 },
             )
             return report
+        # Infrastructure admission belongs to the batch, not to a source
+        # terminal. Check after waiting for the heavy gate, before any claim or
+        # prefetch, so an unsafe volume cannot burn through pending carriers.
+        try:
+            vk_intake._require_vk_crawl_storage_headroom(db)
+        except RuntimeError as exc:
+            report.errors.append(str(exc))
+            await finish_ops_run(
+                db,
+                run_id=ops_run_id,
+                status="error",
+                metrics={"inbox_processed": 0, "inbox_failed_technical": 0},
+                details={
+                    "batch_id": batch_id,
+                    "run_id": run_id,
+                    "skip_reason": "storage_admission",
+                    "errors": list(report.errors),
+                },
+            )
+            logger.warning("vk_auto: batch storage admission blocked: %s", exc)
+            try:
+                await bot.send_message(
+                    chat_id,
+                    "⏸ VK auto import: недостаточно доступного места; "
+                    "очередь не обработана и сохранена для следующего запуска.\n"
+                    f"{exc}",
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                logger.warning("vk_auto: storage_notice_send_failed", exc_info=True)
+            return report
+
         current_no = 0
         prefetch_enabled = _env_enabled("VK_AUTO_IMPORT_PREFETCH", False)
 
