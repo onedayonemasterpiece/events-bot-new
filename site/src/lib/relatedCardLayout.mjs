@@ -161,6 +161,10 @@ function cropFraction(sourceRatio, targetRatio) {
 }
 
 function verifiedDocumentTextCrop(asset, targetAspect) {
+  const sourceAspect = finiteRatio(Number(asset?.width) / Number(asset?.height), 0);
+  // The owner-approved scarcity exception is vertical only: the target may be
+  // wider than the source (trim top/bottom), never narrower (trim the sides).
+  if (!(sourceAspect > 0) || targetAspect + EPSILON < sourceAspect) return null;
   const currentGeometry = asset?.geometry_status === 'classified'
     && asset?.geometry_coordinate_space === 'normalized_0_1'
     && typeof asset?.current_pixel_sha256 === 'string'
@@ -177,11 +181,40 @@ function verifiedDocumentTextCrop(asset, targetAspect) {
   return crop.fit === 'cover' ? crop : null;
 }
 
+export function relatedCardCropProofPayload(asset) {
+  if (!asset || typeof asset !== 'object') return {};
+  const proof = {};
+  for (const key of [
+    'safe_crop',
+    'current_pixel_sha256',
+    'geometry_pixel_sha256',
+    'geometry_status',
+    'geometry_coordinate_space',
+    'ocr_boxes',
+  ]) {
+    if (asset[key] !== undefined) proof[key] = asset[key];
+  }
+  return proof;
+}
+
+export function relatedCardMediaFrameBinding(decision) {
+  const fit = decision?.fit === 'cover' ? 'cover' : 'contain';
+  const mediaTreatment = String(decision?.mediaTreatment || 'document-contain');
+  const requestedPosition = normalizedObjectPosition(decision?.objectPosition);
+  return {
+    fit,
+    objectPosition:fit === 'cover' && requestedPosition ? requestedPosition : '50% 50%',
+    cropPermission:fit === 'contain'
+      ? 'forbidden'
+      : mediaTreatment.startsWith('document-') ? 'reviewed-bounded' : 'allowed',
+  };
+}
+
 /**
  * Final compact-card treatment. Classified visual media fills its shell.
  * A crop-area limit is not evidence that OCR text survives the crop.
- * Until this API has a verified text-region contract, document media remains
- * whole; an exact-ratio cover is uncropped and is still allowed. The existing
+ * Document media remains whole unless current source-bound OCR boxes prove a
+ * vertical crop; an exact-ratio cover is uncropped and is still allowed. The
  * 20% maximum remains a ceiling, not permission to trim unlocated text.
  * Direct callers and packRelatedCardRows share this fail-closed boundary.
  */
@@ -376,12 +409,12 @@ function rowTargets(row) {
   const documents = row.filter((entry) => entry.documentMedia && entryResourcePresent(entry));
   if (documents.length) {
     // Natural ratios remain the only candidates unless every changed document
-    // proves a bounded cover with current OCR boxes. Testing each source ratio
-    // guarantees at least one whole document and avoids inventing a midpoint.
+    // proves a bounded vertical cover with current OCR boxes. The widest
+    // natural ratio is therefore the only possible crop target; narrower
+    // targets would trim the sides and are rejected by the shared resolver.
     if (documents.some((entry) => entry.dimensionsKnown === false)) return [];
     const ratios = documents.map((entry) => entry.ratio);
-    const balancedTarget = Math.sqrt(Math.min(...ratios) * Math.max(...ratios));
-    return [...new Set([...ratios, balancedTarget])].map((targetRatio) => ({
+    return [...new Set(ratios)].map((targetRatio) => ({
       targetRatio,
       rowMode:documents.every((entry) => Math.abs(entry.ratio - targetRatio) <= EPSILON)
         ? 'document-led-natural'

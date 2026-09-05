@@ -17,10 +17,10 @@ test('AdaptiveEventCardGrid owns flow and packed layout while the legacy grid is
   assert.match(adaptive, /import \{ packRelatedCardRows, planRelatedCardRows \} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
   assert.equal((adaptive.match(/<EventCard\b/gu) || []).length, 1);
   assert.match(adaptive, /events\.length > limit[\s\S]*planRelatedCardRows\(events, \{ rowSize, mediaTreatment \}\)\.slice\(0, limit\)[\s\S]*packRelatedCardRows\(events, \{ limit, rowSize, mediaTreatment \}\)/u);
-  assert.match(adaptive, /events\.slice\(0, limit\)\.map\(\(item\) => \(\{ item, layout: undefined \}\)\)/u);
+  assert.match(adaptive, /fullPoolFlowPlan \|\| packRelatedCardRows\(events, \{ limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true \}\)/u);
   assert.match(adaptive, /mode === 'packed' && 'cards-grid--immersive'/u);
-  assert.match(adaptive, /desktopRelatedCrop=\{mode === 'packed'\}/u);
-  assert.match(adaptive, /desktopRelatedLayout=\{mode === 'packed' \? layout : undefined\}/u);
+  assert.match(adaptive, /desktopRelatedCrop=\{Boolean\(layout\)\}/u);
+  assert.match(adaptive, /desktopRelatedLayout=\{layout\}/u);
 
   assert.match(legacy, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro'/u);
   assert.match(legacy, /<AdaptiveEventCardGrid/u);
@@ -117,7 +117,8 @@ test('AdaptiveEventCardGrid shared tracks fill full rows while preserving ordina
 test('flow framing is natural-ratio first and exposes joint satisfaction instead of accepting fixed-frame fields', async () => {
   const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
 
-  assert.doesNotMatch(adaptive, /adaptive-event-card-grid--flow[\s\S]{0,420}aspect-ratio:\s*5\s*\/\s*4/u);
+  assert.match(adaptive, /event-card\[data-lab-media-kind="document"\][\s\S]*aspect-ratio: var\(--lab-media-ratio\) !important/u);
+  assert.match(adaptive, /event-card\[data-lab-media-kind="visual"\][\s\S]*aspect-ratio: 5 \/ 4 !important/u);
   assert.match(adaptive, /packRelatedCardRows\(events, \{ limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true \}\)/u);
   assert.match(adaptive, /data-adaptive-grid-framing-status=\{framingStatus\}/u);
   assert.match(adaptive, /data-adaptive-grid-framing-conflicts=\{framingConflicts \|\| undefined\}/u);
@@ -164,7 +165,7 @@ test('normalized component families and MediaFrame diagnostics retain exact vers
   }
 
   assert.match(card, /cardCrop\.mediaTreatment === 'visual-cover'[\s\S]*\? 'visual'/u);
-  assert.match(card, /const mediaFrameFit = imageUrl \? cardCrop\.fit : 'contain'/u);
+  assert.match(card, /const mediaFrameFit = imageUrl \? cardFrameBinding\.fit : 'contain'/u);
   assert.match(listing, /const mediaFrameFit = image\.mode\.endsWith\('-crop'\) \? 'cover' : 'contain'/u);
   assert.match(listing, /class="ke-listing-card__media ke-skeleton"[\s\S]*data-media-frame/u);
   assert.match(rail, /if \(asset\.media_semantic_status === 'error'\) return 'unknown'/u);

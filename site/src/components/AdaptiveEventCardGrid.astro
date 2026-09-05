@@ -108,10 +108,8 @@ const resolved = mode === 'packed'
   ? events.length > limit
     ? planRelatedCardRows(events, { rowSize, mediaTreatment }).slice(0, limit)
     : packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
-  : fullPoolFlowPlan || events.slice(0, limit).map((item) => ({ item, layout: undefined }));
-const framingPlan = mode === 'packed'
-  ? resolved
   : fullPoolFlowPlan || packRelatedCardRows(events, { limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true });
+const framingPlan = resolved;
 const framingConflicts = [...new Set(framingPlan
   .map(({ layout }) => layout?.framingConflict)
   .filter(Boolean))].join(';');
@@ -280,8 +278,8 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
       <EventCard
         event={item}
         variant="split-actions"
-        desktopRelatedCrop={mode === 'packed'}
-        desktopRelatedLayout={mode === 'packed' ? layout : undefined}
+        desktopRelatedCrop={Boolean(layout)}
+        desktopRelatedLayout={layout}
         mobileFlowMedia={mode === 'flow' && mobileFlowMedia}
         rootClassName={itemRoot?.className}
         rootAttributes={itemRoot?.attributes}
@@ -318,6 +316,19 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
         if (grid.dataset.adaptiveGridMode === 'flow') {
           const renderedColumns = getComputedStyle(grid).gridTemplateColumns.split(/\s+/u).filter(Boolean).length || 1;
           const conflicts = [];
+          const applyFlowFrame = (card, ratio, fit, objectPosition, cropPermission, cropReason) => {
+            const shell = card.querySelector('[data-card-media-shell]');
+            if (!(shell instanceof HTMLElement)) return;
+            card.style.setProperty('--adaptive-flow-row-media-ratio', String(ratio));
+            shell.dataset.mediaFrameFit = fit;
+            shell.dataset.mediaFrameObjectPosition = objectPosition;
+            shell.dataset.mediaFrameFocalPosition = objectPosition;
+            shell.dataset.mediaFrameCropPermission = cropPermission;
+            shell.dataset.mediaFrameCropReason = cropReason;
+            shell.style.setProperty('--media-frame-object-position', objectPosition);
+            shell.classList.toggle('event-card__media-shell--cover', fit === 'cover');
+            shell.classList.toggle('event-card__media-shell--document', fit !== 'cover');
+          };
           cards.forEach((card) => {
             card.style.removeProperty('--adaptive-flow-row-media-ratio');
             delete card.dataset.adaptiveFlowFramingStatus;
@@ -334,6 +345,40 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
               const ratio = width > 0 && height > 0 ? width / height : Number(shell.dataset.mediaFrameSourceRatio);
               return { card, ratio, dimensions:width > 0 && height > 0 ? `${width}x${height}` : 'unknown' };
             }).filter(Boolean);
+            if (renderedColumns === 1) {
+              const card = row[0];
+              const shell = card?.querySelector('[data-card-media-shell]');
+              const document = documents[0];
+              const ratio = document?.ratio || 5 / 4;
+              if (document && Number.isFinite(ratio) && ratio > 0) {
+                applyFlowFrame(card, ratio, 'contain', '50% 50%', 'forbidden', 'mobile_document_natural');
+              } else if (shell?.dataset.mediaFrameKind === 'visual') {
+                applyFlowFrame(card, 5 / 4, 'cover', card.dataset.labObjectPosition || '50% 50%', 'allowed', card.dataset.labCropReason || 'mobile_visual_fixed_5x4');
+              }
+              card.dataset.adaptiveFlowFramingStatus = document && !(Number.isFinite(ratio) && ratio > 0) ? 'unsatisfied' : 'satisfied';
+              if (card.dataset.adaptiveFlowFramingStatus === 'unsatisfied') conflicts.push(`document-natural-ratio-unknown:${card.dataset.eventId || 'unknown'}@unknown`);
+              continue;
+            }
+            const plannedRatio = Number(row[0]?.dataset.labRowRatio);
+            const coherentPlan = Number.isFinite(plannedRatio) && plannedRatio > 0
+              && row.every((card) => Number(card.dataset.labRowRatio) === plannedRatio
+                && card.dataset.labFramingStatus === 'satisfied');
+            if (coherentPlan) {
+              row.forEach((card) => {
+                const fit = card.dataset.labFit === 'cover' ? 'cover' : 'contain';
+                const treatment = card.dataset.labMediaTreatment || '';
+                applyFlowFrame(
+                  card,
+                  plannedRatio,
+                  fit,
+                  card.dataset.labObjectPosition || '50% 50%',
+                  fit === 'contain' ? 'forbidden' : treatment.startsWith('document-') ? 'reviewed-bounded' : 'allowed',
+                  card.dataset.labCropReason || 'planned_flow_frame',
+                );
+                card.dataset.adaptiveFlowFramingStatus = 'satisfied';
+              });
+              continue;
+            }
             const unknown = documents.find((entry) => !(Number.isFinite(entry.ratio) && entry.ratio > 0));
             const anchor = documents[0];
             const mismatch = anchor && documents.find((entry) => Number.isFinite(entry.ratio)
@@ -343,13 +388,21 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
                 ? `document-natural-ratio-unknown:${unknown.card.dataset.eventId || 'unknown'}@${unknown.dimensions}`
                 : `document-natural-ratio-mismatch:${anchor.card.dataset.eventId || 'unknown'}@${anchor.dimensions}=${anchor.ratio.toFixed(8)}|${mismatch.card.dataset.eventId || 'unknown'}@${mismatch.dimensions}=${mismatch.ratio.toFixed(8)}`;
               conflicts.push(conflict);
-              row.forEach((card) => { card.dataset.adaptiveFlowFramingStatus = 'unsatisfied'; });
+              row.forEach((card) => {
+                card.dataset.adaptiveFlowFramingStatus = 'unsatisfied';
+                const document = documents.find((entry) => entry.card === card);
+                if (document && Number.isFinite(document.ratio) && document.ratio > 0) {
+                  applyFlowFrame(card, document.ratio, 'contain', '50% 50%', 'forbidden', 'document_natural_conflict');
+                }
+              });
               continue;
             }
             const targetRatio = anchor?.ratio || 5 / 4;
             row.forEach((card) => {
               card.dataset.adaptiveFlowFramingStatus = 'satisfied';
-              card.style.setProperty('--adaptive-flow-row-media-ratio', String(targetRatio));
+              const document = documents.find((entry) => entry.card === card);
+              if (document) applyFlowFrame(card, targetRatio, 'contain', '50% 50%', 'forbidden', 'document_natural_row');
+              else applyFlowFrame(card, targetRatio, 'cover', card.dataset.labObjectPosition || '50% 50%', 'allowed', card.dataset.labCropReason || 'visual_row_cover');
             });
           }
           grid.dataset.adaptiveGridFramingStatus = conflicts.length ? 'unsatisfied' : 'satisfied';
@@ -483,6 +536,18 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   @media (max-width: 620px) {
     .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size] {
       --adaptive-event-card-columns: 1;
+    }
+    /* Flow rows use the shared desktop plan, but a one-column mobile row has
+       no scarcity: documents return to their factual natural frame. */
+    .adaptive-event-card-grid--flow > :global(.event-card[data-lab-media-kind="document"] .event-card__media-shell) {
+      aspect-ratio: var(--lab-media-ratio) !important;
+    }
+    .adaptive-event-card-grid--flow > :global(.event-card[data-lab-media-kind="document"] [data-media-frame-image]) {
+      object-fit: contain !important;
+      object-position: 50% 50% !important;
+    }
+    .adaptive-event-card-grid--flow > :global(.event-card[data-lab-media-kind="visual"] .event-card__media-shell) {
+      aspect-ratio: 5 / 4 !important;
     }
   }
 </style>

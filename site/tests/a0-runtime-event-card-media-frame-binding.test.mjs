@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const layout = await readFile(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
+const eventCard = await readFile(new URL('../src/components/EventCard.astro', import.meta.url), 'utf8');
+const adaptiveGrid = await readFile(new URL('../src/components/AdaptiveEventCardGrid.astro', import.meta.url), 'utf8');
+const eventsSource = await readFile(new URL('../src/lib/events.ts', import.meta.url), 'utf8');
 
 function functionSource(name, nextName) {
   const start = layout.indexOf(`function ${name}(`);
@@ -124,11 +127,22 @@ test('both runtime entrypoints consume the same rebinding and no inline fit owne
 
   // The unknown-only fail-closed gate must not remove accepted visual or
   // reviewed-bounded document cover from the shared layout decision.
-  assert.match(layoutBinding, /relatedLayout\.mediaTreatment === 'document-safe-cover' \? 'reviewed-bounded' : 'allowed'/u);
+  assert.match(layoutBinding, /relatedCardMediaFrameBinding\(\{[\s\S]*mediaTreatment:relatedLayout\.mediaTreatment,[\s\S]*\}\)\.cropPermission/u);
 
   assert.match(layout, /window\.KenigEventsCreateEventCard = createEventCardElement/u);
   assert.match(layout, /window\.KenigEventsRenderEventCard = \(\.\.\.args\) => createEventCardElement\(\.\.\.args\)\?\.outerHTML \|\| ''/u);
   assert.doesNotMatch(create, /mediaShell\.(?:className|style|dataset)|image\.style\.(?:objectFit|objectPosition)/u);
+});
+
+test('server and hydrated cards carry one source-bound protected framing contract', () => {
+  assert.match(eventCard, /relatedCardMediaFrameBinding\(cardCrop\)/u);
+  assert.match(eventCard, /mediaTreatment: 'document-safe-cover' \| 'document-protected-cover'/u);
+  assert.match(adaptiveGrid, /desktopRelatedLayout=\{layout\}/u);
+  assert.match(adaptiveGrid, /dataset\.labFramingStatus === 'satisfied'/u);
+  assert.equal((eventsSource.match(/\.\.\.relatedCardCropProofPayload\(primaryAsset\)/gu) || []).length, 2);
+  assert.match(layout, /import \{[^}]*relatedCardMediaFrameBinding[^}]*\} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
+  assert.match(layout, /const presentation = feed\?\.dataset\.adaptiveGridMode === 'flow' \? 'flow' : 'packed'/u);
+  assert.match(layout, /store\.ranked = composeRankedForFraming\(semanticallyRanked, feed, \{ preserveOrder:alreadyComposed \}\)/u);
 });
 
 test('EventCard anatomy, actions and ranking entrypoints remain in the existing factory', () => {

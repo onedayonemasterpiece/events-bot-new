@@ -2685,7 +2685,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <script>
       import { shellOccupiedSpace } from '../lib/shellOccupiedSpace.mjs';
       import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
-      import { packRelatedCardRows, planRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
+      import { packRelatedCardRows, planRelatedCardRows, relatedCardMediaFrameBinding, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
       import { selectEventContinuation } from '../lib/eventContinuation.mjs';
       import { composeEventShareImage } from '../lib/eventShareImage.mjs';
       import { getResilientDataClient } from '../lib/resilientDataClient';
@@ -4095,14 +4095,26 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             }));
         }
 
-        function composeRankedForFraming(ranked, feed) {
+        function composeRankedForFraming(ranked, feed, options = {}) {
           const rowSize = Math.max(1, Number.parseInt(feed?.dataset.adaptiveGridRowSize || '3', 10) || 3);
           if (rowSize === 1 || ranked.length <= 1) return ranked.map((item, rank) => ({ ...item, source_rank:item.rank, rank }));
-          return planRelatedCardRows(ranked, {
+          const presentation = feed?.dataset.adaptiveGridMode === 'flow' ? 'flow' : 'packed';
+          const planned = options.preserveOrder
+            ? packRelatedCardRows(ranked, {
+                limit:ranked.length,
+                rowSize,
+                preserveOrder:true,
+                presentation,
+                mediaTreatment:feed?.dataset.adaptiveGridMediaTreatment || 'hybrid',
+                geometry:relatedCardMediaGeometry,
+              })
+            : planRelatedCardRows(ranked, {
             rowSize,
             mediaTreatment:feed?.dataset.adaptiveGridMediaTreatment || 'hybrid',
+            presentation,
             geometry:relatedCardMediaGeometry,
-          }).map(({ item, layout }, rank) => ({ ...item, source_rank:item.rank, rank, framing_layout:layout }));
+          });
+          return planned.map(({ item, layout }, rank) => ({ ...item, source_rank:item.rank, rank, framing_layout:layout }));
         }
 
         function rankAdjacentContinuationCandidates(manifest, profile) {
@@ -4709,17 +4721,19 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             ? 'visual'
             : imageTextMode === 'ocr_text' ? 'document' : 'unknown';
           const role = String(data.image_media_role || '').trim() || 'unknown_document';
-          const requestedObjectPosition = String(relatedLayout?.objectPosition || '50% 50%').trim();
-          const objectPosition = /^[a-z0-9.%\s-]+$/iu.test(requestedObjectPosition)
-            ? requestedObjectPosition
-            : '50% 50%';
           const requestedFit = relatedLayout
             ? (relatedLayout.fit === 'cover' ? 'cover' : 'contain')
             : (kind === 'visual' && !documentMedia ? 'cover' : 'contain');
+          const requestedBinding = relatedCardMediaFrameBinding({
+            fit:requestedFit,
+            mediaTreatment:relatedLayout?.mediaTreatment || (kind === 'visual' ? 'visual-cover' : 'document-contain'),
+            objectPosition:relatedLayout?.objectPosition,
+          });
+          const objectPosition = requestedBinding.objectPosition;
           const fit = kind === 'unknown' ? 'contain' : requestedFit;
           const cropPermission = fit === 'contain'
             ? 'forbidden'
-            : relatedLayout?.mediaTreatment === 'document-safe-cover' ? 'reviewed-bounded' : 'allowed';
+            : requestedBinding.cropPermission;
           const cropReason = imageUrl
             ? String(relatedLayout?.cropReason || 'responsive_target_unknown')
             : 'runtime_event_card_fallback';
@@ -4804,7 +4818,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         function applyRuntimeRelatedLayout(card, relatedLayout) {
           if (!(card instanceof HTMLElement)) return;
-          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCropReason', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost'];
+          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowRatio', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCropReason', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost', 'labFit', 'labObjectPosition', 'labFramingStatus', 'labFramingConflict'];
           for (const key of relatedKeys) delete card.dataset[key];
           delete card.dataset.cardMediaPresentation;
           delete card.dataset.cardMediaTreatment;
@@ -4815,7 +4829,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (relatedLayout.presentation === 'flow') {
             setRuntimeCardDataset(card, 'cardMediaPresentation', 'flow');
             setRuntimeCardDataset(card, 'cardMediaTreatment', relatedLayout.mediaTreatment);
-            return;
           }
           const numericDataset = (key, value, digits) => {
             if (typeof value === 'number' && Number.isFinite(value)) {
@@ -4826,10 +4839,15 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           setRuntimeCardDataset(card, 'labMediaKind', relatedLayout.mediaKind);
           numericDataset('labMediaRatio', relatedLayout.mediaRatio, 5);
           setRuntimeCardDataset(card, 'labRowMedia', relatedLayout.rowMode);
+          numericDataset('labRowRatio', relatedLayout.rowRatio, 8);
           setRuntimeCardDataset(card, 'labRowIndex', relatedLayout.rowIndex);
           setRuntimeCardDataset(card, 'labRowColumn', relatedLayout.rowColumn);
           setRuntimeCardDataset(card, 'labMediaTreatment', relatedLayout.mediaTreatment);
           setRuntimeCardDataset(card, 'labCropReason', relatedLayout.cropReason);
+          setRuntimeCardDataset(card, 'labFit', relatedLayout.fit);
+          setRuntimeCardDataset(card, 'labObjectPosition', relatedLayout.objectPosition);
+          setRuntimeCardDataset(card, 'labFramingStatus', relatedLayout.framingStatus);
+          setRuntimeCardDataset(card, 'labFramingConflict', relatedLayout.framingConflict);
           numericDataset('labCoverCrop', relatedLayout.coverCrop, 4);
           numericDataset('labPotentialCoverCrop', relatedLayout.potentialCoverCrop, 4);
           numericDataset('labRowWorstCrop', relatedLayout.rowWorstCrop, 4);
@@ -4855,9 +4873,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             mediaShell.classList.toggle('event-card__media-shell--document', authoritativeFit !== 'cover');
             mediaShell.classList.toggle('event-card__media-shell--cover', authoritativeFit === 'cover');
             mediaShell.dataset.mediaFrameFit = authoritativeFit;
-            mediaShell.dataset.mediaFrameCropPermission = authoritativeFit === 'contain'
-              ? 'forbidden'
-              : relatedLayout.mediaTreatment === 'document-safe-cover' ? 'reviewed-bounded' : 'allowed';
+            mediaShell.dataset.mediaFrameCropPermission = relatedCardMediaFrameBinding({
+              fit:authoritativeFit,
+              mediaTreatment:relatedLayout.mediaTreatment,
+              objectPosition,
+            }).cropPermission;
             mediaShell.dataset.mediaFrameCropReason = String(relatedLayout.cropReason || 'responsive_target_unknown');
             mediaShell.dataset.mediaFrameObjectPosition = objectPosition;
             mediaShell.dataset.mediaFrameFocalPosition = objectPosition;
@@ -5298,7 +5318,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
                   : rankPopularFallbackCandidates(store.manifest, profile))
             : rankEventDetailRelated(store.manifest, profile, { maxSameCategory: 3, maxSameVenue: 2 });
           const alreadyComposed = isFiltered && store.manifest.composition_order === 'global-natural-rows-v1';
-          store.ranked = alreadyComposed ? semanticallyRanked : composeRankedForFraming(semanticallyRanked, feed);
+          store.ranked = composeRankedForFraming(semanticallyRanked, feed, { preserveOrder:alreadyComposed });
           feed.dataset.framingPlan = 'global-natural-rows-v1';
           feed.dataset.effectiveAlgorithmId = algorithmId;
           feed.dataset.surface = SURFACE_EVENT_DETAIL_RELATED;

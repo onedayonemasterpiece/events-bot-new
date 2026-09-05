@@ -250,6 +250,12 @@ export interface DiscoveryDisplayPayload {
   image_media_role?: EventImageMediaRole;
   image_width?: number | null;
   image_height?: number | null;
+  safe_crop?: EventImageAsset['safe_crop'];
+  current_pixel_sha256?: EventImageAsset['current_pixel_sha256'];
+  geometry_pixel_sha256?: EventImageAsset['geometry_pixel_sha256'];
+  geometry_status?: EventImageAsset['geometry_status'];
+  geometry_coordinate_space?: EventImageAsset['geometry_coordinate_space'];
+  ocr_boxes?: EventImageAsset['ocr_boxes'];
   focal_y?: number | null;
   display_date: string;
   display_time: string | null;

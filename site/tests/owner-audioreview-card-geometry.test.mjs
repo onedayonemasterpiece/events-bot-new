@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { packRelatedCardRows, planRelatedCardRows, resolveRelatedCardMediaTreatment } from '../src/lib/relatedCardLayout.mjs';
+import { packRelatedCardRows, planRelatedCardRows, relatedCardCropProofPayload, relatedCardMediaFrameBinding, resolveRelatedCardMediaTreatment } from '../src/lib/relatedCardLayout.mjs';
 
 // Synthetic geometry, not a claim about the production snapshot or event 5370.
 // The public geometry injection keeps reviewed-media catalog data out of these
@@ -124,19 +124,64 @@ test('full-pool selection uses later natural buckets before admitting a conflict
   assert.ok(planned.slice(-3).every(({ layout }) => layout.framingStatus === 'unsatisfied'));
 });
 
-test('current normalized OCR boxes authorize only their proven bounded cover', () => {
+test('current normalized OCR boxes authorize only a proven bounded vertical cover', () => {
   const hash = 'a'.repeat(64);
-  const item = publicImage(1, 1000, 1000);
+  const item = publicImage(1, 800, 1000);
   const asset = {
     ...item.image_assets[0], safe_crop:true, geometry_status:'classified', geometry_coordinate_space:'normalized_0_1',
     current_pixel_sha256:hash, geometry_pixel_sha256:hash,
-    ocr_boxes:[{ x:.2, y:.1, w:.6, h:.6 }],
+    ocr_boxes:[{ x:.1, y:.2, w:.8, h:.6 }],
   };
   item.image_assets = [asset];
-  const decision = resolveRelatedCardMediaTreatment(item, .8);
+  const decision = resolveRelatedCardMediaTreatment(item, 1);
   assert.equal(decision.fit, 'cover');
   assert.equal(decision.cropReason, 'protected_text_regions_fit');
   assert.ok(decision.coverCrop > 0 && decision.coverCrop <= .2);
+  assert.equal(decision.cropWindow.x, 0);
+  assert.equal(decision.cropWindow.w, 1);
+  assert.deepEqual(relatedCardMediaFrameBinding(decision), {
+    fit:'cover', objectPosition:decision.objectPosition, cropPermission:'reviewed-bounded',
+  });
+});
+
+test('the same source-bound proof survives discovery serialization; horizontal and stale proof stay closed', () => {
+  const hash = 'b'.repeat(64);
+  const source = {
+    src:'/proof.webp', width:800, height:1000, image_text_mode:'ocr_text', safe_crop:true,
+    geometry_status:'classified', geometry_coordinate_space:'normalized_0_1',
+    current_pixel_sha256:hash, geometry_pixel_sha256:hash,
+    ocr_boxes:[{ x:.1, y:.2, w:.8, h:.6 }],
+  };
+  const runtimeCandidate = { id:1, title:'Serialized proof', display:{
+    image_url:source.src, image_width:source.width, image_height:source.height,
+    image_text_mode:source.image_text_mode, ...relatedCardCropProofPayload(source),
+  }};
+  const accepted = resolveRelatedCardMediaTreatment(runtimeCandidate, 1);
+  assert.equal(accepted.mediaTreatment, 'document-protected-cover');
+  assert.equal(relatedCardMediaFrameBinding(accepted).cropPermission, 'reviewed-bounded');
+  const runtimeFlow = packRelatedCardRows([
+    runtimeCandidate,
+    publicImage(2, 1000, 1000),
+    publicImage(3, 1000, 1000),
+  ], { rowSize:3, presentation:'flow', preserveOrder:true });
+  assert.ok(runtimeFlow.every(({ layout }) => layout.framingStatus === 'satisfied' && layout.rowRatio === 1));
+  assert.equal(runtimeFlow[0].layout.mediaTreatment, 'document-protected-cover');
+
+  const horizontal = { ...source, width:1000 };
+  runtimeCandidate.display = {
+    image_url:horizontal.src, image_width:horizontal.width, image_height:horizontal.height,
+    image_text_mode:horizontal.image_text_mode, ...relatedCardCropProofPayload(horizontal),
+  };
+  assert.equal(resolveRelatedCardMediaTreatment(runtimeCandidate, .8).cropReason, 'document_text_crop_unproven');
+
+  const stale = { ...source, geometry_pixel_sha256:'c'.repeat(64) };
+  runtimeCandidate.display = {
+    image_url:stale.src, image_width:stale.width, image_height:stale.height,
+    image_text_mode:stale.image_text_mode, ...relatedCardCropProofPayload(stale),
+  };
+  const rejected = resolveRelatedCardMediaTreatment(runtimeCandidate, 1);
+  assert.equal(rejected.fit, 'contain');
+  assert.equal(relatedCardMediaFrameBinding(rejected).cropPermission, 'forbidden');
 });
 
 test('Free first public row resolves to its shared 1810x2560 natural frame in stable order', () => {

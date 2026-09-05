@@ -2,6 +2,7 @@ import previewData from '../data/preview-events.json';
 import archivedEventData from '../data/preview-event-archive.json';
 import relatedData from '../data/preview-related.json';
 import { eventImageUrl } from './assets';
+import { relatedCardCropProofPayload } from './relatedCardLayout.mjs';
 import {
   collapseOccurrenceCards,
   formatOccurrencePresentation,
@@ -470,10 +471,11 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     event_type: event.event_type,
     image_url: eventImageUrl(event.image_url),
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
-    image_text_mode: event.image_text_mode,
-    image_media_role: event.image_media_role,
+    image_text_mode: primaryAsset?.image_text_mode || event.image_text_mode,
+    image_media_role: primaryAsset?.media_role || event.image_media_role,
     image_width: primaryAsset?.width || null,
     image_height: primaryAsset?.height || null,
+    ...relatedCardCropProofPayload(primaryAsset),
     focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,
@@ -636,6 +638,12 @@ export interface DiscoveryEventPayloadItem {
   image_media_role?: PreviewEvent['image_media_role'];
   image_width?: number | null;
   image_height?: number | null;
+  safe_crop?: boolean;
+  current_pixel_sha256?: string;
+  geometry_pixel_sha256?: string;
+  geometry_status?: 'classified';
+  geometry_coordinate_space?: 'normalized_0_1';
+  ocr_boxes?: PreviewEvent['ocr_boxes'];
   focal_y?: number | null;
   display_date: string;
   display_time: string | null;
@@ -669,10 +677,11 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     event_type: event.event_type,
     image_url: eventImageUrl(event.image_url),
     image_alt: event.image_alt || `Афиша события «${event.title}»`,
-    image_text_mode: event.image_text_mode,
-    image_media_role: event.image_media_role,
+    image_text_mode: primaryAsset?.image_text_mode || event.image_text_mode,
+    image_media_role: primaryAsset?.media_role || event.image_media_role,
     image_width: primaryAsset?.width || null,
     image_height: primaryAsset?.height || null,
+    ...relatedCardCropProofPayload(primaryAsset),
     focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,
