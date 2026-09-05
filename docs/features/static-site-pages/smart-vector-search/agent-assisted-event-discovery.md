@@ -1,155 +1,171 @@
 # Agent-assisted event discovery — product, architecture and experiment plan
 
-> **Status:** продуктовая концепция и owner corrections зафиксированы; техническая спецификация v1 подготовлена для implementation review. Это не production/runtime PASS и не разрешение включить провайдера.  
-> **Updated:** 5 September 2026.  
-> **Implementation specification:** [voice-search-solution-v1.md](voice-search-solution-v1.md).  
-> **Новое окно ChatGPT по сквозной системе островов:** [20260905-floating-islands-system-design.md](../design-system/window-prompts/20260905-floating-islands-system-design.md).
+> **Статус:** продуктовый контракт и техническая спецификация для проверки перед реализацией. Это не runtime/production PASS и не разрешение включить провайдера.
+> **Обновлено:** 5 сентября 2026 года, включая восстановление связей «Плана релиза».
+> **Техническое решение:** [voice-search-solution-v1.md](voice-search-solution-v1.md).
+> **Сквозные зависимости:** [release-integration.md](../../static-personal-announcements/release-integration.md).
+> **Постановка по островам всего сайта:** [20260905-floating-islands-system-design.md](../design-system/window-prompts/20260905-floating-islands-system-design.md).
 
 ## 0. Owner correction and authority
 
-Этот документ — владелец продуктового поведения разговорного поиска. Технические контракты API, состояния, конкурентность, данные, recovery, числовые defaults и тест-план описаны один раз в дочерней [спецификации v1](voice-search-solution-v1.md), а не в новых хронологических отчётах. Предыдущий [аналитический отчёт](../../../reports/voice-assistant-product-technical-vision-20260905.md) остаётся обоснованием, не текущим нормативным дублем. Детализация редакции `bce0a4a` консолидирована в v1 без отмены принятых ниже правил.
+Этот документ владеет продуктовым поведением разговорного поиска; дочерний v1 — техническими API, данными, состояниями и проверками. Общесистемные правила не копируются в новый независимый поиск. [Предыдущий отчёт](../../../reports/voice-assistant-product-technical-vision-20260905.md) остаётся историческим обоснованием.
 
-| Было в ограничительной трактовке | Принято по уточнению владельца |
+| Ограничительная или неполная трактовка | Принятое направление |
 |---|---|
-| Голос наследует небольшой лимит обычного поиска | Отдельная щедрая load-adaptive product allowance внутри единого provider ledger. Не блокировать полезное использование при свободном разрешённом ресурсе. |
-| На странице не нужен четвёртый остров | Нужна управляемая система: часть шапки, подходящие полки/контекстные заголовки, нижняя навигация, голосовой composer. Нет запрета на несколько островов. |
-| Уточнение заменяет текущую выдачу | Завершённые ответы остаются самостоятельными листаемыми разделами: название, вопрос, полезный ответ, карточки. |
-| Ответ модели всегда одна крошечная фраза | Кратко по умолчанию, раскрываемо при необходимости; фактические ответы про адрес/транспорт полноценны даже без карточек. |
-| Продолжать только обсуждение гипотезы | Теперь нужна документальная проработка решения и отдельное комплексное проектирование островов для всего сайта. |
+| Голос наследует небольшой лимит обычного поиска | Собственная щедрая динамическая allowance внутри общего provider ledger; не запрещать полезную работу при свободной разрешённой ёмкости. |
+| Четвёртый Floating Island нежелателен | Несколько управляемых ролей: часть шапки, полки/контекстные заголовки, нижняя навигация, composer. |
+| Новый ответ заменяет прежнюю выдачу | Завершённые ответы остаются листаемыми разделами с названием, вопросом, пояснением и карточками. |
+| Ответ модели всегда одна короткая фраза | Полезный компактный ответ по умолчанию, раскрываемые детали; factual адрес/транспорт допустимы без карточек. |
+| Пока достаточно обсуждать идеи | Требуются полноценная документация решения и отдельное комплексное проектирование общесайтовой системы. |
+| Голос и острова можно развить отдельно от июльского релиза | Обязательны связи с надёжным транспортом, сбором и интерпретацией статистики, действующей персонализацией и F1–F17. |
 
-Auth-only, provider eligibility/privacy, текущий production Search, shared ownership и release gates не отменены. Числовые defaults из технического документа — инженерные предложения для review, не применённые квоты или уже подтверждённые SLA.
+Auth eligibility, provider/privacy/localization, существующий Search, общие владельцы и release gates сохраняются. Численные настройки v1 — инженерные предложения, не уже применённые квоты или измеренные SLA.
 
-[Canonical Search](README.md) владеет действующим поиском; [personalization ownership](../../../architecture/personalization-data-ownership.md) — identity/profile/consent; [mobile shell](../mobile-shell.md) и LoveKGD Design System — общей оболочкой; [autotest strategy](../../../operations/static-site-autotest-strategy.md) и [реестр сценариев](../../../testing/static-site-autotest-scenarios.v1.yml) — тестовой инфраструктурой. Продуктовый смысл принадлежит events-bot-new, общие visual/component contracts — lovekgd-design-system, Penpot — связанная проекция.
+Единственные владельцы: [Search](README.md); [transport](../../unsigned-personalization/production-integration.md); [Yandex resilience](../../../operations/yandex-dependency-resilience.md); [analytics](../analytics/README.md); [personalization blueprint](../personalizaion/personalization-to-be.md) и его ручные требования; [data ownership](../../../architecture/personalization-data-ownership.md); [product-model](../../../product-model/README.md); [release umbrella](../../static-personal-announcements/README.md); [autotest strategy](../../../operations/static-site-autotest-strategy.md) и [реестр](../../../testing/static-site-autotest-scenarios.v1.yml).
 
-Система островов имеет существующий ID `pattern.detached-chrome-control-islands` и [DS PR #47](https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/47). Новый handoff адресно разделяет проектирование сейчас и последующее baseline-gated внедрение; старое ожидание полного AS-IS не должно запрещать документальную работу. [#621](https://github.com/onedayonemasterpiece/events-bot-new/issues/621) остаётся текущим владельцем нормализации/интеграции и одного опубликованного Kaggle Preview. Ни этот документ, ни handoff не объявляют нормализацию завершённой и не разрешают незаметный redesign проверяемого AS-IS.
+Продуктовый смысл находится в events-bot-new, общие visual/component contracts — в lovekgd-design-system, Penpot — связанная проекция. Existing pattern `pattern.detached-chrome-control-islands` в [DS #47](https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/47) не переименовывается во второй паттерн. [#621](https://github.com/onedayonemasterpiece/events-bot-new/issues/621) сохраняет владение нормализацией и одним Kaggle published-preview path. Документальная работа разрешена сейчас; внедрение и A=S=P claims требуют baseline целевых consumers, не выдуманного общего PASS.
 
 ## 1. Product hypothesis
 
-Разговорный поиск помогает выразить желание без знания категорий и фильтров: «вечером, с ребёнком, бесплатно, не концерт» → подходящие события → уточнение без повторения всего запроса. Это дополнительный способ поиска по тому же Event Corpus, не универсальный чат и не замена полезной ленты.
+Разговорный поиск помогает выразить желание без знания фильтров: «вечером, с ребёнком, бесплатно, не концерт» → подходящие события → уточнение без повторения всей фразы. Это дополнительный discovery-режим по тому же Event Corpus, не универсальный чат и не замена полезной афиши.
 
-Ценность: multi-constraint input, постепенное уточнение, понятное объяснение совпадений, спасение неуспешного поиска, возврат к прежним вариантам, factual location/transport answers. Риски: утомительные вопросы, выдуманные факты, бесполезные модельные вызовы, потеря контекста, неограниченно растущий DOM и перекрытый островами контент. Их закрывают конкретные контракты v1, не произвольное урезание функции.
+Пользовательский outcome — быстро найти подходящее событие и достаточно сведений для решения. Outcome владельца — уменьшение пустых сессий и возвращение пользователей за новым выбором при приемлемой стоимости. Количество реплик с ИИ не является успехом.
+
+Риски: утомительное уточнение, выдуманные факты, потеря речи/контекста, бесполезные расходы, перекрытые CTA, растущая история и невоспроизводимая статистика. Их закрывают конкретные контракты, а не произвольное ограничение функции.
 
 ## 2. Initial rollout decision: rescue first, voice is an input mode
 
-Не заменять основной Search без доказательства полезности. Начальный assistant experiment — нулевая/неудачная выдача, повторные переформулировки или явное «Помочь подобрать». При этом добровольный голосовой ввод в поиске не требует обязательно сначала потерпеть неудачу: modality и eligibility разговорного эксперимента — разные настройки.
+Не заменять основной поиск без доказательства пользы. Начальный разговорный эксперимент помогает после нулевого/неудачного результата, повторных переформулировок либо явного «Помочь подобрать». Добровольный голосовой ввод не требует сначала потерпеть неудачу: modality и eligibility эксперимента — разные настройки.
 
-Гость не запускает cost-bearing операции; вход не делает autosubmit. Обычная лента/фильтры и возврат из assistant всегда доступны в пределах фактических backend capabilities.
+Гость не запускает cost-bearing поиск, вход не делает autosubmit. Анонимная Auth-сессия фокус-группы не является автоматически подтверждённой identity для любых функций. Classic listing/filter fallback остаётся доступным в пределах фактических возможностей системы.
 
 ## 3. Architecture decision
 
-Сайт вызывает свои типизированные domain operations через существующие Auth/transport semantics. MCP — будущий внешний адаптер, не обязательный hot path. Выбран небольшой самостоятельный first-party voice service с durable receipts, ordered processing, общей Search domain и Supabase. Размещение Devstand не означает вызов coding agent на каждый запрос; Fly остаётся thin.
+Сайт использует свои ограниченные domain operations через существующие Auth и транспорт. MCP — внешний адаптер, не обязательная зависимость пользовательского пути. Выбран небольшой voice service с durable receipts, упорядоченной обработкой и общей Search domain; Devstand означает обычный сервис, не вызов кодового агента. Fly остаётся thin.
 
-Новые HTTP interfaces и места source integration описаны в [v1 §2–6](voice-search-solution-v1.md#2-прочитанная-база-и-точные-места-интеграции). Нельзя просто вставить длинный transcript в legacy поле 180 символов, копировать retrieval, профили, карточки или Google ledger. Существующий Search wire contract сохраняется. Admin/Smart Update endpoints публичному ассистенту не выдаются.
+Восстановлены два независимых направления: product/Auth/Search → Supabase напрямую или через Yandex relay; optional analytics → Yandex ingest напрямую или через Supabase Edge blind bridge. Это не резервные копии БД. Proxy 200 не доказывает downstream commit, второй маршрут не лечит тот же упавший upstream, ошибка telemetry не портит здоровье product route.
+
+Voice control и media отдельно регистрируются в общем каталоге с проверенными маршрутами, caps и retry semantics. Старые 180 символов и новые большие audio blobs не проталкиваются в существующий endpoint молча. Предел gateway не означает предел человеческой мысли: технические части аудио имеют общую identity и не считаются новыми поисками. Точная реализация — в v1; новый транспорт, индекс, профиль или limiter не создаётся параллельно.
 
 ## 4. Model role and elastic resource policy
 
-Используется owner-approved Lite policy; конкретную модель разрешает текущий registry/capability check. Не наследовать скрыто Flash/Pro/Gemma fallback. Embedding остаётся существующей отдельной Search policy и учитывается отдельно.
+Разрешённая Lite policy определяется текущим registry/capability check, без скрытого Flash/Pro/Gemma escalation. Embedding — отдельная существующая Search policy и отдельный фактический расход.
 
-Один Lite call на простой ход — цель эффективности, не обязательный предел. Когда нужно сначала понять аудио, потом получить события и объяснить найденное, допустим bounded presenter после retrieval. Модель до retrieval не может описывать неизвестные результаты. Не дублировать existing verifier/presenter ещё одним writer; title сам по себе не требует отдельной генерации.
+Один Lite-вызов на простой ход — ориентир, не безусловный предел. После понимания аудио и получения данных может потребоваться bounded presenter. Модель не описывает результаты, которых ещё не видела. Заголовок не требует отдельного вызова; existing verifier/presenter не дублируется.
 
-Разделять provider hard limits/spend, динамическую voice product allowance и технические bytes/duration/queue ceilings. Всё реальное проходит reserve→mark_sent→provider→finalize. Свободный ресурс допускает bursts/borrowing; pressure сначала уменьшает ненужную работу и допустимый discretionary batch. Fair queue сохраняет доступ новым пользователям, hysteresis предотвращает мигание статуса. Accepted utterances не пропадают при смене политики; sent/unknown отмена не превращается в unsent refund. Дубликаты/транспортные части не являются новыми пользовательскими вопросами.
-
-Политика, metering, telemetry и absence-of-limiter behavior конкретизированы в [v1 §11–12](voice-search-solution-v1.md#11-ресурсная-политика-и-egress). Публичный CDN status не раскрывает personal allowance и не даёт права обойти server admission.
+Разделены provider hard limits/spend, динамическая voice allowance и технические limits тела/очереди. Каждая реальная попытка проходит reserve→mark_sent→provider→finalize. Свободная ёмкость допускает bursts/borrowing, pressure сначала сокращает лишнюю работу и допустимые пакетные тесты. Fair queue и hysteresis сохраняют вход новым пользователям и устойчивый UX. Принятые реплики не исчезают при смене policy. Sent/unknown отмена не считается unsent refund. Цель — стоимость полезного результата, а не минимальное число обращений любой ценой.
 
 ## 5. Search-first, clarify-second interaction
 
-Искать по уже известным условиям и показывать полезные кандидаты до длинного опросника. Небольшая первая страница карточек — presentation default, не ограничение всей выборки. «Показать ещё» принадлежит конкретному разделу.
+По известным условиям искать сразу, не начинать обязательный длинный опрос. Первая порция карточек — presentation default, не размер всей выборки. Пагинация принадлежит своему answer section.
 
-Уточнение обязательно только при существенной неоднозначности. Hard constraints не ослабляются молча, unknown price не считается free, альтернативы явно обозначены. Подстановка поискового примера и переход в готовую подборку различаются; типовая фильтрованная выборка не превращается в набор случайных служебных блоков.
+Спрашивать только о существенной неоднозначности. Hard constraints не ослабляются молча; unknown price не free; альтернативы явно названы. Подстановка примера и переход в готовую подборку различаются. Обычная выборка «Бесплатно» не превращается в набор произвольных служебных блоков.
 
 ## 6. Compact conversation state and answer history
 
-Хранить structured intent, происхождение условий, правильные временные anchors, исключения и небольшой хвост речи; не бесконечный transcript в prompt. Отдельно существуют active task, листаемая история и постоянные предпочтения. «С ребёнком сегодня» не становится пожизненным свойством профиля.
+Structured intent, временные anchors, исключения и небольшой хвост речи отделены от видимой истории и постоянного профиля. «С ребёнком сегодня» не становится пожизненным свойством пользователя. Новая беседа не создаёт новую analytics session или profile автоматически.
 
-Capture не блокируется ожидающей сетью. Реплики durable/ordered/idempotent; догон до публикации может уточнять один draft. Atomic section commit — чёткая граница: уже завершённый ответ immutable, следующая реплика создаёт новый раздел. Поздний ответ не перезаписывает свежий, но исходная речь не выбрасывается вместе с отменой retrieval.
+Capture продолжается при ожидающей сети. Durable ordered реплики и атомарные версии защищают от пропусков/дублей. Догон до section commit может уточнить один draft; после commit создаётся новый раздел. Подавляется устаревшая выдача, не исходная речь. Client abort не доказывает отмену провайдера, unknown dispatch не переигрывается вслепую.
 
-Просматриваемый раздел, выбранная база уточнения и pending draft — разные поля. Scroll не меняет target. Явное «Уточнить эту подборку» выбирает старый section; новый ответ добавляется в конец с parent-ссылкой. «Второе событие» связано с реально referenced result set. «Из них» работает по логической parent selection, а не только первому экрану; расширение запроса и refresh устаревшего snapshot обозначаются отдельно.
+Просмотр, база уточнения и pending draft — разные состояния. Прокрутка не меняет target; «Уточнить эту подборку» выбирает старый раздел и создаёт новый в конце с parent. «Второе» привязано к referenced result set. «Из них» относится ко всей логической выборке, не первому экрану. Расширение/обновление истёкшего snapshot обозначается отдельно.
 
-В [v1 §4–7 и §10](voice-search-solution-v1.md#4-доменная-модель) заданы поля, race/crash semantics, ownership, membership, TTL и deletion. Forgetting implicit context не означает незаметного стирания видимой истории; отображение истории не реактивирует expired условия. Logout/delete изолируют identity и late callbacks. Сроки 30 минут/7 суток — proposed configurable defaults, не уже утверждённые ограничения.
+Неизменяемая история решения не возвращает скрытые события. Global exact hide/undo и актуальные lifecycle/facts применяются и к прошлым sections. Видимый префикс/текущая карточка не прыгают при arrival новой profile revision; изменение профиля не переписывает прошлую прозу. Пересчёт интересов и выдача новой проекции принадлежат общему materializer.
+
+Сроки v1 и очистка — отдельные проверяемые настройки. Истечение implicit context не стирает видимую историю тайно; чтение старого ответа не реактивирует истёкшие ограничения. Logout/reset/delete и identity isolation описаны в v1 без смешивания их смыслов.
 
 ## 7. Typed response and grounded content
 
-Модель возвращает закрытые semantic blocks; host проверяет ID, источник и структуру. Event title/date/price/image/address/action URL/social proof/medallions берутся из canonical projections. Prose проходит те же factual boundaries, что карточка; валидный JSON сам по себе не доказывает правду.
+Host проверяет закрытые semantic blocks, IDs и фактические поля. Title/date/price/image/address/action URL/social proof/medallions — из canonical projections. Текст проходит те же factual boundaries, что карточки; JSON schema сама по себе не truth proof.
 
-Название выборки происходит из effective constraints: «Бесплатные события» → «Бесплатные события на побережье». Исходный вопрос остаётся отдельно. Без arbitrary HTML, executable Markdown и model-authored navigation URLs. Допустим безопасный текст с абзацами/выделением/короткими списками. Ошибочная генерация даёт честный degraded fallback, не invented facts.
+Название отражает проверенные effective constraints: «Бесплатные события» → «Бесплатные события на побережье». Исходный вопрос остаётся отдельно. Не использовать arbitrary HTML, исполняемый Markdown и model-authored action URLs. Невалидная генерация даёт честный degraded fallback, а не придуманный ответ.
 
 ## 8. UI composition: scrollable answers and a coordinated island system
 
-Разговор — вертикальная лента самостоятельных результатов:
-
 ```text
 Бесплатные события
-  исходный вопрос → полезное пояснение → EventCards → Показать ещё
+  Вопрос → полезное пояснение → общие карточки → Показать ещё
 
 Бесплатные события на побережье
-  исходный вопрос → уточнённый ответ → EventCards → Показать ещё
+  Вопрос → уточнённый ответ → общие карточки → Показать ещё
 
 Как добраться до выбранной площадки?
-  вопрос → factual explanation/map actions, без фиктивной пустой grid
+  Вопрос → factual explanation / map actions, без фиктивной пустой grid
 ```
 
-Обычный ответ — несколько полезных предложений; детали раскрываются, а не прячутся нечитаемым шрифтом. Важная оговорка/неизвестность не скрывается ради короткого текста. Длинный user query раскрывается без truncation.
+Обычно достаточно нескольких полезных предложений и раскрытия деталей. Важная оговорка не прячется ради короткого текста; длинный вопрос не обрезается молча и не становится нечитаемым мелким шрифтом.
 
-Section heading идёт в потоке, затем становится компактным sticky island в границах своего раздела; следующий заголовок заменяет его, прокрутка вверх возвращает предыдущий. Не накапливать исторические шапки, не дублировать доступный heading и не pin весь ответ.
+Заголовок идёт в потоке, закрепляется в пределах своего раздела и уступает место следующему. Обратная прокрутка возвращает предыдущий. Не складывать историю заголовков в верхний стек и не закреплять весь ответ. Semantic heading один.
 
-Явный submit показывает новую границу/заголовок один раз. Если пользователь затем читает историю, поздний ответ не перехватывает scroll: «Новый ответ ↓». Back, поздние изображения, раскрытие текста и пагинация старого ответа сохраняют anchor. Не перехватывать стрелки поверх native text editing.
+Explicit submit показывает новый heading один раз. Если пользователь затем читает историю, поздний ответ не перехватывает прокрутку; есть «Новый ответ ↓». Изображения, раскрытия, старая пагинация и Back сохраняют anchor. Native text editing не ломается отдельным перехватом стрелок.
 
-Островов несколько: partial header, single-shelf/answer context, bottom navigation, composer. Appearance не равен fixed positioning. Один shared layout owner задаёт measured occupied space, gaps/safe areas/keyboard/layers/expanded policy; никаких независимых top/bottom/magic z-index. Различать surface primitive, composition, control semantics и runtime behavior; не создавать universal pill/window manager или вторую оболочку. Drawer/modal/toast/focus precedence согласованы с существующими consumers. Stop-recording и последний CTA доступны, touch target не уезжает, невидимый screen-sized hit plane запрещён.
+Островов несколько; один shared layout owner управляет occupied rectangles, gaps, safe areas, keyboard, слоями и раскрытием. Surface primitive, composition, control semantics и runtime раздельны. Composer не заменяет общий shell; без magic z-index, full-screen invisible hit plane, уезжающего stop и закрытого последнего CTA. Existing drawer/modal/toast имеют согласованный приоритет.
 
-Полная сквозная система проектируется в отдельном [окне Floating Island](../design-system/window-prompts/20260905-floating-islands-system-design.md). Конкретный Search→Shell adapter и capture/status/scroll implementation — [v1 §8–9](voice-search-solution-v1.md#8-capture-и-пользовательские-состояния). Voice не захватывает владение общей оболочкой сайта.
+Та же геометрия нужна не только красоте: для below-viewport rerank, точной card exposure и сверки actual served list. Flow→sticky одной шапки не новый page view. Повтор карточки в разных sections не новый уникальный event в общей метрике. Shared layout сообщает геометрию, а не собирает raw pointer/keystroke поток.
 
-Capture и processing независимы, статусы соответствуют реально известной стадии. JSON indeterminate progress допустим; fake percent/притворная ASR-транскрипция нет. Expiring CDN manifest не создаёт per-tab backend ping; outage не удаляет уже активный composer/контекст.
+Capture и processing независимы. Status соответствует реально известному этапу; JSON indeterminate progress допустим, fake percent нет. Availability manifest не personal admission и не причина постоянного direct polling. Outage не стирает active composer.
 
-A=S=P означает общий corpus, versioned dependencies и UI-state/viewport fixtures для Astro, Git SoT и native Penpot. Статический board доказывает заявленное визуальное состояние, не network race или физический микрофон. Owner review и опубликованный Preview сохраняют единый Kaggle path #621; локальный mock не получает их credit.
+A=S=P использует один corpus, sanitized synthetic profile/activation/consent/state, viewport и versioned components. Private profiles не экспортируются в Penpot. Статический board не доказывает network race или microphone quality. Текущий #621 сохраняет один Kaggle published-preview путь; local mock не получает owner-review credit.
 
 ## 9. Location, address and transport answers
 
-`explanation` и `mixed` — полноценные результаты. Достоверный адрес или существующее описание проезда можно дать без ожидания идеального геокаталога. Location directory остаётся единственным владельцем canonical identities/coordinates/map actions; trusted interim projection не становится второй БД.
+Пояснение без карточек — полноценный ответ. Достоверный адрес или существующее описание проезда не ждут идеального геокаталога. Location directory остаётся владельцем identities/coordinates/map actions; interim projection не становится второй БД.
 
-Различать расстояние от места, straight-line, маршрут и длительность пути. Нет invented timetable/route time из общих знаний модели; неизвестность явно сообщается. «Рядом со мной» требует отдельного permission/privacy flow. Произвольный интернет-поиск не включён в обычный Search.
+Расстояние по прямой, маршрут, расписание и длительность пути различаются. Неизвестные значения не выводятся из общих знаний модели. «Рядом со мной» имеет отдельный permission/privacy flow; unrestricted web search не включён. Старые июльские timetable fixtures не считаются текущим расписанием.
 
 ## 10. Social proof, medallions and source recommendations
 
-Initial comparison сохраняет ту же карточку/корпус/факты, чтобы проверить разговорный слой. Compact cards, organizer/venue medallions, editorial evidence, behavioral proof и richer maps — отдельные позднейшие эксперименты, а не одновременно новый дизайн всего продукта.
+Initial experiment сохраняет сравнимые карточки/корпус/факты. Compact cards, медальоны, editorial evidence, social proof и карты — отдельные последующие изменения.
 
-Запрос «Что рекомендует Культурная чайка?» — будущий подтверждённый source filter, не имитация вкусов человека. Mention/advertisement/endorsement различаются; отсутствующие рекомендации не выдумываются. Canonical source/medallion evidence переиспользуется, новый ручной список одобрений не создаётся.
+«Что рекомендует Культурная чайка?» — evidence-backed source filter, не имитация вкусов. Mention, advertisement и endorsement не тождественны. Отсутствующие подтверждения не выдумываются, новый ручной каталог одобрений не создаётся.
 
 ## 11. Product experiment sequence
 
-A: rescue неуспешного Search с прежним corpus, classic fallback, matched/missed outcome и общей динамической policy. B: добровольный hybrid с ясностью, что оба режима ищут по одному каталогу. C: randomized primary presentation после доказательства пользы с сопоставимыми retrieval/card/actions. D: отдельно location/identity/compact-card enhancements.
+A — rescue неудачного Search; B — добровольный hybrid; C — проверка основного presentation после доказательства пользы; D — отдельно location/identity/compact enhancements. Лента ответов — принятая форма conversational mode, не эксперимент с максимизацией числа реплик.
 
-Лента ответов — принятая форма разговорного режима. Эксперименты измеряют её пользу, а не считают каждую новую ИИ-реплику успехом. Маленький искусственный cap не подменяет cost guardrails.
+Eligible population, exposure, corpus/profile/model/policy versions, denominator и guardrails определяются до сравнения. Добровольный выбор голоса или «Для меня» создаёт selection bias; простое сравнение со всеми не доказывает uplift. Адаптивные ограничения и отказанные opportunities видны в readout, а не исчезают из denominator для улучшения отчёта.
 
 ## 12. Measurement
 
-Основные existing outcomes: event_value_reached_rate, event_intent_action_rate, cards_to_first_event_value, time_to_first_event_value, matched/missed, abandonment. Дополнительные: rescue success, turns to value, clarification-without-result, accepted refinement, возврат/уточнение старой выборки, assistant→classic switch, lost/duplicate utterances и stale applied results, невольный scroll jump, schema/factual fallback, p50/p95 latency/queue, calls/tokens/audio seconds/egress на успешный выбор.
+Общие `event_value_reached_rate`, `event_intent_action_rate`, cards/time-to-first-value и определения actors/sessions наследуются из Analytics. Они не переименовываются и не переопределяются внутри voice.
 
-Adaptive policy измеряет также зря простаивающую разрешённую ёмкость при заблокированном пользователе, oscillation и starvation новых пользователей. Не логировать raw queries/audio/identity в общей или публичной аналитике. Не оптимизировать низкий расход сам по себе ценой деградации поиска.
+Обязательные вопросы: помогает ли голос найти событие; полезны ли уточнения; не мешают ли острова CTA/чтению; улучшает ли профиль результат; не теряются ли действие и его статистическое подтверждение. На каждый нужен зарегистрированный факт, источник, consent/purpose, denominator, воспроизводимый query/readout, ограничения и конкретное решение владельца. Детальная матрица — в v1 §12 и release-integration, а не второй реестр метрик.
+
+Путь измерения: реальное событие → правильный класс данных → primary/sink receipt → агрегат → проверенный отчёт → finding/decision/follow-up. Browser intent, primary commit и analytics projection — разные состояния. Proxy HTTP 200 и `/general_stats` не доказывают закрытия этой цепочки.
+
+Strong actions считаются по authoritative store; weak visibility/depth/hints — consented bounded summaries; reliability/usage — отдельный operational evidence. Общие budgets/outbox/deduplication сохраняются. Без optional analytics consent продукт и допустимая персонализация работают; analytics не активирует и не обучает профиль произвольным join. Raw query/audio/LLM response/profile/tokens/precise coordinates не уходят в общий поток.
+
+Repeated sections не умножают unique-card depth; rendered не равно seen; фокус и перекрытия учитываются. Save/calendar один durable state, ICS export не внешний import, click не покупка/посещение. Test/preview/synthetic actors исключены. Missing data — coverage gap/INSUFFICIENT_DATA, не ноль. Product Atlas получает reviewed aggregate evidence, не raw stream. Optional action map сохраняет настоящий zero-cost OFF.
 
 ## 13. Acceptance thresholds
 
-Числовые quality/latency/load thresholds фиксируются после измеренного baseline. Требуется рост discovery/intent success, либо сопоставимый успех с меньшими временем/просмотром, либо содержательное rescue failed sessions. Guardrails factuality/privacy/quota/accessibility обязательны.
+Численные quality/latency/load thresholds определяются по измеренному baseline. Цель — лучшее обнаружение/намерение, сопоставимый результат с меньшими временем/просмотром либо meaningful rescue. Сохраняются diversity, accessibility, privacy и ресурсные guards.
 
-В acceptance нет допустимых выдуманных Event/location/map actions, незаметного применения устаревшего результата или потери принятых реплик. Synthetic-only corpus не доказывает human usability. Пропуск live testing из-за бюджета/политики не quality PASS.
+В тестах недопустимы выдуманные IDs/actions, потеря принятых реплик, применение устаревшей выдачи, дубли primary effects и возврат exact hides. Synthetic-only корпус не доказывает человеческую usability. Пропущенный live test не quality PASS; красивые screenshots не полный release verdict.
 
 ## 14. MCP and storage boundaries
 
-External MCP adapter использует те же domain services, canonical IDs/revisions и bounded results; никаких arbitrary SQL/network/provider tools. Feedback/save/calendar/profile/subscription — отдельные typed commands с existing Auth/consent/idempotency. Никакого нового profile/email control plane, history vector index, event copy или quota ledger. `my-data-hub.operation.get` не считается доступным site-user receipt без отдельного contract.
+External MCP использует те же ограниченные domain services. Никаких arbitrary SQL/network/provider tools. Durable actions и изменения профиля используют прежние Auth/activation/consent/idempotency paths. Не создавать новый profile/email control plane, history vector index, raw analytics в Supabase или второй Google ledger.
+
+По accepted personalization blueprint активация — осмысленное разрешённое действие, не generic checkbox и не простой voice query. Purpose consents независимы. Immediate explicit state и materialized profile разделены; shared store и localization gate не меняются молча из-за нового интерфейса. Analytics actor не определяется беседой или сырым профилем.
 
 ## 15. Explicit non-goals
 
-Не строить general chatbot, autonomous purchase, бессрочную raw history, гарантированное background listening, unrestricted research, multi-agent planner или hidden provider escalation. Не выдумывать coordinates/route time/popularity. Эти границы не запрещают полезный подробный ответ, совместные острова, щедрую беседу или доступную историю в её retention policy.
+Не строить general chatbot, autonomous purchases, бесконечную raw history, гарантированное background listening, unrestricted research, multi-agent planner или hidden provider escalation. Не изобретать coordinates/route times/popularity. Не включать always-on action map, не использовать raw analytics как скрытый источник профиля.
+
+Эти ограничения не запрещают полезный развёрнутый ответ, несколько островов, щедрый разговор и доступную историю в её retention policy. Надёжность не достигается постоянным урезанием функции, но и не доказывается обходом лимита через другой маршрут.
 
 ## 16. Delivery and executable-test plan
 
-Исполняемые пакеты A–E, точные места интеграции и 32 stable proposed сценария Given/When/Then находятся в [v1 §14–16](voice-search-solution-v1.md#14-пакеты-реализации-и-границы-записи). До реализации это test design, не пройденные автотесты.
+V1 §14–16 задаёт пакеты A–E, 32 предложенных voice-сценария и их связь с общими seam tests из release-integration. Пока это проект проверок, не число выполненных тестов. Existing scenario registry/CI остаются единственными исполнителями.
 
-ChatGPT выполняет product/schema/state/policy/fixture работу лично. Кодовый агент интегрирует real endpoints, SQL/CAS/recovery, Media capture, actual shared-shell APIs и прогоняет DB/browser/race/mobile tests. Текущие #621 family owners ведут общесистемный UI/SoT/Penpot; source-only voice core может идти параллельно и работать inline без канонизации временного острова.
+ChatGPT делает product/schema/state/policy/fixture и measurement-oracle работу; кодовый агент интегрирует реальные endpoints, DB/CAS/receipts, транспорт, limiter, capture и browser/fault tests. Общие UI/SoT/Penpot принадлежат действующим family owners #621. Pure voice core может работать inline и развиваться параллельно, не создавая временный второй floating shell.
 
-Расширяется existing scenario registry/CI/Search health, не второй framework. PR lane — provider mocks, real browser capture и изолированная test DB. Protected live lane проверяет настоящий разрешённый ASR/retrieval через общий limiter. L2/L3 не подменяются viewport emulation; self-hosted runners не добавляются.
+Первый полезный вертикальный срез: поиск бесплатно → уточнение побережья → hide → другая подборка без возврата скрытого → primary receipt и разрешённая статистика до воспроизводимого readout. Аналитика выключена или YDB недоступна — product path остаётся корректным. Расширение не отменяет F1–F17, source freshness, primary actions и release guards.
 
-Qwen CPU baseline переиспользуется для заранее созданного versioned acoustic corpus. Expected meaning размечается независимо; сохраняются hashes, notebook/source/model versions, consent и event corpus. No TTS generation per PR, no реальный голос в public artifact без разрешения. Deep canary, холодный ASR и cache smoke различаются.
+GitHub-hosted PR lane использует provider mocks, настоящий browser capture, HTTP fault server и test DB; protected live — реальный разрешённый ASR через общий limiter. Qwen CPU заранее создаёт immutable audio fixtures с независимой разметкой и exact hashes. Не генерировать корпус на каждый PR, не загрязнять им product stats. L2/L3 не заменяются viewport emulation; self-hosted runners не добавляются.
 
 ## 17. Closure criterion
 
-Документальная проработка завершена, когда независимый исполнитель может реализовать поведение из конкретных контрактов без повторного концептуального аудита. Runtime готов к ограниченному пользовательскому эксперименту только после реализации, актуальных bindings и требуемых тестов: canonical facts/actions, existing Auth/transport/ledger, сохранённый последовательный догон, листаемая история, явная база уточнения, общий island layout, полезные factual answers и наблюдаемый discovery outcome. Markdown/commit/schema check не равны реализации, live acceptance или owner visual approval.
+Документальная готовность означает, что исполнитель понимает совместимые данные, API, states, transport, profile, measurement и критерии без нового концептуального аудита. Runtime готовность требует реализации, фактических bindings и нужных тестов; deployed и measured состояния подтверждаются отдельно.
+
+Итоговый продукт сохраняет canonical facts/actions, общий Auth/transport/ledger, последовательный догон, историю, явную базу уточнения, глобальные скрытия и неподвижный видимый контент. Общая система островов не мешает чтению, статистика объясняет результат, а подтверждённые действия участвуют в существующей персонализации. Markdown, commit, schema check, screenshot и model response не заменяют всю эту цепочку.
