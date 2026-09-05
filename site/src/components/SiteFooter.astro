@@ -102,7 +102,7 @@ const { socialLinks } = Astro.props;
   .site-footer--service-v1 {
     overflow: hidden;
     border-top: 0;
-    padding: var(--ke-footer-padding-top) 0 var(--ke-footer-padding-bottom);
+    padding: var(--ke-footer-padding-top) 0 calc(var(--ke-footer-padding-bottom) + var(--ke-lower-surface-offset, 0px) + 24px);
     background: var(--ke-color-footer-surface);
     color: var(--ke-color-footer-copy);
   }

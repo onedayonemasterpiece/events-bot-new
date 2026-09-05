@@ -30,15 +30,19 @@ test('mobile menu keeps its 120 by 84 leather tag and removes only the rejected 
   }
 });
 
-test('prelaunch scroll lock is isolated and desktop island reserve does not create a blank footer tail', async () => {
-  const [prelaunch, foundations] = await Promise.all([
+test('prelaunch scroll lock is isolated and footer keeps the four-destination dock clear without a blank tail', async () => {
+  const [prelaunch, foundations, footer, nav] = await Promise.all([
     read('src/layouts/PrelaunchLayout.astro'),
     read('src/components/design-system/shell-foundations.css'),
+    read('src/components/SiteFooter.astro'),
+    read('src/components/MobileBottomNav.astro'),
   ]);
 
   assert.match(prelaunch, /<html lang="ru-RU" class="prelaunch-document">/u);
   assert.match(prelaunch, /body\[data-ds-family="PrelaunchLayout"\] \{[\s\S]*overflow: hidden;/u);
   assert.doesNotMatch(prelaunch, /\n      body \{[\s\S]*?overflow: hidden;/u);
-  assert.match(foundations, /@media \(max-width: 759px\) \{[\s\S]*body\[data-primary-island="true"\] \{[\s\S]*padding-bottom:/u);
-  assert.match(foundations, /@media \(min-width: 760px\) \{[\s\S]*body \.mobile-bottom-nav \{ display: none; \}/u);
+  assert.doesNotMatch(foundations, /body\[data-primary-island="true"\] \{[\s\S]*padding-bottom:/u);
+  assert.doesNotMatch(foundations, /mobile-bottom-nav \{ display: none; \}/u);
+  assert.match(footer, /padding: var\(--ke-footer-padding-top\) 0 calc\(var\(--ke-footer-padding-bottom\) \+ var\(--ke-lower-surface-offset, 0px\) \+ 24px\);/u);
+  for (const destination of ['Афиша', 'Даты', 'Поиск', 'Для меня']) assert.match(nav, new RegExp(`label: '${destination}'`, 'u'));
 });

@@ -231,16 +231,8 @@ body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__n
   box-shadow: none;
 }
 
-/* AR-18 structural island; reserve space only where the mobile dock is painted.
-   Desktop keeps the footer flush with the document end. */
-@media (max-width: 759px) {
-  body[data-primary-island="true"] {
-    padding-bottom: calc(var(--ke-lower-surface-offset, var(--mobile-bottom-stack-h)) + 24px);
-  }
-}
-@media (min-width: 760px) {
-  body .mobile-bottom-nav { display: none; }
-}
+/* AR-18 structural island: the footer owns clearance for the persistent dock,
+   so the document never ends in an unpainted reserve. */
 body[data-primary-island="true"] .mobile-sticky-cta {
   bottom: calc(var(--ke-lower-nav-offset, var(--mobile-bottom-stack-h)) + 8px);
   left: 12px;
