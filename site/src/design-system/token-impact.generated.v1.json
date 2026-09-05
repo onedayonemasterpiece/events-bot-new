@@ -5,13 +5,13 @@
   "registry_version": "1.0.0",
   "registry_sha256": "4f991aff77086abe5e2c3027beb6b2050b9492c73d3ab624053b56087eb1e35a",
   "source_root": "site/src",
-  "source_inventory_sha256": "b1be4af0a789765fdd4cab8b761abd9871a99e903383122c8365c8a0cbd071a1",
+  "source_inventory_sha256": "f5622e9217cf85f2e828d5b8c4fb344cf3c484b296e6e35d7a36b89e4bae77a3",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "c5cfad546061e62a1411be746c4372bbea44b2c7d5930fa05e6060e076f561fb",
+  "astro_family_graph_sha256": "069a2dda7bfa392527026019f8e10afb26ab283dc0b151dbf3118b3f549c8ec2",
   "summary": {
-    "token_count": 2534,
-    "definition_count": 2844,
-    "consumer_count": 3602,
+    "token_count": 2535,
+    "definition_count": 2846,
+    "consumer_count": 3603,
     "alias_edge_count": 895,
     "family_count": 109
   },
@@ -61852,7 +61852,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 410,
+          "line": 463,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"1\"]",
           "kind": "css",
           "value": "1",
@@ -61861,7 +61861,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 411,
+          "line": 464,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"2\"]",
           "kind": "css",
           "value": "2",
@@ -61870,7 +61870,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 412,
+          "line": 465,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"3\"]",
           "kind": "css",
           "value": "3",
@@ -61879,7 +61879,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 413,
+          "line": 466,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"4\"]",
           "kind": "css",
           "value": "4",
@@ -61888,7 +61888,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 414,
+          "line": 467,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"5\"]",
           "kind": "css",
           "value": "5",
@@ -61897,7 +61897,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 415,
+          "line": 468,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"6\"]",
           "kind": "css",
           "value": "6",
@@ -61906,7 +61906,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 468,
+          "line": 521,
           "scope": "@media (max-width: 1023px) > .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size]",
           "kind": "css",
           "value": "1",
@@ -61915,7 +61915,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 479,
+          "line": 532,
           "scope": "@media (max-width: 960px) > .adaptive-event-card-grid--responsive-progressive:is( [data-adaptive-grid-row-size=\"3\"], [data-adaptive-grid-row-size=\"4\"], [data-adaptive-grid-row-size=\"5\"], [data-adaptive-grid-row-size=\"6\"] )",
           "kind": "css",
           "value": "2",
@@ -61924,7 +61924,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 485,
+          "line": 538,
           "scope": "@media (max-width: 620px) > .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size]",
           "kind": "css",
           "value": "1",
@@ -61938,7 +61938,7 @@
         {
           "token": "--adaptive-event-card-columns",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 396,
+          "line": 449,
           "has_fallback": true
         }
       ],
@@ -61950,7 +61950,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 391,
+          "line": 444,
           "scope": "</script> <style> .cards-grid.adaptive-event-card-grid",
           "kind": "css",
           "value": "clamp(.85rem, 1.6vw, 1.25rem)",
@@ -61964,7 +61964,7 @@
         {
           "token": "--adaptive-event-card-gap",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 397,
+          "line": 450,
           "has_fallback": false
         }
       ],
@@ -61976,7 +61976,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 352,
+          "line": 322,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61990,7 +61990,7 @@
         {
           "token": "--adaptive-flow-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 424,
+          "line": 477,
           "has_fallback": false
         }
       ],
@@ -62524,7 +62524,7 @@
       "definitions": [
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 126,
+          "line": 125,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${focalOffset",
@@ -62533,7 +62533,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4760,
+          "line": 4778,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62552,7 +62552,7 @@
       "definitions": [
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 126,
+          "line": 125,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${focalY",
@@ -62561,7 +62561,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4759,
+          "line": 4777,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -63245,7 +63245,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6097,
+          "line": 6121,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -64076,7 +64076,7 @@
       "definitions": [
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 127,
+          "line": 126,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio",
@@ -64085,7 +64085,7 @@
         },
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 130,
+          "line": 129,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -64094,7 +64094,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4758,
+          "line": 4776,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -64103,7 +64103,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4795,
+          "line": 4813,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -64112,7 +64112,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4840,
+          "line": 4862,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -65091,7 +65091,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6053,
+          "line": 6077,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -65117,7 +65117,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6051,
+          "line": 6075,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -65143,7 +65143,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6050,
+          "line": 6074,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175030,11 +175030,37 @@
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
     },
+    "--lab-media-ratio": {
+      "definitions": [
+        {
+          "path": "site/src/components/EventCard.astro",
+          "line": 240,
+          "scope": "style=",
+          "kind": "css",
+          "value": "${intrinsicMediaRatio.toFixed(5)",
+          "aliases": [],
+          "token": "--lab-media-ratio"
+        }
+      ],
+      "aliases_to": [],
+      "aliases_from": [],
+      "direct_consumers": [
+        {
+          "token": "--lab-media-ratio",
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 543,
+          "has_fallback": false
+        }
+      ],
+      "component_set": "components-0e4e9b5eb9c695bd",
+      "astro_family_set": "families-429a90bd9e5ac278",
+      "production_route_set": "routes-d690b48482e738de"
+    },
     "--lab-row-media-ratio": {
       "definitions": [
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 235,
+          "line": 240,
           "scope": "style=",
           "kind": "css",
           "value": "${desktopRelatedLayout.rowRatio.toFixed(5)",
@@ -175043,7 +175069,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4836,
+          "line": 4858,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175057,13 +175083,13 @@
         {
           "token": "--lab-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 445,
+          "line": 498,
           "has_fallback": false
         },
         {
           "token": "--lab-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 449,
+          "line": 502,
           "has_fallback": false
         }
       ],
@@ -175637,8 +175663,8 @@
     "--media-frame-object-position": {
       "definitions": [
         {
-          "path": "site/src/components/EventCard.astro",
-          "line": 129,
+          "path": "site/src/components/AdaptiveEventCardGrid.astro",
+          "line": 328,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175647,7 +175673,16 @@
         },
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 164,
+          "line": 128,
+          "scope": "<runtime-style-property>",
+          "kind": "runtime",
+          "value": "<runtime>",
+          "aliases": [],
+          "token": "--media-frame-object-position"
+        },
+        {
+          "path": "site/src/components/EventCard.astro",
+          "line": 159,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${mediaFrameObjectPosition",
@@ -175656,7 +175691,7 @@
         },
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 315,
+          "line": 320,
           "scope": "> > data-media-frame-object-position=\"50% 50%\" data-media-frame-focal-position=\"50% 50%\" data-media-frame-crop-reason=\"event_card_fallback\" data-media-frame-resource-state=\"fallback\" data-media-frame-clip=\"frame\" data-media-frame-radius=\"surface\" data-media-frame-fill=\"true\" data-media-frame-loading=\"lazy\" data-media-frame-interaction-owner=\"caller\" data-media-frame-fallback style=",
           "kind": "css",
           "value": "50% 50%",
@@ -175773,7 +175808,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4757,
+          "line": 4775,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175782,7 +175817,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4794,
+          "line": 4812,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175791,7 +175826,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4860,
+          "line": 4884,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175845,7 +175880,7 @@
       "definitions": [
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 163,
+          "line": 158,
           "scope": "<top-level>",
           "kind": "css",
           "value": "${mediaFrameRatio",
@@ -175854,7 +175889,7 @@
         },
         {
           "path": "site/src/components/EventCard.astro",
-          "line": 315,
+          "line": 320,
           "scope": "> > data-media-frame-object-position=\"50% 50%\" data-media-frame-focal-position=\"50% 50%\" data-media-frame-crop-reason=\"event_card_fallback\" data-media-frame-resource-state=\"fallback\" data-media-frame-clip=\"frame\" data-media-frame-radius=\"surface\" data-media-frame-fill=\"true\" data-media-frame-loading=\"lazy\" data-media-frame-interaction-owner=\"caller\" data-media-frame-fallback style=",
           "kind": "css",
           "value": "${mediaFrameRatio",
@@ -175908,7 +175943,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4756,
+          "line": 4774,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175917,7 +175952,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4795,
+          "line": 4813,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175926,7 +175961,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4839,
+          "line": 4861,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -176927,7 +176962,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 443,
+          "line": 496,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-link) {",
@@ -176936,7 +176971,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 447,
+          "line": 500,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-shell) {",
@@ -176945,7 +176980,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 452,
+          "line": 505,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media) {",
@@ -176954,7 +176989,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 457,
+          "line": 510,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media-shell) {",
@@ -176963,7 +176998,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 460,
+          "line": 513,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media) { background: transparent !important",
@@ -176972,7 +177007,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 461,
+          "line": 514,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-card-authoritative-fit=\"contain\"]) { background: #15110f",
@@ -176981,7 +177016,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 462,
+          "line": 515,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__body) { min-height: 0",
@@ -176990,7 +177025,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 463,
+          "line": 516,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__utility-row) { min-height: 58px",
@@ -176999,7 +177034,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 464,
+          "line": 517,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px",
@@ -177350,7 +177385,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6015,
+          "line": 6039,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",
@@ -179406,7 +179441,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 473,
+          "line": 526,
           "scope": "@media (max-width: 960px)",
           "kind": "css",
           "value": "is(",

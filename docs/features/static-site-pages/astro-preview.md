@@ -1253,3 +1253,10 @@ route identity is resolved once against BASE_PATH, including immutable previews.
 
 Browser test setup closes its static fixture server even if Chromium launch fails;
 missing browser binaries must not leave the focused packet hanging after failure.
+
+The joint protected-crop correction carries the same source proof through
+server/client serializers and flow/packed renderers. Vertical-only positive and
+horizontal/stale negative fixtures guard the ≤20% fallback; no new image proof
+is inferred for the real corpus. FI occupied-space records include the actual
+section/control rectangles and reuse the existing menu-summary identity rather
+than an empty-space-spanning top-band box.

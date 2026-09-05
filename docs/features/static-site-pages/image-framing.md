@@ -163,3 +163,16 @@ route expires, the same gate requires a current generated visual-only rail cell
 with `140×112`/`cover` and evaluates the immutable `5297` two-photo geometry and
 `65% 35%` focal point through the real resolver. This is a release-gate fixture,
 not a public-event resurrection or an event-id exception in product code.
+
+## Joint protected-crop delivery
+
+The planner, static EventCard, hydrated card factory and flow-grid binding share
+`relatedCardLayout` proof and renderer policy. Related/Free display payloads carry
+existing safe_crop, current/geometry pixel identity, geometry status/coordinate
+space and normalized OCR boxes; serializers must not strip this evidence.
+A proof-enabled vertical fallback uses `document-protected-cover` and the existing
+`reviewed-bounded` permission, not generic allowed crop. Horizontal target shrink,
+stale hashes and absent boxes fail closed. Single-column mobile document media
+returns to its natural uncropped frame. Positive/negative fixtures cover both
+layout selection and renderer binding; the real comparison corpus's unproven
+tail remains explicitly unaccepted, not silently promoted by those fixtures.

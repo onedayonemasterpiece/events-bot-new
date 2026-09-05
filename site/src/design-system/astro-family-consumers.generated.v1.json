@@ -5,7 +5,7 @@
   "registry_version": "1.2.0",
   "registry_sha256": "19d1be363c5347743ff4f75f69bb032017a7ee8161aa6418b29a9e75c23c0eca",
   "source_root": "site/src",
-  "import_inventory_sha256": "c1c50aac43a0dc8f6da7bec0970e55f9070ea95b5f6e5b6b838f37d898799ffc",
+  "import_inventory_sha256": "5afa24e20e6608779e15ac98431bbed9dc63fe3e7d59190c527e8c49d3c4d2bf",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -388,7 +388,7 @@
     "product_family_count": 107,
     "family_count": 109,
     "source_file_count": 322,
-    "import_edge_count": 821,
+    "import_edge_count": 822,
     "direct_consumer_edges": 275,
     "protocol_consumer_edges": 33,
     "runtime_factory_edges": 1,
