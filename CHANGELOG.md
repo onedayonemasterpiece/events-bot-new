@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Shared card-row planning reserves flexible media for isolated proportions and reduces unavoidable whole-image bands without cropping text, changing widths or dropping events.
 - Bridged deferred-module framing helpers into the inline discovery runtime, delaying Free hydration until the bridge is ready; the browser regression now covers the actual 12-to-111 prefix-preserving append plus synthetic protected-crop renderer states.
 - Full-preview post-build validation now checks the approved Popular shared-shell contract and real heading/control markers instead of requiring the retired sticky IntersectionObserver implementation.
 - Protected vertical crop evidence now survives Free/related serialization and reaches static/hydrated flow and packed renderers under reviewed-bounded permission; missing/stale/horizontal proof fails closed.

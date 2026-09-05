@@ -613,7 +613,13 @@ function containedFallbackRows(selected, rowSize, mediaTreatment) {
       const naturalAnchor = entries.find((entry) => (
         entry.documentMedia && entryResourcePresent(entry) && entry.dimensionsKnown !== false
       ));
-      const targetRatio = naturalAnchor?.ratio || PREFERRED_VISUAL_RATIO;
+      const knownRatios = entries.filter((entry) => entryResourcePresent(entry) && entry.documentMedia && entry.dimensionsKnown !== false).map((entry) => entry.ratio);
+      // This is CONTAIN, not a crop window: balance unused area between the
+      // narrowest and widest whole sources instead of making every neighbour
+      // inherit the tallest source's blank bands.
+      const targetRatio = knownRatios.length
+        ? Math.sqrt(Math.min(...knownRatios) * Math.max(...knownRatios))
+        : naturalAnchor?.ratio || PREFERRED_VISUAL_RATIO;
       const decisions = entries.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
       plan = {
         targetRatio,
@@ -689,6 +695,46 @@ function bestFeasibleCombination(entries, size, mediaTreatment) {
         && candidate.signature.localeCompare(best.signature) < 0)) best = candidate;
   }
   return best;
+}
+
+// Flexible media are scarce layout resources, not prizes for early source IDs.
+// Reassign singleton document rows only when it improves the remaining whole-
+// image rows. This preserves the number of accepted rows and every crop rule.
+function refineFlexibleAllocation(rows, residue, rowSize, mediaTreatment) {
+  const ordered = (entries) => [...entries].sort((a, b) => a.ratio - b.ratio || a.originalIndex - b.originalIndex);
+  const score = (entries) => {
+    const gaps = containedFallbackRows(ordered(entries), rowSize, mediaTreatment).flatMap(({ entries, plan }) =>
+      entries.filter((entry) => entryResourcePresent(entry) && entry.dimensionsKnown !== false)
+        .map((entry) => cropFraction(entry.ratio, plan.targetRatio)));
+    return [Math.max(0, ...gaps), gaps.reduce((sum, gap) => sum + gap, 0)];
+  };
+  const better = (a, b) => a[0] < b[0] - EPSILON
+    || (Math.abs(a[0] - b[0]) <= EPSILON && a[1] < b[1] - EPSILON);
+  let examined = 0;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const baseline = score(residue);
+    let best = null;
+    for (const row of rows) {
+      const documents = row.entries.filter((entry) => entryResourcePresent(entry) && entry.documentMedia);
+      if (documents.length !== 1) continue;
+      const old = documents[0];
+      for (let index = 0; index < residue.length && examined < 1000; index += 1) {
+        const replacement = residue[index];
+        if (!replacement.documentMedia || !entryResourcePresent(replacement) || replacement.dimensionsKnown === false) continue;
+        examined += 1;
+        const entries = row.entries.map((entry) => entry === old ? replacement : entry)
+          .sort((a, b) => a.originalIndex - b.originalIndex);
+        const plan = rowPlan(entries, mediaTreatment);
+        if (!plan) continue;
+        const next = residue.map((entry, i) => i === index ? old : entry);
+        const candidateScore = score(next);
+        if (better(candidateScore, best?.score || baseline)) best = { row, entries, plan, next, score:candidateScore };
+      }
+    }
+    if (!best) break;
+    Object.assign(best.row, { entries:best.entries, plan:best.plan });
+    residue.splice(0, residue.length, ...best.next);
+  }
 }
 
 /**
@@ -778,6 +824,8 @@ export function planRelatedCardRows(items, options = {}) {
     satisfiedRows.push({ entries:found.entries, plan:found.plan });
     unresolved.splice(0, unresolved.length, ...removeSelectedEntries(unresolved, found.entries));
   }
+
+  refineFlexibleAllocation(satisfiedRows, unresolved, rowSize, mediaTreatment);
 
   satisfiedRows.sort((left, right) => Math.min(...left.entries.map((entry) => entry.originalIndex))
     - Math.min(...right.entries.map((entry) => entry.originalIndex)));

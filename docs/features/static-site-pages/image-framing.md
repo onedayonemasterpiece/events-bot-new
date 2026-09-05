@@ -50,6 +50,15 @@ Do not limit the search to three extra candidates or discard admitted events to
 manufacture a feasible prefix. Server and hydrated clients must agree on the
 planned sequence, and appending must never move already visible cards.
 
+Before freezing that sequence, reassign flexible singleton rows when their early
+allocation leaves a worse isolated aspect in the remaining pool. Keep the number
+of accepted rows, all identities and crop permissions unchanged. The search is
+bounded (three improvement passes, at most 1000 candidates). For genuinely
+unavoidable **contain-only** rows, use the geometric mean of the extreme natural
+ratios to minimize the worst unused area, rather than inheriting the tallest
+image's large bands. This is not a cover/crop target or a no-fields PASS; protected
+images remain entirely visible and row diagnostics remain `unsatisfied`.
+
 Within this constraint, prefer full compatible natural-ratio rows, less safe
 crop and less source-order displacement. Only the final row may be incomplete;
 its cards keep regular column widths, not stretched widths. All admitted IDs

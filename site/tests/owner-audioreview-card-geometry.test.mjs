@@ -107,8 +107,10 @@ test('owner 8673 full 30-candidate authority exhausts compatible rows before its
   assert.equal(new Set(planned.map(({ item }) => item.id)).size, 30);
   assert.ok(planned.slice(0, 10).every(({ layout }) => layout.framingStatus === 'satisfied'));
   assert.equal(planned.filter(({ layout }) => layout.framingStatus === 'unsatisfied').length, 6);
-  assert.deepEqual(rowGroups(planned).filter((row) => row[0].layout.framingStatus === 'unsatisfied')
-    .map((row) => row.map(({ item }) => item.id)), [[7665,8375,8661], [8339,8715,8364]]);
+  const worstUnused = Math.max(...planned.filter(({ item }) => item.image_assets[0].width > 0 && item.image_assets[0].height > 0).map(({ item, layout }) => layout.fit === 'cover' ? 0 : 1 - Math.min(
+    item.image_assets[0].width / item.image_assets[0].height / layout.rowRatio,
+    layout.rowRatio / (item.image_assets[0].width / item.image_assets[0].height))));
+  assert.ok(worstUnused < .3, 'Whole-pool refinement must not freeze the old residual identities');
 });
 
 test('full-pool selection uses later natural buckets before admitting a conflicting initial prefix', () => {
@@ -206,7 +208,8 @@ test('Free stable-order incompatible row reports the smallest measured conflict 
   assert.ok(packed.every(({ layout }) => layout.framingStatus === 'unsatisfied'));
   assert.ok(packed.every(({ layout }) => layout.framingConflict
     === 'document-natural-ratio-mismatch:8080@1810x2560=0.70703125|8308@2560x2560=1.00000000'));
-  assert.equal(packed.find(({ item }) => item.id === 8080).layout.paintedFields, false);
+  assert.equal(packed.find(({ item }) => item.id === 8080).layout.paintedFields, true);
+  assert.ok(packed.filter(({ item }) => item.id !== 8564).every(({ layout }) => layout.fit === 'contain' && layout.coverCrop === 0));
   assert.equal(packed.find(({ item }) => item.id === 8308).layout.paintedFields, true);
 });
 
@@ -289,4 +292,30 @@ test('AR-02: unsafe/stale/text assets stay text-only; eligible photos retain the
   const deck=buildHomeHeroTalkDeck(Array.from({length:6},(_,i)=>heroEvent(i+1,{image_assets:[photo]})),
     '2026-09-04','review',4,[]);
   assert.ok(deck.some(s=>s.mode==='photo-mosaic'));assert.ok(deck.some(s=>s.mode==='text-only'));
+});
+
+
+test('flexible fillers protect an isolated aspect instead of being exhausted on an early near-match', () => {
+  const corpus = [publicImage(1,700,1000),publicImage(2,710,1000),publicImage(3,720,1000),
+    publicImage(4,1400,1000),publicImage(5,1200,1000,'visual_only'),publicImage(6,1200,1000,'visual_only')];
+  const result = planRelatedCardRows(corpus, {rowSize:3});
+  assert.deepEqual(ids(result), [1,2,3,4,5,6]);
+  const accepted = result.filter(({layout}) => layout.framingStatus === 'satisfied');
+  assert.deepEqual(ids(accepted), [4,5,6]);
+  for (const {item,layout} of result.filter(({item}) => item.id <= 3)) {
+    const ratio = item.image_assets[0].width/item.image_assets[0].height;
+    assert.ok(1-Math.min(ratio/layout.rowRatio,layout.rowRatio/ratio)<.015);
+    assert.equal(layout.fit,'contain');
+    assert.equal(layout.coverCrop,0);
+    assert.equal(layout.framingStatus,'unsatisfied', 'Small remaining fields are not falsely certified');
+  }
+  assert.deepEqual(planRelatedCardRows(corpus,{rowSize:3}),result);
+});
+
+test('unavoidable whole-image fallback minimizes maximum blank area, never crops protected text', () => {
+  const corpus=[publicImage(1,800,1000),publicImage(2,1000,1000),publicImage(3,1200,1000)];
+  const result=packRelatedCardRows(corpus,{rowSize:3,preserveOrder:true});
+  const target=Math.sqrt(.8*1.2);
+  assert.deepEqual(result.map(({item})=>item.id),[1,2,3]);
+  assert.ok(result.every(({layout})=>Math.abs(layout.rowRatio-target)<1e-9 && layout.fit==='contain' && layout.coverCrop===0));
 });
