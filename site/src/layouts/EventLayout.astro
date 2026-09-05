@@ -2820,6 +2820,10 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const selectors = [
             ['brand','.site-header__brand-tag'], ['mobile-brand','.mobile-discovery-menu__summary'],
             ['context','[data-floating-page-context]'], ['navigation','.mobile-bottom-nav'],
+            // The menu summary is already the mobile-brand participant above;
+            // do not bind it again as a desktop menu rectangle.
+            ['section-context','[data-floating-section-context]'],
+            ['eligible-controls','[data-floating-controls-slot] > [data-islands-eligible-controls]'],
             ['date','[data-mobile-date-accessory]'], ['event-cta','.mobile-sticky-cta'],
             ['notification','[data-mobile-toast-region]'],
           ];

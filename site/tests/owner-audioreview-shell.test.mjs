@@ -94,3 +94,12 @@ test('lower stack remeasures an opacity-faded modal when its transition settles'
   assert.match(layout, /document\.addEventListener\('transitionend',syncLowerStackAfterMotion,true\)/u);
   assert.match(layout, /document\.addEventListener\('transitioncancel',syncLowerStackAfterMotion,true\)/u);
 });
+
+test('occupied-space bridge reports each visible Popular island participant, not the empty top band', async () => {
+  const layout = await read('src/layouts/EventLayout.astro');
+  const selectors = layout.slice(layout.indexOf('const selectors = ['), layout.indexOf('occupiedSnapshot=shellOccupiedSpace'));
+  assert.match(selectors, /\['section-context','\[data-floating-section-context\]'\]/u);
+  assert.match(selectors, /\['eligible-controls','\[data-floating-controls-slot\] > \[data-islands-eligible-controls\]'\]/u);
+  assert.match(selectors, /\['mobile-brand','\.mobile-discovery-menu__summary'\]/u);
+  assert.doesNotMatch(selectors, /\['(?:top-band|global-menu)'/u);
+});
