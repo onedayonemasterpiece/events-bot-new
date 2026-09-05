@@ -1051,7 +1051,7 @@ const structuredData = [{
   }
 
   @media (max-width: 819px) {
-    .festival-hero { grid-template-columns: 1fr; min-height: 0; }
+    .festival-hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
     .festival-hero__facts { max-width: 390px; }
     .festival-row--4 {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -1066,7 +1066,7 @@ const structuredData = [{
     .festival-hero { gap: 1.15rem; padding: 1.45rem 1.2rem; border-radius: 26px; }
     .festival-hero h1 {
       max-width: 100%;
-      overflow-wrap: normal;
+      overflow-wrap: anywhere;
       word-break: normal;
       font-size: var(--ke-type-h1-size);
     }

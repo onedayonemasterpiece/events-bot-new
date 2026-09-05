@@ -155,7 +155,9 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
       width:100%!important; height:0!important; min-height:0!important; margin:0!important;
       display:block!important; pointer-events:none;
     }
-    body.mobile-shell-reference4[data-mobile-bottom-mode="nav"] > main { padding-top:84px; }
+    /* Semantic route wrappers retain the same shared chrome inset. */
+    body.mobile-shell-reference4[data-mobile-bottom-mode="nav"] > :is(main, [data-ds-family$="RouteComposition"]) { padding-top:84px; }
+
     body.mobile-shell-reference4[data-mobile-bottom-mode="nav"] .site-footer { display:none!important; }
     body.mobile-shell-reference4 .mobile-discovery-menu--reference4 {
       --drawer-ease:cubic-bezier(.22,.86,.32,1); --shell-tag-w:120px; --shell-tag-h:84px;

@@ -187,19 +187,19 @@ const surfaceState = events.length
     .free-collection__shell { width:min(100% - 24px,1120px); }
     .free-collection__hero {
       min-height:268px;
-      grid-template-columns:minmax(0,1fr) var(--ke-free-medallion-hero-size-compact);
+      grid-template-columns:minmax(0,1fr);
       gap:6px;
       padding:26px 18px 24px;
       border-radius:var(--ke-free-hero-radius-compact);
     }
-    .free-collection__copy h1 { overflow-wrap:normal; word-break:normal; hyphens:none; }
+    .free-collection__copy h1 { max-width:100%; overflow-wrap:normal; word-break:normal; hyphens:none; }
     .free-collection__copy .lead { font-size:.95rem; }
     .free-collection__copy .collection-criteria,.free-collection__copy .muted-note { font-size:.76rem; line-height:1.35; }
     .free-collection__medallion--hero {
       width:var(--ke-free-medallion-hero-size-compact);
       height:var(--ke-free-medallion-hero-size-compact);
       align-self:start;
-      margin-top:44px;
+      margin-top:0;
     }
     .free-collection__sticky-identity { top:var(--ke-free-sticky-top-compact); z-index:var(--ke-free-sticky-layer-compact); padding-right:6px; }
     .free-collection__medallion--compact { width:var(--ke-free-medallion-sticky-size-compact); height:var(--ke-free-medallion-sticky-size-compact); }
