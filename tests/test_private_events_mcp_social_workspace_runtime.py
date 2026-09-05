@@ -306,6 +306,15 @@ class FakeAlbumIngestor:
         self.assets.append(asset)
         return asset
 
+    def reverify(self, storage_ref, *, owner_binding, max_bytes, role):
+        # Match the production ingestor contract used by prepare/commit.
+        # Returning a different album asset would hide ordering/binding bugs.
+        asset = next(item for item in self.assets if item.storage_ref == storage_ref)
+        assert asset.owner_binding == owner_binding
+        assert asset.byte_length <= max_bytes
+        assert asset.role == role
+        return asset
+
 
 class FakeAlbumAdapter(FakeAdapter):
     def __init__(self) -> None:

@@ -149,3 +149,12 @@ execution is claimed. Evidence: local-env-target-mismatch.txt and catchup.txt.
 321 restored rows remain pending for the production scheduler (observed next
 slot 10:00 UTC). Requeue is NOT catch-up completion. Do not close this incident
 until actual terminal results and the deployment gate are verified.
+
+
+## Release gate repair
+
+Reproduced the MCP CI failure locally and traced the normalized exception:
+`SocialWorkspaceRuntimeError('asset reverification is unavailable')`.
+The album test fake implements ingest but lacks the production reverify
+contract. Added reference-specific owner/size/role-checked reverify to the
+test double; production asset safety checks remain unchanged.
