@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2532,
     "definition_count": 2848,
-    "consumer_count": 3581,
+    "consumer_count": 3573,
     "alias_edge_count": 895,
     "family_count": 109
   },
@@ -1134,7 +1134,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-11aa22d0b8f6cbe8": [
+    "components-d5deda58a2436d34": [
       "site/src/components/brand/AnnouncementsLockup.astro",
       "site/src/components/design-system/Badge.astro",
       "site/src/components/design-system/Button.astro",
@@ -1147,7 +1147,6 @@
       "site/src/components/EventHero.astro",
       "site/src/components/FocusGroupFeedback.astro",
       "site/src/components/FocusGroupInviteIntake.astro",
-      "site/src/components/FreeCollectionSurface.astro",
       "site/src/components/HomeHeroTalk.astro",
       "site/src/components/SearchCollectionLinks.astro",
       "site/src/components/SiteFooter.astro",
@@ -2342,43 +2341,6 @@
       "site/src/pages/dlya-menya/index.astro",
       "site/src/pages/festivali/index.astro",
       "site/src/pages/fokus-gruppa/index.astro",
-      "site/src/pages/index.astro",
-      "site/src/pages/izbrannoe/index.astro",
-      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
-      "site/src/pages/kluby-po-interesam/index.astro",
-      "site/src/pages/partners/index.astro",
-      "site/src/pages/partnerstvo/index.astro",
-      "site/src/pages/podborki/[slug]/index.astro",
-      "site/src/pages/podborki/index.astro",
-      "site/src/pages/poisk/index.astro",
-      "site/src/pages/segodnya/index.astro",
-      "site/src/pages/sobytiya/[slug].astro",
-      "site/src/pages/vystavki/index.astro",
-      "site/src/pages/zakrytaya-afisha/index.astro"
-    ],
-    "components-bb6ce3a56b809bdc": [
-      "site/src/components/brand/AnnouncementsLockup.astro",
-      "site/src/components/design-system/Badge.astro",
-      "site/src/components/design-system/Button.astro",
-      "site/src/components/design-system/CopyAction.astro",
-      "site/src/components/design-system/Field.astro",
-      "site/src/components/design-system/Foundations.astro",
-      "site/src/components/design-system/StatePanel.astro",
-      "site/src/components/DesktopEventPage.astro",
-      "site/src/components/EventCard.astro",
-      "site/src/components/EventHero.astro",
-      "site/src/components/FocusGroupFeedback.astro",
-      "site/src/components/FocusGroupInviteIntake.astro",
-      "site/src/components/FreeCollectionSurface.astro",
-      "site/src/components/HomeHeroTalk.astro",
-      "site/src/components/SiteFooter.astro",
-      "site/src/layouts/EventLayout.astro",
-      "site/src/pages/artefakty/index.astro",
-      "site/src/pages/dlya-menya/index.astro",
-      "site/src/pages/festivali/index.astro",
-      "site/src/pages/fokus-gruppa/index.astro",
-      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
       "site/src/pages/index.astro",
       "site/src/pages/izbrannoe/index.astro",
       "site/src/pages/kluby-po-interesam/[slug]/index.astro",
@@ -4469,6 +4431,43 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
+    "components-bb6ce3a56b809bdc": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Badge.astro",
+      "site/src/components/design-system/Button.astro",
+      "site/src/components/design-system/CopyAction.astro",
+      "site/src/components/design-system/Field.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/design-system/StatePanel.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/FocusGroupInviteIntake.astro",
+      "site/src/components/FreeCollectionSurface.astro",
+      "site/src/components/HomeHeroTalk.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
     "components-b57f61a51033c89d": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
@@ -5199,7 +5198,7 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
-    "components-7ffcf81c8bf78568": [
+    "components-2063db3924c9a058": [
       "site/src/components/brand/AnnouncementsLockup.astro",
       "site/src/components/design-system/Badge.astro",
       "site/src/components/design-system/Button.astro",
@@ -5215,7 +5214,6 @@
       "site/src/components/FocusGroupInviteIntake.astro",
       "site/src/components/FocusGroupLabPanel.astro",
       "site/src/components/FocusPwaInstallAction.astro",
-      "site/src/components/FreeCollectionSurface.astro",
       "site/src/components/HomeHeroTalk.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/UnusualListingSurface.astro",
@@ -5431,44 +5429,6 @@
       "site/src/pages/festivali/index.astro",
       "site/src/pages/fokus-gruppa/index.astro",
       "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
-      "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-      "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-      "site/src/pages/index.astro",
-      "site/src/pages/izbrannoe/index.astro",
-      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
-      "site/src/pages/kluby-po-interesam/index.astro",
-      "site/src/pages/partners/index.astro",
-      "site/src/pages/partnerstvo/index.astro",
-      "site/src/pages/podborki/[slug]/index.astro",
-      "site/src/pages/podborki/index.astro",
-      "site/src/pages/poisk/index.astro",
-      "site/src/pages/segodnya/index.astro",
-      "site/src/pages/sobytiya/[slug].astro",
-      "site/src/pages/vystavki/index.astro",
-      "site/src/pages/zakrytaya-afisha/index.astro"
-    ],
-    "components-4bc8a68fd2359e44": [
-      "site/src/components/brand/AnnouncementsLockup.astro",
-      "site/src/components/design-system/Badge.astro",
-      "site/src/components/design-system/Button.astro",
-      "site/src/components/design-system/CopyAction.astro",
-      "site/src/components/design-system/Field.astro",
-      "site/src/components/design-system/Foundations.astro",
-      "site/src/components/design-system/StatePanel.astro",
-      "site/src/components/DesktopEventPage.astro",
-      "site/src/components/EventCard.astro",
-      "site/src/components/EventHero.astro",
-      "site/src/components/FocusGroupFeedback.astro",
-      "site/src/components/FocusGroupInviteIntake.astro",
-      "site/src/components/FreeCollectionSurface.astro",
-      "site/src/components/HomeHeroTalk.astro",
-      "site/src/components/SiteFooter.astro",
-      "site/src/components/UnusualListingSurface.astro",
-      "site/src/layouts/EventLayout.astro",
-      "site/src/pages/artefakty/index.astro",
-      "site/src/pages/dlya-menya/index.astro",
-      "site/src/pages/festivali/index.astro",
-      "site/src/pages/fokus-gruppa/index.astro",
       "site/src/pages/fokus-gruppa/priglashenie/index.astro",
       "site/src/pages/fokus-gruppa/zavershenie/index.astro",
       "site/src/pages/index.astro",
@@ -17139,7 +17099,7 @@
         ]
       }
     ],
-    "families-d32f364eb4770033": [
+    "families-1ce67aad7249e7a5": [
       {
         "id": "AnnouncementsLockup",
         "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
@@ -17408,13 +17368,6 @@
           "/vystavki/",
           "/zakrytaya-afisha/",
           "/zavtra/"
-        ]
-      },
-      {
-        "id": "FreeCollectionSurface",
-        "astro_root": "site/src/components/FreeCollectionSurface.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
         ]
       },
       {
@@ -28377,388 +28330,6 @@
           "/vystavki/",
           "/zavtra/"
         ]
-      },
-      {
-        "id": "TodayReviewGuard",
-        "astro_root": "site/src/pages/segodnya/index.astro",
-        "production_route_patterns": [
-          "/segodnya/"
-        ]
-      }
-    ],
-    "families-208ddce99d97ea26": [
-      {
-        "id": "AnnouncementsLockup",
-        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ArtifactCollectionRouteComposition",
-        "astro_root": "site/src/pages/artefakty/index.astro",
-        "production_route_patterns": [
-          "/artefakty/"
-        ]
-      },
-      {
-        "id": "Badge",
-        "astro_root": "site/src/components/design-system/Badge.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "Button",
-        "astro_root": "site/src/components/design-system/Button.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/fokus-gruppa/",
-          "/fokus-gruppa/priglashenie/",
-          "/fokus-gruppa/zavershenie/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zakrytaya-afisha/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ClosedFocusHubRouteComposition",
-        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
-        "production_route_patterns": [
-          "/zakrytaya-afisha/"
-        ]
-      },
-      {
-        "id": "CollectionCatalogRouteComposition",
-        "astro_root": "site/src/pages/podborki/index.astro",
-        "production_route_patterns": [
-          "/podborki/"
-        ]
-      },
-      {
-        "id": "CopyAction",
-        "astro_root": "site/src/components/design-system/CopyAction.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "DesktopEventDetailSurface",
-        "astro_root": "site/src/components/DesktopEventPage.astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventCard",
-        "astro_root": "site/src/components/EventCard.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "EventDetailRouteComposition",
-        "astro_root": "site/src/pages/sobytiya/[slug].astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventHero",
-        "astro_root": "site/src/components/EventHero.astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventLayout",
-        "astro_root": "site/src/layouts/EventLayout.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ExhibitionsRouteComposition",
-        "astro_root": "site/src/pages/vystavki/index.astro",
-        "production_route_patterns": [
-          "/vystavki/"
-        ]
-      },
-      {
-        "id": "FavoritesRouteComposition",
-        "astro_root": "site/src/pages/izbrannoe/index.astro",
-        "production_route_patterns": [
-          "/izbrannoe/"
-        ]
-      },
-      {
-        "id": "FestivalsTimelineRouteComposition",
-        "astro_root": "site/src/pages/festivali/index.astro",
-        "production_route_patterns": [
-          "/festivali/"
-        ]
-      },
-      {
-        "id": "Field",
-        "astro_root": "site/src/components/design-system/Field.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "FocusGroupCompletionSurface",
-        "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/zavershenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupFeedback",
-        "astro_root": "site/src/components/FocusGroupFeedback.astro",
-        "production_route_patterns": [
-          "/dlya-menya/",
-          "/zakrytaya-afisha/"
-        ]
-      },
-      {
-        "id": "FocusGroupInviteIntake",
-        "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/priglashenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupInviteRouteComposition",
-        "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/priglashenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupProgrammeSurface",
-        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/"
-        ]
-      },
-      {
-        "id": "ForMeRouteComposition",
-        "astro_root": "site/src/pages/dlya-menya/index.astro",
-        "production_route_patterns": [
-          "/dlya-menya/"
-        ]
-      },
-      {
-        "id": "Foundations",
-        "astro_root": "site/src/components/design-system/Foundations.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/fokus-gruppa/",
-          "/fokus-gruppa/kollektsiya/",
-          "/fokus-gruppa/priglashenie/",
-          "/fokus-gruppa/zavershenie/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zakrytaya-afisha/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "FreeCollectionSurface",
-        "astro_root": "site/src/components/FreeCollectionSurface.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
-        ]
-      },
-      {
-        "id": "HomeHeroTalk",
-        "astro_root": "site/src/components/HomeHeroTalk.astro",
-        "production_route_patterns": [
-          "/"
-        ]
-      },
-      {
-        "id": "HomePage",
-        "astro_root": "site/src/pages/index.astro",
-        "production_route_patterns": [
-          "/"
-        ]
-      },
-      {
-        "id": "InterestClubDetailRouteComposition",
-        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
-        "production_route_patterns": [
-          "/kluby-po-interesam/*/"
-        ]
-      },
-      {
-        "id": "InterestClubsIndexRouteComposition",
-        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
-        "production_route_patterns": [
-          "/kluby-po-interesam/"
-        ]
-      },
-      {
-        "id": "MaterializedCollectionRouteComposition",
-        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
-        ]
-      },
-      {
-        "id": "MobileEventDetailSurface",
-        "astro_root": "site/src/pages/sobytiya/[slug].astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "PartnershipRouteComposition",
-        "astro_root": "site/src/pages/partnerstvo/index.astro",
-        "production_route_patterns": [
-          "/partnerstvo/"
-        ]
-      },
-      {
-        "id": "PartnersRouteComposition",
-        "astro_root": "site/src/pages/partners/index.astro",
-        "production_route_patterns": [
-          "/partners/"
-        ]
-      },
-      {
-        "id": "SearchRouteComposition",
-        "astro_root": "site/src/pages/poisk/index.astro",
-        "production_route_patterns": [
-          "/poisk/"
-        ]
-      },
-      {
-        "id": "SiteFooter",
-        "astro_root": "site/src/components/SiteFooter.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "StatePanel",
-        "astro_root": "site/src/components/design-system/StatePanel.astro",
-        "production_route_patterns": []
       },
       {
         "id": "TodayReviewGuard",
@@ -45357,6 +44928,388 @@
         "production_route_patterns": []
       }
     ],
+    "families-208ddce99d97ea26": [
+      {
+        "id": "AnnouncementsLockup",
+        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ArtifactCollectionRouteComposition",
+        "astro_root": "site/src/pages/artefakty/index.astro",
+        "production_route_patterns": [
+          "/artefakty/"
+        ]
+      },
+      {
+        "id": "Badge",
+        "astro_root": "site/src/components/design-system/Badge.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "Button",
+        "astro_root": "site/src/components/design-system/Button.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zakrytaya-afisha/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ClosedFocusHubRouteComposition",
+        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+        "production_route_patterns": [
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "CollectionCatalogRouteComposition",
+        "astro_root": "site/src/pages/podborki/index.astro",
+        "production_route_patterns": [
+          "/podborki/"
+        ]
+      },
+      {
+        "id": "CopyAction",
+        "astro_root": "site/src/components/design-system/CopyAction.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "DesktopEventDetailSurface",
+        "astro_root": "site/src/components/DesktopEventPage.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventCard",
+        "astro_root": "site/src/components/EventCard.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventDetailRouteComposition",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventHero",
+        "astro_root": "site/src/components/EventHero.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventLayout",
+        "astro_root": "site/src/layouts/EventLayout.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ExhibitionsRouteComposition",
+        "astro_root": "site/src/pages/vystavki/index.astro",
+        "production_route_patterns": [
+          "/vystavki/"
+        ]
+      },
+      {
+        "id": "FavoritesRouteComposition",
+        "astro_root": "site/src/pages/izbrannoe/index.astro",
+        "production_route_patterns": [
+          "/izbrannoe/"
+        ]
+      },
+      {
+        "id": "FestivalsTimelineRouteComposition",
+        "astro_root": "site/src/pages/festivali/index.astro",
+        "production_route_patterns": [
+          "/festivali/"
+        ]
+      },
+      {
+        "id": "Field",
+        "astro_root": "site/src/components/design-system/Field.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "FocusGroupCompletionSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/zavershenie/"
+        ]
+      },
+      {
+        "id": "FocusGroupFeedback",
+        "astro_root": "site/src/components/FocusGroupFeedback.astro",
+        "production_route_patterns": [
+          "/dlya-menya/",
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "FocusGroupInviteIntake",
+        "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/priglashenie/"
+        ]
+      },
+      {
+        "id": "FocusGroupInviteRouteComposition",
+        "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/priglashenie/"
+        ]
+      },
+      {
+        "id": "FocusGroupProgrammeSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/"
+        ]
+      },
+      {
+        "id": "ForMeRouteComposition",
+        "astro_root": "site/src/pages/dlya-menya/index.astro",
+        "production_route_patterns": [
+          "/dlya-menya/"
+        ]
+      },
+      {
+        "id": "Foundations",
+        "astro_root": "site/src/components/design-system/Foundations.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/kollektsiya/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zakrytaya-afisha/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "FreeCollectionSurface",
+        "astro_root": "site/src/components/FreeCollectionSurface.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "HomeHeroTalk",
+        "astro_root": "site/src/components/HomeHeroTalk.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "HomePage",
+        "astro_root": "site/src/pages/index.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "InterestClubDetailRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/*/"
+        ]
+      },
+      {
+        "id": "InterestClubsIndexRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/"
+        ]
+      },
+      {
+        "id": "MaterializedCollectionRouteComposition",
+        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "MobileEventDetailSurface",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "PartnershipRouteComposition",
+        "astro_root": "site/src/pages/partnerstvo/index.astro",
+        "production_route_patterns": [
+          "/partnerstvo/"
+        ]
+      },
+      {
+        "id": "PartnersRouteComposition",
+        "astro_root": "site/src/pages/partners/index.astro",
+        "production_route_patterns": [
+          "/partners/"
+        ]
+      },
+      {
+        "id": "SearchRouteComposition",
+        "astro_root": "site/src/pages/poisk/index.astro",
+        "production_route_patterns": [
+          "/poisk/"
+        ]
+      },
+      {
+        "id": "SiteFooter",
+        "astro_root": "site/src/components/SiteFooter.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "StatePanel",
+        "astro_root": "site/src/components/design-system/StatePanel.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "TodayReviewGuard",
+        "astro_root": "site/src/pages/segodnya/index.astro",
+        "production_route_patterns": [
+          "/segodnya/"
+        ]
+      }
+    ],
     "families-b3fcd911420ce802": [
       {
         "id": "AdaptiveEventCardGrid",
@@ -52259,7 +52212,7 @@
         ]
       }
     ],
-    "families-2f98f56f64969c6e": [
+    "families-6c51d036552547ae": [
       {
         "id": "AnnouncementsLockup",
         "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
@@ -52577,13 +52530,6 @@
           "/vystavki/",
           "/zakrytaya-afisha/",
           "/zavtra/"
-        ]
-      },
-      {
-        "id": "FreeCollectionSurface",
-        "astro_root": "site/src/components/FreeCollectionSurface.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
         ]
       },
       {
@@ -54118,395 +54064,6 @@
         "id": "WeekendTimeMatrix",
         "astro_root": "site/src/components/listings/WeekendTimeMatrix.astro",
         "production_route_patterns": []
-      }
-    ],
-    "families-12f6082df0559895": [
-      {
-        "id": "AnnouncementsLockup",
-        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ArtifactCollectionRouteComposition",
-        "astro_root": "site/src/pages/artefakty/index.astro",
-        "production_route_patterns": [
-          "/artefakty/"
-        ]
-      },
-      {
-        "id": "Badge",
-        "astro_root": "site/src/components/design-system/Badge.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "Button",
-        "astro_root": "site/src/components/design-system/Button.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/fokus-gruppa/",
-          "/fokus-gruppa/priglashenie/",
-          "/fokus-gruppa/zavershenie/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zakrytaya-afisha/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ClosedFocusHubRouteComposition",
-        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
-        "production_route_patterns": [
-          "/zakrytaya-afisha/"
-        ]
-      },
-      {
-        "id": "CollectionCatalogRouteComposition",
-        "astro_root": "site/src/pages/podborki/index.astro",
-        "production_route_patterns": [
-          "/podborki/"
-        ]
-      },
-      {
-        "id": "CopyAction",
-        "astro_root": "site/src/components/design-system/CopyAction.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "DesktopEventDetailSurface",
-        "astro_root": "site/src/components/DesktopEventPage.astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventCard",
-        "astro_root": "site/src/components/EventCard.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "EventDetailRouteComposition",
-        "astro_root": "site/src/pages/sobytiya/[slug].astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventHero",
-        "astro_root": "site/src/components/EventHero.astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "EventLayout",
-        "astro_root": "site/src/layouts/EventLayout.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "ExhibitionsRouteComposition",
-        "astro_root": "site/src/pages/vystavki/index.astro",
-        "production_route_patterns": [
-          "/vystavki/"
-        ]
-      },
-      {
-        "id": "FavoritesRouteComposition",
-        "astro_root": "site/src/pages/izbrannoe/index.astro",
-        "production_route_patterns": [
-          "/izbrannoe/"
-        ]
-      },
-      {
-        "id": "FestivalsTimelineRouteComposition",
-        "astro_root": "site/src/pages/festivali/index.astro",
-        "production_route_patterns": [
-          "/festivali/"
-        ]
-      },
-      {
-        "id": "Field",
-        "astro_root": "site/src/components/design-system/Field.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "FocusGroupCompletionSurface",
-        "astro_root": "site/src/pages/fokus-gruppa/zavershenie/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/zavershenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupFeedback",
-        "astro_root": "site/src/components/FocusGroupFeedback.astro",
-        "production_route_patterns": [
-          "/dlya-menya/",
-          "/zakrytaya-afisha/"
-        ]
-      },
-      {
-        "id": "FocusGroupInviteIntake",
-        "astro_root": "site/src/components/FocusGroupInviteIntake.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/priglashenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupInviteRouteComposition",
-        "astro_root": "site/src/pages/fokus-gruppa/priglashenie/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/priglashenie/"
-        ]
-      },
-      {
-        "id": "FocusGroupProgrammeSurface",
-        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
-        "production_route_patterns": [
-          "/fokus-gruppa/"
-        ]
-      },
-      {
-        "id": "ForMeRouteComposition",
-        "astro_root": "site/src/pages/dlya-menya/index.astro",
-        "production_route_patterns": [
-          "/dlya-menya/"
-        ]
-      },
-      {
-        "id": "Foundations",
-        "astro_root": "site/src/components/design-system/Foundations.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/fokus-gruppa/",
-          "/fokus-gruppa/kollektsiya/",
-          "/fokus-gruppa/priglashenie/",
-          "/fokus-gruppa/zavershenie/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zakrytaya-afisha/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "FreeCollectionSurface",
-        "astro_root": "site/src/components/FreeCollectionSurface.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
-        ]
-      },
-      {
-        "id": "HomeHeroTalk",
-        "astro_root": "site/src/components/HomeHeroTalk.astro",
-        "production_route_patterns": [
-          "/"
-        ]
-      },
-      {
-        "id": "HomePage",
-        "astro_root": "site/src/pages/index.astro",
-        "production_route_patterns": [
-          "/"
-        ]
-      },
-      {
-        "id": "InterestClubDetailRouteComposition",
-        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
-        "production_route_patterns": [
-          "/kluby-po-interesam/*/"
-        ]
-      },
-      {
-        "id": "InterestClubsIndexRouteComposition",
-        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
-        "production_route_patterns": [
-          "/kluby-po-interesam/"
-        ]
-      },
-      {
-        "id": "MaterializedCollectionRouteComposition",
-        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
-        "production_route_patterns": [
-          "/podborki/*/"
-        ]
-      },
-      {
-        "id": "MobileEventDetailSurface",
-        "astro_root": "site/src/pages/sobytiya/[slug].astro",
-        "production_route_patterns": [
-          "/sobytiya/*/"
-        ]
-      },
-      {
-        "id": "PartnershipRouteComposition",
-        "astro_root": "site/src/pages/partnerstvo/index.astro",
-        "production_route_patterns": [
-          "/partnerstvo/"
-        ]
-      },
-      {
-        "id": "PartnersRouteComposition",
-        "astro_root": "site/src/pages/partners/index.astro",
-        "production_route_patterns": [
-          "/partners/"
-        ]
-      },
-      {
-        "id": "SearchRouteComposition",
-        "astro_root": "site/src/pages/poisk/index.astro",
-        "production_route_patterns": [
-          "/poisk/"
-        ]
-      },
-      {
-        "id": "SiteFooter",
-        "astro_root": "site/src/components/SiteFooter.astro",
-        "production_route_patterns": [
-          "/",
-          "/artefakty/",
-          "/date-*/",
-          "/dlya-menya/",
-          "/festivali/",
-          "/izbrannoe/",
-          "/kluby-po-interesam/",
-          "/kluby-po-interesam/*/",
-          "/neobychnoe/",
-          "/partners/",
-          "/partnerstvo/",
-          "/podborki/",
-          "/podborki/*/",
-          "/podborki/gastronomiya/",
-          "/poisk/",
-          "/populyarnoe/",
-          "/segodnya/",
-          "/sobytiya/*/",
-          "/vyhodnye/",
-          "/vyhodnye/*/",
-          "/vystavki/",
-          "/zavtra/"
-        ]
-      },
-      {
-        "id": "StatePanel",
-        "astro_root": "site/src/components/design-system/StatePanel.astro",
-        "production_route_patterns": []
-      },
-      {
-        "id": "TodayReviewGuard",
-        "astro_root": "site/src/pages/segodnya/index.astro",
-        "production_route_patterns": [
-          "/segodnya/"
-        ]
-      },
-      {
-        "id": "UnusualListingSurface",
-        "astro_root": "site/src/components/UnusualListingSurface.astro",
-        "production_route_patterns": [
-          "/neobychnoe/"
-        ]
       }
     ],
     "families-7c48e7c1499b7fb9": [
@@ -67772,12 +67329,6 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-color-free-results-border",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 172,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-color-border-brand-soft",
           "path": "site/src/components/HomeColdStartFeed.astro",
           "line": 130,
@@ -71586,18 +71137,6 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-color-free-hero-start",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-free-results-surface",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 174,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-color-personalization-paper",
           "path": "site/src/components/InterestProfile.astro",
           "line": 563,
@@ -72889,12 +72428,6 @@
       ],
       "direct_consumers": [
         {
-          "token": "--ke-color-free-results-border",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 172,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-color-border-brand-quiet",
           "path": "site/src/components/SearchCollectionLinks.astro",
           "line": 100,
@@ -72907,8 +72440,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-11aa22d0b8f6cbe8",
-      "astro_family_set": "families-d32f364eb4770033",
+      "component_set": "components-d5deda58a2436d34",
+      "astro_family_set": "families-1ce67aad7249e7a5",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-border-brand-soft": {
@@ -76540,12 +76073,6 @@
           "token": "--ke-color-action-primary-strong",
           "path": "site/src/components/FocusGroupFeedback.astro",
           "line": 354,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-free-results-border",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 172,
           "has_fallback": false
         },
         {
@@ -92087,14 +91614,7 @@
         "--ke-color-free-identity"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-border",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 131,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -92117,16 +91637,9 @@
         "--ke-color-free-hero-surface"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-hero-end",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-free-hero-glow": {
@@ -92143,14 +91656,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-hero-glow",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 134,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -92173,16 +91679,9 @@
         "--ke-color-background-surface"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-hero-start",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-free-hero-surface": {
@@ -92212,14 +91711,7 @@
       "aliases_from": [
         "--ke-color-free-hero-end"
       ],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-hero-end",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -92263,14 +91755,7 @@
         "--ke-color-free-border",
         "--ke-color-token-free-surface"
       ],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-border",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 131,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -92293,7 +91778,7 @@
         {
           "token": "--ke-color-free-medallion-shadow",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 148,
+          "line": 137,
           "has_fallback": false
         }
       ],
@@ -92319,7 +91804,7 @@
         {
           "token": "--ke-color-free-medallion-shadow-strong",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 165,
+          "line": 154,
           "has_fallback": false
         }
       ],
@@ -92368,16 +91853,9 @@
         "--ke-color-border-brand-quiet"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-results-border",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 172,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-free-results-surface": {
@@ -92398,16 +91876,9 @@
         "--ke-color-background-surface"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-free-results-surface",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 174,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-gesture-negative": {
@@ -99872,13 +99343,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 178,
+          "line": 164,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 179,
+          "line": 165,
           "has_fallback": false
         },
         {
@@ -105786,18 +105257,6 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-color-free-hero-start",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-free-results-surface",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 174,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-color-personalization-paper",
           "path": "site/src/components/InterestProfile.astro",
           "line": 563,
@@ -111688,13 +111147,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 178,
+          "line": 164,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 179,
+          "line": 165,
           "has_fallback": false
         },
         {
@@ -117920,7 +117379,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 166,
+          "line": 155,
           "has_fallback": false
         }
       ],
@@ -120357,14 +119816,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-elevation-free-hero",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 136,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -133183,15 +132635,21 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -134050,15 +133508,21 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -135084,7 +134548,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
           "has_fallback": false
         },
         {
@@ -135291,9 +134755,9 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
           "has_fallback": false
         },
         {
@@ -137444,14 +136908,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-hero-gap",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -137470,14 +136927,7 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-hero-padding",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 130,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -137500,14 +136950,7 @@
         "--ke-shape-radius-hero"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-hero-radius",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 132,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -137530,14 +136973,7 @@
         "--ke-shape-radius-hero-compact"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-hero-radius-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 188,
-          "has_fallback": false
-        }
-      ],
+      "direct_consumers": [],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -137556,28 +136992,9 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-medallion-hero-size",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 127,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-free-medallion-hero-size",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 146,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-free-medallion-hero-size",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 147,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-free-medallion-hero-size-compact": {
@@ -137594,22 +137011,9 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-medallion-hero-size-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 194,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-free-medallion-hero-size-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 195,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-free-medallion-sticky-size": {
@@ -137630,13 +137034,25 @@
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 161,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 162,
+          "line": 136,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-free-medallion-sticky-size",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 150,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-free-medallion-sticky-size",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 151,
           "has_fallback": false
         }
       ],
@@ -137662,13 +137078,25 @@
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 200,
+          "line": 177,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 200,
+          "line": 178,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-free-medallion-sticky-size-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 183,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-free-medallion-sticky-size-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 183,
           "has_fallback": false
         }
       ],
@@ -137694,7 +137122,7 @@
         {
           "token": "--ke-free-motion-opacity",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 166,
+          "line": 155,
           "has_fallback": false
         }
       ],
@@ -137724,7 +137152,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 166,
+          "line": 155,
           "has_fallback": false
         }
       ],
@@ -137792,16 +137220,9 @@
         "--ke-space-editorial-panel-padding"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-results-padding",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 171,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-free-results-radius": {
@@ -137822,16 +137243,9 @@
         "--ke-shape-radius-collection-panel"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-results-radius",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-free-results-radius-compact": {
@@ -137852,16 +137266,9 @@
         "--ke-shape-radius-focus-panel-compact"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-results-radius-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 201,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-free-sticky-layer": {
@@ -137886,7 +137293,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 152,
+          "line": 141,
           "has_fallback": false
         }
       ],
@@ -137912,7 +137319,7 @@
         {
           "token": "--ke-free-sticky-layer-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 199,
+          "line": 182,
           "has_fallback": false
         }
       ],
@@ -137942,7 +137349,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 153,
+          "line": 142,
           "has_fallback": false
         }
       ],
@@ -137972,7 +137379,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 199,
+          "line": 182,
           "has_fallback": false
         }
       ],
@@ -140583,7 +139990,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 152,
+          "line": 141,
           "has_fallback": false
         },
         {
@@ -157727,18 +157134,6 @@
         },
         {
           "token": "--ke-shape-border-hairline",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 131,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-shape-border-hairline",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 172,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-shape-border-hairline",
           "path": "site/src/components/InterestClubCard.astro",
           "line": 162,
           "has_fallback": false
@@ -158153,16 +157548,9 @@
       "aliases_from": [
         "--ke-free-results-radius"
       ],
-      "direct_consumers": [
-        {
-          "token": "--ke-free-results-radius",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-shape-radius-compact": {
@@ -159082,12 +158470,6 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-free-results-radius-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 201,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-footer-share-radius",
           "path": "site/src/components/SiteFooter.astro",
           "line": 119,
@@ -159100,8 +158482,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-7ffcf81c8bf78568",
-      "astro_family_set": "families-2f98f56f64969c6e",
+      "component_set": "components-2063db3924c9a058",
+      "astro_family_set": "families-6c51d036552547ae",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-shape-radius-hero": {
@@ -159144,12 +158526,6 @@
         "--ke-shape-radius-editorial-hero"
       ],
       "direct_consumers": [
-        {
-          "token": "--ke-free-hero-radius",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 132,
-          "has_fallback": false
-        },
         {
           "token": "--ke-shape-radius-editorial-hero",
           "path": "site/src/components/UnusualListingSurface.astro",
@@ -159219,12 +158595,6 @@
         "--ke-shape-radius-editorial-hero-compact"
       ],
       "direct_consumers": [
-        {
-          "token": "--ke-free-hero-radius-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 188,
-          "has_fallback": false
-        },
         {
           "token": "--ke-personal-feed-radius-compact",
           "path": "site/src/components/PersonalFeedSlot.astro",
@@ -159634,7 +159004,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 153,
+          "line": 142,
           "has_fallback": false
         },
         {
@@ -160242,7 +159612,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 199,
+          "line": 182,
           "has_fallback": false
         },
         {
@@ -161453,6 +160823,12 @@
         },
         {
           "token": "--ke-space-3",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 170,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
           "path": "site/src/components/listings/WeekendListingSurface.astro",
           "line": 116,
           "has_fallback": false
@@ -162608,6 +161984,30 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-space-4",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 129,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-4",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 160,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-4",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 171,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-4",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 184,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-collection-state-padding-inline",
           "path": "site/src/components/GastronomyCollectionSurface.astro",
           "line": 113,
@@ -163106,6 +162506,18 @@
       "direct_consumers": [
         {
           "token": "--ke-space-6",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 125,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-6",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 126,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-6",
           "path": "site/src/styles/design-system.css",
           "line": 331,
           "has_fallback": false
@@ -163430,20 +162842,14 @@
       ],
       "direct_consumers": [
         {
-          "token": "--ke-free-results-padding",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 171,
-          "has_fallback": false
-        },
-        {
           "token": "--ke-unusual-panel-padding",
           "path": "site/src/components/UnusualListingSurface.astro",
           "line": 95,
           "has_fallback": false
         }
       ],
-      "component_set": "components-4bc8a68fd2359e44",
-      "astro_family_set": "families-12f6082df0559895",
+      "component_set": "components-0104bf3372b1024b",
+      "astro_family_set": "families-bf6bf36d3eb0570d",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-space-focus-boundary-block": {
@@ -166235,16 +165641,9 @@
         "--ke-type-h1-weight"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-display-collection",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-display-collection-letter": {
@@ -166265,16 +165664,9 @@
         "--ke-type-h1-letter"
       ],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-display-collection-letter",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-display-collection-line": {
@@ -166311,16 +165703,9 @@
       "aliases_from": [
         "--ke-type-display-collection"
       ],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-display-collection",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-display-collection-size": {
@@ -166357,16 +165742,9 @@
       "aliases_from": [
         "--ke-type-display-collection"
       ],
-      "direct_consumers": [
-        {
-          "token": "--ke-type-display-collection",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-bb6ce3a56b809bdc",
-      "astro_family_set": "families-208ddce99d97ea26",
+      "direct_consumers": [],
+      "component_set": "components-49a5dd0f802f557e",
+      "astro_family_set": "families-adb69e752b106d41",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-type-display-home": {
@@ -167562,6 +166940,12 @@
         },
         {
           "token": "--ke-type-h1",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 129,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
           "line": 700,
           "has_fallback": false
@@ -167618,6 +167002,12 @@
           "token": "--ke-type-h1-compact",
           "path": "site/src/components/design-system/foundations.css",
           "line": 275,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -167747,9 +167137,15 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection-letter",
+          "token": "--ke-type-h1-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-compact-letter",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -167990,9 +167386,15 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -168226,9 +167628,15 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -168445,9 +167853,15 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h1-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -168611,9 +168025,9 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection-letter",
+          "token": "--ke-type-h1-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
           "has_fallback": false
         },
         {
@@ -168819,9 +168233,9 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
           "has_fallback": false
         },
         {
@@ -169021,9 +168435,9 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
           "has_fallback": false
         },
         {
@@ -169205,9 +168619,9 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-type-display-collection",
+          "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 140,
+          "line": 129,
           "has_fallback": false
         },
         {
@@ -169303,7 +168717,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
           "has_fallback": false
         },
         {
@@ -169377,7 +168791,7 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
           "has_fallback": false
         },
         {
@@ -169467,7 +168881,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
           "has_fallback": false
         },
         {
@@ -169573,7 +168987,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
           "has_fallback": false
         },
         {
@@ -169699,7 +169113,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 177,
+          "line": 163,
           "has_fallback": false
         },
         {

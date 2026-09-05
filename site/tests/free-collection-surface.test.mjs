@@ -28,6 +28,8 @@ test('Free collection retains its medallion identity while using one ordinary li
   assert.match(surface, /JSON\.stringify\(freeCatalog\)\.replace\(\/</u);
   assert.match(surface, /discoverySrc="#free-collection-catalog"/u);
   assert.match(surface, /data-free-collection-result-count[\s\S]*?data-free-collection-loaded-count[\s\S]*?data-free-collection-total-count/u);
+  assert.doesNotMatch(surface, /ke-type-display-collection|Готовая подборка|Как собрана:|Это не личный сохранённый поиск/u);
+  assert.match(surface, /font:var\(--ke-type-h1\)/u);
   assert.doesNotMatch(surface, /data-free-collection-event-group="exhibitions"|Бесплатные выставки|regularEvents|exhibitionEvents/u);
   assert.match(surface, /parents=\{\[\s*\{ label:'Афиша', href:siteHomeHref\(\) \},\s*\]\}/u);
   assert.doesNotMatch(surface, /label:'Поиск'|\/poisk\//u, 'Free is a first-class collection, not a saved Search result');
