@@ -1,4 +1,4 @@
-import { resolveEventImageCrop } from './imageCrop.mjs';
+import { resolveEventImageCrop, solveProtectedCrop } from './imageCrop.mjs';
 import listingMediaOverrides from '../data/listingMediaOverrides.json' with { type:'json' };
 
 // CSS aspect ratios are width / height. The compact default is therefore the
@@ -104,6 +104,7 @@ export function relatedCardPrimaryImageAsset(item) {
     geometry_pixel_sha256: display?.geometry_pixel_sha256 || candidate?.geometry_pixel_sha256 || item?.geometry_pixel_sha256,
     geometry_status: display?.geometry_status || candidate?.geometry_status || item?.geometry_status,
     geometry_coordinate_space: display?.geometry_coordinate_space || candidate?.geometry_coordinate_space || item?.geometry_coordinate_space,
+    ocr_boxes: display?.ocr_boxes || candidate?.ocr_boxes || item?.ocr_boxes,
     face_boxes: display?.face_boxes || candidate?.face_boxes || item?.face_boxes,
     valuable_region: display?.valuable_region || candidate?.valuable_region || item?.valuable_region,
   });
@@ -157,6 +158,23 @@ export function relatedCardMediaGeometry(item) {
 
 function cropFraction(sourceRatio, targetRatio) {
   return Math.max(0, 1 - Math.min(sourceRatio / targetRatio, targetRatio / sourceRatio));
+}
+
+function verifiedDocumentTextCrop(asset, targetAspect) {
+  const currentGeometry = asset?.geometry_status === 'classified'
+    && asset?.geometry_coordinate_space === 'normalized_0_1'
+    && typeof asset?.current_pixel_sha256 === 'string'
+    && asset.current_pixel_sha256.length > 0
+    && asset.current_pixel_sha256 === asset.geometry_pixel_sha256;
+  if (asset?.image_text_mode !== 'ocr_text' || asset?.safe_crop !== true || !currentGeometry) return null;
+  if (!Array.isArray(asset?.ocr_boxes) || asset.ocr_boxes.length === 0) return null;
+  const crop = solveProtectedCrop({
+    sourceWidth:asset.width,
+    sourceHeight:asset.height,
+    targetAspect,
+    boxes:asset.ocr_boxes,
+  });
+  return crop.fit === 'cover' ? crop : null;
 }
 
 /**
@@ -213,9 +231,22 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
       };
     }
     if (potentialCoverCrop > EPSILON) {
-      // image_text_mode classifies the asset; it does not locate its text.
-      // Centering a numerically legal crop can remove the entire headline.
-      // Do not invent OCR boxes or treat photo valuable_region as text proof.
+      const protectedCrop = verifiedDocumentTextCrop(geometry?.asset, normalizedTargetAspect);
+      if (protectedCrop) {
+        return {
+          mediaKind:'document',
+          mediaTreatment:'document-protected-cover',
+          fit:'cover',
+          objectPosition:protectedCrop.objectPosition,
+          cropReason:'protected_text_regions_fit',
+          potentialCoverCrop,
+          coverCrop:potentialCoverCrop,
+          cropWindow:protectedCrop.cropWindow,
+        };
+      }
+      // image_text_mode alone classifies the asset; it does not locate its
+      // text. A bounded crop is enabled only by current, normalized OCR boxes.
+      // Never substitute a photo valuable_region for protected text proof.
       return {
         mediaKind:'document',
         mediaTreatment:'document-contain',
@@ -341,22 +372,23 @@ function decisionPaintedFields(entry, targetRatio, decision) {
   return cropFraction(finiteRatio(entry?.ratio, targetRatio), targetRatio) > EPSILON;
 }
 
-function rowTarget(row) {
+function rowTargets(row) {
   const documents = row.filter((entry) => entry.documentMedia && entryResourcePresent(entry));
   if (documents.length) {
-    // No current document payload locates protected text. Therefore its only
-    // proven no-field frame is its decoded natural ratio. The historic 20%
-    // area interval was not crop evidence: selecting its upper bound forced
-    // the resolver to contain the source and painted the rejected fields.
-    if (documents.some((entry) => entry.dimensionsKnown === false)) return null;
-    const targetRatio = documents[0].ratio;
-    if (documents.some((entry) => Math.abs(entry.ratio - targetRatio) > EPSILON)) return null;
-    return {
+    // Natural ratios remain the only candidates unless every changed document
+    // proves a bounded cover with current OCR boxes. Testing each source ratio
+    // guarantees at least one whole document and avoids inventing a midpoint.
+    if (documents.some((entry) => entry.dimensionsKnown === false)) return [];
+    const ratios = documents.map((entry) => entry.ratio);
+    const balancedTarget = Math.sqrt(Math.min(...ratios) * Math.max(...ratios));
+    return [...new Set([...ratios, balancedTarget])].map((targetRatio) => ({
       targetRatio,
-      rowMode:'document-led-natural',
-    };
+      rowMode:documents.every((entry) => Math.abs(entry.ratio - targetRatio) <= EPSILON)
+        ? 'document-led-natural'
+        : 'document-led-protected-crop',
+    }));
   }
-  return {
+  return [{
     // A photo-only recommendation row has no semantic neighbour that needs to
     // dictate its height. Use the canonical compact 5:4 frame rather than
     // deriving an ever-wider row from source geometry; every image still fills
@@ -364,35 +396,43 @@ function rowTarget(row) {
     // cards between rows.
     targetRatio:PREFERRED_VISUAL_RATIO,
     rowMode:'visual-compact-5x4',
-  };
+  }];
 }
 
 function rowPlan(row, mediaTreatment) {
-  const target = rowTarget(row, mediaTreatment);
-  if (!target) return null;
-  const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, target.targetRatio, entry));
-  const paintedFields = decisions.map((decision, index) => decisionPaintedFields(row[index], target.targetRatio, decision));
-  if (paintedFields.some((value) => value === true)) return null;
-  const visualCrop = decisions
-    .filter(({ mediaKind }) => mediaKind === 'visual')
-    .reduce((sum, decision) => sum + decision.coverCrop, 0);
-  return {
-    ...target,
-    decisions,
-    // Normalized full-card row height: shared media height plus row-local
-    // intrinsic chrome estimated from the same bounded copy tracks as CSS.
-    cost:estimatedChromeCost(row) + (1 / target.targetRatio),
-    visualCrop,
-    framingStatus:'satisfied',
-    framingConflict:null,
-    paintedFields,
-  };
+  let best = null;
+  for (const target of rowTargets(row, mediaTreatment)) {
+    const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, target.targetRatio, entry));
+    const paintedFields = decisions.map((decision, index) => decisionPaintedFields(row[index], target.targetRatio, decision));
+    if (paintedFields.some((value) => value === true)) continue;
+    const visualCrop = decisions
+      .filter(({ mediaKind }) => mediaKind === 'visual')
+      .reduce((sum, decision) => sum + decision.coverCrop, 0);
+    const documentCrop = decisions
+      .filter(({ mediaKind }) => mediaKind === 'document')
+      .reduce((sum, decision) => sum + Number(decision.coverCrop || 0), 0);
+    const candidate = {
+      ...target,
+      decisions,
+      // Normalized full-card row height: shared media height plus row-local
+      // intrinsic chrome estimated from the same bounded copy tracks as CSS.
+      cost:estimatedChromeCost(row) + (1 / target.targetRatio),
+      visualCrop,
+      documentCrop,
+      framingStatus:'satisfied',
+      framingConflict:null,
+      paintedFields,
+    };
+    if (!best || candidate.documentCrop < best.documentCrop - EPSILON
+      || (Math.abs(candidate.documentCrop - best.documentCrop) <= EPSILON && candidate.cost < best.cost)) best = candidate;
+  }
+  return best;
 }
 
 function comparePlans(left, right) {
   if (!right) return -1;
-  const scoreLeft = [left.cost, left.rows, left.visualCrop, left.displacement];
-  const scoreRight = [right.cost, right.rows, right.visualCrop, right.displacement];
+  const scoreLeft = [Number(left.documentCrop || 0), left.cost, left.rows, left.visualCrop, left.displacement];
+  const scoreRight = [Number(right.documentCrop || 0), right.cost, right.rows, right.visualCrop, right.displacement];
   for (let index = 0; index < scoreLeft.length; index += 1) {
     if (Math.abs(scoreLeft[index] - scoreRight[index]) > EPSILON) return scoreLeft[index] - scoreRight[index];
   }
@@ -461,7 +501,7 @@ function optimizeRows(selected, rowSize, mediaTreatment, preserveOrder = false) 
   const fullMask = (1 << selected.length) - 1;
   const memo = new Map();
   const solveFullRows = (mask) => {
-    if (!mask) return { cost:0, rows:0, visualCrop:0, displacement:0, signature:'', groups:[] };
+    if (!mask) return { documentCrop:0, cost:0, rows:0, visualCrop:0, displacement:0, signature:'', groups:[] };
     if (memo.has(mask)) return memo.get(mask);
     let anchor = 0;
     while (!(mask & (1 << anchor))) anchor += 1;
@@ -476,6 +516,7 @@ function optimizeRows(selected, rowSize, mediaTreatment, preserveOrder = false) 
       const displacement = indexes.reduce((sum, value, index) => sum + Math.abs(value - (anchor + index)), 0);
       const signature = `${indexes.join('.')};${tail.signature}`;
       const candidate = {
+        documentCrop:Number(plan.documentCrop || 0) + Number(tail.documentCrop || 0),
         cost:plan.cost + tail.cost,
         rows:1 + tail.rows,
         visualCrop:plan.visualCrop + tail.visualCrop,
@@ -508,6 +549,7 @@ function optimizeRows(selected, rowSize, mediaTreatment, preserveOrder = false) 
     const full = solveFullRows(fullMask & ~remainderMask);
     if (!full) continue;
     const candidate = {
+      documentCrop:Number(full.documentCrop || 0) + Number(remainderPlan.documentCrop || 0),
       cost:full.cost + remainderPlan.cost,
       rows:full.rows + 1,
       visualCrop:full.visualCrop + remainderPlan.visualCrop,
@@ -522,9 +564,9 @@ function optimizeRows(selected, rowSize, mediaTreatment, preserveOrder = false) 
 
 /**
  * Layout may choose geometry, not remove admitted events. If no complete
- * intrinsic-ratio partition exists, keep the ranked prefix and use a common
- * compact frame only for incompatible rows. Documents stay whole through the
- * same media resolver; compatible rows keep their existing layout unchanged.
+ * intrinsic-ratio partition exists, keep the ranked prefix and anchor each
+ * incompatible row to one factual natural ratio. Documents stay whole through
+ * the same media resolver; the row is diagnostic evidence, not acceptance.
  */
 function containedFallbackRows(selected, rowSize, mediaTreatment) {
   const rows = [];
@@ -566,6 +608,7 @@ function materializeRow(row, rowIndex, presentation) {
       rowRatio:plan.targetRatio,
       rowIndex,
       rowColumn:index,
+      sourceIndex:sourceEntries[index].originalIndex,
       rowMode:plan.rowMode,
       presentation,
       ...plan.decisions[index],
@@ -584,6 +627,139 @@ function materializeRow(row, rowIndex, presentation) {
     : Math.max(0, ...documentCrops);
   for (const entry of entries) entry.layout.rowWorstCrop = rowWorstCrop;
   return entries;
+}
+
+function removeSelectedEntries(entries, selected) {
+  const removed = new Set(selected);
+  return entries.filter((entry) => !removed.has(entry));
+}
+
+function bestFeasibleCombination(entries, size, mediaTreatment) {
+  if (size <= 0 || entries.length < size) return null;
+  let best = null;
+  for (const indexes of combinations((1 << Math.min(entries.length, 30)) - 1, size)) {
+    const selected = indexes.map((index) => entries[index]);
+    const plan = rowPlan(selected, mediaTreatment);
+    if (!plan) continue;
+    const signature = selected.map((entry) => entry.originalIndex).join('.');
+    const candidate = {
+      entries:selected,
+      plan,
+      documentCrop:Number(plan.documentCrop || 0),
+      sourceSum:selected.reduce((sum, entry) => sum + entry.originalIndex, 0),
+      signature,
+    };
+    if (!best
+      || candidate.documentCrop < best.documentCrop - EPSILON
+      || (Math.abs(candidate.documentCrop - best.documentCrop) <= EPSILON && candidate.sourceSum < best.sourceSum)
+      || (Math.abs(candidate.documentCrop - best.documentCrop) <= EPSILON && candidate.sourceSum === best.sourceSum
+        && candidate.signature.localeCompare(best.signature) < 0)) best = candidate;
+  }
+  return best;
+}
+
+/**
+ * Plan one complete eligible pool before choosing the initially visible rows.
+ * Exact natural-ratio document buckets are exhausted first, visual media fill
+ * the cheapest bucket remainders, and only genuine residue reaches the
+ * explicit UNSATISFIED tail. Every source item occurs exactly once.
+ */
+export function planRelatedCardRows(items, options = {}) {
+  const requestedRowSize = Number(options.rowSize ?? 3);
+  const rowSize = Math.max(1, Math.min(6, Math.floor(Number.isFinite(requestedRowSize) ? requestedRowSize : 3)));
+  const mediaTreatment = options.mediaTreatment || 'hybrid';
+  const presentation = options.presentation === 'flow' ? 'flow' : 'related-grid';
+  const geometry = options.geometry || relatedCardMediaGeometry;
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const selected = items.map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
+  const exactBuckets = new Map();
+  const flexible = [];
+  const unresolved = [];
+  for (const entry of selected) {
+    if (!entryResourcePresent(entry) || !entry.documentMedia) {
+      flexible.push(entry);
+      continue;
+    }
+    if (entry.dimensionsKnown === false) {
+      unresolved.push(entry);
+      continue;
+    }
+    const bucket = exactBuckets.get(entry.ratio) || [];
+    bucket.push(entry);
+    exactBuckets.set(entry.ratio, bucket);
+  }
+
+  const satisfiedRows = [];
+  const residues = [];
+  for (const bucket of exactBuckets.values()) {
+    bucket.sort((left, right) => left.originalIndex - right.originalIndex);
+    while (bucket.length >= rowSize) {
+      const entries = bucket.splice(0, rowSize);
+      satisfiedRows.push({ entries, plan:rowPlan(entries, mediaTreatment) });
+    }
+    if (bucket.length) residues.push(bucket);
+  }
+
+  // One visual fills two documents before two visuals fill one document. This
+  // maximizes the number of natural document cards admitted to satisfied rows;
+  // source index breaks ties without creating a second content rank.
+  residues.sort((left, right) => (rowSize - left.length) - (rowSize - right.length)
+    || left[0].originalIndex - right[0].originalIndex);
+  flexible.sort((left, right) => left.originalIndex - right.originalIndex);
+  for (const residue of residues) {
+    const needed = rowSize - residue.length;
+    if (needed <= flexible.length) {
+      const entries = [...residue, ...flexible.splice(0, needed)]
+        .sort((left, right) => left.originalIndex - right.originalIndex);
+      const plan = rowPlan(entries, mediaTreatment);
+      if (plan) {
+        satisfiedRows.push({ entries, plan });
+        continue;
+      }
+      flexible.push(...entries.filter((entry) => !residue.includes(entry)));
+      flexible.sort((left, right) => left.originalIndex - right.originalIndex);
+    }
+    unresolved.push(...residue);
+  }
+  while (flexible.length >= rowSize) {
+    const entries = flexible.splice(0, rowSize);
+    satisfiedRows.push({ entries, plan:rowPlan(entries, mediaTreatment) });
+  }
+  unresolved.push(...flexible);
+  unresolved.sort((left, right) => left.originalIndex - right.originalIndex);
+
+  // Reserve the sole ordinary final remainder when it can itself be framed,
+  // then search the small residue for any OCR-box-proven bounded crop rows.
+  const remainderSize = selected.length % rowSize;
+  let finalRow = null;
+  if (remainderSize && unresolved.length >= remainderSize) {
+    const found = bestFeasibleCombination(unresolved, remainderSize, mediaTreatment);
+    if (found) {
+      finalRow = { entries:found.entries, plan:found.plan };
+      unresolved.splice(0, unresolved.length, ...removeSelectedEntries(unresolved, found.entries));
+    }
+  }
+  while (unresolved.length >= rowSize && unresolved.length <= 30) {
+    const found = bestFeasibleCombination(unresolved, rowSize, mediaTreatment);
+    if (!found) break;
+    satisfiedRows.push({ entries:found.entries, plan:found.plan });
+    unresolved.splice(0, unresolved.length, ...removeSelectedEntries(unresolved, found.entries));
+  }
+
+  satisfiedRows.sort((left, right) => Math.min(...left.entries.map((entry) => entry.originalIndex))
+    - Math.min(...right.entries.map((entry) => entry.originalIndex)));
+  // No protected-text proof exists for the remaining rows. Keep them
+  // unaccepted, but cluster adjacent natural ratios so their reported conflict
+  // is the safest measurable residue rather than an arbitrary source-order
+  // pairing. Unknown geometry stays last and never acquires a crop claim.
+  unresolved.sort((left, right) => {
+    const leftRatio = left.dimensionsKnown === false ? Number.POSITIVE_INFINITY : left.ratio;
+    const rightRatio = right.dimensionsKnown === false ? Number.POSITIVE_INFINITY : right.ratio;
+    return leftRatio - rightRatio || left.originalIndex - right.originalIndex;
+  });
+  const conflictRows = containedFallbackRows(unresolved, rowSize, mediaTreatment);
+  const rows = [...satisfiedRows, ...conflictRows, ...(finalRow ? [finalRow] : [])];
+  return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex, presentation));
 }
 
 /**

@@ -280,7 +280,7 @@ test('hero and desktop gallery share the semantic-error contain contract', async
   assert.doesNotMatch(optimizedGrid, /import EventCard/u);
   assert.doesNotMatch(optimizedGrid, /packRelatedCardRows/u);
   assert.doesNotMatch(optimizedGrid, /<style>/u);
-  assert.match(adaptiveGrid, /import \{ packRelatedCardRows \} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
+  assert.match(adaptiveGrid, /import \{ packRelatedCardRows, planRelatedCardRows \} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
   assert.match(adaptiveGrid, /packRelatedCardRows\(events/u);
   assert.match(adaptiveGrid, /<EventCard/u);
   assert.match(adaptiveGrid, /data-optimized-event-card-grid=\{legacyOptimizedContract/u);

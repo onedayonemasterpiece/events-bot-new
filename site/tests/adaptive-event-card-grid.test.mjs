@@ -14,9 +14,9 @@ test('AdaptiveEventCardGrid owns flow and packed layout while the legacy grid is
   ]);
 
   assert.match(adaptive, /import EventCard(?:, \{ type EventCardRootAttributes \})? from '\.\/EventCard\.astro'/u);
-  assert.match(adaptive, /import \{ packRelatedCardRows \} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
+  assert.match(adaptive, /import \{ packRelatedCardRows, planRelatedCardRows \} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
   assert.equal((adaptive.match(/<EventCard\b/gu) || []).length, 1);
-  assert.match(adaptive, /mode === 'packed'\s*\? packRelatedCardRows\(events, \{ limit, rowSize, mediaTreatment \}\)/u);
+  assert.match(adaptive, /events\.length > limit[\s\S]*planRelatedCardRows\(events, \{ rowSize, mediaTreatment \}\)\.slice\(0, limit\)[\s\S]*packRelatedCardRows\(events, \{ limit, rowSize, mediaTreatment \}\)/u);
   assert.match(adaptive, /events\.slice\(0, limit\)\.map\(\(item\) => \(\{ item, layout: undefined \}\)\)/u);
   assert.match(adaptive, /mode === 'packed' && 'cards-grid--immersive'/u);
   assert.match(adaptive, /desktopRelatedCrop=\{mode === 'packed'\}/u);

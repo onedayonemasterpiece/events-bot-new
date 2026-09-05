@@ -6,9 +6,10 @@ import { freeCollectionCountMessage, freeEventCountLabel } from '../src/lib/free
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('Free collection retains its medallion identity while using one ordinary listing', async () => {
-  const [surface, route] = await Promise.all([
+  const [surface, route, layout] = await Promise.all([
     read('src/components/FreeCollectionSurface.astro'),
     read('src/pages/podborki/[slug]/index.astro'),
+    read('src/layouts/EventLayout.astro'),
   ]);
   assert.match(route, /collection\.slug === 'besplatnye-sobytiya'[\s\S]*<FreeCollectionSurface/u);
   assert.match(surface, /data-free-collection-medallion="large"/u);
@@ -22,12 +23,19 @@ test('Free collection retains its medallion identity while using one ordinary li
   assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*?events=\{initialEvents\}[\s\S]*?rowSize=\{3\}[\s\S]*?mobileFlowMedia[\s\S]*?discoveryFeed[\s\S]*?runtimeManaged[\s\S]*?runtimeVisibleOnly[\s\S]*?runtimeSourcePolicy="all-direct"/u);
   assert.match(surface, /data-free-collection-grid/gu);
   assert.match(surface, /data-free-collection-eligibility':'confirmed-free'/u);
-  assert.match(surface, /events\.slice\(0, 12\)/u);
+  assert.match(surface, /planRelatedCardRows\(events, \{ rowSize:3, presentation:'flow' \}\)/u);
+  assert.match(surface, /const initialEvents = plannedEvents\.slice\(0, 12\)/u);
+  assert.match(surface, /composition_order: 'global-natural-rows-v1'/u);
+  assert.match(surface, /composition_source_event_ids: events\.map/u);
+  assert.match(surface, /related_static: plannedEvents\.map/u);
   assert.match(surface, /id="free-collection-catalog" type="application\/json"[\s\S]*?set:html=\{freeCatalogJson\}/u);
   assert.match(surface, /page_size: 12, preload_target: 12, eligibility_filter: 'confirmed-free'/u);
   assert.match(surface, /JSON\.stringify\(freeCatalog\)\.replace\(\/</u);
   assert.match(surface, /discoverySrc="#free-collection-catalog"/u);
   assert.match(surface, /data-free-collection-result-count[\s\S]*?data-free-collection-loaded-count[\s\S]*?data-free-collection-total-count/u);
+  assert.match(layout, /function retainPreplannedFreeComposition/u);
+  assert.match(layout, /store\.manifest\.composition_order === 'global-natural-rows-v1'/u);
+  assert.match(layout, /feed\.dataset\.framingPlan = 'global-natural-rows-v1'/u);
   assert.doesNotMatch(surface, /ke-type-display-collection|Готовая подборка|Как собрана:|Это не личный сохранённый поиск/u);
   assert.match(surface, /font:var\(--ke-type-h1\)/u);
   assert.doesNotMatch(surface, /data-free-collection-event-group="exhibitions"|Бесплатные выставки|regularEvents|exhibitionEvents/u);

@@ -2527,7 +2527,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <script>
       import { shellOccupiedSpace } from '../lib/shellOccupiedSpace.mjs';
       import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
-      import { packRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
+      import { packRelatedCardRows, planRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
       import { selectEventContinuation } from '../lib/eventContinuation.mjs';
       import { composeEventShareImage } from '../lib/eventShareImage.mjs';
       import { getResilientDataClient } from '../lib/resilientDataClient';
@@ -2653,6 +2653,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       Object.assign(window, {
         KenigEventsFreeCollectionCountMessage: freeCollectionCountMessage,
         KenigEventsPackRelatedCardRows: packRelatedCardRows,
+        KenigEventsPlanRelatedCardRows: planRelatedCardRows,
         KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
         KenigEventsResolveMobileEventCardMedia: resolveMobileEventCardMedia,
         KenigEventsRelatedCardPrimaryImageAsset: relatedCardPrimaryImageAsset,
@@ -3851,6 +3852,31 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           }));
         }
 
+        function retainPreplannedFreeComposition(manifest, profile) {
+          const active = isCompatibleProfile(profile) ? profile : null;
+          return toArray(manifest?.related_static)
+            .filter((candidate) => isEligibleCandidate(candidate, manifest, active))
+            .map((candidate, index) => ({
+              event_id:candidateId(candidate),
+              candidate,
+              rank:index,
+              personal_score:Number(staticCandidateScore(candidate).toFixed(4)),
+              base_similarity:Number(staticCandidateScore(candidate).toFixed(4)),
+              reason_codes:unique([...(toArray(candidate.reason_codes)), 'layout:global-natural-rows-v1']),
+              diversity_postponed:false,
+            }));
+        }
+
+        function composeRankedForFraming(ranked, feed) {
+          const rowSize = Math.max(1, Number.parseInt(feed?.dataset.adaptiveGridRowSize || '3', 10) || 3);
+          if (rowSize === 1 || ranked.length <= 1) return ranked.map((item, rank) => ({ ...item, source_rank:item.rank, rank }));
+          return planRelatedCardRows(ranked, {
+            rowSize,
+            mediaTreatment:feed?.dataset.adaptiveGridMediaTreatment || 'hybrid',
+            geometry:relatedCardMediaGeometry,
+          }).map(({ item, layout }, rank) => ({ ...item, source_rank:item.rank, rank, framing_layout:layout }));
+        }
+
         function rankAdjacentContinuationCandidates(manifest, profile) {
           const active = isCompatibleProfile(profile) ? profile : null;
           return toArray(manifest?.related_adjacent)
@@ -4939,6 +4965,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             const packed = window.KenigEventsPackRelatedCardRows(existingRanked, {
               limit:existingRanked.length,
               rowSize,
+              preserveOrder:feed.dataset.framingPlan === 'global-natural-rows-v1',
               mediaTreatment:feed.dataset.adaptiveGridMediaTreatment || 'hybrid',
               geometry:window.KenigEventsRelatedCardMediaGeometry,
             });
@@ -4974,6 +5001,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
                 if (tailRanked.length !== tailById.size) return;
                 const packed = window.KenigEventsPackRelatedCardRows(tailRanked, {
                   limit:tailRanked.length, rowSize,
+                  preserveOrder:feed.dataset.framingPlan === 'global-natural-rows-v1',
                   mediaTreatment:feed.dataset.adaptiveGridMediaTreatment || 'hybrid',
                   geometry:window.KenigEventsRelatedCardMediaGeometry,
                 });
@@ -5002,7 +5030,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             const id = asId(item.event_id);
             if (!id || existingIds.has(id)) continue;
             if (!isEligibleCandidate(item.candidate, store.manifest, profile)) continue;
-            if (!appendEventCard(feed, item, feed.dataset.feedCardVariant || 'split-actions')) continue;
+            if (!appendEventCard(feed, item, feed.dataset.feedCardVariant || 'split-actions', item.framing_layout || null)) continue;
             existingIds.add(id);
             added += 1;
           }
@@ -5034,11 +5062,16 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const profile = activeProfile(store.manifest);
           const hasLocalProfile = Boolean(profile);
           const algorithmId = hasLocalProfile ? LOCAL_FALLBACK_ALGORITHM_ID : STATIC_ALGORITHM_ID;
-          store.ranked = isFiltered
-            ? collapseRankedOccurrenceFamilies(personalFeedProfileIsReady(profile)
-                ? rankPersonalFeedCandidates(store.manifest, profile)
-                : rankPopularFallbackCandidates(store.manifest, profile))
+          const semanticallyRanked = isFiltered
+            ? store.manifest.composition_order === 'global-natural-rows-v1'
+              ? retainPreplannedFreeComposition(store.manifest, profile)
+              : collapseRankedOccurrenceFamilies(personalFeedProfileIsReady(profile)
+                  ? rankPersonalFeedCandidates(store.manifest, profile)
+                  : rankPopularFallbackCandidates(store.manifest, profile))
             : rankEventDetailRelated(store.manifest, profile, { maxSameCategory: 3, maxSameVenue: 2 });
+          const alreadyComposed = isFiltered && store.manifest.composition_order === 'global-natural-rows-v1';
+          store.ranked = alreadyComposed ? semanticallyRanked : composeRankedForFraming(semanticallyRanked, feed);
+          feed.dataset.framingPlan = 'global-natural-rows-v1';
           feed.dataset.effectiveAlgorithmId = algorithmId;
           feed.dataset.surface = SURFACE_EVENT_DETAIL_RELATED;
           feed.dataset.layoutMode = relatedLayoutMode();

@@ -1,7 +1,7 @@
 ---
 import EventCard, { type EventCardRootAttributes } from './EventCard.astro';
 import type { PreviewEvent } from '../lib/types';
-import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
+import { packRelatedCardRows, planRelatedCardRows } from '../lib/relatedCardLayout.mjs';
 
 type GridMode = 'flow' | 'packed';
 type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
@@ -101,12 +101,17 @@ const gridBaseState = [
   runtimeManagedGrid && 'runtime-managed',
   runtimeManagedGrid && runtimeVisibleOnly && 'runtime-visible-only',
 ].filter(Boolean).join(' ') || undefined;
+const fullPoolFlowPlan = mode === 'flow' && events.length > limit
+  ? planRelatedCardRows(events, { rowSize, mediaTreatment, presentation:'flow' }).slice(0, limit)
+  : null;
 const resolved = mode === 'packed'
-  ? packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
-  : events.slice(0, limit).map((item) => ({ item, layout: undefined }));
+  ? events.length > limit
+    ? planRelatedCardRows(events, { rowSize, mediaTreatment }).slice(0, limit)
+    : packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
+  : fullPoolFlowPlan || events.slice(0, limit).map((item) => ({ item, layout: undefined }));
 const framingPlan = mode === 'packed'
   ? resolved
-  : packRelatedCardRows(events, { limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true });
+  : fullPoolFlowPlan || packRelatedCardRows(events, { limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true });
 const framingConflicts = [...new Set(framingPlan
   .map(({ layout }) => layout?.framingConflict)
   .filter(Boolean))].join(';');
