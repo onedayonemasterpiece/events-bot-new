@@ -62533,7 +62533,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4778,
+          "line": 4779,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -62561,7 +62561,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4777,
+          "line": 4778,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -63245,7 +63245,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6121,
+          "line": 6122,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -64094,7 +64094,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4776,
+          "line": 4777,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -64103,7 +64103,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4813,
+          "line": 4814,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -64112,7 +64112,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4862,
+          "line": 4863,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -65091,7 +65091,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6077,
+          "line": 6078,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -65117,7 +65117,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6075,
+          "line": 6076,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -65143,7 +65143,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6074,
+          "line": 6075,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175069,7 +175069,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4858,
+          "line": 4859,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175808,7 +175808,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4775,
+          "line": 4776,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175817,7 +175817,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4812,
+          "line": 4813,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175826,7 +175826,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4884,
+          "line": 4885,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175943,7 +175943,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4774,
+          "line": 4775,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175952,7 +175952,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4813,
+          "line": 4814,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -175961,7 +175961,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4861,
+          "line": 4862,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -177385,7 +177385,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6039,
+          "line": 6040,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",
