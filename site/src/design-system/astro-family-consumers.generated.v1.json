@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "ad9e6962ed88f7109504b66ea8d24a717c1677fab4e51f1227a244915aff2cb1",
+  "registry_sha256": "1fef8a2c6e952792f2bc60678f8eef693357ec24c8b00fe41df767f6357725fb",
   "source_root": "site/src",
   "import_inventory_sha256": "7b30c4623b51b41a65982106f5901ec954670f4a1224a55c89c4b02a6789ea61",
   "product_scope": {
@@ -392,12 +392,12 @@
     "direct_consumer_edges": 274,
     "protocol_consumer_edges": 32,
     "runtime_factory_edges": 1,
-    "runtime_consumer_edges": 2,
+    "runtime_consumer_edges": 4,
     "production_route_edges": 547,
     "unique_direct_consumers": 119,
     "unique_protocol_consumers": 32,
     "unique_runtime_factories": 1,
-    "unique_runtime_consumers": 2,
+    "unique_runtime_consumers": 4,
     "unique_production_routes": 27
   },
   "families": {
@@ -1226,7 +1226,20 @@
         "site/src/pages/zavtra/index.astro"
       ],
       "runtime_factories": [],
-      "runtime_clients": [],
+      "runtime_clients": [
+        {
+          "path": "site/src/layouts/EventLayout.astro",
+          "symbols": [
+            "shellOccupiedSpace"
+          ]
+        },
+        {
+          "path": "site/src/lib/shellOccupiedSpace.mjs",
+          "symbols": [
+            "shellOccupiedSpace"
+          ]
+        }
+      ],
       "production_routes": [
         {
           "pattern": "/",

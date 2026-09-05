@@ -97,7 +97,17 @@
           ]
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "typography": {
+          "authority": "site/src/components/design-system/f0-typography-authority.v1.json",
+          "title": "--ke-type-card-title-weight",
+          "metadata": "--ke-type-card-metadata-weight",
+          "status": "--ke-type-card-status-weight",
+          "actions": "--ke-type-card-action-weight",
+          "page_heading_roles_unchanged": true
+        }
+      }
     },
     {
       "id": "ListingEventCard",
@@ -160,7 +170,14 @@
           ]
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "typography": {
+          "authority": "site/src/components/design-system/f0-typography-authority.v1.json",
+          "title": "--ke-type-card-title-weight",
+          "page_heading_roles_unchanged": true
+        }
+      }
     },
     {
       "id": "MediaFrame",
@@ -470,7 +487,20 @@
         "Button"
       ],
       "runtime_factories": [],
-      "runtime_clients": [],
+      "runtime_clients": [
+        {
+          "path": "site/src/lib/shellOccupiedSpace.mjs",
+          "symbols": [
+            "shellOccupiedSpace"
+          ]
+        },
+        {
+          "path": "site/src/layouts/EventLayout.astro",
+          "symbols": [
+            "shellOccupiedSpace"
+          ]
+        }
+      ],
       "consumer_signals": [],
       "explicit_override_exceptions": [
         {
@@ -494,7 +524,14 @@
           "suspended",
           "unavailable"
         ],
-        "visual_status": "SCHEMATIC_EXISTING_SHELL_NOT_FINAL_ISLAND_DESIGN"
+        "visual_status": "SCHEMATIC_EXISTING_SHELL_NOT_FINAL_ISLAND_DESIGN",
+        "occupied_space": {
+          "source": "site/src/lib/shellOccupiedSpace.mjs",
+          "read_api": "KenigEventsShellOccupiedSpace",
+          "event": "kenigevents:lower-surface-state",
+          "geometry": "clipped_disjoint_rectangles",
+          "owns_network_or_served_identity": false
+        }
       }
     },
     {
@@ -1126,7 +1163,30 @@
           ]
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "sequence": "single_confirmed_free_personalized_feed",
+        "eligibility_owner": "site/src/lib/freeCollection.mjs",
+        "composition": [
+          "page-title",
+          "in-flow-free-medallion",
+          "loaded-total-status",
+          "AdaptiveEventCardGrid",
+          "load-more"
+        ],
+        "runtime": [
+          "initial",
+          "personalized",
+          "loading",
+          "ready",
+          "exhausted",
+          "empty",
+          "error"
+        ],
+        "admission": "all_confirmed_free_in_selected_corpus",
+        "mobile_identity": "double_existing_compact_medallion_size_in_flow_only",
+        "profile_fixture_is_organic_evidence": false
+      }
     },
     {
       "id": "GastronomyCollectionSurface",
