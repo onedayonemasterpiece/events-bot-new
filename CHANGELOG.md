@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- VK auto import checks volume headroom before claiming a batch, preserving pending carriers instead of mass-terminalizing them when storage admission is blocked (INC-2026-09-05).
+
 - Changed: KenigEvents prelaunch date moved from 5 to 20 September 2026 across the root page, SEO metadata and subscription confirmations; release checks updated.
 
 ### Fixed

@@ -120,6 +120,13 @@ runtime volume и при остатке ниже `VK_CRAWL_MIN_FREE_MB` (default
 в retry с `vk_crawl_storage_admission_blocked`; health critical floor не
 является write admission сам по себе.
 
+Auto-import also checks storage admission after acquiring the heavy gate and
+before the first carrier claim/prefetch. A blocked batch records an error
+ops_run and one operator notice, without converting pending carriers to
+technical terminals. This batch-start guard does not replace the per-fetch
+guard. See `INC-2026-09-05-vk-storage-admission`.
+
+
 Continuation consumer запускается автоматически и следует ожидаемой durable
 state machine без зависимости от ручного UI:
 
