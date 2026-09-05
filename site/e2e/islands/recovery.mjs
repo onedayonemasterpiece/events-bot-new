@@ -27,6 +27,13 @@ try{
       return route.abort();
     });
     const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+    const contained=async name=>{
+      const bounds=await page.locator('[data-fi-city-panel]').first().evaluate(el=>{
+        const panel=el.getBoundingClientRect(),rail=el.closest('[data-fi-city-rail]')?.getBoundingClientRect();
+        return {panelBottom:panel.bottom,railBottom:rail?.bottom};
+      });
+      check(name,Number.isFinite(bounds.railBottom)&&bounds.panelBottom<=bounds.railBottom+1,bounds);
+    };
     try{
       await page.goto(url,{waitUntil:'networkidle'});await page.evaluate(()=>document.fonts.ready);await page.waitForTimeout(200);
       if(popular){
@@ -35,10 +42,13 @@ try{
         await trigger.click();await page.waitForTimeout(100);
         check(`open-${fallback}`,await panel.isVisible());
         check(`presentation-${fallback}`,await controls.getAttribute('data-fi-city-placement')===(fallback?'inline':'popover'));
+        if(fallback)await contained('inline-parent-reserves-full-panel');
+        await page.screenshot({path:join(output,`390-cities-initial-${fallback}.png`)});
         const input=page.locator('[data-listing-city-input]').first();await input.locator('..').click();await input.focus();
         const selection=await input.isChecked();
         await page.setViewportSize({width:390,height:220});await page.waitForTimeout(200);
         check(`small-height-inline-${fallback}`,await controls.getAttribute('data-fi-city-placement')==='inline');
+        await contained(`small-height-parent-reserves-panel-${fallback}`);
         check(`same-controls-small-${fallback}`,await page.evaluate(()=>window.__fiOriginal===document.querySelector('[data-listing-city-filter]')));
         check(`selection-preserved-small-${fallback}`,await input.isChecked()===selection);
         await page.screenshot({path:join(output,`390-city-small-height-${fallback}.png`)});

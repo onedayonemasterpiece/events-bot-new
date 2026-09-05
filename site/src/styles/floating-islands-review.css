@@ -1,11 +1,11 @@
 /* Contextual candidate only. Protected brand and original lower dock are untouched. */
 html[data-fi-review] [data-fi-city-root] { min-width:0; max-width:100%; }
 html[data-fi-review] [data-fi-city-rail] { background:transparent; border-color:transparent; }
-/* A flow fallback must actually reflow its owner, not become a second flex
-   column in the old rail or remain pinned over the page heading. */
+/* Inline disclosure needs natural height at every containing layout level,
+   including the legacy 48px mobile grid track, not just height:auto on its child. */
 html[data-fi-review] [data-fi-city-root][data-fi-city-mode="compact"] { display:block; width:100%; height:auto; }
 html[data-fi-review] [data-fi-city-rail]:has([data-fi-city-placement="inline"]) { position:static; top:auto; height:auto; }
-html[data-fi-review] [data-fi-city-rail]:has([data-fi-city-placement="inline"]) .ke-listing-discovery-rail__inner { height:auto; align-items:start; }
+html[data-fi-review] [data-fi-city-rail]:has([data-fi-city-placement="inline"]) .ke-listing-discovery-rail__inner { height:auto; grid-template-rows:auto; grid-auto-rows:auto; align-items:start; }
 html[data-fi-review] .fi-city-toggle {
   display:inline-flex; align-items:center; justify-content:space-between; gap:var(--ke-space-2);
   min-height:48px; max-width:min(100%,320px); padding:var(--ke-space-2) var(--ke-space-4);
