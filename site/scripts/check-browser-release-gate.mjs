@@ -136,6 +136,8 @@ export function assertOwnerTitleMetrics(title, width) {
   invariant(title.box.width > 0 && title.box.height > 0, 'H1 is not visible');
   invariant(title.box.x >= -1 && title.box.x + title.box.width <= width + 1, 'H1 leaves its viewport');
   invariant(title.scrollWidth <= title.clientWidth + 1, 'H1 clips/overflows its content');
+  invariant(!title.clippedBy?.length, `H1 is clipped by an ancestor: ${(title.clippedBy || []).join(',')}`);
+  invariant(!title.occludedBy?.length, `H1 is covered by chrome: ${(title.occludedBy || []).join(',')}`);
 }
 
 export function assertRegularGridWidths(grid) {
@@ -172,9 +174,26 @@ export async function measureOwnerReviewPage(page) {
       const s = getComputedStyle(e);
       return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','color','backgroundColor','backgroundImage','marginTop','marginBottom','paddingTop','paddingBottom','paddingLeft','paddingRight','gap','maxWidth'].map(k=>[k,s[k]]));
     };
+    const titleVisibility = e => {
+      if (e.tagName !== 'H1') return {};
+      const range = document.createRange(); range.selectNodeContents(e);
+      const rects = [...range.getClientRects()].filter(r=>r.width>1 && r.height>1);
+      const clippedBy = [];
+      for (let parent=e.parentElement; parent && parent!==document.body; parent=parent.parentElement) {
+        const s=getComputedStyle(parent), b=parent.getBoundingClientRect();
+        if (['hidden','clip','auto','scroll'].includes(s.overflowX) && rects.some(r=>r.left<b.left-1 || r.right>b.right+1)) clippedBy.push(parent.className || parent.tagName);
+      }
+      const occludedBy = [];
+      const chrome = [...document.querySelectorAll('.site-header__brand-tag,.mobile-discovery-menu__summary')].filter(visible);
+      for (const node of chrome) {
+        const b=node.getBoundingClientRect();
+        if (rects.some(r=>Math.min(r.right,b.right)>Math.max(r.left,b.left)+1 && Math.min(r.bottom,b.bottom)>Math.max(r.top,b.top)+1)) occludedBy.push(node.className);
+      }
+      return {clippedBy,occludedBy};
+    };
     const headings = [...document.querySelectorAll('h1,h2,h3')].filter(visible).slice(0,100).map(e=>({
       tag:e.tagName,text:e.textContent.trim(),class:e.className,box:box(e),style:style(e),
-      scrollWidth:e.scrollWidth,clientWidth:e.clientWidth,
+      scrollWidth:e.scrollWidth,clientWidth:e.clientWidth,...titleVisibility(e),
       parent:{class:e.parentElement.className,box:box(e.parentElement),style:style(e.parentElement)},
     }));
     const grids = [...document.querySelectorAll('[data-adaptive-event-card-grid]')].filter(visible).map(e=>({
@@ -251,6 +270,111 @@ export async function assertOwnerReviewPages(page, origin, basePath = '', { rout
   if (artifactDir) writeFileSync(join(artifactDir,'owner-semantic-review.json'),JSON.stringify(result,null,2));
   if (!captureOnly) invariant(result.ok, JSON.stringify(result.errors));
   return result;
+}
+
+/** Exercises the schematic behavior in the real shell, not a new navigation implementation. */
+export async function assertSchematicPageContext(page, origin, route, artifactDir='', expectedHome='/') {
+  const reports=[];
+  for(const width of [1440,390,1920]) {
+    await page.setViewportSize({width,height:width===390?844:width===1440?900:1080});
+    await page.goto(origin+route,{waitUntil:'domcontentloaded'});
+    await page.waitForFunction(()=>Boolean(document.body.dataset.floatingContext));
+    invariant(await page.locator('[data-floating-page-context]').count()===1,'Schematic shell duplicated its context');
+    invariant(await page.locator('[data-floating-page-context]').isHidden(),'Context must not duplicate the visible page title');
+    await page.evaluate(()=>{
+      const title=[...document.querySelectorAll('h1')].find(e=>e.getBoundingClientRect().height>2)
+        || document.querySelector('[data-floating-context-label]');
+      window.scrollTo(0,Math.max(500,(title?.getBoundingClientRect().bottom || 0)+150));
+    });
+    await page.waitForFunction(()=>document.body.dataset.floatingContext==='visible');
+    const state=await page.locator('[data-floating-page-context]').evaluate(e=>{
+      const rect=e.getBoundingClientRect(),button=e.querySelector('button'),b=button.getBoundingClientRect();
+      const summary=document.querySelector('.mobile-discovery-menu__summary'),m=summary?.getBoundingClientRect();
+      return {x:rect.x,y:rect.y,width:rect.width,height:rect.height,button:{x:b.x,y:b.y,width:b.width,height:b.height},
+        label:button.getAttribute('aria-label'),home:e.querySelector('a')?.getAttribute('href'),
+        overlapsMenu:m?.width>0 && Math.min(b.right,m.right)>Math.max(b.left,m.left)+1 && Math.min(b.bottom,m.bottom)>Math.max(b.top,m.top)+1};
+    });
+    invariant(state.button.width>=44 && state.button.height>=44,'Floating context lost a 44px target');
+    invariant(state.x>=0 && state.x+state.width<=width+1,'Floating context escapes the viewport');
+    invariant(!state.overlapsMenu,'Floating context covers the mobile menu');
+    invariant(state.label && /Наверх/.test(state.label),'Floating context has no useful accessible label');
+    invariant(state.home===expectedHome,'Floating context lost product Home');
+    if(artifactDir){mkdirSync(artifactDir,{recursive:true});await page.screenshot({path:join(artifactDir,`floating-${width}-${route.replaceAll('/','_')}.png`)});}
+    if(width===390) {
+      const summary=page.locator('details[data-mobile-discovery-menu] > summary');
+      await summary.click();
+      await page.waitForFunction(()=>document.body.dataset.floatingContext==='suspended');
+      invariant(await page.locator('[data-floating-page-context]').isHidden(),'Context remains focusable above an open menu');
+      await page.locator('[data-reference4-close]').click();
+      await page.waitForFunction(()=>document.body.dataset.floatingContext==='visible');
+      invariant(await page.locator('.mobile-bottom-nav').isVisible(),'Floating context removed mobile bottom navigation');
+    }
+    await page.locator('[data-floating-page-context] button').click();
+    await page.waitForFunction(()=>scrollY<2 && document.body.dataset.floatingContext==='at-title');
+    invariant(await page.evaluate(()=>document.activeElement?.tagName==='H1' || document.activeElement?.hasAttribute('data-floating-context-label')),'Back-to-title lost keyboard focus');
+    reports.push({width,...state,menuSuspension:width===390?'checked':'not-applicable',returnToTitle:'checked'});
+  }
+  return reports;
+}
+
+/** Restored production Home: real timers, full scene cycle and safe non-JS/reduced-motion fallbacks. */
+export async function assertRestoredHomeHero(page, origin, route='/', artifactDir='') {
+  const reports=[];
+  for(const width of [1440,390,1920]) {
+    await page.setViewportSize({width,height:width===390?844:width===1440?900:1080});
+    await page.goto(origin+route,{waitUntil:'domcontentloaded'});
+    await page.waitForFunction(()=>document.querySelector('[data-home-hero-talk]')?.dataset.ready==='true');
+    const root=page.locator('[data-home-hero-talk]'), scenes=root.locator('[data-home-hero-scene]');
+    const count=await scenes.count();invariant(count>0,'Current dataset produced no Hero Talk scenes');
+    await page.evaluate(()=>document.activeElement?.blur?.());
+    const inspect=async()=>{
+      await page.waitForTimeout(1600);
+      const state=await root.evaluate(e=>{
+        const scene=e.querySelector('.is-active'),link=scene?.querySelector('a'),copy=scene?.querySelector('[data-home-hero-copy]');
+        const range=document.createRange();if(copy)range.selectNodeContents(copy);
+        const rect=e.getBoundingClientRect();
+        const glyphs=copy?[...range.getClientRects()]:[];
+        return {active:Number(scene?.getAttribute('data-scene-index')),copySource:scene?.getAttribute('data-copy-source'),mode:scene?.getAttribute('data-mode'),
+          text:copy?.textContent?.trim(),href:link?.getAttribute('href'),
+          clipped:glyphs.some(r=>r.width>1&&(r.left<rect.left-1||r.right>rect.right+1||r.top<rect.top-1||r.bottom>rect.bottom+1)),
+          inactiveFocusable:[...e.querySelectorAll('[aria-hidden="true"] a')].some(a=>a.tabIndex>=0),
+          mobileMediaVisible:[...e.querySelectorAll('[data-home-hero-media]')].some(m=>getComputedStyle(m).display!=='none' && m.getBoundingClientRect().width>0)};
+      });
+      invariant(state.text && state.href?.includes('/sobytiya/'),'Hero scene has no source-bound event link');
+      invariant(!state.clipped,'Hero scene clips its words');
+      invariant(!state.inactiveFocusable,'Invisible Hero scene remains in the keyboard order');
+      if(width===390)invariant(!state.mobileMediaVisible,'Mobile donor text-only behavior changed');
+      if(artifactDir){mkdirSync(artifactDir,{recursive:true});await page.screenshot({path:join(artifactDir,`home-${width}-scene-${state.active}.png`)});}
+      return state;
+    };
+    const states=[await inspect()];
+    // One complete observed cycle at desktop, not a factory injection or CSS simulation.
+    if(width===1440 && count>1) {
+      for(let step=1;step<=count;step++) {
+        const previous=states.at(-1).active;
+        await page.waitForFunction(i=>Number(document.querySelector('[data-home-hero-scene].is-active')?.getAttribute('data-scene-index'))!==i,previous,{timeout:15000});
+        states.push(await inspect());
+      }
+      invariant(states.at(-1).active===states[0].active,'Hero did not complete its cycle');
+      const pause=root.locator('[data-home-hero-controls] button');await pause.click();
+      const active=states.at(-1).active;await page.evaluate(()=>document.activeElement?.blur?.());await page.waitForTimeout(8000);
+      invariant(await pause.getAttribute('aria-pressed')==='true','Hero pause state is missing');
+      invariant(await root.locator('.is-active').getAttribute('data-scene-index')===String(active),'Paused Hero keeps changing');
+    }
+    reports.push({width,count,states});
+  }
+  const reduced=await page.context().browser().newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+  const nojs=await page.context().browser().newContext({viewport:{width:390,height:844},javaScriptEnabled:false});
+  try {
+    const p=await reduced.newPage();await p.goto(origin+route,{waitUntil:'domcontentloaded'});
+    await p.waitForFunction(()=>document.querySelector('[data-home-hero-talk]')?.dataset.playback==='reduced-motion');
+    invariant(await p.locator('[data-home-hero-controls]').isHidden(),'Reduced-motion user has an unnecessary play/pause control');
+    const n=await nojs.newPage();await n.goto(origin+route,{waitUntil:'domcontentloaded'});
+    invariant(await n.locator('[data-home-hero-scene]:visible').count()===1,'No-JS Home has no usable first scene');
+    invariant(await n.locator('[data-home-hero-scene]:visible a').count()>0,'No-JS Home lost its event link');
+    if(artifactDir){await p.screenshot({path:join(artifactDir,'home-reduced-motion.png')});await n.screenshot({path:join(artifactDir,'home-no-js.png')});}
+  } finally {await reduced.close();await nojs.close();}
+  return {reports,cycle:'observed',pause:'observed',reducedMotion:'checked',noJavaScript:'checked'};
 }
 
 function mimeType(path) {
@@ -1174,12 +1298,16 @@ async function runBrowserGate({ root, basePath, manifest, origin, browser, artif
     const ownerReview = await assertOwnerReviewPages(page, origin, basePath, {artifactDir});
     invariant(ownerReview.complete, 'owner role review is partial');
     checks.owner_semantic_roles = 'ok';
+    const schematicContext = await assertSchematicPageContext(page,origin,`${basePath}/vystavki/`,artifactDir,`${basePath}/`);
+    const homeHero = await assertRestoredHomeHero(page,origin,`${basePath}/`,artifactDir);
     console.log('[browser-release-gate] festival_calendar=ok');
     return {
       ok: true, checks,
       specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes, hero_routes:heroRoutes },
       hero_gallery:heroGallery,
       owner_review:ownerReview,
+      schematic_context:schematicContext,
+      home_hero:homeHero,
       keyboard:keyboardReports,
       spatial_keyboard:spatialKeyboard,
       festival_calendar:festivalCalendar,

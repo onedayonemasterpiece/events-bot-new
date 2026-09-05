@@ -53,10 +53,11 @@
   --ke-color-text-prize: #5d3c12;
   --ke-color-status-warning-deep: #7a4b00;
 
-  /* Intentional display and section typography variants. */
-  --ke-type-display-home-size: clamp(3rem, 7.5vw, 7.2rem);
-  --ke-type-display-home-line: 0.86;
-  --ke-type-display-home-letter: -0.075em;
+  /* Ordinary route titles share H1; Home editorial scenes retain the accepted donor role. */
+  --ke-type-display-home-size: clamp(2.8rem, 4vw, 3rem);
+  --ke-type-display-home-size-compact: clamp(1.72rem, 8.5vw, 2.12rem);
+  --ke-type-display-home-line: 1.05;
+  --ke-type-display-home-letter: -0.055em;
   --ke-type-display-home: var(--ke-type-h1-weight) var(--ke-type-display-home-size) / var(--ke-type-display-home-line) var(--ke-font-family-sans);
 
   --ke-type-display-unusual-size: var(--ke-type-h1-size);

@@ -466,7 +466,8 @@
         "AnnouncementsLockup",
         "MobileBottomNav",
         "MobileToastRegion",
-        "Reference4MobileMenu"
+        "Reference4MobileMenu",
+        "Button"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -485,7 +486,16 @@
           ]
         }
       ],
-      "penpot_binding": null
+      "penpot_binding": null,
+      "behavior_states": {
+        "floating_page_context": [
+          "at-title",
+          "visible",
+          "suspended",
+          "unavailable"
+        ],
+        "visual_status": "SCHEMATIC_EXISTING_SHELL_NOT_FINAL_ISLAND_DESIGN"
+      }
     },
     {
       "id": "PrelaunchLayout",
@@ -2156,34 +2166,47 @@
     },
     {
       "id": "HomeHeroTalk",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
       ],
       "variants": [
-        "editorial-feature"
+        "editorial-scenes"
       ],
       "states": [
-        "featured-event",
-        "fallback"
+        "populated",
+        "empty"
       ],
-      "nested_families": [],
+      "nested_families": [
+        "Button",
+        "Foundations"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
-      "explicit_override_exceptions": [
-        {
-          "kind": "dynamic_identity",
-          "attribute": "state",
-          "source_regex": "data-ds-state=\\{event \\? 'featured-event' : 'fallback'\\}",
-          "values": [
-            "featured-event",
-            "fallback"
-          ]
-        }
+      "explicit_override_exceptions": [],
+      "penpot_binding": null,
+      "content_dependencies": [
+        "site/src/lib/homeHeroTalk.ts",
+        "site/src/data/homeHeroTalkEditorial.ts"
       ],
-      "penpot_binding": null
+      "behavior_states": {
+        "copy": [
+          "editorial",
+          "catalog-fact-fallback"
+        ],
+        "media": [
+          "text-only",
+          "photo-mosaic"
+        ],
+        "playback": [
+          "playing",
+          "paused",
+          "reduced-motion",
+          "no-js-first-scene"
+        ]
+      }
     },
     {
       "id": "HomeQuickNav",

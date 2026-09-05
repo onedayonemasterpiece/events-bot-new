@@ -1,5 +1,6 @@
 ---
 import EventCard from '../components/EventCard.astro';
+import Button from '../components/design-system/Button.astro';
 import FocusGroupLabPanel from '../components/FocusGroupLabPanel.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
@@ -286,6 +287,20 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .site-header__desktop-lockup { display: grid; grid-template-rows: 12px auto; align-content: start; gap: 4px; }
       .site-header__desktop-lockup .announcements-lockup__endorsement { overflow: visible; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 12px; text-transform: uppercase; white-space: nowrap; }
       .site-header__desktop-lockup .announcements-lockup__wordmark { display: block; width: 192px; height: auto; color: #fff; overflow: visible; }
+      /* Schematic context inside the existing shell; Button owns control skin.
+         No second navigation system or final island visual design. */
+      .site-header__context { display:flex; align-items:center; gap:.5rem; min-width:0; max-width:min(25vw,20rem); pointer-events:auto; }
+      .site-header__context-home { flex:none; display:inline-flex; align-items:center; min-height:44px; font-weight:var(--ke-type-h3-weight); color:var(--ke-color-action-primary); }
+      .site-header__context[hidden] { display:none; }
+      .site-header__context > .ke-button { min-width:0; max-width:100%; }
+      .site-header__context-title { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+      .site-header__context-label { flex:none; }
+      body[data-floating-context="visible"] .site-header__brand-tag { display:none; }
+      @media(max-width:759px) {
+        .site-header__context { position:fixed; top:calc(env(safe-area-inset-top) + 8px); left:142px; right:max(12px,env(safe-area-inset-right)); max-width:none; z-index:43; }
+        .site-header__context-home { display:none; }
+        .site-header__context > .ke-button { width:100%; background:var(--ke-color-background-header); }
+      }
       .mobile-discovery-menu { display: none; }
       .mobile-discovery-menu__summary { list-style: none; cursor: pointer; }
       .mobile-discovery-menu__summary::-webkit-details-marker { display: none; }
@@ -2460,6 +2475,13 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         <a class="site-header__brand-tag" href={siteHomeHref()} aria-label="Полюбить Калининград Анонсы — на главную">
           <AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" />
         </a>
+        {focusPageFamily && <div class="site-header__context" data-floating-page-context hidden>
+          <a class="site-header__context-home" href={siteHomeHref()} aria-label="Главная — Анонсы">Анонсы</a>
+          <Button variant="quiet" size="compact" ariaLabel="Вернуться к заголовку страницы">
+            <span class="site-header__context-label" aria-hidden="true">Наверх:</span>
+            <span class="site-header__context-title" data-floating-page-title></span>
+          </Button>
+        </div>}
         <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={sharedHeaderBadge} />
         <nav class="site-nav" aria-label="Основная навигация">
           {visibleHeaderNavigation.map((item) => (
@@ -2505,6 +2527,48 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       import { composeEventShareImage } from '../lib/eventShareImage.mjs';
       import { getResilientDataClient } from '../lib/resilientDataClient';
       import { EXHIBITIONS_STATE_KEY, exhibitionsUnreadBadge } from '../lib/exhibitionsPersonal';
+      // Keep the page title available after it leaves the reading viewport.
+      // Uses the existing global menu and bottom navigation; never clones them.
+      const pageContext = document.querySelector<HTMLElement>('[data-floating-page-context]');
+      if (pageContext) {
+        const trigger = pageContext.querySelector<HTMLButtonElement>('button');
+        const label = pageContext.querySelector<HTMLElement>('[data-floating-page-title]');
+        let title: HTMLElement | undefined;
+        let scheduled = false;
+        const visible = (node: Element) => {
+          const box=node.getBoundingClientRect();
+          return box.width>2 && box.height>2 && getComputedStyle(node).visibility!=='hidden';
+        };
+        const updateContext = () => {
+          scheduled=false;
+          title=[...document.querySelectorAll<HTMLElement>('h1')].find(node=>visible(node) && !node.classList.contains('sr-only'))
+            || document.querySelector<HTMLElement>('[data-floating-context-label]') || undefined;
+          if (!title) { pageContext.hidden=true; document.body.dataset.floatingContext='unavailable'; return; }
+          const text=(title.dataset.floatingContextLabel || title.textContent || '').replace(/\s+/gu,' ').trim();
+          if (label) label.textContent=text;
+          trigger?.setAttribute('aria-label',`Наверх, к заголовку «${text}»`);
+          const suspended=[...document.querySelectorAll('details[data-mobile-discovery-menu][open],dialog[open],[aria-modal="true"]')].some(visible);
+          const pastTitle=title.getBoundingClientRect().bottom<64;
+          const show=!suspended && (pastTitle || pageContext.contains(document.activeElement));
+          pageContext.hidden=!show;
+          document.body.dataset.floatingContext=suspended?'suspended':show?'visible':'at-title';
+        };
+        const scheduleContext = () => { if (!scheduled) { scheduled=true; requestAnimationFrame(updateContext); } };
+        window.addEventListener('scroll',scheduleContext,{passive:true});
+        window.addEventListener('resize',scheduleContext,{passive:true});
+        window.addEventListener('pageshow',scheduleContext);
+        document.addEventListener('toggle',scheduleContext,true);
+        document.addEventListener('focusin',scheduleContext);
+        document.addEventListener('focusout',scheduleContext);
+        trigger?.addEventListener('click',()=>{
+          if (!title) return;
+          const target=title, previous=target.getAttribute('tabindex');
+          target.setAttribute('tabindex','-1'); target.focus({preventScroll:true});
+          target.addEventListener('blur',()=>{if(previous===null)target.removeAttribute('tabindex');else target.setAttribute('tabindex',previous);},{once:true});
+          window.scrollTo({top:0,behavior:'instant'}); scheduleContext();
+        });
+        updateContext();
+      }
       const syncExhibitionsBadge = () => {
         let ids: Array<number | string> = [];
         let stored: unknown = null;

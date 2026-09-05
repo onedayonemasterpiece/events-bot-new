@@ -75,3 +75,48 @@ test('shared exhibition unread count is identical across routes and excludes see
   assert.deepEqual(exhibitionsUnreadBadge([], {siteVisits:5}), {count:0,hidden:false,soft:true,text:'загляните'});
   assert.equal(exhibitionsUnreadBadge([1], {seenNew:42,negative:'bad'}).count, 1);
 });
+
+// Actual restored selector, not a duplicate implementation or a July-only fixture.
+const heroEvent = (id, extra={}) => ({id,title:`Событие ${id}`,start_date:'2026-09-05',end_date:null,
+  lifecycle_status:'active',other_date_ids:[],image_assets:[],...extra});
+
+test('AR-02: stale editorial IDs fall back to exact current catalogue titles, not an empty hero', async()=>{
+  const {buildHomeHeroTalkDeck}=await import('../src/lib/homeHeroTalk.ts');
+  const events=Array.from({length:6},(_,i)=>heroEvent(9000+i));
+  const stale=[{id:'expired-copy',eventId:1,fragments:[{text:'Не актуально',link:true}]}];
+  const deck=buildHomeHeroTalkDeck(events,'2026-09-04','review',4,stale);
+  assert.equal(deck.length,4);
+  assert.ok(deck.every(s=>s.copySource==='catalog-fact-fallback' && s.fragments.length===1
+    && s.fragments[0].text===s.event.title && s.fragments[0].link));
+  assert.deepEqual(deck,buildHomeHeroTalkDeck(events,'2026-09-04','review',4,stale));
+});
+
+test('AR-02: expired/cancelled scenes are never revived to fill a stale bank', async()=>{
+  const {buildHomeHeroTalkDeck}=await import('../src/lib/homeHeroTalk.ts');
+  assert.deepEqual(buildHomeHeroTalkDeck([heroEvent(1,{start_date:'2026-07-01'}),heroEvent(2,{lifecycle_status:'cancelled'})],
+    '2026-09-04','review'),[]);
+  assert.deepEqual(buildHomeHeroTalkDeck([heroEvent(3)],'2026-09-04','review',0),[]);
+});
+
+test('AR-02: current editorial fragments stay source-bound and occurrence families are deduplicated', async()=>{
+  const {buildHomeHeroTalkDeck}=await import('../src/lib/homeHeroTalk.ts');
+  const e=heroEvent(1,{other_date_ids:[2],popularity_signal_score:100});
+  const copy=[{id:'approved-one',eventId:1,fragments:[{text:'Точные редакционные слова.',link:true}]}];
+  const deck=buildHomeHeroTalkDeck([e,heroEvent(2,{other_date_ids:[1]})],'2026-09-04','review',4,copy);
+  assert.equal(deck.length,1);assert.equal(deck[0].copySource,'editorial');
+  assert.deepEqual(deck[0].fragments,copy[0].fragments);
+});
+
+test('AR-02: unsafe/stale/text assets stay text-only; eligible photos retain the mosaic variant', async()=>{
+  const {buildHomeHeroTalkDeck,isHomeHeroAssetEligible}=await import('../src/lib/homeHeroTalk.ts');
+  const photo={src:'/photo.jpg',image_kind:'photo',image_text_mode:'visual_only',safe_crop:true,recommended_hero_fit:'cover',
+    width:2000,height:1000,focal_point:{x:.5,y:.5},current_pixel_sha256:'a'.repeat(64),geometry_pixel_sha256:'a'.repeat(64),face_boxes:[]};
+  assert.equal(isHomeHeroAssetEligible(photo),true);
+  for(const override of [{image_text_mode:'ocr_text'},{geometry_pixel_sha256:'b'.repeat(64)},{safe_crop:false}]) {
+    const bad={...photo,...override};assert.equal(isHomeHeroAssetEligible(bad),false);
+    assert.ok(buildHomeHeroTalkDeck([heroEvent(1,{image_assets:[bad]})],'2026-09-04','review',4,[]).every(s=>s.mode==='text-only'));
+  }
+  const deck=buildHomeHeroTalkDeck(Array.from({length:6},(_,i)=>heroEvent(i+1,{image_assets:[photo]})),
+    '2026-09-04','review',4,[]);
+  assert.ok(deck.some(s=>s.mode==='photo-mosaic'));assert.ok(deck.some(s=>s.mode==='text-only'));
+});

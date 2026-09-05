@@ -3,6 +3,7 @@ import EventLayout from '../layouts/EventLayout.astro';
 import PrelaunchLayout from '../layouts/PrelaunchLayout.astro';
 import HomeColdStartFeed from '../components/HomeColdStartFeed.astro';
 import HomeHeroTalk from '../components/HomeHeroTalk.astro';
+import { buildHomeHeroTalkDeck } from '../lib/homeHeroTalk.ts';
 import HomeQuickNav from '../components/HomeQuickNav.astro';
 import PrelaunchPage from '../components/PrelaunchPage.astro';
 import type { PreviewEvent } from '../lib/types';
@@ -34,7 +35,7 @@ for (const event of [...popular, ...fallback]) {
   familyIds.forEach((id) => offeredFamilyIds.add(id));
   if (feed.length >= 30) break;
 }
-const heroEvent = feed[0] || null;
+const heroScenes = buildHomeHeroTalkDeck(getEvents(), currentDate, `home:${currentDate}`);
 const title = SITE_NAME;
 const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';
 ---
@@ -63,7 +64,7 @@ const description = 'Афиша Калининграда без шума: пол
       data-home-static-fallback-count={feed.length}
     >
       <div class="page-shell home-page__shell">
-        <HomeHeroTalk event={heroEvent} />
+        <HomeHeroTalk scenes={heroScenes} />
         <HomeQuickNav />
         <HomeColdStartFeed events={feed} />
       </div>

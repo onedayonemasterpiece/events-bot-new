@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "17e7d77be4da7c7669bfddd57af4b43940b0fc1150604b7178fb55edf1007e70",
+  "registry_sha256": "18eaec6d743cc89619a0bc0caf5b09e717cb06c15f204038bcc43bd194b2bec3",
   "source_root": "site/src",
-  "import_inventory_sha256": "dc2fb0b74bfbefc835f7c1ed872eae9ca41aca365831678bb4d179317ead8a09",
+  "import_inventory_sha256": "6c5febf1c57eba1b03dbfe1f3b59568eb0ef26df692bd5ca9a2db15d2433e078",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -233,6 +233,7 @@
       "site/src/components/WeatherDateContext.astro",
       "site/src/data/festivalTimeline.ts",
       "site/src/data/festivalTimelineMedia.ts",
+      "site/src/data/homeHeroTalkEditorial.ts",
       "site/src/data/info-partners.ts",
       "site/src/data/interest-club-covers.ts",
       "site/src/data/searchCollections.ts",
@@ -280,6 +281,7 @@
       "site/src/lib/focus-personalization.ts",
       "site/src/lib/focus-pwa-install-controller.ts",
       "site/src/lib/homeFeed.mjs",
+      "site/src/lib/homeHeroTalk.ts",
       "site/src/lib/ics.ts",
       "site/src/lib/icsFilenames.mjs",
       "site/src/lib/idempotentOutbox.ts",
@@ -382,14 +384,14 @@
   "summary": {
     "product_family_count": 107,
     "family_count": 109,
-    "source_file_count": 317,
-    "import_edge_count": 808,
-    "direct_consumer_edges": 272,
+    "source_file_count": 319,
+    "import_edge_count": 813,
+    "direct_consumer_edges": 274,
     "protocol_consumer_edges": 32,
     "runtime_factory_edges": 1,
     "runtime_consumer_edges": 2,
-    "production_route_edges": 527,
-    "unique_direct_consumers": 118,
+    "production_route_edges": 547,
+    "unique_direct_consumers": 119,
     "unique_protocol_consumers": 32,
     "unique_runtime_factories": 1,
     "unique_runtime_consumers": 2,
@@ -2000,6 +2002,8 @@
         "site/src/components/design-system/StatePanel.astro",
         "site/src/components/FocusGroupFeedback.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/HomeHeroTalk.astro",
+        "site/src/layouts/EventLayout.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
         "site/src/pages/lab/design-system/index.astro",
@@ -2011,6 +2015,8 @@
         "site/src/components/design-system/StatePanel.astro",
         "site/src/components/FocusGroupFeedback.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/HomeHeroTalk.astro",
+        "site/src/layouts/EventLayout.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
         "site/src/pages/lab/design-system/index.astro",
@@ -2020,8 +2026,24 @@
       "runtime_clients": [],
       "production_routes": [
         {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        },
+        {
+          "pattern": "/artefakty/",
+          "source": "site/src/pages/artefakty/index.astro"
+        },
+        {
+          "pattern": "/date-*/",
+          "source": "site/src/pages/date-[date].astro"
+        },
+        {
           "pattern": "/dlya-menya/",
           "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
+          "pattern": "/festivali/",
+          "source": "site/src/pages/festivali/index.astro"
         },
         {
           "pattern": "/fokus-gruppa/",
@@ -2036,29 +2058,133 @@
           "source": "site/src/pages/fokus-gruppa/zavershenie/index.astro"
         },
         {
+          "pattern": "/izbrannoe/",
+          "source": "site/src/pages/izbrannoe/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/",
+          "source": "site/src/pages/kluby-po-interesam/index.astro"
+        },
+        {
+          "pattern": "/kluby-po-interesam/*/",
+          "source": "site/src/pages/kluby-po-interesam/[slug]/index.astro"
+        },
+        {
+          "pattern": "/neobychnoe/",
+          "source": "site/src/pages/neobychnoe/index.astro"
+        },
+        {
+          "pattern": "/partners/",
+          "source": "site/src/pages/partners/index.astro"
+        },
+        {
           "pattern": "/partnerstvo/",
           "source": "site/src/pages/partnerstvo/index.astro"
         },
         {
+          "pattern": "/podborki/",
+          "source": "site/src/pages/podborki/index.astro"
+        },
+        {
+          "pattern": "/podborki/*/",
+          "source": "site/src/pages/podborki/[slug]/index.astro"
+        },
+        {
+          "pattern": "/podborki/gastronomiya/",
+          "source": "site/src/pages/podborki/gastronomiya/index.astro"
+        },
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        },
+        {
+          "pattern": "/populyarnoe/",
+          "source": "site/src/pages/populyarnoe/index.astro"
+        },
+        {
+          "pattern": "/segodnya/",
+          "source": "site/src/pages/segodnya/index.astro"
+        },
+        {
+          "pattern": "/sobytiya/*/",
+          "source": "site/src/pages/sobytiya/[slug].astro"
+        },
+        {
+          "pattern": "/vyhodnye/",
+          "source": "site/src/pages/vyhodnye/index.astro"
+        },
+        {
+          "pattern": "/vyhodnye/*/",
+          "source": "site/src/pages/vyhodnye/[start].astro"
+        },
+        {
+          "pattern": "/vystavki/",
+          "source": "site/src/pages/vystavki/index.astro"
+        },
+        {
           "pattern": "/zakrytaya-afisha/",
           "source": "site/src/pages/zakrytaya-afisha/index.astro"
+        },
+        {
+          "pattern": "/zavtra/",
+          "source": "site/src/pages/zavtra/index.astro"
         }
       ],
       "production_route_patterns": [
+        "/",
+        "/artefakty/",
+        "/date-*/",
         "/dlya-menya/",
+        "/festivali/",
         "/fokus-gruppa/",
         "/fokus-gruppa/priglashenie/",
         "/fokus-gruppa/zavershenie/",
+        "/izbrannoe/",
+        "/kluby-po-interesam/",
+        "/kluby-po-interesam/*/",
+        "/neobychnoe/",
+        "/partners/",
         "/partnerstvo/",
-        "/zakrytaya-afisha/"
+        "/podborki/",
+        "/podborki/*/",
+        "/podborki/gastronomiya/",
+        "/poisk/",
+        "/populyarnoe/",
+        "/segodnya/",
+        "/sobytiya/*/",
+        "/vyhodnye/",
+        "/vyhodnye/*/",
+        "/vystavki/",
+        "/zakrytaya-afisha/",
+        "/zavtra/"
       ],
       "production_route_sources": [
+        "site/src/pages/artefakty/index.astro",
+        "site/src/pages/date-[date].astro",
         "site/src/pages/dlya-menya/index.astro",
+        "site/src/pages/festivali/index.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/priglashenie/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/izbrannoe/index.astro",
+        "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "site/src/pages/kluby-po-interesam/index.astro",
+        "site/src/pages/neobychnoe/index.astro",
+        "site/src/pages/partners/index.astro",
         "site/src/pages/partnerstvo/index.astro",
-        "site/src/pages/zakrytaya-afisha/index.astro"
+        "site/src/pages/podborki/[slug]/index.astro",
+        "site/src/pages/podborki/gastronomiya/index.astro",
+        "site/src/pages/podborki/index.astro",
+        "site/src/pages/poisk/index.astro",
+        "site/src/pages/populyarnoe/index.astro",
+        "site/src/pages/segodnya/index.astro",
+        "site/src/pages/sobytiya/[slug].astro",
+        "site/src/pages/vyhodnye/[start].astro",
+        "site/src/pages/vyhodnye/index.astro",
+        "site/src/pages/vystavki/index.astro",
+        "site/src/pages/zakrytaya-afisha/index.astro",
+        "site/src/pages/zavtra/index.astro"
       ]
     },
     "Badge": {
@@ -3338,7 +3464,7 @@
       ]
     },
     "HomeHeroTalk": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"

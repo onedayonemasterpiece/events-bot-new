@@ -155,9 +155,9 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
       width:100%!important; height:0!important; min-height:0!important; margin:0!important;
       display:block!important; pointer-events:none;
     }
-    /* Semantic route wrappers retain the same shared chrome inset. */
+    /* The same content inset applies to direct mains and route-composition
+       roots. A semantic wrapper must not opt its product page out of chrome. */
     body.mobile-shell-reference4[data-mobile-bottom-mode="nav"] > :is(main, [data-ds-family$="RouteComposition"]) { padding-top:84px; }
-
     body.mobile-shell-reference4[data-mobile-bottom-mode="nav"] .site-footer { display:none!important; }
     body.mobile-shell-reference4 .mobile-discovery-menu--reference4 {
       --drawer-ease:cubic-bezier(.22,.86,.32,1); --shell-tag-w:120px; --shell-tag-h:84px;
@@ -249,6 +249,8 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
     .reference4-menu__back-icon { justify-self:center; width:14px; height:14px; border-left:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); }
     .reference4-icon { position:relative; width:29px; height:29px; display:block; flex:0 0 29px; color:currentColor; }
     .reference4-icon > span { position:absolute; inset:0; display:block; background:currentColor; -webkit-mask:var(--reference4-icon) center/contain no-repeat; mask:var(--reference4-icon) center/contain no-repeat; }
+    body[data-floating-context="visible"] .mobile-discovery-menu--reference4:not([open]) > .mobile-discovery-menu__summary { height:48px!important; min-height:48px!important; }
+    body[data-floating-context="visible"] .mobile-discovery-menu--reference4:not([open]) .brand-tag__endorsement { display:none; }
     .reference4-icon--free { box-sizing:border-box; width:30px; height:30px; border:1px solid currentColor; border-radius:50%; display:flex; align-items:center; justify-content:center; padding-top:.5px; font-size:14px; line-height:1; font-weight:400; letter-spacing:-.02em; white-space:nowrap; opacity:.78; }
     .reference4-menu__utility { box-sizing:border-box; overflow:hidden; margin-top:12px; border:1px solid rgba(255,255,255,.56); border-radius:22px; background:rgba(255,252,247,.18); box-shadow:0 12px 30px rgba(46,28,20,.13),inset 0 1px 0 rgba(255,255,255,.62); }
     .reference4-menu__account-row { box-sizing:border-box; height:56px; display:flex; align-items:center; padding:6px 9px; border-bottom:1px solid rgba(114,93,80,.18); gap:8px; background:rgba(48,31,23,.075); }
@@ -282,6 +284,8 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
     .reference4-menu__row { height:48px; grid-template-columns:34px 1fr 17px; gap:8px; padding-inline:14px; font-size:18px; }
     .reference4-menu__row + .reference4-menu__row::before { left:56px; right:14px; }
     .reference4-menu__row--back { grid-template-columns:34px 1fr; }
+    body[data-floating-context="visible"] .mobile-discovery-menu--reference4:not([open]) > .mobile-discovery-menu__summary { height:48px!important; min-height:48px!important; }
+    body[data-floating-context="visible"] .mobile-discovery-menu--reference4:not([open]) .brand-tag__endorsement { display:none; }
     .reference4-icon--free { font-size:13px; }
     .reference4-menu__utility { margin-top:10px; }
     .reference4-menu__account-row { height:52px; }

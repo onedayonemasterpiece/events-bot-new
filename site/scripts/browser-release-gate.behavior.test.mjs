@@ -337,3 +337,12 @@ test('grid oracle rejects stretched final rows and internal overflow without doc
   assert.throws(()=>assertRegularGridWidths({...grid,cards:[...grid.cards.slice(0,3),{...grid.cards[3],width:940}]}),/partial row stretches/u);
   assert.throws(()=>assertRegularGridWidths({...grid,scrollWidth:1000}),/internal horizontal/u);
 });
+
+// A clear viewport/document is not sufficient when fixed navigation covers text.
+test('same-role oracle rejects chrome occlusion and ancestor clipping', () => {
+  const title = {text:'Выставки',box:{x:12,y:50,width:366,height:34},clientWidth:366,scrollWidth:366,
+    style:{fontFamily:'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',fontSize:'36px',fontWeight:'920',lineHeight:'33.84px',letterSpacing:'-1.98px'}};
+  assert.doesNotThrow(()=>assertOwnerTitleMetrics(title,390));
+  assert.throws(()=>assertOwnerTitleMetrics({...title,occludedBy:['mobile-discovery-menu__summary']},390), /covered by chrome/u);
+  assert.throws(()=>assertOwnerTitleMetrics({...title,clippedBy:['festival-hero']},390), /clipped by an ancestor/u);
+});

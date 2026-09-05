@@ -1,107 +1,336 @@
 ---
-import type { PreviewEvent } from '../lib/types';
-import { displayDateTimeWithWeekday, eventAdmissionLabel, eventHref, withBase } from '../lib/events';
+import type { HomeHeroTalkScene } from '../lib/homeHeroTalk';
+import Button from './design-system/Button.astro';
+import { eventHref } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
-interface Props { event: PreviewEvent | null; }
-const { event } = Astro.props;
-const href = event ? eventHref(event) : withBase('/segodnya/');
-const image = event ? eventImageUrl(event.image_url) : null;
-const fit = event?.image_text_mode === 'visual_only' ? 'cover' : 'contain';
-const focalY = event?.focal_point?.y == null ? 50 : Math.round(Math.max(0, Math.min(1, event.focal_point.y)) * 100);
+interface Props { scenes: HomeHeroTalkScene[]; }
+const { scenes } = Astro.props;
+const visibleScenes = scenes.slice(0, 4);
+const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
 ---
 
-<section
-  class="home-hero-talk"
-  data-ds-family="HomeHeroTalk"
-  data-ds-version="1"
-  data-ds-variant="editorial-feature"
-  data-ds-state={event ? 'featured-event' : 'fallback'}
-  data-home-hero-talk
-  aria-labelledby="home-hero-title"
->
-  <div class="home-hero-talk__copy">
-    <p class="eyebrow">Полюбить Калининград · Анонсы</p>
-    <h1 id="home-hero-title">Куда пойти — без лишнего шума</h1>
-    <p class="home-hero-talk__lead">Актуальные события города и области. Начните с общего выбора: лента уже полезна без входа и постепенно меняется только по вашим локальным оценкам.</p>
-    <div class="home-hero-talk__actions">
-      <a class="cta-button" href={withBase('/segodnya/')}>Что сегодня</a>
-      <a class="secondary-button" href={withBase('/poisk/')}>Найти событие</a>
+{visibleScenes.length > 0 && (
+  <section
+    class="home-hero-talk"
+    data-ds-family="HomeHeroTalk"
+    data-ds-version="2"
+    data-ds-variant="editorial-scenes"
+    data-ds-state="populated"
+    data-floating-context-label="Анонсы"
+    data-home-hero-talk
+    data-scene-count={visibleScenes.length}
+    aria-labelledby="home-hero-talk-title"
+  >
+    <h1 id="home-hero-talk-title" class="home-hero-talk__sr-only">О чём говорит афиша</h1>
+    <div class="home-hero-talk__stage" data-home-hero-stage>
+      {visibleScenes.map((scene, sceneIndex) => {
+        const asset = scene.asset;
+        const image = asset ? eventImageUrl(asset.src) : null;
+        const focusX = Number(asset?.focal_point?.x ?? .5);
+        const focusY = Number(asset?.focal_point?.y ?? .5);
+        return (
+          <article
+            class={`home-hero-talk__scene home-hero-talk__scene--${scene.mode}`}
+            data-home-hero-scene
+            data-scene-index={sceneIndex}
+            data-editorial-id={scene.editorialId}
+            data-mode={scene.mode}
+            data-copy-source={scene.copySource}
+            data-source-width={asset?.width || undefined}
+            data-source-height={asset?.height || undefined}
+            data-focus-x={focusX}
+            data-focus-y={focusY}
+            data-face-boxes={JSON.stringify(asset?.face_boxes || [])}
+            aria-hidden={sceneIndex === 0 ? 'false' : 'true'}
+          >
+            <div class="home-hero-talk__message">
+              <h2 data-home-hero-copy>
+                {scene.fragments.map((fragment, fragmentIndex) => (
+                  <>
+                    {fragment.link ? (
+                      <a
+                        class:list={['home-hero-talk__fragment', fragment.accent && 'home-hero-talk__fragment--accent']}
+                        data-home-hero-fragment
+                        data-fragment-index={fragmentIndex}
+                        style={`--fragment-delay:${100 + fragmentIndex * 185}ms`}
+                        href={eventHref(scene.event)}
+                        aria-label={`${fragment.text} Открыть событие «${scene.event.title}»`}
+                        tabindex={sceneIndex === 0 ? '0' : '-1'}
+                      >{fragment.text}</a>
+                    ) : (
+                      <span
+                        class:list={['home-hero-talk__fragment', fragment.accent && 'home-hero-talk__fragment--accent']}
+                        data-home-hero-fragment
+                        data-fragment-index={fragmentIndex}
+                        style={`--fragment-delay:${100 + fragmentIndex * 185}ms`}
+                      >{fragment.text}</span>
+                    )}
+                    {fragment.breakAfter ? <br /> : ' '}
+                  </>
+                ))}
+              </h2>
+            </div>
+            {image && asset && (
+              <div class="home-hero-talk__media" data-home-hero-media aria-hidden="true">
+                <img
+                  class="home-hero-talk__preload"
+                  data-home-hero-image
+                  src={image}
+                  width={asset.width}
+                  height={asset.height}
+                  alt=""
+                  loading={sceneIndex === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
+                />
+                <span class="home-hero-talk__mosaic" data-home-hero-mosaic>
+                  {tileIndexes.map((tileIndex) => (
+                    <span class="home-hero-talk__tile" data-home-hero-tile data-tile-index={tileIndex}></span>
+                  ))}
+                </span>
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
-  </div>
-  {event && (
-    <a class="home-hero-talk__event" href={href} aria-label={`Открыть событие: ${event.title}`}>
-      <span class={`home-hero-talk__media home-hero-talk__media--${fit}`} style={`--home-hero-focal-y:${focalY}%`}>
-        {image ? <img src={image} alt={event.image_alt || `Афиша события «${event.title}»`} loading="eager" decoding="async" /> : <span aria-hidden="true">Анонсы</span>}
-      </span>
-      <span class="home-hero-talk__event-copy">
-        <small>Ближайший заметный план</small>
-        <strong>{event.title}</strong>
-        <span>{displayDateTimeWithWeekday(event)}</span>
-        <span>{[event.venue_name || event.city, eventAdmissionLabel(event)].filter(Boolean).join(' · ')}</span>
-      </span>
-    </a>
-  )}
-</section>
+    {visibleScenes.length > 1 && <div class="home-hero-talk__controls" data-home-hero-controls hidden>
+      <Button variant="quiet" size="compact" pressed={false} ariaLabel="Приостановить смену сцен">Пауза</Button>
+    </div>}
+  </section>
+)}
 
 <style>
   .home-hero-talk {
-    display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr);
-    gap: var(--ke-space-home-hero-gap);
-    align-items: stretch;
-    padding: var(--ke-space-home-hero-padding);
-    border: 1px solid var(--ke-color-border-brand-soft);
-    border-radius: var(--ke-shape-radius-home-hero);
-    background: linear-gradient(135deg, var(--ke-color-home-hero-start) 0%, var(--ke-color-home-hero-end) 100%);
-    box-shadow: var(--ke-elevation-home-hero);
-    overflow: hidden;
+    position:relative;
+    width:100vw;
+    height:min(42svh,360px);
+    min-height:270px;
+    margin-left:calc(50% - 50vw);
+    overflow:clip;
+    color:var(--ke-color-text-primary);
+    /* The accepted donor lived on the light page canvas. Keep that exact
+       visual context local so later shell themes cannot turn the hero black. */
+    background:
+      linear-gradient(100deg,color-mix(in srgb,var(--ke-color-action-primary) 9%,transparent),color-mix(in srgb,var(--ke-color-surface-warm) 18%,transparent) 58%,transparent),
+      var(--ke-color-surface-warm);
+    isolation:isolate;
   }
-  .home-hero-talk__copy { display: grid; align-content: center; }
-  .home-hero-talk h1 {
-    max-width: 11ch;
-    margin: .15rem 0 .85rem;
-    font: var(--ke-type-display-home);
-    letter-spacing: var(--ke-type-display-home-letter);
+  .home-hero-talk__sr-only {
+    position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;
+    overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;
   }
-  .home-hero-talk__lead {
-    max-width: 54ch;
-    margin: 0;
-    color: var(--muted);
-    font-size: clamp(1rem, 1.8vw, 1.22rem);
-    line-height: 1.48;
+  .home-hero-talk__stage { position:absolute; inset:0; }
+  .home-hero-talk__scene {
+    position:relative;
+    box-sizing:border-box;
+    width:100%;
+    height:100%;
+    padding-inline:max(20px,calc((100vw - 1240px)/2));
+    display:grid;
+    align-items:center;
   }
-  .home-hero-talk__actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.2rem; }
-  .home-hero-talk__event {
-    min-width: 0;
-    display: grid;
-    grid-template-rows: minmax(20rem, 1fr) auto;
-    border-radius: 28px;
-    overflow: hidden;
-    background: var(--ke-color-home-feature-surface);
-    color: var(--ke-color-home-feature-text);
-    text-decoration: none;
-    box-shadow: var(--ke-elevation-home-feature);
+  .home-hero-talk__scene:not(:first-child) { display:none; }
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene {
+    position:absolute;inset:0;display:grid;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity 480ms cubic-bezier(.22,1,.36,1),visibility 0s linear 480ms;
+  }
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active {
+    opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s;
+  }
+  .home-hero-talk__message { position:relative;z-index:2;width:40vw;max-width:40vw;align-self:end;margin-bottom:clamp(2.75rem,7vh,4rem); }
+  .home-hero-talk__message h2 {
+    max-width:100%;min-height:2em;margin:0;padding-bottom:.12em;
+    font:var(--ke-type-display-home);
+    letter-spacing:var(--ke-type-display-home-letter);text-wrap:wrap;
+  }
+  .home-hero-talk__fragment { position:relative;display:inline;color:inherit;text-decoration:none; }
+  a.home-hero-talk__fragment {
+    color:var(--ke-color-action-primary);cursor:pointer;text-decoration:underline;text-decoration-thickness:.045em;
+    text-underline-offset:.16em;text-decoration-color:color-mix(in srgb,currentColor 72%,transparent);
+  }
+  a.home-hero-talk__fragment:hover { text-decoration-thickness:.075em;text-decoration-color:currentColor; }
+  a.home-hero-talk__fragment:focus-visible { border-radius:.08em;outline:.055em solid currentColor;outline-offset:.09em; }
+  .home-hero-talk__fragment--accent { color:var(--ke-color-action-primary); }
+  .home-hero-talk__scene--photo-mosaic .home-hero-talk__fragment {
+    padding:0 .015em;
+    background:linear-gradient(to bottom,transparent 45%,color-mix(in srgb,var(--ke-color-surface-warm) 28%,transparent) 45%,color-mix(in srgb,var(--ke-color-surface-warm) 28%,transparent) 57%,transparent 57%);
+    text-shadow:-1px 0 color-mix(in srgb,var(--ke-color-surface-warm) 92%,transparent),1px 0 color-mix(in srgb,var(--ke-color-surface-warm) 92%,transparent),0 -1px color-mix(in srgb,var(--ke-color-surface-warm) 92%,transparent),0 1px color-mix(in srgb,var(--ke-color-surface-warm) 92%,transparent);
+    -webkit-box-decoration-break:clone;box-decoration-break:clone;
   }
   .home-hero-talk__media {
-    position: relative;
-    min-height: 20rem;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    background: radial-gradient(circle at 30% 20%, var(--ke-color-home-ambient-start), var(--ke-color-home-ambient-end) 72%);
+    --mosaic-columns:16;
+    position:absolute;z-index:0;top:50%;right:0;width:75vw;
+    height:calc((75vw - (var(--mosaic-columns) - 1)*3px)*5/var(--mosaic-columns));
+    max-height:100%;overflow:hidden;transform:translateY(-50%);pointer-events:none;
   }
-  .home-hero-talk__media img { width: 100%; height: 100%; }
-  .home-hero-talk__media--cover img { object-fit: cover; object-position: 50% var(--home-hero-focal-y); }
-  .home-hero-talk__media--contain img { object-fit: contain; object-position: 50% 50%; }
-  .home-hero-talk__media > span { font-size: 2rem; font-weight: 950; letter-spacing: -.05em; }
-  .home-hero-talk__event-copy { display: grid; gap: .24rem; padding: 1rem 1.1rem 1.15rem; }
-  .home-hero-talk__event-copy small { color: var(--ke-color-home-feature-eyebrow); font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
-  .home-hero-talk__event-copy strong { font-size: clamp(1.25rem, 2.2vw, 1.8rem); line-height: 1.05; }
-  .home-hero-talk__event-copy > span { color: var(--ke-color-home-feature-muted); font-size: .9rem; font-weight: 720; }
-  @media (max-width: 820px) {
-    .home-hero-talk { grid-template-columns: minmax(0, 1fr); }
-    .home-hero-talk__event { grid-template-rows: minmax(18rem, 68vw) auto; }
-    .home-hero-talk__media { min-height: 18rem; }
+  .home-hero-talk__preload { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
+  .home-hero-talk__mosaic {
+    display:grid;width:100%;height:100%;grid-template-columns:repeat(var(--mosaic-columns),minmax(0,1fr));
+    grid-template-rows:repeat(5,minmax(0,1fr));column-gap:3px;row-gap:0;
+  }
+  .home-hero-talk__tile {
+    position:relative;display:block;min-width:0;min-height:0;overflow:hidden;opacity:0;
+    transition-property:opacity;transition-duration:var(--tile-in-duration,520ms);
+    transition-timing-function:cubic-bezier(.65,0,.35,1);transition-delay:var(--tile-in-delay,0ms);
+  }
+  .home-hero-talk__tile::before {
+    content:"";position:absolute;left:var(--tile-image-left);top:var(--tile-image-top);
+    width:var(--mosaic-render-width);height:var(--mosaic-render-height);
+    background-image:var(--mosaic-image);background-repeat:no-repeat;background-size:100% 100%;
+    filter:saturate(.94) contrast(1.02);
+  }
+  .home-hero-talk__media.is-present .home-hero-talk__tile { opacity:var(--tile-opacity); }
+  .home-hero-talk__media.is-entering .home-hero-talk__tile { opacity:0;transition:none; }
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__fragment {
+    opacity:0;transform:translateY(.28em);filter:blur(1px);
+    animation:home-hero-fragment-in 340ms cubic-bezier(.16,1,.3,1) var(--fragment-delay) forwards;
+  }
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__fragment:last-of-type::after {
+    content:"";display:inline-block;width:.11em;height:.78em;margin-left:.08em;background:var(--ke-color-action-primary);
+    animation:home-hero-cursor 780ms step-end infinite;vertical-align:-.03em;
+  }
+  @keyframes home-hero-fragment-in { to { opacity:1;transform:none;filter:none; } }
+  @keyframes home-hero-cursor { 50% { opacity:0; } }
+  .home-hero-talk__controls { position:absolute; right:1rem; bottom:.5rem; z-index:3; }
+  .home-hero-talk__controls[hidden] { display:none; }
+  .home-hero-talk__controls :global(.ke-button) { background:var(--ke-color-surface-warm); }
+  .home-hero-talk__scene--text-only .home-hero-talk__message { width:min(90vw,45rem);max-width:100%; }
+  @media (min-width:1536px) { .home-hero-talk__media { --mosaic-columns:18; } }
+  @media (min-width:1792px) { .home-hero-talk__media { --mosaic-columns:20; } }
+  @media (max-width:1023px) {
+    .home-hero-talk { height:min(42svh,250px);min-height:220px; }
+    .home-hero-talk__scene { padding-inline:1rem; }
+    .home-hero-talk__message { width:100%;max-width:none;align-self:center;margin:0; }
+    .home-hero-talk__message h2 { max-width:20ch;font-size:var(--ke-type-display-home-size-compact);line-height:1; }
+    .home-hero-talk__media { display:none; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .home-hero-talk__scene:not(:first-child) { display:none!important; }
+    .home-hero-talk__scene:first-child { position:relative!important;opacity:1!important;visibility:visible!important; }
+    .home-hero-talk__fragment { animation:none!important;opacity:1!important;transform:none!important;filter:none!important; }
+    .home-hero-talk__fragment::after { display:none!important; }
+    .home-hero-talk__tile { transition:none!important;opacity:var(--tile-opacity,0)!important; }
   }
 </style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-home-hero-talk]').forEach((root) => {
+    if (root.dataset.ready === 'true') return;
+    root.dataset.ready = 'true';
+    const stage = root.querySelector<HTMLElement>('[data-home-hero-stage]');
+    const scenes = [...root.querySelectorAll<HTMLElement>('[data-home-hero-scene]')];
+    if (!stage || !scenes.length) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const LEVELS = [.03,.1,.24,.5,.78,.96];
+    let active = 0;
+    let timer = 0;
+    let visible = true;
+    let paused = false;
+    const controls = root.querySelector<HTMLElement>('[data-home-hero-controls]');
+    const pauseButton = controls?.querySelector<HTMLButtonElement>('button');
+    if (controls) controls.hidden = reduced || scenes.length < 2;
+    let transitionToken = 0;
+
+    const clamp = (value:number, minimum=0, maximum=1) => Math.max(minimum, Math.min(maximum, value));
+    const smoothstep = (value:number) => { const progress=clamp(value); return progress*progress*(3-2*progress); };
+    const hashUnit = (...parts:Array<string|number>) => {
+      const input=parts.join('|');let hash=2166136261;
+      for(let index=0;index<input.length;index+=1) hash=Math.imul(hash^input.charCodeAt(index),16777619);
+      hash^=hash>>>16;hash=Math.imul(hash,2246822507);hash^=hash>>>13;hash=Math.imul(hash,3266489909);hash^=hash>>>16;
+      return (hash>>>0)/4294967295;
+    };
+    const nearestLevel = (value:number) => LEVELS.reduce((best,level) => Math.abs(level-value)<Math.abs(best-value)?level:best,LEVELS[0]);
+    const columnsForViewport = () => window.innerWidth>=1792?20:window.innerWidth>=1536?18:16;
+    const decodeImage = async (image:HTMLImageElement) => {
+      if (!image.complete || !image.naturalWidth) await new Promise<void>((resolve,reject) => {
+        const timer=window.setTimeout(()=>reject(new Error('image timeout')),4000);
+        image.addEventListener('load',()=>{clearTimeout(timer);resolve();},{once:true});image.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('image'));},{once:true});
+      });
+      try { await image.decode?.(); } catch {}
+      return image;
+    };
+    const copyLines = (scene:HTMLElement) => {
+      const rects=[...scene.querySelectorAll<HTMLElement>('[data-home-hero-fragment]')]
+        .flatMap((node)=>[...node.getClientRects()]).filter((rect)=>rect.width>1&&rect.height>1)
+        .sort((left,right)=>left.top-right.top||left.left-right.left);
+      const lines:Array<{left:number;right:number;top:number;bottom:number;height:number;centerY:number;rects:DOMRect[]}> = [];
+      rects.forEach((rect) => {
+        const centerY=(rect.top+rect.bottom)/2;
+        let line=lines.find((candidate)=>Math.min(candidate.bottom,rect.bottom)-Math.max(candidate.top,rect.top)>=Math.min(candidate.height,rect.height)*.45||Math.abs(candidate.centerY-centerY)<=Math.max(candidate.height,rect.height)*.48);
+        if(!line){line={left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,height:rect.height,centerY,rects:[]};lines.push(line);}
+        line.left=Math.min(line.left,rect.left);line.right=Math.max(line.right,rect.right);line.top=Math.min(line.top,rect.top);line.bottom=Math.max(line.bottom,rect.bottom);line.height=line.bottom-line.top;line.centerY=(line.top+line.bottom)/2;line.rects.push(rect);
+      });
+      return lines.sort((left,right)=>left.top-right.top);
+    };
+    const configureMosaic = async (scene:HTMLElement, replay=false) => {
+      const media=scene.querySelector<HTMLElement>('[data-home-hero-media]');
+      const mosaic=scene.querySelector<HTMLElement>('[data-home-hero-mosaic]');
+      const image=scene.querySelector<HTMLImageElement>('[data-home-hero-image]');
+      const allTiles=[...scene.querySelectorAll<HTMLElement>('[data-home-hero-tile]')];
+      if(!media||!mosaic||!image||window.innerWidth<1024) return false;
+      try { await decodeImage(image); } catch { media.hidden=true;return false; }
+      const columns=columnsForViewport(),activeCount=columns*5,scenario=scene.dataset.editorialId||'scene';
+      media.style.setProperty('--mosaic-columns',String(columns));mosaic.style.setProperty('--mosaic-columns',String(columns));
+      allTiles.forEach((tile,index)=>{tile.hidden=index>=activeCount;if(index<activeCount){tile.dataset.col=String(index%columns);tile.dataset.row=String(Math.floor(index/columns));}});
+      const rootRect=mosaic.getBoundingClientRect(),sourceWidth=Number(scene.dataset.sourceWidth),sourceHeight=Number(scene.dataset.sourceHeight);
+      if(!rootRect.width||!rootRect.height||!sourceWidth||!sourceHeight) return false;
+      const scale=Math.max(rootRect.width/sourceWidth,rootRect.height/sourceHeight);
+      if(scale>1.1){media.dataset.mediaRejection='upscale';media.hidden=true;return false;}
+      media.hidden=false;delete media.dataset.mediaRejection;
+      const renderWidth=sourceWidth*scale,renderHeight=sourceHeight*scale,focusX=clamp(Number(scene.dataset.focusX||.5)),focusY=clamp(Number(scene.dataset.focusY||.5));
+      const offsetX=(rootRect.width-renderWidth)*focusX,offsetY=(rootRect.height-renderHeight)*focusY;
+      mosaic.style.setProperty('--mosaic-image',`url("${image.currentSrc||image.src}")`);mosaic.style.setProperty('--mosaic-render-width',`${renderWidth}px`);mosaic.style.setProperty('--mosaic-render-height',`${renderHeight}px`);
+      let faces:Array<{x:number;y:number;w:number;h:number}>=[];try{faces=JSON.parse(scene.dataset.faceBoxes||'[]');}catch{}
+      let faceCropSafe=true;
+      const projected=faces.map((box)=>{const px=clamp(box.w*.12,.012,.04),py=clamp(box.h*.12,.012,.04),local={left:offsetX+clamp(box.x-px)*renderWidth,top:offsetY+clamp(box.y-py)*renderHeight,right:offsetX+clamp(box.x+box.w+px)*renderWidth,bottom:offsetY+clamp(box.y+box.h+py)*renderHeight};if(local.left<-.5||local.top<-.5||local.right>rootRect.width+.5||local.bottom>rootRect.height+.5)faceCropSafe=false;return{left:rootRect.left+local.left,top:rootRect.top+local.top,right:rootRect.left+local.right,bottom:rootRect.top+local.bottom};});
+      if(faces.length&&!faceCropSafe){media.dataset.mediaRejection='face-crop';media.hidden=true;return false;}
+      const lines=copyLines(scene),copyRects=lines.flatMap((line)=>line.rects),phase=hashUnit(scenario,'phase')*Math.PI*2;
+      const records=allTiles.slice(0,activeCount).map((tile,index)=>{
+        const column=index%columns,row=Math.floor(index/columns),tileRect=tile.getBoundingClientRect(),centerX=(tileRect.left+tileRect.right)/2,centerY=(tileRect.top+tileRect.bottom)/2;
+        tile.style.setProperty('--tile-image-left',`${offsetX-(tileRect.left-rootRect.left)}px`);tile.style.setProperty('--tile-image-top',`${offsetY-(tileRect.top-rootRect.top)}px`);
+        const line=lines.filter((candidate)=>tileRect.bottom>candidate.top-3&&tileRect.top<candidate.bottom+3).sort((left,right)=>Math.abs(left.centerY-centerY)-Math.abs(right.centerY-centerY))[0]||[...lines].sort((left,right)=>Math.abs(left.centerY-centerY)-Math.abs(right.centerY-centerY))[0];
+        const origin=line?line.right+Math.max(14,tileRect.width*.35):rootRect.left+rootRect.width*.18,fadeWidth=Math.max(rootRect.width*.34,tileRect.width*4),field=smoothstep((centerX-origin)/fadeWidth);
+        const base=.06+.86*field,noiseStrength=.22+.16*field,cellNoise=(hashUnit(scenario,'cell',row,column)-.5)*noiseStrength*2,clusterNoise=(hashUnit(scenario,'cluster',Math.floor(row/2),Math.floor(column/3))-.5)*.40,wave=Math.sin(column*.83+row*1.47+phase)*.08;
+        let opacity=nearestLevel(clamp(base+cellNoise+clusterNoise+wave,.02,.97));const contrast=hashUnit(scenario,'contrast',row,column);
+        if(column<columns-3&&contrast<=.09)opacity=.03;else if(column<columns-3&&contrast>=.91)opacity=.96;if(column===columns-3)opacity=Math.max(.78,opacity);if(column>=columns-2)opacity=1;
+        const copyShield=copyRects.some((rect)=>tileRect.right>rect.left-4&&tileRect.left<rect.right+4&&tileRect.bottom>rect.top-3&&tileRect.top<rect.bottom+3);if(copyShield)opacity=Math.min(opacity,.24);
+        const faceShield=projected.some((rect)=>Math.min(tileRect.right,rect.right)-Math.max(tileRect.left,rect.left)>0&&Math.min(tileRect.bottom,rect.bottom)-Math.max(tileRect.top,rect.top)>0);if(faceShield)opacity=Math.max(.5,opacity);
+        const beat=column>=columns-2?2:Math.floor(hashUnit(scenario,'beat',Math.floor(row/2),Math.floor(column/4))*3),delay=40+beat*260+Math.floor(hashUnit(scenario,'delay',row,column)*140),duration=360+Math.floor(hashUnit(scenario,'duration',row,column)*400);
+        tile.dataset.copyShield=String(copyShield);tile.dataset.faceShield=String(faceShield);tile.style.setProperty('--tile-opacity',String(opacity));tile.style.setProperty('--tile-in-delay',`${delay}ms`);tile.style.setProperty('--tile-in-duration',`${duration}ms`);
+        return{tile,column,row,opacity,copyShield,faceShield};
+      });
+      const accents=records.filter((record)=>!record.copyShield&&!record.faceShield&&record.opacity>=.5&&record.column<columns-2).sort((left,right)=>hashUnit(scenario,'accent',left.row,left.column)-hashUnit(scenario,'accent',right.row,right.column)).slice(0,3);
+      accents.forEach((record,index)=>{record.tile.style.setProperty('--tile-in-delay',`${900+index*40}ms`);record.tile.dataset.entryAccent='true';});
+      mosaic.dataset.columns=String(columns);mosaic.dataset.rows='5';mosaic.dataset.copyLineCount=String(lines.length);mosaic.dataset.fullOpacityCount=String(records.filter((record)=>record.opacity===1).length);mosaic.dataset.partialOpacityCount=String(records.filter((record)=>record.opacity<.98).length);mosaic.dataset.ready='true';
+      if(replay&&!reduced){media.classList.remove('is-present');media.classList.add('is-entering');requestAnimationFrame(()=>requestAnimationFrame(()=>{media.classList.remove('is-entering');media.classList.add('is-present');}));}else media.classList.add('is-present');
+      return true;
+    };
+    const activate = async (index:number) => {
+      const token=++transitionToken,next=index%scenes.length;
+      await configureMosaic(scenes[next],true);
+      if(token!==transitionToken)return;
+      active=next;
+      scenes.forEach((scene,sceneIndex)=>{const selected=sceneIndex===active;scene.classList.toggle('is-active',selected);scene.setAttribute('aria-hidden',String(!selected));scene.querySelectorAll<HTMLAnchorElement>('a').forEach((link)=>link.tabIndex=selected?0:-1);});
+    };
+    const stop=()=>{window.clearTimeout(timer);timer=0;};
+    const schedule=()=>{stop();if(reduced||paused||root.contains(document.activeElement)||!visible||document.hidden||scenes.length<2)return;timer=window.setTimeout(async()=>{await activate(active+1);schedule();},7200);};
+    pauseButton?.addEventListener('click',()=>{
+      paused=!paused;pauseButton.setAttribute('aria-pressed',String(paused));
+      pauseButton.textContent=paused?'Продолжить':'Пауза';
+      pauseButton.setAttribute('aria-label',paused?'Продолжить смену сцен':'Приостановить смену сцен');
+      root.dataset.playback=paused?'paused':'playing';schedule();
+    });
+    root.addEventListener('focusin',stop);
+    root.addEventListener('focusout',()=>window.setTimeout(schedule,0));
+    root.dataset.playback=reduced?'reduced-motion':'playing';
+    stage.classList.add('is-enhanced');
+    scenes[0].classList.add('is-active');
+    configureMosaic(scenes[0],true);
+    if(!reduced){const observer=new IntersectionObserver(([entry])=>{visible=Boolean(entry?.isIntersecting&&entry.intersectionRatio>=.15);if(visible)schedule();else stop();},{threshold:[0,.15,.5]});observer.observe(root);document.addEventListener('visibilitychange',schedule);window.addEventListener('resize',()=>scenes.forEach((scene)=>configureMosaic(scene,false)),{passive:true});schedule();}
+  });
+</script>
+
+{visibleScenes.length === 0 && <section class="home-hero-talk-empty" data-ds-family="HomeHeroTalk" data-ds-version="2" data-ds-variant="editorial-scenes" data-ds-state="empty">
+  <h1>Анонсы</h1><p>Выберите день или найдите интересующее событие.</p>
+</section>}
