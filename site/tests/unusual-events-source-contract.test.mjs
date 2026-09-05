@@ -83,7 +83,8 @@ test('R01-R07 keep the cross-surface product contracts in canonical implementati
   assert.match(free, /data-free-collection-medallion="compact"/u);
   assert.match(free, /data-free-collection-sticky-identity/u);
   assert.doesNotMatch(free, /data-free-collection-shelf/u);
-  assert.match(free, /data-free-collection-event-group="exhibitions"/u);
+  assert.match(free, /data-free-collection-grid/u);
+  assert.doesNotMatch(free, /data-free-collection-event-group="exhibitions"|Бесплатные выставки/u);
 
   assert.match(availability, /furthestEventDate/u);
   assert.match(availability, /horizonEnd\s*=\s*endOfMonth\(furthestEventDate\)/u);

@@ -5,6 +5,7 @@ import './design-system/foundations.css';
 import './design-system/product-contour-foundations.css';
 import type { PreviewEvent } from '../lib/types';
 import { siteHomeHref, withBase } from '../lib/events';
+import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
 
 interface Props {
   title: string;
@@ -13,22 +14,20 @@ interface Props {
   updatedDate: string;
   referenceDate: string;
   events: PreviewEvent[];
+  /** Runtime may update this after eligible free-event loading. */
+  totalEvents?: number;
 }
-const { title, description, criteria, updatedDate, referenceDate, events } = Astro.props;
-const isExhibition = (event: PreviewEvent) => (event.event_type || '').trim().toLocaleLowerCase('ru-RU') === 'выставка'
-  || event.topics.includes('EXHIBITIONS');
-const exhibitionEvents = events.filter(isExhibition);
-const regularEvents = events.filter((event) => !isExhibition(event));
-const surfaceState = events.length
-  ? [regularEvents.length ? 'timed' : null, exhibitionEvents.length ? 'exhibitions' : null, 'populated'].filter(Boolean).join(' ')
-  : 'empty';
+const { title, description, criteria, updatedDate, referenceDate, events, totalEvents = events.length } = Astro.props;
+const loadedCount = events.length;
+const totalCount = Math.max(loadedCount, Number.isFinite(totalEvents) ? Math.floor(totalEvents) : loadedCount);
+const surfaceState = events.length ? 'populated' : 'empty';
 ---
 <main
   id="main"
   class="free-collection"
   data-ds-family="FreeCollectionSurface"
   data-ds-version="1"
-  data-ds-variant="timed-and-exhibitions"
+  data-ds-variant="standard-free-listing"
   data-ds-state={surfaceState}
   data-free-collection-surface
 >
@@ -44,7 +43,7 @@ const surfaceState = events.length
     <section class="free-collection__hero" aria-labelledby="free-collection-title" data-free-collection-hero>
       <div class="free-collection__copy">
         <p class="eyebrow">Готовая подборка</p>
-        <h1 id="free-collection-title">{title}</h1>
+        <h1 id="free-collection-title">Бесплатные события</h1>
         <p class="lead">{description}</p>
         <p class="collection-criteria"><strong>Как собрана:</strong> {criteria}</p>
         <p class="muted-note">Данные афиши обновлены {updatedDate}; подборка рассчитана на {referenceDate}. Это не личный сохранённый поиск.</p>
@@ -61,50 +60,33 @@ const surfaceState = events.length
     </div>
 
     <section id="free-collection-results" class="free-collection__results" aria-labelledby="free-collection-results-title" data-free-collection-event-group="events">
-      <h2 id="free-collection-results-title">
-        {events.length
-          ? (regularEvents.length ? `${regularEvents.length} событий` : 'Событий вне выставок пока нет')
-          : 'Подходящих событий пока нет'}
-      </h2>
+      <div class="free-collection__results-head">
+        <h2 id="free-collection-results-title">События</h2>
+        <p data-free-collection-result-count data-free-collection-loaded-count={loadedCount} data-free-collection-total-count={totalCount} role="status" aria-live="polite">
+          {freeCollectionCountMessage(loadedCount, totalCount)}
+        </p>
+      </div>
       {events.length ? (
-        regularEvents.length ? (
-          <AdaptiveEventCardGrid
-            events={regularEvents}
-            mode="flow"
-            rowSize={3}
-            responsive="progressive"
-            mobileFlowMedia
-            rootAttributes={{
-              'data-search-collection-results':'',
-              'data-free-collection-grid':'events',
-            }}
-          />
-        ) : (
-          <p class="free-collection__empty">Сейчас все актуальные варианты этой подборки — продолжающиеся выставки. Они собраны отдельно ниже.</p>
-        )
-      ) : (
-        <p class="free-collection__empty">Сейчас в актуальной выгрузке нет событий с подтверждённым бесплатным входом. Неизвестные условия не добавляются ради заполнения страницы.</p>
-      )}
-    </section>
-
-    {exhibitionEvents.length > 0 && (
-      <section class="free-collection__results free-collection__results--exhibitions" aria-labelledby="free-collection-exhibitions-title" data-free-collection-event-group="exhibitions">
-        <p class="eyebrow">Можно посетить в течение дня</p>
-        <h2 id="free-collection-exhibitions-title">Бесплатные выставки · {exhibitionEvents.length}</h2>
-        <p class="free-collection__group-note">Продолжающиеся выставки отделены от событий с конкретным временем, чтобы их было проще просматривать.</p>
         <AdaptiveEventCardGrid
-          events={exhibitionEvents}
+          events={events}
           mode="flow"
           rowSize={3}
           responsive="progressive"
           mobileFlowMedia
+          discoveryFeed
+          runtimeManaged
+          runtimeVisibleOnly
+          runtimeSourcePolicy="all-direct"
           rootAttributes={{
-            'data-search-collection-exhibitions':'',
-            'data-free-collection-grid':'exhibitions',
+            'data-search-collection-results':'',
+            'data-free-collection-grid':'',
+            'data-free-collection-eligibility':'confirmed-free',
           }}
         />
-      </section>
-    )}
+      ) : (
+        <p class="free-collection__empty">Сейчас в актуальной выгрузке нет событий с подтверждённым бесплатным входом.</p>
+      )}
+    </section>
   </div>
 </main>
 
@@ -178,10 +160,9 @@ const surfaceState = events.length
     border-radius:var(--ke-free-results-radius);
     background:var(--ke-color-free-results-surface);
   }
-  .free-collection__results h2 { margin:0 0 1.25rem; font:var(--ke-type-h2); letter-spacing:var(--ke-type-h2-letter); }
-  .free-collection__results--exhibitions { margin-top:.25rem; }
-  .free-collection__results--exhibitions .eyebrow { margin-bottom:.35rem; }
-  .free-collection__group-note { max-width:64ch; margin:-.65rem 0 1.25rem; color:var(--ke-color-text-muted); }
+  .free-collection__results-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; }
+  .free-collection__results h2 { margin:0; font:var(--ke-type-h2); letter-spacing:var(--ke-type-h2-letter); }
+  .free-collection__results-head p { margin:0; color:var(--ke-color-text-muted); }
   .free-collection__empty { max-width:62ch; color:var(--ke-color-text-muted); }
   @media(max-width:759px) {
     .free-collection { padding-bottom:calc(5rem + env(safe-area-inset-bottom)); }
@@ -205,6 +186,7 @@ const surfaceState = events.length
     .free-collection__sticky-identity { top:var(--ke-free-sticky-top-compact); z-index:var(--ke-free-sticky-layer-compact); padding-right:6px; }
     .free-collection__medallion--compact { width:var(--ke-free-medallion-sticky-size-compact); height:var(--ke-free-medallion-sticky-size-compact); }
     .free-collection__results { padding:20px 12px; border-radius:var(--ke-free-results-radius-compact); }
+    .free-collection__results-head { align-items:start; flex-direction:column; gap:.25rem; }
   }
   @media(prefers-reduced-motion:reduce) {
     .free-collection__medallion--compact { transition:none; }
