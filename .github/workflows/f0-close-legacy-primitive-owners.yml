@@ -1,128 +1,175 @@
-name: F0 owner-review evidence
+name: F0 owner-review correction and evidence
 
-# Continuation of the existing F0 runner, not a second build or release path.
-# The completed 20260903 hardcoded repair remains in Git history. This branch
-# only collects anonymous evidence and an exact source/dependency archive for
-# ChatGPT's network-isolated runtime. No deployment or automatic source writes.
+# Reuses the existing F0 repair runner. No agent, new builder, deployment,
+# production promotion, Penpot mutation or external model call.
 on:
   push:
-    branches:
-      - work/owner-audioreview-card-geometry-20260905
-    paths:
-      - .github/workflows/f0-close-legacy-primitive-owners.yml
-
+    branches: [work/owner-audioreview-card-geometry-20260905]
+    paths: [.github/workflows/f0-close-legacy-primitive-owners.yml]
 permissions:
-  contents: read
-
+  contents: write
 concurrency:
   group: f0-owner-review-evidence-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   owner-review-evidence:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.16.0'
-      - name: Export exact tracked source, without git credentials
+      - name: Apply exact reviewed source patch, never infer a repair
         run: |
           mkdir -p artifacts/owner-review
-          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
-          git archive --format=tar HEAD site docs .codex/skills AGENTS.md .github CHANGELOG.md | gzip > artifacts/owner-review/source.tar.gz
-      - name: Install lockfile dependencies for the isolated review runtime
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code 40866c0609a790ef892b80907b86ea12e46d7611 HEAD -- site
+          python - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          parts = pathlib.Path('.github/owner-review-patch')
+          encoded = ''.join((parts / f'{i}.b64').read_text().strip() for i in range(4))
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          assert len(patch) == 54358
+          assert hashlib.sha256(patch).hexdigest() == '7a4ba9c3397ff880b1706b4dfc5d3bbd671a32742687259935c6bac314cc11d7'
+          paths = [line.split(' b/',1)[1] for line in patch.decode().splitlines() if line.startswith('diff --git ')]
+          assert len(paths) == 33 and all(path.startswith('site/') and '..' not in path for path in paths)
+          destination = pathlib.Path('artifacts/owner-review/applied-source.patch')
+          destination.write_bytes(patch)
+          subprocess.run(['git','apply','--check','--unidiff-zero',str(destination)],check=True)
+          subprocess.run(['git','apply','--unidiff-zero',str(destination)],check=True)
+          for i in range(4): (parts / f'{i}.b64').unlink()
+          PY
+      - name: Install exact lockfile dependencies
         working-directory: site
         run: npm ci --no-audit --no-fund
-      - name: Export pinned Linux dependencies
-        run: tar -czf artifacts/owner-review/node-modules.tar.gz -C site node_modules
-      - name: Run existing card regression tests
-        working-directory: site
-        run: node --test tests/owner-audioreview-card-geometry.test.mjs
-      - name: Install Chromium for exact viewport evidence
+      - name: Regenerate existing SoT graphs and execute source regressions
+        run: |
+          set -o pipefail
+          node site/scripts/generate-astro-family-consumer-graph.mjs --write | tee artifacts/owner-review/family-generation.json
+          node site/scripts/generate-token-impact-graph.mjs --write | tee artifacts/owner-review/token-generation.json
+          node site/scripts/check-astro-family-sot.mjs | tee artifacts/owner-review/family-check.json
+          node --experimental-strip-types --test site/tests/owner-audioreview-card-geometry.test.mjs site/tests/adaptive-event-card-grid.test.mjs site/tests/unusual-listing-typography-token-adoption.test.mjs site/tests/event-date-availability.test.mjs site/tests/keyboard-event-navigation-production.test.mjs | tee artifacts/owner-review/source-regressions.tap
+      - name: Save applicable product changes to the existing correction branch
+        run: |
+          test "$(git ls-remote origin refs/heads/work/owner-audioreview-card-geometry-20260905 | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site .github/owner-review-patch
+          git diff --cached --check
+          git commit -m 'fix(ui): align semantic roles and preserve owner-review reading flows'
+          git push origin HEAD:refs/heads/work/owner-audioreview-card-geometry-20260905
+          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
+          git show --stat --oneline HEAD > artifacts/owner-review/applied-commit.txt
+      - name: Install Chromium
         working-directory: site
         run: npx playwright install --with-deps chromium
-      - name: Capture the rejected immutable build, not production
-        working-directory: site
+      - name: Run existing browser-gate behavioral regressions
+        id: behavior
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --test site/scripts/browser-release-gate.behavior.test.mjs | tee artifacts/owner-review/browser-regressions.tap
+      - name: Compile and inspect existing page-class diagnostics, not a published build
+        id: diagnostics
+        continue-on-error: true
+        env:
+          PUBLIC_SITE_MODE: preview
+          PUBLIC_PREVIEW_BUILD_ID: local-owner-review
+          PUBLIC_INTEREST_CLUBS_ENABLED: '1'
+          ENABLE_INTEREST_CLUB_STATIC_PROJECTION: '1'
+        run: |
+          set -o pipefail
+          for CLASS in collection date weekend; do
+            (cd site && STATIC_SITE_PAGE_CLASSES="$CLASS" node_modules/.bin/astro build) > "artifacts/owner-review/build-$CLASS.log" 2>&1
+            CLASS="$CLASS" node --input-type=module <<'JS'
+          import {chromium} from './site/node_modules/playwright/index.mjs';
+          import {assertOwnerReviewPages,startReleaseServer} from './site/scripts/check-browser-release-gate.mjs';
+          import {writeFileSync} from 'node:fs';
+          const routes = {collection:['/vystavki/','/populyarnoe/','/festivali/','/neobychnoe/','/kluby-po-interesam/','/podborki/besplatnye-sobytiya/','/podborki/besplatno-s-detmi/','/podborki/'],date:['/segodnya/','/zavtra/'],weekend:['/vyhodnye/']}[process.env.CLASS];
+          const server = await startReleaseServer('site/dist');
+          const browser = await chromium.launch();
+          try {
+            const page = await browser.newPage();
+            page.setDefaultNavigationTimeout(45000);
+            const report = await assertOwnerReviewPages(page,server.origin,'',{routes,artifactDir:`artifacts/owner-review/after-${process.env.CLASS}`,captureOnly:true});
+            report.evidence_class='FOCUSED_FIXTURE_DIAGNOSTIC_NOT_REAL_REVIEW_ACCEPTANCE';
+            report.source_sha = (await import('node:child_process')).execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+            writeFileSync(`artifacts/owner-review/${process.env.CLASS}-result.json`,JSON.stringify(report,null,2));
+            console.log(JSON.stringify({class:process.env.CLASS,ok:report.ok,errors:report.errors}));
+          } finally {await browser.close(); await server.close();}
+          JS
+          done
+      - name: Capture remaining rejected-build cases and anonymous data
+        id: rejected
+        continue-on-error: true
         run: |
           node --input-type=module <<'JS'
-          import { chromium } from 'playwright';
-          import { mkdir, writeFile } from 'node:fs/promises';
-          import { createHash } from 'node:crypto';
-          const out = '../artifacts/owner-review';
-          const base = 'https://kenigevents.ru/preview-real-8b1bb8129-normalized-20260904-v1/';
-          const expected = '8b1bb81298bfca2fe2aaa3ceb7e5f654748b301f';
-          const manifest = await (await fetch(base + 'preview-build.json')).json();
-          if (manifest.repo_sha !== expected) throw new Error('Wrong review SHA');
-          await writeFile(out + '/preview-build.json', JSON.stringify(manifest, null, 2));
-          await mkdir(out + '/cache', {recursive:true});
-          const browser = await chromium.launch({headless:true});
-          const cache = {}; const pending = new Set(); const measurements = [];
-          const context = await browser.newContext({viewport:{width:1440,height:900}, locale:'ru-RU'});
-          const page = await context.newPage();
-          page.on('response', response => {
-            const url = new URL(response.url());
-            const kind = response.request().resourceType();
-            if (!['kenigevents.ru','static.kenigevents.ru'].includes(url.hostname)) return;
-            if (!['document','stylesheet','script','image','font'].includes(kind)) return;
-            if (response.status() !== 200 || url.pathname.includes('/auth/')) return;
-            const job = (async () => {
-              const body = await response.body();
-              const key = createHash('sha256').update(response.url()).digest('hex');
-              await writeFile(out + '/cache/' + key, body);
-              cache[response.url()] = {file:key,contentType:response.headers()['content-type'] || 'application/octet-stream'};
-            })().catch(()=>{}).finally(()=>pending.delete(job));
-            pending.add(job);
-          });
-          await page.goto(base + '__preview/', {waitUntil:'networkidle'});
-          const links = await page.locator('a[href]').evaluateAll(nodes => nodes.map(n=>({text:n.textContent.trim(),href:n.href})));
-          await writeFile(out+'/preview-links.json', JSON.stringify(links,null,2));
-          const routes = ['segodnya/','zavtra/','vyhodnye/','vystavki/','populyarnoe/','podborki/besplatnye-sobytiya/'];
-          for (const link of links) {
-            if (/фестивали|необычное|клубы|главная/i.test(link.text) && link.href.startsWith(base) && !link.href.includes('/lab/')) {
-              const route = link.href.slice(base.length).split(/[?#]/)[0];
-              if (!routes.includes(route) && !route.includes('__preview')) routes.push(route);
-            }
+          import {chromium} from './site/node_modules/playwright/index.mjs';
+          import {mkdirSync,writeFileSync} from 'node:fs';
+          import {measureOwnerReviewPage} from './site/scripts/check-browser-release-gate.mjs';
+          const base='https://kenigevents.ru/preview-real-8b1bb8129-normalized-20260904-v1/';
+          const out='artifacts/owner-review/rejected-extra';mkdirSync(out,{recursive:true});
+          const manifest=await (await fetch(base+'preview-build.json')).json();
+          if(manifest.repo_sha!=='8b1bb81298bfca2fe2aaa3ceb7e5f654748b301f')throw Error('Wrong rejected SHA');
+          for(const path of ['data/personal-feed.json','data/event-dates.json','data/discovery/5370.json']){
+            const r=await fetch(base+path);writeFileSync(out+'/'+path.replaceAll('/','_'),r.ok?await r.text():JSON.stringify({status:r.status,path}));
           }
+          const browser=await chromium.launch(); const page=await browser.newPage();
           try {
-            for (const [width,height] of [[1440,900],[390,844],[1920,1080]]) {
-              await page.setViewportSize({width,height});
-              for (const [index,route] of routes.entries()) {
-                const response = await page.goto(base+route,{waitUntil:'networkidle',timeout:45000});
-                await page.waitForTimeout(600);
-                const record = await page.evaluate(() => {
-                  const box = e => {const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
-                  const style = e => {const s=getComputedStyle(e);return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','color','backgroundColor','marginTop','marginBottom','paddingTop','paddingBottom','paddingLeft','paddingRight','maxWidth','overflowX','display','gap'].map(k=>[k,s[k]]));};
-                  return {url:location.href,viewport:{width:innerWidth,height:innerHeight},documentWidth:document.documentElement.scrollWidth,
-                    headings:[...document.querySelectorAll('h1,h2,h3')].filter(e=>e.getClientRects().length && getComputedStyle(e).visibility!=='hidden').slice(0,70).map(e=>({tag:e.tagName,text:e.textContent.trim(),class:e.className,box:box(e),style:style(e),parent:{class:e.parentElement.className,box:box(e.parentElement),style:style(e.parentElement)}})),
-                    grids:[...document.querySelectorAll('[data-adaptive-event-card-grid]')].filter(e=>e.getClientRects().length).map(e=>({attributes:Object.fromEntries([...e.attributes].filter(a=>a.name.startsWith('data-')).map(a=>[a.name,a.value])),box:box(e),cards:[...e.children].filter(e=>e.getClientRects().length).map(e=>({id:e.getAttribute('data-event-id'),box:box(e)}))})),
-                    scrollers:[...document.querySelectorAll('main *')].filter(e=>e.clientWidth>0 && e.scrollWidth>e.clientWidth+2 && ['auto','scroll'].includes(getComputedStyle(e).overflowX)).slice(0,30).map(e=>({class:e.className,box:box(e),clientWidth:e.clientWidth,scrollWidth:e.scrollWidth})),
-                    logoLinks:[...document.querySelectorAll('header a[href]')].map(a=>({text:a.textContent.trim(),href:a.getAttribute('href')})).slice(0,20)};
-                });
-                const name = `${width}-${index}-${route.replaceAll('/','_')||'home'}`;
-                record.status = response.status(); record.screenshot = name+'.png';
-                await page.screenshot({path:out+'/'+name+'.png',fullPage:false});
-                await page.screenshot({path:out+'/'+name+'-full.png',fullPage:true});
-                measurements.push(record);
+            for(const width of [1440,390,1920]){
+              await page.setViewportSize({width,height:width===390?844:width===1440?900:1080});
+              for(const [index,route] of ['sobytiya/tochka-i-liniya-kaliningrad-5370/','podborki/besplatno-s-detmi/'].entries()){
+                await page.goto(base+route,{waitUntil:'networkidle',timeout:45000});
+                await page.screenshot({path:`${out}/${width}-${index}-top.png`,fullPage:false});
+                writeFileSync(`${out}/${width}-${index}.json`,JSON.stringify(await measureOwnerReviewPage(page),null,2));
+                if(index===0 && width>=1440){
+                  const related=page.locator('[data-related-start]').first();
+                  if(await related.count()){
+                    await related.scrollIntoViewIfNeeded();await page.waitForTimeout(1000);
+                    await page.screenshot({path:`${out}/${width}-5370-related.png`,fullPage:false});
+                    writeFileSync(`${out}/${width}-5370-related.json`,JSON.stringify(await measureOwnerReviewPage(page),null,2));
+                  }
+                  const trigger=page.locator('[data-hide-sticky-after]:visible').first();
+                  if(await trigger.count()){
+                    await trigger.scrollIntoViewIfNeeded();await page.mouse.wheel(0,350);await page.waitForTimeout(2500);
+                    await page.screenshot({path:`${out}/${width}-5370-organic-continuation.png`,fullPage:false});
+                    writeFileSync(`${out}/${width}-5370-organic-continuation.json`,JSON.stringify(await measureOwnerReviewPage(page),null,2));
+                  }
+                }
               }
             }
-          } finally {
-            await Promise.allSettled([...pending]);
-            await writeFile(out+'/cache-index.json',JSON.stringify(cache,null,2));
-            await writeFile(out+'/measurements.json',JSON.stringify(measurements,null,2));
-            await writeFile(out+'/qa-summary.json',JSON.stringify({scenario:'owner-audioreview',auth_mode:'anonymous',platform:'chromium-desktop-viewports',source_sha:process.env.GITHUB_SHA,review_sha:expected,browser:browser.version(),target:base,status:'EVIDENCE_ONLY_NOT_ACCEPTANCE',pages:measurements.length,penpot:'NOT_CHECKED',production_changed:false},null,2));
-            await browser.close();
-          }
+          } finally {await browser.close();}
           JS
-      - name: Upload source and anonymous visual evidence
+      - name: Export updated source without credentials
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        run: |
+          mkdir -p artifacts/owner-review
+          git archive --format=tar HEAD site docs .codex/skills AGENTS.md .github CHANGELOG.md | gzip > artifacts/owner-review/source.tar.gz
+          git rev-parse HEAD > artifacts/owner-review/checked-out-sha.txt
+          printf '%s\n' 'Diagnostic execution only. No production/preview publication. Penpot untested. Owner review remains reopened.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
+      - name: Upload source, test results and browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: owner-review-evidence-${{ github.sha }}
+          name: owner-review-correction-${{ github.sha }}
           path: artifacts/owner-review/
-          retention-days: 7
+          retention-days: 14
           if-no-files-found: error
+      - name: Fail visibly on a failed regression or focused-role assertion
+        if: always()
+        env:
+          BEHAVIOR: ${{ steps.behavior.outcome }}
+          DIAGNOSTICS: ${{ steps.diagnostics.outcome }}
+        run: |
+          python - <<'PY'
+          import json,os,pathlib
+          assert os.environ['BEHAVIOR']=='success', 'Browser regression suite failed or did not execute'
+          assert os.environ['DIAGNOSTICS']=='success', 'Focused diagnostics failed or did not execute'
+          for name in ['collection','date','weekend']:
+            result=json.loads(pathlib.Path(f'artifacts/owner-review/{name}-result.json').read_text())
+            assert result['ok'], result['errors']
+          PY
