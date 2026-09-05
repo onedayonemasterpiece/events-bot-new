@@ -1,5 +1,5 @@
 name: F0 owner-review correction and evidence
-# Existing F0 runner only. No published build, external agent, model or production promotion.
+# Existing diagnostic runner. No publication, agents, models or production promotion.
 on:
   push:
     branches: [work/owner-audioreview-card-geometry-20260905]
@@ -21,53 +21,36 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.16.0'
-      - name: Verify and apply only the exact personally authored source patch
+      - name: Apply the explicit ChatGPT correction, without inferred edits
         run: |
           mkdir -p artifacts/owner-review
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git diff --exit-code 89e621cf2143579f2cc21835b46f37ff5befe230 HEAD -- site
-          python - <<'PY'
-          import base64,gzip,hashlib,pathlib,subprocess
-          directory=pathlib.Path('.github/owner-review-patch')
-          parts=[(directory/f'{i}.b64').read_text().strip() for i in range(5)]
-          # Two identified transcription errors in transport only. Exact old Git
-          # blob and complete decompressed SHA are checked before any application.
-          damaged=parts[3].encode()
-          assert hashlib.sha1(b'blob '+str(len(damaged)).encode()+b'\0'+damaged).hexdigest()=='5bca617652b3a3047c0b14f82c134449402cab78'
-          parts[3]=parts[3].replace('V85V85Knj','V85KNj').replace('P+o/uvvvt7s','P+o/vvvbt7s')
-          patch=gzip.decompress(base64.b64decode(''.join(parts),validate=True))
-          assert len(patch)==74308
-          assert hashlib.sha256(patch).hexdigest()=='93427d0458875062cb66fafb43536d3c5544c38d226825c0320bb3a9623da7cf'
-          paths=[line.split(' b/',1)[1] for line in patch.decode().splitlines() if line.startswith('diff --git ')]
-          assert len(paths)==12 and all(p.startswith('site/') and '..' not in p for p in paths)
-          destination=pathlib.Path('artifacts/owner-review/applied-source.patch');destination.write_bytes(patch)
-          subprocess.run(['git','apply','--check',str(destination)],check=True)
-          subprocess.run(['git','apply',str(destination)],check=True)
-          for i in range(5):(directory/f'{i}.b64').unlink()
-          PY
-      - name: Install and run source regressions plus the existing SoT checks
+          git diff --exit-code 9ab7e439b43e0f8b2a63e7052e260fa4791c0aa5 HEAD -- site
+          python .github/owner-review-final-repair.py
+          rm .github/owner-review-final-repair.py
+      - name: Execute source tests and regenerate existing SoT graphs
         run: |
           cd site && npm ci --no-audit --no-fund && cd ..
           node site/scripts/generate-astro-family-consumer-graph.mjs --write > artifacts/owner-review/family-generation.json
           node site/scripts/generate-token-impact-graph.mjs --write > artifacts/owner-review/token-generation.json
           node site/scripts/check-astro-family-sot.mjs > artifacts/owner-review/family-check.json
           node --experimental-strip-types --test site/tests/owner-audioreview-card-geometry.test.mjs site/tests/adaptive-event-card-grid.test.mjs site/tests/unusual-listing-typography-token-adoption.test.mjs site/tests/event-date-availability.test.mjs site/tests/keyboard-event-navigation-production.test.mjs > artifacts/owner-review/source-regressions.tap
-      - name: Save applicable source to the existing correction branch, without overwriting another writer
+      - name: Save the source-tested correction without overwriting another writer
         run: |
           test "$(git ls-remote origin refs/heads/work/owner-audioreview-card-geometry-20260905 | cut -f1)" = "$GITHUB_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add site .github/owner-review-patch
+          git add site .github/owner-review-final-repair.py
           git diff --cached --check
-          git commit -m 'fix(ui): restore current Hero Talk scenes and schematic page context'
+          git commit -m 'fix(ui): normalize section titles and back schematic context with shared canvas'
           git push origin HEAD:refs/heads/work/owner-audioreview-card-geometry-20260905
           git rev-parse HEAD > artifacts/owner-review/source-sha.txt
       - name: Install Chromium
         working-directory: site
         run: npx playwright install --with-deps chromium
-      - name: Execute the existing browser-gate regression suite
+      - name: Execute existing browser-gate regressions
         run: node --experimental-strip-types --test site/scripts/browser-release-gate.behavior.test.mjs > artifacts/owner-review/browser-regressions.tap
-      - name: Focused diagnostics and real browser actions, not review-snapshot acceptance
+      - name: Focused compiled-page diagnostics, not real snapshot acceptance
         env:
           PUBLIC_SITE_MODE: preview
           PUBLIC_PREVIEW_BUILD_ID: local-owner-review
@@ -85,7 +68,7 @@ jobs:
           const out=`artifacts/owner-review/after-${kind}`;mkdirSync(out,{recursive:true});
           const server=await startReleaseServer('site/dist'),browser=await chromium.launch(),page=await browser.newPage();
           page.setDefaultTimeout(12000);page.setDefaultNavigationTimeout(45000);
-          const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+          const pageErrors=[];page.on('pageerror',e=>pageErrors.push(String(e)));
           let report;
           try {
             report=await assertOwnerReviewPages(page,server.origin,'',{routes,artifactDir:out,captureOnly:true});
@@ -96,27 +79,27 @@ jobs:
             report ||= {ok:false,errors:[]};report.ok=false;report.errors.push({step:'browser-actions',error:String(error.stack||error)});
             await page.screenshot({path:`${out}/failure.png`});
           } finally {
-            report ||= {ok:false,errors:[{error:'No report'}]};report.page_errors=errors;
+            report ||= {ok:false,errors:[{error:'No report'}]};report.page_errors=pageErrors;
             report.source_sha=(await import('node:child_process')).execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
             writeFileSync(`artifacts/owner-review/${kind}-result.json`,JSON.stringify(report,null,2));
             await browser.close();await server.close();
           }
           JS
           done
-      - name: Export exact remote-readable source and diagnostic metadata
+      - name: Export exact source and provenance
         if: always()
         run: |
           mkdir -p artifacts/owner-review
           git archive --format=tar HEAD site docs .codex/skills AGENTS.md .github CHANGELOG.md | gzip > artifacts/owner-review/source.tar.gz
           git rev-parse HEAD > artifacts/owner-review/checked-out-sha.txt
-          echo 'Focused fixture diagnostics only. Full real build requires the existing Kaggle publisher. Production and Penpot unchanged.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
+          echo 'Focused fixture diagnostics. Full real publication requires the existing Kaggle path. Production and Penpot unchanged.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: owner-review-reading-flow-${{ github.sha }}
+          name: owner-review-final-sections-${{ github.sha }}
           path: artifacts/owner-review/
           retention-days: 14
-      - name: Fail on any captured behavioral or semantic-role defect
+      - name: Fail on captured role or behavior mismatches
         run: |
           python - <<'PY'
           import json,pathlib
