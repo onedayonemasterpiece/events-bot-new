@@ -106,7 +106,9 @@ export function assertFreeCollectionStructuralProjection(record, { expectedSha, 
       || !p.snapshot?.id || !hash(p.snapshot?.sha256) || !Number.isFinite(Date.parse(p.reference_clock))) fail('source/data/clock provenance');
   if (record.viewport?.width !== 1440 && record.viewport?.width !== 390) fail('viewport');
   if (record.viewport?.height !== (record.viewport.width === 1440 ? 900 : 844)) fail('viewport height');
-  if (expectedEventIds?.length !== 5 || JSON.stringify(record.event_ids) !== JSON.stringify(expectedEventIds)) fail('event order');
+  if (expectedEventIds?.length !== 5 || JSON.stringify(record.event_ids) !== JSON.stringify(expectedEventIds)
+      || record.sample_size !== 5 || record.catalog_total < record.sample_size
+      || record.eligibility_filter !== 'confirmed-free') fail('sample event order/eligible catalog');
   const bindings = new Map((record.source_bindings || []).map((row) => [row.id, row]));
   if (!bindings.size) fail('source bindings');
   for (const binding of bindings.values()) if (!binding.path || !hash(binding.sha256)
@@ -149,9 +151,10 @@ export function assertFreeCollectionStructuralProjection(record, { expectedSha, 
   };
   visit(record.tree);
   if (record.tree.identity?.family !== 'FreeCollectionSurface'
-      || !nodes.some((node) => node.identity?.family === 'AdaptiveEventCardGrid')) fail('composition identities');
+      || record.tree.identity?.variant !== 'standard-free-listing'
+      || nodes.filter((node) => node.identity?.family === 'AdaptiveEventCardGrid').length !== 1) fail('ordinary listing composition identities');
   const cards = nodes.filter((node) => Object.hasOwn(node.attributes || {}, 'data-event-card'));
-  if (cards.length !== 5 || JSON.stringify(cards.map((node) => node.attributes['data-event-id'])) !== JSON.stringify(expectedEventIds)) fail('card corpus');
+  if (cards.length !== record.sample_size || JSON.stringify(cards.map((node) => node.attributes['data-event-id'])) !== JSON.stringify(expectedEventIds)) fail('sample card corpus');
   const flatten = (node) => [node, ...(node.children || []).flatMap(flatten)];
   for (const card of cards) {
     if (card.identity?.family !== 'EventCard') fail('card identity');

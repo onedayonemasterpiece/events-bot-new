@@ -281,7 +281,14 @@ export async function captureFreeCollectionStructuralProjection({
     const root = document.querySelector('[data-free-collection-surface]');
     const grid = root?.querySelector('[data-adaptive-event-card-grid]');
     if (!root || !grid) throw new Error('Free collection root/grid missing');
-    const cards = [...grid.querySelectorAll(':scope > [data-event-card]')].slice(0, 5);
+    const allCards = [...grid.querySelectorAll(':scope > [data-event-card]')];
+    const catalogNode = root.querySelector('#free-collection-catalog[type="application/json"]');
+    const catalog = catalogNode ? JSON.parse(catalogNode.textContent || '{}') : null;
+    if (root.getAttribute('data-ds-variant') !== 'standard-free-listing' || !catalog
+        || catalog.eligibility_filter !== 'confirmed-free' || catalog.page_size !== 12
+        || catalog.preload_target !== 12 || !Array.isArray(catalog.related_static)
+        || catalog.related_static.some((candidate) => candidate?.is_free !== true)) throw new Error('Free ordinary filtered-list contract missing');
+    const cards = allCards.slice(0, 5);
     const eventIds = cards.map((card) => card.dataset.eventId);
     if (JSON.stringify(eventIds) !== JSON.stringify(expectedEventIds)) throw new Error('Projection event order mismatch');
     const selected = new Set(cards);
@@ -328,7 +335,8 @@ export async function captureFreeCollectionStructuralProjection({
     };
     return { tree: walk(root, 'free-collection', null), tokens, event_ids: eventIds,
       viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio }, url: location.href,
-      total_grid_cards: grid.querySelectorAll(':scope > [data-event-card]').length };
+      total_grid_cards: allCards.length, sample_size: cards.length, catalog_total: catalog.related_static.length,
+      eligibility_filter: catalog.eligibility_filter };
   }, { sourceBindings, expectedEventIds });
   const nodes = [];
   const annotate = (node, parentId = null) => {

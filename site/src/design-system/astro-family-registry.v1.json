@@ -1098,13 +1098,13 @@
         "site/src/components/FreeCollectionSurface.astro"
       ],
       "variants": [
-        "timed-and-exhibitions"
+        "standard-free-listing"
       ],
       "states": [
-        "timed",
-        "exhibitions",
+        "loading",
         "populated",
-        "empty"
+        "empty",
+        "error"
       ],
       "nested_families": [
         "AdaptiveEventCardGrid",

@@ -10,7 +10,7 @@ function fixture() {
   const element = (path, family, attributes = {}, children = []) => ({
     kind: 'element', anatomy_path: path, stable_id: `free-collection.${stableHash(path).slice(0, 24)}`,
     parent_id: null, tag: 'div', attributes,
-    identity: family ? { family, version: family === 'EventCard' ? '2' : '1' } : null,
+    identity: family ? { family, version: family === 'EventCard' ? '2' : '1', ...(family === 'FreeCollectionSurface' ? { variant: 'standard-free-listing' } : {}) } : null,
     containing_family: family, bounds: { x: 0, y: 0, width: 44, height: 44 }, computed: { display: 'block' }, children,
   });
   const cards = expectedEventIds.map((id) => element(`root/grid/${id}`, 'EventCard', {
@@ -29,7 +29,7 @@ function fixture() {
   return { schema: 'current_ui_free_collection_structural_projection_v1', tree,
     provenance: { repo_sha: expectedSha, manifest: { repo_sha: expectedSha }, manifest_sha256: hash,
       registry_sha256: hash, snapshot: { id: 'synthetic-unit-test', sha256: hash }, reference_clock: '2026-09-04T12:00:00Z' },
-    viewport: { width: 1440, height: 900 }, event_ids: expectedEventIds,
+    viewport: { width: 1440, height: 900 }, event_ids: expectedEventIds, sample_size: 5, catalog_total: 12, eligibility_filter: 'confirmed-free',
     source_bindings: ['FreeCollectionSurface', 'AdaptiveEventCardGrid', 'EventCard'].map((id) => ({
       id, version: id === 'EventCard' ? 2 : 1, path: `site/src/components/${id}.astro`, sha256: hash, styles: [],
     })),
