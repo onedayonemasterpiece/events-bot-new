@@ -13,6 +13,23 @@ const geometryFor = (item, overrides = {}) => ({
 const pack = (items, options = {}) => packRelatedCardRows(items, { rowSize: 3, geometry: geometryFor, ...options });
 const ids = (packed) => packed.map(({ item }) => item.id).sort((a, b) => a - b);
 
+const publicImage = (id, width, height, imageTextMode = 'ocr_text') => ({
+  id,
+  title:`Public canary ${id}`,
+  image_url:`/${id}.webp`,
+  image_text_mode:imageTextMode,
+  image_assets:[{
+    src:`/${id}.webp`, width, height,
+    image_text_mode:imageTextMode,
+    media_semantic_status:'classified',
+    media_role:imageTextMode === 'visual_only' ? 'event_photo' : 'event_identity_poster',
+    safe_crop:imageTextMode === 'visual_only',
+  }],
+});
+
+const rowGroups = (packed) => [...new Set(packed.map(({ layout }) => layout.rowIndex))]
+  .map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex));
+
 test('AR-04: three eligible documents remain three despite incompatible aspect ratios', () => {
   const items = [documentItem(1, 1), documentItem(2, 1), documentItem(3, 1.2)];
   assert.deepEqual(ids(pack(items)), [1, 2, 3], 'Layout feasibility must not filter admitted content');
@@ -38,6 +55,64 @@ test('AR-05: a 20% area budget alone cannot authorize cutting unlocated OCR text
   const decision = resolveRelatedCardMediaTreatment(item, 0.625, geometryFor(item));
   assert.equal(decision.fit, 'contain', 'A centered 20% crop can remove the entire top headline');
   assert.equal(decision.coverCrop, 0);
+});
+
+test('owner 8673 public corpus reports its irreconcilable natural-frame rows without loss or irregular widths', () => {
+  // Exact IDs and decoded source dimensions measured on the immutable public
+  // 2fe28b1f8 owner candidate. Visual-only items may cover; documents may not
+  // crop because this corpus carries no located OCR/text-safe crop evidence.
+  const items = [
+    publicImage(8667, 1280, 854),
+    publicImage(8215, 2048, 886, 'visual_only'),
+    publicImage(8210, 2048, 886, 'visual_only'),
+    publicImage(8742, 874, 1280),
+    publicImage(8080, 1810, 2560),
+    publicImage(8252, 1810, 2560),
+    publicImage(8724, 1811, 2560),
+    publicImage(8747, 960, 1280),
+    publicImage(7915, 1810, 2560),
+    publicImage(8209, 2048, 886, 'visual_only'),
+  ];
+  const packed = packRelatedCardRows(items, { rowSize:3, mediaTreatment:'hybrid' });
+
+  assert.deepEqual(ids(packed), ids(items.map((item) => ({ item }))));
+  assert.deepEqual(rowGroups(packed).map((row) => row.length), [3, 3, 3, 1]);
+  assert.ok(packed.some(({ layout }) => layout.framingStatus === 'unsatisfied'));
+  assert.ok(packed.some(({ layout }) => layout.paintedFields === true));
+  assert.deepEqual([...new Set(packed.map(({ layout }) => layout.framingConflict).filter(Boolean))], [
+    'document-natural-ratio-mismatch:8742@874x1280=0.68281250|8080@1810x2560=0.70703125',
+    'document-natural-ratio-mismatch:8724@1811x2560=0.70742187|8747@960x1280=0.75000000',
+  ]);
+  for (const row of rowGroups(packed)) {
+    assert.equal(new Set(row.map(({ layout }) => layout.rowRatio.toFixed(8))).size, 1);
+    assert.equal(new Set(row.map(({ layout }) => layout.framingStatus)).size, 1);
+  }
+});
+
+test('Free first public row resolves to its shared 1810x2560 natural frame in stable order', () => {
+  const items = [7915, 7916, 7920].map((id) => publicImage(id, 1810, 2560));
+  const packed = packRelatedCardRows(items, { rowSize:3, preserveOrder:true });
+
+  assert.deepEqual(packed.map(({ item }) => item.id), [7915, 7916, 7920]);
+  assert.ok(packed.every(({ layout }) => layout.rowRatio === 1810 / 2560));
+  assert.ok(packed.every(({ layout }) => layout.framingStatus === 'satisfied'));
+  assert.ok(packed.every(({ layout }) => layout.paintedFields === false));
+});
+
+test('Free stable-order incompatible row reports the smallest measured conflict without dropping events', () => {
+  const items = [
+    publicImage(8080, 1810, 2560),
+    publicImage(8564, 2560, 1706, 'visual_only'),
+    publicImage(8308, 2560, 2560),
+  ];
+  const packed = packRelatedCardRows(items, { rowSize:3, preserveOrder:true });
+
+  assert.deepEqual(packed.map(({ item }) => item.id), [8080, 8564, 8308]);
+  assert.ok(packed.every(({ layout }) => layout.framingStatus === 'unsatisfied'));
+  assert.ok(packed.every(({ layout }) => layout.framingConflict
+    === 'document-natural-ratio-mismatch:8080@1810x2560=0.70703125|8308@2560x2560=1.00000000'));
+  assert.equal(packed.find(({ item }) => item.id === 8080).layout.paintedFields, false);
+  assert.equal(packed.find(({ item }) => item.id === 8308).layout.paintedFields, true);
 });
 
 test('control: equal-ratio documents still form a deterministic full row', () => {

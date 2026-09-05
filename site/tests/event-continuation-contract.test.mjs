@@ -14,12 +14,12 @@ test('event 3934 crop canary and its continuation use globally packed OCR-safe r
   // production events legitimately expire, while the accepted geometry must
   // remain frozen. The ratios mirror the reviewed mixed two-row specimen.
   const cards = [
-    { event_id:3934, image_text_mode:'ocr_text', image_width:600, image_height:1200 },
-    { event_id:6593, image_text_mode:'ocr_text', image_width:1000, image_height:1000 },
-    { event_id:6821, image_text_mode:'visual_only', image_width:1600, image_height:900 },
-    { event_id:6907, image_text_mode:'visual_only', image_width:700, image_height:1000 },
-    { event_id:4784, image_text_mode:'visual_only', image_width:1500, image_height:1000 },
-    { event_id:6407, image_text_mode:'visual_only', image_width:900, image_height:1000 },
+    { event_id:3934, image_url:'/3934.webp', image_text_mode:'ocr_text', image_width:600, image_height:1200 },
+    { event_id:6593, image_url:'/6593.webp', image_text_mode:'ocr_text', image_width:1000, image_height:1000 },
+    { event_id:6821, image_url:'/6821.webp', image_text_mode:'visual_only', image_width:1600, image_height:900 },
+    { event_id:6907, image_url:'/6907.webp', image_text_mode:'visual_only', image_width:700, image_height:1000 },
+    { event_id:4784, image_url:'/4784.webp', image_text_mode:'visual_only', image_width:1500, image_height:1000 },
+    { event_id:6407, image_url:'/6407.webp', image_text_mode:'visual_only', image_width:900, image_height:1000 },
   ];
   const ids = cards.map((event) => event.event_id);
 
@@ -33,7 +33,8 @@ test('event 3934 crop canary and its continuation use globally packed OCR-safe r
     const row = packed.filter(({ layout }) => layout.rowIndex === rowIndex);
     assert.equal(row.length, 3, 'all six canaries form full rows');
     assert.equal(new Set(row.map(({ layout }) => layout.rowRatio.toFixed(5))).size, 1);
-    assert.ok(row.every(({ layout }) => layout.fit === 'cover'), 'no card may expose fields');
+    assert.ok(row.every(({ layout }) => layout.paintedFields === false), 'no loaded card may expose fields');
+    assert.ok(row.every(({ layout }) => layout.framingStatus === 'satisfied'));
     assert.ok(row.every(({ layout }) => layout.rowWorstCrop <= RELATED_CARD_MAX_DOCUMENT_CROP + 1e-9));
     assert.ok(row.filter(({ layout }) => layout.mediaKind === 'document').every(({ layout }) => layout.coverCrop <= RELATED_CARD_MAX_DOCUMENT_CROP + 1e-9));
   }

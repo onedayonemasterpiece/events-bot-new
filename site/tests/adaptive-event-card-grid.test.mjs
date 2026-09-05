@@ -114,6 +114,17 @@ test('AdaptiveEventCardGrid shared tracks fill full rows while preserving ordina
   assert.doesNotMatch(adaptive, /repeat\(\s*auto-fit/u);
 });
 
+test('flow framing is natural-ratio first and exposes joint satisfaction instead of accepting fixed-frame fields', async () => {
+  const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
+
+  assert.doesNotMatch(adaptive, /adaptive-event-card-grid--flow[\s\S]{0,420}aspect-ratio:\s*5\s*\/\s*4/u);
+  assert.match(adaptive, /packRelatedCardRows\(events, \{ limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true \}\)/u);
+  assert.match(adaptive, /data-adaptive-grid-framing-status=\{framingStatus\}/u);
+  assert.match(adaptive, /data-adaptive-grid-framing-conflicts=\{framingConflicts \|\| undefined\}/u);
+  assert.match(adaptive, /'data-adaptive-grid-framing-status'/u);
+  assert.match(adaptive, /'data-adaptive-grid-framing-conflicts'/u);
+});
+
 test('packed grid keeps row geometry and layering but delegates MediaFrame anatomy', async () => {
   const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
   const shell = /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media-shell\) \{([\s\S]*?)\n  \}/u.exec(adaptive)?.[1] || '';

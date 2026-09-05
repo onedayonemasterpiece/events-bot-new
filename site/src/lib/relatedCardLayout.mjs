@@ -149,6 +149,7 @@ export function relatedCardMediaGeometry(item) {
     imageTextMode,
     semanticStatus,
     documentMedia,
+    resourcePresent:Boolean(asset?.src),
     dimensionsKnown,
     ratio: finiteRatio(dimensionsKnown ? width / height : 0, documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO),
   };
@@ -297,24 +298,62 @@ export function resolveMobileEventCardMedia(item, options = {}) {
   };
 }
 
-function documentTargetInterval(entry) {
-  // Preserve the existing candidate-frame interval for tall documents. This
-  // selects row geometry, not crop permission: the media resolver still
-  // contains unlocated text when the candidate ratio differs from the source.
-  if (entry.ratio >= VERY_TALL_DOCUMENT_RATIO - EPSILON) return [entry.ratio, entry.ratio];
-  return [entry.ratio, entry.ratio / (1 - MAX_DOCUMENT_CROP)];
+function entryResourcePresent(entry) {
+  return entry?.resourcePresent !== false && Boolean(entry?.asset?.src ?? true);
+}
+
+function entryIdentifier(entry) {
+  const item = entry?.item || {};
+  const candidate = item?.candidate || item;
+  return String(candidate?.id ?? candidate?.event_id ?? item?.id ?? item?.event_id ?? entry?.originalIndex ?? 'unknown');
+}
+
+function entryDimensions(entry) {
+  const width = Number(entry?.asset?.width || 0);
+  const height = Number(entry?.asset?.height || 0);
+  return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
+    ? `${width}x${height}`
+    : 'unknown';
+}
+
+function ratioLabel(entry) {
+  return `${entryIdentifier(entry)}@${entryDimensions(entry)}=${finiteRatio(entry?.ratio, 0).toFixed(8)}`;
+}
+
+function rowFramingConflict(row) {
+  const documents = row.filter((entry) => entry.documentMedia && entryResourcePresent(entry));
+  const unknown = documents.find((entry) => entry.dimensionsKnown === false);
+  if (unknown) return `document-natural-ratio-unknown:${entryIdentifier(unknown)}@${entryDimensions(unknown)}`;
+  for (let left = 0; left < documents.length; left += 1) {
+    for (let right = left + 1; right < documents.length; right += 1) {
+      if (Math.abs(documents[left].ratio - documents[right].ratio) > EPSILON) {
+        return `document-natural-ratio-mismatch:${ratioLabel(documents[left])}|${ratioLabel(documents[right])}`;
+      }
+    }
+  }
+  return 'natural-frame-partition-unavailable';
+}
+
+function decisionPaintedFields(entry, targetRatio, decision) {
+  if (!entryResourcePresent(entry)) return null;
+  if (decision?.fit === 'cover') return false;
+  if (entry?.dimensionsKnown === false) return null;
+  return cropFraction(finiteRatio(entry?.ratio, targetRatio), targetRatio) > EPSILON;
 }
 
 function rowTarget(row) {
-  const documents = row.filter(({ documentMedia }) => documentMedia);
+  const documents = row.filter((entry) => entry.documentMedia && entryResourcePresent(entry));
   if (documents.length) {
-    const intervals = documents.map(documentTargetInterval);
-    const lower = Math.max(...intervals.map(([value]) => value));
-    const upper = Math.min(...intervals.map(([, value]) => value));
-    if (lower > upper + EPSILON) return null;
+    // No current document payload locates protected text. Therefore its only
+    // proven no-field frame is its decoded natural ratio. The historic 20%
+    // area interval was not crop evidence: selecting its upper bound forced
+    // the resolver to contain the source and painted the rejected fields.
+    if (documents.some((entry) => entry.dimensionsKnown === false)) return null;
+    const targetRatio = documents[0].ratio;
+    if (documents.some((entry) => Math.abs(entry.ratio - targetRatio) > EPSILON)) return null;
     return {
-      targetRatio:upper,
-      rowMode:'document-led-uncropped',
+      targetRatio,
+      rowMode:'document-led-natural',
     };
   }
   return {
@@ -332,9 +371,8 @@ function rowPlan(row, mediaTreatment) {
   const target = rowTarget(row, mediaTreatment);
   if (!target) return null;
   const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, target.targetRatio, entry));
-  if (decisions.some((decision) => decision.mediaKind === 'document'
-    && Number.isFinite(decision.coverCrop)
-    && decision.coverCrop > MAX_DOCUMENT_CROP + EPSILON)) return null;
+  const paintedFields = decisions.map((decision, index) => decisionPaintedFields(row[index], target.targetRatio, decision));
+  if (paintedFields.some((value) => value === true)) return null;
   const visualCrop = decisions
     .filter(({ mediaKind }) => mediaKind === 'visual')
     .reduce((sum, decision) => sum + decision.coverCrop, 0);
@@ -345,6 +383,9 @@ function rowPlan(row, mediaTreatment) {
     // intrinsic chrome estimated from the same bounded copy tracks as CSS.
     cost:estimatedChromeCost(row) + (1 / target.targetRatio),
     visualCrop,
+    framingStatus:'satisfied',
+    framingConflict:null,
+    paintedFields,
   };
 }
 
@@ -393,8 +434,18 @@ function combinations(mask, exactSize) {
   return result;
 }
 
-function optimizeRows(selected, rowSize, mediaTreatment) {
+function optimizeRows(selected, rowSize, mediaTreatment, preserveOrder = false) {
   if (!selected.length) return [];
+  if (preserveOrder) {
+    const rows = [];
+    for (let offset = 0; offset < selected.length; offset += rowSize) {
+      const entries = selected.slice(offset, offset + rowSize);
+      const plan = rowPlan(entries, mediaTreatment);
+      if (!plan) return null;
+      rows.push({ entries, plan });
+    }
+    return rows;
+  }
   // Current recommendation surfaces cap at 10. Keep a deterministic fallback
   // rather than allowing a bitmask overflow if a future caller forgets limit.
   if (selected.length > 20) {
@@ -481,15 +532,24 @@ function containedFallbackRows(selected, rowSize, mediaTreatment) {
     const entries = selected.slice(offset, offset + rowSize);
     let plan = rowPlan(entries, mediaTreatment);
     if (!plan) {
-      const targetRatio = PREFERRED_VISUAL_RATIO;
+      // Preserve the first factual document whole rather than inventing a 5:4
+      // document frame. Other incompatible sources stay fail-closed, and the
+      // row is explicitly UNSATISFIED with its smallest measured conflict.
+      const naturalAnchor = entries.find((entry) => (
+        entry.documentMedia && entryResourcePresent(entry) && entry.dimensionsKnown !== false
+      ));
+      const targetRatio = naturalAnchor?.ratio || PREFERRED_VISUAL_RATIO;
       const decisions = entries.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
       plan = {
         targetRatio,
-        rowMode:'document-mixed-contained',
+        rowMode:'document-natural-conflict-contained',
         decisions,
         cost:estimatedChromeCost(entries) + (1 / targetRatio),
         visualCrop:decisions.filter(({ mediaKind }) => mediaKind === 'visual')
           .reduce((sum, decision) => sum + decision.coverCrop, 0),
+        framingStatus:'unsatisfied',
+        framingConflict:rowFramingConflict(entries),
+        paintedFields:decisions.map((decision, index) => decisionPaintedFields(entries[index], targetRatio, decision)),
       };
     }
     rows.push({ entries, plan });
@@ -509,6 +569,9 @@ function materializeRow(row, rowIndex, presentation) {
       rowMode:plan.rowMode,
       presentation,
       ...plan.decisions[index],
+      framingStatus:plan.framingStatus,
+      framingConflict:plan.framingConflict,
+      paintedFields:plan.paintedFields[index],
       rowWorstCrop:0,
       rowCost:plan.cost,
     },
@@ -528,8 +591,9 @@ function materializeRow(row, rowIndex, presentation) {
  * remainder, then use bitmask dynamic programming to minimize the sum of
  * normalized full-card row heights.
  * Reordering is intentional and deterministic within the feasible intrinsic
- * partitions. If none exists, contained rows preserve the admitted prefix;
- * that content-preserving fallback does not claim a global optimum.
+ * partitions unless preserveOrder is requested. If none exists, contained
+ * rows preserve the admitted prefix and publish an exact UNSATISFIED conflict;
+ * that content-preserving fallback is not an accepted no-fields composition.
  */
 export function packRelatedCardRows(items, options = {}) {
   const requestedLimit = Number(options.limit ?? items.length);
@@ -545,7 +609,7 @@ export function packRelatedCardRows(items, options = {}) {
   // the admitted ranked prefix, including a mixed-document final remainder.
   const selected = items.slice(0, targetCount)
     .map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
-  const rows = optimizeRows(selected, rowSize, mediaTreatment)
+  const rows = optimizeRows(selected, rowSize, mediaTreatment, options.preserveOrder === true)
     || containedFallbackRows(selected, rowSize, mediaTreatment);
   return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex, presentation));
 }

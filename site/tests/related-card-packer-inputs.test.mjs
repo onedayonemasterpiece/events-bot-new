@@ -58,14 +58,16 @@ test('public resolver enforces the document crop budget for direct callers', () 
   assert.equal(decision.coverCrop, 0);
 });
 
-test('public resolver permits the exact budget boundary and normalizes invalid targets', () => {
+test('public resolver does not confuse the exact area budget with text-safe crop proof', () => {
   const boundary = resolveRelatedCardMediaTreatment(
     { id: 'boundary-document' },
     1,
     classifiedDocumentGeometry(0.8),
   );
-  assert.equal(boundary.fit, 'cover');
-  assert.ok(Math.abs(boundary.coverCrop - RELATED_CARD_MAX_DOCUMENT_CROP) < 1e-9);
+  assert.equal(boundary.fit, 'contain');
+  assert.equal(boundary.cropReason, 'document_text_crop_unproven');
+  assert.equal(boundary.coverCrop, 0);
+  assert.ok(Math.abs(boundary.potentialCoverCrop - RELATED_CARD_MAX_DOCUMENT_CROP) < 1e-9);
 
   for (const target of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
     const normalized = resolveRelatedCardMediaTreatment(

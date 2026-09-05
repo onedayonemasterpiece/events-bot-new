@@ -394,7 +394,7 @@ test('global row optimizer separates incompatible OCR ratios and keeps every doc
       if (plan.length !== 3 || new Set(plan.map(({ layout }) => layout.rowIndex)).size !== 1) continue;
       // The fallback preserves admission when no compatible partition exists;
       // it is not an intrinsic-ratio candidate in this optimizer search.
-      if (plan.some(({layout})=>layout.rowMode==='document-mixed-contained')) continue;
+      if (plan.some(({layout})=>layout.framingStatus==='unsatisfied')) continue;
       const tailIds = new Set(tail.map((item) => item.id));
       best = Math.min(best, plan[0].layout.rowCost + exhaustiveMinimum(rest.filter((item) => !tailIds.has(item.id))));
     }

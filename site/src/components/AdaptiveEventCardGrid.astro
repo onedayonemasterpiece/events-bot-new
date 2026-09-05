@@ -104,6 +104,15 @@ const gridBaseState = [
 const resolved = mode === 'packed'
   ? packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
   : events.slice(0, limit).map((item) => ({ item, layout: undefined }));
+const framingPlan = mode === 'packed'
+  ? resolved
+  : packRelatedCardRows(events, { limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true });
+const framingConflicts = [...new Set(framingPlan
+  .map(({ layout }) => layout?.framingConflict)
+  .filter(Boolean))].join(';');
+const framingStatus = framingPlan.some(({ layout }) => layout?.framingStatus === 'unsatisfied')
+  ? 'unsatisfied'
+  : 'satisfied';
 const remainderCount = resolved.length % rowSize;
 const initialRemainderVariant = remainderVariantFor(resolved.length, rowSize);
 const initialRuntimeState = runtimeManagedGrid ? (resolved.length ? 'populated' : 'empty') : undefined;
@@ -135,6 +144,8 @@ const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
   'data-adaptive-grid-source-order',
   'data-adaptive-grid-rendered-order',
   'data-adaptive-grid-item-root-contract',
+  'data-adaptive-grid-framing-status',
+  'data-adaptive-grid-framing-conflicts',
   'data-adaptive-grid-live',
   'data-adaptive-grid-runtime-managed',
   'data-adaptive-grid-runtime-bound',
@@ -234,6 +245,8 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-adaptive-grid-source-order={sourceOrder}
   data-adaptive-grid-rendered-order={renderedOrder}
   data-adaptive-grid-item-root-contract={hasItemRoots ? 'event-id-or-event-id-source-index' : undefined}
+  data-adaptive-grid-framing-status={framingStatus}
+  data-adaptive-grid-framing-conflicts={framingConflicts || undefined}
   data-adaptive-grid-live={ariaLive}
   data-adaptive-grid-runtime-managed={runtimeManagedGrid ? 'true' : undefined}
   data-adaptive-grid-runtime-state={initialRuntimeState}
@@ -297,6 +310,47 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
         const runtimeRemainderVariant = runtimeRemainderCount === 0
           ? 'complete'
           : `regular-${runtimeRemainderCount}-of-${runtimeRowSize}`;
+        if (grid.dataset.adaptiveGridMode === 'flow') {
+          const renderedColumns = getComputedStyle(grid).gridTemplateColumns.split(/\s+/u).filter(Boolean).length || 1;
+          const conflicts = [];
+          cards.forEach((card) => {
+            card.style.removeProperty('--adaptive-flow-row-media-ratio');
+            delete card.dataset.adaptiveFlowFramingStatus;
+          });
+          for (let offset = 0; offset < cards.length; offset += renderedColumns) {
+            const row = cards.slice(offset, offset + renderedColumns);
+            const documents = row.map((card) => {
+              const shell = card.querySelector('[data-card-media-shell]');
+              const state = shell?.dataset.mediaFrameResourceState || '';
+              const kind = shell?.dataset.mediaFrameKind || 'unknown';
+              if (!shell || kind === 'visual' || kind === 'fallback' || state === 'broken' || state === 'fallback') return null;
+              const width = Number(shell.dataset.mediaFrameSourceWidth);
+              const height = Number(shell.dataset.mediaFrameSourceHeight);
+              const ratio = width > 0 && height > 0 ? width / height : Number(shell.dataset.mediaFrameSourceRatio);
+              return { card, ratio, dimensions:width > 0 && height > 0 ? `${width}x${height}` : 'unknown' };
+            }).filter(Boolean);
+            const unknown = documents.find((entry) => !(Number.isFinite(entry.ratio) && entry.ratio > 0));
+            const anchor = documents[0];
+            const mismatch = anchor && documents.find((entry) => Number.isFinite(entry.ratio)
+              && Math.abs(entry.ratio - anchor.ratio) > 1e-9);
+            if (unknown || mismatch) {
+              const conflict = unknown
+                ? `document-natural-ratio-unknown:${unknown.card.dataset.eventId || 'unknown'}@${unknown.dimensions}`
+                : `document-natural-ratio-mismatch:${anchor.card.dataset.eventId || 'unknown'}@${anchor.dimensions}=${anchor.ratio.toFixed(8)}|${mismatch.card.dataset.eventId || 'unknown'}@${mismatch.dimensions}=${mismatch.ratio.toFixed(8)}`;
+              conflicts.push(conflict);
+              row.forEach((card) => { card.dataset.adaptiveFlowFramingStatus = 'unsatisfied'; });
+              continue;
+            }
+            const targetRatio = anchor?.ratio || 5 / 4;
+            row.forEach((card) => {
+              card.dataset.adaptiveFlowFramingStatus = 'satisfied';
+              card.style.setProperty('--adaptive-flow-row-media-ratio', String(targetRatio));
+            });
+          }
+          grid.dataset.adaptiveGridFramingStatus = conflicts.length ? 'unsatisfied' : 'satisfied';
+          if (conflicts.length) grid.dataset.adaptiveGridFramingConflicts = [...new Set(conflicts)].join(';');
+          else delete grid.dataset.adaptiveGridFramingConflicts;
+        }
         if (sourcePolicy === 'mirror-rendered') {
           grid.dataset.adaptiveGridSourceCount = String(count);
           grid.dataset.adaptiveGridSourceOrder = order;
@@ -315,10 +369,12 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
           runtimeState,
         ].filter(Boolean).join(' ');
       };
-      const observerOptions = visibleOnly
-        ? { childList:true, subtree:true, attributes:true, attributeFilter:['hidden'] }
-        : { childList:true };
+      const observerOptions = { childList:true, subtree:true, attributes:true,
+        attributeFilter:visibleOnly
+          ? ['hidden','data-media-frame-resource-state','data-media-frame-source-ratio']
+          : ['data-media-frame-resource-state','data-media-frame-source-ratio'] };
       new MutationObserver(sync).observe(grid, observerOptions);
+      window.addEventListener('resize', sync, { passive:true });
       sync();
     });
   }
@@ -353,29 +409,14 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] { --adaptive-event-card-columns: 5; }
   .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] { --adaptive-event-card-columns: 6; }
 
-  /* AR-04: flow is an admission/runtime strategy, not permission for each
-     desktop card to choose a different media/body track. Reuse the compact
-     5:4 visual frame already owned by relatedCardLayout. Document fit stays
-     contain; the one-column mobile composition keeps its natural poster. */
+  /* Flow preserves ranked DOM order. A row receives a shared frame only when
+     its loaded documents prove one natural ratio; incompatible rows retain
+     their sources and expose UNSATISFIED diagnostics instead of 5:4 fields. */
   .adaptive-event-card-grid--flow > :global(.event-card) {
     grid-template-rows: subgrid;
   }
-  @media (min-width: 621px) {
-    .adaptive-event-card-grid--flow:not([data-adaptive-grid-row-size="1"]):not(.adaptive-event-card-grid--responsive-stack)
-      > :global(.event-card .event-card__media-shell) {
-      aspect-ratio: 5 / 4;
-    }
-    .adaptive-event-card-grid--flow:not([data-adaptive-grid-row-size="1"]):not(.adaptive-event-card-grid--responsive-stack)
-      > :global(.event-card .event-card__media) {
-      position: absolute;
-      inset: 0;
-    }
-  }
-  @media (min-width: 1024px) {
-    .adaptive-event-card-grid--flow.adaptive-event-card-grid--responsive-stack:not([data-adaptive-grid-row-size="1"])
-      > :global(.event-card .event-card__media-shell) { aspect-ratio: 5 / 4; }
-    .adaptive-event-card-grid--flow.adaptive-event-card-grid--responsive-stack:not([data-adaptive-grid-row-size="1"])
-      > :global(.event-card .event-card__media) { position: absolute; inset: 0; }
+  .adaptive-event-card-grid--flow > :global(.event-card[data-adaptive-flow-framing-status="satisfied"] .event-card__media-shell) {
+    aspect-ratio: var(--adaptive-flow-row-media-ratio) !important;
   }
   .adaptive-event-card-grid :global(.event-card__body) { align-content: start; }
   .adaptive-event-card-grid :global(.event-card__utility-row) { min-width: 0; }
