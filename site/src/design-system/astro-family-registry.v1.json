@@ -307,6 +307,9 @@
         "framing_contract": "joint_painted_bounds_protected_text_admission_row_geometry_stable_order",
         "framing_owner": "site/src/lib/relatedCardLayout.mjs",
         "flow_order": "stable_visible_prefix",
+        "initial_composition": "full_eligible_pool_before_page_limit",
+        "row_width": "equal_regular_columns",
+        "crop_fallback": "source_bound_protected_text_and_20_percent_budget_after_natural_grouping",
         "infeasible_corpus": "explicit_minimal_document_ratio_conflict_not_accepted_letterboxing"
       }
     },

@@ -1232,3 +1232,12 @@ Home feeds the shared planner the whole deduplicated eligible pool, retaining th
 hidden/not-interested choices without reshuffling already-painted cards. The
 status copy no longer claims a reordered feed. Source eligibility count and
 visible fallback count are separate; no personalized backend is introduced.
+
+The shared planner now composes full eligible pools before Free/discovery limits;
+static and runtime rows share that sequence. Same-corpus diagnostics retain all
+111 Free IDs, with 93 in compatible natural rows and an explicit 18-card tail
+without usable protected-text evidence. The available 30-card pool for8673 gives
+a satisfied initial10, not a claim that all tail rows are feasible. No evidence
+is invented to activate the 20% fallback. The previously suspected mobile Free
+8745 source960×1280 paints naturally in364×485.328px; total horizontal rounding
+residue0.003906px is not a visible band (public26fb, not event-detail substitution).

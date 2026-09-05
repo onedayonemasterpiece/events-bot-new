@@ -5,9 +5,9 @@
   "registry_version": "1.0.0",
   "registry_sha256": "4f991aff77086abe5e2c3027beb6b2050b9492c73d3ab624053b56087eb1e35a",
   "source_root": "site/src",
-  "source_inventory_sha256": "5c390a2016db5fcf73453040f18ba015f42bf55c507cd78318fcc5ce9a241f75",
+  "source_inventory_sha256": "b1be4af0a789765fdd4cab8b761abd9871a99e903383122c8365c8a0cbd071a1",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "15670a98197393d4a1fead6afa0855717175d33c1b0b4a297c173588d7053c40",
+  "astro_family_graph_sha256": "e2c334370e79285b6af00f09ca7d8b825a174280425f60a69c55e4529e591d4a",
   "summary": {
     "token_count": 2534,
     "definition_count": 2844,
@@ -58667,7 +58667,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 405,
+          "line": 410,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"1\"]",
           "kind": "css",
           "value": "1",
@@ -58676,7 +58676,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 406,
+          "line": 411,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"2\"]",
           "kind": "css",
           "value": "2",
@@ -58685,7 +58685,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 407,
+          "line": 412,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"3\"]",
           "kind": "css",
           "value": "3",
@@ -58694,7 +58694,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 408,
+          "line": 413,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"4\"]",
           "kind": "css",
           "value": "4",
@@ -58703,7 +58703,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 409,
+          "line": 414,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"5\"]",
           "kind": "css",
           "value": "5",
@@ -58712,7 +58712,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 410,
+          "line": 415,
           "scope": ".adaptive-event-card-grid[data-adaptive-grid-row-size=\"6\"]",
           "kind": "css",
           "value": "6",
@@ -58721,7 +58721,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 463,
+          "line": 468,
           "scope": "@media (max-width: 1023px) > .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size]",
           "kind": "css",
           "value": "1",
@@ -58730,7 +58730,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 474,
+          "line": 479,
           "scope": "@media (max-width: 960px) > .adaptive-event-card-grid--responsive-progressive:is( [data-adaptive-grid-row-size=\"3\"], [data-adaptive-grid-row-size=\"4\"], [data-adaptive-grid-row-size=\"5\"], [data-adaptive-grid-row-size=\"6\"] )",
           "kind": "css",
           "value": "2",
@@ -58739,7 +58739,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 480,
+          "line": 485,
           "scope": "@media (max-width: 620px) > .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size]",
           "kind": "css",
           "value": "1",
@@ -58753,7 +58753,7 @@
         {
           "token": "--adaptive-event-card-columns",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 391,
+          "line": 396,
           "has_fallback": true
         }
       ],
@@ -58765,7 +58765,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 386,
+          "line": 391,
           "scope": "</script> <style> .cards-grid.adaptive-event-card-grid",
           "kind": "css",
           "value": "clamp(.85rem, 1.6vw, 1.25rem)",
@@ -58779,7 +58779,7 @@
         {
           "token": "--adaptive-event-card-gap",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 392,
+          "line": 397,
           "has_fallback": false
         }
       ],
@@ -58791,7 +58791,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 347,
+          "line": 352,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -58805,7 +58805,7 @@
         {
           "token": "--adaptive-flow-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 419,
+          "line": 424,
           "has_fallback": false
         }
       ],
@@ -59348,7 +59348,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4510,
+          "line": 4536,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -59376,7 +59376,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4509,
+          "line": 4535,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60060,7 +60060,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5840,
+          "line": 5873,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60909,7 +60909,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4508,
+          "line": 4534,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60918,7 +60918,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4545,
+          "line": 4571,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -60927,7 +60927,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4590,
+          "line": 4616,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61906,7 +61906,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5796,
+          "line": 5829,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61932,7 +61932,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5794,
+          "line": 5827,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -61958,7 +61958,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5793,
+          "line": 5826,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -91776,7 +91776,7 @@
         {
           "token": "--ke-color-free-medallion-shadow",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 137,
+          "line": 143,
           "has_fallback": false
         }
       ],
@@ -91802,7 +91802,7 @@
         {
           "token": "--ke-color-free-medallion-shadow-strong",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 154,
+          "line": 160,
           "has_fallback": false
         }
       ],
@@ -99341,13 +99341,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 164,
+          "line": 170,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 165,
+          "line": 171,
           "has_fallback": false
         },
         {
@@ -111145,13 +111145,13 @@
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 164,
+          "line": 170,
           "has_fallback": false
         },
         {
           "token": "--ke-color-text-muted",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 165,
+          "line": 171,
           "has_fallback": false
         },
         {
@@ -117377,7 +117377,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 155,
+          "line": 161,
           "has_fallback": false
         }
       ],
@@ -132641,19 +132641,19 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -133532,19 +133532,19 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -134582,7 +134582,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
@@ -134797,7 +134797,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
@@ -137086,25 +137086,25 @@
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 135,
+          "line": 141,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 136,
+          "line": 142,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 150,
+          "line": 156,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 151,
+          "line": 157,
           "has_fallback": false
         }
       ],
@@ -137130,25 +137130,25 @@
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 179,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-free-medallion-sticky-size-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 180,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-free-medallion-sticky-size-compact",
-          "path": "site/src/components/FreeCollectionSurface.astro",
           "line": 185,
           "has_fallback": false
         },
         {
           "token": "--ke-free-medallion-sticky-size-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 185,
+          "line": 186,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-free-medallion-sticky-size-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 191,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-free-medallion-sticky-size-compact",
+          "path": "site/src/components/FreeCollectionSurface.astro",
+          "line": 191,
           "has_fallback": false
         }
       ],
@@ -137174,7 +137174,7 @@
         {
           "token": "--ke-free-motion-opacity",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 155,
+          "line": 161,
           "has_fallback": false
         }
       ],
@@ -137204,7 +137204,7 @@
         {
           "token": "--ke-free-motion-transform",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 155,
+          "line": 161,
           "has_fallback": false
         }
       ],
@@ -137345,7 +137345,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 141,
+          "line": 147,
           "has_fallback": false
         }
       ],
@@ -137371,7 +137371,7 @@
         {
           "token": "--ke-free-sticky-layer-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 184,
+          "line": 190,
           "has_fallback": false
         }
       ],
@@ -137401,7 +137401,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 142,
+          "line": 148,
           "has_fallback": false
         }
       ],
@@ -137431,7 +137431,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 184,
+          "line": 190,
           "has_fallback": false
         }
       ],
@@ -140042,7 +140042,7 @@
         {
           "token": "--ke-free-sticky-layer",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 141,
+          "line": 147,
           "has_fallback": false
         },
         {
@@ -159028,7 +159028,7 @@
         {
           "token": "--ke-free-sticky-top",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 142,
+          "line": 148,
           "has_fallback": false
         },
         {
@@ -159636,7 +159636,7 @@
         {
           "token": "--ke-free-sticky-top-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 184,
+          "line": 190,
           "has_fallback": false
         },
         {
@@ -160848,7 +160848,7 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 170,
+          "line": 176,
           "has_fallback": false
         },
         {
@@ -162010,25 +162010,25 @@
         {
           "token": "--ke-space-4",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-space-4",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 160,
+          "line": 166,
           "has_fallback": false
         },
         {
           "token": "--ke-space-4",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 171,
+          "line": 177,
           "has_fallback": false
         },
         {
           "token": "--ke-space-4",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 186,
+          "line": 192,
           "has_fallback": false
         },
         {
@@ -162531,13 +162531,13 @@
         {
           "token": "--ke-space-6",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 125,
+          "line": 131,
           "has_fallback": false
         },
         {
           "token": "--ke-space-6",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 126,
+          "line": 132,
           "has_fallback": false
         },
         {
@@ -167099,7 +167099,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
@@ -167177,7 +167177,7 @@
         {
           "token": "--ke-type-h1-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -167315,13 +167315,13 @@
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-compact-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -167582,13 +167582,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -167842,13 +167842,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -168085,13 +168085,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-compact",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 173,
+          "line": 179,
           "has_fallback": false
         },
         {
@@ -168275,7 +168275,7 @@
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
@@ -168501,7 +168501,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
@@ -168721,7 +168721,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
@@ -168923,7 +168923,7 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 129,
+          "line": 135,
           "has_fallback": false
         },
         {
@@ -169031,7 +169031,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
@@ -169105,7 +169105,7 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
@@ -169195,7 +169195,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
@@ -169301,7 +169301,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
@@ -169427,7 +169427,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/FreeCollectionSurface.astro",
-          "line": 163,
+          "line": 169,
           "has_fallback": false
         },
         {
@@ -171696,7 +171696,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4586,
+          "line": 4612,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -171710,13 +171710,13 @@
         {
           "token": "--lab-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 440,
+          "line": 445,
           "has_fallback": false
         },
         {
           "token": "--lab-row-media-ratio",
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 444,
+          "line": 449,
           "has_fallback": false
         }
       ],
@@ -172426,7 +172426,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4507,
+          "line": 4533,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172435,7 +172435,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4544,
+          "line": 4570,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172444,7 +172444,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4610,
+          "line": 4636,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172561,7 +172561,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4506,
+          "line": 4532,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172570,7 +172570,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4545,
+          "line": 4571,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -172579,7 +172579,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4589,
+          "line": 4615,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -173580,7 +173580,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 438,
+          "line": 443,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-link) {",
@@ -173589,7 +173589,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 442,
+          "line": 447,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media-shell) {",
@@ -173598,7 +173598,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 447,
+          "line": 452,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__media) {",
@@ -173607,7 +173607,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 452,
+          "line": 457,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media-shell) {",
@@ -173616,7 +173616,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 455,
+          "line": 460,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-media-kind=\"visual\"] .event-card__media) { background: transparent !important",
@@ -173625,7 +173625,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 456,
+          "line": 461,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-card-authoritative-fit=\"contain\"]) { background: #15110f",
@@ -173634,7 +173634,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 457,
+          "line": 462,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__body) { min-height: 0",
@@ -173643,7 +173643,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 458,
+          "line": 463,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__utility-row) { min-height: 58px",
@@ -173652,7 +173652,7 @@
         },
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 459,
+          "line": 464,
           "scope": "<top-level>",
           "kind": "css",
           "value": "global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px",
@@ -174003,7 +174003,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5758,
+          "line": 5791,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",
@@ -176059,7 +176059,7 @@
       "definitions": [
         {
           "path": "site/src/components/AdaptiveEventCardGrid.astro",
-          "line": 468,
+          "line": 473,
           "scope": "@media (max-width: 960px)",
           "kind": "css",
           "value": "is(",
