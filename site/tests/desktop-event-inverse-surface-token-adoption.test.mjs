@@ -22,3 +22,10 @@ test('desktop event inverse surfaces consume canonical background roles', async 
   );
   assert.doesNotMatch(desktopEvent, /#(?:24211f|292521)\b/iu);
 });
+
+
+test('graphite related-card share action keeps the canonical inverse foreground', async () => {
+  const desktopEvent = await read('src/components/DesktopEventPage.astro');
+  assert.match(desktopEvent, /\[data-desktop-clean-event\] \.desktop-clean-related__grid :global\(\.event-card--split-actions \.event-card__feedback--under \.feedback-button--share\) \{ color:var\(--ke-color-text-inverse\); \}/u);
+  assert.match(desktopEvent, /feedback-button--share:hover\),[\s\S]*?color:var\(--ke-color-text-inverse\);/u);
+});
