@@ -14,7 +14,7 @@ test('EventLayout is the single mobile shell owner with canonical route mapping'
   assert.match(layout, /import Reference4MobileMenu/u);
   assert.match(layout, /<Reference4MobileMenu current=\{drawerCurrent\} discoveryBases=\{mobileDiscoveryBases\} badge=\{sharedHeaderBadge\} \/>/u);
   assert.match(layout, /<\/header>\s*<MobileToastRegion\s*\/>/u, 'toast region must immediately follow the header');
-  assert.match(layout, /resolvedMobileBottomMode === 'nav' && <MobileBottomNav current=\{mobileSection\} \/>/u);
+  assert.match(layout, /resolvedMobileBottomMode !== 'none' && <MobileBottomNav current=\{mobileSection\} \/>/u);
   assert.match(layout, /\/(?:\\\/)?\(\?:poisk\|podborki\)/u);
   assert.match(layout, /headerCurrent === 'today' \|\| headerCurrent === 'tomorrow'/u);
   assert.match(layout, /resolvedMobileTopMode === 'immersive' \? 'cta'/u);

@@ -171,10 +171,24 @@ tests also exercise oversized text with native dialogs; neither is real-candidat
 acceptance. Media viewers now join the persistent lower-surface family with common chrome
 and a functional dark media stage; their compiled real-event verification,
 complete real-browser coverage and same-snapshot
-publication remain open; these bindings alone do not close AR-17. Desktop
-primary navigation remains unchanged pending AR-18 owner choice.
+publication remain open; these bindings alone do not close AR-17. AR-18 is now owner-approved (contract v1.14): the existing four-destination
+navigation is a floating island on both device classes. Contextual header
+links are not a second primary menu; event CTA clearance uses the measured
+island height. Final decorative skin and independent acceptance remain open.
 
 The real exporter preserves the persisted `time_is_default` flag. Placeholder
 time does not produce a precise start timestamp, time label or daypart;
 confirmed times are unchanged. This does not repair upstream occurrence
 identity/date mistakes (DATA5550038387), which remain separate work.
+
+Exhibitions defaults to the shared graphite role family. The same product
+`/vystavki/?theme=light` resolves light comparison roles without a second route,
+lab copy, data/ranking change or media recoloring. The remaining route-owned
+category/keyboard/action/row aliases also resolve through these shared roles.
+Product undo/notifications use `KenigEventsToast`; the deck's polite live
+announcement stays distinct from visible notifications.
+
+Explicit source-related IDs are preserved separately from calendar occurrence
+IDs. A multi-day exhibition and an explicitly typed guided tour do not become
+alternate dates of each other. This narrow consistency guard is not a general
+semantic certification of every historical linked-event family.

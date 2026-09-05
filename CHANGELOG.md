@@ -14,6 +14,8 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Exhibitions shares graphite roles and offers same-page light comparison; shared floating navigation now covers both device sizes, with measured CTA/notification clearance.
+- Kept source-related events separate from calendar occurrences, excluding guided tours from alternate dates of a long-running exhibition.
 - Media viewers share lower-window chrome while retaining image framing; exported default/unknown event times no longer appear as precise start times.
 - Shared lower-surface clearance and form/consent styling; rail undo uses the existing persistent notification action instead of a separate expiring toast.
 - Owner-review regressions follow candidate v2 and regular-width subgrid semantics rather than historical stretched rows; event keyboard title selection excludes action-panel metadata.

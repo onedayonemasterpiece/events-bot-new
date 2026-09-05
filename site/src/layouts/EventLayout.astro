@@ -151,7 +151,9 @@ const HEADER_NAVIGATION = [
   { key: 'unusual', label: 'Необычное', href: '/neobychnoe/' },
   { key: 'clubs', label: 'Клубы', href: '/kluby-po-interesam/' },
 ] as const;
-const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
+// Primary destinations live in the shared island; this is contextual discovery.
+const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) =>
+  item.key !== 'today' && item.key !== 'popular' && (item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED));
 const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : mobileSection === 'personal' ? 'personal' : mobileSection === 'afisha' ? 'all' : null);
 ---
 <!doctype html>
@@ -2467,7 +2469,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
     </style>
   </head>
-  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="2" data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="2" data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
@@ -2483,7 +2485,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           </Button>
         </div>}
         <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={sharedHeaderBadge} />
-        <nav class="site-nav" aria-label="Основная навигация">
+        <nav class="site-nav" aria-label="Разделы афиши">
           {visibleHeaderNavigation.map((item) => (
             <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined} data-unusual-nav-link={item.key === 'unusual' ? '' : undefined}>
               {item.label}
@@ -2519,7 +2521,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       <EventCard event={runtimeTemplateEvent} variant="overlay-controls" desktopRelatedCrop runtimeTemplate />
     </template>
     <SiteFooter socialLinks={FOOTER_SOCIAL_LINKS} />
-    {resolvedMobileBottomMode === 'nav' && <MobileBottomNav current={mobileSection} />}
+    {resolvedMobileBottomMode !== 'none' && <MobileBottomNav current={mobileSection} />}
 
     <script>
       import { packRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
@@ -2586,6 +2588,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const modalOpen=[...document.querySelectorAll('dialog[open],[aria-modal="true"],details[data-mobile-discovery-menu][open]')].some(visible);
           const nextState=modalOpen?'modal':'ready';
           if(document.body.dataset.lowerSurfaceState!==nextState)document.body.dataset.lowerSurfaceState=nextState;
+          const nav=document.querySelector('.mobile-bottom-nav');
+          const navOffset=nav && visible(nav)?Math.ceil(Math.max(0,innerHeight-nav.getBoundingClientRect().top)):0;
+          document.body.style.setProperty('--ke-lower-nav-offset',`${navOffset}px`);
           const occupied=[...document.querySelectorAll('.mobile-bottom-nav,.mobile-sticky-cta')]
             .filter(visible).map(node=>Math.max(0,innerHeight-node.getBoundingClientRect().top));
           const offset=Math.ceil(Math.max(keyboardOffset,...occupied,0));

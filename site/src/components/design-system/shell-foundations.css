@@ -230,3 +230,18 @@ body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__n
   color: var(--ke-color-inverse-control);
   box-shadow: none;
 }
+
+/* AR-18 structural island; no new decorative skin or second nav runtime. */
+body[data-primary-island="true"] {
+  padding-bottom: calc(var(--ke-lower-surface-offset, var(--mobile-bottom-stack-h)) + 24px);
+}
+body[data-primary-island="true"] .mobile-sticky-cta {
+  bottom: calc(var(--ke-lower-nav-offset, var(--mobile-bottom-stack-h)) + 8px);
+  left: 12px;
+  right: 12px;
+  width: min(480px, calc(100% - 24px));
+  margin-inline: auto;
+  border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+  border-radius: var(--ke-shape-radius-control);
+  background: var(--ke-color-background-surface);
+}
