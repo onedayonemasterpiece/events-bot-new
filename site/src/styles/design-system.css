@@ -283,7 +283,7 @@
 .ke-listing-card__copy { width: 100%; display: grid; gap: var(--ke-space-1); padding-top: var(--ke-space-2); }
 .ke-listing-card[data-listing-row-end] .ke-listing-card__copy { width: min(440px, calc(100% + var(--ke-listing-row-tail, 0px))); }
 .ke-listing-card[data-listing-full-title] .ke-listing-card__title { display: block; overflow: visible; -webkit-line-clamp: unset; }
-.ke-listing-card__title { display: -webkit-box; color: var(--ke-color-ink); font-size: 1.0625rem; font-weight: 900; line-height: 1.24; text-decoration: none; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.ke-listing-card__title { display: -webkit-box; color: var(--ke-color-ink); font-size: 1.0625rem; font-weight: var(--ke-type-card-title-weight, 700); line-height: 1.24; text-decoration: none; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .ke-listing-card__title:hover { color: var(--ke-color-brand-700); text-decoration: underline; }
 .ke-listing-card__copy p { margin: 0; overflow: hidden; color: var(--ke-color-muted); font-size: 0.9375rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .ke-listing-card__medallion { --venue-medallion-bg: var(--ke-color-surface-strong); --venue-medallion-ring: var(--ke-color-surface-strong); position: absolute; right: var(--ke-space-2); bottom: var(--ke-space-2); width: 42px; height: 42px; display: grid; place-items: center; overflow: hidden; border: 3px solid var(--venue-medallion-ring); border-radius: 50%; background: var(--venue-medallion-bg); box-shadow: var(--ke-shadow-1); }

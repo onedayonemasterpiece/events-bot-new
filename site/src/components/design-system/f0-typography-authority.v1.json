@@ -46,7 +46,11 @@
       "--ke-type-h3-weight": 900,
       "--ke-type-h2-weight": 900,
       "--ke-type-h1-compact-weight": 920,
-      "--ke-type-h1-weight": 950
+      "--ke-type-h1-weight": 950,
+      "--ke-type-card-title-weight": 700,
+      "--ke-type-card-metadata-weight": 500,
+      "--ke-type-card-status-weight": 600,
+      "--ke-type-card-action-weight": 600
     },
     "consumer_rule": "consume semantic weight tokens; do not redeclare a second font-family authority"
   },

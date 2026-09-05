@@ -11,6 +11,13 @@
 
 :root {
   /* Typography families and roles. */
+  /* Owner follow-up: readable card hierarchy, shared by static and hydrated
+     EventCard consumers. Page-heading weights remain independently unchanged. */
+  --ke-type-card-title-weight: 700;
+  --ke-type-card-metadata-weight: 500;
+  --ke-type-card-status-weight: 600;
+  --ke-type-card-action-weight: 600;
+
   --ke-font-family-sans: var(--ke-font-sans);
 
   --ke-type-body-size: var(--ke-font-size-300);

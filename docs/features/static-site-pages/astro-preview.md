@@ -1182,3 +1182,24 @@ Partnership as well as the original twelve routes. Favorites and Partners no
 longer retain a separate local H1 scale; standalone Search uses the shared
 compact role at the same mobile breakpoint. Entity/card/editorial/form headings
 keep their distinct semantic roles; no title copy or route behavior is changed.
+
+### Owner follow-up on2fe28b1f8 (2026-09-05)
+
+The two full transcripts in #621/5551113067 reopen CODE correction, not only
+independent REVIEW/MATERIALS. REL-053 and DS1.14.1 jointly require loaded painted
+bounds without fields, protected text, preserved admitted IDs and row geometry;
+protective contain inside an arbitrary fixed5:4 shell is not accepted output.
+Card title/metadata/status/action weights now have shared semantic owners
+(700/500/600/600), with page H1 roles unchanged. The existing CSS fallback font
+stack is retained: measured Linux Chromium used DejaVu Sans Bold, not a loaded
+Inter asset; CSS family text alone is not font-delivery evidence. Listing and
+ordinary EventCard titles consume the same card-title role.
+The existing lower-stack controller exposes read-only clipped occupied rectangles
+through `KenigEventsShellOccupiedSpace()` and its existing state event; separate
+islands are not merged into a fictitious opaque rectangle. This adapter does
+not send analytics, alter served-list identity/order or create a transport.
+Primary action receipts remain independent of optional disposable telemetry;
+existing transport failure isolation checks are retained. Free mobile's in-flow
+page medallion is doubled without scaling all medallions or covering card text.
+The next same-corpus Kaggle handoff must use the product Home URL as its primary
+link. Source changes/test packets are not deployed runtime or independent acceptance.

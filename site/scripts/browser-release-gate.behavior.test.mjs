@@ -400,7 +400,8 @@ test('existing lower shell keeps native forms and long notifications clear of na
   const end=layout.indexOf('const syncExhibitionsBadge',begin);
   assert.ok(begin>0 && end>begin);
   const {transform}=await import('esbuild');
-  const runtime=(await transform(layout.slice(begin,end),{loader:'ts'})).code;
+  const geometry=readFileSync(new URL('../src/lib/shellOccupiedSpace.mjs',import.meta.url),'utf8').replace('export function shellOccupiedSpace','function shellOccupiedSpace');
+  const runtime=(await transform(geometry+'\n'+layout.slice(begin,end),{loader:'ts'})).code;
   const css=readFileSync(new URL('../src/components/design-system/shell-foundations.css',import.meta.url),'utf8');
   const {chromium}=await import('playwright');
   const browser=await chromium.launch(browserLaunchOptions());

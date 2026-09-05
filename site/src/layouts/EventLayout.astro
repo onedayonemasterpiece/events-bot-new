@@ -1490,16 +1490,16 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .event-card__fallback strong { font-size: clamp(1.15rem, 5vw, 1.55rem); line-height: 1; letter-spacing: -0.04em; }
       .event-card__body { display: grid; gap: 0.5rem; padding: 0.85rem 0.85rem 4.85rem; }
       .event-card__meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.32rem 0.42rem; }
-      .event-card__tag { width: max-content; max-width: 100%; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.14rem 0.44rem; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.88); font-size: 0.72rem; line-height: 1.2; font-weight: 900; letter-spacing: 0.01em; }
-      .event-card__meta { color: rgba(255,255,255,0.74); font-weight: 750; font-size: 0.82rem; line-height: 1.25; }
-      .event-card__status { width: max-content; max-width: 100%; min-height: 28px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.22rem 0.55rem; background: rgba(215,240,236,0.16); border: 1px solid rgba(215,240,236,0.28); color: #d7f0ec; font-size: 0.75rem; font-weight: 850; line-height: 1.15; }
-      .event-card__title { color: #fff; text-decoration: none; font-weight: 900; line-height: 1.08; font-size: clamp(1.03rem, 4.2vw, 1.35rem); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .event-card__tag { width: max-content; max-width: 100%; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.14rem 0.44rem; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.88); font-size: 0.72rem; line-height: 1.2; font-weight: var(--ke-type-card-status-weight); letter-spacing: 0.01em; }
+      .event-card__meta { color: rgba(255,255,255,0.74); font-weight: var(--ke-type-card-metadata-weight); font-size: 0.82rem; line-height: 1.25; }
+      .event-card__status { width: max-content; max-width: 100%; min-height: 28px; display: inline-flex; align-items: center; border-radius: 999px; padding: 0.22rem 0.55rem; background: rgba(215,240,236,0.16); border: 1px solid rgba(215,240,236,0.28); color: #d7f0ec; font-size: 0.75rem; font-weight: var(--ke-type-card-status-weight); line-height: 1.15; }
+      .event-card__title { color: #fff; text-decoration: none; font-weight: var(--ke-type-card-title-weight); line-height: 1.08; font-size: clamp(1.03rem, 4.2vw, 1.35rem); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       .event-card__title:hover { text-decoration: underline; text-decoration-thickness: 0.08em; }
-      .event-card__other-times { width: max-content; max-width: 100%; border-radius: 999px; padding: 0.24rem 0.56rem; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.88); font-weight: 880; font-size: 0.78rem; line-height: 1.18; }
-      .event-card__footer { color: rgba(255,255,255,0.84); font-weight: 760; font-size: 0.86rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+      .event-card__other-times { width: max-content; max-width: 100%; border-radius: 999px; padding: 0.24rem 0.56rem; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.88); font-weight: var(--ke-type-card-status-weight); font-size: 0.78rem; line-height: 1.18; }
+      .event-card__footer { color: rgba(255,255,255,0.84); font-weight: var(--ke-type-card-metadata-weight); font-size: 0.86rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
       .event-card__feedback { position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0.65rem; z-index: 6; display: grid; grid-template-columns: 52px minmax(132px, 1fr) 88px; align-items: end; gap: 0.38rem; pointer-events: none; }
       .event-card__utility-row { display: none; }
-      .feedback-button { pointer-events: auto; min-height: 52px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; color: #fff; background: rgba(15,17,15,0.7); font: inherit; font-weight: 900; text-decoration: none; box-shadow: 0 14px 26px rgba(0,0,0,0.28); cursor: pointer; touch-action: manipulation; }
+      .feedback-button { pointer-events: auto; min-height: 52px; border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.42rem; color: #fff; background: rgba(15,17,15,0.7); font: inherit; font-weight: var(--ke-type-card-action-weight); text-decoration: none; box-shadow: 0 14px 26px rgba(0,0,0,0.28); cursor: pointer; touch-action: manipulation; }
       .feedback-button .icon { width: 1.25rem; height: 1.25rem; }
       .feedback-count:empty { display: none; }
       .feedback-button--like { min-width: 88px; padding: 0.44rem 0.58rem; font-size: 1.04rem; }
@@ -2524,6 +2524,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {resolvedMobileBottomMode !== 'none' && <MobileBottomNav current={mobileSection} />}
 
     <script>
+      import { shellOccupiedSpace } from '../lib/shellOccupiedSpace.mjs';
       import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
       import { packRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
       import { selectEventContinuation } from '../lib/eventContinuation.mjs';
@@ -2577,6 +2578,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       {
         let scheduled = false;
         let lastLowerState = '';
+        let occupiedSnapshot = shellOccupiedSpace({width:innerWidth,height:innerHeight}, []);
+        Object.assign(window,{KenigEventsShellOccupiedSpace:()=>occupiedSnapshot});
         const visible = (node: Element) => {
           const box=node.getBoundingClientRect(), style=getComputedStyle(node);
           return box.width>0 && box.height>0 && style.display!=='none'
@@ -2599,10 +2602,18 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             const cssValue=`${value}px`;
             if(document.body.style.getPropertyValue(String(key))!==cssValue)document.body.style.setProperty(String(key),cssValue);
           }
-          const stateKey=`${modalOpen}:${offset}`;
+          const selectors = [
+            ['brand','.site-header__brand-tag'], ['mobile-brand','.mobile-discovery-menu__summary'],
+            ['context','[data-floating-page-context]'], ['navigation','.mobile-bottom-nav'],
+            ['date','[data-mobile-date-accessory]'], ['event-cta','.mobile-sticky-cta'],
+            ['notification','[data-mobile-toast-region]'],
+          ];
+          occupiedSnapshot=shellOccupiedSpace({x:viewport?.offsetLeft || 0,y:viewport?.offsetTop || 0,width:viewport?.width || innerWidth,height:viewport?.height || innerHeight},
+            selectors.flatMap(([id,selector])=>[...document.querySelectorAll(selector)].filter(visible).map((node,index)=>({id:`${id}:${index}`,role:id,rect:node.getBoundingClientRect()}))));
+          const stateKey=`${modalOpen}:${offset}:${JSON.stringify(occupiedSnapshot)}`;
           if(stateKey!==lastLowerState){
             lastLowerState=stateKey;
-            window.dispatchEvent(new CustomEvent('kenigevents:lower-surface-state',{detail:{modalOpen,offset}}));
+            window.dispatchEvent(new CustomEvent('kenigevents:lower-surface-state',{detail:{modalOpen,offset,occupiedSpace:occupiedSnapshot}}));
           }
         };
         const scheduleLowerStack=()=>{if(!scheduled){scheduled=true;requestAnimationFrame(updateLowerStack);}};

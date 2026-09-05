@@ -173,9 +173,11 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
     .free-collection__copy h1 { font:var(--ke-type-h1-compact); letter-spacing:var(--ke-type-h1-compact-letter); max-width:100%; overflow-wrap:normal; word-break:normal; hyphens:none; }
     .free-collection__copy .lead { font-size:.95rem; }
     .free-collection__copy .collection-criteria,.free-collection__copy .muted-note { font-size:.76rem; line-height:1.35; }
+    /* Page identity only: owner requested a larger Free medallion, not a
+       global badge scale or an overlay that hides a card's poster text. */
     .free-collection__medallion--hero {
-      width:var(--ke-free-medallion-sticky-size-compact);
-      height:var(--ke-free-medallion-sticky-size-compact);
+      width:calc(2 * var(--ke-free-medallion-sticky-size-compact));
+      height:calc(2 * var(--ke-free-medallion-sticky-size-compact));
       align-self:start;
       margin-top:0;
     }
