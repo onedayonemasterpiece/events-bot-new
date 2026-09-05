@@ -4,6 +4,8 @@
 в формате floating island на мобильном и десктопе. Постановки для ручного
 запуска, не отчёт о выполнении. Исходный immutable-пакет393a8e8 предшествует
 уточнению,64784c01 — принятию навигации; задачи продолжаются, не создаются заново.
+Исправлена двусмысленность поставки: Astro и executable UI SoT меняются вместе;
+отложенная native-материализация Penpot не разрешает отложить SoT.
 
 Выполняй общую часть и только выбранную роль: CODE, VISUAL, DATA, MATERIALS
 или REVIEW. CODE — ручной кодовый агент в VS Code/терминале. Остальные —
@@ -24,10 +26,13 @@
 - `contracts/launch-normalized-ui.v1.yaml` v1.14.0 или проверенный successor;
   особенно `owner_visible_normalization_clarification`, review stage и build topology;
 - `docs/launch-normalization/STATUS.md`;
-- `docs/launch-normalization/owner-audioreview-20260905.md`, теперь AR-01–AR-18.
+- `docs/launch-normalization/owner-audioreview-20260905.md`, теперь AR-01–AR-18;
+- для Free: `contracts/page-profiles/free-collection.owner-review.v1.yaml`
+  v1.2.1 или проверенный successor, включая `source_delivery`.
 
 DS checkpoint после принятия навигации: `b31653708a878040d9415b26679aa4c1a2f5b888`.
-Открой current heads: точка выше не разрешает reset или игнорирование новых
+Уточнение парной поставки Free: `e92a4504004ddf551a29748c85c7f5a66b980061`.
+Открой current heads: точки выше не разрешают reset или игнорирование новых
 решений. Требования не переопределять этим пакетом/комментарием/планом.
 
 ## Продолжение, не новый старт
@@ -35,11 +40,13 @@ DS checkpoint после принятия навигации: `b31653708a878040d
 Координация — `events-bot-new#621`; прочитай comment5549769770 и всё новее,
 включая owner clarification. Runtime-ветка прежняя:
 `work/owner-audioreview-card-geometry-20260905`.
-Последний проверенный UI — `d6fd10919f39e2689a85388ebd6cfd53639fec61`;
-clean verification head — `97c507be2521a244820caca5f7f5d641efca8bbc`.
+Исторический стартовый UI — `d6fd10919f39e2689a85388ebd6cfd53639fec61`;
+его clean verification head — `97c507be2521a244820caca5f7f5d641efca8bbc`.
+Это не актуальный кандидат: CODE уже продвинул исходники и публикацию;
+их точные текущие refs и evidence разрешай по #621 и remote heads.
 Позднейшие изменения постановок — не новая UI-сборка.
 Integration target — `agent/static-site-single-kaggle-contract`;
-последний прочитанный trunk — `8b1bb81298bfca2fe2aaa3ceb7e5f654748b301f`.
+исходный отвергнутый trunk — `8b1bb81298bfca2fe2aaa3ceb7e5f654748b301f`.
 
 Отвергнутый before-reference:
 https://kenigevents.ru/preview-real-8b1bb8129-normalized-20260904-v1/__preview/
@@ -107,7 +114,7 @@ VISUAL даёт целевой набор существующих ролей и
 неполные ряды во всех причастных flow/packed/static/hydrated/client-created
 consumers. Сохранять admission, допустимый порядок, содержание и текст афиш;
 нельзя достигать равенства удалением событий, unsafe crop, обрезкой текста
-или растягиванием singleton. Локальный профиль/фабрика не заменяют organic feed.
+или растягиванием singleton. Локальный профиль/фабрика не заменяет organic feed.
 
 Поведение: event5370/Tretyakov/actions/semantic keyboard reading, cold/warm/
 loading/return, truthful badges и entity adapters по конкретным AR-cases.
@@ -118,8 +125,9 @@ DATA даёт фактические dispositions; не округляй/пра�
 AR-17 — миграция всех app-owned modal/notification consumers через существующих
 owners, не отдельный новый компонент без подключённых процессов. Проверь
 имеющиеся dialog/sheet roots и `MobileToastRegion.astro` / `KenigEventsToast`:
-там уже есть timer/progress, паузы, очередь и persistent action/error; toast
-сейчас привязан к верху. Переиспользуй правильное, убери параллельные реализации.
+там уже есть timer/progress, паузы, очередь и persistent action/error; в исходном
+review toast был привязан к верху. Сначала проверь текущую реализацию CODE,
+переиспользуй правильное и убери параллельные реализации.
 
 Нижнее размещение и общий visual/lifecycle contract применяются и к desktop,
 и к mobile. Интерактивные формы/подтверждения/ошибки не исчезают во время ввода;
@@ -142,8 +150,21 @@ Primary vs contextual navigation и размещение согласуются 
 
 ### Замкнутый цикл и итог
 
-Для каждого пакета: воспроизведение → owner/reverse impact → source/consumers
-→ регрессии в существующих проверках → личный просмотр → commit/read-back.
+Для каждого UI-изменения: воспроизведение → owner/reverse impact → согласованная
+правка Astro/consumers И executable UI SoT → проверки A=S и регрессии → личный
+просмотр → сохранённая связанная поставка и remote read-back.
+SoT не является задачей «после готового Astro», независимо от размера правки.
+Соблюдай существующий conformance contract; для Free его применение уточнено
+в `source_delivery` профиля v1.2.1. Исправленный профиль/STATUS/комментарий
+сами по себе не обновляют executable SoT.
+
+Меняются причастные canonical owners, variants/states, composition, точные
+asset/geometry/token bindings, interaction semantics и actual consumers.
+Производные данные регенерируются существующими средствами и проверяются;
+не создавай вторую ручную копию CSS или определений компонентов. В разных
+репозиториях допустимы связанные коммиты, но до согласованной пары A/S это WIP,
+а не законченная поставка или кандидат с якобы отложенной только P-частью.
+
 Проверяй видимые consumers, same-role styles/colors/spacing, внутренние tracks,
 длинный контент, loaded/missing/broken media, negative override/singleton/
 occlusion controls, три заданных viewport и причастные breakpoint seams.
@@ -152,25 +173,33 @@ Native mobile-system checks выбирай по существующему scena
 desktop viewport не закрывает OS integration. Дешёвые L0/L1 по риску, не полный
 каталог на эмуляторах. Focused диагностика — существующий путь.
 
-Готовые совместимые изменения интегрируй в executable trunk по repo rules,
+Актуализируй executable SoT и данные структурной проекции в той же поставке,
+используя существующие owners/exporter/validator. Проверка опубликованного
+кандидата позднее дополняет evidence этой пары, а не впервые создаёт S.
+До передачи готовности укажи в существующем receipt/evidence точные A/S revisions,
+сценарий/состояние и результаты проверок, включая отклонение stale/missing S.
+Пять экспортированных карточек не заменяют описание всей композиции и её
+initial/personalized/load-more/error/empty states.
+
+Готовые совместимые A+S изменения интегрируй в executable trunk по repo rules,
 без обхода release-side effects. Production автоматически не переключать.
 Полный опубликованный кандидат — только единый существующий Kaggle-путь.
 Первый причинный before/after сохраняет snapshot/clock/slice300/page scope;
 недоступный snapshot не подменяй незаметно свежим. Исправления upstream-данных
 проверяй отдельно с собственной идентичностью, не маскируя смену baseline.
 
-Обнови текущие SoT/structural projection через существующий exporter/validator.
-Передай MATERIALS точные стабильные source bindings и delta изменившихся
-материалов; старые каталоги/packets не являются доказательством нового source.
-Полная материализация всех страниц Penpot не требуется; четыре каталога —
-отдельный обязательный результат. Нативную работу не приписывай себе по Git JSON.
+Передай MATERIALS уже согласованную пару A+S и изменившиеся bindings для native
+материализации. Старые каталоги/packets не доказывают новый source. Полная
+материализация всех страниц Penpot может быть отложена, executable SoT — нет;
+четыре каталога остаются отдельным обязательным результатом.
+Нативную работу не приписывай себе по Git JSON.
 
-В#621: одна актуальная ссылка/manifest/SHA/snapshot/clock, фактическое покрытие,
-тесты/скриншоты, состояния AR-01–AR-18, четыре native page links либо точный
-неустранённый blocker. STATUS/docs/changelog согласованы; никакого completed
-при открытом обязательном видимом расхождении. Передай кандидата независимому
-REVIEW; его замечания исправляй в этой же задаче. Готовность к owner review
-не означает owner approval или A=S=P без P.
+В#621: одна актуальная ссылка/manifest, точные A/S SHA и snapshot/clock,
+фактическое покрытие, тесты/скриншоты, состояния AR-01–AR-18, четыре native page
+links либо точный неустранённый blocker. STATUS/docs/changelog согласованы;
+никакого completed при stale SoT или открытом обязательном видимом расхождении.
+Передай кандидата независимому REVIEW; его замечания исправляй в этой же задаче.
+Готовность к owner review не означает owner approval или A=S=P без P.
 
 Внешние пробелы делегируй коротким пакетом ChatGPT: exact вопрос/refs/evidence,
 ожидаемый выход, место в#621, запрещённые owning paths. Не дублируй работу,
@@ -255,9 +284,11 @@ interactive/timed/persistent, focus/paused/loading states и desktop/mobile.
 
 Не рисуй похожие значки/глифы и не выдавай стену PNG за восстановленный каталог.
 Донор восстанавливает материал, но не делает старый вариант новой authority.
-Сначала можно вернуть стабильный inventory на текущем source с честным
-непринятым статусом; после CODE обновить изменившиеся bindings/состояния.
-Нельзя объявить завершение на preliminary-страницах.
+Стабильные материалы можно материализовать из уже согласованного A+S;
+последующие изменения поступают как новая проверенная пара A+S, и MATERIALS
+обновляет её native P. Он не должен задним числом создавать отсутствующий S
+по изменённому Astro. Старая P-проекция помечается как принадлежащая старой
+паре, а не как текущая. Нельзя объявить завершение на preliminary-страницах.
 
 Проверь native exports визуально, linkage и duplicate-free повторный проход.
 Сохрани source pins/receipt по действующему контракту и реальные page/frame
@@ -270,6 +301,9 @@ IDs; в#621 четыре прямые ссылки и экспортирован
 После готового кандидата прочитай current#621, contract/STATUS/AR-register и
 принятые решения VISUAL/navigation. Сам разреши URL/manifest и проверь SHA,
 snapshot/clock/slice. Нет successor — нет приёмки по rejected build.
+Проверь соответствующую executable S revision и данные всей причастной
+композиции/состояний: новый Astro со старым S не проходит, даже если экран
+выглядит правильно и обновлены Markdown-профиль или только sample-карточки.
 
 Лично выполни собственный browser scenario при1440×900/390×844/1920×1080:
 product archetypes, shared role consistency, reaction states, color combinations,
