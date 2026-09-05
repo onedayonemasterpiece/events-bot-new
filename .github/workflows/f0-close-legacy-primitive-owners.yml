@@ -1,18 +1,13 @@
-name: F0 owner-review evidence
-# Existing F0 runner, now read-only. It neither repairs source nor publishes a
-# site. Full real previews remain exclusively on the canonical Kaggle path.
+name: F0 bounded owner-review correction
+# One deterministic continuation of the existing F0 runner. Only the explicitly
+# reviewed source delta may be committed. NEVER stage a workflow with this token.
+# Full published review builds remain on the existing Kaggle path.
 on:
-  workflow_dispatch:
   push:
     branches: [work/owner-audioreview-card-geometry-20260905]
-    paths:
-      - .github/workflows/f0-close-legacy-primitive-owners.yml
-      - site/src/**
-      - site/scripts/check-browser-release-gate.mjs
-      - site/scripts/browser-release-gate.behavior.test.mjs
-      - site/tests/owner-audioreview-card-geometry.test.mjs
+    paths: [.github/workflows/f0-close-legacy-primitive-owners.yml]
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: f0-owner-review-evidence-${{ github.ref }}
   cancel-in-progress: false
@@ -24,24 +19,47 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}
-          persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.16.0'
-      - name: Install exact lockfile dependencies
+      - name: Apply the exact personally reviewed correction
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir -p artifacts/owner-review
-          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
+          git diff --exit-code 64294cb5e4595063e72f910960ca34302f1101b4 HEAD -- site docs CHANGELOG.md
+          gh api repos/onedayonemasterpiece/events-bot-new/git/blobs/d277472050d8c0daaa7c7288886f98752fdf05d0 --jq .content | base64 -d > /tmp/owner-review-correction.py
+          test "$(git hash-object /tmp/owner-review-correction.py)" = d277472050d8c0daaa7c7288886f98752fdf05d0
+          python /tmp/owner-review-correction.py
+          git diff --check
           cd site && npm ci --no-audit --no-fund
-      - name: Verify existing SoT and execute source regressions
+      - name: Refresh only existing SoT outputs and execute source regressions
         run: |
+          node site/scripts/generate-astro-family-consumer-graph.mjs --write
+          node site/scripts/generate-token-impact-graph.mjs --write
           node site/scripts/check-astro-family-sot.mjs > artifacts/owner-review/family-check.json
+          node site/scripts/check-token-impact-sot.mjs > artifacts/owner-review/token-check.json
           node --experimental-strip-types --test site/tests/owner-audioreview-card-geometry.test.mjs site/tests/adaptive-event-card-grid.test.mjs site/tests/unusual-listing-typography-token-adoption.test.mjs site/tests/event-date-availability.test.mjs site/tests/keyboard-event-navigation-production.test.mjs > artifacts/owner-review/source-regressions.tap
       - name: Install Chromium
         working-directory: site
         run: npx playwright install --with-deps chromium
-      - name: Execute existing browser-gate regression suite
+      - name: Execute the existing browser-gate regressions
         run: node --experimental-strip-types --test site/scripts/browser-release-gate.behavior.test.mjs > artifacts/owner-review/browser-regressions.tap
+      - name: Commit source only, with a fresh remote guard
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/work/owner-audioreview-card-geometry-20260905 | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md docs/features/static-site-pages/design-system/README.md site/scripts/browser-release-gate.behavior.test.mjs site/scripts/check-browser-release-gate.mjs site/src/components/Breadcrumbs.astro site/src/components/FreeCollectionSurface.astro site/src/components/HomeColdStartFeed.astro site/src/components/design-system/f0-typography-authority.v1.json site/src/design-system/astro-family-consumers.generated.v1.json site/src/design-system/token-impact.generated.v1.json
+          test -z "$(git diff --cached --name-only -- .github/workflows)"
+          git diff --cached --check
+          git commit -m 'fix(ui): close Home section and breadcrumb gaps with singleton regressions'
+          git push origin HEAD:refs/heads/work/owner-audioreview-card-geometry-20260905
+          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
+          git show --format=fuller HEAD > artifacts/owner-review/source-change.patch
       - name: Compile isolated page classes and capture role and behavior evidence
         env:
           PUBLIC_SITE_MODE: preview
@@ -49,6 +67,7 @@ jobs:
           PUBLIC_INTEREST_CLUBS_ENABLED: '1'
           ENABLE_INTEREST_CLUB_STATIC_PROJECTION: '1'
         run: |
+          export SOURCE_SHA="$(git rev-parse HEAD)"
           for CLASS in collection date weekend; do
             (cd site && STATIC_SITE_PAGE_CLASSES="$CLASS" node_modules/.bin/astro build) > "artifacts/owner-review/build-$CLASS.log" 2>&1
             CLASS="$CLASS" node --input-type=module <<'JS'
@@ -72,13 +91,13 @@ jobs:
             await page.screenshot({path:`${out}/failure.png`});
           } finally {
             report ||= {ok:false,errors:[{error:'No report'}]};report.page_errors=pageErrors;
-            report.source_sha=process.env.GITHUB_SHA;
+            report.source_sha=process.env.SOURCE_SHA;
             writeFileSync(`artifacts/owner-review/${kind}-result.json`,JSON.stringify(report,null,2));
             await browser.close();await server.close();
           }
           JS
           done
-      - name: Record diagnostic provenance, not an acceptance receipt
+      - name: Record diagnostic provenance
         if: always()
         run: |
           mkdir -p artifacts/owner-review
@@ -88,7 +107,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: owner-review-evidence-${{ github.sha }}
+          name: owner-review-source-correction-${{ github.sha }}
           path: artifacts/owner-review/
           retention-days: 14
           if-no-files-found: error
@@ -99,4 +118,5 @@ jobs:
           for name in ['collection','date','weekend']:
             d=json.loads(pathlib.Path(f'artifacts/owner-review/{name}-result.json').read_text())
             assert d['ok'],d['errors']
+            assert not d.get('page_errors'),d.get('page_errors')
           PY
