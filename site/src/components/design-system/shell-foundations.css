@@ -180,3 +180,53 @@ body[data-lower-surface-state] [data-app-lower-surface="notification"] .mobile-t
   position: sticky; top: 0; align-self: start;
   background: var(--ke-color-background-surface);
 }
+
+/* Media retains a dark image stage, not an independent window/control skin. */
+body[data-lower-surface-state] [data-app-lower-surface="media"][data-app-lower-lifecycle] {
+  position: fixed;
+  inset: auto 0 calc(12px + env(safe-area-inset-bottom) + var(--ke-lower-keyboard-offset));
+  width: min(1120px, calc(100% - 24px));
+  margin: 0 auto;
+  overflow: hidden;
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"][data-app-lower-lifecycle]:not(dialog) {
+  height: calc(var(--ke-lower-visible-height, 100dvh) - 24px - env(safe-area-inset-bottom));
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__topbar {
+  min-height: 104px;
+  background: var(--ke-color-background-surface);
+  border-bottom: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__event-title {
+  color: var(--ke-color-text-primary);
+  font: var(--ke-type-h4);
+  letter-spacing: var(--ke-type-h4-letter);
+  text-shadow: none;
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"] :is(.hero-gallery__close,.hero-gallery__counter) {
+  background: var(--ke-color-background-surface-strong);
+  color: var(--ke-color-text-primary);
+  border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+  box-shadow: none;
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__counter { top: auto; bottom: 8px; }
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__chrome { display: none; }
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__viewport {
+  inset: 104px 0 44px;
+  height: auto;
+  background: var(--ke-color-background-inverse);
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__image {
+  min-height: 0;
+  max-height: 100%;
+  background: var(--ke-color-background-inverse);
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"][data-efficient-portrait-viewer="true"] .hero-gallery__slide {
+  height: 100%;
+}
+body[data-lower-surface-state] [data-app-lower-surface="media"] .hero-gallery__nav {
+  border: var(--ke-shape-border-hairline) solid var(--ke-color-inverse-control-border);
+  background: var(--ke-color-inverse-control-background);
+  color: var(--ke-color-inverse-control);
+  box-shadow: none;
+}

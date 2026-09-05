@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2501,
     "definition_count": 2788,
-    "consumer_count": 3527,
+    "consumer_count": 3576,
     "alias_edge_count": 721,
     "family_count": 109
   },
@@ -69287,8 +69287,26 @@
       "direct_consumers": [
         {
           "token": "--ke-color-background-inverse",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 217,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 222,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse",
           "path": "site/src/components/DesktopEventPage.astro",
           "line": 1856,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2360,
           "has_fallback": false
         }
       ],
@@ -69849,9 +69867,27 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 197,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2369,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-train-row-hover-surface",
           "path": "site/src/components/EventTransportSchedule.astro",
           "line": 189,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
           "has_fallback": false
         },
         {
@@ -70199,9 +70235,27 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-background-surface-strong",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 207,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface-strong",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2382,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-media-rail-current-border",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 569,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface-strong",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -71080,6 +71134,48 @@
           "token": "--ke-color-border-default",
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 284,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 198,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 209,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2370,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2380,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 458,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -77137,6 +77233,18 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-inverse-control",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 230,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 466,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-control-inverse",
           "path": "site/src/styles/design-system.css",
           "line": 136,
@@ -77209,6 +77317,18 @@
           "token": "--ke-color-inverse-control-background",
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 121,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-background",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 229,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-background",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 466,
           "has_fallback": false
         },
         {
@@ -77311,6 +77431,18 @@
           "token": "--ke-color-inverse-control-border",
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 120,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-border",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 228,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-border",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 466,
           "has_fallback": false
         },
         {
@@ -80755,12 +80887,6 @@
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 201,
           "has_fallback": false
-        },
-        {
-          "token": "--ke-color-exhibitions-action-border",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 461,
-          "has_fallback": false
         }
       ],
       "component_set": "components-b77fccb22b33cc5e",
@@ -81176,12 +81302,6 @@
           "token": "--ke-color-exhibitions-border",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 423,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-exhibitions-border",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 458,
           "has_fallback": false
         }
       ],
@@ -81631,16 +81751,9 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-exhibitions-gallery-control-surface",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 461,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-b77fccb22b33cc5e",
-      "astro_family_set": "families-62339cf450860ed5",
+      "direct_consumers": [],
+      "component_set": "components-1d2aaa489688c9b3",
+      "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-exhibitions-gallery-line": {
@@ -81657,16 +81770,9 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-exhibitions-gallery-line",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 453,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-b77fccb22b33cc5e",
-      "astro_family_set": "families-62339cf450860ed5",
+      "direct_consumers": [],
+      "component_set": "components-1d2aaa489688c9b3",
+      "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-exhibitions-gallery-navigation-surface": {
@@ -81683,16 +81789,9 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-exhibitions-gallery-navigation-surface",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 466,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-b77fccb22b33cc5e",
-      "astro_family_set": "families-62339cf450860ed5",
+      "direct_consumers": [],
+      "component_set": "components-1d2aaa489688c9b3",
+      "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-exhibitions-gallery-stage-surface": {
@@ -81747,16 +81846,9 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-color-exhibitions-gallery-surface",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 453,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-b77fccb22b33cc5e",
-      "astro_family_set": "families-62339cf450860ed5",
+      "direct_consumers": [],
+      "component_set": "components-1d2aaa489688c9b3",
+      "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-exhibitions-gray": {
@@ -82582,19 +82674,7 @@
         {
           "token": "--ke-color-exhibitions-muted",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 459,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-exhibitions-muted",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 465,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-exhibitions-muted",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 467,
           "has_fallback": false
         }
       ],
@@ -83727,24 +83807,6 @@
           "token": "--ke-color-exhibitions-text",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 443,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-exhibitions-text",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 453,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-exhibitions-text",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 461,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-exhibitions-text",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 466,
           "has_fallback": false
         },
         {
@@ -89263,6 +89325,42 @@
         },
         {
           "token": "--ke-color-text-primary",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 201,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 208,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2373,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2383,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
           "path": "site/src/components/FocusGroupFeedback.astro",
           "line": 320,
           "has_fallback": false
@@ -89806,6 +89904,18 @@
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 144,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 230,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 466,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -89836,6 +89946,18 @@
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 121,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-background",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 229,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-background",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 466,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -89865,6 +89987,18 @@
           "token": "--ke-color-inverse-control-border",
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 120,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-border",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 228,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-inverse-control-border",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 466,
           "has_fallback": false
         }
       ],
@@ -90749,6 +90883,48 @@
           "token": "--ke-color-border-default",
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 284,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 198,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 209,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2370,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2380,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 458,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-border-default",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -93414,6 +93590,18 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
+          "has_fallback": false
+        },
+        {
           "token": "--muted",
           "path": "site/src/components/EventBusTransportSchedule.astro",
           "line": 101,
@@ -93471,6 +93659,18 @@
           "token": "--muted",
           "path": "site/src/components/EventTransportSchedule.astro",
           "line": 207,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
           "has_fallback": false
         },
         {
@@ -98876,9 +99076,27 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 197,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2369,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-train-row-hover-surface",
           "path": "site/src/components/EventTransportSchedule.astro",
           "line": 189,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
           "has_fallback": false
         },
         {
@@ -99299,8 +99517,26 @@
       "direct_consumers": [
         {
           "token": "--ke-color-background-inverse",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 217,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 222,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse",
           "path": "site/src/components/DesktopEventPage.astro",
           "line": 1856,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2360,
           "has_fallback": false
         },
         {
@@ -100245,6 +100481,24 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-background-surface-strong",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 207,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2361,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface-strong",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2382,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-media-rail-current-border",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 569,
@@ -100254,6 +100508,12 @@
           "token": "--ke-color-media-rail-role-text",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 590,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-background-surface-strong",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -101620,6 +101880,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-text-inverse",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2361,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-media-rail-role-text",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 590,
@@ -101869,6 +102135,30 @@
           "token": "--ke-color-text-muted",
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 309,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-muted",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
           "has_fallback": false
         },
         {
@@ -102341,6 +102631,42 @@
           "token": "--ke-color-text-primary",
           "path": "site/src/components/design-system/shell-foundations.css",
           "line": 155,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 201,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 208,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2373,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2383,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -107431,6 +107757,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-size-touch-target",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-connectivity-copy-action-min-height",
           "path": "site/src/components/FocusConnectivityDiagnostic.astro",
           "line": 499,
@@ -109197,16 +109529,9 @@
       ],
       "aliases_to": [],
       "aliases_from": [],
-      "direct_consumers": [
-        {
-          "token": "--ke-elevation-exhibitions-gallery",
-          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
-          "line": 453,
-          "has_fallback": false
-        }
-      ],
-      "component_set": "components-b77fccb22b33cc5e",
-      "astro_family_set": "families-62339cf450860ed5",
+      "direct_consumers": [],
+      "component_set": "components-1d2aaa489688c9b3",
+      "astro_family_set": "families-4bf1d21f44f08a5f",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-elevation-exhibitions-live": {
@@ -110398,6 +110723,12 @@
           "token": "--ke-elevation-overlay",
           "path": "site/src/components/design-system/shell-foundations.css",
           "line": 156,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-elevation-overlay",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
           "has_fallback": false
         },
         {
@@ -120425,9 +120756,33 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 202,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-type-label",
           "path": "site/src/components/DesktopEventActionPanel.astro",
           "line": 313,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-font-family-sans",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2373,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
           "has_fallback": false
         },
         {
@@ -120440,6 +120795,30 @@
           "token": "--ke-type-h2",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 199,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-label",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
           "has_fallback": false
         },
         {
@@ -121244,9 +121623,33 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 202,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-type-label",
           "path": "site/src/components/DesktopEventActionPanel.astro",
           "line": 313,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-font-family-sans",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2373,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
           "has_fallback": false
         },
         {
@@ -121259,6 +121662,30 @@
           "token": "--ke-type-h2",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
           "line": 199,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-label",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
           "has_fallback": false
         },
         {
@@ -121868,6 +122295,30 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-font-size-100",
           "path": "site/src/styles/design-system.css",
           "line": 201,
@@ -121985,6 +122436,12 @@
           "token": "--ke-type-label",
           "path": "site/src/components/DesktopEventActionPanel.astro",
           "line": 313,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-label",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -122237,6 +122694,18 @@
           "token": "--ke-type-h4",
           "path": "site/src/components/design-system/foundations.css",
           "line": 271,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 202,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
           "has_fallback": false
         },
         {
@@ -128103,6 +128572,12 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 268,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body-line",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2373,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -130021,6 +130496,12 @@
           "path": "site/src/components/design-system/shell-foundations.css",
           "line": 177,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-lower-keyboard-offset",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 187,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1d2aaa489688c9b3",
@@ -130110,6 +130591,12 @@
           "token": "--ke-lower-visible-height",
           "path": "site/src/components/design-system/shell-foundations.css",
           "line": 177,
+          "has_fallback": true
+        },
+        {
+          "token": "--ke-lower-visible-height",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 193,
           "has_fallback": true
         }
       ],
@@ -142378,6 +142865,12 @@
         },
         {
           "token": "--ke-shape-radius-control",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-radius-control",
           "path": "site/src/components/FocusEggArtifact.astro",
           "line": 106,
           "has_fallback": false
@@ -142802,6 +143295,12 @@
         "--radius-xl"
       ],
       "direct_consumers": [
+        {
+          "token": "--ke-shape-radius-panel",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        },
         {
           "token": "--radius-xl",
           "path": "site/src/layouts/EventLayout.astro",
@@ -144201,6 +144700,12 @@
         },
         {
           "token": "--ke-elevation-overlay",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-elevation-overlay",
           "path": "site/src/components/FocusGroupFeedback.astro",
           "line": 304,
           "has_fallback": false
@@ -144314,6 +144819,60 @@
           "token": "--ke-shape-border-hairline",
           "path": "site/src/components/design-system/CopyAction.astro",
           "line": 158,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 198,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 209,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 228,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2370,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2380,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 458,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-border-hairline",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 466,
           "has_fallback": false
         },
         {
@@ -145038,6 +145597,12 @@
           "token": "--ke-shape-radius-control",
           "path": "site/src/components/design-system/CopyAction.astro",
           "line": 159,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -146041,7 +146606,14 @@
       "aliases_from": [
         "--ke-free-panel-radius"
       ],
-      "direct_consumers": [],
+      "direct_consumers": [
+        {
+          "token": "--ke-shape-radius-panel",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 453,
+          "has_fallback": false
+        }
+      ],
       "component_set": "components-1de6c86c83f709a4",
       "astro_family_set": "families-75abe2c474680c3b",
       "production_route_set": "routes-e561c0806280701b"
@@ -147361,6 +147933,12 @@
           "token": "--ke-media-rail-hero-item-min-width",
           "path": "site/src/components/EventMediaRail.astro",
           "line": 558,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-size-touch-target",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         },
         {
@@ -152693,6 +153271,12 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 268,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body-line",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2373,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -152854,6 +153438,12 @@
           "token": "--ke-type-body-strong-weight",
           "path": "site/src/components/design-system/component-foundations.css",
           "line": 244,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body-strong-weight",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2373,
           "has_fallback": false
         }
       ],
@@ -156780,6 +157370,18 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 271,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 202,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -156805,6 +157407,18 @@
           "token": "--ke-type-h4-letter",
           "path": "site/src/components/design-system/foundations.css",
           "line": 271,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4-letter",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 203,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4-letter",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
           "has_fallback": false
         }
       ],
@@ -156853,6 +157467,18 @@
           "token": "--ke-type-h4",
           "path": "site/src/components/design-system/foundations.css",
           "line": 271,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 202,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
           "has_fallback": false
         }
       ],
@@ -156906,6 +157532,18 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 271,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 202,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -156948,6 +157586,18 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 271,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/design-system/shell-foundations.css",
+          "line": 202,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-h4",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 460,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -156989,6 +157639,12 @@
           "token": "--ke-type-label",
           "path": "site/src/components/DesktopEventActionPanel.astro",
           "line": 313,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-label",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         }
       ],
@@ -157037,6 +157693,12 @@
           "token": "--ke-type-label",
           "path": "site/src/components/DesktopEventActionPanel.astro",
           "line": 313,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-label",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         }
       ],
@@ -157101,6 +157763,12 @@
           "token": "--ke-type-label",
           "path": "site/src/components/DesktopEventActionPanel.astro",
           "line": 313,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-label",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
           "has_fallback": false
         }
       ],
@@ -157269,6 +157937,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-label",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 461,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-type-label-weight",
           "path": "site/src/components/FocusGroupInviteIntake.astro",
           "line": 1045,
@@ -157321,6 +157995,30 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 270,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1de6c86c83f709a4",
@@ -157372,6 +158070,12 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 270,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata-letter",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
         }
       ],
       "component_set": "components-e8acb756952de912",
@@ -157413,6 +158117,30 @@
           "token": "--ke-type-metadata",
           "path": "site/src/components/design-system/foundations.css",
           "line": 270,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
           "has_fallback": false
         }
       ],
@@ -157490,6 +158218,30 @@
           "path": "site/src/components/design-system/foundations.css",
           "line": 270,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
+          "has_fallback": false
         }
       ],
       "component_set": "components-e8acb756952de912",
@@ -157543,6 +158295,30 @@
           "token": "--ke-type-metadata",
           "path": "site/src/components/design-system/foundations.css",
           "line": 270,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2374,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/DesktopEventPage.astro",
+          "line": 2375,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 459,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-metadata",
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 467,
           "has_fallback": false
         }
       ],

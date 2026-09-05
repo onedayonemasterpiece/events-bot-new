@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Media viewers share lower-window chrome while retaining image framing; exported default/unknown event times no longer appear as precise start times.
 - Shared lower-surface clearance and form/consent styling; rail undo uses the existing persistent notification action instead of a separate expiring toast.
 - Owner-review regressions follow candidate v2 and regular-width subgrid semantics rather than historical stretched rows; event keyboard title selection excludes action-panel metadata.
 - Desktop event ArrowDown follows title, rendered prose paragraphs, practical summary and related cards; ArrowUp reverses the reading route with existing input/dialog guards.

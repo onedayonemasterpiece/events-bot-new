@@ -168,6 +168,13 @@ and confirmation dialogs wrap Tab focus and preserve Escape/focus return.
 Focused compiled-date diagnostics verified lower calendar placement, modal
 notification suspension and long notices at390/1440/1920. Browser contract
 tests also exercise oversized text with native dialogs; neither is real-candidate
-acceptance. Media-viewer migration, complete real-browser coverage and same-snapshot
+acceptance. Media viewers now join the persistent lower-surface family with common chrome
+and a functional dark media stage; their compiled real-event verification,
+complete real-browser coverage and same-snapshot
 publication remain open; these bindings alone do not close AR-17. Desktop
 primary navigation remains unchanged pending AR-18 owner choice.
+
+The real exporter preserves the persisted `time_is_default` flag. Placeholder
+time does not produce a precise start timestamp, time label or daypart;
+confirmed times are unchanged. This does not repair upstream occurrence
+identity/date mistakes (DATA5550038387), which remain separate work.
