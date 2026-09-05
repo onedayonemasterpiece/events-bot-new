@@ -1,11 +1,18 @@
-name: F0 owner-review correction and evidence
-# Existing diagnostic runner. No publication, agents, models or production promotion.
+name: F0 owner-review evidence
+# Existing F0 runner, now read-only. It neither repairs source nor publishes a
+# site. Full real previews remain exclusively on the canonical Kaggle path.
 on:
+  workflow_dispatch:
   push:
     branches: [work/owner-audioreview-card-geometry-20260905]
-    paths: [.github/workflows/f0-close-legacy-primitive-owners.yml]
+    paths:
+      - .github/workflows/f0-close-legacy-primitive-owners.yml
+      - site/src/**
+      - site/scripts/check-browser-release-gate.mjs
+      - site/scripts/browser-release-gate.behavior.test.mjs
+      - site/tests/owner-audioreview-card-geometry.test.mjs
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: f0-owner-review-evidence-${{ github.ref }}
   cancel-in-progress: false
@@ -16,41 +23,26 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.16.0'
-      - name: Apply the explicit ChatGPT correction, without inferred edits
+      - name: Install exact lockfile dependencies
         run: |
           mkdir -p artifacts/owner-review
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git diff --exit-code 9ab7e439b43e0f8b2a63e7052e260fa4791c0aa5 HEAD -- site
-          python .github/owner-review-final-repair.py
-          rm .github/owner-review-final-repair.py
-      - name: Execute source tests and regenerate existing SoT graphs
+          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
+          cd site && npm ci --no-audit --no-fund
+      - name: Verify existing SoT and execute source regressions
         run: |
-          cd site && npm ci --no-audit --no-fund && cd ..
-          node site/scripts/generate-astro-family-consumer-graph.mjs --write > artifacts/owner-review/family-generation.json
-          node site/scripts/generate-token-impact-graph.mjs --write > artifacts/owner-review/token-generation.json
           node site/scripts/check-astro-family-sot.mjs > artifacts/owner-review/family-check.json
           node --experimental-strip-types --test site/tests/owner-audioreview-card-geometry.test.mjs site/tests/adaptive-event-card-grid.test.mjs site/tests/unusual-listing-typography-token-adoption.test.mjs site/tests/event-date-availability.test.mjs site/tests/keyboard-event-navigation-production.test.mjs > artifacts/owner-review/source-regressions.tap
-      - name: Save the source-tested correction without overwriting another writer
-        run: |
-          test "$(git ls-remote origin refs/heads/work/owner-audioreview-card-geometry-20260905 | cut -f1)" = "$GITHUB_SHA"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add site .github/owner-review-final-repair.py
-          git diff --cached --check
-          git commit -m 'fix(ui): normalize section titles and back schematic context with shared canvas'
-          git push origin HEAD:refs/heads/work/owner-audioreview-card-geometry-20260905
-          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
       - name: Install Chromium
         working-directory: site
         run: npx playwright install --with-deps chromium
-      - name: Execute existing browser-gate regressions
+      - name: Execute existing browser-gate regression suite
         run: node --experimental-strip-types --test site/scripts/browser-release-gate.behavior.test.mjs > artifacts/owner-review/browser-regressions.tap
-      - name: Focused compiled-page diagnostics, not real snapshot acceptance
+      - name: Compile isolated page classes and capture role and behavior evidence
         env:
           PUBLIC_SITE_MODE: preview
           PUBLIC_PREVIEW_BUILD_ID: local-owner-review
@@ -80,26 +72,27 @@ jobs:
             await page.screenshot({path:`${out}/failure.png`});
           } finally {
             report ||= {ok:false,errors:[{error:'No report'}]};report.page_errors=pageErrors;
-            report.source_sha=(await import('node:child_process')).execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+            report.source_sha=process.env.GITHUB_SHA;
             writeFileSync(`artifacts/owner-review/${kind}-result.json`,JSON.stringify(report,null,2));
             await browser.close();await server.close();
           }
           JS
           done
-      - name: Export exact source and provenance
+      - name: Record diagnostic provenance, not an acceptance receipt
         if: always()
         run: |
           mkdir -p artifacts/owner-review
-          git archive --format=tar HEAD site docs .codex/skills AGENTS.md .github CHANGELOG.md | gzip > artifacts/owner-review/source.tar.gz
           git rev-parse HEAD > artifacts/owner-review/checked-out-sha.txt
-          echo 'Focused fixture diagnostics. Full real publication requires the existing Kaggle path. Production and Penpot unchanged.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
+          git diff --exit-code
+          printf '%s\n' 'Compiled committed-fixture diagnostics only. No real-snapshot build, publication, production change or Penpot check. Owner acceptance remains reopened.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: owner-review-final-sections-${{ github.sha }}
+          name: owner-review-evidence-${{ github.sha }}
           path: artifacts/owner-review/
           retention-days: 14
-      - name: Fail on captured role or behavior mismatches
+          if-no-files-found: error
+      - name: Reject captured role or behavior defects
         run: |
           python - <<'PY'
           import json,pathlib
