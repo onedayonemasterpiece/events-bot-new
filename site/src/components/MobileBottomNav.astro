@@ -1,5 +1,7 @@
 ---
 import SemanticIcon from './design-system/SemanticIcon.astro';
+import FloatingIslandsReview from './design-system/FloatingIslandsReview.astro';
+import { ICON_SIZE_ROLES } from './design-system/foundations';
 import { mobileDiscoveryHref } from '../lib/mobileDiscoveryRoutes';
 import { BASE_PATH, withBase } from '../lib/events';
 
@@ -20,7 +22,8 @@ const items = [
 ] as const;
 ---
 
-<nav class="mobile-bottom-nav" data-mobile-bottom-nav aria-label="Навигация по афише">
+<nav class="mobile-bottom-nav" data-mobile-bottom-nav aria-label="Навигация по афише"
+  style={`--fi-nav-feature-size:${ICON_SIZE_ROLES.feature}px`}>
   {items.map((item) => (
     <a href={item.href} data-mobile-nav-section={item.key} aria-current={item.key === current ? 'page' : undefined}>
       <span class="mobile-bottom-nav__icon">
@@ -44,6 +47,7 @@ const items = [
     </a>
   ))}
 </nav>
+<FloatingIslandsReview />
 
 <style is:global>
   .mobile-bottom-nav {
