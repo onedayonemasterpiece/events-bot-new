@@ -1,13 +1,19 @@
-name: F0 bounded owner-review correction
-# One deterministic continuation of the existing F0 runner. Only the explicitly
-# reviewed source delta may be committed. NEVER stage a workflow with this token.
-# Full published review builds remain on the existing Kaggle path.
+name: F0 owner-review evidence
+# Existing F0 runner, read-only. Source corrections are already committed.
+# No source writes, publication or production promotion. Full published review
+# builds remain exclusively on the canonical Kaggle path.
 on:
+  workflow_dispatch:
   push:
     branches: [work/owner-audioreview-card-geometry-20260905]
-    paths: [.github/workflows/f0-close-legacy-primitive-owners.yml]
+    paths:
+      - .github/workflows/f0-close-legacy-primitive-owners.yml
+      - site/src/**
+      - site/scripts/check-browser-release-gate.mjs
+      - site/scripts/browser-release-gate.behavior.test.mjs
+      - site/tests/owner-audioreview-card-geometry.test.mjs
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: f0-owner-review-evidence-${{ github.ref }}
   cancel-in-progress: false
@@ -19,47 +25,25 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.16.0'
-      - name: Apply the exact personally reviewed correction
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Install exact lockfile dependencies
         run: |
-          set -euo pipefail
           mkdir -p artifacts/owner-review
-          git diff --exit-code 64294cb5e4595063e72f910960ca34302f1101b4 HEAD -- site docs CHANGELOG.md
-          gh api repos/onedayonemasterpiece/events-bot-new/git/blobs/d277472050d8c0daaa7c7288886f98752fdf05d0 --jq .content | base64 -d > /tmp/owner-review-correction.py
-          test "$(git hash-object /tmp/owner-review-correction.py)" = d277472050d8c0daaa7c7288886f98752fdf05d0
-          python /tmp/owner-review-correction.py
-          git diff --check
+          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
           cd site && npm ci --no-audit --no-fund
-      - name: Refresh only existing SoT outputs and execute source regressions
+      - name: Verify existing SoT and execute source regressions
         run: |
-          node site/scripts/generate-astro-family-consumer-graph.mjs --write
-          node site/scripts/generate-token-impact-graph.mjs --write
           node site/scripts/check-astro-family-sot.mjs > artifacts/owner-review/family-check.json
           node site/scripts/check-token-impact-sot.mjs > artifacts/owner-review/token-check.json
           node --experimental-strip-types --test site/tests/owner-audioreview-card-geometry.test.mjs site/tests/adaptive-event-card-grid.test.mjs site/tests/unusual-listing-typography-token-adoption.test.mjs site/tests/event-date-availability.test.mjs site/tests/keyboard-event-navigation-production.test.mjs > artifacts/owner-review/source-regressions.tap
       - name: Install Chromium
         working-directory: site
         run: npx playwright install --with-deps chromium
-      - name: Execute the existing browser-gate regressions
+      - name: Execute existing browser-gate regression suite
         run: node --experimental-strip-types --test site/scripts/browser-release-gate.behavior.test.mjs > artifacts/owner-review/browser-regressions.tap
-      - name: Commit source only, with a fresh remote guard
-        run: |
-          set -euo pipefail
-          test "$(git ls-remote origin refs/heads/work/owner-audioreview-card-geometry-20260905 | cut -f1)" = "$GITHUB_SHA"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add CHANGELOG.md docs/features/static-site-pages/design-system/README.md site/scripts/browser-release-gate.behavior.test.mjs site/scripts/check-browser-release-gate.mjs site/src/components/Breadcrumbs.astro site/src/components/FreeCollectionSurface.astro site/src/components/HomeColdStartFeed.astro site/src/components/design-system/f0-typography-authority.v1.json site/src/design-system/astro-family-consumers.generated.v1.json site/src/design-system/token-impact.generated.v1.json
-          test -z "$(git diff --cached --name-only -- .github/workflows)"
-          git diff --cached --check
-          git commit -m 'fix(ui): close Home section and breadcrumb gaps with singleton regressions'
-          git push origin HEAD:refs/heads/work/owner-audioreview-card-geometry-20260905
-          git rev-parse HEAD > artifacts/owner-review/source-sha.txt
-          git show --format=fuller HEAD > artifacts/owner-review/source-change.patch
       - name: Compile isolated page classes and capture role and behavior evidence
         env:
           PUBLIC_SITE_MODE: preview
@@ -67,7 +51,6 @@ jobs:
           PUBLIC_INTEREST_CLUBS_ENABLED: '1'
           ENABLE_INTEREST_CLUB_STATIC_PROJECTION: '1'
         run: |
-          export SOURCE_SHA="$(git rev-parse HEAD)"
           for CLASS in collection date weekend; do
             (cd site && STATIC_SITE_PAGE_CLASSES="$CLASS" node_modules/.bin/astro build) > "artifacts/owner-review/build-$CLASS.log" 2>&1
             CLASS="$CLASS" node --input-type=module <<'JS'
@@ -91,23 +74,38 @@ jobs:
             await page.screenshot({path:`${out}/failure.png`});
           } finally {
             report ||= {ok:false,errors:[{error:'No report'}]};report.page_errors=pageErrors;
-            report.source_sha=process.env.SOURCE_SHA;
+            report.source_sha=process.env.GITHUB_SHA;report.browser_version=browser.version();
             writeFileSync(`artifacts/owner-review/${kind}-result.json`,JSON.stringify(report,null,2));
             await browser.close();await server.close();
           }
           JS
           done
-      - name: Record diagnostic provenance
+      - name: Record diagnostic provenance, not an acceptance receipt
         if: always()
         run: |
           mkdir -p artifacts/owner-review
           git rev-parse HEAD > artifacts/owner-review/checked-out-sha.txt
           git diff --exit-code
           printf '%s\n' 'Compiled committed-fixture diagnostics only. No real-snapshot build, publication, production change or Penpot check. Owner acceptance remains reopened.' > artifacts/owner-review/NOT-ACCEPTANCE.txt
+          python - <<'PY'
+          import json,os,pathlib,re
+          root=pathlib.Path('artifacts/owner-review')
+          results={}
+          for name in ['collection','date','weekend']:
+            p=root/f'{name}-result.json'
+            results[name]=json.loads(p.read_text()) if p.exists() else {'ok':False,'errors':['no terminal capture']}
+          tests={}
+          for name in ['source-regressions','browser-regressions']:
+            p=root/f'{name}.tap';text=p.read_text() if p.exists() else ''
+            tests[name]={k:int(m.group(1)) if (m:=re.search(r'^# '+k+r' (\d+)$',text,re.M)) else None for k in ['tests','pass','fail','skipped']}
+          ok=all(r.get('ok') and not r.get('page_errors') for r in results.values()) and all(t['fail']==0 and t['tests'] for t in tests.values())
+          summary={'scenario':'owner-audioreview','source_sha':os.environ['GITHUB_SHA'],'platform':'Chromium desktop and mobile viewports','auth_mode':'mocked_ui','route_auth':'anonymous','home_filter':'explicit local-profile fixture; not cloud persistence','status':'DIAGNOSTIC_PASS_NOT_ACCEPTANCE' if ok else 'DIAGNOSTIC_FAIL','tests':tests,'route_viewports':sum(len(r.get('reports',[])) for r in results.values()),'browser_versions':sorted({r['browser_version'] for r in results.values() if r.get('browser_version')}),'data':'committed fixtures, not the rejected real snapshot','production_changed':False,'published_build':False,'Penpot':'NOT_CHECKED'}
+          (root/'qa-summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: owner-review-source-correction-${{ github.sha }}
+          name: owner-review-evidence-${{ github.sha }}
           path: artifacts/owner-review/
           retention-days: 14
           if-no-files-found: error
@@ -115,8 +113,10 @@ jobs:
         run: |
           python - <<'PY'
           import json,pathlib
+          root=pathlib.Path('artifacts/owner-review')
           for name in ['collection','date','weekend']:
-            d=json.loads(pathlib.Path(f'artifacts/owner-review/{name}-result.json').read_text())
+            d=json.loads((root/f'{name}-result.json').read_text())
             assert d['ok'],d['errors']
             assert not d.get('page_errors'),d.get('page_errors')
+          assert json.loads((root/'qa-summary.json').read_text())['status']=='DIAGNOSTIC_PASS_NOT_ACCEPTANCE'
           PY
