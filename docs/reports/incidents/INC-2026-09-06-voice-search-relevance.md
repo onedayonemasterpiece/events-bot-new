@@ -527,3 +527,88 @@ PASS, including actual predecessor prompt propagation and replacing topic while
 carrying dates; strict typecheck PASS. Controlled QA Auth cleanup PASS. These
 follow-up probes use real authenticated endpoints/providers, not a fresh
 physical-phone/ASR or new full browser-five-turn claim. UI/link unchanged.
+
+
+## Adaptive planner implementation and live acceptance — 2026-09-06
+
+**Status remains OPEN.** This delivers internal clarification/refinement mechanics,
+not a claim of complete semantic precision/recall or web-grounding acceptance.
+
+Protected preview only: https://kenigevents.ru/preview-voice-plan-20260906/poisk/
+Frontend unchanged (`8c03373d98c39c72160a3cc6db270eacdaac03af`). Runtime health
+readback: `62456531641bebe0690bfe6af162d379b2ae4b7e`; backend revision `sha256:d9780d7188f70e1cced7beb2008d6aed9195b34ed03e66b7a6b1c2d0b1c35f57`.
+Runtime bundle SHA256:
+`06720e476dbe2873a42201214e22a113bb9b34c6753527c3894a203d6412e0fc`.
+No root promotion, full catalog/Kaggle build, session/audio/history deletion.
+
+Saved implementation commits:
+- `80216597284e5d5966dc3e5bfdd06f17a86f1f55`: same-call adaptive planner,
+  blocking/optional answer composition, result-dependent nullable refinement.
+- `819cb3d3e18f6c446468da0216461b1d8823b3da`: unresolved question has no executable
+  queryPlan; do not reject it or inherit invented conditions.
+- `301acb862fec96abe0fc15f281e0144ba9440353`: bounded schema batches,
+  no retrieval-window truncation, fewer technical assumptions.
+- `8a04199ae`: provider minimum deadline and bounded total-window defaults.
+- `62456531641bebe0690bfe6af162d379b2ae4b7e`: real-wrapper admission regression for the deadline guard.
+
+### Actual failures found, not hidden by unit passes
+
+1. First real blocking request failed `invalid_query_plan` on
+   `c1b91ae1-0c3c-4cc6-99af-3fd91eed0470`. Original model output was not retained;
+   a controlled diagnostic call returned a valid blocking result. The demonstrated
+   contract defect was requiring an executable date/provenance plan to ask an
+   unresolved question. Blocking now stores queryPlan=null, while nonblocking
+   plans remain strictly validated. Do not claim the missing original provider
+   output was reconstructed.
+2. Three-group/20-candidate verifier rejected HTTP400 / generic INVALID_ARGUMENT;
+   two-group/20 worked. Smaller three-group/13 batches succeeded. This supports
+   schema-complexity mitigation, but generic provider text does not establish a
+   documented numerical schema limit.
+3. After four successful smaller batches, the seven-candidate tail still returned
+   HTTP400. Controlled capture identified a separate **confirmed** cause:
+   `Manually set deadline 8s is too short. Minimum allowed deadline is 10s.`
+   Dispatch now checks remaining time BEFORE reserve; total default is 60s for
+   >=3 groups, with one unchanged global deadline, not retries or partial results.
+4. The first deadline regression run had 202/206 tests passing: four old mocked
+   integration tests had only a 2s total window and correctly stopped before
+   dispatch under the new contract. Their normal fixture now uses 20s; a separate
+   explicit 8s test proves zero reserve/provider calls. Final run: **207/207 PASS**.
+
+### Live evidence
+
+| Scenario | Actual result |
+|---|---|
+| Missing reference to another chat | Search `d3007b5a-70ad-444b-8c18-5e74fcd4b2b5`: one blocking question, zero cards, no invented lookup. Rendered on mobile. |
+| Reply clarifying original request | `519734be-85ee-4fb8-8cc6-1d6a874ef48a`: retained full raw clarification context, replaced unresolved plan, resolved 7–13 September, returned 4 verifier-admitted cards. Not a precision PASS: a film-with-discussion and broad historical exhibition warrant relevance review. |
+| Same saved three-condition interpretation, explicit NEW QA search after fixes | `84f27ff7-19ec-4709-bcfe-40d9071b4f49`: all **59/59** candidates checked in **13/13/13/13/7** batches, **2** exact cards, 36.5s. Old failed operation not replayed or overwritten. |
+| Natural standalone child/city/week request | Prior v3 UI returned 23 cards and no forced question; model chose clarification=none. This is not evidence of automatic optional-question selection. |
+| Controlled optional request: show family events now, ask age to refine afterwards | UI search `8248f963-9276-4512-bf3e-28081eac3c6b`: clarification=optional, top-level clarification=null, **58/58** checked, **20** ordinary cards, age question exactly once in existing answer, no extra footer/buttons/details. 24.3s. |
+| Status refresh | Both final operation answers unchanged, no regeneration or duplicated question. |
+
+Actual model/API + authenticated published-page checks; browser widths 390 and
+1440 inspected. Auth was the existing ordinary QA session fixture, owner-scoped
+protected probe PASS, ephemeral fixture cleanup PASS. No real email was sent.
+**No physical-phone, microphone/ASR, or actual-mail-OTP acceptance is claimed here.**
+
+Local ignored evidence: `artifacts/codex/voice-drift-20260906/adaptive-v2/`,
+`adaptive-v3/`, `adaptive-v4/` (live JSON, screenshots, activation/health readbacks).
+Final live receipt SHA256:
+`b29d9f6d5175e4aefc0c08dfad0d67d139062eac2e8f1c9774495474e365cab3`.
+Checks: 207 focused/broader tests, strict backend TypeScript with existing Deno
+ambient shim, generated revision verification, git diff check. No new CI PASS
+claim: latest PR API check collection was empty.
+
+### Remaining limitations / next acceptance
+
+- Web execution remains disabled; only an explicit unavailable capability and
+  blocking fallback for an unknown external reference are implemented. Grounding
+  quota accounting, attribution UI/storage and controlled web execution remain.
+- Optional route is live-proven on an explicitly requested optional follow-up;
+  broad calibration of when the model independently asks useful questions is not
+  proven. An empty candidate set still has no new result-grounded editorial pass.
+- Visual inspection found answer verbosity: an unnecessary assumption line and
+  repeated event titles can still push mobile cards far below the heading. No
+  extra control panel was added, but “crystal clean/short answer” is not closed.
+- Current projection completeness and broad science/family relevance still need
+  the existing independent audit. Full-window verification completion is not a
+  substitute for human relevance/recall acceptance.
