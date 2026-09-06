@@ -99,6 +99,7 @@ CHATGPT_MAX_SCOPES = (
     READ_SCOPES
     | EVENT_WRITE_SCOPES
     | {"hero:read", "hero:write"}
+    | {"promo:read", "promo:write"}
     | {"partners:manage"}
     | SOCIAL_SCOPES
     | AUDIO_TRANSCRIPTION_SCOPES

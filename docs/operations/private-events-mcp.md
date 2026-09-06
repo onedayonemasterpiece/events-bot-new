@@ -439,6 +439,53 @@ second real HTTP partner using the same source cannot mutate or accept that
 foreign Event: canonical Event/source/jobs/portfolio remain unchanged, and no
 receipt can promote the denied operation. This is domain crash/isolation acceptance, not live content/upload/publication acceptance.
 
+### Default-OFF owner promo creation (#643; R1b source slice)
+
+`PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED=1` requires owner event-create capability
+and adds only `promo_capabilities`, `promo_campaign_create_prepare`, `promo_campaign_create_commit`
+and `promo_operation_get` to the existing owner resource. Explicit new
+`promo:write` / `promo:read` OAuth consent is required; previous tokens are not
+expanded. Partner and Codex resources receive none of these tools.
+
+This is a **separate** operation after the same OAuth actor's accepted create
+operation identifies one raw canonical Event. `promo_capabilities` resolves that
+exact accepted reference/ID and returns the current raw canonical revision and
+supported input registries. Clients obtain the CAS token through MCP, not private
+SQLite or a guessed hash. This read is not complete business eligibility proof.
+Preparation binds that operation,
+exact Event ID/public revision, selected existing surface/profile/slot/count,
+period and disclosure to an actor-bound frozen ten-minute record in the existing
+`event_change_log`. There is no new campaign/operation database, Telegram actor or
+synthetic User. Preparation creates no campaign, does not extend on replay, and
+explicitly reports `planned_campaign_status=active` and
+`business_validation=commit_recheck_required` rather than a completed business
+preview.
+
+Commit accepts only the stored preparation ref and digest. Current owner
+client/resource/scopes/expiry/flags, canonical identity/revision and accepted-ID
+binding are rechecked under the same SQLite write lock. The existing
+`create_partner_event_promo_campaign` service validates business eligibility and
+atomically creates its campaign, target and activities with the operation
+receipt. `created_by=NULL` is valid OAuth attribution, not a Telegram identity or
+privilege grant; private original OAuth attribution stays in the operation
+ledger. Legacy Telegram callers and business rules remain unchanged.
+
+**Commit creates an active campaign.** Existing schedulers may subsequently
+publish from its activities. The tool does not itself call a provider or claim
+publication success: the result reports `publication_state=not_observed` and
+historical `campaign_status_at_commit`. Idempotent replay rechecks current
+access, returns that historical receipt and never recreates or resumes a
+campaign. A later pause therefore remains a pause. Timeout/receipt failure
+cannot commit a campaign without its matching durable operation receipt.
+
+This slice supports only the existing `video_general` / `vk_repost` surfaces and
+existing video-profile/slot registries. Full eligibility/inventory/activity-add,
+partner promo policy/review, full publication readback and Hero's typed browser
+accounting remain separate missing integration work. Do not enable this flag as
+an R1b acceptance shortcut or treat fixture content as approved public material.
+Tests: `tests/test_private_events_mcp_promo_operations.py`,
+`tests/test_private_events_mcp_promo_tools.py`, `tests/test_promo_oauth_creator.py`.
+
 ### Exact-ID lifecycle transaction core (#643; not exposed)
 
 `event_lifecycle_operations.apply_lifecycle_operation` is an internal canonical

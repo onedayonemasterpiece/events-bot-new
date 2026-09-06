@@ -341,8 +341,28 @@ def test_hero_draft_flag_default_off_strict_and_inert_when_mcp_disabled(monkeypa
     monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID','codex-public-client')
     monkeypatch.delenv('PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED',raising=False)
     assert not PrivateEventsMCPConfig.from_env().hero_drafts_enabled
+
     monkeypatch.setenv('PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED','not-a-boolean')
     with pytest.raises(ValueError,match='HERO_DRAFTS_ENABLED'):
         PrivateEventsMCPConfig.from_env()
     monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED','0')
     assert not PrivateEventsMCPConfig.from_env().hero_drafts_enabled
+
+
+def test_owner_promo_flag_default_off_strict_and_requires_event_create(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID','codex-public-client')
+    monkeypatch.delenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED',raising=False)
+    assert not PrivateEventsMCPConfig.from_env().owner_promo_enabled
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED','not-a-boolean')
+    with pytest.raises(ValueError,match='OWNER_PROMO_ENABLED'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED','1')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED','0')
+    with pytest.raises(ValueError,match='owner promo requires'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED','1')
+    assert PrivateEventsMCPConfig.from_env().owner_promo_enabled
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED','0')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED','not-a-boolean')
+    assert not PrivateEventsMCPConfig.from_env().owner_promo_enabled

@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Added default-OFF owner promo prepare/commit/status over existing atomic campaign services and the canonical operation ledger; explicit OAuth scopes and accepted Event binding, no fabricated Telegram creator or publication receipt (#643).
+
 - Added an unexposed exact-ID reviewed CANCEL/POSTPONE transaction core with current authorization, revision CAS and atomic existing history; downstream public repair remains explicitly unresolved (#643).
 
 - **Added / Hero Talk**: bounded read-only canonical event token resolver with existing event revisions, Kaliningrad eligibility deadlines and exact expiring route-evidence binding; missing route/media proof remains unresolved.

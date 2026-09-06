@@ -396,10 +396,16 @@ scenarios:
     layer: integration
     title: Promo create requires accepted existing event ID
     expect: [missing_or_unaccepted_event_rejected]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_promo_operations.py", "tests/test_private_events_mcp_promo_tools.py", "tests/test_promo_oauth_creator.py"]
   - id: PRM-002
     layer: integration
     title: MCP uses existing promo campaign services
     expect: [no_parallel_promo_model]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_promo_operations.py", "tests/test_private_events_mcp_promo_tools.py", "tests/test_promo_oauth_creator.py"]
   - id: PRM-003
     layer: integration
     title: Reschedule never silently extends campaign period budget or goal

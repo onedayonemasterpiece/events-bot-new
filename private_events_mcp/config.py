@@ -197,6 +197,7 @@ class PrivateEventsMCPConfig:
     repository_sha_file: str
     event_create_enabled: bool = False
     hero_drafts_enabled: bool = False
+    owner_promo_enabled: bool = False
     event_assets_enabled: bool = False
     partner_enabled: bool = False
     partner_event_create_enabled: bool = False
@@ -303,6 +304,9 @@ class PrivateEventsMCPConfig:
             ).strip(),
             hero_drafts_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED", mcp_enabled=enabled,
+            ),
+            owner_promo_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED", mcp_enabled=enabled,
             ),
             partner_event_create_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED", mcp_enabled=enabled,
@@ -522,6 +526,8 @@ class PrivateEventsMCPConfig:
         return config
 
     def validate(self) -> None:
+        if self.owner_promo_enabled and not self.event_create_enabled:
+            raise ValueError("owner promo requires the owner event-create capability")
         if self.partner_event_create_enabled and not (self.partner_enabled and self.event_create_enabled):
             raise ValueError("partner event create requires partner and owner event-create capabilities")
         if not self.public_base_url:

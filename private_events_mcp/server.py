@@ -89,6 +89,16 @@ class PrivateEventsMCPServer:
             from .hero_drafts import HeroDraftOperations
             self.hero_drafts = HeroDraftOperations(canonical_database, config_getter=lambda: self.config)
             hero_tools = self.hero_drafts.tools()
+        promo_tools = ()
+        self.owner_promo = None
+        if config.enabled and config.owner_promo_enabled:
+            if canonical_database is None:
+                raise ValueError("Owner promo requires the canonical Database instance")
+            if not config.event_create_enabled:
+                raise ValueError("Owner promo requires the owner event-create capability")
+            from .promo_tools import OwnerPromoTools
+            self.owner_promo = OwnerPromoTools(canonical_database, config_getter=lambda: self.config)
+            promo_tools = self.owner_promo.tools()
         self.event_assets = None
         self.partner_event_operations = None
         event_asset_tools = ()
@@ -287,7 +297,7 @@ class PrivateEventsMCPServer:
                 capability_policy={name: name in expected for name in ("telegram", "vk")},
             )
         self.protocol = MCPProtocol(
-            (*read_tools, *hero_tools, *event_create_tools, *event_asset_tools, *publication_tools, *partner_review_tools, *partner_admin_tools, *social_tools, *workspace_tools),
+            (*read_tools, *hero_tools, *promo_tools, *event_create_tools, *event_asset_tools, *publication_tools, *partner_review_tools, *partner_admin_tools, *social_tools, *workspace_tools),
             cache_ttl_seconds=config.cache_ttl_seconds,
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),
