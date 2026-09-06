@@ -1,16 +1,19 @@
 import type { AudioPart, WireBudget } from './audioSegments.ts';
 import { StreamingPcm16 } from './streamingAudio.ts';
+import { CompressedCapture, type CompressedPart, type CompressedReceipt } from './compressedCapture.ts';
 
 export type CaptureReason = 'user' | 'background' | 'device_lost' | 'interrupted' |
   'storage_backpressure' | 'storage_failed' | 'capture_failed' | 'cancelled' | 'flush_timeout';
 export type CaptureStatus = 'idle' | 'requesting' | 'recording' | 'stopping' | 'saved' | 'partial' | 'error';
 export type CaptureReceipt = { reason: CaptureReason; sampleRate: number; frames: number;
-  savedFrames: number; partCount: number; complete: boolean; captureComplete?: boolean };
+  savedFrames: number; partCount: number; complete: boolean; captureComplete?: boolean; compressed?: CompressedReceipt };
 export type CaptureOptions = {
   workletUrl: string;
   budget: WireBudget;
   /** Must resolve only after durable commit (e.g. an IndexedDB transaction). */
   onPart: (part: AudioPart) => Promise<void>;
+  /** Optional durable companion; failures never discard or stop PCM capture. */
+  onCompressedPart?: (part: CompressedPart) => Promise<void>;
   onStatus: (state: CaptureStatus, reason?: string) => void;
   onStopped?: (receipt: CaptureReceipt) => void;
   maxPendingBytes?: number;
@@ -26,6 +29,7 @@ export class MicrophoneCapture {
   private stream: MediaStream | null = null;
   private node: AudioWorkletNode | null = null;
   private segmenter: StreamingPcm16 | null = null;
+  private compressedCapture: CompressedCapture | null = null;
   private tail: Promise<void> = Promise.resolve();
   private pendingBytes = 0;
   private savedFrames = 0;
@@ -46,6 +50,7 @@ export class MicrophoneCapture {
   }
   async start(): Promise<void> {
     if (['requesting', 'recording', 'stopping'].includes(this.status)) throw new Error('capture_busy');
+    if (this.retrying) throw new Error('capture_busy');
     if (this.failedParts.length) throw new Error('unsaved_audio');
     if (!globalThis.isSecureContext || !navigator.mediaDevices?.getUserMedia || !globalThis.AudioWorkletNode) {
       this.setStatus('error', 'microphone_unavailable'); throw new Error('microphone_unavailable');
@@ -55,6 +60,7 @@ export class MicrophoneCapture {
     this.lastReceipt = null; this.stopping = null;
     this.savedFrames = 0; this.parts = 0; this.pendingBytes = 0; this.storageFailed = false; this.captureFailed = false;
     this.tail = Promise.resolve();
+    this.node = null; this.segmenter = null; this.stream = null; this.compressedCapture = null;
     let context: AudioContext | null = null;
     let stream: MediaStream | null = null;
     try {
@@ -83,25 +89,28 @@ export class MicrophoneCapture {
           for (const part of this.segmenter!.push(data.pcm, data.firstFrame)) this.persist(part);
         } catch { this.captureFailed = true; void this.stop('capture_failed'); }
       };
-      node.onprocessorerror = () => { this.captureFailed = true; void this.stop('capture_failed'); };
+      node.onprocessorerror = () => { if (generation !== this.generation) return; this.captureFailed = true; void this.stop('capture_failed'); };
+      if (this.options.onCompressedPart) this.compressedCapture = new CompressedCapture(stream, this.options.onCompressedPart);
       const muted = context.createGain(); muted.gain.value = 0;
       context.createMediaStreamSource(stream).connect(node); node.connect(muted); muted.connect(context.destination);
       await resumed; await context.resume();
-      if (generation !== this.generation) return;
-      stream.getAudioTracks().forEach(track => { track.onended = () => { void this.stop('device_lost'); }; });
+      if (generation !== this.generation || this.status !== 'requesting') return;
+      stream.getAudioTracks().forEach(track => { track.onended = () => { if (generation === this.generation) void this.stop('device_lost'); }; });
       context.onstatechange = () => {
-        if (activeContext.state !== 'running' && this.status === 'recording') void this.stop('interrupted');
+        if (generation === this.generation && activeContext.state !== 'running' && this.status === 'recording') void this.stop('interrupted');
       };
       document.addEventListener('visibilitychange', this.visibility);
       window.addEventListener('pagehide', this.pagehide);
       this.setStatus('recording');
       if (document.hidden) void this.stop('background');
     } catch (error) {
+      if (generation === this.generation) await this.compressedCapture?.stop();
       stream?.getTracks().forEach(t => t.stop());
       if (context && context.state !== 'closed') await context.close().catch(() => undefined);
-      if (generation === this.generation) {
+      if (generation === this.generation && this.status === 'requesting') {
         this.setStatus('error', error instanceof DOMException && error.name === 'NotAllowedError' ? 'microphone_denied' : error instanceof DOMException && error.name === 'NotFoundError' ? 'microphone_not_found' : 'capture_failed');
       }
+      if (generation !== this.generation || this.status !== 'error') return;
       throw new Error('capture_start_failed');
     }
   }
@@ -143,31 +152,40 @@ export class MicrophoneCapture {
   stop(reason: CaptureReason = 'user'): Promise<CaptureReceipt> {
     if (this.lastReceipt) return Promise.resolve(this.lastReceipt);
     if (this.stopping) return this.stopping;
-    if (this.status === 'requesting' || !this.node || !this.segmenter) {
+    if (!this.node || !this.segmenter) {
       ++this.generation;
+      const compressed = this.compressedCapture; this.compressedCapture = null;
+      void compressed?.stop();
       this.stream?.getTracks().forEach(t => t.stop());
       if (this.context && this.context.state !== 'closed') void this.context.close().catch(() => undefined);
       const receipt: CaptureReceipt = { reason: 'cancelled', sampleRate: 0, frames: 0, savedFrames: 0, partCount: 0, complete: false };
       this.lastReceipt = receipt; this.setStatus('idle'); this.options.onStopped?.(receipt); return Promise.resolve(receipt);
     }
+    if (this.status === 'requesting') reason = 'cancelled';
     this.setStatus('stopping', reason);
     // Set the promise before its body so persist() cannot recursively start stop.
     this.stopping = Promise.resolve().then(async () => {
       let acknowledged = false;
+      const compressedStop = this.compressedCapture?.stop();
       await new Promise<void>(resolve => {
         const timer = setTimeout(() => { this.acknowledge = null; resolve(); }, 1500);
         this.acknowledge = () => { acknowledged = true; clearTimeout(timer); this.acknowledge = null; resolve(); };
         this.node!.port.postMessage({ type: 'stop' });
-        this.stream?.getTracks().forEach(t => { t.onended = null; t.stop(); });
+        this.stream?.getTracks().forEach(t => { t.onended = null; });
       });
       ++this.generation;
       for (const part of this.segmenter!.finish()) this.persist(part);
       await this.tail;
+      const compressed = await compressedStop;
+      // WL contract: let MediaRecorder emit its final container bytes before
+      // releasing the shared input. The worklet has already acknowledged stop.
+      this.stream?.getTracks().forEach(t => t.stop());
       document.removeEventListener('visibilitychange', this.visibility);
       window.removeEventListener('pagehide', this.pagehide);
       this.node!.disconnect(); this.node!.port.close(); this.node = null;
       if (this.context && this.context.state !== 'closed') await this.context.close().catch(() => undefined);
       const receipt: CaptureReceipt = {
+        ...(compressed ? { compressed } : {}),
         reason: this.storageFailed ? 'storage_failed' : this.captureFailed ? 'capture_failed' : !acknowledged ? 'flush_timeout' : reason,
         sampleRate: this.segmenter!.sampleRate, frames: this.segmenter!.frames,
         savedFrames: this.savedFrames, partCount: this.parts,

@@ -2,10 +2,12 @@ import type { State } from './conversationState.ts';
 import type { Command } from './assistantClient.ts';
 import type { AudioPart } from './audioSegments.ts';
 import type { CaptureReceipt } from './microphoneCapture.ts';
+import type { CompressedPart } from './compressedCapture.ts';
 
 export type Recording = { id: string; owner: string; createdAt: string; state: 'recording' | 'saved' | 'partial';
   receipt?: CaptureReceipt; transcript?: string; partCount: number; bytes: number };
 export type StoredAnswer = { id: string; owner: string; createdAt: string; payload: Record<string, unknown> };
+type CompressedPartRow = CompressedPart & { owner: string; recordingId: string; digest: string };
 type PartRow = AudioPart & { owner: string; recordingId: string; digest: string };
 const key = (owner: string, id: string) => [owner, id];
 function identity(owner: string, id: string): void {
@@ -22,7 +24,7 @@ export class VoiceStore {
   constructor(db: IDBDatabase) { this.db = db; }
   static open(): Promise<VoiceStore> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('kenigevents-voice-v1', 2);
+      const request = indexedDB.open('kenigevents-voice-v1', 3);
       request.onupgradeneeded = () => {
         const db = request.result;
         for (const name of ['recordings', 'answers', 'commands']) {
@@ -31,6 +33,7 @@ export class VoiceStore {
           store.createIndex('owner_created', ['owner', 'createdAt', 'id']);
         }
         if (!db.objectStoreNames.contains('parts')) db.createObjectStore('parts', { keyPath: ['owner', 'recordingId', 'index'] });
+        if (!db.objectStoreNames.contains('compressedParts')) db.createObjectStore('compressedParts', { keyPath: ['owner', 'recordingId', 'index'] });
         if (!db.objectStoreNames.contains('conversations')) db.createObjectStore('conversations', { keyPath: 'owner' });
       };
       request.onblocked = () => reject(new Error('voice_storage_upgrade_blocked'));
@@ -93,6 +96,52 @@ export class VoiceStore {
         };
       };
     });
+  }
+  async putCompressedPart(owner: string, id: string, part: CompressedPart): Promise<void> {
+    identity(owner, id);
+    if (!Number.isSafeInteger(part.index) || part.index < 0 || !part.bytes.byteLength ||
+        !/^audio\/(webm|ogg|mp4)(;[^\r\n]*)?$/.test(part.mimeType)) throw new Error('invalid_compressed_part');
+    const hash = await digest(part.bytes);
+    const row: CompressedPartRow = { ...part, owner, recordingId: id, digest: hash };
+    await this.write<void>(['recordings', 'compressedParts'], (tx, result) => {
+      const recordings = tx.objectStore('recordings'); const parts = tx.objectStore('compressedParts');
+      const getRecording = recordings.get(key(owner, id));
+      getRecording.onsuccess = () => {
+        const recording: Recording | undefined = getRecording.result;
+        if (!recording) { this.abort(tx, 'recording_not_found'); return; }
+        const get = parts.get([owner, id, part.index]);
+        get.onsuccess = () => {
+          const existing: CompressedPartRow | undefined = get.result;
+          if (existing) {
+            if (existing.digest !== hash || existing.mimeType !== part.mimeType) this.abort(tx, 'audio_payload_conflict');
+            else result();
+            return;
+          }
+          if (recording.receipt?.compressed?.complete) { this.abort(tx, 'compressed_recording_sealed'); return; }
+          parts.add(row); result();
+        };
+      };
+    });
+  }
+  /** Only a fully sealed, contiguous original container is usable. An abrupt
+   * reload retains fragments and PCM, but never presents fragments as a file. */
+  async compressed(owner: string, id: string): Promise<{ mimeType: string; bytes: Uint8Array } | null> {
+    identity(owner, id);
+    const { recording, parts } = await new Promise<{ recording?: Recording; parts: CompressedPartRow[] }>((resolve, reject) => {
+      const tx = this.db.transaction(['recordings', 'compressedParts']);
+      const recording = tx.objectStore('recordings').get(key(owner, id));
+      const parts = tx.objectStore('compressedParts').getAll(IDBKeyRange.bound([owner, id, 0], [owner, id, Number.MAX_SAFE_INTEGER]));
+      tx.oncomplete = () => resolve({ recording: recording.result, parts: parts.result });
+      tx.onabort = tx.onerror = () => reject(new Error('voice_storage_read_failed'));
+    });
+    const seal = recording?.receipt?.compressed;
+    if (!seal?.complete || !parts.length || parts.length !== seal.partCount ||
+        parts.some((part, index) => part.index !== index || part.mimeType !== seal.mimeType) ||
+        parts.reduce((sum, part) => sum + part.bytes.byteLength, 0) !== seal.bytes) return null;
+    for (const part of parts) if (await digest(part.bytes) !== part.digest) return null;
+    const bytes = new Uint8Array(seal.bytes); let offset = 0;
+    for (const part of parts) { bytes.set(part.bytes, offset); offset += part.bytes.byteLength; }
+    return { mimeType: seal.mimeType, bytes };
   }
   async finish(owner: string, id: string, receipt: CaptureReceipt): Promise<void> {
     await this.patchRecording(owner, id, row => ({ ...row, receipt,
