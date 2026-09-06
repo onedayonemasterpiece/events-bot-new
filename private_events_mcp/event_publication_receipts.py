@@ -14,7 +14,22 @@ from urllib.parse import urlsplit
 import aiosqlite
 
 from .event_create import _OPERATION_REF_RE
-from .tool_catalog import ToolCallContext, ToolExecutionError
+from .tool_catalog import ToolCallContext, ToolExecutionError, ToolSpec
+
+
+def build_event_publication_tools(service, *, scope='operations:read'):
+    async def read(arguments, context):
+        return await service.read(arguments.get('operation_ref'), context)
+
+    return (ToolSpec(
+        name='event_publications_get', title='Read current event publication evidence',
+        description='Read current publication URL records and bounded jobs for your accepted create operation. Recorded URLs are not live provider verification; a static build is not proof of event inclusion.',
+        input_schema={'type': 'object', 'additionalProperties': False,
+                      'required': ['operation_ref'], 'properties': {
+                          'operation_ref': {'type': 'string', 'maxLength': 127}}},
+        output_schema={'type': 'object'}, scopes=frozenset({scope}),
+        handler=read, cacheable=False, publicly_discoverable=False,
+    ),)
 
 _TASKS = ('telegraph_build', 'vk_sync', 'tg_event_publish', 'tg_premium_emoji_edit',
           'event_media_review', 'static_site_build')

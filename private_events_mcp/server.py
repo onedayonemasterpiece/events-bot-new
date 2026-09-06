@@ -116,6 +116,26 @@ class PrivateEventsMCPServer:
             build_event_create_tools(event_create_runtime, asset_service=self.event_assets)
             if event_create_runtime is not None else ()
         )
+        publication_tools = ()
+        if event_create_runtime is not None and config.enabled and config.event_create_enabled:
+            from .event_publication_receipts import EventPublicationReceiptService, build_event_publication_tools
+            from .oauth import SUBJECT
+
+            async def authorize_publication_read(context, event_id):
+                identity = context.identity
+                return bool(
+                    self.config.enabled and self.config.event_create_enabled
+                    and identity.subject == SUBJECT
+                    and identity.client_id
+                    and identity.client_id in {self.config.oauth_client_id, self.config.opencode_oauth_client_id}
+                    and identity.audience == self.config.resource == context.resource
+                    and 'operations:read' in identity.scopes
+                    and identity.expires_at > int(time.time())
+                )
+
+            publication_tools = build_event_publication_tools(EventPublicationReceiptService(
+                database=event_create_runtime.store.database, authorize=authorize_publication_read,
+            ))
         social_tools = build_social_tools(
             store=self.oauth.store,
             policy=self.target_policy,
@@ -231,7 +251,7 @@ class PrivateEventsMCPServer:
                 capability_policy={name: name in expected for name in ("telegram", "vk")},
             )
         self.protocol = MCPProtocol(
-            (*read_tools, *event_create_tools, *event_asset_tools, *partner_admin_tools, *social_tools, *workspace_tools),
+            (*read_tools, *event_create_tools, *event_asset_tools, *publication_tools, *partner_admin_tools, *social_tools, *workspace_tools),
             cache_ttl_seconds=config.cache_ttl_seconds,
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),

@@ -83,3 +83,21 @@ async def test_real_attachment_prepare_worker_reverify_and_parser_handoff(tmp_pa
     assert result['status'] == 'rejected' and result['error_code'] == 'EVENT_ASSETS_DISABLED'
     assert len(seen) == 1
     await server.event_create_runtime.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_owner_publication_tool_scoped_and_current(config, tmp_path):
+    from private_events_mcp.server import PrivateEventsMCPServer
+    database, runtime, _, _ = await setup(tmp_path)
+    config = replace(config, event_create_enabled=True)
+    server = PrivateEventsMCPServer(config, event_create_runtime=runtime)
+    context = owner(config, scopes=frozenset({'events:write', 'operations:read'}))
+    request = EventCreateRuntime.request_from_arguments(arguments(), context)
+    operation, _ = await runtime.store.reserve(request)
+    tool = server.protocol.by_name['event_publications_get']
+    assert 'event_publications_get' not in server.codex_protocol.by_name
+    result = await tool.handler({'operation_ref': operation['operation_ref']}, context)
+    assert result['availability'] == 'operation_not_accepted' and not result['live_verified']
+    server.config = replace(config, event_create_enabled=False)
+    with pytest.raises(ToolExecutionError):
+        await tool.handler({'operation_ref': operation['operation_ref']}, context)

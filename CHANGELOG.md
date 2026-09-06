@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Wired owner `event_publications_get` to current accepted-operation publication evidence; exact actor/resource policy is rechecked and Codex remains unchanged (#643).
+
 - Connected digest-bound private event images to owner prepare/commit, durable recovery and the existing Smart Update parser media path, with execution-time policy/expiry/byte checks and no synthetic Telegram/OAuth actor (#643).
 
 - Added default-off owner OAuth event image stage/get tools with private attachment metadata, independent of social publishing flags; Codex remains read-only (#643).

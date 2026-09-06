@@ -1616,3 +1616,10 @@ the existing `media=[(bytes, filename)]` path handles posters and Smart Update.
 Failures known to precede the parser are rejected, not marked outcome-unknown.
 No Telegram owner is invented and no public upload occurs at staging. Partner
 mutation wiring is still pending. No production flag has been enabled.
+
+Owner `event_publications_get(operation_ref)` is now attached with the event-create
+capability and `operations:read`. It uses the exact operation actor/client/resource
+and current flag/owner checks, returns current safe canonical public URLs plus
+bounded queue states, and never turns a queued job or static build into a verified
+publication. This read is uncached; Codex does not receive the tool. Partner
+exposure will use its separate current portfolio policy, not owner authority.
