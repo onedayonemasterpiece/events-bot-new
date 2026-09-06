@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added event-scoped private image staging/read/reverification over the existing
+  secure media store, with durable principal-bound refs, exact digest/expiry
+  checks and mandatory current authorization; no social provider upload (#643).
+
 - Connected queued Events MCP create recovery to canonical-DB startup and the
   existing five-minute scheduler, with owner resource/client/capability checks
   immediately before both normal and recovered execution. Partner/Codex jobs do
