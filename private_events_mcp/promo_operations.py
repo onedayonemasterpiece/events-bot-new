@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 from sqlalchemy import text
 from static_site_release import event_public_revision
-from promo import PartnerActivitySpec, add_partner_activity_to_campaign, PartnerPromoSpec, create_partner_event_promo_campaign, PARTNER_PROMO_VIDEO_PROFILES, PARTNER_PROMO_SLOT_POLICIES
+from promo import PartnerActivitySpec, add_partner_activity_to_campaign, PartnerPromoSpec, create_partner_event_promo_campaign, PARTNER_PROMO_VIDEO_PROFILES, PARTNER_PROMO_SLOT_POLICIES, PROMO_POLICY_GUARANTEED_ANY_POSITION, PROMO_POLICY_DIVERSE_SHUFFLE
 from .oauth import SUBJECT
 
 FIELDS = frozenset({'accepted_event_operation_ref','event_id','event_revision','surface',
@@ -58,6 +58,22 @@ class PromoActor:
                 fail('PROMO_ACCESS_DENIED')
 
 
+def validate_slot_policy(request):
+    policy=request['slot_policy']
+    if ((request['surface']=='video_general' and (not isinstance(policy,str) or policy not in PARTNER_PROMO_SLOT_POLICIES))
+            or (request['surface']=='vk_repost' and policy is not None)):
+        fail('PROMO_INVALID_REQUEST')
+
+
+def effective_selection_policy(request):
+    return PROMO_POLICY_DIVERSE_SHUFFLE if request['surface']=='vk_repost' else request['slot_policy']
+
+
+def service_slot_policy(request):
+    # Legacy helper requires a placeholder; VK does not expose slot selection.
+    return PROMO_POLICY_GUARANTEED_ANY_POSITION if request['surface']=='vk_repost' else request['slot_policy']
+
+
 def validate_request(request):
     if not isinstance(request,dict) or set(request)!=FIELDS:
         fail('PROMO_INVALID_REQUEST')
@@ -70,13 +86,12 @@ def validate_request(request):
             fail('PROMO_INVALID_REQUEST')
     if request['surface'] not in ('video_general','vk_repost'):
         fail('PROMO_INVALID_REQUEST')
-    if not isinstance(request['slot_policy'],str) or request['slot_policy'] not in PARTNER_PROMO_SLOT_POLICIES:
-        fail('PROMO_INVALID_REQUEST')
+    validate_slot_policy(request)
     profile=request['profile_key']
     if ((request['surface']=='video_general' and (not isinstance(profile,str) or profile not in PARTNER_PROMO_VIDEO_PROFILES))
             or (request['surface']=='vk_repost' and profile is not None)):
         fail('PROMO_INVALID_REQUEST')
-    for field,limit,nullable in [('profile_key',120,True),('slot_policy',120,False),
+    for field,limit,nullable in [('profile_key',120,True),('slot_policy',120,True),
         ('sponsorship_disclosure',1000,True),('title_override',300,True)]:
         value=request[field]
         if value is None and nullable:
@@ -256,6 +271,8 @@ class PromoOperationStore:
                     'supported_surfaces':['video_general','vk_repost'],
                     'video_profiles':dict(PARTNER_PROMO_VIDEO_PROFILES),
                     'slot_policies':dict(PARTNER_PROMO_SLOT_POLICIES),
+                    'slot_policy_by_surface':{'video_general':list(PARTNER_PROMO_SLOT_POLICIES),'vk_repost':[]},
+                    'vk_selection_policy':PROMO_POLICY_DIVERSE_SHUFFLE,
                     'business_validation':'commit_recheck_required'}
                 await session.rollback()  # Read snapshot only; no operation reservation.
                 return response
@@ -284,7 +301,8 @@ class PromoOperationStore:
                 'action_digest':row['action_digest'],'expires_at':envelope['expires_at'],
                 'status':('expired' if row['status']=='prepared' and self.clock()>=envelope['expires_at'] else row['status']),
                 'planned_campaign_status':'active',
-                'business_validation':'commit_recheck_required'}
+                'business_validation':'commit_recheck_required',
+                'effective_selection_policy':effective_selection_policy(envelope['request'])}
 
     def _receipt(self,row):
         try:
@@ -375,7 +393,8 @@ class PromoOperationStore:
                             'result_event_revision','domain_receipt_json','result_json')):
                         fail('PROMO_OPERATION_CONFLICT')
                     spec=PartnerPromoSpec(event_id=request['event_id'],creator_user_id=None,organization_name=None,
-                        **{key:request[key] for key in ('surface','profile_key','slot_policy','count','is_editorial','sponsorship_disclosure','title_override')},
+                        **{key:request[key] for key in ('surface','profile_key','count','is_editorial','sponsorship_disclosure','title_override')},
+                        slot_policy=service_slot_policy(request),
                         ends_at=date.fromisoformat(request['ends_at']))
                     result=await create_partner_event_promo_campaign(self.database,spec,
                         now_utc=datetime.fromtimestamp(self.clock(),timezone.utc),session=session)
@@ -401,9 +420,9 @@ class PromoOperationStore:
         if (type(request['campaign_id']) is not int or not 1<=request['campaign_id']<=2**63-1
                 or not isinstance(request['campaign_revision'],str) or SHA.fullmatch(request['campaign_revision']) is None
                 or type(request['count']) is not int or not 1<=request['count']<=10000
-                or request['surface'] not in ('video_general','vk_repost')
-                or not isinstance(request['slot_policy'],str) or request['slot_policy'] not in PARTNER_PROMO_SLOT_POLICIES):
+                or request['surface'] not in ('video_general','vk_repost')):
             fail('PROMO_INVALID_REQUEST')
+        validate_slot_policy(request)
         profile=request['profile_key']
         if ((request['surface']=='video_general' and (not isinstance(profile,str) or profile not in PARTNER_PROMO_VIDEO_PROFILES))
                 or (request['surface']=='vk_repost' and profile is not None)):
@@ -430,7 +449,8 @@ class PromoOperationStore:
         return {'operation_ref':row['operation_ref'],'preparation_ref':row['operation_ref'],
             'action_digest':row['action_digest'],'expires_at':envelope['expires_at'],
             'status':'expired' if row['status']=='prepared' and self.clock()>=envelope['expires_at'] else row['status'],
-            'planned_campaign_status':'unchanged','planned_activity_enabled':True}
+            'planned_campaign_status':'unchanged','planned_activity_enabled':True,
+            'effective_selection_policy':effective_selection_policy(envelope['request'])}
 
     async def _activity_snapshot(self,session,request):
         campaign,targets,activities,current=await self._campaign_snapshot(session,request['campaign_id'])
@@ -512,7 +532,8 @@ class PromoOperationStore:
         campaign,targets,activities=await self._activity_snapshot(session,request)
         if any(row[field] for field in ('before_json','after_json','changed_fields_json','result_event_revision','domain_receipt_json','result_json')):
             fail('PROMO_OPERATION_CONFLICT')
-        spec=PartnerActivitySpec(**{key:request[key] for key in ('campaign_id','surface','profile_key','slot_policy','count')})
+        spec=PartnerActivitySpec(**{key:request[key] for key in ('campaign_id','surface','profile_key','count')},
+            slot_policy=service_slot_policy(request))
         result=await add_partner_activity_to_campaign(self.database,spec,actor_user_id=None,
             now_utc=datetime.fromtimestamp(self.clock(),timezone.utc),session=session)
         if result.campaign is None or result.status!='created':
