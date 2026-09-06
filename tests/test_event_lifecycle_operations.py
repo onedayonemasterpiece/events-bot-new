@@ -174,3 +174,35 @@ async def test_callback_exception_rolls_back(prepared):
         apply(prepared,authorize=denied)
     assert row(prepared[0])['lifecycle_status']=='active'
     assert row(prepared[0],'event_change_log')['status']=='processing'
+
+
+@pytest.mark.parametrize('revision', [None, True, False, 0, -1, '1'])
+def test_partner_requires_positive_policy_revision(revision):
+    action=LifecycleAction(1,'CANCEL','a'*64,'partner:principal:1','client','resource',revision)
+    with pytest.raises(LifecycleOperationError,match='partner_policy_revision_invalid'):
+        action.payload()
+
+
+@pytest.mark.asyncio
+async def test_partner_policy_revision_frozen_and_current_rechecked(prepared):
+    path, owner_action=prepared
+    action=replace(owner_action,actor_subject='partner:principal:1',partner_policy_revision=1)
+    changed=replace(action,partner_policy_revision=2)
+    assert action.digest != changed.digest
+    with sqlite3.connect(path) as con:
+        con.execute('UPDATE event_change_log SET actor_subject=?,action_digest=?,request_json=?',
+                    (action.actor_subject,action.digest,json.dumps(action.payload())))
+    # A request with changed revision cannot reuse the frozen ledger operation.
+    with pytest.raises(LifecycleOperationError,match='operation_context_conflict'):
+        apply((path,changed))
+    # Host compares the frozen revision against current durable grant policy.
+    with sqlite3.connect(path) as con:
+        con.execute('CREATE TABLE test_grant_policy(subject TEXT PRIMARY KEY, revision INTEGER)')
+        con.execute('INSERT INTO test_grant_policy VALUES(?,2)',(action.actor_subject,))
+    def current_policy(conn,target):
+        current=conn.execute('SELECT revision FROM test_grant_policy WHERE subject=?',(target.actor_subject,)).fetchone()[0]
+        return current == target.partner_policy_revision
+    with pytest.raises(LifecycleOperationError,match='access_denied'):
+        apply((path,action),authorize=current_policy)
+    assert row(path)['lifecycle_status']=='active'
+    assert row(path,'event_change_log')['status']=='processing'

@@ -34,6 +34,7 @@ class LifecycleAction:
     actor_subject: str
     actor_client_id: str
     actor_audience: str
+    partner_policy_revision: int | None = None
 
     def payload(self) -> dict:
         if (type(self.event_id) is not int or not 1 <= self.event_id <= 2**63-1
@@ -44,6 +45,10 @@ class LifecycleAction:
         if any(not isinstance(value, str) or not value.strip() or len(value) > 2048 or any(ord(char) < 32 or ord(char) == 127 for char in value) for value in
                (self.actor_subject, self.actor_client_id, self.actor_audience)):
             raise LifecycleOperationError('actor_invalid')
+        revision = self.partner_policy_revision
+        if (revision is not None and (type(revision) is not int or revision < 1)) or (
+                self.actor_subject.startswith('partner:') and revision is None):
+            raise LifecycleOperationError('partner_policy_revision_invalid')
         return {'schema': 'event-lifecycle-action-v1', **asdict(self)}
 
     @property
@@ -70,7 +75,9 @@ def apply_lifecycle_operation(database_path: str | Path, *, operation_ref: str,
 
     verify_review independently verifies frozen approval for exact op/digest/actor/target
     on the same connection; it cannot substitute for current-policy authorize.
-    No existing create-only review service is assumed to support these actions.
+    Partner actions freeze partner_policy_revision in the digest; authorize must
+    compare it with current durable policy on this connection. The core does not
+    resolve grants itself. No create-only review service is assumed to support these actions.
     Accepted replay returns historical receipt without reapplying after later edits.
     """
     payload = action.payload()
