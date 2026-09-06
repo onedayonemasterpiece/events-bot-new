@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Docs: investigated voice jazz-query false positives; recorded disabled semantic
+  verifier, internal quota gate and vector-to-exact contract regression with real
+  bounded classifier evidence. No relevance fix deployed yet.
+
 - Fixed: clean voice preview Auth positioning layer no longer intercepts the
   mobile History button; added rendered hit-test regression.
 - Docs: documented safe completed-worktree cleanup and voice preview live-check

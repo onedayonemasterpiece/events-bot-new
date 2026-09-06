@@ -698,3 +698,15 @@ had 1,265 local branch names, but names are not full checkouts. Active work,
 shared dependencies, production SQLite snapshots, recordings, queues and Auth
 were preserved. Exact source-equivalence and retained-artifact hash receipts:
 `artifacts/codex/voice-chat-20260906/disk-cleanup/receipt.json`.
+
+
+### Relevance acceptance regression — 2026-09-06
+
+User review proved the earlier successful transport/card-count check was NOT
+semantic acceptance: «Джаз на выходных» returned50unverified vector candidates.
+The voice adapter explicitly disables verifier, runtime defaults it off, and the
+voice quota branch separately prevents its admission. Legacy Search promotes
+possible candidates when verification is unused; voice must not inherit this as
+confirmed matches. Exact evidence, correction requirements and regression gate:
+[INC-2026-09-06-voice-search-relevance](../../../reports/incidents/INC-2026-09-06-voice-search-relevance.md).
+This is an open defect; investigation did not deploy a fix or alter user history.

@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-06-voice-search-relevance.md`
+  - Scope: protected voice preview falsely presents vector candidates as exact
+    thematic matches; jazz request returned50 including rap/exhibitions.
+  - Must not regress: strict semantic admission for voice, honest unknown/partial
+    states, grounded date/locality, real shared quota and no keyword genre hacks.
+
+
 - `INC-2026-09-06-voice-preview-startup.md`
   - Scope: preview-only voice mount/IndexedDB upgrade, Auth/controller readiness
     and ordinary Search signed-in status; no production outage claim.
