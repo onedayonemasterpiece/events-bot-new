@@ -899,12 +899,16 @@ async def create_partner_event_promo_campaign(
     spec: PartnerPromoSpec,
     *,
     now_utc: datetime | None = None,
+    session: Any | None = None,
 ) -> PromoCreateResult:
     """Create an event-targeted partner promo campaign from a confirmed FSM spec.
 
     The caller (FSM step 6) is responsible for authorization. This function
     only validates business rules: event must exist, be future and active,
     ``ends_at`` is clamped to the event end date, count is positive.
+    Campaign, target and activities commit atomically. An explicit caller-owned
+    session is flushed but never committed, allowing the same transaction to
+    carry current authorization and an operation receipt without another engine.
     """
 
     now_utc = now_utc or datetime.now(timezone.utc)
@@ -921,33 +925,41 @@ async def create_partner_event_promo_campaign(
     }:
         return PromoCreateResult(None, "invalid", f"Неизвестная политика слота: {spec.slot_policy!r}.")
 
-    async with db.get_session() as session:
-        from models import User  # local import to avoid cycle at import-time
-
-        event = await session.get(Event, int(spec.event_id))
-        if event is None:
-            return PromoCreateResult(None, "not_found", "Событие не найдено.")
-        if not _event_is_promo_eligible(
-            event,
-            today=today,
-            campaign=PromoCampaign(
-                title="_probe_",
-                status="active",
-                starts_at=now_utc,
-                ends_at=_campaign_end_dt(spec.ends_at),
-            ),
-            enforce_event_date_lte_campaign=False,
-        ):
-            return PromoCreateResult(
-                None,
-                "not_eligible",
-                "Событие не подходит под промо: либо прошло, либо закрыто, либо silent.",
+    if session is None:
+        async with db.get_session() as owned_session:
+            result = await create_partner_event_promo_campaign(
+                db, spec, now_utc=now_utc, session=owned_session,
             )
-        partner = await session.get(User, int(spec.creator_user_id))
-        partner_username = partner.username if partner is not None else None
-        is_superadmin = bool(partner.is_superadmin) if partner is not None else False
-        event_title = str(event.title or "")
-        event_id = int(event.id)
+            if result.campaign is not None:
+                await owned_session.commit()
+            return result
+
+    from models import User  # local import to avoid cycle at import-time
+
+    event = await session.get(Event, int(spec.event_id))
+    if event is None:
+        return PromoCreateResult(None, "not_found", "Событие не найдено.")
+    if not _event_is_promo_eligible(
+        event,
+        today=today,
+        campaign=PromoCampaign(
+            title="_probe_",
+            status="active",
+            starts_at=now_utc,
+            ends_at=_campaign_end_dt(spec.ends_at),
+        ),
+        enforce_event_date_lte_campaign=False,
+    ):
+        return PromoCreateResult(
+            None,
+            "not_eligible",
+            "Событие не подходит под промо: либо прошло, либо закрыто, либо silent.",
+        )
+    partner = await session.get(User, int(spec.creator_user_id))
+    partner_username = partner.username if partner is not None else None
+    is_superadmin = bool(partner.is_superadmin) if partner is not None else False
+    event_title = str(event.title or "")
+    event_id = int(event.id)
 
     clamped_end = clamp_campaign_end_to_event(spec.ends_at, event)
     if clamped_end < today:
@@ -979,46 +991,43 @@ async def create_partner_event_promo_campaign(
         created_by=int(spec.creator_user_id),
     )
 
-    async with db.get_session() as session:
-        session.add(campaign)
-        await session.commit()
-        await session.refresh(campaign)
-        campaign_id = int(campaign.id)
+    session.add(campaign)
+    await session.flush()
+    campaign_id = int(campaign.id)
 
-        target = PromoTarget(
+    target = PromoTarget(
+        campaign_id=campaign_id,
+        target_type="event",
+        event_id=event_id,
+        query_text=event_title,
+    )
+
+    if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
+        activity = PromoActivity(
             campaign_id=campaign_id,
-            target_type="event",
-            event_id=event_id,
-            query_text=event_title,
+            surface=PROMO_SURFACE_VIDEO_GENERAL,
+            profile_key=spec.profile_key,
+            slot=_activity_slot_for_policy(spec.slot_policy),
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=spec.slot_policy,
+            enabled=True,
         )
-
-        if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
-            activity = PromoActivity(
-                campaign_id=campaign_id,
-                surface=PROMO_SURFACE_VIDEO_GENERAL,
-                profile_key=spec.profile_key,
-                slot=_activity_slot_for_policy(spec.slot_policy),
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=spec.slot_policy,
-                enabled=True,
-            )
-        else:
-            activity = PromoActivity(
-                campaign_id=campaign_id,
-                surface=PROMO_SURFACE_VK_REPOST,
-                profile_key=None,
-                slot=None,
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
-                enabled=True,
-            )
-        session.add(target)
-        session.add(activity)
-        session.add(_default_tg_button_highlight_activity(campaign_id))
-        await session.commit()
-        await session.refresh(campaign)
+    else:
+        activity = PromoActivity(
+            campaign_id=campaign_id,
+            surface=PROMO_SURFACE_VK_REPOST,
+            profile_key=None,
+            slot=None,
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+            enabled=True,
+        )
+    session.add(target)
+    session.add(activity)
+    session.add(_default_tg_button_highlight_activity(campaign_id))
+    await session.flush()
 
     return PromoCreateResult(
         campaign,
@@ -1128,12 +1137,14 @@ async def add_partner_activity_to_campaign(
     *,
     actor_user_id: int,
     now_utc: datetime | None = None,
+    session: Any | None = None,
 ) -> PromoCreateResult:
     """Append a new PromoActivity to an existing partner campaign.
 
     Authorization: caller must verify the user owns the campaign or is
     superadmin; this function only enforces business rules (campaign
-    exists, not archived, surface/slot_policy known, count positive).
+    exists, not archived, surface/slot_policy known, count positive). A supplied
+    session remains caller-owned: flush only, with no independent commit.
     """
 
     now_utc = now_utc or datetime.now(timezone.utc)
@@ -1157,52 +1168,60 @@ async def add_partner_activity_to_campaign(
         if spec.count is not None or spec.slot_policy != PROMO_HERO_POLICY or spec.profile_key is not None:
             return PromoCreateResult(None, "invalid", "hero_talk requires qualified_visibility; publication count/profile/slot are unsupported.")
 
-    async with db.get_session() as session:
-        campaign = await session.get(PromoCampaign, int(spec.campaign_id))
-        if campaign is None:
-            return PromoCreateResult(None, "not_found", "Кампания не найдена.")
-        if campaign.status == "archived":
-            return PromoCreateResult(
-                None,
-                "invalid",
-                "Кампания в архиве — нельзя добавить активность. Восстановите её сначала.",
+    if session is None:
+        async with db.get_session() as owned_session:
+            result = await add_partner_activity_to_campaign(
+                db, spec, actor_user_id=actor_user_id, now_utc=now_utc,
+                session=owned_session,
             )
+            if result.campaign is not None:
+                await owned_session.commit()
+            return result
 
-        if spec.surface == PROMO_SURFACE_HERO_TALK:
-            if campaign.total_exposure_goal is not None or campaign.daily_exposure_cap is not None:
-                return PromoCreateResult(None, "invalid", "HERO_CAMPAIGN_PUBLICATION_CAP_UNSUPPORTED: browser visibility cannot consume publication units.")
-            activity = PromoActivity(
-                campaign_id=int(campaign.id), surface=PROMO_SURFACE_HERO_TALK,
-                selection_policy=PROMO_HERO_POLICY, config_json=hero_config,
-                max_per_publish=1, enabled=True,
-            )
-        elif spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
-            activity = PromoActivity(
-                campaign_id=int(campaign.id),
-                surface=PROMO_SURFACE_VIDEO_GENERAL,
-                profile_key=spec.profile_key,
-                slot=1 if spec.slot_policy == PROMO_POLICY_FIRST_SLOT else None,
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=spec.slot_policy,
-                enabled=True,
-            )
-        else:
-            activity = PromoActivity(
-                campaign_id=int(campaign.id),
-                surface=PROMO_SURFACE_VK_REPOST,
-                profile_key=None,
-                slot=None,
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
-                enabled=True,
-            )
-        campaign.updated_at = now_utc
-        session.add(campaign)
-        session.add(activity)
-        await session.commit()
-        await session.refresh(campaign)
+    campaign = await session.get(PromoCampaign, int(spec.campaign_id))
+    if campaign is None:
+        return PromoCreateResult(None, "not_found", "Кампания не найдена.")
+    if campaign.status == "archived":
+        return PromoCreateResult(
+            None,
+            "invalid",
+            "Кампания в архиве — нельзя добавить активность. Восстановите её сначала.",
+        )
+
+    if spec.surface == PROMO_SURFACE_HERO_TALK:
+        if campaign.total_exposure_goal is not None or campaign.daily_exposure_cap is not None:
+            return PromoCreateResult(None, "invalid", "HERO_CAMPAIGN_PUBLICATION_CAP_UNSUPPORTED: browser visibility cannot consume publication units.")
+        activity = PromoActivity(
+            campaign_id=int(campaign.id), surface=PROMO_SURFACE_HERO_TALK,
+            selection_policy=PROMO_HERO_POLICY, config_json=hero_config,
+            max_per_publish=1, enabled=True,
+        )
+    elif spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VIDEO_GENERAL,
+            profile_key=spec.profile_key,
+            slot=1 if spec.slot_policy == PROMO_POLICY_FIRST_SLOT else None,
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=spec.slot_policy,
+            enabled=True,
+        )
+    else:
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_REPOST,
+            profile_key=None,
+            slot=None,
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+            enabled=True,
+        )
+    campaign.updated_at = now_utc
+    session.add(campaign)
+    session.add(activity)
+    await session.flush()
 
     return PromoCreateResult(
         campaign,

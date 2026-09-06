@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Made existing partner promo campaign/target/default activities atomic and exposed a caller-owned transaction option for shared campaign/activity services, without changing authorization or activating campaigns through MCP (#643).
+
 - Recover receipt-proven MCP domain acceptance without replaying the parser; preserve explicit unresolved fan-out status and restrict partner operation diagnostics to current authorized portfolio scope (#643).
 
 - Connected default-off partner event create, private posters, owner review/image readback, current-policy queued execution, canonical accepted-ID portfolio assignment and tenant-scoped publication evidence; no synthetic Telegram/OAuth actor or implicit promo operation (#643).
