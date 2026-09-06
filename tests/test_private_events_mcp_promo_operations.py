@@ -233,3 +233,59 @@ async def test_dirty_preparation_history_never_overwritten(prepared,field):
     with pytest.raises(PromoOperationError,match='OPERATION_CONFLICT'):
         await store.commit(p['preparation_ref'],action_digest=p['action_digest'],actor=ACTOR)
     assert await counts(db)==[0,0,0,0]
+
+
+@pytest.mark.asyncio
+async def test_capabilities_current_token_no_reservation(prepared):
+    db,request,auth=prepared
+    calls=[]
+    async def checked(session,actor,action,packet):
+        calls.append(action)
+        assert session.in_transaction() and set(packet)=={'accepted_event_operation_ref','event_id'}
+        return True
+    store=PromoOperationStore(db,checked,clock=lambda:NOW)
+    result=await store.capabilities(SOURCE,request['event_id'],actor=ACTOR)
+    assert result['event_revision']==request['event_revision']
+    assert result['business_validation']=='commit_recheck_required'
+    assert result['supported_surfaces']==['video_general','vk_repost']
+    assert result['video_profiles']==module.PARTNER_PROMO_VIDEO_PROFILES
+    assert result['slot_policies']==module.PARTNER_PROMO_SLOT_POLICIES
+    async with db.get_session() as session:
+        assert (await session.execute(text('SELECT count(*) FROM event_change_log'))).scalar()==1
+        await session.execute(text("UPDATE event SET title='Current changed title',silent=1,lifecycle_status='cancelled'"))
+        await session.commit()
+    current=await store.capabilities(SOURCE,request['event_id'],actor=ACTOR)
+    assert current['event_revision']!=result['event_revision']
+    assert current['silent'] is True and current['lifecycle_status']=='cancelled'
+    assert calls==['capabilities','capabilities']
+    assert await counts(db)==[0,0,0,0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('change',[
+    "UPDATE event_change_log SET actor_subject='foreign'",
+    "UPDATE event_change_log SET actor_client_id='other'",
+    "UPDATE event_change_log SET status='processing'",
+    "UPDATE event SET identity_status='merged'",
+    "UPDATE event SET merged_into_event_id=1",
+])
+async def test_capabilities_exact_actor_accepted_canonical_binding(prepared,change):
+    db,request,auth=prepared
+    async with db.get_session() as session:
+        await session.execute(text(change));await session.commit()
+    store=PromoOperationStore(db,auth)
+    with pytest.raises(PromoOperationError,match='BINDING_DENIED'):
+        await store.capabilities(SOURCE,request['event_id'],actor=ACTOR)
+
+
+@pytest.mark.asyncio
+async def test_capabilities_revoked_wrong_target_and_foreign_actor(prepared):
+    db,request,auth=prepared
+    async def deny(*args): return False
+    with pytest.raises(PromoOperationError,match='ACCESS_DENIED'):
+        await PromoOperationStore(db,deny).capabilities(SOURCE,request['event_id'],actor=ACTOR)
+    store=PromoOperationStore(db,auth)
+    with pytest.raises(PromoOperationError):
+        await store.capabilities(SOURCE,999,actor=ACTOR)
+    with pytest.raises(PromoOperationError):
+        await store.capabilities(SOURCE,request['event_id'],actor=replace(ACTOR,audience='foreign'))
