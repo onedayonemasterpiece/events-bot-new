@@ -17,7 +17,7 @@ import {
   SharedGoogleQuotaError,
   withSharedGoogleQuotaAttempt,
 } from "./google-quota.ts";
-import { classifyVoicePayload, verifyVoiceWindow, voiceVerifierPrompt } from "./assistant-verification.ts";
+import { classifyVoiceSchemaPayload, voiceVerifierSchema, verifyVoiceWindow, voiceVerifierPrompt } from "./assistant-verification.ts";
 import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts";
 import { handleAssistant, type AssistantDependencies, type AssistantRepository } from "./assistant-handler.ts";
 import { assistantGenerator } from "./assistant-provider.ts";
@@ -1600,7 +1600,7 @@ async function llmVerify(
                     temperature: 0,
                     maxOutputTokens,
                     responseMimeType: "application/json",
-                    responseJsonSchema: LLM_VERIFIER_RESPONSE_SCHEMA,
+                    responseJsonSchema: options.voiceIntent ? voiceVerifierSchema(profile.candidates) : LLM_VERIFIER_RESPONSE_SCHEMA,
                     thinkingConfig: {
                       includeThoughts: false,
                       thinkingLevel,
@@ -1629,7 +1629,7 @@ async function llmVerify(
             }
             const text = extractGeminiText(payload);
             return {
-              value: options.voiceIntent ? classifyVoicePayload(parseLlmJson(text), profile.candidates) : classifyLlmPayload(text, profile.candidates),
+              value: options.voiceIntent ? classifyVoiceSchemaPayload(parseLlmJson(text), profile.candidates) : classifyLlmPayload(text, profile.candidates),
               provider_status: "succeeded",
               usage,
             };

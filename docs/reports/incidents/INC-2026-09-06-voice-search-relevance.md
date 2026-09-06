@@ -214,3 +214,23 @@ Both configured Opus consultant paths were authentication-blocked (`a-opus` and
 Claude project Opus). No external review pass claimed; user's ChatGPT Pro audit
 is independent and pending. No new credentials requested or lower-class
 consultant substituted.
+
+### First published live regression and follow-up correction
+
+Frontend source `882e88f3d5e146334769276ba62d2696e8821b0f` published at
+https://kenigevents.ru/preview-voice-relevance-20260906/poisk/ ; all seven selected
+public objects match local bytes. Three public landing/Auth/History layout checks
+and four topic locator fixtures passed. These are not voice provider acceptance.
+
+The native synthetic-mic browser run used real ASR and Search. ASR was correct,
+unsupported city remained empty, but interpreter selected September6–7
+(Sunday/Monday), and verifier classified only19/20 first-batch IDs. The strict
+admission guard correctly returned an explicit unavailable answer and no cards.
+This failed end-to-end acceptance; do not hide it behind passing unit tests.
+Receipt: `voice-recall-20260906/final-live-browser-final-receipt.json`.
+
+Correction: voice-only required per-ID enum schema plus unchanged server membership
+validation; interpreter calendar grounding supplies actual Saturday/Sunday dates
+and asks it to display the resolved interval. Focused47 tests pass. No retries,
+shared limiter bypass, speculative relevance thresholds or production changes.
+Second live verification is required before declaring this correction delivered.

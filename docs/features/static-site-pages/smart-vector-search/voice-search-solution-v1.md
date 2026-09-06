@@ -788,3 +788,20 @@ Svetlogorsk event8580 was rank2 but removed by an invented Kaliningrad filter;
 exact-vs-RPC ordered top60 matched. The separate stale production static claim
 blocks vector freshness and is not repaired by this preview. Full details and
 acceptance limitations remain in the canonical relevance incident record.
+
+### Live hardening: complete classification and weekend grounding (2026-09-06)
+
+A real voice run exposed that three unconstrained ID lists can omit a candidate
+while remaining schema-valid. Voice provider output now uses a required property
+for **every** candidate ID, with enum `exact|possible|rejected`; the server still
+validates complete membership before admitting cards. Ordinary Search keeps its
+existing schema. This follows the provider's supported `required`, object and
+`enum` contract: https://ai.google.dev/gemini-api/docs/structured-output . No
+extra retry/model spend is introduced by this correction.
+
+For a new generic «на выходных» request, supply the interpreter an anchor-derived
+nearest upcoming Saturday/Sunday pair (Saturday includes today; Sunday selects
+the following Saturday). Explicit dates/«сегодня»/«эти выходные» and inherited
+follow-up dates take precedence. Show resolved concrete dates in the reply/title
+so the user can correct the default. Calendar arithmetic only grounds the prompt;
+no regex/keyword search or deterministic genre interpretation is introduced.

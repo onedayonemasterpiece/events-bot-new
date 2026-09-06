@@ -28,6 +28,14 @@ export function kaliningradDay(anchor: string): string {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(anchor) || !Number.isFinite(Date.parse(anchor))) reject('invalid_anchor');
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kaliningrad', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(anchor));
 }
+/** Calendar grounding only; the LLM still interprets the user's date semantics. */
+export function nearestWeekend(anchor: string): {dateFrom:string;dateTo:string} {
+  const day=new Date(kaliningradDay(anchor)+'T12:00:00Z');
+  day.setUTCDate(day.getUTCDate()+(6-day.getUTCDay()+7)%7);
+  const dateFrom=day.toISOString().slice(0,10);
+  day.setUTCDate(day.getUTCDate()+1);
+  return {dateFrom,dateTo:day.toISOString().slice(0,10)};
+}
 export function confirmedInput(value: unknown): ConfirmedInput {
   const row = object(value, ['text','mode','parentId','previousId','anchor','visibleIds']);
   text(row.text, 8192); kaliningradDay(row.anchor);
@@ -75,6 +83,7 @@ export function interpreterPrompt(input: ConfirmedInput, base: Intent, parentFac
 География не подразумевается названием KenigEvents: если INPUT не задаёт место и BASE.localityIds пуст, intent.localityIds должен остаться []. «Джаз на выходных» без города — вся область, не только Калининград. Не добавляй kaliningrad по умолчанию; сохраняй явно заданную географию BASE при уточнении, изменяй только по словам пользователя. Также не добавляй выдуманное место в title/responseSummary.
 Аудитории: children, students, adults, family. Категории/исключения: concert, lecture, exhibition, theatre, masterclass, excursion, sport, festival, cinema.
 Относительные даты определяй на момент anchor (${input.anchor}), местный день ${kaliningradDay(input.anchor)}, Europe/Kaliningrad. dateFrom/dateTo — включительные ISO-дни. Завтра = следующий местный день. Не используй своё текущее время.
+Календарная опора для нового запроса «на выходных»/«в ближайшие выходные» без иных уточнений: ближайшая наступающая суббота и следующее воскресенье ${JSON.stringify(nearestWeekend(input.anchor))}. В субботу это текущие выходные; в воскресенье — следующие. Никогда не подменяй выходные парой воскресенье–понедельник. Явные даты, «сегодня», «в эти выходные» и сохранённый интервал BASE имеют приоритет; при реальной неоднозначности уточняй. В title и responseSummary показывай выбранные конкретные даты, чтобы пользователь мог поправить трактовку.
 Для нового поиска без даты dateFrom=${kaliningradDay(input.anchor)}, dateTo=null. Для уточнения сохраняй интервал базы. Если неоднозначно — clarification, не придумывай.
 Поиск адреса/сведений о выбранном событии: explanationKind address/facts и ordinal по переданному visibleIds (не по общему рангу). Адреса и факты сам не сочиняй: их сформирует сервер из карточки.
 title — короткое осмысленное название запроса по-русски, желательно до 80 символов: что + где + когда, только если эти условия заданы. Не копируй всю речь и вводные слова. Пример формы при соответствующем запросе: «Экскурсии по востоку области на 5–6 сентября». Не добавляй дату или место ради шаблона.

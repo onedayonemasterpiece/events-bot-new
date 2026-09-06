@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyVoicePayload, verifyVoiceWindow, voiceVerifierPrompt } from './assistant-verification.ts';
+import { classifyVoicePayload, classifyVoiceSchemaPayload, voiceVerifierSchema, verifyVoiceWindow, voiceVerifierPrompt } from './assistant-verification.ts';
 const candidates=[{event_id:7422,title:'Swing standards',category:'concert'},{event_id:8680,title:'Rap concert',place:'City Jazz Club'},{event_id:7410,title:'Exhibition'},{event_id:4,title:'Classical music'},{event_id:5,title:'Related music festival'}];
 const payload={query_interpretation:'Jazz repertoire on the weekend',exact_event_ids:[7422],possible_event_ids:[5],rejected_event_ids:[8680,7410,4]};
 test('verifier contract accepts nonliteral jazz evidence and rejects rap in Jazz venue, exhibition, classical; possible stays separate',async()=>{
@@ -47,4 +47,14 @@ test('invalid duplicate input window fails before any classifier send',async()=>
 });
 test('expired total budget does not start another classifier call',async()=>{
  const r=await verifyVoiceWindow(candidates,async()=>{throw Error('unexpected')},{budgetMs:0});assert.equal(r.verification.failure_reason,'verification_budget_exhausted');assert.equal(r.verification.checked_count,0);
+});
+
+test('provider schema requires every ID once; parser still rejects missing/unknown/invalid verdicts',()=>{
+ const rows=[{event_id:7422},{event_id:8580}];
+ const schema=voiceVerifierSchema(rows).properties.classifications;
+ assert.deepEqual(schema.required,['7422','8580']);assert.equal(schema.additionalProperties,false);
+ assert.equal(classifyVoiceSchemaPayload({classifications:{7422:'exact',8580:'possible'}},rows).status,'ok');
+ for(const classifications of [{7422:'exact'},{7422:'exact',8580:'maybe'},{7422:'exact',8580:'exact',999:'exact'},null,[]]) {
+  assert.notEqual(classifyVoiceSchemaPayload({classifications},rows).status,'ok');
+ }
 });

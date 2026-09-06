@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: voice verifier schema requires a verdict for each candidate ID; interpreter receives anchor-grounded Saturday/Sunday dates and exposes resolved dates instead of inventing Sunday/Monday weekends. Live regression and acceptance remain recorded in the relevance incident.
+
 - Fixed: voice control timeout covers bounded full-window semantic verification;
   status/media retain their existing deadlines and durable recovery.
 - Docs: recall audit localized a missing Svetlogorsk jazz concert to invented

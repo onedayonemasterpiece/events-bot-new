@@ -198,3 +198,13 @@ test('interpreter has no default-city narrowing when base and question provide n
  assert.deepEqual(interpretation(parsed({intent:emptyBase})).intent.localityIds,[]);
  assert.ok(eligible({event_id:8580,title:'FOXTROT JAZZ BAND',city:'Светлогорск',start_date:'2026-09-12'}, {...emptyBase,dateFrom:'2026-09-12',dateTo:'2026-09-13'}));
 });
+
+test('nearest weekend calendar grounding spans Saturday/Sunday with local timezone and month/year rollover',async()=>{
+ const {nearestWeekend,interpreterPrompt}=await import('../../supabase/functions/event-search/assistant-intent.ts');
+ assert.deepEqual(nearestWeekend('2026-09-06T14:00:00Z'),{dateFrom:'2026-09-12',dateTo:'2026-09-13'});
+ assert.deepEqual(nearestWeekend('2026-09-05T12:00:00Z'),{dateFrom:'2026-09-05',dateTo:'2026-09-06'});
+ assert.deepEqual(nearestWeekend('2026-09-05T22:30:00Z'),{dateFrom:'2026-09-12',dateTo:'2026-09-13'});
+ assert.deepEqual(nearestWeekend('2026-12-31T12:00:00Z'),{dateFrom:'2027-01-02',dateTo:'2027-01-03'});
+ const prompt=interpreterPrompt({anchor:'2026-09-06T14:00:00Z'}, {}, null);
+ assert.match(prompt,/2026-09-12/);assert.match(prompt,/воскресенье–понедельник/);
+});
