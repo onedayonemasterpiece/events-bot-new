@@ -39,6 +39,12 @@ for(const width of [320,390,430,1440]) {
       assert.ok(r.x>=brand.x+brand.width+11);assert.ok(r.x+r.width<=width-11);assert.ok(r.height<=64);
       assert.equal(await locator.evaluate(n=>getComputedStyle(n).position),'absolute');
     }
+    if(width>=760){
+      assert.equal(await locator.isVisible(),true);assert.equal(await locator.textContent(),title);
+      const toggle=page.locator('[data-search-nav-toggle]');assert.equal(await toggle.isVisible(),true);
+      await toggle.click();assert.equal(await page.locator('.site-nav').isVisible(),true);
+      await page.keyboard.press('Escape');assert.equal(await page.locator('.site-nav').isVisible(),false);
+    }
     assert.equal(await page.locator(`#assistant-answer-${id} > h2`).textContent(),title);
   }
   await page.screenshot({path:`${out}/${width}-topic.png`});

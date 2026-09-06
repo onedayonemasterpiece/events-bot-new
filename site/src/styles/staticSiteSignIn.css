@@ -1,22 +1,22 @@
 /* Neutral inline Auth surface; inherits the host's typography and palette. */
-.static-sign-in{box-sizing:border-box;inline-size:100%;max-inline-size:28rem;margin-inline:auto;padding:1rem;border:1px solid var(--color-border,#ded8d1);border-radius:1rem;background:var(--color-surface,#fff);color:var(--color-text,#25211e)}
+.static-sign-in{box-sizing:border-box;inline-size:100%;max-inline-size:28rem;margin-inline:auto;padding:1rem;border:1px solid var(--color-border,var(--ke-color-line,#ded8d1));border-radius:1rem;background:var(--color-surface,var(--surface,#fff));color:var(--color-text,var(--text,#25211e))}
 .static-sign-in [hidden]{display:none!important}
 .static-sign-in__head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.75rem}
 .static-sign-in h2{font:inherit;font-weight:650;font-size:1.1rem;margin:0}
 .static-sign-in form{display:grid;gap:.625rem}
 .static-sign-in label{font-size:.875rem}
 .static-sign-in input,.static-sign-in button{box-sizing:border-box;min-block-size:44px;max-inline-size:100%;font:inherit;font-size:16px}
-.static-sign-in input{inline-size:100%;min-inline-size:0;border:1px solid var(--color-border,#aaa);border-radius:.625rem;padding:.65rem .75rem;background:var(--color-surface,#fff);color:inherit}
-.static-sign-in button{border:0;border-radius:.625rem;padding:.65rem .8rem;background:var(--color-text,#25211e);color:var(--color-surface,#fff);cursor:pointer}
+.static-sign-in input{inline-size:100%;min-inline-size:0;border:1px solid var(--color-border,#aaa);border-radius:.625rem;padding:.65rem .75rem;background:var(--color-surface,var(--surface,#fff));color:inherit}
+.static-sign-in button{border:0;border-radius:.625rem;padding:.65rem .8rem;background:var(--color-text,var(--text,#25211e));color:var(--color-surface,var(--surface,#fff));cursor:pointer}
 .static-sign-in button:disabled{opacity:.55;cursor:default}
 .static-sign-in .static-sign-in__close{flex:0 0 44px;padding:0;font-size:1.5rem;background:transparent;color:inherit}
 .static-sign-in__yandex{inline-size:100%}
 .static-sign-in__divider{text-align:center;margin:.75rem 0;font-size:.875rem;opacity:.6}
-.static-sign-in .static-sign-in__secondary{background:transparent;color:inherit;border:1px solid var(--color-border,#ded8d1)}
+.static-sign-in .static-sign-in__secondary{background:transparent;color:inherit;border:1px solid var(--color-border,var(--ke-color-line,#ded8d1))}
 .static-sign-in__destination,.static-sign-in__status{font-size:.875rem;line-height:1.45;overflow-wrap:anywhere}
 .static-sign-in__destination{margin:0 0 .25rem}
 .static-sign-in__status{margin:.75rem 0 0}
 .static-sign-in__status:empty{display:none}
 .static-sign-in :focus-visible{outline:2px solid currentColor;outline-offset:3px}
 
-.static-sign-in--compact{max-inline-size:none;padding:0;border:0;border-radius:0;background:transparent}
+.static-sign-in--compact{max-inline-size:26rem;padding:0;border:0;border-radius:0;background:transparent}

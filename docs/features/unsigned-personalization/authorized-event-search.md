@@ -1339,3 +1339,9 @@ voice UI. Follow the existing controlled harness/adapter discipline for any
 future live voice-page acceptance; do not create a parallel OTP transport or send
 additional emails as an untracked smoke test. Canonical procedure:
 [`external-focus-email-otp`](../../testing/external-focus-email-otp.md).
+
+
+Shared sign-in consumer sizing: the compact variant retains a 26rem content cap;
+Search hosts it in a warm 440px-max island (not a full-width desktop form). Its
+palette inherits the existing site tokens, and only the guest landing mic is
+hidden while inline sign-in is open; close restores focus without starting it.

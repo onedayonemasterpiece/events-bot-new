@@ -9,6 +9,7 @@
   treatment; audio-responsive shadow, reduced motion and focus restoration are
   supported. Shared Yandex/email OTP sign-in is connected to the same Auth instance;
   the existing desktop navigation compacts when a topic needs the shared row.
+  The shared compact sign-in is width-bounded and inherits site palette tokens.
   Opening the mobile menu stops capture before hiding controls. Guest-trial quotas
   remain documented to-be, not enabled.
 

@@ -196,3 +196,9 @@ checks the real built shell with explicit topic-state fixtures (320–1440 px).
 unchanged durable controller/CAS and actual frozen-old-tab startup without an
 upgrade. See the canonical voice solution and startup incident for live/phone
 acceptance boundaries and publication receipts.
+
+Clean voice Search consumer: `voice-clean-preview.integration.mjs` checks real
+anonymous rendered landing, shared sign-in entry/close focus, compact composer
+geometry and bottom-nav clearance at 320/390/1440, with zero OTP or assistant
+POSTs. Compact phase in this geometry suite is explicitly a fixture; real
+ASR-driven transition belongs to the authorized live preview evidence.
