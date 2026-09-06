@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Owner MCP queue readback in the existing `operations_snapshot`: bounded
+  payload-free JobOutbox pages, event/status filters and stable numeric cursor.
+  Existing detail fetch and the Codex seven-tool projection remain unchanged;
+  no write capability, provider effect or schema migration is introduced (R0).
+
 ### Fixed
 - Repair album release-gate fixture to implement asset reverification without weakening production media checks (INC-2026-09-05 release unblock).
 - VK auto import checks volume headroom before claiming a batch, preserving pending carriers instead of mass-terminalizing them when storage admission is blocked (INC-2026-09-05).
