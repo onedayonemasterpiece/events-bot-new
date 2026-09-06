@@ -227,6 +227,10 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     .home-hero-talk__fragment::after { display:none!important; }
     .home-hero-talk__tile { transition:none!important;opacity:var(--tile-opacity,0)!important; }
   }
+  @media (max-width:759px) {
+    :global(body[data-shell-composition="home-navigation-only"]) .home-hero-talk { min-height:320px; }
+    :global(body[data-shell-composition="home-navigation-only"]) .home-hero-talk__scene { padding-top:88px; padding-bottom:16px; }
+  }
   .home-hero-talk.home-hero-talk--generic { height:auto; min-height:0; padding-block:var(--ke-space-6); }
   .home-hero-talk__generic-copy { max-width:40rem; }
   .home-hero-talk__generic-copy h1 { margin:0 0 var(--ke-space-3); font:var(--ke-type-h2); letter-spacing:var(--ke-type-h2-letter); }

@@ -1,4 +1,4 @@
-> Latest owner override: Hero begins at viewport top, header occupies no flow space. HomeSearchEntry v2 floating-link opens existing /poisk/; no inline field or mounted capture controller on Home. Content order is Hero → quick links → feed → page-end. Earlier inline capture remains a reusable compatibility variant, not the Home composition.
+> Latest owner override: Hero begins at viewport top, header occupies no flow space. On mobile the scene reserves internal clearance for the shared brand/menu so its words do not run behind the navigation; the Hero background still begins at y=0. HomeSearchEntry v2 floating-link opens existing /poisk/; no inline field or mounted capture controller on Home. Content order is Hero → quick links → feed → page-end. Earlier inline capture remains a reusable compatibility variant, not the Home composition.
 
 # Home composition: global navigation without context islands
 
