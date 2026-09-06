@@ -2,16 +2,6 @@
 
 ## [Unreleased]
 
-- Added: protected preview voice conversational Search on the existing Search/Auth/
-  transport and shared Google quota path: continuous PCM capture, owner-scoped
-  IndexedDB audio and accepted input, explicit ASR confirmation, durable private
-  operation receipts, ordered interpretation and normal card/history integration.
-  Added additive service-only SQL, independent semantic filters, reconciliation,
-  synthetic capture/HTTP contracts and read-only Android preflight. The shared
-  action owner no longer adds a separate personalization activation dialog.
-  Live ASR, environment rollout, PWA and native A=S=P remain unverified; optional
-  analytics consent is unchanged and no production/root promotion is included.
-
 - Fixed: `social_item_resolve` now publishes an operation-specific ChatGPT
   input schema that requires one canonical link and its read-access class and
   no longer advertises unrelated target-kind/search/feed fields. Legacy
