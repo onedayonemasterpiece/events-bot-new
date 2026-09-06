@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added durable partner create owner-review transitions on the existing event
+  operation ledger, exact-digest approval/rejection and immutable owner audit;
+  approval only queues work with separate execution-time policy checks (#643).
+
 - Connected queued Events MCP create recovery to canonical-DB startup and the
   existing five-minute scheduler, with owner resource/client/capability checks
   immediately before both normal and recovered execution. Partner/Codex jobs do
