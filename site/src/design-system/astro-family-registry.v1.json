@@ -2356,7 +2356,7 @@
         "site/src/components/HomeQuickNav.astro"
       ],
       "variants": [
-        "inline-routes"
+        "rectangular-grid"
       ],
       "states": [
         "populated"

@@ -5,13 +5,13 @@
   "registry_version": "1.0.0",
   "registry_sha256": "4f991aff77086abe5e2c3027beb6b2050b9492c73d3ab624053b56087eb1e35a",
   "source_root": "site/src",
-  "source_inventory_sha256": "5daac48826c04c5fff658343451a3882c90d974ec0faf05125b043ac39e22066",
+  "source_inventory_sha256": "9a55dc1fd49863a1f468367a595042731e010e57443e4eba75a07c636994d24a",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "c68853ddb5745d8bef94015fb0ef715e0583cb502f028f2eb8f6d8e690cf49a4",
+  "astro_family_graph_sha256": "573f0fe8ab8f906e67ab0604a1cc02121104a532ccfa2b811ebda4e7a3401e8b",
   "summary": {
     "token_count": 2542,
-    "definition_count": 2852,
-    "consumer_count": 3661,
+    "definition_count": 2851,
+    "consumer_count": 3663,
     "alias_edge_count": 897,
     "family_count": 112
   },
@@ -73687,6 +73687,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-action-primary",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 38,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-mobile-rail-primary",
           "path": "site/src/components/listings/mobile-listing-foundation-bindings.css",
           "line": 225,
@@ -74770,7 +74776,7 @@
         {
           "token": "--ke-color-mobile-nav-border",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -78572,7 +78578,7 @@
         {
           "token": "--ke-color-mobile-nav-surface",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -79905,7 +79911,7 @@
         {
           "token": "--ke-color-mobile-nav-border",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -81742,6 +81748,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-action-primary",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 38,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-mobile-rail-primary",
           "path": "site/src/components/listings/mobile-listing-foundation-bindings.css",
           "line": 225,
@@ -83504,7 +83516,7 @@
         {
           "token": "--ke-color-mobile-nav-border",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -88459,7 +88471,7 @@
         {
           "token": "--ke-color-text-secondary",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 42,
+          "line": 45,
           "has_fallback": false
         },
         {
@@ -104709,7 +104721,7 @@
         {
           "token": "--ke-color-mobile-nav-border",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -104771,7 +104783,7 @@
         {
           "token": "--ke-color-mobile-nav-surface",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -112777,7 +112789,7 @@
         {
           "token": "--ke-color-mobile-nav-surface",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -119593,7 +119605,7 @@
         {
           "token": "--ke-color-text-secondary",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 42,
+          "line": 45,
           "has_fallback": false
         }
       ],
@@ -127547,7 +127559,7 @@
         {
           "token": "--ke-elevation-mobile-nav",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -142510,7 +142522,7 @@
         {
           "token": "--ke-font-size-small",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 42,
+          "line": 45,
           "has_fallback": true
         }
       ],
@@ -149929,7 +149941,7 @@
         {
           "token": "--ke-lower-surface-offset",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": true
         },
         {
@@ -162347,6 +162359,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/components/HomeQuickNav.astro",
+          "line": 25,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-review-notice-radius",
           "path": "site/src/pages/segodnya/index.astro",
           "line": 48,
@@ -162520,7 +162538,7 @@
         {
           "token": "--ke-radius-pill",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
@@ -165521,6 +165539,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/components/HomeQuickNav.astro",
+          "line": 25,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-review-notice-radius",
           "path": "site/src/pages/segodnya/index.astro",
           "line": 48,
@@ -168405,7 +168429,7 @@
         {
           "token": "--ke-space-2",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 40,
+          "line": 43,
           "has_fallback": true
         },
         {
@@ -168684,25 +168708,25 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 35,
+          "line": 38,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 39,
+          "line": 42,
           "has_fallback": true
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 40,
+          "line": 43,
           "has_fallback": true
         },
         {
@@ -170334,7 +170358,7 @@
         {
           "token": "--ke-space-5",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 39,
+          "line": 42,
           "has_fallback": true
         },
         {
@@ -185732,15 +185756,6 @@
     },
     "--word-delay": {
       "definitions": [
-        {
-          "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 61,
-          "scope": "--- > class=\"home-hero-talk__sr-only\">О чём говорит афиша</h1> <div class=\"home-hero-talk__stage\" data-home-hero-stage> > visibleScenes.map((scene, sceneIndex) => > > <div class=\"home-hero-talk__message\"> <h2 data-home-hero-copy> > scene.fragments.map((fragment, fragmentIndex) => ( <> > aria-label= > `$ > fragment.text.split(/(\\s+)/u).map((word, wordIndex, words) => /^\\s+$/u.test(word) ? word : <span class=\"home-hero-talk__word\" style=",
-          "kind": "css",
-          "value": "${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)",
-          "aliases": [],
-          "token": "--word-delay"
-        },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
           "line": 63,
