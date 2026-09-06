@@ -134,3 +134,83 @@ Evidence assertions PASS:50typed overlaps, verifier disabled in original,
 real20-prefix classification1exact/15rejected/4possible,30unchecked.
 The probe is supplementary execution evidence, not external consultant review.
 No new worktree, no audio/session/database cleanup, no frontend rebuild/deploy.
+
+
+## Recall audit and correction integration — 2026-09-06
+
+The preceding investigation-only status is superseded by source correction
+integration `c2ac4a8ae` (worker `d720b01c45c5ba45ab8faff0fb70e3e031dd0c81`).
+Live delivery remains a separate evidence gate below.
+
+### Confirmed omission, correctly localized
+
+Using the SAME cached query vector as the user's request, read-only live RPC
+returned60 rows. Exact cosine ranking with index/bitmap scans disabled returned
+all76 eligible indexed rows for12–13September; the ordered top60 was identical.
+No approximate-index loss was observed for this query. The direct query plan
+used typed date filtering plus primary-key lookup and a sort; no blanket HNSW
+health/perfect-recall claim is made for other queries.
+
+Event8580 FOXTROT JAZZ BAND / Paola Meidra in Svetlogorsk ranked **2nd**, similarity
+0.7526246687. Event8526 festival entry ranked4th. Both were removed by the
+interpreter's unsupported Kaliningrad-only filter AFTER retrieval. Replaying that
+city filter gives51 rows; applying the existing reciprocal occurrence-family
+collapse gives the user's exact ordered50 (7448 is correctly represented by its
+family, not a newly found loss). This reproduces the actual missing result, not
+just a hypothesis about top-K.
+
+Authenticated readback of public source https://t.me/kenigevents/4877 confirms
+FOXTROT's American jazz programme on12September19:00 in Svetlogorsk. The festival
+entry8526 has broader interval/single-opening-program ambiguity: do not count it
+as an independently confirmed extra concert solely from its dates.
+
+### Corpus check independent of the original50
+
+- Persisted projection587 documents,587 search_v3 and587 related_v1 vectors,
+  model gemini-embedding-2/dim768. All587 search vector text hashes match their
+  corresponding projection text_hash; no missing search vector among these docs.
+- Query/document construction inspected: `task: search result | query: ...`
+  versus `title: ... | text: ...`, same model/dimension; cosine metric. Do not
+  confuse a numerically high similarity with confidence of genre identity.
+- Full date-window inventory76indexed across all cities, not the original50.
+  Canonical Fly comparison adds14 active/unmerged records missing from projection,
+  for90 inspected records. Cancelled/merged rows were excluded from that14.
+- Separate supplementary classifier pass, not vector-ranked (ID-order batches),
+  classified ALL90 with complete ID partitions in5bounded shared-limiter calls:
+ 2exact (7422,8580),3possible (7410,7689,8526),85rejected. This is not independent
+  gold truth or proof that the real world's entire jazz schedule is complete.
+- Raw typed intervals are still not certification of source dates; the current/
+  next weekend convention and projector date errors remain separate concerns.
+
+### Additional production freshness defect (not silently repaired)
+
+Projection last indexed2026-09-04 21:30UTC. Deployed vector sync guard has been
+repeatedly deferring against stale terminal static owner76545, failedSept4
+23:02UTC, with remaining claim and retry parked2036. Vector job76235 is pending;
+static successor76603 is also pending. The guard merely tests non-null active
+job and does not reconcile terminal owner state. This matches existing July11
+vector-stall and August12 terminal-static-claim regression families.
+
+Do NOT clear this guard as a voice quick-fix: it could launch the queued full
+Kaggle build. Current task forbids full builds/root promotion; production recovery
+needs a governed vector-only catch-up that preserves exact static recovery state.
+No guard/production DB/job was mutated. Thus global catalog freshness remains
+OPEN even after voice precision/unsupported-locality fixes. The14missing records
+in this window did not contain a confirmed additional jazz match in the probe;
+other kinds of searches are nevertheless affected.
+
+### Source checks and remaining gate
+
+Worker154 assistant/shared-quota/canary/family tests and strict index typecheck
+passed. Parent adds90s control timeout (read/media remain60s) with3client tests;
+classification total budget45s, individual batch15s. Same durable retry/status
+path remains; no automatic repost of ambiguous searches.
+
+Exact evidence under `artifacts/codex/voice-recall-20260906/`:
+`rank-comparison.json`, `rank-default-plan.json`, `rank-exact-plan.json`,
+`coverage-gaps.json`, `audit-verified.json`, `catalog-classification-summary.json`,
+`source-8580.json`, `guard-audit.md`, `guard-{schema,state,runtime}.json`.
+Both configured Opus consultant paths were authentication-blocked (`a-opus` and
+Claude project Opus). No external review pass claimed; user's ChatGPT Pro audit
+is independent and pending. No new credentials requested or lower-class
+consultant substituted.

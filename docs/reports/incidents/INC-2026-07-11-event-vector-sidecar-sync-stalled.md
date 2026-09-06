@@ -114,3 +114,13 @@ the immediate idempotency rerun `ops_run=3561` made zero provider calls.
 - Regular projection no longer depends on a manual preview or remote image probes.
 - Durable `ops_run` evidence separates persistent coverage from ephemeral audits.
 - VK runs with failed rows are no longer marked successful and carry end-to-end correlation identifiers.
+
+
+## 2026-09-06 recurrence evidence
+
+Protected voice recall audit found persisted projection frozen sinceSept4 while
+canonical Fly imports continued. Root localization is a retained terminal static
+claim, matching the August12 regression family. Evidence and constrained recovery
+requirements: `INC-2026-09-06-voice-search-relevance.md`, section Recall audit.
+No production catch-up or guard release was performed by the preview task; do not
+interpret a successful voice classifier as restored index freshness.

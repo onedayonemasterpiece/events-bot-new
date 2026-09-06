@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: voice control timeout covers bounded full-window semantic verification;
+  status/media retain their existing deadlines and durable recovery.
+- Docs: recall audit localized a missing Svetlogorsk jazz concert to invented
+  locality, not vector rank; recorded separate stale static-claim/index-freshness
+  regression without releasing production guards.
+
 - Fixed: authenticated voice Search now requires complete-window semantic verification for exact results, preserves uncertain/rejected/unchecked accounting, and reports verification failure explicitly. Refinement rechecks the changed intent within its parent subset; shared real provider reservations and ordinary Search fail-open behavior remain unchanged. Interpreter no longer assumes Kaliningrad when no city was supplied. Source correction only; live deployment/acceptance tracked in the voice relevance incident.
 
 - Docs: investigated voice jazz-query false positives; recorded disabled semantic

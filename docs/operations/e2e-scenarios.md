@@ -202,3 +202,18 @@ anonymous rendered landing, shared sign-in entry/close focus, compact composer
 geometry and bottom-nav clearance at 320/390/1440, with zero OTP or assistant
 POSTs. Compact phase in this geometry suite is explicitly a fixture; real
 ASR-driven transition belongs to the authorized live preview evidence.
+
+
+### Voice semantic relevance regression (2026-09-06)
+
+- `supabase/functions/event-search/assistant-verification.test.mjs`: complete
+  partitions, exact-only output, malformed/conflicting/unknown IDs and full-window
+  timeout/partial/unavailable accounting (unit fixtures).
+- `supabase/functions/event-search/assistant-verifier-integration.test.mjs`: actual
+  verifier/shared lease wrapper with injected provider and quota; not live ASR.
+- `site/tests/assistant-handler.test.mjs`: strict search/refine admission and
+  durable unavailable receipt/status, no expansion outside parent membership.
+- `site/tests/assistant-capture-only.test.mjs`: capture-only isolation and bounded
+ 90s control versus60s status deadlines.
+- Live recall/precision acceptance and projection-freshness constraints:
+  `docs/reports/incidents/INC-2026-09-06-voice-search-relevance.md`.

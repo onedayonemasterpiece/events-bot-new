@@ -779,3 +779,12 @@ Deployment prerequisites (not activated by this source lane):
   Opus; both were authentication-blocked. No valid external review is claimed.
   Full live authenticated relevance/date/locality acceptance on the deployed SHA
   and physical-phone verification remain integration responsibilities.
+
+
+Integration boundary: browser control requests now allow90s for embedding plus
+bounded full-window verification; read/media requests retain60s. Timeout still
+uses the existing durable status/no-repost recovery path. Recall audit confirmed
+Svetlogorsk event8580 was rank2 but removed by an invented Kaliningrad filter;
+exact-vs-RPC ordered top60 matched. The separate stale production static claim
+blocks vector freshness and is not repaired by this preview. Full details and
+acceptance limitations remain in the canonical relevance incident record.

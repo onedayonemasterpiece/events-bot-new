@@ -16,7 +16,8 @@ export class AssistantClient {
     if(this.owner()!==owner)throw new Error('voice_identity_changed');
     const response=await this.auth.dataClient.request(`${this.base}/${route}`,{method:body===undefined?'GET':'POST',
       headers:{Authorization:`Bearer ${session.access_token}`,apikey:this.key,'Content-Type':mediaType||'application/json',Accept:'application/json'},
-      signal:AbortSignal.timeout(60000),...(body===undefined?{}:{body:mediaType?body as BodyInit:JSON.stringify(body)})});
+      // A search control includes bounded semantic verification of the full window.
+      signal:AbortSignal.timeout(route==='control'?90000:60000),...(body===undefined?{}:{body:mediaType?body as BodyInit:JSON.stringify(body)})});
     const value=await response.json();
     if(this.owner()!==owner)throw new Error('voice_identity_changed');
     if(!response.ok)throw new Error(typeof value.error==='string'?value.error:'voice_request_failed');
