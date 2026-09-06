@@ -13,6 +13,9 @@ public festival/club counts and native Penpot acceptance remain open.
 
 ## [Unreleased]
 
+### Fixed
+- Mobile fullscreen menu now hides the entire composed date/event lower dock until closing completes, rather than leaving its date rail and empty skin above the menu. Upward header/scroll-end swipe closes the menu while preserving normal menu scrolling, focus and calendar state.
+
 ### Changed
 - Strengthen the shared lower-island contact and ambient shadow across single navigation, date/calendar and event Buy docks, including Weekend static first paint; preserve geometry and upper-island styling.
 - Weekend initial HTML now contains its native city row, closed picker and final lower composition; posters and the canonical wordmark no longer wait for client scripts to become visible. Separate lightweight island startup from unrelated Auth imports and add delayed-JS/no-JS first-paint checks.
@@ -5415,6 +5418,16 @@ public festival/club counts and native Penpot acceptance remain open.
 - **Admin / Delete Event**: Event deletion no longer attempts to delete source VK wall posts; only bot-managed VK posts (`event.vk_source_hash` present) are deleted.
 - **VK Auto Queue / Event Parse**: Added a conservative prefilter for obvious long historical/admin non-event VK posts before full `event_parse`; ambiguous or event-like posts still go through the normal LLM parse unchanged, reducing wasted TPM on repeated non-events.
 - **General Stats / Festivals Queue**: `/general_stats` now shows current festival queue snapshot (`total/pending/running/done/error`), active backlog (`pending+running`), and active breakdown by source (`vk/tg/url`) in addition to daily inflow.
+
+### Fixed
+- Mobile island review: city text clips to the actual eased surface bounds; Popular starts compact in static HTML/CSS rather than flashing expanded. Free event cards say only «Бесплатно» while detail conditions stay intact.
+
+### Added
+- Source-bound, preview-only mobile Date editorial draft with three real event links; extends the existing documented Weekend prototype without runtime generation or current-data claims.
+
+### Fixed
+- Mobile city caption waits for complete contraction and vertical settling; reverse hides the caption before expanding city choices.
+- Open calendar dismisses with a downward touch pull from its header/grid while retaining horizontal months, selected dates and keyboard/close controls.
 
 ## [1.12.0] - 2026-03-04
 ### Highlights

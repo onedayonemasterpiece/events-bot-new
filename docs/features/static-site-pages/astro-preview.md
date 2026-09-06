@@ -1614,3 +1614,134 @@ editorial remain in this focused preview. Acceptance compares B9/B10 rendered
 geometry and upper shadows, single/composed lower shadows, calendar and CTA
 states, and initial Weekend before script enhancement. Evidence:
 `artifacts/codex/lower-island-shadow-20260906/`. No root/full-catalog promotion.
+
+### Owner review corrections: compact entry and contained city motion — 2026-09-06
+
+- Card admission is now `Бесплатно` via `eventCardAdmissionLabel`; detailed
+  registration/booking conditions remain on event details. Sold-out precedence
+  is unchanged. This is presentation only, not classification of event facts.
+- Mobile city content has one rounded, two-axis clipping viewport inside the
+  actual animated surface. Its width/height follow that same finite540ms eased
+  animation; the shadow remains outside. The former independently scaled skin
+  could become44px high while its54px text row painted beyond the edge. The
+  two-phase row/picker handoff remains, including reversal and native horizontal
+  scroll before docking. No opacity flashes or text scaling were introduced.
+- Mobile Popular starts with the compact right-hand picker in server HTML/CSS,
+  even while scripts are withheld. Its enhancer preserves that state at scroll0
+  and on return to the top. Desktop continues to expose the maximal fitting
+  city choices; it is not reduced to a mobile-only ellipsis.
+- The Date specimen now includes a mobile bottom editorial block with three
+  real internal links, prepared before build. Provenance, historical-data scope
+  and production-generation gap are documented in the existing
+  [editorial owner](weekend-editorial-review.md#date-specimen-extension--2026-09-06).
+
+Review prefix: `preview-islands-review-20260906`; direct specimens are
+`/date-2026-07-23/`, `/populyarnoe/`, `/vyhodnye/` and
+`/podborki/besplatnye-sobytiya/`, not a design-system catalog.
+The same historical23July snapshot/reference date is deliberately retained for
+comparison; this is not a current September-event freshness acceptance.
+
+Checks: `islands-review.test.mjs`, `island-archetypes.test.mjs`,
+`islands-review.playwright.mjs`, `mobile-city-scroll.playwright.mjs`
+(date/Weekend only: Popular no longer has an expanded mobile initial row), and
+source production-surface gate. Tags: static-data, static-route, visual-layout;
+auth_mode=anonymous. L0/L1 only; no Auth/native-system change, L2/L3 not claimed.
+Artifacts: `artifacts/codex/islands-review-20260906/`.
+
+Published review receipt: source
+`cd90e408d526259cbb2411032f8489694b38feee`, [PR639](https://github.com/onedayonemasterpiece/events-bot-new/pull/639)
+against `feature/islands-archetypes-20260906`, not voice/main.
+- [Date + day editorial](https://kenigevents.ru/preview-islands-review-20260906/date-2026-07-23/)
+- [Popular](https://kenigevents.ru/preview-islands-review-20260906/populyarnoe/)
+- [Free](https://kenigevents.ru/preview-islands-review-20260906/podborki/besplatnye-sobytiya/)
+- [Weekend](https://kenigevents.ru/preview-islands-review-20260906/vyhodnye/)
+
+PASS:16 L0 tests; source-surface contract;6 native city swipe/filter/reversal
+cases;7 Weekend delayed/no-JS cases;6 dedicated route/width cases both locally
+and against the published target (320/390/430 plus desktop1440).
+All13 emitted route/support files and `preview-build.json` read back byte-exact.
+CI [34024739021](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34024739021)
+completed its contract/facts/gate jobs successfully; its browser job was skipped,
+not presented as the separate public L1 run. No phone/production certification.
+
+### Sequential city caption and calendar swipe dismissal — 2026-09-06
+
+Owner follow-up supersedes the earlier in-animation58% caption handoff.
+Reproduction on the published review found22 frames with incoming text while
+geometry still moved; reciprocal row/caption masks alone were insufficient.
+The city island now contracts for540ms, finishes its180ms vertical settling
+(with a40ms completion margin), and only then reveals the compact caption over
+180ms. Reverse first closes the caption mask, then expands the list; reversing
+before the caption appeared skips that unnecessary wait. The existing clipping
+viewport, native horizontal city row, reduced motion and Popular compact SSR
+remain. Caption visibility is tested against actual settled x/y/width/height,
+not a phase name alone. The masked caption remains inert throughout geometry,
+settling and reveal, becoming keyboard-actionable only when ready. Reverse native scroll may move Y; list expansion still
+waits until the caption is hidden.
+
+The opened calendar now closes on a downward single-finger pull over56px,
+starting at the scroll-top of its panel, from either header or month grid.
+Horizontal months, day-strip native scrolling, short drags, selected month,
+real date links, Escape/close and focus return are regression cases. No global
+body-scroll lock, alternate calendar or voice overlay is introduced. Touch
+arbitration is localized to the sheet: [MDN touch events](https://developer.mozilla.org/en-US/docs/Web/API/Touch_events)
+and [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)
+explain why a vertical browser gesture cancels pointerup and why preventDefault
+must act on the first directional touchmove, not only after the final threshold.
+
+Focused successor prefix: `preview-islands-sequential-20260906`; same historical
+corpus and existing date/weekend editorial drafts, with24July and23April2027
+included only as real navigation regression targets. L1 native touch injection
+is not physical-phone certification. Artifacts:
+`artifacts/codex/islands-sequential-20260906/`.
+
+The native city regression waits for the actual terminal caption phase after
+reverse, rather than assuming all main-thread callbacks have completed after
+1150ms. Per-frame mask/geometry checks remain; this does not skip motion checks.
+
+Published successor receipt: runtime `e1150f4ee5683c3235677b3dd4235db1b560e953`,
+exact built source `e08e7e74a7b605a71c1964bea6316382b9f2242e`, same PR639.
+[Date: city handoff and downward calendar gesture](https://kenigevents.ru/preview-islands-sequential-20260906/date-2026-07-23/),
+[Popular](https://kenigevents.ru/preview-islands-sequential-20260906/populyarnoe/),
+[Weekend](https://kenigevents.ru/preview-islands-sequential-20260906/vyhodnye/),
+[Free](https://kenigevents.ru/preview-islands-sequential-20260906/podborki/besplatnye-sobytiya/).
+
+PASS:18 L0; surface contract; sequential geometry/inert/native gestures at
+320/390/430 plus reduced-motion both locally and publicly;6 native city cases;
+5 calendar/date-strip/future-date/desktop cases;6 prior review cases locally.
+All15 route/support files plus manifest read back byte-exact. CI
+[34028608681](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34028608681)
+contract/facts/gate PASS; its browser job skipped, separate public L1 above.
+
+### Fullscreen menu owns lower-surface occlusion (2026-09-06)
+
+The mobile Date/Weekend regression was reproduced on the public sequential
+preview: the date dock (z64) remained above the menu (z60), because the old rule
+hid only its nested navigation. Reference4 now occludes and makes inert the
+whole existing composed date/event dock or standalone nav; no z-index escalation
+or second shell. Native `[open]` also occludes before controller startup. The
+previous inert state is restored only after the drawer's closing animation.
+The legacy layout controller skips Reference4, leaving a single lifecycle owner.
+
+A single-finger upward swipe over56px closes from the menu header or scroll end.
+Elsewhere a long menu scrolls natively; short and horizontal gestures do not
+close it. Escape, close button, real menu links, focus return and date/calendar
+state are preserved. This is anonymous L1 native Chromium touch injection, not
+physical-phone certification. Focused successor: `preview-islands-menu-20260906`,
+same historical corpus and approved editorial drafts; no full build or root
+promotion. Evidence: `artifacts/codex/islands-menu-20260906/`.
+
+Published source: `591a1e06148e07dfec1910db9623ccf5a3f4aa30`, PR639.
+[Date](https://kenigevents.ru/preview-islands-menu-20260906/date-2026-07-23/),
+[Weekend](https://kenigevents.ru/preview-islands-menu-20260906/vyhodnye/).
+All15 route/support files and the public manifest were read back byte-exact.
+PASS:20 L0, surface contract, local/public native menu suite4 plus no-JS and
+reduced motion; local sequential city/calendar320/390/430 plus reduced motion.
+The menu suite also checks service/back, collections reset and breakpoint
+close/release. Supplementary public checks verify expanded-calendar occlusion
+and preservation of the page's scrolled position. Public screenshots inspected.
+CI [34030418199](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34030418199)
+contract/facts/gate PASS; CI browser skipped, public L1 was run separately.
+The optional desktop outside-click probe was not applicable at1440px, where
+this mobile disclosure is hidden in favor of normal desktop navigation; it is
+not counted as passing desktop interaction evidence.

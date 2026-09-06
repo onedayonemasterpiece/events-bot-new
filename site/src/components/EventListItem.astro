@@ -2,7 +2,7 @@
 import Icon from './Icon.astro';
 import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventAdmissionLabel, eventCalendarHref, eventHref, getLinkedSessionIds, getOccurrencePresentation, isCalendarEligible } from '../lib/events';
+import { eventCardAdmissionLabel, eventCalendarHref, eventHref, getLinkedSessionIds, getOccurrencePresentation, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 interface Props { event: PreviewEvent }
@@ -39,7 +39,7 @@ const linkedEventIds = getLinkedSessionIds(event).join(',');
     <a class="listing-item__title" href={href} data-prefetch>{event.title}</a>
     <div class="listing-item__meta">
       <EventOccurrenceLabel presentation={occurrencePresentation} variant="rail-date-first" />
-      <span>{eventAdmissionLabel(event)}</span>
+      <span>{eventCardAdmissionLabel(event)}</span>
     </div>
     {place && <p>{place}</p>}
     <div class="listing-item__actions">

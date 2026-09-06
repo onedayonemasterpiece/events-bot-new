@@ -11,6 +11,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  const contextParent=context.parentNode,sectionParent=section.parentNode,contextNext=context.nextSibling,sectionNext=section.nextSibling;
  const originalContextStyle=context.getAttribute('style')||'',originalControlsStyle=controls.getAttribute('style')||'',originalNavStyle=nav.getAttribute('style')||'';
  const controlParent=controls.parentNode,controlNext=controls.nextSibling;
+ const initiallyCompact=controls.hasAttribute('data-fi-compact-initial');
  const prepared=controls.hasAttribute('data-fi-ssr-city');
  const marker=prepared?controls.parentElement:doc.createElement('div');if(!prepared){marker.className='fi-mobile-city-origin';controls.before(marker);marker.append(controls);}
  const shortRail=marker.closest('.ke-listing-discovery-rail'),feed=marker.closest('.feed-head');if(shortRail)shortRail.before(marker);else if(feed)feed.before(marker);
@@ -34,6 +35,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const name=button.querySelector('span')||doc.createElement('span'),count=button.querySelector('small')||doc.createElement('small');name.textContent=singleDay&&input.value==='all'?'Все':entry.name;button.setAttribute('aria-label',entry.name);button.append(name,count);row.append(button);
   on(button,'click',()=>{input.checked=!input.checked;input.dispatchEvent(new Event('change',{bubbles:true}));});return{...entry,button,count};
  });
+ const content=doc.createElement('div');content.className='fi-city-content';controls.append(content);content.append(row,toggle);
  row.append(toggle);toggle.hidden=true;toggle.setAttribute('aria-haspopup','dialog');panel.hidden=true;closeButton.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Остальные города');
  let geometry=null,ready=false,dead=false,frame=0,measureNeeded=true,opened=false,visibleCount=items.length,activeHeading=null,lastScope='',sectionRanges=[],widths=[],docked=null,motions=[],settleTimer=0;
  let selectionLabel='';
@@ -68,15 +70,15 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const targetWidth=singleDay?Math.min(Math.max(112,Math.ceil(labelProbe.getBoundingClientRect().width)+48),win.innerWidth-left-inset):cityWidth;labelProbe.remove();
   marker.style.height=`${contextHeight}px`;
   const cr=controls.getBoundingClientRect(),mr=marker.getBoundingClientRect();
-  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:singleDay||weekend?44:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
+  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:singleDay||weekend?44:initiallyCompact?70:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
   titleMarker.style.position='';marker.style.position='';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${geometry.approachTop}px`);
   title.style.cssText=titleStyle;
   if(!nativeTimeline){title.style.animation='none';titleSkin.style.animation='none';}
   context.style.cssText=`--fi-title-height:${singleDay?38:contextHeight}px;--fi-title-x:${left+pad-tr.x}px;--fi-title-scale:${geometry.title.scale};--fi-title-end:${titleEnd}px;--fi-skin-x:${left-tr.x}px;--fi-skin-width:${contextWidth}px;`;
   if(weekend){context.style.setProperty('--fi-title-height','44px');weekendNav.style.cssText=`left:${left-tr.x}px;width:${contextWidth}px;`;title.style.cssText=titleStyle;}
   section.style.cssText=`left:${left+pad-tr.x}px;top:30px;width:${contextWidth-2*pad}px;height:${contextHeight-38}px;`;section.hidden=true;
-  controls.style.cssText='';controls.append(toggle);toggle.style.cssText='position:absolute;left:0;top:0;width:44px;';row.style.width=`${originWidth}px`;
-  ranges();docked=null;setDocked(win.scrollY>=geometry.threshold,false);row.scrollLeft=savedScroll;measureNeeded=false;
+  controls.style.cssText='';content.append(row,toggle);toggle.style.cssText='position:absolute;left:0;top:0;width:44px;';row.style.width=`${originWidth}px`;
+  ranges();docked=null;setDocked(initiallyCompact||win.scrollY>=geometry.threshold,false);row.scrollLeft=savedScroll;measureNeeded=false;
  }
  function fit(){
   // Native scrolling owns overflow before docking; the compact picker owns all
@@ -84,7 +86,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
   visibleCount=docked?0:items.length;
   row.inert=!!docked;row.setAttribute('aria-hidden',String(!!docked));
   items.forEach((item,i)=>{item.button.hidden=false;item.button.inert=!!docked;item.label.hidden=opened&&i<visibleCount;});
-  toggle.hidden=!docked;toggle.inert=!docked;toggle.textContent=singleDay?compactLabel():'…';
+  toggle.hidden=!docked;toggle.inert=!docked||['geometry','settling','revealing'].includes(controls.dataset.fiCaptionPhase);toggle.textContent=singleDay?compactLabel():'…';
   toggle.setAttribute('aria-label',`Выбрать город. Сейчас: ${items.filter(i=>i.input.checked).map(i=>i.name).join(', ')}`);
   toggle.classList.toggle('has-selected',items.some(i=>i.input.checked&&i.input.value!=='all'));
   controls.dataset.fiVisibleCount=String(visibleCount);controls.dataset.fiOverflowCount=String(items.length-visibleCount);
@@ -104,29 +106,41 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const emptyRow=`inset(0px ${geometry.origin.width}px 0px 0px)`,fullRow='inset(0px 0px 0px 0px)';
   const emptyToggle='inset(0px 100% 0px 0px)',fullToggle='inset(0px 0% 0px 0px)';
   const rowClip=next?emptyRow:fullRow,toggleClip=next?fullToggle:emptyToggle;
-  row.style.clipPath=rowClip;toggle.style.width=`${toggleWidth}px`;toggle.style.clipPath=toggleClip;
+  const animated=animate&&!reduced();
+  row.style.clipPath=rowClip;toggle.style.width=`${toggleWidth}px`;toggle.style.clipPath=next&&animated?emptyToggle:toggleClip;
   const toggleX=next?(target.width-toggleWidth)/2:target.width-toggleWidth,toggleY=(target.height-(next&&singleDay?44:40))/2;
   toggle.style.transform=`translate(${toggleX}px,${toggleY}px)`;controls.dataset.fiDocked=String(next);
-  if(!animate||reduced())return;
-  toggle.hidden=false;
-  const timing={duration:540,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
+  controls.dataset.fiCaptionPhase=animated?(next?'geometry':'caption-hide'):'ready';
+  if(!animated){toggle.inert=!next;return;}
+  toggle.hidden=false;toggle.inert=true;
+  const hideDelay=next||beforeToggleClip==='inset(0px 100% 0px 0px)'?0:180;
+  const timing={duration:540,delay:hideDelay,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
+  if(!next)settleTimer=win.setTimeout(()=>{settleTimer=0;controls.dataset.fiCaptionPhase='geometry';},hideDelay);
   controls.dataset.fiMoving='true';
-  const move=controls.animate([{transform:`translate3d(${before.x-geometry.markerX}px,0,0)`},{transform:`translate3d(${x}px,0,0)`}],timing);
+  const move=controls.animate([{width:`${before.width}px`,height:`${before.height}px`,minHeight:`${before.height}px`,transform:`translate3d(${before.x-geometry.markerX}px,0,0)`},{width:`${target.width}px`,height:`${target.height}px`,minHeight:`${target.height}px`,transform:`translate3d(${x}px,0,0)`}],timing);
   // A shared two-phase clipping handoff: the row leaves BEFORE the compact
   // caption enters (the reverse on expansion). No intersecting text layers,
   // opacity fade, font scaling, DOM replacement or scroll-time seeking.
   const rowStart=beforeRowClip==='none'?fullRow:beforeRowClip;
   const toggleStart=beforeToggleClip==='none'?fullToggle:beforeToggleClip;
   const handoff=next ? 0.58 : 0.42;
-  motions=[move,skin.animate([{transform:`scale(${skinWidth/target.width},${skinHeight/target.height})`},{transform:'scale(1,1)'}],timing),
+  motions=[move,
    row.animate([{clipPath:rowStart},{clipPath:next?emptyRow:rowStart,offset:handoff},{clipPath:rowClip}],timing),
    toggle.animate([{transform:`translate(${beforeToggleX}px,${beforeToggleY}px)`},{transform:`translate(${toggleX}px,${toggleY}px)`}],timing),
-   toggle.animate([{clipPath:toggleStart},{clipPath:next?toggleStart:emptyToggle,offset:handoff},{clipPath:toggleClip}],timing)];
+   toggle.animate(next?[{clipPath:emptyToggle},{clipPath:emptyToggle}]:[{clipPath:toggleStart},{clipPath:emptyToggle}],{duration:next?540:160,easing:'ease-out',fill:'both'})];
   move.onfinish=()=>{cancelMotion();fit();
    if(next){
+    // Complete BOTH surface contraction and vertical settling before exposing
+    // any caption. The original toggle remains inert behind its closed mask.
+    toggle.inert=true;controls.dataset.fiCaptionPhase='settling';
     marker.style.transition='top 180ms cubic-bezier(.25,.1,.25,1)';marker.style.setProperty('--fi-city-top',`${geometry.city.y}px`);
-    controls.dataset.fiMoving='true';settleTimer=win.setTimeout(()=>{settleTimer=0;controls.removeAttribute('data-fi-moving');},220);
-   }
+    controls.dataset.fiMoving='true';settleTimer=win.setTimeout(()=>{
+     settleTimer=0;controls.removeAttribute('data-fi-moving');controls.dataset.fiCaptionPhase='revealing';
+     toggle.style.clipPath=fullToggle;
+     const reveal=toggle.animate([{clipPath:emptyToggle},{clipPath:fullToggle}],{duration:180,easing:'ease-out',fill:'both'});motions=[reveal];
+     reveal.onfinish=()=>{cancelMotion();controls.dataset.fiCaptionPhase='ready';fit();};
+    },220);
+   }else controls.dataset.fiCaptionPhase='ready';
   };
  }
  function close(focus=true){if(!opened)return;opened=false;if(panel.matches(':popover-open'))panel.hidePopover();panel.removeAttribute('popover');panel.style.cssText='';panel.hidden=true;items.forEach(i=>i.label.hidden=false);closeButton.hidden=true;controls.removeAttribute('data-island-city-open');toggle.setAttribute('aria-expanded','false');if(focus)toggle.focus({preventScroll:true});}
@@ -135,7 +149,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  function render(){
   frame=0;if(dead||!ready)return;if(measureNeeded)measure();
   const g=geometry,y=win.scrollY;
-  if(!docked&&y>=g.threshold)setDocked(true);else if(docked&&y<=Math.max(0,g.threshold-24))setDocked(false);
+  if(!docked&&y>=g.threshold)setDocked(true);else if(!initiallyCompact&&docked&&y<=Math.max(0,g.threshold-24))setDocked(false);
   if(opened){placePanel();if(motions.length||settleTimer)schedule();}
   const line=y+g.context.y+g.context.height+12;let active=sectionRanges[0];for(const r of sectionRanges)if(r.top<=line)active=r;
   activeHeading=active?.heading;const text=activeHeading?.textContent.trim()||'';
@@ -157,13 +171,13 @@ export function initMobileFloatingIslands(doc=document,win=window){
  on(doc,'pointerdown',e=>{if(opened&&!panel.contains(e.target)&&!controls.contains(e.target))close(false);});
  if(!singleDay&&!weekend)on(title,'click',()=>win.scrollTo({top:0,behavior:reduced()?'instant':'smooth'}));
  on(win,'scroll',()=>schedule(),{passive:true});on(win,'resize',()=>schedule(true),{passive:true});on(win,'pageshow',()=>schedule(true));
- on(win.matchMedia('(prefers-reduced-motion: reduce)'),'change',()=>{cancelMotion();fit();marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${docked?geometry.city.y:geometry.approachTop}px`);schedule();});
+ on(win.matchMedia('(prefers-reduced-motion: reduce)'),'change',()=>{cancelMotion();controls.dataset.fiCaptionPhase='ready';fit();toggle.style.clipPath=docked?'inset(0px 0% 0px 0px)':'inset(0px 100% 0px 0px)';controls.dataset.fiCaptionPhase='ready';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${docked?geometry.city.y:geometry.approachTop}px`);schedule();});
  const personal=doc.querySelector('[data-popular-personalized]');
  const personalObserver=new MutationObserver(()=>schedule(true));if(personal)personalObserver.observe(personal,{attributes:true,attributeFilter:['hidden']});
  band.__islands={get geometry(){return geometry},destroy(){dead=true;personalObserver.disconnect();cancelMotion();abort.abort();win.cancelAnimationFrame(frame);close(false);
  titleParent.insertBefore(title,titleNext);title.style.cssText=titleStyle;flow.forEach(n=>delete n.dataset.fiMobileFlow);titleSkin.remove();weekendNav?.remove();
  contextParent.insertBefore(context,contextNext);sectionParent.insertBefore(section,sectionNext);context.style.cssText=originalContextStyle;section.style.cssText='';if(pageButton)pageButton.hidden=false;
- if(!prepared){row.remove();skin.remove();}else{row.style.cssText='';row.inert=false;items.forEach(i=>i.button.inert=false);marker.style.cssText='';toggle.hidden=true;}controls.prepend(toggle);toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);if(!prepared)marker.remove();titleMarker.remove();panel.hidden=prepared;delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete doc.body.dataset.fiWeekend;delete band.__islands;}};
+ if(!prepared){row.remove();skin.remove();}else{row.style.cssText='';row.inert=false;items.forEach(i=>i.button.inert=false);marker.style.cssText='';toggle.hidden=true;}controls.prepend(toggle);if(prepared)controls.append(row);content.remove();toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);if(!prepared)marker.remove();titleMarker.remove();panel.hidden=prepared;delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete doc.body.dataset.fiWeekend;delete band.__islands;}};
  sync();ready=true;measure();render();doc.body.dataset.fiMotion='ready';
  doc.fonts.ready.then(()=>{if(!dead)schedule(true);});return band.__islands;
 }

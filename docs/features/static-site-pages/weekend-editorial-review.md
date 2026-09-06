@@ -66,3 +66,28 @@ no overlay/overflow at page end, three real same-preview detail navigations,
 no footer on desktop or a different weekend. Native Android/iOS, current-event
 accuracy and automated LLM/provider execution are **not claimed**.
 Evidence: `artifacts/codex/mobile-city-native-20260906/`.
+
+## Date specimen extension — 2026-09-06
+
+The same product contract now has a source-bound one-day prototype at
+`/preview-islands-review-20260906/date-2026-07-23/`, after the event lists on
+mobile only. `date-editorial-prototype.json` is an assistant-prepared AI draft,
+not a production provider run. It is statically included only for the exact
+review prefix, matching day, snapshot timestamp and available referenced IDs.
+No browser/LLM request is made to invent recommendations on opening the page.
+
+Grounding in the same23July historical snapshot:
+- 6986: botanical cyanotype at «Ворота», gathering plants, emulsion and printing.
+- 6997: Alina Zhurina's local-play reading, followed by an announced discussion.
+- 5662: marimba, vibraphone and balafon with chamber orchestra.
+
+The block explicitly says these are alternative evenings, not a sequential
+itinerary. All-region scope is visible and does not pretend to follow the city
+filter. Each real link is resolved by `eventHref`; all three detail routes must
+be part of the focused preview. A different day or snapshot hides the draft.
+
+Plan extension: the pending shared editorial schema/pipeline above must support
+one-day scope as well as weekend ranges; generation remains before publication
+through existing LLM admission/limiter, with event-ID evidence and stale-data
+checks. Wiring automated day/weekend generation and fresh production data is
+still pending, not silently completed by this visual prototype.

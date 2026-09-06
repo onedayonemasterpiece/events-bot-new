@@ -326,7 +326,11 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
     .reference4-menu__account-row > *:focus-visible,.reference4-menu__share:focus-visible { outline:3px solid #98401f; outline-offset:-3px; }
     html.shell-menu-open, body.shell-menu-open { overflow:hidden; overscroll-behavior:none; }
     html.shell-menu-open body.mobile-shell-reference4 .site-header { z-index:60!important; }
-    html.shell-menu-open .mobile-bottom-nav { opacity:0; visibility:hidden; pointer-events:none; transform:translate3d(0,100%,0); transition:opacity 140ms ease,transform 220ms cubic-bezier(.22,.82,.22,1),visibility 0s linear 220ms; }
+    /* Hide the whole composed owner, including its rail and skin, not only nav. */
+    html:is(.shell-menu-open, :has([data-mobile-discovery-menu][data-reference4-fullscreen][open]))
+      :is([data-date-dock-surface], [data-event-dock-surface], [data-mobile-bottom-nav], [data-mobile-date-accessory]) {
+      visibility:hidden!important; pointer-events:none!important;
+    }
     @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
       body.mobile-shell-reference4 .mobile-discovery-menu--reference4 > .mobile-discovery-menu__panel { background:rgba(203,191,181,.94)!important; }
       .reference4-menu__list { background:rgba(255,252,247,.90); }
@@ -379,6 +383,23 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
     const serviceBack = menu.querySelector('[data-reference4-service-back]');
     const panel = menu.querySelector('.mobile-discovery-menu__panel');
     let settleTimer = 0;
+    let closeTimer = 0;
+    const mobileViewport = window.matchMedia('(max-width:759px)');
+    const lowerInert = new Map();
+    const syncLowerSurfaces = () => {
+      if (!menu.open || !mobileViewport.matches) {
+        for (const [surface, wasInert] of lowerInert) surface.inert = wasInert;
+        lowerInert.clear();
+        return;
+      }
+      document.querySelectorAll('[data-date-dock-surface], [data-event-dock-surface], [data-mobile-bottom-nav], [data-mobile-date-accessory]').forEach((surface) => {
+        if (surface.parentElement?.closest('[data-date-dock-surface], [data-event-dock-surface]')) return;
+        if (!lowerInert.has(surface)) lowerInert.set(surface, surface.inert);
+        surface.inert = true;
+      });
+    };
+    window.addEventListener('kenigevents:date-dock-change', syncLowerSurfaces);
+    window.addEventListener('kenigevents:event-dock-change', syncLowerSurfaces);
 
     const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const clearSettled = () => {
@@ -425,25 +446,74 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
       requestAnimationFrame(() => serviceOpen?.focus({ preventScroll:true }));
     });
     const closeMenu = () => {
-      if (!menu.open) return;
+      if (!menu.open || menu.classList.contains('is-closing')) return;
       clearSettled();
-      showPlane('main');
-      menu.open = false;
-      window.setTimeout(() => summary?.focus({ preventScroll: true }), reducedMotion() ? 0 : 360);
+      menu.classList.add('is-closing');
+      // Retain open/occlusion until the drawer has left the viewport.
+      closeTimer = window.setTimeout(() => {
+        menu.open = false;
+        menu.classList.remove('is-closing');
+        summary?.focus({ preventScroll:true });
+      }, reducedMotion() ? 0 : 340);
     };
+    const openMenu = () => {
+      window.clearTimeout(closeTimer);
+      menu.classList.remove('is-closing');
+      menu.open = true;
+      syncLowerSurfaces();
+      scheduleSettled();
+    };
+    summary?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (menu.open && !menu.classList.contains('is-closing')) closeMenu();
+      else openMenu();
+    });
+    mobileViewport.addEventListener('change', () => {
+      closeMenu();
+      syncLowerSurfaces();
+    });
     close?.addEventListener('click', closeMenu);
-    menu.addEventListener('keydown', (event) => {
+    menu.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMenu));
+    document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape' || !menu.open) return;
       event.preventDefault();
-      event.stopPropagation();
       closeMenu();
     });
+    document.addEventListener('click', (event) => {
+      if (menu.open && !menu.contains(event.target)) closeMenu();
+    });
+    // The header or scroll end owns upward dismissal; elsewhere pan-y stays native.
+    let swipe = null;
+    panel?.addEventListener('touchstart', (event) => {
+      swipe = null;
+      if (!menu.open || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const header = event.target.closest('.reference4-menu__brand, [data-reference4-close]');
+      const atEnd = panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 2;
+      swipe = { x:touch.clientX, y:touch.clientY, eligible:Boolean(header || atEnd), owns:false, dx:0, dy:0 };
+    }, { passive:true });
+    panel?.addEventListener('touchmove', (event) => {
+      if (!swipe || event.touches.length !== 1) { swipe = null; return; }
+      swipe.dx = event.touches[0].clientX - swipe.x;
+      swipe.dy = event.touches[0].clientY - swipe.y;
+      if (swipe.eligible && swipe.dy < 0 && -swipe.dy > Math.abs(swipe.dx) * 1.5) swipe.owns = true;
+      if (swipe.owns && event.cancelable) event.preventDefault();
+    }, { passive:false });
+    panel?.addEventListener('touchend', (event) => {
+      const finish = swipe;
+      swipe = null;
+      if (!finish?.owns || finish.dy > -56 || -finish.dy <= Math.abs(finish.dx) * 1.5) return;
+      if (event.cancelable) event.preventDefault();
+      closeMenu();
+    }, { passive:false });
+    panel?.addEventListener('touchcancel', () => { swipe = null; }, { passive:true });
     menu.addEventListener('toggle', () => {
       const open = menu.open;
       summary?.setAttribute('aria-label', open ? 'Закрыть навигацию афиши' : 'Открыть навигацию афиши');
       summary?.setAttribute('aria-expanded', String(open));
       document.documentElement.classList.toggle('shell-menu-open', open);
       document.body.classList.toggle('shell-menu-open', open);
+      syncLowerSurfaces();
       if (open) {
         panel.scrollTop = 0;
         scheduleSettled();

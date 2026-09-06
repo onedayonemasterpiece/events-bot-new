@@ -171,3 +171,34 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 ### Lower-island shadow parity
 
 `CHECK_BEFORE=<previous preview> CHECK_BASE=<candidate> CHECK_OUTPUT=<artifacts> node site/tests/lower-island-shadow.playwright.mjs` compares actual standalone/date/Weekend/Buy surfaces, lower geometry and unchanged upper shadow at mobile widths plus desktop. Nested dock navigation must not gain a second shadow. Pair with Weekend delayed/no-JS first paint and existing event-dock action-state checks; this is rendered CSS acceptance, not physical-phone or purchase acceptance.
+
+### Compact Popular entry, bounded city text and day editorial
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/islands-review.playwright.mjs`
+checks Popular before withheld scripts and without JavaScript, then the same
+compact picker after enhancement; mobile date frame-by-frame surface/content
+bounds, three real day-editorial event navigations and desktop behavior.
+Pair with `mobile-city-scroll.playwright.mjs` using
+`CHECK_ROUTES='["/date-2026-07-23/","/vyhodnye/"]'` for native swipe/filter/reversal.
+Anonymous L1, not phone certification, fresh live data or automated LLM evidence.
+
+### Sequential city caption and downward calendar gesture
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/islands-sequential.playwright.mjs`
+checks320/390/430: caption only after real surface x/y/width/height settles,
+caption hidden before reverse list expansion, mid-motion reversal, reduced motion;
+native touch downward from calendar header/grid, short and horizontal gestures,
+retained month, date navigation, Escape/close/focus. Pair with native city swipe
+and `date-dock.playwright.mjs` future-month/date-strip regression. Anonymous L1;
+not physical Android/iPhone evidence. Reproduction artifacts preserve the old
+premature caption and absent downward-dismiss behavior.
+
+### Fullscreen mobile menu / composed lower dock
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/mobile-menu-dock.playwright.mjs`
+checks Date and Weekend at390x844/600: full outer dock hidden/inert, no hit-test
+occlusion through close animation, native menu scrolling, upward header/end
+swipe dismissal, short/horizontal gestures preserved, date state/focus restored,
+Escape/close, calendar reopening and real Popular link navigation. Anonymous
+L1 responsive-layout/native-touch regression, not physical-phone acceptance.
+Run alongside `islands-sequential.playwright.mjs` for prior city/calendar motion.

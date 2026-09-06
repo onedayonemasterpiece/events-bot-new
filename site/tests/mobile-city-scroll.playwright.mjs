@@ -1,7 +1,7 @@
 import {chromium} from 'playwright';import assert from 'node:assert/strict';import {mkdirSync,writeFileSync} from 'node:fs';
 const base=process.env.CHECK_BASE,out=process.env.CHECK_OUTPUT;if(!base||!out)throw new Error('CHECK_BASE/CHECK_OUTPUT required');mkdirSync(out,{recursive:true});
 const browser=await chromium.launch(),checks=[];
-for(const width of (process.env.CHECK_WIDTHS||'320,384,430').split(',').map(Number))for(const route of (process.env.CHECK_ROUTES?JSON.parse(process.env.CHECK_ROUTES):['/date-2026-07-23/','/vyhodnye/','/populyarnoe/'])){
+for(const width of (process.env.CHECK_WIDTHS||'320,384,430').split(',').map(Number))for(const route of (process.env.CHECK_ROUTES?JSON.parse(process.env.CHECK_ROUTES):['/date-2026-07-23/','/vyhodnye/'])){
  const page=await browser.newPage({viewport:{width,height:844},hasTouch:true}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base+route,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.body.dataset.fiMotion==='ready');
  const row=page.locator('.fi-mobile-city-origin .fi-city-visible'),controls=page.locator('.fi-mobile-city-origin [data-listing-controls]'),toggle=controls.locator('[data-island-city-toggle]');
  assert.equal(await controls.getAttribute('data-fi-docked'),'false');assert.equal(await toggle.isVisible(),false);assert.ok(await row.evaluate(n=>n.scrollWidth>n.clientWidth+10));assert.equal(await row.locator('.fi-city-item[hidden]').count(),0);
@@ -17,7 +17,7 @@ for(const width of (process.env.CHECK_WIDTHS||'320,384,430').split(',').map(Numb
  }
  const down=await motion(300);assert.equal(await controls.getAttribute('data-fi-docked'),'true');const docked=await controls.boundingBox();assert.ok(Math.abs(width-docked.x-docked.width-12)<2);
  await toggle.click();assert.equal(await controls.locator('[data-island-city-panel]:popover-open').count(),1);await page.keyboard.press('Escape');
- const up=await motion(0);assert.equal(await controls.getAttribute('data-fi-docked'),'false');assert.equal(await toggle.isVisible(),false);assert.ok(Math.abs(await row.evaluate(n=>n.scrollLeft)-offset)<2,'native scroll position survives collapse and expansion');
+ const up=await motion(0);await page.waitForFunction(()=>document.querySelector('.fi-mobile-city-origin [data-listing-controls]').dataset.fiCaptionPhase==='ready');assert.equal(await controls.getAttribute('data-fi-docked'),'false');assert.equal(await toggle.isVisible(),false);assert.ok(Math.abs(await row.evaluate(n=>n.scrollLeft)-offset)<2,'native scroll position survives collapse and expansion');
  const reversal=await motion(300,true);assert.equal(await controls.getAttribute('data-fi-docked'),'false');
  // Click a real city from the native scroller. Playwright scrolls the same row
  // to the focused button, without substituting a filter call or mock dataset.
