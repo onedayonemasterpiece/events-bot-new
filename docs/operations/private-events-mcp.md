@@ -269,6 +269,24 @@ steps, with renewed authorization and exact digest verification before mutation.
 Regression evidence: `tests/test_private_events_mcp_event_assets.py` plus the
 existing secure-store suite use actual local manifests/files and deterministic
 HTTP transport, with no live provider calls.
+Durable execution uses `EventAssetService.read_durable(asset_ref,
+expected_digest=..., actor_subject=..., actor_client_id=..., actor_audience=...,
+authorize=...) -> (bytes, safe_filename)`. It consumes the exact persisted actor
+fields and the same shared `event-image-v1` HMAC binding; it never constructs an
+`AccessIdentity`, OAuth token or fake Telegram actor. Its mandatory no-argument
+async authorization callback must revalidate current durable-operation rights.
+The callback runs before/after both reverification and verified-stream reading.
+The original HTTP token lifetime is not repurposed as durable job authority.
+
+The injected ingestor must implement existing `open_verified`; absence fails
+closed. Reads are bounded to `max_bytes + 1`, matched to measured length and
+hashed against the approved digest again after reading, with unchanged role,
+MIME, dimensions and expiry metadata. Expiry crossing during I/O also fails.
+The filename is generated from digest and measured MIME, never the original
+private path/name. No bytes are returned after revocation during I/O, and neither
+this read nor restart extends image retention. This is an internal intake API,
+not an MCP binary response or a provider upload.
+
 ### Durable partner create owner review (#643)
 
 `PartnerEventReviewService` in `private_events_mcp/partner_event_review.py` uses

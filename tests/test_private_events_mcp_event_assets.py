@@ -153,3 +153,134 @@ def test_callback_and_limits_required(tmp_path):
     for kwargs in ({'authorize': None}, {'ttl_seconds': 86401}, {'max_bytes': True}):
         with pytest.raises(ValueError):
             service(store, **kwargs)
+
+
+async def durable_policy():
+    return True
+
+
+def durable(runtime, staged, ctx=None, **kwargs):
+    who = (ctx or context()).identity
+    return runtime.read_durable(staged['asset_ref'], expected_digest=staged['content_digest'],
+                                actor_subject=who.subject, actor_client_id=who.client_id,
+                                actor_audience=who.audience,
+                                authorize=kwargs.pop('authorize', durable_policy), **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_durable_read_restart_uses_actor_fields_not_oauth_token(tmp_path):
+    import hashlib
+    store, _ = make_store(tmp_path)
+    staged = await service(store).stage(file(), context())
+    reopened, fetcher = make_store(tmp_path)
+
+    async def no_http_authorization(*args):
+        raise AssertionError('durable execution must not fabricate an HTTP identity')
+
+    runtime = service(reopened, authorize=no_http_authorization)
+    content, name = await durable(runtime, staged)
+    assert 'sha256:' + hashlib.sha256(content).hexdigest() == staged['content_digest']
+    assert name == 'event-image-' + staged['content_digest'][7:23] + '.png'
+    assert not fetcher.calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('deny_at', [1, 2, 3, 4])
+async def test_durable_policy_checked_around_each_io_phase(tmp_path, deny_at):
+    store, _ = make_store(tmp_path)
+    runtime = service(store)
+    staged = await runtime.stage(file(), context())
+    checks = []
+
+    async def policy():
+        checks.append(True)
+        return len(checks) < deny_at
+
+    with pytest.raises(ToolExecutionError):
+        await durable(runtime, staged, authorize=policy)
+    assert len(checks) == deny_at
+
+
+@pytest.mark.asyncio
+async def test_durable_expiry_and_wrong_actor_fail(tmp_path):
+    now = [1000]
+    store, _ = make_store(tmp_path, clock=lambda: now[0])
+    runtime = service(store, clock=lambda: now[0], ttl_seconds=60)
+    staged = await runtime.stage(file(), context())
+    with pytest.raises(ToolExecutionError):
+        await durable(runtime, staged, context(subject='partner:other'))
+    now[0] = staged['expires_at']
+    with pytest.raises(ToolExecutionError):
+        await durable(runtime, staged)
+
+
+@pytest.mark.asyncio
+async def test_durable_hashes_actual_stream_bytes_and_bounds_read(tmp_path):
+    from contextlib import contextmanager
+    from io import BytesIO
+    store, _ = make_store(tmp_path)
+    runtime = service(store)
+    staged = await runtime.stage(file(), context())
+    real_open = store.open_verified
+    sizes = []
+
+    class CorruptStream(BytesIO):
+        def read(self, size):
+            sizes.append(size)
+            return super().read(size)
+
+    @contextmanager
+    def corrupt(ref, binding):
+        with real_open(ref, binding) as (stream, metadata):
+            yield CorruptStream(b'x' * metadata.byte_length), metadata
+
+    store.open_verified = corrupt
+    with pytest.raises(ToolExecutionError):
+        await durable(runtime, staged)
+    assert sizes == [runtime.max_bytes + 1]
+
+
+@pytest.mark.asyncio
+async def test_durable_revoke_during_stream_io_and_expiry_after_read(tmp_path):
+    from contextlib import contextmanager
+    now = [1000]
+    store, _ = make_store(tmp_path, clock=lambda: now[0])
+    runtime = service(store, clock=lambda: now[0], ttl_seconds=60)
+    staged = await runtime.stage(file(), context())
+    active = [True]
+    real_open = store.open_verified
+
+    @contextmanager
+    def revoking(ref, binding):
+        with real_open(ref, binding) as pair:
+            yield pair
+        active[0] = False
+
+    async def policy():
+        return active[0]
+
+    store.open_verified = revoking
+    with pytest.raises(ToolExecutionError):
+        await durable(runtime, staged, authorize=policy)
+
+    @contextmanager
+    def expiring(ref, binding):
+        with real_open(ref, binding) as pair:
+            yield pair
+        now[0] = staged['expires_at']
+
+    store.open_verified = expiring
+    with pytest.raises(ToolExecutionError):
+        await durable(runtime, staged)
+
+
+@pytest.mark.asyncio
+async def test_durable_requires_current_policy_and_verified_opener(tmp_path):
+    store, _ = make_store(tmp_path)
+    runtime = service(store)
+    staged = await runtime.stage(file(), context())
+    with pytest.raises(ValueError):
+        await durable(runtime, staged, authorize=None)
+    store.open_verified = None
+    with pytest.raises(ToolExecutionError):
+        await durable(runtime, staged)

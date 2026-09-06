@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added bounded durable event-image reads from persisted actor bindings, with
+  current-policy checks around every I/O phase and exact returned-byte digest
+  verification; no synthetic OAuth identity or retention extension (#643).
+
 - Added default-off owner OAuth event image stage/get tools with private attachment metadata, independent of social publishing flags; Codex remains read-only (#643).
 - Added current tenant-authorized publication evidence for accepted event-create
   operations: canonical public URL records and bounded live JobOutbox state,
