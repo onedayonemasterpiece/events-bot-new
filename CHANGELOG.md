@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added: preview-only voice startup diagnostics in the existing request/details
+  panel: bounded metadata trace, manual copy/download, and an explicit disposable
+  storage probe that never reads or deletes user recordings. Pending IndexedDB
+  opens are single-flight even after timeout, preventing retry queue amplification.
+  This is diagnostic instrumentation, not a claimed fix for the physical-phone
+  storage timeout; microphone/ASR and durable recording contracts are unchanged.
+
 - Fixed: voice preview startup now bounds stalled IndexedDB open, exposes a
   concrete startup stage and offers non-destructive manual reconnect instead
   of an endless “search connecting” microphone. Late connections/upgrades are

@@ -1,3 +1,4 @@
+import { voiceTrace, voiceErrorName } from './voiceDiagnostics.ts';
 import type { State } from './conversationState.ts';
 import type { Command } from './assistantClient.ts';
 import type { AudioPart } from './audioSegments.ts';
@@ -19,21 +20,33 @@ const digest = async (bytes: Uint8Array) => Array.from(new Uint8Array(await cryp
  * transport outbox or localStorage. No logout/upgrade path deletes this DB.
  * Every write resolves on transaction completion, not request success.
  */
+let pendingOpen: Promise<VoiceStore> | null = null;
+let openAttempt = 0;
 export class VoiceStore {
   private db: IDBDatabase;
   constructor(db: IDBDatabase) { this.db = db; }
   static open({ timeoutMs = 8000 }: { timeoutMs?: number } = {}): Promise<VoiceStore> {
-    return new Promise((resolve, reject) => {
+    if (pendingOpen) { voiceTrace('open_reused', { attempt: openAttempt }); return pendingOpen; }
+    const attempt = ++openAttempt;
+    voiceTrace('open_requested', { attempt, newVersion: 3 });
+    let terminal = false;
+    const opening = new Promise<VoiceStore>((resolve, reject) => {
+      const trace = (event: string) => voiceTrace(event, { attempt });
+      const release = () => { terminal = true; pendingOpen = null; };
       let settled = false;
       const fail = (code: string) => { if (!settled) { settled = true; clearTimeout(timer); reject(new Error(code)); } };
-      const timer = setTimeout(() => fail('voice_storage_open_timeout'), timeoutMs);
+      const timer = setTimeout(() => { trace('open_timeout'); fail('voice_storage_open_timeout'); }, timeoutMs);
       let request: IDBOpenDBRequest;
       try { request = indexedDB.open('kenigevents-voice-v1', 3); }
-      catch { fail('voice_storage_unavailable'); return; }
-      request.onupgradeneeded = () => {
+      catch (error) { voiceTrace('open_throw', { attempt, error: voiceErrorName(error) }); release(); fail('voice_storage_unavailable'); return; }
+      request.onupgradeneeded = event => {
+        voiceTrace('open_upgrade', { attempt, oldVersion: event?.oldVersion, newVersion: event?.newVersion });
+        request.transaction?.addEventListener?.('complete', () => trace('upgrade_complete'));
+        request.transaction?.addEventListener?.('abort', () => trace('upgrade_abort'));
+        request.transaction?.addEventListener?.('error', () => trace('upgrade_error'));
         // Open requests cannot be cancelled. A timed-out/blocked attempt must
         // not later retain a connection or run an orphan upgrade after retry.
-        if (settled) { request.transaction?.abort(); return; }
+        if (settled) { trace('late_upgrade_abort'); request.transaction?.abort(); return; }
         const db = request.result;
         for (const name of ['recordings', 'answers', 'commands']) {
           if (db.objectStoreNames.contains(name)) continue;
@@ -44,15 +57,20 @@ export class VoiceStore {
         if (!db.objectStoreNames.contains('compressedParts')) db.createObjectStore('compressedParts', { keyPath: ['owner', 'recordingId', 'index'] });
         if (!db.objectStoreNames.contains('conversations')) db.createObjectStore('conversations', { keyPath: 'owner' });
       };
-      request.onblocked = () => fail('voice_storage_upgrade_blocked');
-      request.onerror = () => fail('voice_storage_unavailable');
+      request.onblocked = event => { voiceTrace('open_blocked', { attempt, oldVersion: event?.oldVersion, newVersion: event?.newVersion }); fail('voice_storage_upgrade_blocked'); };
+      request.onerror = () => { voiceTrace('open_error', { attempt, error: voiceErrorName(request.error) }); release(); fail('voice_storage_unavailable'); };
       request.onsuccess = () => {
-        if (settled) { request.result.close(); return; }
+        voiceTrace(settled ? 'open_late_success' : 'open_success', { attempt, version: request.result.version }); release();
+        if (settled) { request.result.close(); trace('late_connection_closed'); return; }
         settled = true; clearTimeout(timer);
-        request.result.onversionchange = () => request.result.close();
+        request.result.onversionchange = event => { voiceTrace('connection_versionchange', { attempt, oldVersion: event?.oldVersion, newVersion: event?.newVersion }); request.result.close(); trace('connection_closed'); };
         resolve(new VoiceStore(request.result));
       };
     });
+    // Timeout does not cancel IDBOpenDBRequest. Reuse it until a terminal event
+    // instead of adding more opens to the same database's connection queue.
+    if (!terminal) pendingOpen = opening;
+    return opening;
   }
   close(): void { this.db.close(); }
   private write<T>(stores: string[], apply: (tx: IDBTransaction, result: (value: T) => void) => void): Promise<T> {

@@ -119,3 +119,47 @@ signed_in even if quota fails; repeated Auth snapshots preserve Search output.
 
 - [x] Parent: integrate committed fix into PR #587 and publish only authorized preview.
 - [ ] Parent/user: verify the same Telegram Android surface, without clearing data.
+
+## 11:13 UTC follow-up: confirmed timeout and diagnostic-only investigation
+
+- Telegram screenshot 1450 is **Chrome Android**, not Telegram WebView. It shows
+  the updated «Открываю локальные записи…» toast and signed-in Search quota copy.
+  The user then explicitly confirmed the local-storage timeout after 10–15s;
+  lack of a repeated microphone permission prompt is not evidence of denial.
+- Previous working schema was v2; compression integration `d4175e695` added
+  `compressedParts` by opening the same DB at v3. The old source already had
+  `onversionchange => close()`. We must not claim a missing handler or a frozen
+  tab as the established physical cause. Main Auth can work independently.
+- Native Chromium evidence: an intentionally held v2 connection blocks a first
+  v3 upgrade; another v3 open for that name receives **no event** before timeout,
+  while an independent v1 DB opens successfully. Releasing only the fixture's
+  v2 connection lets both v3 opens finish. This is a genuine native connection
+  queue, not delayed `onsuccess` injection. Legacy audio bytes `[17,29]` remain.
+  The mechanism matches the [IndexedDB connection queue contract](https://w3c.github.io/IndexedDB/#connection-queue): requests for the same storage key/name
+  run sequentially; waiting on preceding requests happens before `blocked`.
+- [Chrome lifecycle guidance](https://developer.chrome.com/docs/web-platform/page-lifecycle-api)
+  recommends closing IndexedDB connections on freeze. However our CDP
+  `Page.setWebLifecycleState(frozen)` probe did **not** establish a frozen tab:
+  headless document stayed `visible`, no freeze event fired, and the real old
+  `onversionchange => close()` handler allowed upgrade immediately. This is
+  negative/inconclusive evidence, not proof of the user's physical trigger.
+  Artifacts: isolated `voice-regression/artifacts/codex/voice-regression/`
+  `native-idb-queue.json`, `frozen-idb.json`, scripts and diagnostic screenshot.
+- User rejected timeout/retry as a product fix. No capture journal, alternate
+  kernel, volatile-success bypass, provider/service change or data cleanup was
+  implemented. The immediate release scope is **diagnosis only**: existing UI
+  details export a privacy-safe event report, with an explicit isolated probe;
+  retry cannot amplify a pending same-DB queue. Report contract is canonical in
+  the feature document, not duplicated here.
+- Local diagnostics acceptance: 28 relevant unit checks and 6 native browser
+  startup checks PASS. The browser suite includes actual queued upgrade,
+  unchanged legacy bytes, explicit probe cleanup, no automatic probe/mic/network,
+  report privacy/download, bounded ring and previous normal native capture.
+  Rendered mobile fixture details inspected; actual published CSS/bundle readback
+  remains parent release work. Trigger tags: `forms`, `connectivity`, `auth`;
+  Auth mode `mocked_ui` for this native-browser fixture, not live Auth acceptance.
+  L2 physical-device storage cause remains unknown and incident stays open.
+
+Next: publish only the diagnostic preview, obtain the user's manually exported
+report on the affected device, then choose a cause-specific repair. Do not ask
+the user to clear site data, recordings, queues or sessions.

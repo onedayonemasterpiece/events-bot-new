@@ -1,3 +1,4 @@
+import { mountVoiceDiagnostics } from './voiceDiagnostics.ts';
 import { getStaticSiteAuth } from '../staticSiteAuth';
 import { MicrophoneCapture, type CaptureStatus } from './microphoneCapture.ts';
 import { VoiceStore, type Recording, type StoredAnswer } from './voiceStore.ts';
@@ -32,6 +33,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   const record=get<HTMLButtonElement>('record'),stop=get<HTMLButtonElement>('stop'),submit=get<HTMLButtonElement>('submit');
   const text=get<HTMLTextAreaElement>('text'),processing=get('processing'),captureStatus=get('capture'),baseLabel=get('base');
   const answers=get('answers'),historyList=get('history-list'),recordings=get('recording-list'),resume=get<HTMLButtonElement>('resume');
+  mountVoiceDiagnostics(root,get('composer'));
   const host=window as Host;let owner='';let authSeen=false;let authStatus='';let generation=0;let store:VoiceStore;
   let controllerReady=false;let controller:ConversationController|null=null;let capture:MicrophoneCapture|null=null;let recordingId:string|null=null;
   let pendingCommit=false;let receiptRetry=false;

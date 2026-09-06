@@ -441,3 +441,27 @@ Manifest содержит clip SHA, codec/rate/duration, intended и verified tr
 ### Первичные технические источники
 
 [AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet), [MediaRecorder lifecycle/chunks](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/dataavailable_event), [Gemini audio](https://ai.google.dev/gemini-api/docs/audio), [structured output](https://ai.google.dev/gemini-api/docs/structured-output), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Yandex gateway limits](https://yandex.cloud/en/docs/api-gateway/concepts/limits), [Edge limits](https://supabase.com/docs/guides/functions/limits). Актуальность проверяется при изменении адаптера или провайдера. Документ не применяет SQL, не публикует сайт и не запускает модели.
+
+### Preview startup diagnostic (2026-09-06, not a capture workaround)
+
+The existing «Запрос и записи» surface contains «Диагностика запуска», available
+before VoiceStore resolves. The report is a bounded 80-event in-memory ring:
+monotonic milliseconds, open attempt/schema versions, upgrade/blocked/error/
+timeout/late-success/cleanup, visibility/freeze/resume/pageshow/pagehide, coarse
+browser family/major version, static diagnostic revision and actual bundle file
+hash. It contains no account, URL query, audio, transcript, recording identifiers,
+DB rows or raw exception messages. Copy/download is explicit; there is no automatic
+network telemetry. «Проверить отдельное хранилище» manually opens one unique
+empty diagnostic v1 database and closes/deletes **only that disposable database**.
+Optional bounded `indexedDB.databases()` reports only whether the existing voice
+DB is present and its version; other DB names are neither shown nor retained.
+A successful independent probe does not establish the cause of the original wait.
+
+A timed-out open cannot be cancelled by IndexedDB. Further manual reconnects reuse
+that same pending request until its native terminal event, rather than adding
+new queued opens. A late success is closed; a late upgrade is aborted. No legacy
+schema, user data, Auth, recorder, kernel or provider is changed. This diagnostic
+release does **not** remove the storage dependency from microphone startup and
+must not be represented as repaired capture on the user's phone. Current facts,
+causal native queue test and device acceptance gap belong to
+[`INC-2026-09-06-voice-preview-startup`](../../../reports/incidents/INC-2026-09-06-voice-preview-startup.md).

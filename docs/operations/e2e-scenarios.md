@@ -173,6 +173,10 @@ Voice DevCoveer preview: `site/tests/voice-devcoveer-host.test.mjs` (HTTP/media 
 Voice preview startup recovery: `site/tests/voice-startup.integration.mjs`
 (native Chromium/IndexedDB, explicit Auth fixture) covers stalled open/manual
 retry, a real old-v2 blocking tab, owner-bound restore and checking→signed-in.
-`voice-startup-store.test.mjs` and `search-auth-startup.test.mjs` are unit guards.
+It also covers a native queued v3 open with no callback injection, one physical
+open despite repeated retry, manual isolated probe/cleanup, untouched legacy
+bytes, metadata-only report/download and an 80-event lifecycle ring. These are
+L1 fixtures, not physical Android freeze evidence.
+`voice-startup-store.test.mjs`, `voice-diagnostics.test.mjs` and `search-auth-startup.test.mjs` are unit guards.
 Canonical acceptance boundaries and preview-only incident evidence:
 [`INC-2026-09-06-voice-preview-startup`](../reports/incidents/INC-2026-09-06-voice-preview-startup.md).
