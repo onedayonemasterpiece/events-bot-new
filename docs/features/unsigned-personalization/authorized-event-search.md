@@ -1289,3 +1289,53 @@ Required release evidence remains: real mobile Yandex login → return to the
 same immutable candidate → menu, Personal and Search all show the same identity
 → Enter submits → a real Edge result renders canonical cards. Mocked callback
 and network-stall tests are regression gates, not a substitute.
+
+## Shared inline sign-in block for voice preview — 2026-09-06
+
+`site/src/lib/staticSiteSignIn.ts` exports
+`mountStaticSiteSignIn(container, auth, { variant: 'compact' | 'card' })`.
+The optional variant defaults to `card`; both variants use the same actions and
+controller. The caller supplies its **existing** `getStaticSiteAuth(...)` instance,
+keeps the normal Auth initialization/subscription, and imports
+`site/src/styles/staticSiteSignIn.css`. The returned `{open(trigger?), close(),
+destroy()}` controls one inline panel; mount itself neither opens nor focuses it.
+Calling `open(microphoneLauncher)` after an explicit guest action reveals Yandex,
+then email, then a six-digit code after the existing mail request is accepted or
+its response is ambiguous. Successful ordinary Auth closes the panel and returns
+focus to that launcher, but never records or submits a search automatically.
+Anonymous snapshots do not count as signed-in access.
+
+This is a UI component, **not a new Auth subsystem**. It calls only existing
+`signIn`, `signInWithEmailOtp`, `verifyEmailOtp`, and `subscribe`, and reuses
+`emailOtp.ts` normalization/selected-once guards. No SDK client, transport route,
+provider configuration, credentials, anonymous quota, focus participation,
+consent registration, storage reset or session creation algorithm is introduced.
+Pending calls are single-flight; accepted/ambiguous/rate-limited sends enforce
+60-second resend cooldown even if the email view is changed. Six-digit input
+verifies once; identical repeated input/submit cannot reverify. Late results
+cannot reopen a successfully authenticated/destroyed panel. Email/code values
+are cleared on ordinary sign-in or destruction and are not persisted by the UI.
+
+Scope: this shared block is available for explicit voice-preview integration;
+the ordinary `AuthorizedEventSearch` and global header wiring are not changed by
+its addition. Existing Focus intake is **not** imported because it also registers
+participation and consent. No simulated login success is shipped.
+
+Verification: `site/tests/static-site-sign-in.integration.mjs` exercises both
+variants at 320px, minimum 44px controls, selected-once verification, ambiguous
+send/cooldown, late completion, anonymous rejection, destroy, focus return and
+rendered code entry. These are provider-free UI fixtures, not real-mail acceptance.
+Existing helper/controller tests: `node --experimental-strip-types --test
+site/src/lib/emailOtp.test.ts site/src/lib/staticSiteAuth.test.ts`.
+
+The canonical controlled real-mail harness remains
+`.github/workflows/external-focus-email-otp.yml` / `site/e2e/focus-email/`:
+`npm --prefix site run test:external-focus-email-otp` runs its offline contracts;
+live `npm --prefix site run e2e:external-focus-email-otp` requires its existing
+`E2E_TARGET_URL`, `E2E_EXPECTED_REPO_SHA`, platform and role-scoped mailbox lane.
+Its `focus.otp.browser_tab` scenario includes participant registration, so a
+successful existing Focus run is not automatically acceptance of this neutral
+voice UI. Follow the existing controlled harness/adapter discipline for any
+future live voice-page acceptance; do not create a parallel OTP transport or send
+additional emails as an untracked smoke test. Canonical procedure:
+[`external-focus-email-otp`](../../testing/external-focus-email-otp.md).

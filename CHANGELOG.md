@@ -2,11 +2,19 @@
 
 ## [Unreleased]
 
+
 - Changed: preview Search starts with one minimal message line and a large
   microphone, then moves the same mic into a compact lower-right composer after
   first ASR/typed intake. Shared-shell surfaces retain the site's light floating
   treatment; audio-responsive shadow, reduced motion and focus restoration are
   supported. Guest-trial quotas remain documented to-be, not enabled.
+
+- Added: a neutral inline sign-in block with compact/card variants for voice
+  Search hosts, reusing the existing shared Yandex/email OTP controller and
+  six-digit selected-once helpers. It preserves resend cooldown and ambiguous
+  delivery handling, closes on ordinary sign-in without starting the microphone,
+  and introduces no Auth client, provider, onboarding effects or anonymous quota.
+
 
 
 - Changed: conversational voice preview sends fresh complete ASR into the existing
