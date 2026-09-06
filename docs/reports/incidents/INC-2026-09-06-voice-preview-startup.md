@@ -163,3 +163,32 @@ signed_in even if quota fails; repeated Auth snapshots preserve Search output.
 Next: publish only the diagnostic preview, obtain the user's manually exported
 report on the affected device, then choose a cause-specific repair. Do not ask
 the user to clear site data, recordings, queues or sessions.
+
+### Diagnostic-only publication/readback — 2026-09-06
+
+- Worker `2c4523df023551b5441ef5e58b4892cf5b1415e5` integrated and pushed to
+  PR587 as `87ca55d1346256ce1252b624787b7df6992db6da`.
+- Published https://kenigevents.ru/preview-voice-diagnostics-20260906/poisk/
+  with the existing create-only publisher, clean source and focused 2-page
+  build. Backend/source/service, production and user recordings unchanged.
+- Exact public bytes: 7 route/support files match. Parent 6 focused unit checks
+  and source-surface contract PASS; worker 28 unit + 6 native startup PASS.
+- Actual published bundles, anonymous isolated Chromium390x844: normal and
+  held-v2 **test fixture** cases PASS. Expanded diagnostic panel, explicit
+  independent empty-DB probe, automatic cleanup of that exact disposable DB,
+  native JSON download verified. Blocked report identifies schema2 + blocked
+  upgrade; independent probe succeeds and original fixture sentinel remains
+  unchanged. No Auth, microphone or ASR calls in this diagnostic acceptance.
+  Parent inspected the real rendered report/buttons; no horizontal overflow.
+- Parent harness bootstrap hit ESM module resolution and stale global browser
+  package issues before running. Node official ESM resolution reference was
+  consulted; existing installed site Playwright was used, no dependencies or
+  browser cache installed/deleted. These were harness startup errors, not page
+  failures. Actual page scenarios completed with zero page errors.
+- Evidence: `voice-search-implementation/artifacts/codex/voice-diagnostics-20260906/`
+  including `public/receipt.json`, exported reports and rendered screenshots.
+- Telegram1452 direct link/instructions sent and read back:
+  https://t.me/c/4337049383/1452 . No automatic diagnostic upload; user chooses
+  whether to copy/send the metadata-only report.
+- **Still open:** awaiting report from the affected physical phone. Diagnostic
+  delivery does not restore recording or establish the user's root cause.

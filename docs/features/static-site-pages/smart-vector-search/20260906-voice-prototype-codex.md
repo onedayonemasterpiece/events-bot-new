@@ -675,3 +675,11 @@ separately labelled IDB/quota fault recovery. No ASR was requested by these star
 checks. Exact test/CI evidence and remaining physical-device confirmation are
 tracked in [INC-2026-09-06-voice-preview-startup](../../../reports/incidents/INC-2026-09-06-voice-preview-startup.md);
 not a claim that the physical Telegram WebView cause has been confirmed.
+
+Diagnostic-only follow-up is now published at
+https://kenigevents.ru/preview-voice-diagnostics-20260906/poisk/
+(source `87ca55d1346256ce1252b624787b7df6992db6da`, PR587). Existing composer
+contains metadata-only startup events and manual report export/isolated probe.
+Physical report is required: this is not presented as repaired voice recording.
+Publication and native diagnostic readback evidence remain in the linked
+`INC-2026-09-06-voice-preview-startup` record; Telegram delivery1452 verified.
