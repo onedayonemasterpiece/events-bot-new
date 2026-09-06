@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Added an unexposed exact-ID reviewed CANCEL/POSTPONE transaction core with current authorization, revision CAS and atomic existing history; downstream public repair remains explicitly unresolved (#643).
+
 - **Added / Hero Talk**: bounded read-only canonical event token resolver with existing event revisions, Kaliningrad eligibility deadlines and exact expiring route-evidence binding; missing route/media proof remains unresolved.
 
 - Added canonical Hero draft/version storage with current same-transaction authorization, idempotent CAS and preserved campaign origin; corrected media receipts to distinguish encoded-byte SHA from geometry-bound pixel SHA. Added default-OFF owner-only Hero verbatim draft prepare/commit/read tools with explicit scopes; no generation/publication/activation enabled (#643).

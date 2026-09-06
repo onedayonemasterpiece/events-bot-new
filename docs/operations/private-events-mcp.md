@@ -439,6 +439,44 @@ second real HTTP partner using the same source cannot mutate or accept that
 foreign Event: canonical Event/source/jobs/portfolio remain unchanged, and no
 receipt can promote the denied operation. This is domain crash/isolation acceptance, not live content/upload/publication acceptance.
 
+### Exact-ID lifecycle transaction core (#643; not exposed)
+
+`event_lifecycle_operations.apply_lifecycle_operation` is an internal canonical
+transaction boundary for explicit reviewed `CANCEL` / `POSTPONE` only. It does
+not parse notices, choose a target, impersonate a Telegram user, reserve/review
+an operation or advertise a new MCP capability. General edits/rescheduling still
+need extraction of the existing domain side effects and are not supported here.
+
+The caller must supply an existing processing `event_cancel` / `event_postpone`
+row in `event_change_log`, frozen exact target/original OAuth actor/action digest
+and expected `event_public_revision`. Partner actors additionally require a
+positive frozen `partner_policy_revision` inside the action digest, so the host
+can reject a changed current grant revision. Independent current-authorization and
+immutable-review-verification callbacks run on the same `BEGIN IMMEDIATE`
+connection; they must be local, bounded and read-only. The host must wire actual
+current owner/partner scopes, grants and exact portfolio membership. The current
+create-only review service is not assumed to authorize lifecycle operations.
+
+Only an active raw canonical, non-merged Event at that exact revision can change.
+The core updates lifecycle status only, preserves silent state and all unrelated
+Events/fields, and atomically writes existing before/after/changed-fields history
+and accepted result. A conflict or denied callback rolls back the entire change.
+A currently authorized replay returns the immutable historical result without
+reapplying it—even after a later valid edit. Historical acceptance is not a claim
+about the Event's present lifecycle state.
+
+Every result explicitly says `downstream=reconciliation_required`. No JobOutbox,
+provider request, public retraction or notification is performed. Cancellation
+cannot rely on ordinary update scheduling: inactive Events are skipped there,
+while already-published projections need explicit reconciled repair. MCP exposure
+and production activation remain blocked until those application/review/fan-out
+boundaries and their acceptance tests are connected.
+
+Tests: `tests/test_event_lifecycle_operations.py`; existing VK replay regression
+contract: [INC-2026-08-24](../reports/incidents/INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost.md).
+This is deterministic execution of an explicit reviewed action, not heuristic
+semantic lifecycle inference or a new incident repair/publication.
+
 ## ChatGPT social workspace
 
 When the universal workspace is enabled, ChatGPT can discover only the tools
