@@ -5,6 +5,9 @@
 - Added event-scoped private image staging/read/reverification over the existing
   secure media store, with durable principal-bound refs, exact digest/expiry
   checks and mandatory current authorization; no social provider upload (#643).
+- Added durable partner create owner-review transitions on the existing event
+  operation ledger, exact-digest approval/rejection and immutable owner audit;
+  approval only queues work with separate execution-time policy checks (#643).
 
 - Connected queued Events MCP create recovery to canonical-DB startup and the
   existing five-minute scheduler, with owner resource/client/capability checks

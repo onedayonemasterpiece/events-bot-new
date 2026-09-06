@@ -239,6 +239,45 @@ steps, with renewed authorization and exact digest verification before mutation.
 Regression evidence: `tests/test_private_events_mcp_event_assets.py` plus the
 existing secure-store suite use actual local manifests/files and deterministic
 HTTP transport, with no live provider calls.
+### Durable partner create owner review (#643)
+
+`PartnerEventReviewService` in `private_events_mcp/partner_event_review.py` uses
+only existing canonical `event_change_log` rows. `submit(request)` invokes current
+submission authorization and reserves `initial_status=review_required` with the
+original actor/client/resource, action digest and idempotency binding. No Event,
+Telegram actor, provider call or worker task is created. A duplicate submission
+returns the existing operation unchanged; it never switches queued/review state.
+The store's optional `initial_status` accepts only `queued` or `review_required`;
+normal owner create retains `queued` as its default.
+
+`decide(operation_ref, expected_action_digest=..., decision="approve"|"reject",
+owner_context=...)` requires an injected async current-policy callback over the
+owner context, immutable `ReviewTarget` actor/digest binding and decision.
+That callback must authenticate/authorize the owner and revalidate the stored
+partner's current grant, credential epoch, expiry, scopes/actions and applicable
+organization policy. Missing/failed policy fails closed. It runs under the short
+canonical SQLite write lock to serialize revocation and decision: **DB/read-only,
+no provider/LLM/network, and no writes on a second connection**. Submission also
+requires its own current-policy callback. These are service contracts, not new
+OAuth claims or bypasses around `PartnerAccessStore`.
+
+Approval only transitions `review_required` to `queued`; rejection records
+terminal `rejected` with `EVENT_CREATE_OWNER_REJECTED`. Both require the exact
+expected action digest. `organizer_comment` stores private immutable review audit
+JSON (decision, digest, owner subject/client/audience, timestamp), deliberately
+separate from `result_json`, which executor completion replaces. No public Event
+field receives that audit. Repeating the same decision returns `changed=false`
+and the current operation state with the original audit, even after execution;
+an opposite decision/different digest conflicts and cannot resurrect work.
+
+The existing runtime must separately recover/execute approved queued operations
+with current partner authorization and media/digest rechecks at the mutation
+boundary. Review approval is not publication or acceptance of a canonical event.
+Partner reads continue through exact actor-bound `EventCreateOperationStore.get`;
+owner listing/tool wiring, media approval binding and UI are integration work,
+not implemented by this ledger service. Tests cover restart, competing decisions,
+repeat decisions after finish/rejection, two actors, and real PartnerAccessStore
+expiry/suspension/scope revocation: `tests/test_private_events_mcp_partner_event_review.py`.
 
 ## ChatGPT social workspace
 

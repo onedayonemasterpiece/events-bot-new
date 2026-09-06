@@ -249,7 +249,11 @@ class EventCreateOperationStore:
         await cursor.close()
         return row
 
-    async def reserve(self, request: EventCreateRequest) -> tuple[dict[str, Any], bool]:
+    async def reserve(
+        self, request: EventCreateRequest, *, initial_status: str = "queued",
+    ) -> tuple[dict[str, Any], bool]:
+        if initial_status not in {"queued", "review_required"}:
+            raise ValueError("invalid initial event operation status")
         async with self.database.raw_conn() as conn:
             conn.row_factory = aiosqlite.Row
             await conn.execute("BEGIN IMMEDIATE")
@@ -280,7 +284,7 @@ class EventCreateOperationStore:
                         operation_ref,operation_kind,actor_subject,actor_client_id,
                         actor_audience,idempotency_hash,action_digest,source_type,
                         source_url,request_json,status,created_at,updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?, 'queued',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
                     """,
                     (
                         operation_ref,
@@ -293,6 +297,7 @@ class EventCreateOperationStore:
                         "manual",
                         request.source_locator,
                         _canonical_json(request.stored_request()),
+                        initial_status,
                     ),
                 )
                 await conn.commit()
