@@ -1,72 +1,50 @@
-name: Events MCP integration checkpoint
+name: Events MCP offline test checkout
 
-# Temporary deterministic Git executor for the ChatGPT-authored integration.
-# No agents, secrets, production destinations, merge to main or deployment.
+# Temporary source-only export for the ChatGPT implementation sandbox.
+# No agents, production credentials, external providers, writes or deployment.
 on:
   push:
     branches: [feature/events-mcp-owner-create-r1]
     paths: [.github/workflows/events-mcp-source-checkpoint.yml]
-
 permissions:
-  contents: write
-
+  contents: read
 jobs:
-  integrate-r1:
-    if: github.ref == 'refs/heads/feature/events-mcp-owner-create-r1'
+  checkout:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 100
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Integrate exact reviewed R0 and preserve both changelog additions
-        shell: bash
+      - name: Export tracked application sources
         run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git fetch --no-tags --depth=100 origin feature/events-mcp-queue-observability-r0
-          test "$(git rev-parse origin/feature/events-mcp-queue-observability-r0)" = 9dd31c5ed36c7c20da2dd8fa0480e1cb771eadf6
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git merge --no-ff --no-commit 9dd31c5ed36c7c20da2dd8fa0480e1cb771eadf6 || test "$(git diff --name-only --diff-filter=U)" = CHANGELOG.md
+          mkdir -p artifacts/events-mcp-checkout
           python - <<'PY'
-          from pathlib import Path
-          import hashlib
-          p = Path('CHANGELOG.md')
-          p.write_text(''.join(line for line in p.read_text().splitlines(keepends=True) if not line.startswith(('<<<<<<< ', '=======', '>>>>>>> '))))
-          expected = {
-              'CHANGELOG.md': '0b6cc21eb399a384874eeeac95a14359d0ca8e40b1f866969408c6269c9a0114',
-              'docs/operations/private-events-mcp.md': 'f7a675efa4bcebee980e8459742176c99204e3dc27b1619e8b91684d7d374466',
-              'private_events_mcp/config.py': 'a96bd7c4f85233c87a28cd7b5e520b8cd705941f21a3f1e9b2c153e15f56dbf1',
-              'private_events_mcp/server.py': '7ef05d21e12eb9f8272cf02dc5829c26bfc9474a10a78952cd577ceb0ba9d44b',
-          }
-          for name, digest in expected.items():
-              assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == digest, name
+          import hashlib, json, pathlib, subprocess, tarfile
+          root = pathlib.Path('.')
+          extensions = {'.py', '.md', '.yml', '.yaml', '.json', '.toml', '.txt', '.ini', '.html', '.sql', '.j2', '.sh', '.mjs', '.js', '.ts', '.astro', '.css'}
+          files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          manifest = {}
+          with tarfile.open('artifacts/events-mcp-checkout/source.tar.gz', 'w:gz') as archive:
+              for name in files:
+                  p = root / name
+                  if not name or not p.is_file() or p.is_symlink():
+                      continue
+                  if p.suffix not in extensions and not name.startswith('tests/fixtures/') and p.name not in {'.env.example', '.gitignore', '.gitattributes', 'Dockerfile'}:
+                      continue
+                  archive.add(p, arcname=name, recursive=False)
+                  manifest[name] = hashlib.sha256(p.read_bytes()).hexdigest()
+          pathlib.Path('artifacts/events-mcp-checkout/manifest.json').write_text(json.dumps({'sha': subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip(), 'files': manifest}, indent=2))
           PY
-          git add -- CHANGELOG.md
-          git diff --check --cached
-      - name: Install test dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Verify exact integrated application source
-        run: |
-          PYTHONPATH=. python -m pytest -q tests/test_private_events_mcp_event_create.py tests/test_private_events_mcp_queue_observability.py
-      - name: Save integration merge only to the existing R1 branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git status --short
-          git commit -m 'merge(mcp-r1): preserve current main and R0 with verified creation contracts'
-          git push origin HEAD:refs/heads/feature/events-mcp-owner-create-r1
-          mkdir -p artifacts/events-mcp-integration
-          git show -s --format=fuller HEAD > artifacts/events-mcp-integration/commit.txt
-          git diff --stat 9dd31c5ed36c7c20da2dd8fa0480e1cb771eadf6 HEAD > artifacts/events-mcp-integration/diff-stat.txt
-          sha256sum CHANGELOG.md docs/operations/private-events-mcp.md private_events_mcp/config.py private_events_mcp/server.py > artifacts/events-mcp-integration/SHA256SUMS
+      - name: Build dependency wheels for the offline test sandbox
+        run: python -m pip wheel -r requirements.txt -w artifacts/events-mcp-checkout/wheels
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: events-mcp-r1-integration-${{ github.sha }}
-          path: artifacts/events-mcp-integration/
+          name: events-mcp-checkout-${{ github.sha }}
+          path: artifacts/events-mcp-checkout/
           retention-days: 7
           if-no-files-found: error
