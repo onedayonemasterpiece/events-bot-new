@@ -34,7 +34,13 @@ nested errors redacted and missing legacy columns/table reported explicitly.
 `event_id=0` selects global jobs. `include_jobs=false` with filters is rejected.
 No new tool, scope, DB schema, queue worker or provider call is introduced.
 
-The default snapshot remains backward-compatible. `fetch(job:...)` still returns
+The default snapshot retains its fields, but `database.quick_check` is explicitly
+`not_run:interactive_budget`: full-database integrity scans are not interactive
+health probes and must run as explicit operator/release checks. Counts and queue
+readback never imply an integrity PASS. This prevents the production timeout
+recorded in `INC-2026-09-06-mcp-snapshot-integrity-budget`.
+
+The default snapshot remains backward-compatible apart from that honest health value. `fetch(job:...)` still returns
 bounded detail through the existing evidence repository. The Codex seven-tool
 projection and descriptor remain unchanged; these additional queue arguments
 belong only to the full owner ChatGPT/OpenCode resource. A queue state or URL

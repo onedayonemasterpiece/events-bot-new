@@ -443,3 +443,8 @@
 - `INC-2026-09-05-vk-storage-admission.md`
   - Scope: Fly /data storage admission and VK auto-import carrier selection.
   - Must not regress: a storage-blocked batch must not consume pending carriers; exact affected carriers require evidence-backed catch-up.
+
+- `INC-2026-09-06-mcp-snapshot-integrity-budget.md`
+  - Scope: interactive owner MCP snapshot and queue/count readback.
+  - Must not regress: no full-database integrity scan in the interactive tool;
+    explicit not-run integrity status is not an integrity PASS.

@@ -10,6 +10,7 @@ import pytest
 from aiohttp import web
 
 from private_events_mcp.crypto import AccessIdentity
+from private_events_mcp.repository import EventsEvidenceRepository
 from private_events_mcp.integration import attach_private_events_mcp
 
 
@@ -293,3 +294,15 @@ async def test_existing_fetch_job_detail_path_is_unchanged(config) -> None:
     result = response["result"]
     assert result["isError"] is False
     assert result["structuredContent"]["id"] == "job:7"
+
+
+@pytest.mark.asyncio
+async def test_snapshot_never_starts_full_database_integrity_scan(config, monkeypatch):
+    """Production regression: a full quick_check can exhaust the HTTP tool budget."""
+    repository = EventsEvidenceRepository(config)
+    async def forbidden_integrity_check():
+        pytest.fail("Interactive snapshot must not scan the full database")
+    monkeypatch.setattr(repository.db, "quick_check", forbidden_integrity_check)
+    snapshot = await repository.operations_snapshot()
+    assert snapshot["database"]["quick_check"] == "not_run:interactive_budget"
+    assert snapshot["network"]["provider_calls"] == 0

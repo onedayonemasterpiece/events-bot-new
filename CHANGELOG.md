@@ -9,6 +9,9 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
+- Prevent full SQLite integrity scans from exhausting owner MCP snapshot latency:
+  return explicit `not_run:interactive_budget`, preserving bounded queue/count
+  readback without pretending that integrity was checked (INC-2026-09-06).
 - Repair album release-gate fixture to implement asset reverification without weakening production media checks (INC-2026-09-05 release unblock).
 - VK auto import checks volume headroom before claiming a batch, preserving pending carriers instead of mass-terminalizing them when storage admission is blocked (INC-2026-09-05).
 
