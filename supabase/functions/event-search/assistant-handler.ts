@@ -62,6 +62,11 @@ function validPart(value:any):any {
   validateAudioParts([{index:0,firstFrame:0,frameCount:row.frameCount,sampleRate:row.sampleRate,bytes}],row.frameCount,AUDIO_BUDGET);
   return {...row,bytes};
 }
+function searchAnswer(result:any,count:number):string {
+  const summary=typeof result.responseSummary==='string'?result.responseSummary.trim():'';
+  const facts=count?`Событий в текущей выдаче: ${count}.`:'В текущем поисковом окне нет событий с подтверждёнными условиями.';
+  return summary?`${summary}\n${facts}`:count?'Подобрал события по указанным условиям.':facts;
+}
 const itemsOf=(row:Operation|null):any[]=>Array.isArray(row?.outcome?.result?.items)?row!.outcome.result.items:[];
 async function completedDependency(repo:AssistantRepository,owner:string,id:string,kind:string):Promise<Operation|null>{
   const row=await repo.get(owner,id);
@@ -84,6 +89,8 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
           const lookup=new Map(fresh.map(i=>[String(i.event_id??i.id),i]));
           projection.result={...row.outcome.result,logical_event_ids:original.map(i=>String(i.event_id??i.id)),
             items:original.map(i=>lookup.get(String(i.event_id??i.id))).filter(Boolean),facts_refreshed_at:new Date().toISOString()};
+          if(row.outcome.result.responseSummary&&!row.outcome.result.clarification&&row.outcome.result.explanationKind==='none')
+            projection.result.answer=searchAnswer(row.outcome.result,projection.result.items.length);
         }
         return {status:200,body:projection};}
       const before=url.searchParams.get('before')||undefined;
@@ -173,7 +180,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
         }
         const items=Array.isArray(search.items)?search.items:[];
         await complete({...search,...result,id,items,parentId:result.parentId,
-          title:result.title,answer:answer||(items.length?'Подобрал события по указанным условиям.':'В текущем поисковом окне нет событий с подтверждёнными условиями.'),
+          title:result.title,answer:answer||searchAnswer(result,items.length),
           served_list_id:crypto.randomUUID(),served_list_hash:await sha256(new TextEncoder().encode(JSON.stringify(items.map((i:any)=>i.event_id??i.id)))),
           source_served_list_id:search.served_list_id||null,has_more:search.has_more===true,
           membership_complete:search.membership_complete===true, membership_scope:'bounded_canonical_search_window'});

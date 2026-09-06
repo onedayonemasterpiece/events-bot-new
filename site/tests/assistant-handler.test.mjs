@@ -5,7 +5,7 @@ import {handleAssistant,publicOperation} from '../../supabase/functions/event-se
 import {sha256} from '../../supabase/functions/event-search/assistant-media.ts';
 import {initialState} from '../src/lib/assistant/conversationState.ts';
 import {segmentPcm16} from '../src/lib/assistant/audioSegments.ts';
-import {AssistantError,AUDIO_BUDGET,interpretation,eligible,kaliningradDay} from '../../supabase/functions/event-search/assistant-intent.ts';
+import {AssistantError,AUDIO_BUDGET,interpretation,eligible,kaliningradDay,interpreterPrompt,INTERPRETATION_SCHEMA} from '../../supabase/functions/event-search/assistant-intent.ts';
 const uid=()=>crypto.randomUUID(),owner=uid(),other=uid(),origin='https://preview.example';
 const intent=()=>({...initialState().activeIntent,goal:'лекции',dateFrom:'2026-09-06',dateTo:null,timeOfDay:null,audience:[],timezone:'Europe/Kaliningrad'});
 const input=(extra={})=>({text:'Хочу на лекцию',mode:'new_search',parentId:null,previousId:null,anchor:'2026-09-05T23:30:00.000Z',visibleIds:[],...extra});
@@ -111,4 +111,57 @@ test('bounded search membership is never relabelled as a complete catalogue',asy
  const original=h.deps.search;h.deps.search=async()=>({...await original(),has_more:true});
  const result=(await h.control(s,'search',{interpretationId:i})).body.result;
  assert.equal(result.has_more,true);assert.equal(result.membership_complete,false);assert.equal(result.membership_scope,'bounded_canonical_search_window');
+});
+
+// Same interpreter call produces an intent acknowledgement, not invented card facts.
+function summaryProvider(h, extra={}) {
+ h.deps.generate=async o=>{h.calls.push(o.kind);await o.dispatched();const value=o.validate(parsed({responseSummary:'Вы хотите лекцию в Калининграде на 6 сентября.',...extra}));await o.completed(value,{pending:true});await o.accounted();return value;};
+}
+test('optional response summary preserves old receipts and enforces a short nonempty string when supplied',()=>{
+ assert.equal(interpretation(parsed()).responseSummary,undefined);
+ assert.equal(interpretation(parsed({responseSummary:null})).responseSummary,null);
+ assert.equal(interpretation(parsed({responseSummary:'Вы хотите лекцию.'})).responseSummary,'Вы хотите лекцию.');
+ for(const responseSummary of ['', '  ', 5, {}, 'я'.repeat(321)]) assert.throws(()=>interpretation(parsed({responseSummary})));
+ assert.ok(!INTERPRETATION_SCHEMA.required.includes('responseSummary'));
+ assert.equal(INTERPRETATION_SCHEMA.properties.responseSummary.maxLength,320);
+ const prompt=interpreterPrompt(input(),intent(),[]);
+ assert.match(prompt,/title — короткое осмысленное название/);assert.match(prompt,/что \+ где \+ когда/);
+ assert.match(prompt,/Экскурсии по востоку области на 5–6 сентября/);
+ assert.match(prompt,/поиск ещё не выполнен/);assert.match(prompt,/Фактическое количество и отсутствие результатов сообщит сервер/);
+});
+test('one existing interpretation call creates a compact acknowledgement and actual bounded-window count without replay',async()=>{
+ const h=harness(),i=uid(),s=uid();summaryProvider(h,{title:'Лекции в Калининграде на 6 сентября'});
+ await h.control(i,'interpret',input());
+ const done=await h.control(s,'search',{interpretationId:i});
+ assert.equal(done.body.result.title,'Лекции в Калининграде на 6 сентября');
+ assert.equal(done.body.result.answer,'Вы хотите лекцию в Калининграде на 6 сентября.\nСобытий в текущей выдаче: 1.');
+ await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
+ assert.deepEqual(h.calls,['interpret','search']);
+});
+test('summary never masks zero matches and refreshed projections recount without mutating the completed receipt',async()=>{
+ const h=harness(),i=uid(),s=uid();summaryProvider(h);
+ await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
+ h.deps.currentCards=async()=>[];
+ const refreshed=await h.request(`status?id=${s}`);
+ assert.match(refreshed.body.result.answer,/Вы хотите лекцию/);
+ assert.match(refreshed.body.result.answer,/нет событий с подтверждёнными условиями/);
+ assert.match(h.rows.get(s).outcome.result.answer,/выдаче: 1/);
+ assert.deepEqual(h.calls,['interpret','search']);
+ const empty=harness(),j=uid(),k=uid();summaryProvider(empty);empty.deps.search=async()=>({items:[]});
+ await empty.control(j,'interpret',input());
+ const done=await empty.control(k,'search',{interpretationId:j});
+ assert.match(done.body.result.answer,/нет событий с подтверждёнными условиями/);
+});
+test('clarification and canonical card explanations take precedence over generated acknowledgements',async()=>{
+ const h=harness(),i=uid(),s=uid();summaryProvider(h,{clarification:'На какой день искать лекцию?'});
+ await h.control(i,'interpret',input());const done=await h.control(s,'search',{interpretationId:i});
+ assert.equal(done.body.result.answer,'На какой день искать лекцию?');assert.deepEqual(h.calls,['interpret']);
+ const fresh=harness(),a=uid(),b=uid();await fresh.control(a,'interpret',input());await fresh.control(b,'search',{interpretationId:a});
+ summaryProvider(fresh,{explanationKind:'address',ordinal:1});
+ fresh.deps.currentCards=async()=>[{event_id:1,title:'Лекция',address:'Проверенный адрес'}];
+ const explain=uid(),answer=uid();
+ await fresh.control(explain,'interpret',input({mode:'explain_selection',parentId:b,visibleIds:['1'],text:'Где первая лекция?'}));
+ const reply=await fresh.control(answer,'search',{interpretationId:explain});
+ assert.equal(reply.body.result.answer,'Проверенный адрес');
+ const status=await fresh.request(`status?id=${answer}`);assert.equal(status.body.result.answer,'Проверенный адрес');
 });

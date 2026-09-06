@@ -3,7 +3,7 @@ export type { Intent, Mode };
 export const ASSISTANT_CONTRACT = 'kenigevents-assistant-v1';
 export const AUDIO_BUDGET = { maxWireBytes: 1024 * 1024, envelopeBytes: 8192, encoding: 'base64' as const };
 export const MODES = ['new_search', 'refine_selection', 'continue_draft', 'explain_selection', 'expand_selection'] as const;
-export type Interpretation = { intent: Intent; title: string; clarification: string | null;
+export type Interpretation = { intent: Intent; title: string; responseSummary?: string | null; clarification: string | null;
   explanationKind: 'none' | 'address' | 'facts'; ordinal: number | null };
 export type ConfirmedInput = { text: string; mode: Mode; parentId: string | null; previousId: string | null;
   anchor: string; visibleIds: string[] };
@@ -41,7 +41,7 @@ export function confirmedInput(value: unknown): ConfirmedInput {
   return row as ConfirmedInput;
 }
 export function interpretation(value: unknown, base: Intent = initialState().activeIntent): Interpretation {
-  const row = object(value, ['intent','title','clarification','explanationKind','ordinal']);
+  const row = object(value, ['intent','title','responseSummary','clarification','explanationKind','ordinal']);
   const intent = applyIntentPatch(base, row.intent);
   text(intent.goal, 180);
   // Structured fields must be explicit. Full user text remains in the receipt;
@@ -51,6 +51,7 @@ export function interpretation(value: unknown, base: Intent = initialState().act
   }
   if (intent.localityIds.some(id=>!cityNames[id]) || intent.excludedFormats.some(id=>!['concert','lecture','exhibition','theatre','masterclass','excursion','sport','festival','cinema'].includes(id)) || intent.audience?.some(id=>!['children','students','adults','family'].includes(id))) reject('unsupported_intent_value');
   text(row.title,160);
+  if (row.responseSummary != null) text(row.responseSummary,320);
   if (row.clarification !== null) text(row.clarification,512);
   if (!['none','address','facts'].includes(row.explanationKind)) reject('invalid_explanation');
   if (row.ordinal !== null && (!Number.isSafeInteger(row.ordinal) || row.ordinal < 1 || row.ordinal > 60)) reject('invalid_ordinal');
@@ -63,7 +64,7 @@ export const INTERPRETATION_SCHEMA = { type:'object', additionalProperties:false
       goal:{type:'string',maxLength:180},localityIds:stringArray,excludedFormats:stringArray,freeOnly:{type:'boolean'},maxPrice:{type:['number','null'],minimum:0},
       dateFrom:{type:['string','null']},dateTo:{type:['string','null']},timeOfDay:{type:['string','null'],enum:['morning','day','evening','night',null]},
       audience:stringArray,timezone:{type:'string',enum:['Europe/Kaliningrad']}}},
-    title:{type:'string',maxLength:160},clarification:{type:['string','null']},explanationKind:{type:'string',enum:['none','address','facts']},ordinal:{type:['integer','null'],minimum:1,maximum:60}
+    title:{type:'string',maxLength:160},responseSummary:{type:['string','null'],maxLength:320},clarification:{type:['string','null']},explanationKind:{type:'string',enum:['none','address','facts']},ordinal:{type:['integer','null'],minimum:1,maximum:60}
   }};
 export const TRANSCRIPT_SCHEMA = {type:'object',additionalProperties:false,required:['text','uncertain'],properties:{text:{type:'string'},uncertain:{type:'array',items:{type:'string'}}}};
 export function interpreterPrompt(input: ConfirmedInput, base: Intent, parentFacts: unknown): string {
@@ -75,6 +76,8 @@ export function interpreterPrompt(input: ConfirmedInput, base: Intent, parentFac
 Относительные даты определяй на момент anchor (${input.anchor}), местный день ${kaliningradDay(input.anchor)}, Europe/Kaliningrad. dateFrom/dateTo — включительные ISO-дни. Завтра = следующий местный день. Не используй своё текущее время.
 Для нового поиска без даты dateFrom=${kaliningradDay(input.anchor)}, dateTo=null. Для уточнения сохраняй интервал базы. Если неоднозначно — clarification, не придумывай.
 Поиск адреса/сведений о выбранном событии: explanationKind address/facts и ordinal по переданному visibleIds (не по общему рангу). Адреса и факты сам не сочиняй: их сформирует сервер из карточки.
+title — короткое осмысленное название запроса по-русски, желательно до 80 символов: что + где + когда, только если эти условия заданы. Не копируй всю речь и вводные слова. Пример формы при соответствующем запросе: «Экскурсии по востоку области на 5–6 сентября». Не добавляй дату или место ради шаблона.
+responseSummary — одна короткая естественная фраза по-русски (до 320 символов), подтверждающая понятые условия итогового intent: что ищем, где, когда и важное ограничение. Например: «Вы хотите экскурсию по востоку области на 5–6 сентября, без длительных пеших переходов». Используй только условия пользователя и сохранённые условия base, без новых советов. Это не отчёт о результатах: поиск ещё не выполнен. Нельзя утверждать «нашёл», «подобрал», обещать наличие/соответствие событий, перечислять карточки, адреса, цены или количество результатов. Фактическое количество и отсутствие результатов сообщит сервер после поиска. Для clarification или explanationKind не none можно вернуть null. Поле необязательно для совместимости, но для обычного поиска заполняй его.
 Краткий goal <=180 символов нужен только для векторного запроса. Исходная речь хранится отдельно целиком.
 BASE=${JSON.stringify(base)}\nINPUT=${JSON.stringify(input)}\nPARENT_FACTS=${JSON.stringify(parentFacts)}`;
 }
