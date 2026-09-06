@@ -6,6 +6,8 @@
 
 - Машиночитаемая карта: `docs/routes.yml`
 - Статический сайт: `docs/features/static-site-pages/README.md`
+  - главная `/`: [итоговая MVP-концепция](features/static-site-pages/home-mvp.md) —
+    TO-BE композиция, выбор до 30 карточек, Hero-talk / page-end, промо и вход в text/voice Search;
   - reviewed Current UI Decoder v1 и immutable design-system handoff:
     `docs/features/static-site-pages/current-ui-resource-graph.md`;
   - аналитика и продуктовая статистика: `analytics/README.md`;
