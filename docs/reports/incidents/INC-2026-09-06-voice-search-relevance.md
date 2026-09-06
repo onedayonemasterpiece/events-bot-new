@@ -409,3 +409,15 @@ read-only review caught differing prompt/parser fact lines and premature date
 validation, both corrected before publication. Explicit subset refinement stays
 bounded intentionally; natural followups use expansion. Local tests are not
 live quality acceptance. Publication/replay evidence follows after validation.
+
+
+First structured replay is **FAIL**, not acceptance: festival question selected
+from_today and returned47/58; science5/58 included household lecture7720; local
+history5/59 was narrower but the fourth interpretation failed before dispatch.
+Do not rerun frozen IDs or claim query-plan schema solved semantic quality.
+Targeted official Gemini3 research confirmed Flash-Lite minimal default and
+recommended temperature1. Runtime had temperature0/minimal; next revision uses
+medium reasoning plus simplified one-call interpreter prompt, with real shared
+reservation adjusted to bounded output budgets. Public UI long-title boundary
+checks PASS at320/390/430/1440 including200% mobile text; source injection OFF.
+Public byte readback7routes matches8c03373d98c39c72160a3cc6db270eacdaac03af.

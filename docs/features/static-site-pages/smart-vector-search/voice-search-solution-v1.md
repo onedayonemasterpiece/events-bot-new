@@ -893,3 +893,14 @@ reflows the same island below the leather tag. The active reading edge retains
 its high-water mark until inactivity/viewport change to avoid title-height
 feedback oscillation. No second sticky shell. Rendered acceptance and remaining
 limits live in the relevance incident, not in unit-test pass claims.
+
+
+Live replay exposed remaining semantic failures with the default minimal-thinking
+Flash-Lite profile. Structured interpretation now uses one concise prompt instead
+of appended conflicting legacy instructions. Interpretation and per-clause
+verification explicitly use medium thinking, temperature1 and bounded output
+budgets4096/8192 on the SAME approved model/shared limiter. ASR, ordinary Search
+and editorial profiles are unchanged. This follows the [official Gemini3
+contract](https://ai.google.dev/gemini-api/docs/generate-content/gemini-3), not a
+claim that structured JSON alone guarantees meaning. Shared-quota rejection is
+reported by sanitized stage, never by private provider/key contents.

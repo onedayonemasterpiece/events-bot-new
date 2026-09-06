@@ -1499,13 +1499,13 @@ async function llmVerify(
     maxLlmCandidates,
     adaptiveHalfCandidateProfile(maxLlmCandidates).slice(-1),
   );
-  const maxOutputTokens = options.voiceIntent ? (options.semanticPlan ? 4096 : 2048) : envInt(
+  const maxOutputTokens = options.voiceIntent ? (options.semanticPlan ? 8192 : 2048) : envInt(
     "EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS",
     384,
     128,
     4096,
   );
-  const thinkingLevel = env("EVENT_SEARCH_LLM_THINKING_LEVEL", "MINIMAL");
+  const thinkingLevel = options.semanticPlan ? "MEDIUM" : env("EVENT_SEARCH_LLM_THINKING_LEVEL", "MINIMAL");
 
   const attempts: LlmAttempt[] = [];
   const providerBlockedScopesByModel = new Map<string, Set<string>>();
@@ -1599,7 +1599,7 @@ async function llmVerify(
                 body: JSON.stringify({
                   contents: [{ parts: [{ text: profile.prompt }] }],
                   generationConfig: {
-                    temperature: 0,
+                    temperature: options.semanticPlan ? 1 : 0,
                     maxOutputTokens,
                     responseMimeType: "application/json",
                     responseJsonSchema: options.voiceIntent ? (options.semanticPlan ? planVerifierSchema(profile.candidates,options.semanticPlan) : voiceVerifierSchema(profile.candidates)) : LLM_VERIFIER_RESPONSE_SCHEMA,

@@ -242,7 +242,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
       }
     }catch(error){
       if(!durable){
-        const code=error instanceof AssistantError?error.code:'provider_or_storage_failed';
+        const code=error instanceof AssistantError?error.code:error instanceof SharedGoogleQuotaError?`shared_quota_${error.stage}`:'provider_or_storage_failed';
         await repo.checkpoint(owner,id,claim.claim_id!,sent?'outcome_unknown':'failed',null,code).catch(()=>{});
       }
       // A durable provider outcome is authoritative even if quota finalization

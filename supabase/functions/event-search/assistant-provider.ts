@@ -22,7 +22,8 @@ export function assistantGenerator(config:{backend:GoogleQuotaBackend|null;keys:
     if(!approved.includes(model)||!model.includes('flash-lite'))reject('assistant_model_not_approved',503);
     const pool=await resolveStrictGoogleQuotaPool(config.backend,config.keys);
     if(!pool.length)reject('assistant_provider_unavailable',503);
-    const outputTokens=options.kind==='asr'?8192:2048;
+    const structuredReasoning=options.kind==='interpret';
+    const outputTokens=options.kind==='asr'?8192:structuredReasoning?4096:2048;
     const inputTokens=Math.ceil(options.prompt.length/2)+(options.frames&&options.sampleRate?Math.ceil(options.frames/options.sampleRate*32):0);
     return withSharedGoogleQuotaAttempt({backend:config.backend,key:pool[0],model,reservedTpm:inputTokens+outputTokens,
       consumer:`kenigevents.voice.${options.kind}.v1`,accountName:'kenigevents',readEnv:config.env,
@@ -33,7 +34,7 @@ export function assistantGenerator(config:{backend:GoogleQuotaBackend|null;keys:
         try{
           const response=await (config.fetchImpl||fetch)(googleModelActionUrl(model,'generateContent'),{
             method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},signal:controller.signal,
-            body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0,maxOutputTokens:outputTokens,responseMimeType:'application/json',responseJsonSchema:options.schema}})});
+            body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:structuredReasoning?1:0,...(structuredReasoning?{thinkingConfig:{thinkingLevel:'medium',includeThoughts:false}}:{}),maxOutputTokens:outputTokens,responseMimeType:'application/json',responseJsonSchema:options.schema}})});
           const payload=await responseJson(response,512*1024);
           const count=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?Math.floor(v):null;
           const u=payload.usageMetadata||{};const usage:GoogleTokenUsage={input_tokens:count(u.promptTokenCount),output_tokens:count(u.candidatesTokenCount),total_tokens:count(u.totalTokenCount)};

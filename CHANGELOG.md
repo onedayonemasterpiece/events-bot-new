@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: structured voice interpretation/verification uses documented medium-thinking Gemini3 configuration and a concise non-conflicting prompt; quota-stage failures are distinguishable without leaking provider data.
+
 - Fixed: mobile Search topic island wraps full long titles, measures shared reading clearance and avoids section-boundary oscillation.
 - Changed: protected conversational Search persists grounded AND/OR query plans, resolves relative dates server-side, prefilters single-city vector retrieval and verifies separate semantic clauses; broad city/date searches use typed eligibility without invented genre constraints.
 
