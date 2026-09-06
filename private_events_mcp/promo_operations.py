@@ -239,7 +239,19 @@ class PromoOperationStore:
                         item[key]=str(value)[:120] if isinstance(value,str) else value
                     item['enabled']=bool(item['enabled'])
                     public_activities.append(item)
+                # These are bounded ledger observations, not live provider verification
+                # or browser visibility counts. An empty page makes no delivery claim.
+                recorded=(await session.execute(text(
+                    'SELECT id AS exposure_id,event_id,activity_id,surface,placement_kind,'
+                    'publish_status AS recorded_publish_status,'
+                    'public_target_count AS recorded_public_target_count,'
+                    'published_at AS recorded_published_at FROM promo_exposure '
+                    'WHERE campaign_id=:id ORDER BY published_at DESC,id DESC LIMIT 17'),
+                    {'id':campaign_id})).mappings().all()
+                recorded_page={'source':'promo_exposure','scope':'recent_recorded_rows_only',
+                    'rows':[dict(row) for row in recorded[:16]],'has_more':len(recorded)>16}
                 response={'campaign':self._campaign_summary(campaign),
+                    'recorded_exposures':recorded_page,
                     'campaign_revision':campaign_revision,
                     'revision_unavailable_reason':None if complete else 'snapshot_too_large',
                     'targets':public_targets,'targets_count':len(targets),
