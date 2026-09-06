@@ -1,0 +1,50 @@
+name: Events MCP offline test checkout
+
+# Temporary source-only export for the ChatGPT implementation sandbox.
+# No agents, production credentials, external providers, writes or deployment.
+on:
+  push:
+    branches: [feature/events-mcp-owner-create-r1]
+    paths: [.github/workflows/events-mcp-source-checkpoint.yml]
+permissions:
+  contents: read
+jobs:
+  checkout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Export tracked application sources
+        run: |
+          mkdir -p artifacts/events-mcp-checkout
+          python - <<'PY'
+          import hashlib, json, pathlib, subprocess, tarfile
+          root = pathlib.Path('.')
+          extensions = {'.py', '.md', '.yml', '.yaml', '.json', '.toml', '.txt', '.ini', '.html', '.sql', '.j2', '.sh', '.mjs', '.js', '.ts', '.astro', '.css'}
+          files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          manifest = {}
+          with tarfile.open('artifacts/events-mcp-checkout/source.tar.gz', 'w:gz') as archive:
+              for name in files:
+                  p = root / name
+                  if not name or not p.is_file() or p.is_symlink():
+                      continue
+                  if p.suffix not in extensions and not name.startswith('tests/fixtures/') and p.name not in {'.env.example', '.gitignore', '.gitattributes', 'Dockerfile'}:
+                      continue
+                  archive.add(p, arcname=name, recursive=False)
+                  manifest[name] = hashlib.sha256(p.read_bytes()).hexdigest()
+          pathlib.Path('artifacts/events-mcp-checkout/manifest.json').write_text(json.dumps({'sha': subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip(), 'files': manifest}, indent=2))
+          PY
+      - name: Build dependency wheels for the offline test sandbox
+        run: python -m pip wheel -r requirements.txt -w artifacts/events-mcp-checkout/wheels
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: events-mcp-checkout-${{ github.sha }}
+          path: artifacts/events-mcp-checkout/
+          retention-days: 7
+          if-no-files-found: error

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added a source-default-off owner Events MCP creation path with typed
+  prepare/commit/status tools. It reuses the existing parser, full Smart Update
+  identity/provenance boundary and standard `JobOutbox` fan-out; supports one
+  `smart_rewrite` event per request; stores idempotent operation state in the
+  canonical event DB; keeps Codex read-only; and suppresses legacy immediate
+  page/provider projections for this queue-owned entry point. Multi-event and
+  festival-program packets fail closed before canonical event/job mutation.
 ### Fixed
 - Repair album release-gate fixture to implement asset reverification without weakening production media checks (INC-2026-09-05 release unblock).
 - VK auto import checks volume headroom before claiming a batch, preserving pending carriers instead of mass-terminalizing them when storage admission is blocked (INC-2026-09-05).

@@ -992,6 +992,24 @@ if "add_event_sessions" not in globals():
 
 class FestivalRequiredError(RuntimeError):
     """Raised when festival mode requires an explicit festival but none was found."""
+
+
+class MultiEventSourceRequiresSeparateRequests(RuntimeError):
+    """R1 owner-create accepts exactly one event per committed request."""
+
+
+class FestivalSourceRequiresDedicatedIntake(RuntimeError):
+    """Festival-level sources need the existing reviewed festival intake path."""
+
+
+class EventSourceRequiresExactlyOneEvent(RuntimeError):
+    """R1 cannot commit a source that did not resolve to exactly one event."""
+
+
+class LifecycleSourceRequiresDedicatedChange(RuntimeError):
+    """Lifecycle facts must use an explicit event-change operation."""
+
+
 # waiting for a date for events listing
 if "events_date_sessions" not in globals():
     events_date_sessions: TTLCache[int, bool] = TTLCache(maxsize=64, ttl=3600)
@@ -4522,6 +4540,7 @@ async def ensure_festival(
     source_chat_id: int | None = None,
     source_message_id: int | None = None,
     aliases: Sequence[str] | None = None,
+    rebuild_navigation: bool = True,
 ) -> tuple[Festival, bool, bool]:
     """Return festival and flags (created, updated)."""
     async with db.get_session() as session:
@@ -4606,7 +4625,8 @@ async def ensure_festival(
             if updated:
                 session.add(fest)
                 await session.commit()
-                await rebuild_fest_nav_if_changed(db)
+                if rebuild_navigation:
+                    await rebuild_fest_nav_if_changed(db)
             return fest, False, updated
         fest = Festival(
             name=name,
@@ -4634,7 +4654,8 @@ async def ensure_festival(
         session.add(fest)
         await session.commit()
         logging.info("created festival %s", name)
-        await rebuild_fest_nav_if_changed(db)
+        if rebuild_navigation:
+            await rebuild_fest_nav_if_changed(db)
         return fest, True, True
 
 
@@ -16786,6 +16807,7 @@ async def schedule_event_update_tasks(
     drain_nav: bool = False,
     skip_vk_sync: bool = False,
     refresh_existing_vk: bool = False,
+    defer_external_projections: bool = False,
 ) -> dict[JobTask, str]:
     eid = ev.id
     results: dict[JobTask, str] = {}
@@ -16920,7 +16942,11 @@ async def schedule_event_update_tasks(
 
         # month_pages — отложенный запуск
         month = ev.date.split("..", 1)[0][:7]
-        event_update_sync = (os.getenv("EVENT_UPDATE_SYNC") or "").strip().lower() in {"1", "true", "yes"}
+        event_update_sync = (
+            not defer_external_projections
+            and (os.getenv("EVENT_UPDATE_SYNC") or "").strip().lower()
+            in {"1", "true", "yes"}
+        )
         if event_update_sync:
             logging.info("EVENT_UPDATE_SYNC set, triggering sync_month_page immediately")
             await sync_month_page(db, month)
@@ -16988,7 +17014,9 @@ async def schedule_event_update_tasks(
             # weekend/month rebuilds, so we no longer enqueue this task.
             w_start = weekend_start_for_date(d)
             if w_start:
-                if os.getenv("EVENT_UPDATE_SYNC"):
+                # Preserve the historical truthy-string behavior for existing
+                # callers; the MCP enqueue-only path suppresses it explicitly.
+                if not defer_external_projections and os.getenv("EVENT_UPDATE_SYNC"):
                     logging.info(
                         "EVENT_UPDATE_SYNC set, triggering sync_weekend_page immediately"
                     )
@@ -17373,6 +17401,10 @@ async def add_events_from_text(
 
 
     bot: Bot | None = None,
+    defer_external_projections: bool = False,
+    require_single_event: bool = False,
+    allow_festival_queue: bool = True,
+    allow_lifecycle_actions: bool = True,
 
 ) -> AddEventsResult:
     logging.info(
@@ -17635,6 +17667,18 @@ async def add_events_from_text(
                 limit_notice=ocr_limit_notice,
                 source_decision=parsed,
             )
+        if not allow_lifecycle_actions and parsed.lifecycle_actions:
+            raise LifecycleSourceRequiresDedicatedChange(
+                "lifecycle source requires an explicit event-change operation"
+            )
+    if require_single_event and len(parsed_events) != 1:
+        if len(parsed_events) > 1:
+            raise MultiEventSourceRequiresSeparateRequests(
+                "R1 owner event creation accepts exactly one parsed event"
+            )
+        raise EventSourceRequiresExactlyOneEvent(
+            "R1 owner event creation requires exactly one parsed event"
+        )
     links_iter = iter(extract_links_from_html(html_text) if html_text else [])
     source_text_clean = html_text or text
     program_url: str | None = None
@@ -17749,6 +17793,11 @@ async def add_events_from_text(
         if festival_decision.context and not (festival_info.get("festival_context") or "").strip():
             festival_info["festival_context"] = festival_decision.context
 
+    if festival_decision.context == "festival_post":
+        if not allow_festival_queue:
+            raise FestivalSourceRequiresDedicatedIntake(
+                "festival-level source requires reviewed festival intake"
+            )
     if (
         festival_decision.context == "festival_post"
         and source_kind_for_queue in {"vk", "tg", "url"}
@@ -17820,6 +17869,9 @@ async def add_events_from_text(
         city = festival_info.get("city")
         loc_addr = strip_city_from_address(loc_addr, city)
         photo_u = catbox_urls[0] if catbox_urls else None
+        festival_write_kwargs: dict[str, Any] = {}
+        if defer_external_projections:
+            festival_write_kwargs["rebuild_navigation"] = False
         fest_obj, created, updated = await ensure_festival(
             db,
             fest_name,
@@ -17838,6 +17890,7 @@ async def add_events_from_text(
             source_post_url=source_link,
             source_chat_id=source_chat_id,
             source_message_id=source_message_id,
+            **festival_write_kwargs,
         )
         festival_obj = fest_obj
         fest_created = created
@@ -17863,14 +17916,14 @@ async def add_events_from_text(
                     except Exception:
                         logging.exception("notify_superadmin failed for %s", name)
 
-        if created or fest_updated:
+        if (created or fest_updated) and not defer_external_projections:
             await _safe_sync_fest(fest_obj.name)
             async with db.get_session() as session:
                 res = await session.execute(
                     select(Festival).where(Festival.name == fest_obj.name)
                 )
                 festival_obj = res.scalar_one_or_none()
-        if festival_obj:
+        if festival_obj and not defer_external_projections:
             await try_set_fest_cover_from_program(db, festival_obj)
     elif force_festival:
         raise FestivalRequiredError("festival name missing")
@@ -17981,6 +18034,9 @@ async def add_events_from_text(
 
         if base_event.festival:
             photo_u = catbox_urls[0] if catbox_urls else None
+            festival_event_kwargs: dict[str, Any] = {}
+            if defer_external_projections:
+                festival_event_kwargs["rebuild_navigation"] = False
             await ensure_festival(
                 db,
                 base_event.festival,
@@ -17989,6 +18045,7 @@ async def add_events_from_text(
                 photo_urls=catbox_urls,
                 start_date=base_event.date or None,
                 end_date=base_event.end_date or base_event.date or None,
+                **festival_event_kwargs,
             )
 
         if base_event.event_type == "выставка" and not base_event.end_date:
@@ -18083,6 +18140,7 @@ async def add_events_from_text(
                 source_chat_username=source_channel,
                 creator_id=creator_id,
                 producer_ordinal=producer_ordinal,
+                defer_external_projections=defer_external_projections,
                 source_native_occurrence_id=(
                     str(
                         data.get("source_native_occurrence_id")
@@ -18116,10 +18174,16 @@ async def add_events_from_text(
                         )
                     ],
             )
+            smart_update_schedule_kwargs = (
+                {"defer_external_projections": True}
+                if defer_external_projections
+                else None
+            )
             update_result = await smart_event_update(
                 db,
                 candidate,
                 check_source_url=False,
+                schedule_kwargs=smart_update_schedule_kwargs,
             )
             saved: Event | None = None
             if update_result.is_accepted:

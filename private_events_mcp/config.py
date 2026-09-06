@@ -195,6 +195,7 @@ class PrivateEventsMCPConfig:
     repository_root: str
     repository_slug: str
     repository_sha_file: str
+    event_create_enabled: bool = False
     universal_social_enabled: bool = False
     universal_social_telegram_enabled: bool = False
     universal_social_vk_enabled: bool = False
@@ -292,6 +293,10 @@ class PrivateEventsMCPConfig:
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
             ).strip(),
+            event_create_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED",
+                mcp_enabled=enabled,
+            ),
             universal_social_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED",
                 mcp_enabled=enabled,

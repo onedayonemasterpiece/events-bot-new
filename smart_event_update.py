@@ -620,6 +620,8 @@ class EventCandidate:
     replay_check_source_url: bool = True
     replay_schedule_tasks: bool = True
     replay_schedule_kwargs: dict[str, Any] | None = None
+    # Queue-owned callers may suppress legacy direct festival/page rebuilds.
+    defer_external_projections: bool = False
     # Only identity-bearing sources may participate in event matching. Linked
     # roundups/program pages are provenance context and must use context_only.
     source_role: str = "identity_bearing"
@@ -17653,7 +17655,9 @@ async def _accepted_occurrence_anchor_event_id(
     return int(row[0]) if row[0] is not None else None
 
 
-async def _apply_holiday_festival_mapping(db: Database, event_id: int) -> bool:
+async def _apply_holiday_festival_mapping(
+    db: Database, event_id: int, *, rebuild_navigation: bool = True
+) -> bool:
     """Ensure pseudo-festivals from docs/reference/holidays.md are applied universally.
 
     This runs as part of Smart Update so that holiday grouping does not depend on
@@ -17716,6 +17720,8 @@ async def _apply_holiday_festival_mapping(db: Database, event_id: int) -> bool:
     if aliases_payload:
         ensure_kwargs["aliases"] = aliases_payload
 
+    if not rebuild_navigation:
+        ensure_kwargs["rebuild_navigation"] = False
     fest_obj, fest_created, fest_updated = await ensure_festival(
         db,
         canonical_name,
@@ -20830,7 +20836,16 @@ async def _smart_event_update_impl(
 
         await _persist_pending_festival_queue()
         try:
-            await _apply_holiday_festival_mapping(db, new_event.id)
+            holiday_kwargs = (
+                {"rebuild_navigation": False}
+                if candidate.defer_external_projections
+                else {}
+            )
+            await _apply_holiday_festival_mapping(
+                db,
+                new_event.id,
+                **holiday_kwargs,
+            )
         except Exception:
             logger.warning(
                 "smart_update: holiday mapping failed for event %s",
@@ -22511,7 +22526,16 @@ async def _smart_event_update_impl(
 
     holiday_changed = False
     try:
-        holiday_changed = await _apply_holiday_festival_mapping(db, existing.id)
+        holiday_kwargs = (
+            {"rebuild_navigation": False}
+            if candidate.defer_external_projections
+            else {}
+        )
+        holiday_changed = await _apply_holiday_festival_mapping(
+            db,
+            existing.id,
+            **holiday_kwargs,
+        )
     except Exception:
         logger.warning(
             "smart_update: holiday mapping failed for event %s",

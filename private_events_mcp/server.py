@@ -22,6 +22,7 @@ from .config import PrivateEventsMCPConfig
 from .crypto import AccessIdentity, TokenValidationError
 from .limits import AdmissionController, RateLimitExceeded
 from .media_contract import AssetIngestor
+from .event_create import EventCreateRuntime, build_event_create_tools
 from .oauth import PrivateOAuthServer
 from .protocol import (
     LATEST_LEGACY_PROTOCOL,
@@ -59,12 +60,19 @@ class PrivateEventsMCPServer:
         social_adapters: Mapping[str, SocialAdapter] | None = None,
         social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
         asset_ingestor: AssetIngestor | None = None,
+        event_create_runtime: EventCreateRuntime | None = None,
     ) -> None:
         self.config = config
         self.oauth = PrivateOAuthServer(config)
         self.repository = EventsEvidenceRepository(config)
         self.target_policy = TargetAliasPolicy.from_json(config.social_targets_json)
         read_tools = build_tools(self.repository)
+        event_create_tools = (
+            build_event_create_tools(event_create_runtime)
+            if event_create_runtime is not None
+            else ()
+        )
+        self.event_create_runtime = event_create_runtime
         social_tools = build_social_tools(
             store=self.oauth.store,
             policy=self.target_policy,
@@ -180,7 +188,7 @@ class PrivateEventsMCPServer:
                 capability_policy={name: name in expected for name in ("telegram", "vk")},
             )
         self.protocol = MCPProtocol(
-            (*read_tools, *social_tools, *workspace_tools),
+            (*read_tools, *event_create_tools, *social_tools, *workspace_tools),
             cache_ttl_seconds=config.cache_ttl_seconds,
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),
