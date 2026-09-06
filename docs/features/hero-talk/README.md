@@ -950,3 +950,9 @@ Exposure считается только после реальной квали�
 - age rating показывается компактно;
 - video mosaic требует отдельного social-source lab;
 - Hero-talk получает отдельные GitHub Actions gates.
+
+### Canonical event resolver (read-only)
+
+`hero_talk.resolver.resolve_event_packet(database_path, event_id, now=..., route_evidence=...)` resolves one raw SQLite Event snapshot, including lifecycle/silent and canonical identity/merge columns. It reuses `event_public_revision` and canonical publication span semantics with explicit Europe/Kaliningrad deadlines: timed one-day start, date-only day-end, trusted multiday end-of-day; inferred end dates do not extend a timed start. Missing identity, invalid dates and expired events fail closed. It does not establish freshness of organizer confirmation, perform semantic review, or grant campaign rights.
+
+Links remain unresolved unless an internal `RouteReadinessEvidence` binds the exact event ID/current revision, exported slug/href and a current verification interval. This evidence must originate in a public route/inclusion verifier, not model/request JSON, outbox success or a secret-candidate build receipt. Its expiry also bounds the packet. Re-resolve at activation/use; the packet is not a durable permit. Media is intentionally unresolved: gallery approval/pixel geometry alone does not prove public encoded-object availability or usage rights. No provider/model calls, DB writes, publishing or fallback media inference occur.
