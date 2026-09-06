@@ -63,3 +63,13 @@ test('bounded voice facts preserve audience metadata at the tail of long descrip
  const facts='Programme: organ. '+ 'x'.repeat(4000)+'\nАудитория/свойства: для детей, для семьи';
  const compact=voiceCandidateFacts(facts);assert.ok(compact.length<=2400);assert.match(compact,/Programme: organ/);assert.match(compact,/для детей, для семьи/);
 });
+test('voice provider minimum timeout is enforced before dispatch without extending the remaining window',async()=>{
+ const {voiceVerifierAttemptTimeout}=await import('./assistant-verification.ts');
+ assert.equal(voiceVerifierAttemptTimeout(15000,18000,10000),null);
+ assert.equal(voiceVerifierAttemptTimeout(15000,20000,10000),10000);
+ assert.equal(voiceVerifierAttemptTimeout(15000,22000,10000),12000);
+ assert.equal(voiceVerifierAttemptTimeout(15000,40000,10000),15000);
+ assert.equal(voiceVerifierAttemptTimeout(5000,25000,10000),10000);
+ const {planVerifierBudgetMs}=await import('./assistant-plan-verification.ts');
+ assert.equal(planVerifierBudgetMs({groups:[{},{}]}),45000);assert.equal(planVerifierBudgetMs({groups:[{},{},{}]}),60000);
+});

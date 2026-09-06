@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: voice verification respects Gemini's 10-second minimum server deadline before quota dispatch; three/four-condition windows get a bounded 60-second default without truncation or retries.
+
 - Fixed: conversational verifier sizes batches by candidate×condition schema complexity without dropping candidates/conditions; shared deadlines and fail-closed full-window verification remain unchanged.
 - Changed: adaptive assumptions default to empty and exclude technical catalog commentary or silent broadening of requested genres.
 

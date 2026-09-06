@@ -1,4 +1,4 @@
-import {planVerifierSchema, planVerifierBatchSize,planVerifierPrompt,classifyPlanPayload,type SemanticPlan} from './assistant-plan-verification.ts';
+import {planVerifierSchema, planVerifierBatchSize,planVerifierBudgetMs,planVerifierPrompt,classifyPlanPayload,type SemanticPlan} from './assistant-plan-verification.ts';
 // KenigEvents authorized vector search Edge Function.
 // Runtime: Supabase Edge Functions / Deno.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.108.2";
@@ -18,7 +18,7 @@ import {
   SharedGoogleQuotaError,
   withSharedGoogleQuotaAttempt,
 } from "./google-quota.ts";
-import { classifyVoiceSchemaPayload, voiceVerifierSchema, voiceCandidateFacts, verifyVoiceWindow, voiceVerifierPrompt } from "./assistant-verification.ts";
+import { classifyVoiceSchemaPayload, voiceVerifierSchema, voiceCandidateFacts, verifyVoiceWindow, voiceVerifierAttemptTimeout, voiceVerifierPrompt } from "./assistant-verification.ts";
 import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts";
 import { handleAssistant, type AssistantDependencies, type AssistantRepository } from "./assistant-handler.ts";
 import { assistantGenerator } from "./assistant-provider.ts";
@@ -1535,7 +1535,14 @@ async function llmVerify(
       const key = llmKeys[(providerKeyCursor + keyIndex) % llmKeys.length];
       if (providerBlockedScopes.has(key.quota_scope)) continue;
       const startedAt = performance.now();
-      if (options.deadline) {
+      if (options.voiceIntent) {
+        const admittedTimeout=voiceVerifierAttemptTimeout(timeoutMs,options.deadline);
+        if(admittedTimeout===null){
+          attempts.push({model,role,attempt:attemptNumber,status:'degraded:verification_budget_exhausted',elapsed_ms:0,timeout_ms:0,prompt_chars:profile.prompt_chars,prompt_fact_chars:profile.prompt_fact_chars,compact_candidate_count:profile.compact_candidate_count});
+          return null;
+        }
+        timeoutMs=admittedTimeout;
+      } else if (options.deadline) {
         const remaining = options.deadline - Date.now();
         if (remaining < 300) return null;
         timeoutMs = Math.min(timeoutMs, remaining);
@@ -1838,7 +1845,7 @@ async function verifyAssistantWindow(supabaseUrl: string, candidates: Candidate[
       voiceIntent: intent, semanticPlan, deadline, gemma_overflow_allowed: false,
       quota_backend: sharedGoogleQuotaBackend(supabaseUrl), counters,
     });
-  }, { batchSize: planVerifierBatchSize(semanticPlan), budgetMs: envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_TOTAL_BUDGET_MS", 45000, 1000, 90000) });
+  }, { batchSize: planVerifierBatchSize(semanticPlan), budgetMs: envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_TOTAL_BUDGET_MS", planVerifierBudgetMs(semanticPlan), 1000, 90000) });
   return {...result, verification: {...result.verification, candidate_fact_count: digests.size, semantic_groups:semanticPlan?.groups||null},
     policy: result.verification.policy, attempts: result.verification.attempts,
     model: result.verification.attempts.at(-1)?.model || null};

@@ -6,6 +6,9 @@ export function planFacts(value:unknown):{index:number;text:string}[]{
 }
 /** Cap repeated candidate×group schema complexity, not retrieval membership.
  * 40 group verdicts is an observed working envelope, not a provider SLA. */
+export function planVerifierBudgetMs(plan?:SemanticPlan):number {
+ return (plan?.groups.length||0)>=3?60000:45000;
+}
 export function planVerifierBatchSize(plan?:SemanticPlan):number {
  return Math.min(20,Math.floor(40/Math.max(1,plan?.groups.length||1)));
 }

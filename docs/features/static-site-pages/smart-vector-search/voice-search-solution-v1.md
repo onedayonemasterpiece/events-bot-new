@@ -1057,3 +1057,12 @@ still run under the same global deadline and per-call shared limiter. If any
 batch fails, no unchecked/partial exact list is presented as complete. Grounding
 HTTP400 remains diagnosed in the incident; provider only supplied generic
 INVALID_ARGUMENT, so complexity attribution requires controlled smaller-batch evidence.
+
+
+Confirmed deadline guard: controlled seven-candidate probe returned
+`Manually set deadline 8s is too short. Minimum allowed deadline is 10s.`
+Voice verifier now refuses dispatch/lease if less than 10s remain in its shared
+window, rather than sending an invalid server timeout. Default total window is
+60s for 3–4 conditions (more smaller batches), 45s for <=2; explicit configured
+total budgets remain authoritative. No deadline is extended mid-run and no
+failed batch is automatically retried; normal Search timeout policy is unchanged.

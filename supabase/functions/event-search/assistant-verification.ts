@@ -76,3 +76,11 @@ export async function verifyVoiceWindow(candidates: Card[], classify:(batch:Card
     membership_scope:'bounded_canonical_search_window',attempts,...(Object.keys(groupEvidence).length?{group_evidence:groupEvidence}:{})};
   return {exact:failure?[]:exact,possible,rejected_ids:rejected,used:!failure,status:failure||'ok',verification};
 }
+
+/** Gemini rejects explicitly requested server deadlines below 10 seconds.
+ * Do not spend another lease when the shared window cannot accommodate that. */
+export function voiceVerifierAttemptTimeout(requestedMs:number,deadline?:number,now=Date.now()):number|null {
+ const available=deadline===undefined?Infinity:deadline-now;
+ if(available<10000)return null;
+ return Math.min(Math.max(10000,requestedMs),available);
+}
