@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Connected digest-bound private event images to owner prepare/commit, durable recovery and the existing Smart Update parser media path, with execution-time policy/expiry/byte checks and no synthetic Telegram/OAuth actor (#643).
+
 - Added default-off owner OAuth event image stage/get tools with private attachment metadata, independent of social publishing flags; Codex remains read-only (#643).
 - Added current tenant-authorized publication evidence for accepted event-create
   operations: canonical public URL records and bounded live JobOutbox state,

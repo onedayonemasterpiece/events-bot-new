@@ -11,8 +11,9 @@ from .event_create import EventCreateRequest
 class MainEventCreateExecutor:
     """Thin adapter over the existing parser + Smart Update ingestion path."""
 
-    def __init__(self, database: Any) -> None:
+    def __init__(self, database: Any, *, resolve_media=None) -> None:
         self.database = database
+        self.resolve_media = resolve_media
 
     async def create(self, request: EventCreateRequest) -> dict[str, Any]:
         # Lazy imports avoid pulling the bot/provider stack when the feature is off.
@@ -20,13 +21,23 @@ class MainEventCreateExecutor:
         from models import Event, JobOutbox, SmartUpdateCandidateState
         from smart_event_update import canonicalize_identity_url
 
+        media = None
+        if request.media:
+            from .tool_catalog import ToolExecutionError
+            if self.resolve_media is None:
+                return {"status": "rejected", "error_code": "EVENT_ASSETS_DISABLED", "event_ids": [], "jobs": []}
+            try:
+                media = await self.resolve_media(request)
+            except ToolExecutionError as exc:
+                # Proven pre-parser failure, not an ambiguous post-write outcome.
+                return {"status": "rejected", "error_code": exc.error_code, "event_ids": [], "jobs": []}
         try:
             result = await main.add_events_from_text(
                 self.database,
                 request.raw_text,
                 request.source_url,
                 html_text=None,
-                media=None,
+                media=media,
                 poster_media=None,
                 force_festival=False,
                 raise_exc=True,

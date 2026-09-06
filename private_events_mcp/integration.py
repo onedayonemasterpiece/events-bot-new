@@ -157,6 +157,28 @@ def attach_private_events_mcp(
         asset_ingestor=asset_ingestor,
         event_create_runtime=event_create_runtime,
     )
+    if event_create_runtime is not None:
+        async def _resolve_event_media(request: EventCreateRequest):
+            from .tool_catalog import ToolExecutionError
+
+            async def current_policy() -> bool:
+                return bool(server.config.event_assets_enabled
+                            and event_create_actor_is_current(server.config, request))
+
+            if server.event_assets is None or not await current_policy():
+                raise ToolExecutionError("EVENT_ASSETS_DISABLED", "Event image ingress is disabled.")
+            media = []
+            for image in request.media:
+                media.append(await server.event_assets.read_durable(
+                    image.asset_ref, expected_digest=image.content_digest,
+                    actor_subject=request.actor_subject, actor_client_id=request.actor_client_id,
+                    actor_audience=request.actor_audience, authorize=current_policy,
+                ))
+            if not await current_policy():
+                raise ToolExecutionError("EVENT_CREATE_ACCESS_REVOKED", "Event create access was revoked.")
+            return media
+
+        event_create_runtime.executor.resolve_media = _resolve_event_media
     # R0 deliberately extends only the owner ChatGPT/OpenCode descriptor and
     # handler for the existing operations_snapshot tool. The Codex protocol,
     # scopes, database schema, workers, and provider adapters remain unchanged.

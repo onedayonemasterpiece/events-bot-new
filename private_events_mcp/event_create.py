@@ -107,6 +107,32 @@ def _idempotency_key(value: Any) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class EventImageRef:
+    asset_ref: str
+    content_digest: str
+
+
+def parse_event_images(value: Any) -> tuple[EventImageRef, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list) or len(value) > 3:
+        raise InvalidArgumentsError("media must contain at most three staged event images")
+    images = []
+    seen = set()
+    for item in value:
+        if (not isinstance(item, Mapping) or set(item) != {"asset_ref", "content_digest"}
+                or not isinstance(item["asset_ref"], str)
+                or not re.fullmatch(r"ing_[A-Za-z0-9_-]{24,160}", item["asset_ref"])
+                or not isinstance(item["content_digest"], str)
+                or not re.fullmatch(r"sha256:[a-f0-9]{64}", item["content_digest"])
+                or item["asset_ref"] in seen):
+            raise InvalidArgumentsError("media requires unique staged references and exact digests")
+        seen.add(item["asset_ref"])
+        images.append(EventImageRef(item["asset_ref"], item["content_digest"]))
+    return tuple(images)
+
+
+@dataclass(frozen=True, slots=True)
 class EventCreateRequest:
     raw_text: str
     source_url: str | None
@@ -118,9 +144,10 @@ class EventCreateRequest:
     actor_client_id: str
     actor_audience: str
     _persisted_idempotency_hash: str | None = None
+    media: tuple[EventImageRef, ...] = ()
 
     def canonical_action(self) -> dict[str, Any]:
-        return {
+        action = {
             "schema": "events-mcp-owner-create-r1",
             "raw_text": self.raw_text,
             "source_url": self.source_url,
@@ -128,6 +155,11 @@ class EventCreateRequest:
             "source_locator": self.source_locator,
             "text_policy": self.text_policy,
         }
+        # Existing text-only R1 digests survive unchanged across recovery.
+        if self.media:
+            action["media"] = [{"asset_ref": item.asset_ref, "content_digest": item.content_digest}
+                               for item in self.media]
+        return action
 
     @property
     def action_digest(self) -> str:
@@ -459,11 +491,14 @@ class EventCreateRuntime:
             actor_subject=context.identity.subject,
             actor_client_id=context.identity.client_id,
             actor_audience=context.identity.audience,
+            media=parse_event_images(arguments.get("media")),
         )
 
     def prepare(
         self, request: EventCreateRequest, *, now: int | None = None
     ) -> dict[str, Any]:
+        if request.media and not self.config.event_assets_enabled:
+            raise ToolExecutionError("EVENT_ASSETS_DISABLED", "Event image ingress is disabled.")
         issued = int(time.time()) if now is None else int(now)
         expires = issued + _PREPARATION_TTL_SECONDS
         payload = {
@@ -489,6 +524,8 @@ class EventCreateRuntime:
             "expires_at": expires,
             "committable": True,
             "preview": {
+                "media": [{"asset_ref": image.asset_ref, "content_digest": image.content_digest}
+                          for image in request.media],
                 "text_policy": request.text_policy,
                 "raw_text_chars": len(request.raw_text),
                 "raw_text_preview": request.raw_text[:600],
@@ -725,6 +762,7 @@ class EventCreateRuntime:
                     actor_subject=row["actor_subject"], actor_client_id=row["actor_client_id"],
                     actor_audience=row["actor_audience"], idempotency_key="",
                     _persisted_idempotency_hash=row["idempotency_hash"],
+                    media=parse_event_images(stored.get("media")),
                 )
                 if not constant_time_equal(request.action_digest, row["action_digest"]):
                     raise ValueError("stored request digest mismatch")
@@ -755,6 +793,11 @@ class EventCreateRuntime:
 
 
 _INPUT_PROPERTIES = {
+    "media": {"type": "array", "maxItems": 3, "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["asset_ref", "content_digest"], "properties": {
+            "asset_ref": {"type": "string", "pattern": "^ing_[A-Za-z0-9_-]{24,160}$"},
+            "content_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}}},
     "raw_text": {
         "type": "string",
         "minLength": 10,
@@ -779,11 +822,17 @@ _GENERIC_OUTPUT = {"type": "object", "additionalProperties": True}
 
 def build_event_create_tools(
     runtime: EventCreateRuntime,
+    *, asset_service=None,
 ) -> tuple[ToolSpec, ...]:
     async def prepare(
         arguments: Mapping[str, Any], context: ToolCallContext
     ) -> dict[str, Any]:
         request = runtime.request_from_arguments(arguments, context)
+        if request.media:
+            if asset_service is None:
+                raise ToolExecutionError("EVENT_ASSETS_DISABLED", "Event image ingress is disabled.")
+            for image in request.media:
+                await asset_service.reverify(image.asset_ref, context, expected_digest=image.content_digest)
         return runtime.prepare(request)
 
     async def commit(
@@ -812,8 +861,8 @@ def build_event_create_tools(
             name="event_create_prepare",
             title="Prepare canonical event creation",
             description=(
-                "Validate and freeze one owner event-create request. R1 supports raw text only, "
-                "text_policy=smart_rewrite, and no media or promo. This tool does not mutate "
+                "Validate and freeze one owner event-create request with smart_rewrite text and "
+                "optional digest-bound staged images when enabled; no promo. This tool does not mutate "
                 "Event, EventSource, promo or JobOutbox."
             ),
             input_schema={

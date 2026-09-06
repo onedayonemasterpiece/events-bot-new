@@ -1606,5 +1606,13 @@ of social providers; event-only ingress does not enable social media tools.
 The existing media host allowlist, byte/store/dimension limits and retention
 settings remain mandatory. Stage advertises `openai/fileParams: ["file"]`, returns
 bounded digest-bound metadata and never publishes or exposes a signed URL/path.
-This is attachment ingress only: event-create consumption and partner tools are
-not yet connected at this checkpoint. No production flag has been enabled.
+Owner event-create now accepts up to three unique `{asset_ref, content_digest}`
+entries in `media`. Prepare reverifies their current actor binding; the frozen
+action digest includes exact refs/digests. Text-only R1 digests remain unchanged.
+After a restart, queued requests retain the same media identities. Immediately
+before the existing parser, durable reads check current owner/capability policy,
+expiry and actual-byte digests without constructing an OAuth identity or token;
+the existing `media=[(bytes, filename)]` path handles posters and Smart Update.
+Failures known to precede the parser are rejected, not marked outcome-unknown.
+No Telegram owner is invented and no public upload occurs at staging. Partner
+mutation wiring is still pending. No production flag has been enabled.

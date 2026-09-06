@@ -58,9 +58,15 @@ class EventAssetService:
             raise _error("EVENT_ASSET_ACCESS_DENIED") from None
         if allowed is not True:
             raise _error("EVENT_ASSET_ACCESS_DENIED")
-        # Purpose separation prevents event refs being borrowed from social assets.
-        payload = json.dumps(["event-image-v1", identity.client_id, identity.subject,
-                              context.resource], ensure_ascii=False, separators=(",", ":"))
+        return self._binding(identity.subject, identity.client_id, context.resource)
+
+    def _binding(self, subject: str, client_id: str, audience: str) -> str:
+        if any(not isinstance(value, str) or not 1 <= len(value) <= 2048
+               for value in (subject, client_id, audience)):
+            raise _error("EVENT_ASSET_ACCESS_DENIED")
+        # Shared by HTTP and durable execution; no synthetic OAuth identity.
+        payload = json.dumps(["event-image-v1", client_id, subject, audience],
+                             ensure_ascii=False, separators=(",", ":"))
         return hmac.new(self._key, payload.encode(), hashlib.sha256).hexdigest()
 
     def _validate(self, asset: VerifiedAsset, binding: str) -> VerifiedAsset:
@@ -108,6 +114,13 @@ class EventAssetService:
         expected_digest: str | None = None,
     ) -> VerifiedAsset:
         binding = await self._authorize(context, action)
+        asset = await self._reverify_bound(asset_ref, binding, expected_digest=expected_digest)
+        await self._authorize(context, action)
+        return asset
+
+    async def _reverify_bound(
+        self, asset_ref: str, binding: str, *, expected_digest: str | None,
+    ) -> VerifiedAsset:
         if not isinstance(asset_ref, str) or not _REF.fullmatch(asset_ref):
             raise _error()
         try:
@@ -126,7 +139,6 @@ class EventAssetService:
             raise
         except Exception:
             raise _error() from None
-        await self._authorize(context, action)
         return asset
 
     async def read(self, asset_ref: str, context: ToolCallContext) -> dict[str, Any]:
@@ -139,3 +151,63 @@ class EventAssetService:
         if not isinstance(expected_digest, str) or not _DIGEST.fullmatch(expected_digest):
             raise _error("EVENT_ASSET_DIGEST_MISMATCH")
         return await self._resolve(asset_ref, context, action="use", expected_digest=expected_digest)
+
+
+    async def read_durable(
+        self, asset_ref: str, *, expected_digest: str, actor_subject: str,
+        actor_client_id: str, actor_audience: str,
+        authorize: Callable[[], Awaitable[bool]],
+    ) -> tuple[bytes, str]:
+        """Read exact staged bytes for a stored actor without fabricating tokens.
+
+        The callback must check current durable-operation policy. No original
+        HTTP token is needed; expiry of the staged image is never extended.
+        """
+        if not callable(authorize):
+            raise ValueError("current durable-operation authorization is required")
+
+        async def check() -> None:
+            try:
+                permitted = await authorize()
+            except Exception:
+                raise _error("EVENT_ASSET_ACCESS_DENIED") from None
+            if permitted is not True:
+                raise _error("EVENT_ASSET_ACCESS_DENIED")
+
+        await check()
+        binding = self._binding(actor_subject, actor_client_id, actor_audience)
+        if not isinstance(expected_digest, str) or not _DIGEST.fullmatch(expected_digest):
+            raise _error("EVENT_ASSET_DIGEST_MISMATCH")
+        asset = await self._reverify_bound(asset_ref, binding, expected_digest=expected_digest)
+        await check()
+        opener = getattr(self.ingestor, "open_verified", None)
+        if not callable(opener):
+            raise _error()
+
+        def read_bytes() -> bytes:
+            with opener(asset_ref, binding) as (stream, metadata):
+                self._validate(metadata, binding)
+                if self._public(metadata) != self._public(asset):
+                    raise _error()
+                content = stream.read(self.max_bytes + 1)
+                if (not isinstance(content, bytes) or len(content) != asset.byte_length
+                        or len(content) > self.max_bytes):
+                    raise _error()
+                # Also hash the actual returned bytes, closing the gap between
+                # store pre-read verification and a changed file during reading.
+                digest = "sha256:" + hashlib.sha256(content).hexdigest()
+                if not hmac.compare_digest(digest, expected_digest):
+                    raise _error("EVENT_ASSET_DIGEST_MISMATCH")
+                return content
+
+        await check()
+        try:
+            content = await asyncio.to_thread(read_bytes)
+        except ToolExecutionError:
+            raise
+        except Exception:
+            raise _error() from None
+        await check()
+        self._validate(asset, binding)  # expiry may have crossed during I/O
+        extension = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[asset.mime_type]
+        return content, "event-image-" + expected_digest[7:23] + "." + extension

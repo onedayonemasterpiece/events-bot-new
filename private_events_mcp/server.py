@@ -79,11 +79,6 @@ class PrivateEventsMCPServer:
         self.repository = EventsEvidenceRepository(config)
         self.target_policy = TargetAliasPolicy.from_json(config.social_targets_json)
         read_tools = build_tools(self.repository)
-        event_create_tools = (
-            build_event_create_tools(event_create_runtime)
-            if event_create_runtime is not None
-            else ()
-        )
         self.event_create_runtime = event_create_runtime
         self.event_assets = None
         event_asset_tools = ()
@@ -117,6 +112,10 @@ class PrivateEventsMCPServer:
             event_asset_tools = build_event_asset_tools(
                 self.event_assets, timeout_seconds=config.download_timeout_seconds + 5,
             )
+        event_create_tools = (
+            build_event_create_tools(event_create_runtime, asset_service=self.event_assets)
+            if event_create_runtime is not None else ()
+        )
         social_tools = build_social_tools(
             store=self.oauth.store,
             policy=self.target_policy,
