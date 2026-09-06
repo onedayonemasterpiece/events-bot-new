@@ -489,3 +489,41 @@ cleanup PASS. Telegram report/link delivered and topic/text readback verified:
 https://t.me/c/4337049383/1460 . Latest queried PR source matches backend SHA;
 GitHub reports no checks on this head, so no new CI PASS claim. Local85focused
 regressions, typecheck and generated revision check are the executed code gates.
+
+### User clarification: model-led inheritance, not a mechanical reset
+
+The user explicitly rejected both unconditional inheritance and unconditional
+reset. This supersedes the earlier treatment of the untimed local-history turn
+as necessarily independent. Active protected backend is now
+`318c55bced887858d5c86b6df94b0d27f2975070`, health readback matches, revision
+`sha256:2a27f13350e9a6ad4b81c1de18f07e24d926f0faf180d3cc5a7fe07029ced8ab`.
+LLM receives the owner-checked actual predecessor message plus its state, not
+just a short embedding goal. It chooses relevant carryover per condition.
+Complete sentence/new topic/missing date do not mechanically determine reset.
+
+Four real protected interpretations from the same persisted science/week parent:
+
+| Probe | Effective model decision |
+| --- | --- |
+| Untimed local-history formats | Replaced science; retained7–13September |
+| Explicit “what of these in Svetlogorsk” follow-up | Retained science/week; changed city |
+| Explicit new December search | All events, Kaliningrad,1–31December; no science |
+| Broad Svetlogorsk week question | All events7–13September; no old science |
+
+First probe's actual search `3e814724-c57b-46e2-aa00-c7400a369119` returns5verified
+cards with7–13September; status refresh preserves the answer. No re-generation
+of the four interpretation IDs. Results/effects pass, but preserve the original
+harness flag mismatch: model called first plan `replace/next_week` rather than
+`patch/inherit`, although it retained the relevant contextual week. The initial
+assertion rejected the internal label, not the effective dates/topic. Separate
+continuation audit records this nuance, not an unconditional classifier-label
+PASS. Dates remain visibly explicit; no claim of perfect probabilistic intent
+classification.
+
+Evidence: `inheritance/live-inheritance.json` (original),
+`inheritance/inheritance-search.json` (effective-condition checks and actual
+search/readback), `inheritance/runtime-activation.json`.83focused regressions
+PASS, including actual predecessor prompt propagation and replacing topic while
+carrying dates; strict typecheck PASS. Controlled QA Auth cleanup PASS. These
+follow-up probes use real authenticated endpoints/providers, not a fresh
+physical-phone/ASR or new full browser-five-turn claim. UI/link unchanged.

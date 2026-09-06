@@ -243,3 +243,8 @@ Search or full-catalog acceptance):
   controlled QA Auth cleanup and immutable deployment revisions are tracked in
   `INC-2026-09-06-voice-search-relevance.md`; no physical-phone claim inferred
   from emulated mobile viewport.
+
+Model-led inheritance amendment: handler regression includes the owner-checked
+actual predecessor question; plan tests allow topical replacement with date
+carryover. Real contextual-topic-change, explicit followup, explicit restart and
+broad city-question probes are recorded separately in the relevance incident.

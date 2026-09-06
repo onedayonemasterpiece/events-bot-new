@@ -270,3 +270,12 @@ test('structured plan is durably passed to search; ordinary conversational conti
  const r=await h.control(uid(),'search',{interpretationId:id});
  assert.equal(r.body.state,'completed');assert.deepEqual(received[4],queryPlan);assert.equal(received[3],undefined);assert.equal(received[1].goal,'события');assert.deepEqual(r.body.result.queryPlan,queryPlan);
 });
+
+test('model-led interpretation receives the owner-checked actual predecessor message, not only its shortened goal',async()=>{
+ const h=harness(),parentId=uid();h.deps.structuredPlanEnabled=true;
+ const original='Хочется спланировать всю следующую неделю, начнём с научных мероприятий.';
+ const queryPlan={contextMode:'replace',dateMode:'next_week',scope:'constrained',groups:[{dimension:'topic',alternatives:['научпоп'],sourceQuote:original,source:'current'}]};
+ h.rows.set(parentId,{id:parentId,owner_id:owner,kind:'search',state:'completed',outcome:{result:{question:original,title:'Научпоп',intent:{...intent(),dateFrom:'2026-09-07',dateTo:'2026-09-13'},queryPlan,items:[]}}});
+ h.deps.generate=async o=>{assert.ok(o.prompt.includes('CONVERSATION_CONTEXT='));assert.ok(o.prompt.includes(original));await o.dispatched();const result=o.validate(parsed({intent:{...intent(),dateFrom:null,dateTo:null},queryPlan:{contextMode:'patch',dateMode:'inherit',scope:'constrained',groups:[{dimension:'format',alternatives:['лекция'],sourceQuote:'Подбери лекции',source:'current'}]}}));await o.completed(result);return result;};
+ const r=await h.control(uid(),'interpret',input({text:'Подбери лекции',mode:'expand_selection',parentId}));assert.equal(r.body.state,'completed');assert.equal(r.body.result.intent.dateFrom,'2026-09-07');assert.equal(r.body.result.intent.dateTo,'2026-09-13');assert.doesNotMatch(r.body.result.intent.goal,/научпоп/);
+});
