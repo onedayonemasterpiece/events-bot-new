@@ -192,3 +192,17 @@ the user to clear site data, recordings, queues or sessions.
   whether to copy/send the metadata-only report.
 - **Still open:** awaiting report from the affected physical phone. Diagnostic
   delivery does not restore recording or establish the user's root cause.
+
+### First physical-phone diagnostic — Telegram1453
+
+User-provided report from Chrome152, diagnostic bundleDQ8l1o0V, received
+2026-09-06 11:39UTC. `open_requested`187ms (schema3, attempt1) ->
+`open_timeout`8188ms. No blocked/upgrade/error/success event. Page was hidden
+at3873ms, freeze5463ms, visible5634ms, resume5641ms; pageshow was not persisted.
+The open was already pending before freeze, and the recorded freeze lasted
+about178ms, so that lifecycle event alone does not explain the8second wait.
+Queue blockage is compatible with the trace but not established. No standalone
+probe or database metadata events were in this first report; user asked to run
+the explicit isolated probe and resend. No data reset, schema bypass or second
+recording/search kernel was introduced. Physical report artifact:
+`artifacts/codex/voice-diagnostics-20260906/phone/telegram-1453.json`.
