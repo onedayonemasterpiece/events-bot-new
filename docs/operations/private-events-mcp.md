@@ -30,7 +30,10 @@ MAX remains outside the current scope.
 The existing owner `operations_snapshot` accepts `include_jobs=true` and bounded
 `event_id`, `status`, `before_job_id`, `limit` filters. A page contains at most
 10 payload-free current `JobOutbox` rows in descending numeric ID order, with
-nested errors redacted and missing legacy columns/table reported explicitly.
+nested JSON-shaped error strings decoded before recursive credential/personal-ID
+redaction; malformed/oversized structured errors are omitted rather than emitted
+as raw text. Missing legacy columns/table are reported explicitly. Fractional IDs
+are rejected rather than truncated.
 `event_id=0` selects global jobs. `include_jobs=false` with filters is rejected.
 No new tool, scope, DB schema, queue worker or provider call is introduced.
 

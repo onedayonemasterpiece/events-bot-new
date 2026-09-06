@@ -9,6 +9,8 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
+- Decode JSON-shaped queue error text before recursive secret/personal-ID
+  redaction, and reject fractional queue IDs instead of truncating them (R0).
 - Prevent full SQLite integrity scans from exhausting owner MCP snapshot latency:
   return explicit `not_run:interactive_budget`, preserving bounded queue/count
   readback without pretending that integrity was checked (INC-2026-09-06).

@@ -249,6 +249,7 @@ async def test_numeric_before_id_pagination_has_exact_end_and_no_duplicates(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
+        ({"include_jobs": True, "event_id": 0.9}, "event_id must be an integer"),
         ({"include_jobs": "yes"}, "include_jobs must be a boolean"),
         (
             {"include_jobs": False, "status": "pending"},
@@ -306,3 +307,32 @@ async def test_snapshot_never_starts_full_database_integrity_scan(config, monkey
     snapshot = await repository.operations_snapshot()
     assert snapshot["database"]["quick_check"] == "not_run:interactive_budget"
     assert snapshot["network"]["provider_calls"] == 0
+
+
+@pytest.mark.asyncio
+async def test_nested_json_error_is_decoded_before_redaction(config, event_db):
+    with sqlite3.connect(event_db) as conn:
+        conn.execute("UPDATE joboutbox SET last_error=? WHERE id=7", (json.dumps({
+            "nested": {"api_key": "secretcredentialhere", "user_id": 12345,
+                       "message": "safe diagnostic", "token": "another-secret"}}),))
+    server = attach_private_events_mcp(web.Application(), config)
+    result = await _snapshot(server, _owner(config), {"include_jobs": True})
+    assert result["isError"] is False
+    serialized = json.dumps(result["structuredContent"]["job_queue"])
+    assert "secretcredentialhere" not in serialized
+    assert "another-secret" not in serialized
+    assert "12345" not in serialized
+    assert "safe diagnostic" in serialized
+
+
+@pytest.mark.parametrize("value", [
+    '{"nested":{"api_key":"secretcredentialhere","user_id":12345}',
+    "{'api_key': 'secretcredentialhere'}",
+    '{"api_key":"secretcredentialhere","padding":"' + ('x' * 17000) + '"}',
+])
+def test_malformed_or_oversized_structured_error_never_falls_back_to_raw_text(value):
+    from private_events_mcp.queue_read import _safe_job
+    output = json.dumps(_safe_job({"id": 7, "last_error": value}))
+    assert "secretcredentialhere" not in output
+    assert "12345" not in output
+    assert "structured error omitted" in output
