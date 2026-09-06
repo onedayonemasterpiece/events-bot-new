@@ -6,6 +6,8 @@
 
 - Машиночитаемая карта: `docs/routes.yml`
 - Статический сайт: `docs/features/static-site-pages/README.md`
+  - главная `/`: [итоговая MVP-концепция](features/static-site-pages/home-mvp.md) —
+    TO-BE композиция, выбор до 30 карточек, Hero-talk / page-end, промо и вход в text/voice Search;
   - reviewed Current UI Decoder v1 и immutable design-system handoff:
     `docs/features/static-site-pages/current-ui-resource-graph.md`;
   - аналитика и продуктовая статистика: `analytics/README.md`;
@@ -52,7 +54,7 @@
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Postbox feedback correlation and bounded DLQ recovery:
   `docs/operations/postbox-feedback-dlq-recovery.md`; active incident:
-  `docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-correlation.md`
+    `docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-recovery.md`
 - External focus-group mailbox OTP E2E: `docs/testing/external-focus-email-otp.md`
 - Static-site deterministic direct/relay fault profiles:
   `docs/testing/transport-fault-profiles.v1.yml`
@@ -72,7 +74,7 @@
 - Расписание / cron / scheduler routing: `docs/operations/cron.md`
   - дефолты APScheduler: `scheduling.py`
   - production overrides: `fly.toml` (`[env]`)
-  - локальный/env шаблон: `.env.example`
+  - локальный/env шаблон — `.env.example`
 - Region Talk / «О Калининграде говорят»: `docs/features/region-talk-channel/README.md`
 - Telegram link inspection через Telethon: `docs/operations/telegram-link-inspection.md`
 - LLM: `docs/llm/` (промпты, формат запросов, классификатор тем)
