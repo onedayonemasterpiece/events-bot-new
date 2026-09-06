@@ -340,3 +340,54 @@ variance. Runtime now tolerates modest text-length overshoot up to600characters
 text explicitly and avoids double quotation around already quoted canonical titles.
 This is a formatting guard adjustment, not relaxation of relevance admission.
 Source tests cover moderate overshoot and reject empty/601-character fields.
+
+### Final dialogue delivery and requirement accounting
+
+Published UI source `9c8c0f288fe92ac8c1c3295fb68107d91fa3f21b`:
+https://kenigevents.ru/preview-voice-dialogue-20260906/poisk/
+Active backend `22f789cae06f38db51ee589eb906b3b52cc8b566`, public health readback
+matches; generated revision `sha256:3c07baf5f043777220e8d6cb6f34f3d306137273598440f9c228ff08bbb16f58`.
+Only protected preview updated; processing operations0 before each graceful restart.
+No root/full catalog/Kaggle build, production guard mutation or user receipt rewrite.
+
+| User requirement | Delivered / evidence |
+| --- | --- |
+| R1: two three-event answers seem throttled | No cap3; different IDs,59/57checked in original chain. Union interpretation and week grounding corrected. Final replay5then4; full-catalog recall remains explicitly unproven. |
+| R2: zero results on third request | Missing audience prefilter fixed; final children query14cards,58/58checked. |
+| R3: no technical controls after selection | Clean UI has no selection/footer/about controls; all14cards rendered; existing card actions preserved.3browser regression cases include15-card output. |
+| R4: meaningful editorial response | All3final responses have completed fact-referenced editorial suggestions. General editorial, not personalized. Membership/source-index validation is NOT semantic infallibility; wording quality remains a review surface. |
+| R5: flexible conversation context |7–13September→14–20→children12–13; music dropped on independent question. Fresh catalog retrieval, children IDs not restricted to earlier music set. |
+
+Final controlled live replay used the user's actual **text messages** with a
+scoped ordinary QA session on real published UI, real interpretation/retrieval/
+verifier/editorial providers. No mocked backend, no additional ASR or physical
+phone claim in this particular run. Owner-probe and fixture cleanup PASS.
+
+| Turn | Durable ID | Checked / exact | Elapsed UI submit→ready |
+| --- | --- | --- | --- |
+| Music/organ next week | `2c5327ba-937e-4be3-bf50-2de4d392e4d7` |59/59;5exact |18.679s |
+| A week later | `1d8e4dd9-a226-4677-aa9a-eaa164ebd3ed` |59/59;4exact |22.265s |
+| Children on weekend | `37ecab9d-11bf-434e-b667-7fc5629b3ea0` |58/58;14exact |14.683s |
+
+All3editorials survive actual status refresh with unchanged source hashes and
+unchanged answer, without regeneration. Unit tests cover changed facts and
+provider+finalize failure.55focused tests, strict index typecheck,3clean-result
+browser tests,3published landing/Auth/layout checks,7public byte checks PASS.
+Internal read-only reviewer confirmed both reported checkpoint/refresh issues
+fixed in b72de1584; not an external consultant review.
+
+Artifacts under `voice-dialogue-review-20260906/`: `live-chain-final-receipt.json`,
+`final-390-turn{1,2,3}.png`, `final-1440-third.png`, `final-regression.log`,
+`final-typecheck.log`, `clean-ui-tests.log`, `public-layout.log`,
+`public-readback-clean2.json`, `runtime-activation-final.json`.
+Inspected rendered mobile/desktop screenshots and recommendation public facts.
+Worker7c62b313 patch-equivalent to integrated9c8c0f288; completed2.7MB sparse
+worktree removed, branch retained, parent browser-test evidence preserved.
+
+Remaining: independent Pro audit, projection freshness, model exact/possible
+variance (observed5→5→14,5→4→10,5→4→14across live attempts), physical PWA/phone,
+old history restoration and long mobile topic-title clipping. Recommendations
+are an initial editorial prototype, not a certified factual or personalized
+ranking. This delivery does not close those separate gaps.
+
+New Telegram link/report verified by topic/text readback: https://t.me/c/4337049383/1459 .
