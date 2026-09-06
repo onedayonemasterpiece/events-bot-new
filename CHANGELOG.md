@@ -38,7 +38,18 @@
   canonical event DB; keeps Codex read-only; and suppresses legacy immediate
   page/provider projections for this queue-owned entry point. Multi-event and
   festival-program packets fail closed before canonical event/job mutation.
+### Added
+- Owner MCP queue readback in the existing `operations_snapshot`: bounded
+  payload-free JobOutbox pages, event/status filters and stable numeric cursor.
+  Existing detail fetch and the Codex seven-tool projection remain unchanged;
+  no write capability, provider effect or schema migration is introduced (R0).
+
 ### Fixed
+- Decode JSON-shaped queue error text before recursive secret/personal-ID
+  redaction, and reject fractional queue IDs instead of truncating them (R0).
+- Prevent full SQLite integrity scans from exhausting owner MCP snapshot latency:
+  return explicit `not_run:interactive_budget`, preserving bounded queue/count
+  readback without pretending that integrity was checked (INC-2026-09-06).
 - Repair album release-gate fixture to implement asset reverification without weakening production media checks (INC-2026-09-05 release unblock).
 - VK auto import checks volume headroom before claiming a batch, preserving pending carriers instead of mass-terminalizing them when storage admission is blocked (INC-2026-09-05).
 

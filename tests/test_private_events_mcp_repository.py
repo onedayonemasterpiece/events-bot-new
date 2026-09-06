@@ -153,7 +153,7 @@ async def test_incident_search_combines_repo_and_runtime_evidence(config) -> Non
 async def test_operations_snapshot_has_no_provider_calls(config) -> None:
     snapshot = await EventsEvidenceRepository(config).operations_snapshot()
     assert snapshot["database"]["mode"] == "read_only"
-    assert snapshot["database"]["quick_check"] == "ok"
+    assert snapshot["database"]["quick_check"] == "not_run:interactive_budget"
     assert snapshot["network"] == {"provider_calls": 0, "media_transferred": False}
     assert snapshot["counts"]["events_total"] == 1
     assert snapshot["status_counts"]["joboutbox"]["error"] == 1

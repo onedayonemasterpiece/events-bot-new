@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from dataclasses import replace
 from typing import Any, Mapping
 
@@ -29,7 +30,7 @@ _MAX_PAGE_ROWS = 10
 def _integer(value: Any, *, name: str, minimum: int) -> int | None:
     if value is None or value == "":
         return None
-    if isinstance(value, bool):
+    if isinstance(value, bool) or isinstance(value, float):
         raise InvalidArgumentsError(f"{name} must be an integer")
     try:
         parsed = int(value)
@@ -108,10 +109,25 @@ def _input_properties(repository: EventsEvidenceRepository) -> dict[str, Any]:
     }
 
 
+
+def _safe_error(value: Any) -> Any:
+    if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
+        # Never fall back to raw malformed JSON/Python repr: quoted credential
+        # keys may evade free-text assignment redaction. Bound parser input too.
+        if len(value) > 16_384:
+            return "<structured error omitted: size budget>"
+        try:
+            value = json.loads(value)
+            return redact_and_clip_untrusted(value, limit=1000)
+        except (ValueError, TypeError, RecursionError):
+            return "<structured error omitted: invalid encoding>"
+    return redact_and_clip_untrusted(value, limit=1000)
+
+
 def _safe_job(row: Mapping[str, Any]) -> dict[str, Any]:
     job = {
         str(key): redact_and_clip_untrusted(
-            value,
+            _safe_error(value) if key == "last_error" else value,
             limit=1000 if key == "last_error" else 300,
         )
         for key, value in row.items()
