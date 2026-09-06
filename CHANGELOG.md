@@ -11,7 +11,8 @@
   the existing desktop navigation compacts when a topic needs the shared row.
   The shared compact sign-in is width-bounded and inherits site palette tokens.
   Opening the mobile menu stops capture before hiding controls. Guest-trial quotas
-  remain documented to-be, not enabled.
+  remain documented to-be, not enabled. Ordinary follow-up messages search the
+  catalog with context; only explicit subset refinement stays inside old results.
 
 - Added: a neutral inline sign-in block with compact/card variants for voice
   Search hosts, reusing the existing shared Yandex/email OTP controller and

@@ -622,3 +622,10 @@ until the next section crosses; the full question remains in flow. Mobile bottom
 nav uses the existing component with light island/shadow treatment; quick input
 and mic clear it. Production gating is unchanged: this clean treatment is only
 for the enabled standalone voice preview, not a root-page promotion.
+
+
+Ordinary subsequent chat messages default to contextual `expand_selection`:
+keep the prior interpreted context but search the current catalog again. Do not
+silently trap all following questions inside the preceding (possibly empty)
+membership. The explicit “Уточнить эту подборку” action still selects
+`refine_selection` and its bounded-subset contract; no regex guesses of intent.
