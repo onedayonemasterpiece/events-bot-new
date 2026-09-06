@@ -142,6 +142,95 @@ class PromoOperationStore:
         if revision(event)!=request['event_revision']:
             fail('PROMO_EVENT_REVISION_CONFLICT')
 
+    @staticmethod
+    def _campaign_summary(row):
+        # Human-facing fields only, never goal_comment/creator/private configuration.
+        output={'campaign_id':row['id'],
+                'cap_accounting':'legacy_publication_units_not_browser_visibility'}
+        for key in ('title','status','starts_at','ends_at','total_exposure_goal',
+                    'daily_exposure_cap','priority','sponsorship_disclosure'):
+            value=row[key]
+            if isinstance(value,str):
+                value=''.join(c for c in value if ord(c)>=32 and ord(c)!=127)[:1000 if key=='sponsorship_disclosure' else 300]
+            output[key]=value
+        return output
+
+    async def campaigns_list(self,*,actor,after_id=0,limit=20,status=None):
+        actor.validate()
+        if (type(after_id) is not int or not 0<=after_id<=2**63-1
+                or type(limit) is not int or not 1<=limit<=50
+                or (status is not None and status not in ('draft','active','paused','archived'))):
+            fail('PROMO_INVALID_REQUEST')
+        request={'after_id':after_id,'limit':limit,'status':status}
+        async with self.database.get_session() as session:
+            try:
+                await session.execute(text('BEGIN'))
+                await self._authorize(session,actor,'campaigns_list',request)
+                query='SELECT * FROM promo_campaign WHERE id>:after_id'
+                if status is not None:
+                    query+=' AND status=:status'
+                rows=(await session.execute(text(query+' ORDER BY id ASC LIMIT :take'),
+                    {**request,'take':limit+1})).mappings().all()
+                more=len(rows)>limit
+                visible=rows[:limit]
+                response={'campaigns':[self._campaign_summary(row) for row in visible],
+                    'has_more':more,'next_after_id':visible[-1]['id'] if more else None,
+                    'publication_state':'not_observed','delivery_stats':'unavailable'}
+                await session.rollback()
+                return response
+            except BaseException:
+                await session.rollback()
+                raise
+
+    async def campaign_get(self,campaign_id,*,actor):
+        actor.validate()
+        if type(campaign_id) is not int or not 1<=campaign_id<=2**63-1:
+            fail('PROMO_INVALID_REQUEST')
+        async with self.database.get_session() as session:
+            try:
+                await session.execute(text('BEGIN'))
+                await self._authorize(session,actor,'campaign_get',{'campaign_id':campaign_id})
+                campaign=(await session.execute(text('SELECT * FROM promo_campaign WHERE id=:id'),
+                    {'id':campaign_id})).mappings().first()
+                if campaign is None:
+                    fail('PROMO_CAMPAIGN_NOT_FOUND')
+                snapshots={}
+                for table in ('promo_target','promo_activity'):
+                    snapshots[table]=(await session.execute(text('SELECT * FROM '+table+
+                        ' WHERE campaign_id=:id ORDER BY id ASC LIMIT 257'),{'id':campaign_id})).mappings().all()
+                targets=snapshots['promo_target']
+                activities=snapshots['promo_activity']
+                complete=len(targets)<=256 and len(activities)<=256
+                # Hash every field in the bounded complete raw business snapshot,
+                # including hidden config; never return its content or hash a prefix.
+                campaign_revision=digest({'schema':'promo-campaign-revision-v1',
+                    'campaign':dict(campaign),'targets':[dict(row) for row in targets],
+                    'activities':[dict(row) for row in activities]}) if complete else None
+                public_targets=[{'target_id':row['id'],'target_type':str(row['target_type'])[:80],
+                    'event_id':row['event_id'] if row['target_type']=='event' else None} for row in targets[:16]]
+                public_activities=[]
+                for row in activities[:16]:
+                    item={'activity_id':row['id'],'config_state':'unavailable'}
+                    for key in ('surface','profile_key','slot','max_per_publish','target_exposure_goal',
+                                'daily_cap','selection_policy','enabled'):
+                        value=row[key]
+                        item[key]=str(value)[:120] if isinstance(value,str) else value
+                    item['enabled']=bool(item['enabled'])
+                    public_activities.append(item)
+                response={'campaign':self._campaign_summary(campaign),
+                    'campaign_revision':campaign_revision,
+                    'revision_unavailable_reason':None if complete else 'snapshot_too_large',
+                    'targets':public_targets,'targets_count':len(targets),
+                    'targets_count_is_lower_bound':len(targets)>256,'targets_truncated':len(targets)>16,
+                    'activities':public_activities,'activities_count':len(activities),
+                    'activities_count_is_lower_bound':len(activities)>256,'activities_truncated':len(activities)>16,
+                    'publication_state':'not_observed','delivery_stats':'unavailable'}
+                await session.rollback()
+                return response
+            except BaseException:
+                await session.rollback()
+                raise
+
     async def capabilities(self,accepted_event_operation_ref,event_id,*,actor):
         """Read current exact accepted target tokens, not an inventory or eligibility permit."""
         actor.validate()
