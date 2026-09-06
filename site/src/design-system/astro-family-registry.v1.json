@@ -59,6 +59,18 @@
           "symbols": [
             "KenigEventsRenderEventCard"
           ]
+        },
+        {
+          "path": "site/src/lib/homeFeedRuntime.ts",
+          "symbols": [
+            "KenigEventsCreateEventCard"
+          ]
+        },
+        {
+          "path": "site/src/lib/assistant/conversationalSearch.ts",
+          "symbols": [
+            "KenigEventsCreateEventCard"
+          ]
         }
       ],
       "consumer_signals": [],
@@ -473,7 +485,7 @@
     },
     {
       "id": "EventLayout",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro"
@@ -499,7 +511,14 @@
         "Reference4MobileMenu",
         "Button"
       ],
-      "runtime_factories": [],
+      "runtime_factories": [
+        {
+          "path": "site/src/layouts/EventLayout.astro",
+          "symbols": [
+            "KenigEventsSearchCardHost"
+          ]
+        }
+      ],
       "runtime_clients": [
         {
           "path": "site/src/lib/shellOccupiedSpace.mjs",
@@ -511,6 +530,18 @@
           "path": "site/src/layouts/EventLayout.astro",
           "symbols": [
             "shellOccupiedSpace"
+          ]
+        },
+        {
+          "path": "site/src/lib/assistant/conversationalSearch.ts",
+          "symbols": [
+            "KenigEventsSearchCardHost"
+          ]
+        },
+        {
+          "path": "site/src/lib/homeFeedRuntime.ts",
+          "symbols": [
+            "KenigEventsSearchCardHost"
           ]
         }
       ],
@@ -557,6 +588,13 @@
             "transitionend",
             "transitioncancel"
           ]
+        },
+        "composition": {
+          "source": "site/src/lib/shellComposition.ts",
+          "home": "home-navigation-only",
+          "others": "contextual",
+          "home_top_participants": "not-mounted-or-bound",
+          "home_brand": "in-flow"
         }
       }
     },
@@ -597,7 +635,7 @@
     },
     {
       "id": "HomePage",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/pages/index.astro",
       "style_owners": [
         "site/src/pages/index.astro"
@@ -610,7 +648,11 @@
         "empty"
       ],
       "nested_families": [
-        "HomeColdStartFeed"
+        "HomeHeroTalk",
+        "HomeSearchEntry",
+        "HomeQuickNav",
+        "HomeColdStartFeed",
+        "HeroTalkPageEnd"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -630,17 +672,18 @@
     },
     {
       "id": "HomeColdStartFeed",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HomeColdStartFeed.astro",
       "style_owners": [
         "site/src/components/HomeColdStartFeed.astro"
       ],
       "variants": [
-        "stable-profile-feedback"
+        "shared-ranked-finite-feed"
       ],
       "states": [
         "static-fallback",
-        "profile-feedback",
+        "general",
+        "personalized",
         "populated",
         "empty"
       ],
@@ -648,7 +691,15 @@
         "AdaptiveEventCardGrid"
       ],
       "runtime_factories": [],
-      "runtime_clients": [],
+      "runtime_clients": [
+        {
+          "path": "site/src/lib/homeFeedRuntime.ts",
+          "symbols": [
+            "KenigEventsCreateEventCard",
+            "KenigEventsSearchCardHost"
+          ]
+        }
+      ],
       "consumer_signals": [],
       "explicit_override_exceptions": [
         {
@@ -657,7 +708,8 @@
           "source_regex": "data-ds-state=\\{`static-fallback \\$\\{eligibleEvents\\.length \\? 'populated' : 'empty'\\}`\\}",
           "values": [
             "static-fallback",
-            "profile-feedback",
+            "general",
+            "personalized",
             "populated",
             "empty"
           ]
@@ -2258,11 +2310,12 @@
         "site/src/components/HomeHeroTalk.astro"
       ],
       "variants": [
-        "editorial-scenes"
+        "editorial-scenes",
+        "service-fallback"
       ],
       "states": [
         "populated",
-        "empty"
+        "generic"
       ],
       "nested_families": [
         "Button",
@@ -2275,7 +2328,8 @@
       "penpot_binding": null,
       "content_dependencies": [
         "site/src/lib/homeHeroTalk.ts",
-        "site/src/data/homeHeroTalkEditorial.ts"
+        "site/src/data/homeHeroTalkEditorial.ts",
+        "site/src/lib/heroTalkPlacement.ts"
       ],
       "behavior_states": {
         "copy": [
@@ -2296,18 +2350,20 @@
     },
     {
       "id": "HomeQuickNav",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HomeQuickNav.astro",
       "style_owners": [
         "site/src/components/HomeQuickNav.astro"
       ],
       "variants": [
-        "six-route-grid"
+        "inline-routes"
       ],
       "states": [
         "populated"
       ],
-      "nested_families": [],
+      "nested_families": [
+        "Button"
+      ],
       "runtime_factories": [],
       "runtime_clients": [],
       "consumer_signals": [],
@@ -3619,6 +3675,102 @@
           "reason": "Required production-surface contract owner has no diagnostic data-ds marker; this SoT batch does not change product markup."
         }
       ],
+      "penpot_binding": null
+    },
+    {
+      "id": "HeroTalkPageEnd",
+      "version": 1,
+      "astro_root": "site/src/components/HeroTalkPageEnd.astro",
+      "style_owners": [
+        "site/src/components/HeroTalkPageEnd.astro"
+      ],
+      "variants": [
+        "compact-service"
+      ],
+      "states": [
+        "service-continuation",
+        "suppressed"
+      ],
+      "nested_families": [
+        "Button"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
+      "penpot_binding": null,
+      "content_dependencies": [
+        "site/src/lib/heroTalkPlacement.ts"
+      ]
+    },
+    {
+      "id": "HomeSearchEntry",
+      "version": 1,
+      "astro_root": "site/src/components/HomeSearchEntry.astro",
+      "style_owners": [
+        "site/src/components/HomeSearchEntry.astro"
+      ],
+      "variants": [
+        "inline-capture"
+      ],
+      "states": [
+        "disabled",
+        "signed-out",
+        "idle",
+        "requesting",
+        "recording",
+        "saving",
+        "submitted",
+        "error"
+      ],
+      "nested_families": [
+        "Button",
+        "Field"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [
+        {
+          "kind": "dynamic_identity",
+          "attribute": "state",
+          "source_regex": "data-ds-state=\\{enabled\\?'signed-out':'disabled'\\}",
+          "values": [
+            "disabled",
+            "signed-out",
+            "idle",
+            "requesting",
+            "recording",
+            "saving",
+            "submitted",
+            "error"
+          ]
+        }
+      ],
+      "penpot_binding": null
+    },
+    {
+      "id": "ConversationalSearch",
+      "version": 1,
+      "astro_root": "site/src/components/ConversationalSearch.astro",
+      "style_owners": [
+        "site/src/components/ConversationalSearch.astro",
+        "site/src/styles/staticSiteSignIn.css"
+      ],
+      "variants": [
+        "conversation"
+      ],
+      "states": [
+        "landing",
+        "conversation"
+      ],
+      "nested_families": [
+        "EventCard"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "consumer_signals": [],
+      "explicit_override_exceptions": [],
       "penpot_binding": null
     }
   ],

@@ -123,3 +123,10 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - ссылка на `/log <event_id>`,
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
+
+## Home owner review (2026-09-06)
+
+- `site/tests/home-composition.playwright.mjs` with `CHECK_BASE`: rendered Home order, shared desktop navigation/mobile menu, absence of contextual islands, one lower dock, CTA clearance at four viewport sizes. Without CHECK_BASE this is only a controller fixture.
+- `site/tests/home-search-handoff.browser.test.mjs`: cross-document IndexedDB handoff with mocked Auth/transport, not live ASR acceptance.
+- `site/tests/home-feed-runtime.browser.mjs`: synthetic ranking/prefix/hide/Undo/storage regression; real media and published navigation require the integrated preview.
+- Canonical details: [Home composition](../features/static-site-pages/design-system/home-composition.md).

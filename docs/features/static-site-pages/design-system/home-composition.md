@@ -1,14 +1,14 @@
-# Home composition: lower-only shell
+# Home composition: global navigation without context islands
 
 Runtime owner: `EventLayout` v3 with `shellCompositionForRoute` /
 `shell-composition-v1`. After the existing canonical-base normalization, `/`
-selects `home-lower-only`; other routes remain `contextual`.
+selects `home-navigation-only`; other routes remain `contextual`.
 
-Home renders the existing brand in document flow and one `MobileBottomNav`
-(`afisha`, `dates`, `search`, `personal`) at both responsive sizes. Reference4,
-site top navigation and floating context participants are not mounted; the upper
-runtime is not invoked and contributes no listeners or occupied rectangles.
-The Hero-talk `data-floating-context-label` cannot opt home back into that runtime.
+Owner clarification (2026-09-06): global navigation is mandatory on Home.
+Desktop retains the existing header navigation as a fixed upper island; mobile
+retains the existing Reference4 menu/brand trigger. Only contextual title,
+city and section participants are absent and their runtime is not invoked.
+One shared MobileBottomNav remains. Hero-talk cannot enable context islands.
 The common measured lower-stack owner suspends the dock for an open modal or
 editable focus with at least 120px visual-viewport keyboard occupancy. Ordinary
 focus/browser toolbar movement does not hide it. No separate home z-index owner

@@ -35,6 +35,17 @@ Object Storage credentials into the notebook. A local Astro build is only a
 diagnostic/test gate and is never a publishable production or preview source.
 The former `npm run deploy:preview` local-dist publisher is retired.
 
+### Home voice review public gates
+
+The existing runner/kernel allowlist carries only
+`PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED=1`,
+`PUBLIC_EVENT_SEARCH_ASSISTANT_HOST=devcoveer` and
+`PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY=0` for an explicitly enabled preview.
+Existing public Auth URL/publishable key/relay remain the shared configuration.
+No provider keys are forwarded. Production-candidate staging forces this preview
+assistant gate OFF; this is not a production activation path. Portable assistant
+domain sources live inside `site/` so the normal source tarball is self-contained.
+
 ### Execution-capacity lanes
 
 There are exactly two **private Kaggle execution slugs**, but only one packaged

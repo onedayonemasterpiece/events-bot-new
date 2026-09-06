@@ -1,5 +1,9 @@
 ---
 import EventLayout from '../../../layouts/EventLayout.astro';
+import HomeHeroTalk from '../../../components/HomeHeroTalk.astro';
+import HomeSearchEntry from '../../../components/HomeSearchEntry.astro';
+import HomeQuickNav from '../../../components/HomeQuickNav.astro';
+import HeroTalkPageEnd from '../../../components/HeroTalkPageEnd.astro';
 import Badge from '../../../components/design-system/Badge.astro';
 import Button from '../../../components/design-system/Button.astro';
 import CopyAction from '../../../components/design-system/CopyAction.astro';
@@ -87,6 +91,24 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
         <span aria-hidden="true">/</span>
         <span>Дизайн-система</span>
       </nav>
+
+      <section class="section-card" id="home-final-candidate">
+        <div class="section-card__inner">
+          <Badge tone="accent">Кандидат для аудиоревью</Badge>
+          <h2>Главная: единая композиция</h2>
+          <p>HomePage v2 · EventLayout v3 · HomeSearchEntry v1 · HomeQuickNav v2 · HomeColdStartFeed v2 · HeroTalkPageEnd v1.
+            Предыдущая кандидатная композиция v1 заменена; это не утверждение нового дизайна Hero-talk.</p>
+          <p><a href={withBase('/')}>Открыть реальную главную: Hero → набор → ссылки → лента → продолжение</a></p>
+          <h3>Hero-talk v2: общий evergreen fallback</h3>
+          <HomeHeroTalk scenes={[]} />
+          <h3>Inline capture: разрешение, запись, сохранение и восстановление</h3>
+          <HomeSearchEntry />
+          <HomeQuickNav />
+          <HeroTalkPageEnd context={{ placement:'page_end', route:'home', readyCapabilities:['search'] }} />
+          <p>Разрешение и авторизация проверяются настоящими общими компонентами. Каталог не запускает запись или поиск автоматически.
+            Populated/general/personalized/empty, hidden/Undo и остаток ряда проверяются на том же HomeColdStartFeed и общем AdaptiveEventCardGrid.</p>
+        </div>
+      </section>
 
       <section class="section-card ds-catalog__intro">
         <div class="section-card__inner">

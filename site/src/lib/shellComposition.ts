@@ -4,8 +4,9 @@ export function shellCompositionForRoute(routePath: string) {
   const home = routePath.replace(/\/+$/u, '') === '';
   return Object.freeze({
     version: SHELL_COMPOSITION_VERSION,
-    id: home ? 'home-lower-only' : 'contextual',
+    id: home ? 'home-navigation-only' : 'contextual',
     topParticipants: !home,
+    globalNavigation: true,
     brandInFlow: home,
     lowerNavigation: home ? 'afisha' : 'route',
   } as const);

@@ -86,7 +86,7 @@ async function createFixture({ family = fixtureFamily(), source, extraFamilies =
 test('complete canonical production-surface registry, graph and checker agree', async () => {
   const registry = await json(path.resolve(repoRoot, registryPath));
   for (const id of requiredFamilies) assert.ok(registry.families.some((family) => family.id === id), `registry misses ${id}`);
-  assert.equal(registry.families.length, 109);
+  assert.equal(registry.families.length, 112);
   assert.ok(registry.production_surface_contract);
   for (const family of registry.families) {
     for (const field of [

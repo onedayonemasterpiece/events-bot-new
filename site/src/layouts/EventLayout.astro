@@ -82,7 +82,7 @@ const derivedMobileSection: MobileSection = heroChrome === 'immersive'
 const mobileSection = explicitMobileSection === undefined ? derivedMobileSection : explicitMobileSection;
 const resolvedMobileTopMode: MobileTopMode = mobileTopMode || (heroChrome === 'immersive' ? 'immersive' : mobileSection === 'dates' ? 'contextual' : 'standard');
 const resolvedMobileBottomMode: MobileBottomMode = mobileBottomMode || (resolvedMobileTopMode === 'immersive' ? 'cta' : mobileSection === null ? 'none' : 'nav');
-const bodyClass = [shellComposition.topParticipants ? 'mobile-shell-reference4' : null, resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : null].filter(Boolean).join(' ');
+const bodyClass = [shellComposition.globalNavigation ? 'mobile-shell-reference4' : null, resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : null].filter(Boolean).join(' ');
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
@@ -2620,13 +2620,24 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         .event-hero--photo-cover .event-hero__image,
         .event-hero--poster-stage .event-hero__image { transform: none !important; }
       }
-      body[data-shell-composition="home-lower-only"] .site-header {
+      body[data-shell-composition="home-navigation-only"] .site-header {
         position:relative; height:auto; min-height:0; background:transparent; border:0; box-shadow:none;
       }
-      body[data-shell-composition="home-lower-only"] .site-header__inner {
+      body[data-shell-composition="home-navigation-only"] .site-header__inner {
         height:auto; min-height:0; padding-block-end:var(--ke-space-3);
       }
-      body[data-shell-composition="home-lower-only"] .site-header__brand-tag { display:block; }
+      @media (min-width:760px) {
+        body[data-shell-composition="home-navigation-only"] .site-nav {
+          position:fixed; top:16px; right:max(24px,env(safe-area-inset-right));
+          max-width:calc(100vw - 320px); padding:6px;
+          border-radius:24px; background:var(--ke-color-background-header);
+          box-shadow:var(--ke-elevation-mobile-nav); border:1px solid var(--ke-color-line);
+        }
+        body[data-shell-composition="home-navigation-only"] .site-nav a::after { display:none; }
+      }
+      @media (max-width:759px) {
+        body[data-shell-composition="home-navigation-only"] .site-header__brand-tag { display:none; }
+      }
       body[data-primary-island="true"] :is(main a, main button, main input, main textarea, main [tabindex]) { scroll-margin-block-end:calc(max(var(--ke-lower-surface-offset, 0px), var(--mobile-bottom-stack-h, 84px)) + var(--ke-space-4)); }
       body[data-lower-surface-state="keyboard"] .mobile-bottom-nav { visibility:hidden; pointer-events:none; }
     </style>
@@ -2654,8 +2665,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             {hasFloatingIslandsPopular && <div class="site-header__controls-slot" data-floating-controls-slot hidden></div>}
           </div>
         )}
-        {shellComposition.topParticipants && <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={sharedHeaderBadge} />}
-        {shellComposition.topParticipants && <nav class="site-nav" aria-label="Разделы афиши">
+        {shellComposition.globalNavigation && <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={sharedHeaderBadge} />}
+        {shellComposition.globalNavigation && <nav class="site-nav" aria-label="Разделы афиши">
           {visibleHeaderNavigation.map((item) => (
             <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined} data-unusual-nav-link={item.key === 'unusual' ? '' : undefined}>
               {item.label}
@@ -2705,7 +2716,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       // FI-P1: one existing shell writer composes the Popular context row.
       // H1/H2 stay in their original sections; the row only receives locators
       // and the already-owned rail controls while the reading title is past it.
-      if (document.body.dataset.shellComposition !== 'home-lower-only') {
+      if (document.body.dataset.shellComposition !== 'home-navigation-only') {
       const pageContext = document.querySelector<HTMLElement>('[data-floating-page-context]');
       const topBand = document.querySelector<HTMLElement>('[data-floating-top-band]');
       const sectionContext = document.querySelector<HTMLButtonElement>('[data-floating-section-context]');
@@ -2833,7 +2844,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             if(document.body.style.getPropertyValue(String(key))!==cssValue)document.body.style.setProperty(String(key),cssValue);
           }
           const selectors = [
-            ...(document.body.dataset.shellComposition === 'home-lower-only' ? [] : [
+            ...(document.body.dataset.shellComposition === 'home-navigation-only' ? [] : [
               ['brand','.site-header__brand-tag'], ['mobile-brand','.mobile-discovery-menu__summary'],
               ['context','[data-floating-page-context]'],
               // The menu summary already owns the mobile-brand rectangle.

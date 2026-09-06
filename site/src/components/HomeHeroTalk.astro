@@ -349,7 +349,3 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     if(!reduced){const observer=new IntersectionObserver(([entry])=>{visible=Boolean(entry?.isIntersecting&&entry.intersectionRatio>=.15);if(visible)schedule();else stop();},{threshold:[0,.15,.5]});observer.observe(root);document.addEventListener('visibilitychange',schedule);window.addEventListener('resize',()=>scenes.forEach((scene)=>configureMosaic(scene,false)),{passive:true});schedule();}
   });
 </script>
-
-{visibleScenes.length === 0 && <section class="home-hero-talk-empty" data-ds-family="HomeHeroTalk" data-ds-version="2" data-ds-variant="editorial-scenes" data-ds-state="empty">
-  <h1>Анонсы</h1><p>Выберите день или найдите интересующее событие.</p>
-</section>}

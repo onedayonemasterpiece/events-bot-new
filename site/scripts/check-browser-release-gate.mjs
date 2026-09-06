@@ -448,15 +448,17 @@ export async function assertHomeFeedColumnStates(page,origin,route='/',artifactD
   await page.waitForFunction(()=>document.querySelector('[data-home-cold-start-feed]')?.dataset.homeFeedBound==='true');
   const ids=await page.locator('[data-home-feed-grid] > [data-home-feed-item]').evaluateAll(nodes=>nodes.map(e=>e.dataset.eventId));
   invariant(ids.length>=10,'Home fixture must provide at least ten admitted events');
+  const candidateFamilies = await page.locator('[data-home-feed-candidates]').evaluate(node => JSON.parse(node.textContent).candidates.map(c => ({ id:String(c.event_id ?? c.id), members:(c.display?.occurrence_member_ids || []).map(String) })));
   const original=await page.evaluate(()=>localStorage.getItem('ke_personalization_profile'));
   const states=[];
   try {
     for(const count of [1,2,3,4,5,7,10]) {
-      await page.evaluate(({ids,count})=>{
-        const profile={consent_ok:true,profile_version:'anon-profile-v1',feature_schema_version:'event-detail-related-v1',taxonomy_version:'event-taxonomy-v1',hidden_event_ids:ids.slice(count)};
+      await page.evaluate(({ids,count,candidateFamilies})=>{
+        const kept = new Set(ids.slice(0,count));
+        const profile={consent_ok:true,anon_id:'11111111-1111-4111-8111-111111111111',session_id:'22222222-2222-4222-8222-222222222222',profile_version:'anon-profile-v1',feature_schema_version:'event-detail-related-v1',taxonomy_version:'event-taxonomy-v1',hidden_event_ids:[...new Set(candidateFamilies.filter(c=>!kept.has(c.id)).map(c=>c.id))],liked_event_ids:[],not_interested_event_ids:[],share_counts:{}};
         localStorage.setItem('ke_personalization_profile',JSON.stringify(profile));
         window.dispatchEvent(new StorageEvent('storage',{key:'ke_personalization_profile'}));
-      },{ids,count});
+      },{ids,count,candidateFamilies});
       await page.waitForFunction(n=>Number(document.querySelector('[data-home-feed-grid]')?.dataset.adaptiveGridRenderedCount)===n,count);
       const report=await measureOwnerReviewPage(page),grid=report.grids[0];
       invariant(grid && grid.cards.length===count,'Hydrated Home lost an admitted event');

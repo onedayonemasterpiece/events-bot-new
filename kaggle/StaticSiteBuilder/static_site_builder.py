@@ -1096,6 +1096,15 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
     if yandex_provider:
         env['PUBLIC_YANDEX_AUTH_PROVIDER'] = yandex_provider
     env['PUBLIC_AUTHORIZED_SEARCH_TRANSPORT'] = search_transport
+    # Explicit allowlist: no general PUBLIC_* or secret forwarding.
+    enabled = str(config.get('public_event_search_assistant_enabled') or '0')
+    capture_only = str(config.get('public_event_search_assistant_capture_only') or '0')
+    host = str(config.get('public_event_search_assistant_host') or '')
+    if enabled not in {'0', '1'} or capture_only not in {'0', '1'} or host not in {'', 'devcoveer'}:
+        raise RuntimeError('invalid public assistant presentation gates')
+    env['PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED'] = enabled if config.get('profile') == 'preview' else '0'
+    env['PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY'] = capture_only
+    env['PUBLIC_EVENT_SEARCH_ASSISTANT_HOST'] = host
 
 
 def apply_interest_club_build_env(env: dict[str, str], config: dict) -> None:

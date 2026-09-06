@@ -1550,6 +1550,11 @@ def stage_kernel_and_dataset(
         'public_personalization_supabase_relay_url': getattr(args, 'public_personalization_supabase_relay_url', '') or None,
         'public_yandex_auth_provider': args.public_yandex_auth_provider or 'custom:yandex',
         'public_authorized_search_transport': getattr(args, 'public_authorized_search_transport', '') or 'json',
+        # Public presentation gates only; provider/auth secrets remain host-side.
+        # Home review opts in explicitly. Production stays disabled.
+        'public_event_search_assistant_enabled': os.getenv('PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED', '0') if args.profile == 'preview' else '0',
+        'public_event_search_assistant_host': 'devcoveer' if os.getenv('PUBLIC_EVENT_SEARCH_ASSISTANT_HOST') == 'devcoveer' else '',
+        'public_event_search_assistant_capture_only': os.getenv('PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY', '0'),
         'secret_candidate_artifact_research': bool(args.secret_candidate_artifact_research),
         'secret_candidate_require_authorized_search': bool(args.secret_candidate_require_authorized_search),
         'search_corpus_receipt_filename': (

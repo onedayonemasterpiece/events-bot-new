@@ -11,21 +11,21 @@ const source=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
 const home:HeroTalkPlacementContext={route:'home',placement:'page_end',readyCapabilities:['search']};
 
 test('home alone selects lower-only participants before mount; other archetypes unchanged',()=>{
- for(const path of ['/',''])assert.deepEqual(shellCompositionForRoute(path),{version:'shell-composition-v1',id:'home-lower-only',topParticipants:false,brandInFlow:true,lowerNavigation:'afisha'});
+ for(const path of ['/',''])assert.deepEqual(shellCompositionForRoute(path),{version:'shell-composition-v1',id:'home-navigation-only',topParticipants:false,globalNavigation:true,brandInFlow:true,lowerNavigation:'afisha'});
  for(const path of ['/poisk','/segodnya','/podborki/besplatnye-sobytiya','/vyhodnye','/sobytiya/event','/populyarnoe']) {
   const policy=shellCompositionForRoute(path);assert.equal(policy.id,'contextual');assert.equal(policy.topParticipants,true);assert.equal(policy.brandInFlow,false);
  }
 });
 test('home does not even query titles or register upper floating listeners',()=>{
  const layout=source('../src/layouts/EventLayout.astro');
- const start=layout.indexOf("if (document.body.dataset.shellComposition !== 'home-lower-only')");
+ const start=layout.indexOf("if (document.body.dataset.shellComposition !== 'home-navigation-only')");
  const end=layout.indexOf('// AR-17',start);
  const unexpected=()=>{throw Error('upper runtime executed on lower-only home');};
- const state={document:{body:{dataset:{shellComposition:'home-lower-only'}},querySelector:unexpected,addEventListener:unexpected},window:{addEventListener:unexpected},matchMedia:unexpected};
+ const state={document:{body:{dataset:{shellComposition:'home-navigation-only'}},querySelector:unexpected,addEventListener:unexpected},window:{addEventListener:unexpected},matchMedia:unexpected};
  vm.runInNewContext(stripTypeScriptTypes(layout.slice(start,end)),state);
  assert.ok(start>=0&&end>start);assert.match(layout.slice(start,end),/window\.addEventListener\('scroll',scheduleContext/);
- assert.match(layout, /shellComposition\.topParticipants && <Reference4MobileMenu/);
- assert.match(layout, /shellComposition\.topParticipants && <nav class="site-nav"/);
+ assert.match(layout, /shellComposition\.globalNavigation && <Reference4MobileMenu/);
+ assert.match(layout, /shellComposition\.globalNavigation && <nav class="site-nav"/);
 });
 test('shared lower navigation respects modal and real keyboard occupancy, not ordinary focus alone',()=>{
  assert.equal(lowerNavigationState(false,0,true),'ready');assert.equal(lowerNavigationState(false,60,true),'ready');

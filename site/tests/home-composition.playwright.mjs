@@ -28,13 +28,15 @@ try{
   for(const [width,height] of [[1440,900],[1920,1080],[390,844],[360,844]]){
    const page=await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
    await page.goto(`${base}/`);await page.evaluate(()=>document.fonts.ready);
-   assert.equal(await page.locator('body').getAttribute('data-shell-composition'),'home-lower-only');
-   assert.equal(await page.locator('[data-floating-top-band],[data-reference4-fullscreen],[data-floating-page-context]').count(),0);
+   assert.equal(await page.locator('body').getAttribute('data-shell-composition'),'home-navigation-only');
+   assert.equal(await page.locator('[data-floating-top-band],[data-floating-page-context]').count(),0);
    assert.equal(await page.locator('[data-mobile-bottom-nav]').count(),1);
    assert.equal(await page.locator('[data-mobile-nav-section="afisha"]').getAttribute('aria-current'),'page');
    const order=await page.evaluate(()=>['[data-home-hero-talk]','[data-home-search-entry]','[data-home-quick-nav]','[data-home-cold-start-feed]','[data-hero-talk-page-end]'].map(selector=>{const el=document.querySelector(selector);return el&&!el.hidden?el.getBoundingClientRect().top:null;}));
    for(let i=1;i<order.length;i++)if(order[i]!==null&&order[i-1]!==null)assert.ok(order[i]>=order[i-1],`block order ${i}`);
-   assert.equal(await page.locator('.site-header').evaluate(n=>getComputedStyle(n).position),'relative');
+   assert.equal(await page.locator('[data-reference4-fullscreen]').count(),1);
+   if(width>=760) { assert.equal(await page.locator('.site-nav').evaluate(n=>getComputedStyle(n).position),'fixed'); }
+   else { assert.equal(await page.locator('.mobile-discovery-menu__summary').isVisible(),true); }
    assert.equal(await page.locator('[data-home-quick-nav] a').count(),6);
    for(const href of await page.locator('[data-home-quick-nav] a').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('href'))))assert.ok(href.startsWith(new URL(base).pathname.replace(/\/$/,'')+'/'));
    await page.screenshot({path:`${out}/home-${width}-top.png`});
@@ -44,7 +46,7 @@ try{
     const rect=await pageEnd.boundingBox(),dock=await page.locator('[data-mobile-bottom-nav]').boundingBox();
     assert.ok(rect.y+rect.height<=dock.y,'page-end remains above lower navigation');
    }else await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
-   assert.equal(await page.locator('[data-floating-top-band],[data-reference4-fullscreen]').count(),0);
+   assert.equal(await page.locator('[data-floating-top-band],[data-floating-page-context]').count(),0);
    await page.screenshot({path:`${out}/home-${width}-end.png`});
    checks.push({kind:'integrated-route',width,height,order,pageEndVisible:await pageEnd.isVisible(),pass:true});await page.close();
   }
