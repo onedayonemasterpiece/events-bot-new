@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Changed: preview Search starts with one minimal message line and a large
+  microphone, then moves the same mic into a compact lower-right composer after
+  first ASR/typed intake. Shared-shell surfaces retain the site's light floating
+  treatment; audio-responsive shadow, reduced motion and focus restoration are
+  supported. Guest-trial quotas remain documented to-be, not enabled.
+
 
 - Changed: conversational voice preview sends fresh complete ASR into the existing
   durable Search flow without mandatory confirmation, immediately showing the full

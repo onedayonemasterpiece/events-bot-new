@@ -15,6 +15,7 @@ export type CaptureOptions = {
   onPart: (part: AudioPart) => Promise<void>;
   /** Optional durable companion; failures never discard or stop PCM capture. */
   onCompressedPart?: (part: CompressedPart) => Promise<void>;
+  onLevel?: (level: number) => void;
   onStatus: (state: CaptureStatus, reason?: string) => void;
   onStopped?: (receipt: CaptureReceipt) => void;
   maxPendingBytes?: number;
@@ -93,6 +94,10 @@ export class MicrophoneCapture {
         try {
           if (data.sampleRate !== activeContext.sampleRate) throw new Error('mixed_sample_rates');
           for (const part of this.segmenter!.push(data.pcm, data.firstFrame)) this.persist(part);
+          if(this.options.onLevel){
+            let energy=0;for(const sample of data.pcm)energy+=sample*sample;
+            try{this.options.onLevel(Math.min(1,Math.sqrt(energy/data.pcm.length)*10));}catch{/* Visual metering never breaks durable capture. */}
+          }
           // Analyze only after every received byte entered the original PCM
           // path. Endpointing cannot drop the current block or either tail.
           if (this.status === 'recording' && this.options.silenceDetection !== false) {

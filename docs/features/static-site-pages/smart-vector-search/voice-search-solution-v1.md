@@ -572,3 +572,38 @@ the real state owner and using instant test scrolling rather than sampling mid
 smooth-scroll. These fixtures are not substitutes for the following live checks.
 ASR waiting uses the mic ring loader with reduced-motion support; the skeleton
 begins only once actual ASR text is available.
+
+### To-be: clean Search entry and shared sign-in (user review, 2026-09-06)
+
+Target authorized journey: an almost empty, site-normalized Search page with one
+search/message line and a large central microphone. No introductory dashboard,
+quota panel, duplicate search forms, collection links or recording database on
+first view. During capture the microphone's soft shadow responds to audio level;
+reduced-motion keeps a stable legible state. On the first actual ASR transcript
+(or an explicitly sent typed message), the same microphone moves to the lower
+right and shrinks using transform-based spatial continuity. A discreet single-line
+composer sits immediately to its left; above is the append-only conversation
+already specified. Existing site brand, navigation, card families and shared
+current-topic locator remain owners, not a second Search shell. Recovery/history
+are explicitly discoverable secondary controls, not the primary entry screen.
+
+Sign-in is a reusable variant UI (`compact` / `card`) over the SAME shared Auth
+controller: Yandex and email OTP, with the already tested selected-once issue /
+verify transport. It must not copy Focus Group onboarding writes, create another
+Supabase client or turn sign-in completion into automatic microphone permission.
+Existing OTP GitHub Actions prove the existing auth flow, not the newly styled
+block; rendered variants and new consumer require their own acceptance evidence.
+
+**Deferred, not enabled in this preview:** three guest search runs, followed by
+mandatory sign-in. Before implementation define exactly what consumes a run and
+reserve it atomically server-side before any paid ASR/interpretation dispatch;
+retries/unknown receipts must not re-spend it. Browser storage alone cannot enforce
+this across incognito or cleared profiles. A server-secret HMAC of appropriately
+limited signals and IP-rate limits can be investigated, but an IP is often shared
+and a browser does not expose a reliable physical-device identifier. Do not claim
+that a “device salt + IP” guarantees both anti-reset protection and zero impact on
+other people. Specify privacy/retention, proxy/NAT handling, bounded global spend,
+abuse controls and measurable false-positive tolerance before any guest release.
+Do not add covert fingerprinting or a guest bypass now. Current delivery priority
+is the working AUTHENTICATED end-to-end scenario; the existing auth gate and
+shared provider limiter remain mandatory.

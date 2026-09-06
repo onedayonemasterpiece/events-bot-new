@@ -17,8 +17,16 @@ export function mountComposerPresentation(root: HTMLElement) {
   const message = (value: string) => { live.textContent = value; };
   launcher.addEventListener('click', () => activate());
   details.addEventListener('click', () => { if(panel.hidden)open();else void close(); });
-  root.querySelector('[data-assistant-close]')!.addEventListener('click', () => { void close(); details.focus({preventScroll:true}); });
-  return { open, close, launcher, message,
+  root.querySelector('[data-assistant-close]')!.addEventListener('click', () => { void close(); (root.dataset.assistantCleanUi==='true'?root.querySelector<HTMLElement>('[data-assistant-recovery-open]')||launcher:details).focus({preventScroll:true}); });
+  const enterConversation=()=>{
+    if(root.dataset.assistantPhase==='conversation')return;
+    const before=launcher.getBoundingClientRect();root.dataset.assistantPhase='conversation';
+    const after=launcher.getBoundingClientRect();
+    if(root.dataset.assistantCleanUi==='true'&&!matchMedia('(prefers-reduced-motion: reduce)').matches&&before.width&&after.width){
+      launcher.animate([{transform:`translate(${before.left+before.width/2-after.left-after.width/2}px,${before.top+before.height/2-after.top-after.height/2}px) scale(${before.width/after.width})`},{transform:'translate(0,0) scale(1)'}],{duration:650,easing:'cubic-bezier(.22,.72,.18,1)'});
+    }
+  };
+  return { open, close, launcher, message, enterConversation,
     bind: (action: () => void, _stopForOverlay: () => Promise<void>) => { activate = action; },
     setCapture: (state: string, copy?: string) => {
       if(state === 'recording' && captureState !== state){started=performance.now();tick();clock=setInterval(tick,250);}

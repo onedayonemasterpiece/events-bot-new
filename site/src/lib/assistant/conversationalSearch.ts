@@ -31,6 +31,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   const captureOnly=root.dataset.assistantCaptureOnly==='true';
   const search=root.closest<HTMLElement>('[data-authorized-search]');if(!search)return;
   const get=<T extends HTMLElement>(name:string)=>root.querySelector<T>(`[data-assistant-${name}]`)!;
+  const quick=root.querySelector<HTMLInputElement>('[data-assistant-quick-input]');
   const record=get<HTMLButtonElement>('record'),stop=get<HTMLButtonElement>('stop'),submit=get<HTMLButtonElement>('submit');
   const text=get<HTMLTextAreaElement>('text'),processing=get('processing'),captureStatus=get('capture'),baseLabel=get('base');
   const answers=get('answers'),historyList=get('history-list'),recordings=get('recording-list'),resume=get<HTMLButtonElement>('resume');
@@ -84,7 +85,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     let next:string|null=null;
     for(const section of answers.querySelectorAll<HTMLElement>('[data-assistant-section]')){
       const rect=section.getBoundingClientRect();
-      if(rect.top<=edge+8&&rect.bottom>edge){next=section.dataset.assistantSection||null;break;}
+      if(rect.top<=edge+1)next=section.dataset.assistantSection||null;else break;
     }
     if(next!==viewed){viewed=next;notify();}
   };
@@ -153,7 +154,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       button('Изменить условия и искать заново',()=>chooseBase(result,'expand_selection')),button('Спросить о событии',()=>chooseBase(result,'explain_selection')));
     body.append(controls);if(!section.isConnected)answers.append(section);appendCards(entry);visibility.observe(section);scheduleViewed();
     latest=result.id;get('latest').hidden=false;get('history')?.removeAttribute('hidden');
-    if(scroll)section.scrollIntoView({block:'start'});
+    if(scroll){presentation?.enterConversation();section.scrollIntoView({block:'start'});}
   }
   let transcriptRevision=0;
   text.addEventListener('input',()=>{transcriptRevision++;});
@@ -227,7 +228,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       }catch(error){if(owner===own){receiptRetry=true;get('save-retry').hidden=false;presentation?.setCapture('error','Не удалось завершить сохранение. Аудио не удалено; повторите сохранение.');processing.textContent='Не удалось завершить сохранение. Повторите локальное сохранение, не закрывая вкладку.';showComposer();}}
       finally{pendingCommit=false;}
     };
-    capture=new MicrophoneCapture({workletUrl:root.dataset.assistantWorklet||'',budget:AUDIO_BUDGET,onPart:async part=>{await created;await store.putPart(own,id,part);},onCompressedPart:async part=>{await created;await store.putCompressedPart(own,id,part);},
+    capture=new MicrophoneCapture({onLevel:level=>{if(owner===own)root.style.setProperty('--voice-energy',String(level));},workletUrl:root.dataset.assistantWorklet||'',budget:AUDIO_BUDGET,onPart:async part=>{await created;await store.putPart(own,id,part);},onCompressedPart:async part=>{await created;await store.putCompressedPart(own,id,part);},
       onStatus:(status:CaptureStatus,reason)=>{
         if(owner!==own)return;
         stop.hidden=!['requesting','recording','stopping'].includes(status);stop.disabled=status==='stopping';record.disabled=!stop.hidden;record.hidden=!stop.hidden;
@@ -258,7 +259,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     if(captureOnly||!raw.trim())return;
     // No mandatory confirmation surface: the question and skeleton are visible
     // immediately, before waiting for the controller's durable checkpoint.
-    void presentation?.close();
+    void presentation?.close();presentation?.enterConversation();
     const turn=createConversationTurn(raw);answers.append(turn.section);
     turn.section.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
     if(!capture||!['requesting','recording','stopping'].includes(capture.status))presentation?.setCapture('idle','Ищу события · можно дополнить голосом');
@@ -276,6 +277,14 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     accepting=true;transcriptRevision++;const raw=text.value;
     transition=transition.then(()=>sendQuestion(raw)).finally(()=>{accepting=false;});
   });
+  root.querySelector('[data-assistant-quick-form]')?.addEventListener('submit',event=>{
+    event.preventDefault();if(!quick?.value.trim()||accepting)return;
+    if(!owner){get<HTMLButtonElement>('sign-in-open')?.click();return;}
+    if(!controllerReady){presentation?.message('Поиск подключается. Ваш текст остаётся в строке.');return;}
+    const raw=quick.value;accepting=true;
+    transition=transition.then(()=>sendQuestion(raw)).then(()=>{if(quick.value===raw)quick.value='';}).finally(()=>{accepting=false;});
+  });
+  root.querySelector('[data-assistant-recovery-open]')?.addEventListener('click',()=>showComposer());
   get('new').addEventListener('click',()=>{if(!controllerReady)return;transcriptRevision++;void controller?.newTask().then(()=>{selectedBase=null;mode='new_search';baseLabel.textContent='Новый поиск';notify();}).catch(showError);});
   resume.addEventListener('click',()=>{if(controllerReady)void controller?.resume();});
   get('latest').addEventListener('click',()=>{if(latest)rendered.get(latest)?.element.scrollIntoView({block:'start'});});
@@ -333,7 +342,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=false;
       const saved=await store.page<StoredAnswer>('answers',owner,undefined,10);
       if(epoch!==generation)return;
-      for(const row of saved.reverse()){
+      for(const row of root.dataset.assistantCleanUi==='true'?[]:saved.reverse()){
         try{const fresh=await api.status(owner,row.id);if(epoch!==generation)return;if(fresh.state==='completed')renderAnswer(fresh.result);}
         catch{if(epoch!==generation)return;processing.textContent='История сохранена на устройстве, но актуальность событий пока не проверена. Карточки не показаны как текущие.';}
       }
