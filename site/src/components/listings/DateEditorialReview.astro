@@ -7,7 +7,7 @@ interface Props { date: string; events: PreviewEvent[]; }
 const { date, events } = Astro.props;
 const items = draft.items.map(item => ({ ...item, event: events.find(event => event.id === item.event_id) }));
 const enabled = SITE_MODE === 'preview'
-  && PREVIEW_BUILD_ID === 'preview-islands-review-20260906'
+  && ['preview-islands-review-20260906','preview-islands-sequential-20260906'].includes(PREVIEW_BUILD_ID)
   && draft.source_snapshot === catalog.build.generated_at && date === draft.date
   && items.every(item => item.event);
 ---

@@ -86,7 +86,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
   visibleCount=docked?0:items.length;
   row.inert=!!docked;row.setAttribute('aria-hidden',String(!!docked));
   items.forEach((item,i)=>{item.button.hidden=false;item.button.inert=!!docked;item.label.hidden=opened&&i<visibleCount;});
-  toggle.hidden=!docked;toggle.inert=!docked;toggle.textContent=singleDay?compactLabel():'…';
+  toggle.hidden=!docked;toggle.inert=!docked||['geometry','settling','revealing'].includes(controls.dataset.fiCaptionPhase);toggle.textContent=singleDay?compactLabel():'…';
   toggle.setAttribute('aria-label',`Выбрать город. Сейчас: ${items.filter(i=>i.input.checked).map(i=>i.name).join(', ')}`);
   toggle.classList.toggle('has-selected',items.some(i=>i.input.checked&&i.input.value!=='all'));
   controls.dataset.fiVisibleCount=String(visibleCount);controls.dataset.fiOverflowCount=String(items.length-visibleCount);
@@ -106,12 +106,16 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const emptyRow=`inset(0px ${geometry.origin.width}px 0px 0px)`,fullRow='inset(0px 0px 0px 0px)';
   const emptyToggle='inset(0px 100% 0px 0px)',fullToggle='inset(0px 0% 0px 0px)';
   const rowClip=next?emptyRow:fullRow,toggleClip=next?fullToggle:emptyToggle;
-  row.style.clipPath=rowClip;toggle.style.width=`${toggleWidth}px`;toggle.style.clipPath=toggleClip;
+  const animated=animate&&!reduced();
+  row.style.clipPath=rowClip;toggle.style.width=`${toggleWidth}px`;toggle.style.clipPath=next&&animated?emptyToggle:toggleClip;
   const toggleX=next?(target.width-toggleWidth)/2:target.width-toggleWidth,toggleY=(target.height-(next&&singleDay?44:40))/2;
   toggle.style.transform=`translate(${toggleX}px,${toggleY}px)`;controls.dataset.fiDocked=String(next);
-  if(!animate||reduced())return;
-  toggle.hidden=false;
-  const timing={duration:540,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
+  controls.dataset.fiCaptionPhase=animated?(next?'geometry':'caption-hide'):'ready';
+  if(!animated){toggle.inert=!next;return;}
+  toggle.hidden=false;toggle.inert=true;
+  const hideDelay=next||beforeToggleClip==='inset(0px 100% 0px 0px)'?0:180;
+  const timing={duration:540,delay:hideDelay,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
+  if(!next)settleTimer=win.setTimeout(()=>{settleTimer=0;controls.dataset.fiCaptionPhase='geometry';},hideDelay);
   controls.dataset.fiMoving='true';
   const move=controls.animate([{width:`${before.width}px`,height:`${before.height}px`,minHeight:`${before.height}px`,transform:`translate3d(${before.x-geometry.markerX}px,0,0)`},{width:`${target.width}px`,height:`${target.height}px`,minHeight:`${target.height}px`,transform:`translate3d(${x}px,0,0)`}],timing);
   // A shared two-phase clipping handoff: the row leaves BEFORE the compact
@@ -123,12 +127,20 @@ export function initMobileFloatingIslands(doc=document,win=window){
   motions=[move,
    row.animate([{clipPath:rowStart},{clipPath:next?emptyRow:rowStart,offset:handoff},{clipPath:rowClip}],timing),
    toggle.animate([{transform:`translate(${beforeToggleX}px,${beforeToggleY}px)`},{transform:`translate(${toggleX}px,${toggleY}px)`}],timing),
-   toggle.animate([{clipPath:toggleStart},{clipPath:next?toggleStart:emptyToggle,offset:handoff},{clipPath:toggleClip}],timing)];
+   toggle.animate(next?[{clipPath:emptyToggle},{clipPath:emptyToggle}]:[{clipPath:toggleStart},{clipPath:emptyToggle}],{duration:next?540:160,easing:'ease-out',fill:'both'})];
   move.onfinish=()=>{cancelMotion();fit();
    if(next){
+    // Complete BOTH surface contraction and vertical settling before exposing
+    // any caption. The original toggle remains inert behind its closed mask.
+    toggle.inert=true;controls.dataset.fiCaptionPhase='settling';
     marker.style.transition='top 180ms cubic-bezier(.25,.1,.25,1)';marker.style.setProperty('--fi-city-top',`${geometry.city.y}px`);
-    controls.dataset.fiMoving='true';settleTimer=win.setTimeout(()=>{settleTimer=0;controls.removeAttribute('data-fi-moving');},220);
-   }
+    controls.dataset.fiMoving='true';settleTimer=win.setTimeout(()=>{
+     settleTimer=0;controls.removeAttribute('data-fi-moving');controls.dataset.fiCaptionPhase='revealing';
+     toggle.style.clipPath=fullToggle;
+     const reveal=toggle.animate([{clipPath:emptyToggle},{clipPath:fullToggle}],{duration:180,easing:'ease-out',fill:'both'});motions=[reveal];
+     reveal.onfinish=()=>{cancelMotion();controls.dataset.fiCaptionPhase='ready';fit();};
+    },220);
+   }else controls.dataset.fiCaptionPhase='ready';
   };
  }
  function close(focus=true){if(!opened)return;opened=false;if(panel.matches(':popover-open'))panel.hidePopover();panel.removeAttribute('popover');panel.style.cssText='';panel.hidden=true;items.forEach(i=>i.label.hidden=false);closeButton.hidden=true;controls.removeAttribute('data-island-city-open');toggle.setAttribute('aria-expanded','false');if(focus)toggle.focus({preventScroll:true});}
@@ -159,7 +171,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  on(doc,'pointerdown',e=>{if(opened&&!panel.contains(e.target)&&!controls.contains(e.target))close(false);});
  if(!singleDay&&!weekend)on(title,'click',()=>win.scrollTo({top:0,behavior:reduced()?'instant':'smooth'}));
  on(win,'scroll',()=>schedule(),{passive:true});on(win,'resize',()=>schedule(true),{passive:true});on(win,'pageshow',()=>schedule(true));
- on(win.matchMedia('(prefers-reduced-motion: reduce)'),'change',()=>{cancelMotion();fit();marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${docked?geometry.city.y:geometry.approachTop}px`);schedule();});
+ on(win.matchMedia('(prefers-reduced-motion: reduce)'),'change',()=>{cancelMotion();controls.dataset.fiCaptionPhase='ready';fit();toggle.style.clipPath=docked?'inset(0px 0% 0px 0px)':'inset(0px 100% 0px 0px)';controls.dataset.fiCaptionPhase='ready';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${docked?geometry.city.y:geometry.approachTop}px`);schedule();});
  const personal=doc.querySelector('[data-popular-personalized]');
  const personalObserver=new MutationObserver(()=>schedule(true));if(personal)personalObserver.observe(personal,{attributes:true,attributeFilter:['hidden']});
  band.__islands={get geometry(){return geometry},destroy(){dead=true;personalObserver.disconnect();cancelMotion();abort.abort();win.cancelAnimationFrame(frame);close(false);

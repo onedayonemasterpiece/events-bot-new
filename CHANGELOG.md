@@ -5422,6 +5422,10 @@ public festival/club counts and native Penpot acceptance remain open.
 ### Added
 - Source-bound, preview-only mobile Date editorial draft with three real event links; extends the existing documented Weekend prototype without runtime generation or current-data claims.
 
+### Fixed
+- Mobile city caption waits for complete contraction and vertical settling; reverse hides the caption before expanding city choices.
+- Open calendar dismisses with a downward touch pull from its header/grid while retaining horizontal months, selected dates and keyboard/close controls.
+
 ## [1.12.0] - 2026-03-04
 ### Highlights
 - **Smart Update (feature bundle)**: unified create/merge pipeline for VK/TG/`/parse` with source logs, Telegraph consistency, festival-context routing, and out-of-region filtering safeguards.

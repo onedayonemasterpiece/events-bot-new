@@ -1663,3 +1663,34 @@ All13 emitted route/support files and `preview-build.json` read back byte-exact.
 CI [34024739021](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34024739021)
 completed its contract/facts/gate jobs successfully; its browser job was skipped,
 not presented as the separate public L1 run. No phone/production certification.
+
+### Sequential city caption and calendar swipe dismissal — 2026-09-06
+
+Owner follow-up supersedes the earlier in-animation58% caption handoff.
+Reproduction on the published review found22 frames with incoming text while
+geometry still moved; reciprocal row/caption masks alone were insufficient.
+The city island now contracts for540ms, finishes its180ms vertical settling
+(with a40ms completion margin), and only then reveals the compact caption over
+180ms. Reverse first closes the caption mask, then expands the list; reversing
+before the caption appeared skips that unnecessary wait. The existing clipping
+viewport, native horizontal city row, reduced motion and Popular compact SSR
+remain. Caption visibility is tested against actual settled x/y/width/height,
+not a phase name alone. The masked caption remains inert throughout geometry,
+settling and reveal, becoming keyboard-actionable only when ready. Reverse native scroll may move Y; list expansion still
+waits until the caption is hidden.
+
+The opened calendar now closes on a downward single-finger pull over56px,
+starting at the scroll-top of its panel, from either header or month grid.
+Horizontal months, day-strip native scrolling, short drags, selected month,
+real date links, Escape/close and focus return are regression cases. No global
+body-scroll lock, alternate calendar or voice overlay is introduced. Touch
+arbitration is localized to the sheet: [MDN touch events](https://developer.mozilla.org/en-US/docs/Web/API/Touch_events)
+and [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)
+explain why a vertical browser gesture cancels pointerup and why preventDefault
+must act on the first directional touchmove, not only after the final threshold.
+
+Focused successor prefix: `preview-islands-sequential-20260906`; same historical
+corpus and existing date/weekend editorial drafts, with24July and23April2027
+included only as real navigation regression targets. L1 native touch injection
+is not physical-phone certification. Artifacts:
+`artifacts/codex/islands-sequential-20260906/`.

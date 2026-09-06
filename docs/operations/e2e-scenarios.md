@@ -181,3 +181,14 @@ bounds, three real day-editorial event navigations and desktop behavior.
 Pair with `mobile-city-scroll.playwright.mjs` using
 `CHECK_ROUTES='["/date-2026-07-23/","/vyhodnye/"]'` for native swipe/filter/reversal.
 Anonymous L1, not phone certification, fresh live data or automated LLM evidence.
+
+### Sequential city caption and downward calendar gesture
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/islands-sequential.playwright.mjs`
+checks320/390/430: caption only after real surface x/y/width/height settles,
+caption hidden before reverse list expansion, mid-motion reversal, reduced motion;
+native touch downward from calendar header/grid, short and horizontal gestures,
+retained month, date navigation, Escape/close/focus. Pair with native city swipe
+and `date-dock.playwright.mjs` future-month/date-strip regression. Anonymous L1;
+not physical Android/iPhone evidence. Reproduction artifacts preserve the old
+premature caption and absent downward-dismiss behavior.

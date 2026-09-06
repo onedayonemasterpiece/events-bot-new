@@ -9,7 +9,7 @@ export function initMobileDateDock(accessory,doc=document,win=window){
  const origin=doc.createComment('date-dock-origin');accessory.before(origin);
  const navOrigin=doc.createComment('date-dock-nav-origin');nav.before(navOrigin);
  const dock=doc.createElement('div');dock.className='date-dock';dock.dataset.dateDockSurface='';
- let active=false,opened=false,motion=null,index=Math.max(0,months.findIndex(m=>m.dataset.calendarMonth===root.dataset.selectedMonth)),pointer=null,suppressClickUntil=0;
+ let active=false,opened=false,motion=null,index=Math.max(0,months.findIndex(m=>m.dataset.calendarMonth===root.dataset.selectedMonth)),pointer=null,pull=null,suppressClickUntil=0;
  const emit=()=>win.dispatchEvent(new CustomEvent('kenigevents:date-dock-change'));
  function center(){const selected=rail.querySelector('[aria-current="date"]');if(selected)rail.scrollTo({left:selected.offsetLeft-(rail.clientWidth-selected.clientWidth)/2,behavior:'instant'});}
  function resize(animate=false){if(!active)return;const before=dock.getBoundingClientRect().height;motion?.cancel();motion=null;
@@ -38,7 +38,26 @@ export function initMobileDateDock(accessory,doc=document,win=window){
  root.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;pointer={x:e.clientX,y:e.clientY,id:e.pointerId};});
  root.addEventListener('pointercancel',()=>pointer=null);
  root.addEventListener('pointerup',e=>{if(!pointer||pointer.id!==e.pointerId)return;const dx=e.clientX-pointer.x,dy=e.clientY-pointer.y;pointer=null;if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)*1.5){suppressClickUntil=Date.now()+400;showMonth(index+(dx<0?1:-1),true);}});
- root.addEventListener('click',e=>{if(e.detail>0&&Date.now()<suppressClickUntil){e.preventDefault();e.stopPropagation();}},true);
+ sheet.addEventListener('click',e=>{if(e.detail>0&&Date.now()<suppressClickUntil){e.preventDefault();e.stopPropagation();}},true);
+ // Downward dismissal is a touch gesture, not pointerup: pan-y otherwise
+ // cancels pointers as soon as the browser claims scrolling. Only own a
+ // downward single-finger pull starting at the panel's scroll top; let the
+ // panel scroll normally elsewhere and leave horizontal month swipes alone.
+ sheet.addEventListener('touchstart',e=>{
+  if(!active||!opened||e.touches.length!==1){pull=null;return;}
+  const t=e.touches[0];pull={id:t.identifier,x:t.clientX,y:t.clientY,atTop:sheet.querySelector('.calendar-panel').scrollTop<=0,vertical:false};
+ },{passive:true});
+ sheet.addEventListener('touchmove',e=>{
+  if(!pull||e.touches.length!==1){pull=null;return;}
+  const t=e.touches[0],dx=t.clientX-pull.x,dy=t.clientY-pull.y;
+  if(pull.atTop&&dy>0&&dy>Math.abs(dx)*1.5){pull.vertical=true;e.preventDefault();}
+ },{passive:false});
+ sheet.addEventListener('touchend',e=>{
+  if(!pull)return;const start=pull;pull=null;const t=[...e.changedTouches].find(t=>t.identifier===start.id);if(!t)return;
+  const dx=t.clientX-start.x,dy=t.clientY-start.y;
+  if(start.vertical&&dy>56&&dy>Math.abs(dx)*1.5){e.preventDefault();pointer=null;suppressClickUntil=Date.now()+400;setOpen(false);}
+ },{passive:false});
+ sheet.addEventListener('touchcancel',()=>{pull=null;});
  // Horizontal trackpad/wheel intent scrolls the day strip, never expands it.
  rail.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){e.preventDefault();rail.scrollLeft+=e.deltaX;}},{passive:false});
  media.addEventListener('change',mount);win.addEventListener('resize',()=>resize());win.addEventListener('pageshow',center);win.visualViewport?.addEventListener('resize',()=>resize());
