@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Registered all #643 HT-AF-01…22 and MCP-HT-01…06 acceptance IDs in the existing MCP v2 registry, explicitly distinguishing partial component tests from unrun full/live acceptance.
+
 - Wired owner `event_publications_get` to current accepted-operation publication evidence; exact actor/resource policy is rechecked and Codex remains unchanged (#643).
 
 - Connected digest-bound private event images to owner prepare/commit, durable recovery and the existing Smart Update parser media path, with execution-time policy/expiry/byte checks and no synthetic Telegram/OAuth actor (#643).
