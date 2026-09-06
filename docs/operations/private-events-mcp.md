@@ -1365,3 +1365,49 @@ after the feature is off; do not manually reuse its refs or copy it into the
 event database.
 
 Scheduled-queue edit/delete is direct only for an exact principal-bound scheduled/postponed item; published/live content still requires external approval.
+
+
+## Partner access implementation checkpoint (2026-09-06)
+
+**Default OFF, not a complete partner event/promo product.**
+`PRIVATE_EVENTS_MCP_PARTNER_ENABLED=1` installs the independent resource
+`<public-base><private-prefix>/events-partner/mcp` in the existing runtime.
+The existing issuer/token/authorization endpoints are reused. Owner, Codex,
+OpenCode and partner resources do not accept each other's tokens.
+
+An owner must explicitly authorize the additional `partners:manage` scope.
+Existing grants do not acquire that scope automatically. `partner_create`
+accepts tenant, organization, display name, exact redirect URIs, expiry,
+portfolio event IDs and a closed policy (scopes/actions/auto_approve/limits).
+It returns the public `client_id` and a login code **once**. Deliver the login
+code privately; do not put it in an app as an OAuth `client_secret`.
+The partner enters it only on the issuer's browser consent form and uses
+Authorization Code + S256 PKCE. Telegram registration is not involved.
+
+`partner_get` reads current rights and portfolio without a stored secret.
+`partner_access_change` requires `expected_revision` and performs suspend,
+resume, terminal revoke, credential rotation, policy replacement or portfolio
+replacement. Suspend/rotation/revoke increment the credential epoch, so old
+access tokens and refresh grants cannot revive on resume. Current grants are
+read again on every HTTP request and before protocol cache/discovery. Policy
+changes invalidate overbroad old tokens; acquiring new scopes needs consent.
+
+`partner_workspace_get` and `partner_events_list` expose only the assigned
+portfolio. Search filtering happens after the principal/tenant/organization
+join and before pagination. Direct foreign IDs fail closed. There is no
+partner access to owner search/fetch, incidents, operational snapshots or
+Social Workspace. Unsupported event/promo mutations are explicitly false.
+
+The three `mcp_partner*` tables are additive canonical-DB policy tables. They
+are not a second event database, scheduler or Social Workspace store. Startup
+never backfills credentials or assigns existing events. Repeated init is
+covered by `tests/test_private_events_mcp_partner_access.py`; real local
+OAuth -> MCP -> policy -> canonical SQLite read and restart tests are in
+`tests/test_private_events_mcp_partner_protocol.py`. No external provider or
+production destination is involved. This checkpoint does not satisfy the
+full registry-v2 event/media/review/lifecycle/promo acceptance gates.
+
+Rollout remains R0 -> R1 -> R1b -> R2 -> R3 -> R4. This source checkpoint is an
+R4 prerequisite behind its own flag, not permission to enable R4 before the
+preceding product gates. Rollback disables the flag first and keeps additive
+tables; it never deletes partner history or rewrites the canonical event DB.

@@ -40,6 +40,8 @@ from .crypto import (
     verify_compact_token,
 )
 from .limits import SlidingWindowLimiter
+from .partner_access import PARTNER_SCOPES, PartnerAccessStore
+from .tool_catalog import ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,9 @@ class PrivateOAuthServer:
         config.ensure_auth_directory()
         self.store = OAuthStateStore(config.auth_database_path)
         self.failure_limiter = SlidingWindowLimiter()
+        self.partners = PartnerAccessStore(
+            config.database_path, resource=config.partner_resource, signing_key=config.signing_key,
+        ) if config.partner_enabled else None
 
     @staticmethod
     def _json_response(
@@ -114,6 +119,13 @@ class PrivateOAuthServer:
         return self.protected_resource_metadata_for(self.config.resource)
 
     def protected_resource_metadata_for(self, resource: str) -> dict[str, Any]:
+        if self.partners is not None and resource == self.config.partner_resource:
+            return {
+                "resource": resource, "authorization_servers": [self.config.issuer],
+                "scopes_supported": sorted(PARTNER_SCOPES),
+                "resource_documentation": self.config.documentation_url,
+                "bearer_methods_supported": ["header"],
+            }
         clients = tuple(
             client
             for client_id in self.config.oauth_client_ids
@@ -145,7 +157,7 @@ class PrivateOAuthServer:
                 "client_secret_post",
                 "none",
             ],
-            "scopes_supported": sorted(ALL_SCOPES),
+            "scopes_supported": sorted(ALL_SCOPES | (PARTNER_SCOPES if self.partners else frozenset())),
             "service_documentation": self.config.documentation_url,
         }
 
@@ -195,6 +207,15 @@ class PrivateOAuthServer:
                 OPENCODE_MAX_SCOPES,
                 OPENCODE_DEFAULT_SCOPES,
             )
+        if self.partners is not None:
+            try:
+                grant = self.partners.get(client_id=client_id)
+                if grant.status != "active" or grant.expires_at <= int(time.time()):
+                    raise ToolExecutionError("PARTNER_ACCESS_REVOKED", "Partner access revoked")
+                return OAuthClient(client_id, "none", frozenset({self.config.partner_resource}),
+                                   grant.scopes, grant.scopes - {"offline_access"})
+            except ToolExecutionError:
+                pass
         raise OAuthHTTPError("unauthorized_client", "Unknown OAuth client")
 
     @staticmethod
@@ -292,6 +313,11 @@ class PrivateOAuthServer:
         return value
 
     def _validate_redirect_uri(self, value: str, client: OAuthClient) -> str:
+        if self.partners is not None and self.config.partner_resource in client.allowed_resources:
+            grant = self.partners.get(client_id=client.client_id)
+            if value not in grant.redirect_uris:
+                raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed")
+            return value
         if client.client_id == self.config.oauth_client_id:
             return self._validate_chatgpt_redirect_uri(value)
         if client.client_id == self.config.codex_oauth_client_id:
@@ -406,6 +432,8 @@ class PrivateOAuthServer:
             auth_request = self._parse_authorization_request(request.query)
         except OAuthHTTPError as exc:
             return self._error_page(exc)
+        if self.partners is not None and auth_request.resource == self.config.partner_resource:
+            return self._partner_authorize_page(auth_request)
         sealed = self._seal_authorization_request(auth_request)
         callback = urlsplit(auth_request.redirect_uri)
         callback_origin = (
@@ -500,7 +528,16 @@ class PrivateOAuthServer:
             sealed = str(form.get("authorization_request") or "")
             supplied = str(form.get("operator_token") or "")
             auth_request = self._unseal_authorization_request(sealed)
-            if not constant_time_equal(supplied, self.config.operator_token):
+            subject = SUBJECT
+            partner_request = self.partners is not None and auth_request.resource == self.config.partner_resource
+            if partner_request:
+                try:
+                    grant = self.partners.authenticate(auth_request.client_id, str(form.get("partner_login") or ""))
+                    subject = grant.subject
+                except ToolExecutionError:
+                    await asyncio.sleep(0.2)
+                    raise OAuthHTTPError("access_denied", "Неверные данные партнёрского входа", 403) from None
+            elif not constant_time_equal(supplied, self.config.operator_token):
                 await asyncio.sleep(0.2)
                 await asyncio.to_thread(
                     self.store.audit,
@@ -517,7 +554,7 @@ class PrivateOAuthServer:
             await asyncio.to_thread(
                 self.store.create_authorization_code,
                 code=code,
-                subject=SUBJECT,
+                subject=subject,
                 client_id=auth_request.client_id,
                 redirect_uri=auth_request.redirect_uri,
                 resource=auth_request.resource,
@@ -530,7 +567,7 @@ class PrivateOAuthServer:
                 action="authorize",
                 outcome="granted",
                 client_fingerprint=secret_hash(auth_request.client_id)[:12],
-                subject=SUBJECT,
+                subject=subject,
                 details={"scopes": sorted(auth_request.scopes)},
             )
             target = self._append_query(
@@ -615,6 +652,7 @@ class PrivateOAuthServer:
         resource: str,
         scopes: frozenset[str],
     ) -> dict[str, Any]:
+        self._validate_partner_grant(subject, client_id, resource, scopes)
         access_token, _ = mint_access_token(
             signing_key=self.config.signing_key,
             issuer=self.config.issuer,
@@ -768,7 +806,47 @@ class PrivateOAuthServer:
             raise TokenValidationError("wrong_client")
         if not identity.scopes.issubset(client.allowed_scopes):
             raise TokenValidationError("wrong_scope")
+        self._validate_partner_grant(identity.subject, identity.client_id, resource, identity.scopes, token=True)
         return identity
+
+    def _validate_partner_grant(self, subject, client_id, resource, scopes, *, token=False):
+        if resource != self.config.partner_resource:
+            if subject.startswith("partner:"):
+                if token:
+                    raise TokenValidationError("wrong_resource")
+                raise OAuthHTTPError("invalid_grant", "Partner audience required")
+            return
+        try:
+            if self.partners is None:
+                raise ToolExecutionError("PARTNER_ACCESS_REVOKED", "Partner access revoked")
+            identity = AccessIdentity(subject, client_id, scopes, resource, "oauth-validation", int(time.time())+1)
+            grant = self.partners.resolve(identity)
+            if not scopes.issubset(grant.scopes):
+                raise ToolExecutionError("PARTNER_SCOPE_DENIED", "Partner scope denied")
+        except ToolExecutionError:
+            if token:
+                raise TokenValidationError("partner_access_revoked") from None
+            raise OAuthHTTPError("invalid_grant", "Partner grant is no longer valid") from None
+
+    def _partner_authorize_page(self, auth_request):
+        grant = self.partners.get(client_id=auth_request.client_id)
+        sealed = html.escape(self._seal_authorization_request(auth_request), quote=True)
+        body = f"""<!doctype html><html lang="ru"><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1"><title>Партнёр EventsBot</title></head>
+        <body><main><h1>Подключить {html.escape(grant.display_name)}</h1>
+        <p>Организация: {html.escape(grant.organization_id)}. Только назначенные события и права.</p>
+        <p>Запрашиваемые права: {html.escape(', '.join(sorted(auth_request.scopes)))}</p>
+        <p>Приложение: {html.escape(auth_request.client_id)}.</p>
+        <p>Возврат: {html.escape(auth_request.redirect_uri)}.</p>
+        <form method="post"><input type="hidden" name="authorization_request" value="{sealed}">
+        <label>Код партнёрского входа, выданный владельцем
+        <input type="password" name="partner_login" required autocomplete="current-password"></label>
+        <button type="submit">Подключить</button></form><p>Регистрация в Telegram не требуется.</p></main></body></html>"""
+        return web.Response(text=body, content_type="text/html", headers={
+            "Cache-Control": "no-store", "Pragma": "no-cache", "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY",
+            "Content-Security-Policy": "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+        })
 
     def challenge(
         self,

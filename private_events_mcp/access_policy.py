@@ -98,6 +98,7 @@ OPENCODE_DEFAULT_SCOPES = READ_SCOPES
 CHATGPT_MAX_SCOPES = (
     READ_SCOPES
     | EVENT_WRITE_SCOPES
+    | {"partners:manage"}
     | SOCIAL_SCOPES
     | AUDIO_TRANSCRIPTION_SCOPES
     | {"offline_access"}
