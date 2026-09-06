@@ -1698,3 +1698,17 @@ is not physical-phone certification. Artifacts:
 The native city regression waits for the actual terminal caption phase after
 reverse, rather than assuming all main-thread callbacks have completed after
 1150ms. Per-frame mask/geometry checks remain; this does not skip motion checks.
+
+Published successor receipt: runtime `e1150f4ee5683c3235677b3dd4235db1b560e953`,
+exact built source `e08e7e74a7b605a71c1964bea6316382b9f2242e`, same PR639.
+[Date: city handoff and downward calendar gesture](https://kenigevents.ru/preview-islands-sequential-20260906/date-2026-07-23/),
+[Popular](https://kenigevents.ru/preview-islands-sequential-20260906/populyarnoe/),
+[Weekend](https://kenigevents.ru/preview-islands-sequential-20260906/vyhodnye/),
+[Free](https://kenigevents.ru/preview-islands-sequential-20260906/podborki/besplatnye-sobytiya/).
+
+PASS:18 L0; surface contract; sequential geometry/inert/native gestures at
+320/390/430 plus reduced-motion both locally and publicly;6 native city cases;
+5 calendar/date-strip/future-date/desktop cases;6 prior review cases locally.
+All15 route/support files plus manifest read back byte-exact. CI
+[34028608681](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34028608681)
+contract/facts/gate PASS; its browser job skipped, separate public L1 above.
