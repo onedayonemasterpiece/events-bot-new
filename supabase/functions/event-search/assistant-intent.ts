@@ -1,9 +1,10 @@
+import {QUERY_PLAN_SCHEMA,validateQueryPlan,resolvePlanDates,queryPlanPrompt,type QueryPlan} from './assistant-query-plan.ts';
 import { applyIntentPatch, initialState, type Intent, type Mode } from './assistant-dialogue.ts';
 export type { Intent, Mode };
 export const ASSISTANT_CONTRACT = 'kenigevents-assistant-v1';
 export const AUDIO_BUDGET = { maxWireBytes: 1024 * 1024, envelopeBytes: 8192, encoding: 'base64' as const };
 export const MODES = ['new_search', 'refine_selection', 'continue_draft', 'explain_selection', 'expand_selection'] as const;
-export type Interpretation = { intent: Intent; title: string; responseSummary?: string | null; clarification: string | null;
+export type Interpretation = { queryPlan?:QueryPlan; intent: Intent; title: string; responseSummary?: string | null; clarification: string | null;
   explanationKind: 'none' | 'address' | 'facts'; ordinal: number | null };
 export type ConfirmedInput = { text: string; mode: Mode; parentId: string | null; previousId: string | null;
   anchor: string; visibleIds: string[] };
@@ -55,7 +56,7 @@ export function confirmedInput(value: unknown): ConfirmedInput {
   return row as ConfirmedInput;
 }
 export function interpretation(value: unknown, base: Intent = initialState().activeIntent): Interpretation {
-  const row = object(value, ['intent','title','responseSummary','clarification','explanationKind','ordinal']);
+  const row = object(value, ['intent','title','responseSummary','clarification','explanationKind','ordinal','queryPlan']);
   const intent = applyIntentPatch(base, row.intent);
   text(intent.goal, 180);
   // Structured fields must be explicit. Full user text remains in the receipt;
@@ -80,6 +81,32 @@ export const INTERPRETATION_SCHEMA = { type:'object', additionalProperties:false
       audience:stringArray,timezone:{type:'string',enum:['Europe/Kaliningrad']}}},
     title:{type:'string',maxLength:160},responseSummary:{type:['string','null'],maxLength:320},clarification:{type:['string','null']},explanationKind:{type:'string',enum:['none','address','facts']},ordinal:{type:['integer','null'],minimum:1,maximum:60}
   }};
+export const STRUCTURED_INTERPRETATION_SCHEMA = {...INTERPRETATION_SCHEMA,
+ required:[...INTERPRETATION_SCHEMA.required,'queryPlan'],
+ properties:{...INTERPRETATION_SCHEMA.properties,queryPlan:QUERY_PLAN_SCHEMA}};
+export function structuredInterpretation(value:unknown,input:ConfirmedInput,base:Intent,basePlan:QueryPlan|null=null):Interpretation {
+  try {
+    const raw=object(value,['intent','title','responseSummary','clarification','explanationKind','ordinal','queryPlan']);
+    const queryPlan=validateQueryPlan(raw.queryPlan,input,basePlan);
+    const dates=resolvePlanDates(queryPlan,input.anchor,{dateFrom:base.dateFrom??null,dateTo:base.dateTo??null},{dateFrom:raw.intent?.dateFrom??null,dateTo:raw.intent?.dateTo??null});
+    const parsed=interpretation({...raw,intent:{...raw.intent,...dates}},base);
+    // The embedding query is only a bounded retrieval hint. Full AND/OR clauses
+    // remain in the durable plan and the verifier; old topical goals cannot leak.
+    const goal=queryPlan.scope==='all_events'?'события':queryPlan.groups.map(g=>`(${g.alternatives.join(' ИЛИ ')})`).join(' И ');
+    if(parsed.intent.audience?.length&&!queryPlan.groups.some(g=>g.dimension==='audience'))reject('invalid_query_plan');
+    const intent={...parsed.intent,...dates,goal:goal.slice(0,180)};
+    const dateLabel=[dates.dateFrom,dates.dateTo].filter((d,i,a)=>d&&a.indexOf(d)===i).map(d=>new Intl.DateTimeFormat('ru',{day:'numeric',month:'long',timeZone:'Europe/Kaliningrad'}).format(new Date(d+'T12:00:00Z'))).join(' — ');
+    const title=parsed.title+(dateLabel&&parsed.title.length+dateLabel.length+3<=160?` · ${dateLabel}`:'');
+    return {...parsed,intent,queryPlan,title,responseSummary:null};
+  } catch(error) {
+    if((error as any)?.code==='invalid_query_plan')reject('invalid_query_plan');
+    throw error;
+  }
+}
+export function structuredInterpreterPrompt(input:ConfirmedInput,base:Intent,parentFacts:unknown,basePlan:QueryPlan|null):string {
+ return interpreterPrompt(input,base,parentFacts)+'\n'+queryPlanPrompt(input,basePlan)+
+ '\nПриоритет структурного контракта: title — только краткие что/где, БЕЗ даты; сервер добавит вычисленный интервал. responseSummary=null: не дублируй ещё не вычисленные даты. intent остаётся полным состоянием; replace снимает не повторённые прежние географию/аудиторию/бюджет/исключения. Все смысловые ограничения, включая audience, обязаны присутствовать в groups. Только дата/город/цена без темы/формата/аудитории = all_events. Для patch из старого BASE без BASE_QUERY_PLAN сформулируй полное уточнение как clarification, не выдавай потерянную тему за all_events.';
+}
 export const TRANSCRIPT_SCHEMA = {type:'object',additionalProperties:false,required:['text','uncertain'],properties:{text:{type:'string'},uncertain:{type:'array',items:{type:'string'}}}};
 export function interpreterPrompt(input: ConfirmedInput, base: Intent, parentFacts: unknown): string {
   return `Ты интерпретатор поиска событий KenigEvents, не автономный агент. Верни JSON по схеме. Никаких инструментов, команд или постоянного профиля.

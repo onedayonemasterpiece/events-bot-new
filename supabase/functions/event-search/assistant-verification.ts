@@ -55,6 +55,7 @@ export function classifyVoicePayload(parsed: Record<string, any>, candidates: Ca
 export async function verifyVoiceWindow(candidates: Card[], classify:(batch:Card[],deadline:number)=>Promise<any>, options:{budgetMs?:number;batchSize?:number}={}) {
   const ids=candidates.map(x=>Number(x.event_id??x.id));const exact:Card[]=[],possible:Card[]=[],rejected:number[]=[],attempts:any[]=[];
   if(ids.some(id=>!Number.isSafeInteger(id)||id<1)||new Set(ids).size!==ids.length)return {exact:[],possible:[],rejected_ids:[],used:false,status:'invalid_candidate_window',verification:{policy:'voice-exact-complete-window-v1',status:'unavailable',failure_reason:'invalid_candidate_window',candidate_ids:ids,candidate_count:ids.length,checked_count:0,exact_ids:[],possible_ids:[],rejected_ids:[],unchecked_ids:ids,membership_scope:'bounded_canonical_search_window',attempts:[]}};
+  const groupEvidence:Record<string,unknown>={};
   const deadline=Date.now()+(options.budgetMs??45000);let failure:string|null=null;
   const batchSize=Math.min(20,Math.max(1,options.batchSize??20));
   for(let at=0;at<candidates.length;at+=batchSize){
@@ -62,6 +63,7 @@ export async function verifyVoiceWindow(candidates: Card[], classify:(batch:Card
     let result:any;
     try{result=await classify(candidates.slice(at,at+batchSize),deadline);}catch(_){failure='verification_provider_unavailable';break;}
     attempts.push(...(result.attempts||[]).map(({key_env:_keyEnv,...attempt}:any)=>attempt));
+    Object.assign(groupEvidence,result.group_evidence||{});
     if(!result.used){failure=result.status||'verification_unavailable';break;}
     exact.push(...(result.exact||[]));possible.push(...(result.possible||[]));rejected.push(...(result.rejected_ids||[]));
     if(result.status!=='ok'){failure=result.status||'incomplete_classification';break;}
@@ -71,6 +73,6 @@ export async function verifyVoiceWindow(candidates: Card[], classify:(batch:Card
   if(unchecked.length&&!failure)failure='incomplete_classification';
   const verification={policy:'voice-exact-complete-window-v1',status:failure?'unavailable':'complete',failure_reason:failure,
     candidate_ids:ids,candidate_count:ids.length,checked_count:checked.size,exact_ids:exactIds,possible_ids:possibleIds,rejected_ids:rejected,unchecked_ids:unchecked,
-    membership_scope:'bounded_canonical_search_window',attempts};
+    membership_scope:'bounded_canonical_search_window',attempts,...(Object.keys(groupEvidence).length?{group_evidence:groupEvidence}:{})};
   return {exact:failure?[]:exact,possible,rejected_ids:rejected,used:!failure,status:failure||'ok',verification};
 }

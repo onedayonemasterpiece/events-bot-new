@@ -260,3 +260,13 @@ test('editorial failure plus unresolved quota finalize preserves cards AND pendi
  const i=uid(),s=uid();await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
  assert.equal(r.body.state,'completed');assert.equal(r.body.result.items.length,1);assert.equal(r.body.accounting_pending,true);assert.equal(r.body.result.editorial.failure_reason,'shared_quota_finalize');
 });
+
+test('structured plan is durably passed to search; ordinary conversational continuation does not force subset',async()=>{
+ const h=harness();h.deps.structuredPlanEnabled=true;
+ const queryPlan={contextMode:'replace',dateMode:'next_week',scope:'all_events',groups:[]};
+ h.deps.generate=async o=>{await o.dispatched();const r=o.validate(parsed({queryPlan,title:'События в Светлогорске',intent:{...intent(),goal:'старое краеведение',localityIds:['svetlogorsk']}}));await o.completed(r);return r;};
+ let received;h.deps.search=async(...args)=>{received=args;return {items:[],semantic_verification:{status:'complete',exact_ids:[],unchecked_ids:[]}};};
+ const id=uid();await h.control(id,'interpret',input({text:'Какие события пройдут в Светлогорске на следующей неделе?'}));
+ const r=await h.control(uid(),'search',{interpretationId:id});
+ assert.equal(r.body.state,'completed');assert.deepEqual(received[4],queryPlan);assert.equal(received[3],undefined);assert.equal(received[1].goal,'события');assert.deepEqual(r.body.result.queryPlan,queryPlan);
+});

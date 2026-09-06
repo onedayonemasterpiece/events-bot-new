@@ -854,3 +854,42 @@ provider length overshoot. Empty/oversized text remains invalid. Canonical title
 are not wrapped in another pair of quotation marks. Exact/possible classification
 is model output, so repeated searches can differ; counts are not a completeness
 certificate and old completed answers are not recomputed to hide that variance.
+
+
+### Grounded conversation plan / September 6 drift correction
+
+Protected preview interpretation now persists a `queryPlan` in the same durable
+receipt: context replace/patch, calendar operation, scope, and source-grounded
+format/topic/audience groups. Groups are AND; alternatives inside one group are
+OR. Current quotes must occur in current speech; inherited clauses must match the
+parent plan. LLM chooses meaning, not regexes. Self-correction narrows rather than
+adds a broad alternative. Standalone city/date questions reset old topical goals;
+explicit subset-refinement still preserves parent membership. Ordinary followups
+use catalog expansion, not the visible card set.
+
+Server computes recognized relative calendar operations in Europe/Kaliningrad
+before validating model date fields. September6 next week and combined upcoming
+weekend+next week both mean September7–13, not September12–20. Embedding goal is a
+bounded hint derived from clauses; the verifier receives the full plan. Each
+candidate gets a verdict per clause and an indexed source fact; server combines
+AND/OR verdicts and keeps per-group evidence in the receipt. Prompt and validation
+use identical fact lines. Source indexing is provenance, not proof of semantic
+infallibility. Broad date/city queries with no semantic clauses admit candidates
+by current typed eligibility instead of asking a genre verifier to invent a
+constraint. Audience requests cannot use that broad-scope bypass.
+
+Single-city constraints are passed into the existing vector RPC before top60;
+current card eligibility still checks dates/city/lifecycle/cost after retrieval.
+The window remains bounded; multi-city/global recall and stale projection are
+not certified. No new provider, auth, quota ledger, embedding model or production
+index mutation. Old completed receipts remain frozen; legacy receipts without a
+plan retain legacy verification. Patching old semantic context requires a
+clarification rather than silently dropping its theme.
+
+Mobile current-topic title uses the shared locator, wraps in full without a
+height cap or internal scrolling, and contributes measured height to the shared
+reading edge/turn scroll margin. At large text scaling a too-narrow inline slot
+reflows the same island below the leather tag. The active reading edge retains
+its high-water mark until inactivity/viewport change to avoid title-height
+feedback oscillation. No second sticky shell. Rendered acceptance and remaining
+limits live in the relevance incident, not in unit-test pass claims.

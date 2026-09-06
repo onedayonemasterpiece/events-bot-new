@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fixed: mobile Search topic island wraps full long titles, measures shared reading clearance and avoids section-boundary oscillation.
+- Changed: protected conversational Search persists grounded AND/OR query plans, resolves relative dates server-side, prefilters single-city vector retrieval and verifies separate semantic clauses; broad city/date searches use typed eligibility without invented genre constraints.
+
 - Fixed: bounded editorial text tolerates modest model length overshoot instead of dropping grounded commentary; canonical event titles avoid duplicated quotation marks.
 
 - Fixed: editorial provenance uses indexed source facts; changed facts invalidate stale recommendations without regeneration, and unresolved quota finalization stays visible in accounting.

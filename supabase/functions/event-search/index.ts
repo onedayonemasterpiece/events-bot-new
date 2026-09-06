@@ -1,3 +1,4 @@
+import {planVerifierSchema,planVerifierPrompt,classifyPlanPayload,type SemanticPlan} from './assistant-plan-verification.ts';
 // KenigEvents authorized vector search Edge Function.
 // Runtime: Supabase Edge Functions / Deno.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.108.2";
@@ -22,7 +23,7 @@ import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts"
 import { handleAssistant, type AssistantDependencies, type AssistantRepository } from "./assistant-handler.ts";
 import { assistantGenerator } from "./assistant-provider.ts";
 import { assistantRepository } from "./assistant-repository.ts";
-import { eligible as assistantEligible, reject as assistantReject, type Intent as AssistantIntent } from "./assistant-intent.ts";
+import { eligible as assistantEligible, cityName as assistantCityName, reject as assistantReject, type Intent as AssistantIntent } from "./assistant-intent.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -1116,6 +1117,7 @@ type LlmVerifyOptions = {
   counters?: SearchAttemptCounters;
   reserve_canary_attempt?: () => Promise<boolean>;
   voiceIntent?: AssistantIntent;
+  semanticPlan?: SemanticPlan;
   deadline?: number;
 };
 
@@ -1450,7 +1452,7 @@ async function llmVerify(
     const compact = promptCandidates.map((candidate, index) => {
       const display = (candidate.display as Candidate | undefined) || {};
       const id = candidateId(candidate);
-      const facts = truncateText(
+      const facts = options.semanticPlan ? voiceCandidateFacts(id === null ? null : candidateDigests.get(id), factMaxChars) : truncateText(
         options.voiceIntent ? voiceCandidateFacts(id === null ? null : candidateDigests.get(id), factMaxChars) : compactSearchDigest(id === null ? null : candidateDigests.get(id)),
         factMaxChars,
       );
@@ -1468,7 +1470,7 @@ async function llmVerify(
         ...(options.voiceIntent ? { start_date: candidate.start_date, end_date: candidate.end_date, start_time: candidate.start_time, city: candidate.city, is_free: candidate.is_free, min_price: candidate.min_price, audience_tags: candidate.audience_tags, format_tags: candidate.format_tags } : {}),
       };
     });
-    const prompt = options.voiceIntent ? voiceVerifierPrompt(options.voiceIntent, compact) : [
+    const prompt = options.voiceIntent ? (options.semanticPlan ? planVerifierPrompt(options.semanticPlan,options.voiceIntent,compact) : voiceVerifierPrompt(options.voiceIntent, compact)) : [
       "Проверь результаты поиска афиши Калининграда.",
       "Каждый candidate ID отнеси ровно в один список: exact_event_ids, possible_event_ids, rejected_event_ids.",
       "exact: факты прямо соответствуют запросу; сомнения или мало фактов — possible; явное несоответствие — rejected.",
@@ -1497,7 +1499,7 @@ async function llmVerify(
     maxLlmCandidates,
     adaptiveHalfCandidateProfile(maxLlmCandidates).slice(-1),
   );
-  const maxOutputTokens = options.voiceIntent ? 2048 : envInt(
+  const maxOutputTokens = options.voiceIntent ? (options.semanticPlan ? 4096 : 2048) : envInt(
     "EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS",
     384,
     128,
@@ -1600,7 +1602,7 @@ async function llmVerify(
                     temperature: 0,
                     maxOutputTokens,
                     responseMimeType: "application/json",
-                    responseJsonSchema: options.voiceIntent ? voiceVerifierSchema(profile.candidates) : LLM_VERIFIER_RESPONSE_SCHEMA,
+                    responseJsonSchema: options.voiceIntent ? (options.semanticPlan ? planVerifierSchema(profile.candidates,options.semanticPlan) : voiceVerifierSchema(profile.candidates)) : LLM_VERIFIER_RESPONSE_SCHEMA,
                     thinkingConfig: {
                       includeThoughts: false,
                       thinkingLevel,
@@ -1629,7 +1631,7 @@ async function llmVerify(
             }
             const text = extractGeminiText(payload);
             return {
-              value: options.voiceIntent ? classifyVoiceSchemaPayload(parseLlmJson(text), profile.candidates) : classifyLlmPayload(text, profile.candidates),
+              value: options.voiceIntent ? (options.semanticPlan ? classifyPlanPayload(parseLlmJson(text),profile.candidates,options.semanticPlan,new Map(profile.candidates.map(c=>[Number(c.event_id),voiceCandidateFacts(candidateDigests.get(Number(c.event_id)),factMaxChars)]))) : classifyVoiceSchemaPayload(parseLlmJson(text), profile.candidates)) : classifyLlmPayload(text, profile.candidates),
               provider_status: "succeeded",
               usage,
             };
@@ -1824,16 +1826,20 @@ async function llmVerify(
   };
 }
 
-async function verifyAssistantWindow(supabaseUrl: string, candidates: Candidate[], intent: AssistantIntent, counters = emptyAttemptCounters()): Promise<LlmVerifyResult> {
+async function verifyAssistantWindow(supabaseUrl: string, candidates: Candidate[], intent: AssistantIntent, counters = emptyAttemptCounters(), semanticPlan?: SemanticPlan): Promise<LlmVerifyResult> {
+  if(semanticPlan?.scope==='all_events'&&semanticPlan.groups.length===0) {
+    const checked=await verifyVoiceWindow(candidates,async batch=>({used:true,status:'ok',exact:batch,possible:[],rejected_ids:[]}));
+    return {...checked,verification:{...checked.verification,policy:'voice-typed-constraints-v2',semantic_groups:[],candidate_fact_count:candidates.length},attempts:[],model:null};
+  }
   const digests = await fetchCandidateDigests(supabaseUrl, candidates.map(candidateId).filter((id): id is number => id !== null));
   const result = await verifyVoiceWindow(candidates, async (batch, deadline) => {
     const ids = new Set(batch.map(candidateId));
     return await llmVerify(intent.goal, batch, new Map([...digests].filter(([id]) => ids.has(id))), {
-      voiceIntent: intent, deadline, gemma_overflow_allowed: false,
+      voiceIntent: intent, semanticPlan, deadline, gemma_overflow_allowed: false,
       quota_backend: sharedGoogleQuotaBackend(supabaseUrl), counters,
     });
   }, { budgetMs: envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_TOTAL_BUDGET_MS", 45000, 1000, 90000) });
-  return {...result, verification: {...result.verification, candidate_fact_count: digests.size},
+  return {...result, verification: {...result.verification, candidate_fact_count: digests.size, semantic_groups:semanticPlan?.groups||null},
     policy: result.verification.policy, attempts: result.verification.attempts,
     model: result.verification.attempts.at(-1)?.model || null};
 }
@@ -2048,6 +2054,7 @@ async function runEventSearch(
   requestStartedAt: number,
   progress?: ProgressCallback,
   assistantIntent?: AssistantIntent,
+  assistantPlan?: SemanticPlan,
 ): Promise<SearchHandlerResult> {
   const recordVoiceAwareRequest = (...args: Parameters<typeof recordSearchRequest>) => {
     const [client, owner, record] = args;
@@ -2475,7 +2482,7 @@ async function runEventSearch(
         p_offset_count: 0,
         p_date_from: dateFrom,
         p_date_to: assistantIntent?.dateTo || null,
-        p_city_filter: null,
+        p_city_filter: assistantIntent?.localityIds.length===1 ? (()=>{const city=assistantCityName(assistantIntent.localityIds[0]);return city ? city[0].toLocaleUpperCase('ru')+city.slice(1):null;})() : null,
         p_category_filter: null,
         p_embedding_model: embeddingModel,
         p_embedding_dim: EMBEDDING_DIM,
@@ -2572,7 +2579,7 @@ async function runEventSearch(
       timings.llm_ms = 0;
     } else if (assistantIntent) {
       const strictStartedAt = performance.now();
-      llmResult = await verifyAssistantWindow(supabaseUrl, items, assistantIntent, counters);
+      llmResult = await verifyAssistantWindow(supabaseUrl, items, assistantIntent, counters,assistantPlan);
       llmCandidateFactCount = Number(llmResult.verification?.candidate_fact_count || 0);
       timings.voice_verification_ms = nowMs() - Math.round(strictStartedAt);
     } else if (llmExecutionAllowed) {
@@ -2968,6 +2975,7 @@ export function createAssistantDependencies(repository?: AssistantRepository): A
   const enabled = env("EVENT_SEARCH_ASSISTANT_ENABLED") === "1" && Boolean(env("EVENT_SEARCH_ASSISTANT_POLICY_REF"));
   return {
     enabled,
+    structuredPlanEnabled: true,
     editorialEnabled: true,
     editorialFacts: async (_owner, ids) => {
       const cards=await assistantCurrentCards(service,ids);
@@ -2993,10 +3001,10 @@ export function createAssistantDependencies(repository?: AssistantRepository): A
       return { owner: data.user.id, repo: repository || assistantRepository(service) };
     },
     generate: assistantGenerator({backend: sharedGoogleQuotaBackend(supabaseUrl), keys: providerKeyPool("LLM"), env: name => env(name)}),
-    async search(req, intent, operationId, parentCandidates) {
+    async search(req, intent, operationId, parentCandidates, semanticPlan) {
       if (parentCandidates) {
         const counters = emptyAttemptCounters();
-        const verified = await verifyAssistantWindow(supabaseUrl, parentCandidates, intent, counters);
+        const verified = await verifyAssistantWindow(supabaseUrl, parentCandidates, intent, counters,semanticPlan);
         return {items: verified.exact, fallback_items: [], has_more: false,
           semantic_verification: verified.verification, verification_unavailable: !verified.used,
           llm_verifier: {requested:true,used:verified.used,status:verified.status}, request_counters:counters};
@@ -3005,7 +3013,7 @@ export function createAssistantDependencies(repository?: AssistantRepository): A
       const internal = new Request(req.url, {method: "POST", headers,
         body: JSON.stringify({query: intent.goal, limit: 60, candidate_window: 60, client_request_id: operationId,
           include_fallback: false, use_llm_verifier: true, allow_llm_fallback: false})});
-      const result = await runEventSearch(internal, operationId, performance.now(), undefined, intent);
+      const result = await runEventSearch(internal, operationId, performance.now(), undefined, intent,semanticPlan);
       if (result.status >= 400) assistantReject(result.body.error === "quota_exceeded" ? "quota_exceeded" : "search_failed", result.status);
       return result.body;
     },

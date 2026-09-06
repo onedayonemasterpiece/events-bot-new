@@ -1,3 +1,4 @@
+import type {QueryPlan} from './assistant-query-plan.ts';
 import {SharedGoogleQuotaError} from './google-quota.ts';
 import {editorialSchema,editorialPrompt,validateEditorial,editorialText} from './assistant-editorial.ts';
 import { ASR_VOCABULARY_VERSION, transcriptionPrompt } from './assistant-vocabulary.ts';
@@ -6,7 +7,7 @@ export { assemble, sha256 } from './assistant-media.ts';
 import { validateAudioParts } from './assistant-audio.ts';
 import { initialState } from './assistant-dialogue.ts';
 import { AUDIO_BUDGET, ASSISTANT_CONTRACT, AssistantError, confirmedInput, eligible, interpretation,
-  interpreterPrompt, INTERPRETATION_SCHEMA, TRANSCRIPT_SCHEMA, object, reject, text, uuid,
+  structuredInterpretation, structuredInterpreterPrompt, STRUCTURED_INTERPRETATION_SCHEMA, interpreterPrompt, INTERPRETATION_SCHEMA, TRANSCRIPT_SCHEMA, object, reject, text, uuid,
   type Intent, type ConfirmedInput } from './assistant-intent.ts';
 export type Operation = {id:string;owner_id:string;kind:string;payload:any;state:string;dispatched:boolean;outcome?:any;error_code?:string;updated_at?:string;created_at?:string};
 export interface AssistantRepository {
@@ -25,8 +26,9 @@ export interface AssistantDependencies {
   allowedOrigins:readonly string[];
   generate(options:{kind:'asr'|'interpret'|'editorial';prompt:string;schema:unknown;audio?:Uint8Array;audioMimeType?:string;sampleRate?:number;frames?:number;
     validate:(value:unknown)=>unknown;dispatched:()=>Promise<void>;completed:(value:unknown,accounting:unknown)=>Promise<void>;accounted:()=>Promise<void>}):Promise<unknown>;
-  search(request:Request,intent:Intent,operationId:string,parentCandidates?:Record<string,any>[]):Promise<Record<string,any>>;
+  search(request:Request,intent:Intent,operationId:string,parentCandidates?:Record<string,any>[],queryPlan?:QueryPlan):Promise<Record<string,any>>;
   currentCards(owner:string,ids:string[]):Promise<Record<string,any>[]>;
+  structuredPlanEnabled?:boolean;
   editorialEnabled?:boolean;
   editorialFacts?:(owner:string,ids:string[])=>Promise<Record<string,any>[]>;
   maxAudioBytes:number;
@@ -176,12 +178,13 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
       } else if(body.kind==='interpret'){
         const input=payload as ConfirmedInput;
         const base=previous?.outcome.result.intent||parent?.outcome.result.intent||initialState().activeIntent;
+        const basePlan=previous?.outcome.result.queryPlan||parent?.outcome.result.queryPlan||null;
         const parentItems=itemsOf(parent);
         if(input.visibleIds.some(v=>!parentItems.some(item=>String(item.event_id??item.id)===v)))reject('untrusted_visible_ids',409);
         const question=previous?`${previous.outcome.result.question}\n${input.text}`:input.text;
         if(question.length>65536)reject('draft_capacity',413);
-        await deps.generate({kind:'interpret',prompt:interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:INTERPRETATION_SCHEMA,
-          dispatched:dispatch,completed:complete,accounted,validate:value=>({...interpretation(value,base),question,parentId:input.parentId,
+        await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?STRUCTURED_INTERPRETATION_SCHEMA:INTERPRETATION_SCHEMA,
+          dispatched:dispatch,completed:complete,accounted,validate:value=>({...(deps.structuredPlanEnabled?structuredInterpretation(value,input,base,basePlan):interpretation(value,base)),question,parentId:input.parentId,
             mode:previous?.outcome.result.mode||input.mode,anchor:input.anchor,visibleIds:input.visibleIds})});
       } else {
         const result=interpreted!.outcome.result;let answer:string='';let search:any={items:[],catalog_revision:parent?.outcome?.result?.catalog_revision||'facts-v1'};
@@ -203,13 +206,13 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
           // Full parent membership, NOT the currently rendered page; preserve rank.
           const candidates=parentItems.map(i=>byId.get(String(i.event_id??i.id))).filter((i): i is Record<string,any>=>Boolean(i)&&eligible(i!,result.intent,true));
           await dispatch();
-          search=await deps.search(request,result.intent,id,candidates);
+          search=await deps.search(request,result.intent,id,candidates,result.queryPlan);
           // Refine may never expand outside the refreshed logical parent set.
           const allowed=new Set(candidates.map(i=>String(i.event_id??i.id)));
           search.items=(search.items||[]).filter((i:any)=>allowed.has(String(i.event_id??i.id)));
           search.has_more=false;
         } else {
-          await dispatch();search=await deps.search(request,result.intent,id);
+          await dispatch();search=await deps.search(request,result.intent,id,undefined,result.queryPlan);
           if(search.error)reject('search_failed',502);
         }
         if(!result.clarification&&result.explanationKind==='none'&&(search.semantic_verification?.status!=='complete'||!Array.isArray(search.semantic_verification.exact_ids)||!Array.isArray(search.semantic_verification.unchecked_ids)||search.semantic_verification.unchecked_ids.length)) {

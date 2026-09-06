@@ -1,0 +1,23 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {structuredInterpretation,STRUCTURED_INTERPRETATION_SCHEMA} from './assistant-intent.ts';
+import {initialState} from './assistant-dialogue.ts';
+const base={...initialState().activeIntent,goal:'экскурсии краеведческие',dateFrom:'2026-09-07',dateTo:'2026-09-13',timeOfDay:null,audience:[],timezone:'Europe/Kaliningrad'};
+const input={text:'Какие события пройдут в Светлогорске на следующей неделе?',anchor:'2026-09-06T15:09:37.000Z',mode:'expand_selection',parentId:crypto.randomUUID(),previousId:null,visibleIds:[]};
+const value={intent:{...base,localityIds:['svetlogorsk'],dateFrom:'2026-09-14',dateTo:'2026-09-20'},title:'События в Светлогорске',responseSummary:'На 14–20 сентября',clarification:null,explanationKind:'none',ordinal:null,queryPlan:{contextMode:'replace',dateMode:'next_week',scope:'all_events',groups:[]}};
+test('structured calendar overrides LLM date arithmetic and embedding goal cannot retain prior topic',()=>{
+ const r=structuredInterpretation(value,input,base);assert.equal(r.intent.dateFrom,'2026-09-07');assert.equal(r.intent.dateTo,'2026-09-13');assert.equal(r.intent.goal,'события');assert.equal(r.responseSummary,null);assert.match(r.title,/7 сентября/);assert.doesNotMatch(r.title,/14/);assert.equal(r.queryPlan.scope,'all_events');
+});
+test('production structured schema requires plan and rejects missing or hidden audience predicates',()=>{
+ assert.ok(STRUCTURED_INTERPRETATION_SCHEMA.required.includes('queryPlan'));
+ for(const v of [{...value,queryPlan:undefined},{...value,intent:{...value.intent,audience:['family']}}]) assert.throws(()=>structuredInterpretation(v,input,base),e=>e.code==='invalid_query_plan');
+});
+test('full predicates survive independent from bounded embedding hint',()=>{
+ const speech='Лекции и экскурсии краеведческие на следующей неделе';
+ const queryPlan={contextMode:'replace',dateMode:'next_week',scope:'constrained',groups:[{dimension:'format',alternatives:['лекция','экскурсия'],source:'current',sourceQuote:'Лекции и экскурсии'},{dimension:'topic',alternatives:['краеведение'],source:'current',sourceQuote:'краеведческие'}]};
+ const r=structuredInterpretation({...value,queryPlan},{...input,text:speech},base);assert.equal(r.intent.goal,'(лекция ИЛИ экскурсия) И (краеведение)');assert.deepEqual(r.queryPlan,queryPlan);
+});
+
+test('relative mode is authoritative even if model emits reversed or malformed date strings',()=>{
+ const r=structuredInterpretation({...value,intent:{...value.intent,dateFrom:'nonsense',dateTo:'2026-01-01'}},input,base);
+ assert.equal(r.intent.dateFrom,'2026-09-07');assert.equal(r.intent.dateTo,'2026-09-13');
+});

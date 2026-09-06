@@ -391,3 +391,21 @@ are an initial editorial prototype, not a certified factual or personalized
 ranking. This delivery does not close those separate gaps.
 
 New Telegram link/report verified by topic/text readback: https://t.me/c/4337049383/1459 .
+
+
+### New September6 user chain: drift is reproduced, previous acceptance insufficient
+
+Read-only owner-scoped receipts show independent faults: combined weekend/next
+week interpreted12–20September; science self-correction expanded to broad useful
+lectures; local-history format AND topic treated too loosely; a standalone
+Zelenogradsk question inherited local history and returned0/1; Svetlogorsk next
+week changed to14–20 and classified all9ordinary city events as possible. This
+was completed search, not ASR/network failure. Private exact messages/receipts
+remain local in `artifacts/codex/voice-drift-20260906/user-chain.private.json`.
+
+Implementation changes are specified in voice-search-solution-v1.md under
+Grounded conversation plan. New query-plan and mobile-title lanes integrated;
+read-only review caught differing prompt/parser fact lines and premature date
+validation, both corrected before publication. Explicit subset refinement stays
+bounded intentionally; natural followups use expansion. Local tests are not
+live quality acceptance. Publication/replay evidence follows after validation.
