@@ -1,73 +1,72 @@
-name: Events MCP source checkpoint
+name: Events MCP integration checkpoint
 
-# Source-only development artifact. No secrets, provider calls, merge or deploy.
-# Temporary bootstrap for an offline ChatGPT implementation checkout.
+# Temporary deterministic Git executor for the ChatGPT-authored integration.
+# No agents, secrets, production destinations, merge to main or deployment.
 on:
   push:
     branches: [feature/events-mcp-owner-create-r1]
     paths: [.github/workflows/events-mcp-source-checkpoint.yml]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  source-checkpoint:
+  integrate-r1:
+    if: github.ref == 'refs/heads/feature/events-mcp-owner-create-r1'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 100
-          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Export pinned source trees and integration inputs
+      - name: Integrate exact reviewed R0 and preserve both changelog additions
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/events-mcp-source
-          git fetch --no-tags --depth=100 origin main feature/events-mcp-queue-observability-r0
-          main_sha=$(git rev-parse origin/main)
-          r0_sha=$(git rev-parse origin/feature/events-mcp-queue-observability-r0)
-          base_sha=$(git merge-base HEAD "$main_sha")
-          printf 'head=%s\nmain=%s\nr0=%s\nmerge_base=%s\n' "$(git rev-parse HEAD)" "$main_sha" "$r0_sha" "$base_sha" > artifacts/events-mcp-source/refs.txt
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags --depth=100 origin feature/events-mcp-queue-observability-r0
+          test "$(git rev-parse origin/feature/events-mcp-queue-observability-r0)" = 9dd31c5ed36c7c20da2dd8fa0480e1cb771eadf6
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-ff --no-commit 9dd31c5ed36c7c20da2dd8fa0480e1cb771eadf6 || test "$(git diff --name-only --diff-filter=U)" = CHANGELOG.md
           python - <<'PY'
-          import json, pathlib, subprocess, tarfile
-          root = pathlib.Path('artifacts/events-mcp-source')
-          refs = dict(line.split('=', 1) for line in (root/'refs.txt').read_text().splitlines())
-          extensions = {'.py', '.md', '.yml', '.yaml', '.json', '.toml', '.txt', '.ini', '.html', '.sql', '.sh', '.astro', '.ts', '.mjs', '.js', '.csv', '.svg', '.css'}
-          for name, ref in [('head', refs['head']), ('main', refs['main']), ('r0', refs['r0']), ('base', refs['merge_base'])]:
-              excluded = []
-              proc = subprocess.Popen(['git', 'archive', '--format=tar', ref], stdout=subprocess.PIPE)
-              with tarfile.open(fileobj=proc.stdout, mode='r|') as src, tarfile.open(root/f'{name}.tar.gz', 'w:gz') as dst:
-                  for item in src:
-                      path = pathlib.PurePosixPath(item.name)
-                      keep = item.isfile() and (path.suffix.lower() in extensions or path.name in {'.env.example', '.gitattributes', '.gitignore', '.editorconfig', 'Dockerfile', 'Makefile'} or (item.name.startswith('tests/') and item.size <= 1024*1024))
-                      if keep:
-                          dst.addfile(item, src.extractfile(item))
-                      elif item.isfile():
-                          excluded.append({'path': item.name, 'bytes': item.size})
-              if proc.wait() != 0:
-                  raise SystemExit('git archive failed')
-              (root/f'{name}-excluded.json').write_text(json.dumps(excluded, indent=2))
+          from pathlib import Path
+          import hashlib
+          p = Path('CHANGELOG.md')
+          p.write_text(''.join(line for line in p.read_text().splitlines(keepends=True) if not line.startswith(('<<<<<<< ', '=======', '>>>>>>> '))))
+          expected = {
+              'CHANGELOG.md': '0b6cc21eb399a384874eeeac95a14359d0ca8e40b1f866969408c6269c9a0114',
+              'docs/operations/private-events-mcp.md': 'f7a675efa4bcebee980e8459742176c99204e3dc27b1619e8b91684d7d374466',
+              'private_events_mcp/config.py': 'a96bd7c4f85233c87a28cd7b5e520b8cd705941f21a3f1e9b2c153e15f56dbf1',
+              'private_events_mcp/server.py': '7ef05d21e12eb9f8272cf02dc5829c26bfc9474a10a78952cd577ceb0ba9d44b',
+          }
+          for name, digest in expected.items():
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == digest, name
           PY
-          git diff --binary "$base_sha" HEAD > artifacts/events-mcp-source/r1-from-base.patch
-          git diff --binary "$base_sha" "$main_sha" > artifacts/events-mcp-source/main-from-base.patch
-          sha256sum artifacts/events-mcp-source/*.tar.gz > artifacts/events-mcp-source/SHA256SUMS
-      - uses: actions/upload-artifact@v4
-        with:
-          name: events-mcp-source-${{ github.sha }}
-          path: artifacts/events-mcp-source/
-          retention-days: 7
-          if-no-files-found: error
-      - name: Export installable Python test dependencies
+          git add -- CHANGELOG.md
+          git diff --check --cached
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Verify exact integrated application source
         run: |
-          python -m pip wheel -r requirements.txt -w artifacts/events-mcp-wheels
+          PYTHONPATH=. python -m pytest -q tests/test_private_events_mcp_event_create.py tests/test_private_events_mcp_queue_observability.py
+      - name: Save integration merge only to the existing R1 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          git commit -m 'merge(mcp-r1): preserve current main and R0 with verified creation contracts'
+          git push origin HEAD:refs/heads/feature/events-mcp-owner-create-r1
+          mkdir -p artifacts/events-mcp-integration
+          git show -s --format=fuller HEAD > artifacts/events-mcp-integration/commit.txt
+          git diff --stat 9dd31c5ed36c7c20da2dd8fa0480e1cb771eadf6 HEAD > artifacts/events-mcp-integration/diff-stat.txt
+          sha256sum CHANGELOG.md docs/operations/private-events-mcp.md private_events_mcp/config.py private_events_mcp/server.py > artifacts/events-mcp-integration/SHA256SUMS
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: events-mcp-wheels-${{ github.sha }}
-          path: artifacts/events-mcp-wheels/
+          name: events-mcp-r1-integration-${{ github.sha }}
+          path: artifacts/events-mcp-integration/
           retention-days: 7
           if-no-files-found: error
