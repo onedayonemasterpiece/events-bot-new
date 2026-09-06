@@ -309,7 +309,7 @@ test('unavailable web reference asks rather than pretends to search externally',
  assert.equal(r.body.result.adaptivePlan.knowledgeAction,'web_lookup');assert.deepEqual(r.body.result.items,[]);assert.deepEqual(h.calls,['interpret']);
 });
 test('answer to blocking question retains original request as grounded input without replacing raw speech',async()=>{
- const h=harness();adaptiveProvider(h,adaptive({clarification:'blocking',question:'На какую тему?'}));const i=uid(),s=uid();
+ const h=harness();adaptiveProvider(h,adaptive({clarification:'blocking',question:'На какую тему?'}),null);const i=uid(),s=uid();
  await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
  let prompt,schema;adaptiveProvider(h,adaptive());const generate=h.deps.generate;h.deps.generate=o=>{prompt=o.prompt;schema=o.schema;return generate(o);};
  const next=uid();const r=await h.control(next,'interpret',input({text:'История края',mode:'expand_selection',parentId:s}));
@@ -330,4 +330,13 @@ test('adaptive editorial uses actual candidates and optional question is compose
  assert.equal(r.body.result.editorial.status,'complete');assert.equal(r.body.result.answer.split(question).length,2);assert.equal(r.body.result.items.length,1);assert.deepEqual(h.calls,['interpret','search','editorial']);
  assert.equal((await h.request(`status?id=${s}`)).body.result.answer,r.body.result.answer);
  h.deps.editorialFacts=async()=>[];const stale=await h.request(`status?id=${s}`);assert.equal(stale.body.result.editorial.status,'stale');assert.equal(stale.body.result.answer.split(question).length,2);
+});
+
+test('blocking is not rejected by an unexecutable query plan and cannot carry it into next search',async()=>{
+ const h=harness();adaptiveProvider(h,adaptive({clarification:'blocking',question:'О каком событии речь?'}),{contextMode:'patch',dateMode:'inherit',scope:'constrained',groups:[]});
+ const i=uid();const r=await h.control(i,'interpret',input());assert.equal(r.body.state,'completed');assert.equal(r.body.result.queryPlan,null);
+ const found=await h.control(uid(),'search',{interpretationId:i});assert.equal(found.body.result.answer,'О каком событии речь?');assert.deepEqual(h.calls,['interpret']);
+});
+test('nonblocking null plan still fails closed before retrieval',async()=>{
+ const h=harness();adaptiveProvider(h,adaptive(),null);const r=await h.control(uid(),'interpret',input());assert.equal(r.body.error,'invalid_query_plan');assert.deepEqual(h.calls,['interpret']);
 });

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: blocking clarification does not require an executable query plan; unresolved conditions cannot be inherited as verified search constraints. Oversized combined planning input fails before paid dispatch.
+
 - Changed: one conversational interpreter now plans blocking/optional clarification and important assumptions; optional questions preserve verified cards and appear inline without another shell or footer. Grounding execution remains disabled.
 - Added: result-dependent, nullable refinement in the existing grounded editorial; blocking replies retain the original unresolved request for provenance, with raw new speech preserved.
 

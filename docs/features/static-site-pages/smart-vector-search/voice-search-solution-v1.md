@@ -1016,7 +1016,7 @@ Acceptance TO-BE: одинаковые диалоги с внутренним, �
 остаётся одним provider-вызовом. Старые durable receipts не переписываются.
 
 - `blocking`: существующее верхнее `clarification` заполняется вопросом;
-  Search возвращает его без retrieval, verifier или editorial.
+  Search возвращает его без retrieval, verifier или editorial. `queryPlan=null`: не требуем исполнимых дат/provenance для пока неразрешимого намерения и не переносим выдуманные условия в следующий поиск. Для optional/none валидный queryPlan по-прежнему обязателен.
 - `optional`: верхнее `clarification=null`, обычные verified карточки не блокируются.
   Предположение/вопрос входят в существующий текст перед карточками, без нового UI.
 - Ответ на blocking получает оригинальный неразрешённый вопрос в planning input

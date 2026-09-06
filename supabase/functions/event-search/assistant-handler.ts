@@ -189,7 +189,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
         const unresolved=previous||((deps.adaptivePlanEnabled&&parent?.outcome.result.clarification)?parent:null);
         const question=unresolved?`${unresolved.outcome.result.question}\n${input.text}`:input.text;
         const planningInput=deps.adaptivePlanEnabled&&unresolved?{...input,text:question}:input;
-        if(question.length>65536)reject('draft_capacity',413);
+        if(question.length>65536||(deps.structuredPlanEnabled&&planningInput.text.length>8192))reject('draft_capacity',413);
         await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(planningInput,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan,conversationContext,deps.adaptivePlanEnabled):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?structuredInterpretationSchema(planningInput,basePlan,deps.adaptivePlanEnabled):INTERPRETATION_SCHEMA,
           dispatched:dispatch,completed:complete,accounted,validate:value=>({...(deps.structuredPlanEnabled?structuredInterpretation(value,planningInput,base,basePlan,deps.adaptivePlanEnabled):interpretation(value,base)),question,parentId:input.parentId,
             mode:previous?.outcome.result.mode||input.mode,anchor:input.anchor,visibleIds:input.visibleIds})});

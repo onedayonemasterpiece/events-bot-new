@@ -5,7 +5,7 @@ export type { Intent, Mode };
 export const ASSISTANT_CONTRACT = 'kenigevents-assistant-v1';
 export const AUDIO_BUDGET = { maxWireBytes: 1024 * 1024, envelopeBytes: 8192, encoding: 'base64' as const };
 export const MODES = ['new_search', 'refine_selection', 'continue_draft', 'explain_selection', 'expand_selection'] as const;
-export type Interpretation = { adaptivePlan?:AdaptivePlan; queryPlan?:QueryPlan; intent: Intent; title: string; responseSummary?: string | null; clarification: string | null;
+export type Interpretation = { adaptivePlan?:AdaptivePlan; queryPlan?:QueryPlan|null; intent: Intent; title: string; responseSummary?: string | null; clarification: string | null;
   explanationKind: 'none' | 'address' | 'facts'; ordinal: number | null };
 export type ConfirmedInput = { text: string; mode: Mode; parentId: string | null; previousId: string | null;
   anchor: string; visibleIds: string[] };
@@ -95,7 +95,7 @@ export function sourceFragments(text:string):string[] {
 export function structuredInterpretationSchema(input:ConfirmedInput,basePlan:QueryPlan|null,adaptive=false) {
  const quotes=[...new Set([...sourceFragments(input.text),...(basePlan?.groups.map(g=>g.sourceQuote)||[])])];
  return {...STRUCTURED_INTERPRETATION_SCHEMA,required:[...STRUCTURED_INTERPRETATION_SCHEMA.required,...(adaptive?['adaptivePlan']:[])],properties:{...STRUCTURED_INTERPRETATION_SCHEMA.properties,...(adaptive?{adaptivePlan:ADAPTIVE_PLAN_SCHEMA}:{}),
- queryPlan:{...QUERY_PLAN_SCHEMA,properties:{...QUERY_PLAN_SCHEMA.properties,
+ queryPlan:{...QUERY_PLAN_SCHEMA,...(adaptive?{type:['object','null']}:{}),properties:{...QUERY_PLAN_SCHEMA.properties,
  groups:{...QUERY_PLAN_SCHEMA.properties.groups,items:{...QUERY_PLAN_SCHEMA.properties.groups.items,properties:{...QUERY_PLAN_SCHEMA.properties.groups.items.properties,sourceQuote:{type:'string',enum:quotes}}}}}}}};
 }
 export function structuredInterpretation(value:unknown,input:ConfirmedInput,base:Intent,basePlan:QueryPlan|null=null,adaptive=false):Interpretation {
@@ -103,6 +103,9 @@ export function structuredInterpretation(value:unknown,input:ConfirmedInput,base
     const raw=object(value,['intent','title','responseSummary','clarification','explanationKind','ordinal','queryPlan','adaptivePlan']);
     const adaptivePlan=adaptive?validateAdaptivePlan(raw.adaptivePlan):undefined;
     if(adaptivePlan)raw.clarification=adaptivePlan.clarification==='blocking'?adaptivePlan.question:null;
+    // An unresolved question is not an executable search. Do not require made-up
+    // date/provenance clauses merely to ask it, nor reuse them on the next turn.
+    if(adaptivePlan?.clarification==='blocking')return {...interpretation({...raw,queryPlan:null,explanationKind:'none',ordinal:null},base),adaptivePlan,queryPlan:null,responseSummary:null};
     const queryPlan=validateQueryPlan(raw.queryPlan,input,basePlan);
     const dates=resolvePlanDates(queryPlan,input.anchor,{dateFrom:base.dateFrom??null,dateTo:base.dateTo??null},{dateFrom:raw.intent?.dateFrom??null,dateTo:raw.intent?.dateTo??null});
     const parsed=interpretation({...raw,intent:{...raw.intent,...dates}},base);
