@@ -124,9 +124,13 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
 
+### One-day mobile content density
+
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/single-day-density.playwright.mjs` checks Today/Tomorrow/Date at320/384/430px: first card within230px, three full rows at720px/four at844px, flow-only H1, real city filtering and counts, single-city/no-filter behavior, unchanged bottom dock, reduced motion and retained Weekend context. Anonymous L1 only. [Canonical scope](../features/static-site-pages/astro-preview.md#one-day-mobile-entry-cleanup--2026-09-06).
+
 ### Mobile date dock B
 
-`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/date-dock.playwright.mjs` checks the actual rendered date rail and calendar with Chromium touch input at320/384/430px, future month arrows/swipe, empty-date disabling, navigation to the real23April2027 specimen, stationary lower nav and desktop breakpoint restoration. Compact B additionally asserts110px dock height, original64px stacked date rail,12px title/metadata gutters, four text-only destinations and unchanged icon+label navigation on Popular. L1 anonymous preview evidence only; no phone/PWA or current-data claim. Canonical contract: [Date composition B](../features/static-site-pages/astro-preview.md#date-composition-b--2026-09-06).
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/date-dock.playwright.mjs` checks the actual rendered date rail and calendar with Chromium touch input at320/384/430px, future month arrows/swipe, empty-date disabling, navigation to the real23April2027 specimen, stationary lower nav and desktop breakpoint restoration. Compact B additionally asserts110px dock height, original64px stacked date rail,12px title gutter and adjacent live count, four text-only destinations and unchanged icon+label navigation on Popular. L1 anonymous preview evidence only; no phone/PWA or current-data claim. Canonical contract: [Date composition B](../features/static-site-pages/astro-preview.md#date-composition-b--2026-09-06).
 
 ### Floating-island archetype review
 

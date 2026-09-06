@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "85867012c94f7bbc8097c990c908648495848afed41e38834a3d0b304bc1e99d",
+  "registry_sha256": "9e710f81afb2e5668964339f66d0af33aadc98cf363c56a874629f0f3bdaf8fe",
   "source_root": "site/src",
   "import_inventory_sha256": "945a3164b04385ab3d4aaa79bf4d451235ee7a3e07d5d2b6952677f8b2f91279",
   "product_scope": {
@@ -1517,7 +1517,7 @@
       ]
     },
     "MobileListingRailSurface": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
         "site/src/components/listings/MobileListingRailSurface.astro"

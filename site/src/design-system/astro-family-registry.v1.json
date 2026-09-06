@@ -697,7 +697,7 @@
     },
     {
       "id": "MobileListingRailSurface",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
         "site/src/components/listings/MobileListingRailSurface.astro"

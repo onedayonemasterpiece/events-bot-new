@@ -1397,3 +1397,37 @@ short containing block. Browser checks assert title/meta x=12px,64px rail,48px
 stacked date chips and110px total; existing archetype checks cover sticky/context
 and city filtering on Date/Today/Weekend. Evidence is under
 `artifacts/codex/date-dock-correction-20260906/`; preview-only limitations unchanged.
+
+
+### One-day mobile entry cleanup — 2026-09-06
+
+Owner approved a content-first follow-up, `preview-islands-20260906-archetypes-date-b4`,
+for Today/Tomorrow/explicit-date pages only (MobileListingRailSurface v2). The real H1 and a live result count
+stay in normal flow; neither date nor “По времени” becomes a top island. The
+permanent feed-order/gesture-instruction row is removed from this mobile view;
+this review does not introduce a replacement tutorial overlay. The actual city
+filter retains its native sticky/540ms easing mechanism, but uses the available
+width beside the unchanged brand, fitting whole choices plus overflow instead of
+reserving space for a duplicate date. The all-city choice is consistently labelled
+“Все” in this compact row (full accessible label retained), so320px does not
+produce an empty island with only +N. Its normal-flow reserve is56px with8px
+margins, not72px with12/24px margins. One-city/empty days keep a static heading
+through the existing responsive shell owner: no fabricated filter or second shell.
+The original filter updates the heading count after city selection and row hiding.
+
+The lower B3 dock is unchanged:64px stacked dates +44px labels,110px with border.
+Cards remain112px tall. Weekend still retains its current-day section context;
+Popular and other multi-section headings keep their accepted behavior. Desktop
+source layout and calendar horizon/empty-date rules are unchanged.
+
+Anonymous Chromium measures the first event at224px (previously341.64px), giving
+three full rows in384×720 without reducing cards, dates or the brand. The initial
+200–220px proposal was an estimate; the acceptance check allows230px and separately
+requires three complete rows at720px/four at844px when the route has enough events.
+`site/tests/single-day-density.playwright.mjs` covers320/384/430px, three day routes,
+static heading exit, maximal city fitting beside the brand, real city filtering
+and live counts, single-city routing, reduced motion and the Weekend exception.
+`site/tests/date-dock.playwright.mjs` remains the calendar and unchanged-lower-nav
+regression. Evidence: `artifacts/codex/date-page-clean-20260906/`. Same eight routes,
+review index and historical snapshot; not a full build, native phone, Auth/PWA,
+Penpot certification or production/root release.

@@ -5,6 +5,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  const context=band.querySelector('[data-floating-page-context]'),section=band.querySelector('[data-floating-section-context]'),scope=band.querySelector('[data-floating-section-title]');
  const surface=citySurface(doc,true);if(!surface)return;
  const {controls,panel,field,toggle,closeButton}=surface,nav=doc.querySelector('.site-nav');
+ const singleDay=['today','tomorrow','date'].includes(controls.closest('[data-mobile-v23-page]')?.dataset.mobileV23Page);
  if(!context||!section||!field||!nav)return;
  const abort=new AbortController(),on=(n,t,fn,opts={})=>n?.addEventListener(t,fn,{...opts,signal:abort.signal});
  const contextParent=context.parentNode,sectionParent=section.parentNode,contextNext=context.nextSibling,sectionNext=section.nextSibling;
@@ -16,7 +17,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  const titleMarker=doc.createElement('div');titleMarker.className='fi-mobile-title-origin';title.before(titleMarker);
  const flow=[titleParent,title.closest('.ke-listing-head')].filter(Boolean);flow.forEach(n=>n.dataset.fiMobileFlow='');
  const titleSkin=doc.createElement('div');titleSkin.className='fi-mobile-title-skin';titleSkin.setAttribute('aria-hidden','true');
- doc.body.dataset.fiMobile='';
+ doc.body.dataset.fiMobile='';if(singleDay)doc.body.dataset.fiSingleDay='';
  context.append(section);context.hidden=false;section.hidden=false;context.setAttribute('aria-hidden','false');
  const pageButton=context.querySelector('button:not(.site-header__section-context)');if(pageButton)pageButton.hidden=true;
  titleMarker.append(context);context.prepend(titleSkin,title);
@@ -25,7 +26,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  const row=doc.createElement('div');row.className='fi-city-visible';row.setAttribute('role','group');row.setAttribute('aria-label','Города');controls.append(row);
  const items=cityEntries(field).map(entry=>{
   const {label,input}=entry,button=doc.createElement('button');button.type='button';button.className='fi-city-item';button.dataset.fiCityValue=input.value;
-  const name=doc.createElement('span'),count=doc.createElement('small');name.textContent=entry.name;button.append(name,count);row.append(button);
+  const name=doc.createElement('span'),count=doc.createElement('small');name.textContent=singleDay&&input.value==='all'?'Все':entry.name;button.setAttribute('aria-label',entry.name);button.append(name,count);row.append(button);
   on(button,'click',()=>{input.checked=!input.checked;input.dispatchEvent(new Event('change',{bubbles:true}));});return{...entry,button,count};
  });
  row.append(toggle);toggle.hidden=true;toggle.setAttribute('aria-haspopup','dialog');panel.hidden=true;closeButton.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Остальные города');
@@ -42,12 +43,12 @@ export function initMobileFloatingIslands(doc=document,win=window){
   title.style.cssText=titleStyle+';animation:none;transform:none;';
   const brand=doc.querySelector('[data-mobile-discovery-menu] > summary').getBoundingClientRect(),tr=titleMarker.getBoundingClientRect(),font=parseFloat(win.getComputedStyle(title).fontSize);
   const narrow=win.innerWidth<360,inset=12,gap=narrow?8:10,pad=narrow?8:12;
-  const left=brand.right+(narrow?8:12),cityWidth=narrow?44:54,contextWidth=win.innerWidth-left-inset-cityWidth-gap,titleTop=8;
+  const left=brand.right+(narrow?8:12),cityWidth=narrow?44:54,contextWidth=win.innerWidth-left-inset-cityWidth-gap,titleTop=singleDay?14:8;
   // Reserve enough space for every full section title once per viewport, not
   // on scroll; changing sections never makes the sticky stack jump.
   const probe=doc.createElement('div');probe.style.cssText=`position:fixed;visibility:hidden;width:${contextWidth-2*pad}px;font:600 12px/17px Inter,ui-sans-serif,system-ui,sans-serif;`;doc.body.append(probe);
   let sectionHeight=34;for(const h of sectionHeadings(doc)){if(!h.getClientRects().length&&!h.closest('[data-popular-personalized]'))continue;probe.textContent=h.textContent.trim();sectionHeight=Math.max(sectionHeight,probe.getBoundingClientRect().height);}probe.remove();
-  const contextHeight=Math.max(70,sectionHeight+38);titleMarker.style.height=`${contextHeight}px`;
+  const contextHeight=singleDay?56:Math.max(70,sectionHeight+38);titleMarker.style.height=singleDay?'38px':`${contextHeight}px`;
   const titleEnd=Math.max(1,tr.y+win.scrollY-brand.bottom-16),targetY=titleTop;
   widths=items.map(i=>i.button.getBoundingClientRect().width);
   toggle.hidden=false;for(let n=1;n<=items.length;n++){toggle.textContent=`+${n}`;moreWidths[n]=toggle.getBoundingClientRect().width;}toggle.hidden=true;
@@ -56,22 +57,22 @@ export function initMobileFloatingIslands(doc=document,win=window){
   // Accepted mobile reference: the city surface becomes the ellipsis island
   // beside the title, in the SAME top row; all original choices remain in its
   // picker. The full-width pre-dock row retains maximal whole-item fit.
-  const targetWidth=cityWidth;
+  const targetWidth=singleDay?Math.min(originWidth,win.innerWidth-left-inset):cityWidth;
   marker.style.height=`${contextHeight}px`;
   const cr=controls.getBoundingClientRect(),mr=marker.getBoundingClientRect();
   geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
   titleMarker.style.position='';marker.style.position='';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${geometry.approachTop}px`);
   title.style.cssText=titleStyle;
   if(!nativeTimeline){title.style.animation='none';titleSkin.style.animation='none';}
-  context.style.cssText=`--fi-title-height:${contextHeight}px;--fi-title-x:${left+pad-tr.x}px;--fi-title-scale:${geometry.title.scale};--fi-title-end:${titleEnd}px;--fi-skin-x:${left-tr.x}px;--fi-skin-width:${contextWidth}px;`;
+  context.style.cssText=`--fi-title-height:${singleDay?38:contextHeight}px;--fi-title-x:${left+pad-tr.x}px;--fi-title-scale:${geometry.title.scale};--fi-title-end:${titleEnd}px;--fi-skin-x:${left-tr.x}px;--fi-skin-width:${contextWidth}px;`;
   section.style.cssText=`left:${left+pad-tr.x}px;top:30px;width:${contextWidth-2*pad}px;height:${contextHeight-38}px;`;section.hidden=true;
   controls.style.cssText='';controls.append(toggle);toggle.style.cssText='position:absolute;left:0;top:0;width:44px;';row.style.width=`${fullWidth}px`;
   ranges();docked=null;setDocked(win.scrollY>=geometry.threshold,false);measureNeeded=false;
  }
  function fit(width){
-  const count=docked?0:fitCityItems(width,widths,moreWidths);visibleCount=count;
+  const count=docked&&!singleDay?0:fitCityItems(width,widths,moreWidths);visibleCount=count;
   items.forEach((item,i)=>{item.button.hidden=i>=count;item.button.inert=i>=count;item.label.hidden=opened&&i<count;});
-  const n=items.length-count;toggle.hidden=n===0;toggle.textContent=docked?'…':`+${n}`;toggle.setAttribute('aria-label',docked?`Выбрать город. Сейчас: ${items.filter(i=>i.input.checked).map(i=>i.label.querySelector('span').textContent).join(', ')}`:`Ещё ${n} города`);toggle.classList.toggle('has-selected',items.slice(count).some(i=>i.input.checked&&i.input.value!=='all'));
+  const n=items.length-count;toggle.hidden=n===0;toggle.textContent=docked&&!singleDay?'…':`+${n}`;toggle.setAttribute('aria-label',docked?`Выбрать город. Сейчас: ${items.filter(i=>i.input.checked).map(i=>i.label.querySelector('span').textContent).join(', ')}`:`Ещё ${n} города`);toggle.classList.toggle('has-selected',items.slice(count).some(i=>i.input.checked&&i.input.value!=='all'));
   controls.dataset.fiVisibleCount=String(count);controls.dataset.fiOverflowCount=String(n);
  }
  function setDocked(next,animate=true){
@@ -89,13 +90,13 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const count=visibleCount,hasMore=count<items.length;
   const textEdge=hasMore?8+widths.slice(0,count).reduce((a,b)=>a+b,0)+6*Math.max(0,count-1):geometry.fullWidth;
   const clip=`inset(0px ${Math.max(0,geometry.fullWidth-textEdge)}px 0px 0px)`;
-  row.style.clipPath=clip;const toggleX=next?(target.width-44)/2:target.width-54,toggleY=(target.height-40)/2;toggle.style.transform=`translate(${toggleX}px,${toggleY}px)`;
+  row.style.clipPath=clip;const toggleX=next&&!singleDay?(target.width-44)/2:target.width-54,toggleY=(target.height-40)/2;toggle.style.transform=`translate(${toggleX}px,${toggleY}px)`;
   controls.dataset.fiDocked=String(next);
   if(!animate||reduced())return;
   // Keep outgoing choices in the same row while the edge crops them away.
   // They cannot receive focus/clicks once moved to the overflow picker.
   items.forEach((item,i)=>{item.button.hidden=!(shown[i]||i<count);});
-  const movingOverflow=Math.max(items.length-count,items.length-fitCityItems(before.width,widths,moreWidths));toggle.hidden=movingOverflow===0;toggle.textContent=next?'…':`+${movingOverflow}`;
+  const movingOverflow=Math.max(items.length-count,items.length-fitCityItems(before.width,widths,moreWidths));toggle.hidden=movingOverflow===0;toggle.textContent=next&&!singleDay?'…':`+${movingOverflow}`;
   const timing={duration:540,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
   controls.dataset.fiMoving='true';
   const move=controls.animate([{transform:`translate3d(${before.x-geometry.markerX}px,0,0)`},{transform:`translate3d(${x}px,0,0)`}],timing);
@@ -128,8 +129,8 @@ export function initMobileFloatingIslands(doc=document,win=window){
   // No short-label map, no text opacity animation, no scroll-position compensation.
   // Older mobile engines: transform-only fallback. Native sticky still owns Y;
   // never resize fonts, reflow controls or correct vertical scroll coordinates.
-  if(!nativeTimeline){const t=Math.min(1,Math.max(0,y/g.title.end)),p=reduced()?1:1-(1-t)**3,{x,scale}=g.title;title.style.transform=`translateX(${x*p}px) scale(${1+(scale-1)*p})`;titleSkin.style.opacity=String(reduced()?(t>=1?1:0):t*t);}
-  const arrived=y>=g.title.end;section.hidden=!arrived;section.tabIndex=arrived?0:-1;section.setAttribute('aria-label',`К разделу: ${text}`);
+  if(!nativeTimeline&&!singleDay){const t=Math.min(1,Math.max(0,y/g.title.end)),p=reduced()?1:1-(1-t)**3,{x,scale}=g.title;title.style.transform=`translateX(${x*p}px) scale(${1+(scale-1)*p})`;titleSkin.style.opacity=String(reduced()?(t>=1?1:0):t*t);}
+  const arrived=!singleDay&&y>=g.title.end;section.hidden=!arrived;section.tabIndex=arrived?0:-1;section.setAttribute('aria-label',`К разделу: ${text}`);
   context.dataset.fiTitleArrived=String(arrived);
   doc.body.dataset.floatingContext=docked?'docked':'morphing';
  }
@@ -139,7 +140,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  on(controls,'change',()=>{queueMicrotask(()=>{sync();fit(controls.getBoundingClientRect().width);ranges();schedule();});});
  on(doc,'keydown',e=>{if(e.key==='Escape'){if(opened){e.preventDefault();close();}}});
  on(doc,'pointerdown',e=>{if(opened&&!panel.contains(e.target)&&!controls.contains(e.target))close(false);});
- on(title,'click',()=>win.scrollTo({top:0,behavior:reduced()?'instant':'smooth'}));
+ if(!singleDay)on(title,'click',()=>win.scrollTo({top:0,behavior:reduced()?'instant':'smooth'}));
  on(win,'scroll',()=>schedule(),{passive:true});on(win,'resize',()=>schedule(true),{passive:true});on(win,'pageshow',()=>schedule(true));
  on(win.matchMedia('(prefers-reduced-motion: reduce)'),'change',()=>{cancelMotion();fit(controls.getBoundingClientRect().width);marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${docked?geometry.city.y:geometry.approachTop}px`);schedule();});
  const personal=doc.querySelector('[data-popular-personalized]');
@@ -147,6 +148,6 @@ export function initMobileFloatingIslands(doc=document,win=window){
  band.__islands={get geometry(){return geometry},destroy(){dead=true;personalObserver.disconnect();cancelMotion();abort.abort();win.cancelAnimationFrame(frame);close(false);
  titleParent.insertBefore(title,titleNext);title.style.cssText=titleStyle;flow.forEach(n=>delete n.dataset.fiMobileFlow);titleSkin.remove();
  contextParent.insertBefore(context,contextNext);sectionParent.insertBefore(section,sectionNext);context.style.cssText=originalContextStyle;section.style.cssText='';if(pageButton)pageButton.hidden=false;
- row.remove();skin.remove();controls.prepend(toggle);toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);marker.remove();titleMarker.remove();panel.hidden=false;delete doc.body.dataset.fiMobile;delete band.__islands;}};
+ row.remove();skin.remove();controls.prepend(toggle);toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);marker.remove();titleMarker.remove();panel.hidden=false;delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete band.__islands;}};
  doc.fonts.ready.then(()=>new Promise(r=>win.requestAnimationFrame(()=>win.requestAnimationFrame(r)))).then(()=>{if(dead)return;sync();ready=true;measure();render();doc.body.dataset.fiMotion='ready';});return band.__islands;
 }

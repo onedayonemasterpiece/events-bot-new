@@ -135,3 +135,16 @@ body[data-fi-content-mobile] .fi-content-layer .site-header__context {background
 @supports(animation-timeline:scroll(root block)) {body[data-fi-content-mobile] .fi-content-layer h1 {animation:fi-content-title 1s cubic-bezier(.22,1,.36,1) both;animation-timeline:scroll(root block);animation-range:0px var(--fi-content-end);}}
 @media(prefers-reduced-motion:reduce){body[data-fi-content-mobile] .fi-content-layer h1 {animation:none;transform:scale(var(--fi-content-scale));color:#241d17!important;}}
 body[data-fi-content-mobile]:has(details[data-mobile-discovery-menu][open]) .fi-content-layer {visibility:hidden;}
+
+
+/* One-day lists: the date is selected in the existing bottom rail. The heading
+   remains in normal flow; only the real city filter docks beside the brand. */
+body[data-fi-mobile][data-fi-single-day] .ke-mobile-listing-rails .page-head {display:flex;align-items:baseline;gap:12px;flex-direction:row;justify-content:flex-start;height:auto;padding:0;margin:32px var(--ke-container-gutter-mobile,12px) 8px;}
+body[data-fi-mobile][data-fi-single-day] .page-head > .fi-mobile-title-origin {position:static;top:auto;margin:0;z-index:auto;min-width:0;}
+body[data-fi-mobile][data-fi-single-day] .ke-mobile-listing-rails .page-head h1 {position:static;animation:none;transform:none!important;font-size:32px;line-height:38px;max-width:100%;}
+body[data-fi-mobile][data-fi-single-day] .fi-mobile-title-skin,
+body[data-fi-mobile][data-fi-single-day] .fi-mobile-title-origin .site-header__section-context {display:none!important;}
+body[data-fi-mobile][data-fi-single-day] .ke-mobile-listing-rails .page-head > p {margin:0;white-space:nowrap;font-size:12px;line-height:18px;}
+body[data-fi-mobile][data-fi-single-day] .ke-mobile-listing-rails .feed-head {display:none;}
+body[data-fi-mobile][data-fi-single-day] .fi-mobile-city-origin {margin:8px 0;}
+body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle] {font-size:12px;font-weight:650;}

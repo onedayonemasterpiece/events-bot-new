@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Changed
+- Make one-day mobile listings content-first: static date/title with live count, no permanent order/tutorial row, and city controls filling the top space beside the brand. Preserve Weekend section context, card sizes and the110px date dock.
 - Compact only the lower row of the two-tier mobile date dock: retain the original64px date rail above44px text-only navigation (110px total); standalone navigation retains icons. Restore mobile listing title/metadata gutters lost through the sticky display:contents wrapper.
 - Mobile dates use the approved B single lower dock with the existing navigation: native horizontal day scrolling, an expanding full-month calendar with arrows/touch swipes through the event horizon, and disabled individual days without events.
 - Extend accepted mobile12 floating-island kinetics to date/weekend city owners and city-free content archetypes; preserve original filters, full section headings and actions. Add a seven-page focused review index and browser checks, without a full site build or root publication.

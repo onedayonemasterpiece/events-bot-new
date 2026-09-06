@@ -41,12 +41,13 @@ const {
   weather,
 } = Astro.props;
 let rowIndex = 0;
+const singleDay = ['today', 'tomorrow', 'date'].includes(current);
 const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 ---
 <div
   class="ke-mobile-listing-rails ke-mobile-listing-rails--v23"
   data-ds-family="MobileListingRailSurface"
-  data-ds-version="1"
+  data-ds-version="2"
   data-ds-variant={current}
   data-ds-state={total > 0 ? 'populated' : 'empty'}
   data-mobile-listing-rails
@@ -55,7 +56,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 >
   <section class="page-head" aria-labelledby={`mobile-v23-title-${current}`}>
     <h1 id={`mobile-v23-title-${current}`}>{title}</h1>
-    <p>{meta}</p>
+    <p>{singleDay ? <>Событий: <span data-mobile-v23-result-count aria-live="polite">{total}</span></> : meta}</p>
   </section>
   {weather ? <WeatherDateContext {...weather} surface="mobile" /> : null}
   <div class="mobile-listing-pin-sentinel" data-mobile-listing-pin-sentinel aria-hidden="true"></div>
@@ -218,6 +219,8 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
         if (countNode) countNode.textContent = String(count);
       });
       if (empty) empty.hidden = visible !== 0;
+      const resultCount = surface.querySelector('[data-mobile-v23-result-count]');
+      if (resultCount) resultCount.textContent = String(visible);
     };
     const syncRowVisibility = (row) => {
       const cityFiltered = selectedCity !== 'all' && row.dataset.listingCity !== selectedCity;
