@@ -113,6 +113,25 @@ jobs:
         run: node --experimental-strip-types --test tests/assistant-*.test.mjs
       - name: Install pinned site dependencies
         run: npm ci --no-audit --no-fund
+      # Temporary PR #587 bridge for exact-source local validation where git DNS
+      # is unavailable. Only tracked source and public pinned dependencies;
+      # never .git/config, credentials, environment, audio or user state.
+      - name: Export voice integration inputs
+        if: github.event.pull_request.number == 587
+        working-directory: .
+        run: |
+          mkdir -p /tmp/voice-integration-inputs
+          git archive --format=tar.gz -o /tmp/voice-integration-inputs/source.tar.gz HEAD
+          git rev-parse HEAD > /tmp/voice-integration-inputs/checkout-sha.txt
+          tar -czf /tmp/voice-integration-inputs/site-dependencies.tar.gz site/node_modules
+          sha256sum /tmp/voice-integration-inputs/*.tar.gz > /tmp/voice-integration-inputs/SHA256SUMS
+      - name: Save voice integration inputs
+        if: github.event.pull_request.number == 587
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-integration-inputs
+          path: /tmp/voice-integration-inputs/
+          retention-days: 2
       - name: Validate design-system production surface contract
         run: npm run check:design-system-production-surfaces
       - name: Inventory design-system iconography
