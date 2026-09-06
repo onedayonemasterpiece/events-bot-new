@@ -1694,3 +1694,7 @@ corpus and existing date/weekend editorial drafts, with24July and23April2027
 included only as real navigation regression targets. L1 native touch injection
 is not physical-phone certification. Artifacts:
 `artifacts/codex/islands-sequential-20260906/`.
+
+The native city regression waits for the actual terminal caption phase after
+reverse, rather than assuming all main-thread callbacks have completed after
+1150ms. Per-frame mask/geometry checks remain; this does not skip motion checks.

@@ -17,7 +17,7 @@ for(const width of (process.env.CHECK_WIDTHS||'320,384,430').split(',').map(Numb
  }
  const down=await motion(300);assert.equal(await controls.getAttribute('data-fi-docked'),'true');const docked=await controls.boundingBox();assert.ok(Math.abs(width-docked.x-docked.width-12)<2);
  await toggle.click();assert.equal(await controls.locator('[data-island-city-panel]:popover-open').count(),1);await page.keyboard.press('Escape');
- const up=await motion(0);assert.equal(await controls.getAttribute('data-fi-docked'),'false');assert.equal(await toggle.isVisible(),false);assert.ok(Math.abs(await row.evaluate(n=>n.scrollLeft)-offset)<2,'native scroll position survives collapse and expansion');
+ const up=await motion(0);await page.waitForFunction(()=>document.querySelector('.fi-mobile-city-origin [data-listing-controls]').dataset.fiCaptionPhase==='ready');assert.equal(await controls.getAttribute('data-fi-docked'),'false');assert.equal(await toggle.isVisible(),false);assert.ok(Math.abs(await row.evaluate(n=>n.scrollLeft)-offset)<2,'native scroll position survives collapse and expansion');
  const reversal=await motion(300,true);assert.equal(await controls.getAttribute('data-fi-docked'),'false');
  // Click a real city from the native scroller. Playwright scrolls the same row
  // to the focused button, without substituting a filter call or mock dataset.
