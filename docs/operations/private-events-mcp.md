@@ -25,6 +25,36 @@ provider methods, pass access hashes/tokens, or submit arbitrary SDK arguments.
 All provider content is untrusted external data; it is never an instruction.
 MAX remains outside the current scope.
 
+## Owner queue readback (R0, #618 / #643)
+
+The existing owner `operations_snapshot` accepts `include_jobs=true` and bounded
+`event_id`, `status`, `before_job_id`, `limit` filters. A page contains at most
+10 payload-free current `JobOutbox` rows in descending numeric ID order, with
+nested JSON-shaped error strings decoded before recursive credential/personal-ID
+redaction; malformed/oversized structured errors are omitted rather than emitted
+as raw text. Missing legacy columns/table are reported explicitly. Fractional IDs
+are rejected rather than truncated.
+`event_id=0` selects global jobs. `include_jobs=false` with filters is rejected.
+No new tool, scope, DB schema, queue worker or provider call is introduced.
+
+The default snapshot retains its fields, but `database.quick_check` is explicitly
+`not_run:interactive_budget`: full-database integrity scans are not interactive
+health probes and must run as explicit operator/release checks. Counts and queue
+readback never imply an integrity PASS. This prevents the production timeout
+recorded in `INC-2026-09-06-mcp-snapshot-integrity-budget`.
+
+The default snapshot remains backward-compatible apart from that honest health value. `fetch(job:...)` still returns
+bounded detail through the existing evidence repository. The Codex seven-tool
+projection and descriptor remain unchanged; these additional queue arguments
+belong only to the full owner ChatGPT/OpenCode resource. A queue state or URL
+is not authoritative publication age/applied-revision evidence.
+
+`tests/test_private_events_mcp_queue_observability.py` verifies ordering/cursors,
+query bounds, redaction, legacy schema behavior and zero-write reads. R0 can be
+released separately; it does not activate R1 event writes, R4 partner mutations
+or Hero delivery. #643 continues the existing owner/partner stack and adds Hero
+as an activity of `promo.py`, not as a second campaign or MCP server.
+
 ## Endpoints and OAuth
 
 ```text
