@@ -1,0 +1,133 @@
+body[data-fi-mobile] .site-nav {position:fixed;top:20px;right:clamp(24px,2.6vw,48px);height:auto;min-height:56px;box-sizing:border-box;padding:5px;align-items:center;justify-content:center;gap:2px;border-radius:20px;transition:none;}
+body[data-fi-mobile] .site-nav a {display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 9px;font:650 13px/1.2 Inter,ui-sans-serif,system-ui,sans-serif;}
+body[data-fi-mobile] .site-nav a[aria-current="page"] {font-weight:650;}
+body[data-fi-mobile] .fi-desktop-layer {position:fixed;inset:0;z-index:61;pointer-events:none;}
+body[data-fi-mobile] .fi-mobile-city-origin {height:56px;position:relative;}
+body[data-fi-mobile] .site-header__context {border-radius:20px;pointer-events:auto;}
+body[data-fi-mobile] .site-header__context > button:not(.site-header__section-context) {display:none!important;}
+body[data-fi-mobile] .site-header__context .site-header__section-context {inset:0;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-height:56px;padding:0 14px;box-sizing:border-box;font:650 13px/1.2 Inter,ui-sans-serif,system-ui,sans-serif;}
+body[data-fi-mobile] .site-header__section-slot {width:100%;height:auto;min-height:18px;line-height:18px;padding-right:12px;}
+body[data-fi-mobile] .site-header__section-slot::after {top:6px;}
+body[data-fi-mobile] .site-header__context,
+body[data-fi-mobile] [data-listing-controls],
+body[data-fi-mobile] .site-nav {background:rgba(255,252,246,.94);border:1px solid rgba(255,255,255,.95);box-shadow:inset 0 1px 0 #fff,0 3px 6px rgba(55,37,24,.045),0 12px 26px -10px rgba(55,37,24,.25);}
+body[data-fi-mobile] [data-listing-controls] {display:block;width:max-content;max-width:100%;height:56px;min-height:56px;padding:0!important;border-radius:20px;box-sizing:border-box;pointer-events:auto;transition:none;}
+body[data-fi-mobile] .fi-city-visible {display:flex;flex-wrap:nowrap;align-items:center;justify-content:flex-start;gap:6px;padding:7px;box-sizing:border-box;height:54px;width:100%;overflow:hidden;}
+body[data-fi-mobile] .fi-city-item {display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;gap:4px;height:40px;min-height:40px;white-space:nowrap;box-sizing:border-box;padding:0 10px;border:0;border-radius:12px;box-shadow:none;background:transparent;color:var(--ke-color-text-primary);font:650 13px/1.2 Inter,ui-sans-serif,system-ui,sans-serif;cursor:pointer;text-decoration:none;}
+body[data-fi-mobile] .fi-city-item small {font:600 10px/1 Inter,ui-sans-serif,system-ui,sans-serif;opacity:.55;}
+body[data-fi-mobile] .fi-city-item[aria-pressed="true"] {background:rgba(165,72,33,.09);color:var(--primary,#a54821);}
+body[data-fi-mobile] .fi-city-item:hover,
+body[data-fi-mobile] [data-island-city-toggle]:hover {background:rgba(165,72,33,.065);}
+body[data-fi-mobile] .fi-city-item:focus-visible,
+body[data-fi-mobile] [data-island-city-toggle]:focus-visible {outline:2px solid var(--primary,#a54821);outline-offset:-2px;}
+body[data-fi-mobile] [data-island-city-toggle] {flex:0 0 auto;width:auto;min-width:44px;height:40px;min-height:40px;padding:0 10px;font:650 13px/1.2 Inter,ui-sans-serif,system-ui,sans-serif;border-radius:12px;}
+body[data-fi-mobile] [data-island-city-toggle].has-selected {color:var(--primary,#a54821);background:rgba(165,72,33,.09);}
+body[data-fi-mobile] [data-island-city-panel][popover] {padding:12px;border-radius:20px;background:#fffcf6;}
+body[data-fi-mobile] [data-listing-city-filter] {display:flex;flex-wrap:wrap;justify-content:flex-start;width:100%;gap:6px;}
+body[data-fi-mobile] [data-listing-city-filter] .ke-filter-chip {display:flex;gap:5px;align-items:center;border:0;min-height:40px;height:40px;border-radius:12px;background:transparent;font:650 13px/1.2 Inter,ui-sans-serif,system-ui,sans-serif;}
+body[data-fi-mobile] [data-listing-city-filter] .ke-filter-chip:has(input:checked) {font-weight:650;}
+
+body[data-fi-mobile] [data-floating-section-title] {font:inherit;}
+body[data-fi-mobile] .fi-mobile-city-origin,body[data-fi-mobile] .fi-desktop-layer {overflow-anchor:none;}
+
+/* Browser-native sticky, like the existing section shelves. Retired short rails
+   must not bound the sticky box; the full Popular listing is its containing block. */
+body[data-fi-mobile] .ke-popular-listing .ke-listing-discovery-rail,
+body[data-fi-mobile] .ke-popular-listing .ke-listing-discovery-rail__inner {display:contents;}
+body[data-fi-mobile] .fi-mobile-city-origin {position:sticky;top:var(--fi-city-top,20px);height:56px;min-height:56px;margin:12px 0 24px;width:100%;z-index:62;pointer-events:none;align-self:start;overflow:visible;}
+body[data-fi-mobile] .fi-mobile-city-origin [data-listing-controls] {position:relative;inset:auto;margin:0;max-width:none;height:56px;min-height:56px;pointer-events:auto;transform:none;width:max-content;transition:none;}
+
+/* Horizontal kinetic FLIP: a stable native sticky wrapper, one final layout per
+   state, transform/opacity-only motion. Skin scaling never stretches text. */
+body[data-fi-mobile] .fi-mobile-city-origin [data-listing-controls] {background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;animation:none;}
+body[data-fi-mobile] .fi-city-skin {position:absolute;inset:-1px;border-radius:20px;border:1px solid rgba(255,255,255,.95);background:#fffcf6;box-shadow:inset 0 1px 0 #fff,0 3px 6px rgba(55,37,24,.045),0 12px 26px -10px rgba(55,37,24,.25);transform-origin:left center;pointer-events:none;}
+body[data-fi-mobile] .fi-city-visible {position:relative;}
+
+body[data-fi-mobile] .ke-popular-listing [data-listing-controls][data-fi-moving="true"] {overflow:visible;}
+body[data-fi-mobile] [data-floating-section-title] {white-space:normal;text-overflow:clip;overflow:visible;line-height:18px;}
+body[data-fi-mobile] .site-header__section-slot {overflow:visible;}
+body[data-fi-mobile] .site-nav {flex-wrap:nowrap;overflow:visible;}
+body[data-fi-mobile] [data-island-nav-more] {position:relative;flex:0 0 44px;}
+body[data-fi-mobile] [data-island-nav-more] summary {display:flex;align-items:center;justify-content:center;width:44px;height:44px;list-style:none;border-radius:12px;cursor:pointer;}
+body[data-fi-mobile] [data-island-nav-more] summary::-webkit-details-marker {display:none;}
+body[data-fi-mobile] [data-island-nav-more] summary:hover,body[data-fi-mobile] [data-island-nav-more][open] summary {background:rgba(165,72,33,.09);}
+body[data-fi-mobile] [data-island-nav-more] summary:focus-visible {outline:2px solid #a54821;outline-offset:-2px;}
+body[data-fi-mobile] [data-island-nav-panel] {position:absolute;top:56px;right:0;min-width:230px;padding:8px;box-sizing:border-box;background:#fffcf6;border:1px solid #fff;border-radius:20px;box-shadow:0 12px 30px rgba(55,37,24,.18);}
+body[data-fi-mobile] .site-nav [data-island-nav-panel] a {justify-content:flex-start;padding:0 14px;}
+body[data-fi-mobile] .site-nav .site-header__badge {min-width:18px;height:18px;padding:0 4px;font-size:10px;line-height:18px;}
+
+/* The same city text remains opaque throughout resizing. Only the clipping
+   boundary moves; the overflow affordance follows the surface edge. */
+body[data-fi-mobile] .fi-city-visible {opacity:1;}
+
+/* A cropped, full-length text row must not enlarge document scrollWidth.
+   clip (unlike hidden/auto) does not create a scroll container for sticky. */
+body[data-fi-mobile] .fi-mobile-city-origin {overflow-x:clip;overflow-y:visible;}
+
+/* Full native sticky containing block for both mobile islands. */
+body[data-fi-mobile] [data-fi-mobile-flow] {display:contents;}
+body[data-fi-mobile] .ke-listing-head__date {margin:32px 0 8px;}
+body[data-fi-mobile] .ke-listing-head__count {margin:0 0 12px;}
+body[data-fi-mobile] .fi-mobile-title-origin {position:sticky;top:8px;height:70px;margin:8px 0 0;z-index:61;overflow:visible;overflow-anchor:none;pointer-events:none;}
+body[data-fi-mobile] .fi-mobile-title-origin .site-header__context {position:relative;inset:auto;display:block;width:100%;height:var(--fi-title-height,70px);min-height:0;max-width:none;margin:0;padding:0;background:transparent;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;overflow:visible;opacity:1;pointer-events:none;will-change:auto;}
+body[data-fi-mobile] .fi-mobile-title-origin h1 {position:relative;top:8px;margin:0;width:max-content;max-width:none;transform-origin:0 0;opacity:1;pointer-events:auto;}
+body[data-fi-mobile] .fi-mobile-title-skin {position:absolute;top:0;left:var(--fi-skin-x);width:var(--fi-skin-width);height:var(--fi-title-height,70px);border-radius:20px;background:#fffcf6;border:1px solid #fff;box-sizing:border-box;box-shadow:inset 0 1px 0 #fff,0 3px 6px rgba(55,37,24,.045),0 12px 26px -10px rgba(55,37,24,.25);opacity:0;pointer-events:none;}
+body[data-fi-mobile] .fi-mobile-title-origin .site-header__section-context {position:absolute;inset:auto;display:flex;align-items:center;justify-content:flex-start;min-height:36px;height:36px;padding:0;font:600 12px/17px Inter,ui-sans-serif,system-ui,sans-serif;pointer-events:auto;opacity:1;overflow:visible;}
+body[data-fi-mobile] .site-header__section-slot {padding-right:0;min-height:0;line-height:17px;}
+body[data-fi-mobile] .site-header__section-slot::after {display:none;}
+body[data-fi-mobile] [data-floating-section-title] {white-space:normal;overflow:visible;text-overflow:clip;line-height:17px;opacity:1;}
+body[data-fi-mobile] .fi-mobile-city-origin {overflow-clip-margin:12px;}
+body[data-fi-mobile] .fi-city-item {font-size:12px;}
+body[data-fi-mobile] [data-island-city-toggle] {font-size:12px;}
+@keyframes fi-mobile-title-arrive {from {transform:translateX(0) scale(1);}to {transform:translateX(var(--fi-title-x)) scale(var(--fi-title-scale));}}
+@keyframes fi-mobile-title-surface {from {opacity:0;}to {opacity:1;}}
+@supports (animation-timeline:scroll(root block)) {
+ body[data-fi-mobile] .fi-mobile-title-origin h1 {animation:fi-mobile-title-arrive 1s cubic-bezier(.22,1,.36,1) both;animation-timeline:scroll(root block);animation-range:0px var(--fi-title-end);}
+ body[data-fi-mobile] .fi-mobile-title-skin {animation:fi-mobile-title-surface 1s ease-in both;animation-timeline:scroll(root block);animation-range:0px var(--fi-title-end);}
+}
+@supports not (animation-timeline:scroll(root block)) {
+ body[data-fi-mobile] .fi-mobile-title-origin h1 {transform:none;}
+ body[data-fi-mobile] [data-fi-title-arrived="true"] .fi-mobile-title-skin {opacity:1;}
+}
+@media(prefers-reduced-motion:reduce) {
+ body[data-fi-mobile] .fi-mobile-title-origin h1 {animation:none;transform:translateX(var(--fi-title-x)) scale(var(--fi-title-scale));}
+ body[data-fi-mobile] .fi-mobile-title-skin {animation:none;}
+ body[data-fi-mobile] [data-fi-title-arrived="true"] .fi-mobile-title-skin {opacity:1;}
+}
+body[data-fi-mobile]:has(details[data-mobile-discovery-menu][open]) .fi-mobile-title-origin,
+body[data-fi-mobile]:has(details[data-mobile-discovery-menu][open]) .fi-mobile-city-origin {visibility:hidden;pointer-events:none;}
+
+/* Mobile10 accepted composition: tag | title/context | city ellipsis.
+   The real city island itself contracts into this control; no second row. */
+body[data-fi-mobile] .fi-city-skin {transform-origin:left top;}
+body[data-fi-mobile] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle] {font-size:22px;font-weight:500;background:transparent;}
+body[data-fi-mobile] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle].has-selected::after {content:"";position:absolute;width:4px;height:4px;bottom:3px;left:20px;border-radius:50%;background:var(--primary,#a54821);}
+
+/* Shared date/weekend city owner: old title rail is not another sticky floor. */
+body[data-fi-mobile] .mobile-listing-sticky-title {display:none!important;}
+body[data-fi-mobile] .ke-mobile-listing-rails .page-head {display:contents;}
+body[data-fi-mobile] .ke-mobile-listing-rails .fi-mobile-title-origin h1 {font-size:38px;line-height:1.1;color:var(--ke-color-text-primary);}
+body[data-fi-mobile] .ke-mobile-listing-rails .feed-head {position:static;}
+body[data-fi-mobile] .ke-mobile-listing-rails .group-head {position:relative;top:auto;}
+body[data-fi-mobile] .fi-mobile-city-origin > [data-listing-controls] {display:block!important;position:relative!important;inset:auto!important;max-width:none!important;background:transparent!important;box-shadow:none!important;border:0!important;}
+body[data-fi-mobile] .fi-mobile-city-origin [data-island-city-toggle] {display:flex;}
+body[data-fi-mobile] .fi-mobile-city-origin [data-island-city-panel][hidden] {display:none!important;}
+body[data-fi-mobile] .ke-mobile-listing-rails [data-island-city-panel][popover] {position:fixed;}
+body[data-fi-mobile] .ke-mobile-listing-rails [data-listing-city-filter] {display:block;}
+body[data-fi-mobile] .ke-mobile-listing-rails [data-listing-city-filter] button[hidden] {display:none;}
+@media(max-width:759px){body[data-fi-mobile] .ke-listing-discovery-rail {display:none!important;}}
+.fi-content-layer {position:fixed;inset:0;z-index:61;pointer-events:none;}
+body[data-fi-content] .fi-content-layer .site-header__context {position:absolute;box-sizing:border-box;padding:12px;border-radius:20px;background:#fffcf6;box-shadow:inset 0 1px 0 #fff,0 3px 6px #3725180b,0 12px 26px -10px #37251840;}
+body[data-fi-content] .fi-content-layer .site-header__section-context {position:static!important;width:100%!important;height:auto!important;min-height:30px;padding:0!important;white-space:normal;}
+body[data-fi-content] .site-header__section-slot,body[data-fi-content] [data-floating-section-title] {height:auto;white-space:normal;overflow:visible;line-height:17px;}
+body[data-fi-content-mobile] .fi-content-layer .site-header__context>button:not(.site-header__section-context) {position:static;display:block;width:100%;text-align:left;margin:0 0 5px;}
+body[data-fi-content-mobile] .site-header__context-title {font:650 17px/1.2 Inter,system-ui,sans-serif;}
+body[data-fi-content] .ex-controls,body[data-fi-content] .festival-month-nav {position:relative;top:auto;}
+body[data-fi-content] .festival-month__shelf {top:100px;}
+
+body[data-fi-content-mobile] .fi-content-layer .site-header__context {background:transparent;box-shadow:none;border:0;overflow:visible;}
+.fi-content-skin {position:absolute;inset:0;z-index:-1;border-radius:20px;background:#fffcf6;box-shadow:inset 0 1px 0 #fff,0 3px 6px #3725180b,0 12px 26px -10px #37251840;}
+@keyframes fi-content-title {from {color:var(--fi-content-original-color);transform:translate(var(--fi-content-x),var(--fi-content-y)) scale(1);}to {color:#241d17;transform:translate(0,0) scale(var(--fi-content-scale));}}
+@supports(animation-timeline:scroll(root block)) {body[data-fi-content-mobile] .fi-content-layer h1 {animation:fi-content-title 1s cubic-bezier(.22,1,.36,1) both;animation-timeline:scroll(root block);animation-range:0px var(--fi-content-end);}}
+@media(prefers-reduced-motion:reduce){body[data-fi-content-mobile] .fi-content-layer h1 {animation:none;transform:scale(var(--fi-content-scale));color:#241d17!important;}}
+body[data-fi-content-mobile]:has(details[data-mobile-discovery-menu][open]) .fi-content-layer {visibility:hidden;}

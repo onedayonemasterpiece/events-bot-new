@@ -13,6 +13,9 @@ import PersonalizationRuntime from '../components/personalization/Personalizatio
 import StandardOnboardingPlacementContext from '../components/onboarding/StandardOnboardingPlacementContext.astro';
 import UnusualUnreadRuntime from '../components/UnusualUnreadRuntime.astro';
 import '../styles/design-system.css';
+import '../styles/floating-islands.css';
+import '../styles/mobile-floating-islands.css';
+import { userIslandRoute } from '../lib/shellFloatingIslands.mjs';
 import { BASE_PATH, getCurrentDate, getOngoingExhibitionEvents, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { projectExhibitionsPersonal, exhibitionsUnreadBadge } from '../lib/exhibitionsPersonal';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
@@ -66,8 +69,7 @@ const routePath = canonicalBasePath
   : requestedRoutePath;
 const focusPageFamily = focusGroupPageFamily(routePath);
 const focusPageLabel = focusPageFamily ? focusGroupPageLabel(focusPageFamily) : '';
-const hasFloatingIslandsPopular = headerCurrent === 'popular' && routePath === '/populyarnoe';
-const hasFloatingPageContext = Boolean(focusPageFamily) || hasFloatingIslandsPopular;
+const hasFloatingPageContext = userIslandRoute(routePath);
 const derivedMobileSection: MobileSection = heroChrome === 'immersive'
   ? null
   : /\/(?:poisk|podborki)(?:\/|$)/u.test(`${routePath}/`)
@@ -158,11 +160,11 @@ const HEADER_NAVIGATION = [
   { key: 'festivals', label: 'Фестивали', href: '/festivali/' },
   { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
   { key: 'unusual', label: 'Необычное', href: '/neobychnoe/' },
-  { key: 'clubs', label: 'Клубы', href: '/kluby-po-interesam/' },
+  { key: 'clubs', label: 'Клубы по интересам', href: '/kluby-po-interesam/' },
 ] as const;
 // Primary destinations live in the shared island; this is contextual discovery.
 const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) =>
-  item.key !== 'popular' && (item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED));
+  item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
 const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : mobileSection === 'personal' ? 'personal' : mobileSection === 'afisha' ? 'all' : null);
 ---
 <!doctype html>
@@ -306,146 +308,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .site-header__context > .ke-button { min-width:0; max-width:100%; }
       .site-header__context-title { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
       .site-header__context-label { flex:none; }
-      /* FI-P1: Popular uses this existing header as one shared band. The real
-         H1/H2 remain in flow; these controls are locators, not copied headings. */
       .site-header__top-band { display: contents; }
-      .site-header__section-context { display: none; }
-      .site-header__controls-slot { display: none; }
-      @media (min-width:760px) {
-        body[data-floating-islands="popular"] .site-header__inner { gap: 12px; }
-        body[data-floating-islands="popular"] .site-header__top-band {
-          min-width: 0;
-          flex: 1 1 auto;
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 8px;
-        }
-        body[data-floating-islands="popular"] .site-header__context {
-          flex: 0 1 10rem;
-          max-width: 10rem;
-        }
-        body[data-floating-islands="popular"] .site-header__context-home { display: none; }
-        body[data-floating-islands="popular"] .site-header__context-label { display: none; }
-        body[data-floating-islands="popular"] .site-header__section-context {
-          min-width: 0;
-          max-width: min(18rem, 26vw);
-          min-height: 44px;
-          display: inline-flex;
-          align-items: center;
-          border: 0;
-          border-bottom: 2px solid transparent;
-          padding: 0 4px;
-          background: transparent;
-          color: var(--ke-color-copy);
-          font: inherit;
-          font-weight: 760;
-          white-space: nowrap;
-          cursor: pointer;
-        }
-        body[data-floating-islands="popular"] .site-header__section-context:hover,
-        body[data-floating-islands="popular"] .site-header__section-context:focus-visible {
-          color: var(--ke-color-brand-700);
-          border-bottom-color: var(--ke-color-brand-600);
-        }
-        body[data-floating-islands="popular"] .site-header__section-context-title {
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        body[data-floating-islands="popular"] .site-header__controls-slot {
-          display: flex;
-          min-width: 0;
-          max-width: min(24rem, 34vw);
-          align-items: center;
-        }
-        body[data-floating-islands="popular"] .site-header__controls-slot > .ke-listing-discovery-rail {
-          position: static;
-          top: auto;
-          z-index: auto;
-          min-width: 0;
-          max-width: 100%;
-          width: 100%;
-          height: 44px;
-          overflow: hidden;
-          margin: 0;
-          border: 0;
-          background: transparent;
-          backdrop-filter: none;
-        }
-        body[data-floating-islands="popular"] .site-header__controls-slot .ke-listing-discovery-rail__inner {
-          width: auto;
-          height: 44px;
-          display: block;
-          padding: 0;
-        }
-        body[data-floating-islands="popular"] .site-header__controls-slot .ke-listing-controls {
-          width: 100%;
-          min-width: 0;
-          height: 44px;
-          min-height: 44px;
-        }
-        body[data-floating-islands="popular"] .site-header__controls-slot .ke-city-filter {
-          width: 100%;
-          min-width: 0;
-          height: 44px;
-          min-height: 44px;
-          gap: 0 10px;
-        }
-        body[data-floating-islands="popular"] .site-header__controls-slot .ke-filter-chip {
-          height: 44px;
-          min-height: 44px;
-        }
-        body[data-floating-islands="popular"] .site-header__controls-slot .ke-filter-chip { font-size: .82rem; }
-        body[data-floating-islands="popular"] .site-header__controls-slot .ke-filter-chip::after { bottom: 0; }
-        body[data-floating-islands="popular"] .site-nav { display: none; }
-      }
-  @media (max-width:720px) {
-    body[data-floating-islands="popular"] .ke-popular-behavior__head,
-    body[data-floating-islands="popular"] .ke-popular-behavior__head.is-stuck {
-      position: static !important;
-      top: auto !important;
-      z-index: auto !important;
-      min-height: 0;
-      display: flex;
-      align-items: baseline;
-      justify-content: flex-start;
-      padding: 0 0 12px;
-      pointer-events: auto;
-    }
-    body[data-floating-islands="popular"] .ke-popular-behavior__head-label,
-    body[data-floating-islands="popular"] .ke-popular-behavior__head.is-stuck .ke-popular-behavior__head-label {
-      width: 100%;
-      max-width: none;
-      min-height: 0;
-      display: flex;
-      align-items: baseline;
-      justify-content: flex-start;
-      gap: 10px;
-      margin: 0;
-      border: 0;
-      border-radius: 0;
-      padding: 0;
-      background: transparent;
-      text-align: left;
-    }
-    body[data-floating-islands="popular"] .ke-popular-behavior__head h2,
-    body[data-floating-islands="popular"] .ke-popular-behavior__head.is-stuck h2 {
-      max-width: none;
-      margin: 0;
-      overflow: visible;
-      font: var(--ke-type-h2);
-      letter-spacing: var(--ke-type-h2-letter);
-      line-height: normal;
-      text-overflow: clip;
-      white-space: normal;
-    }
-    body[data-floating-islands="popular"] .ke-popular-behavior__head.is-stuck span {
-      min-width: 28px;
-      min-height: 28px;
-      font-size: .72rem;
-    }
-    body[data-floating-islands="popular"] .ke-popular-behavior__group { scroll-margin-top: 88px; }
-  }
+      .site-header__section-context, .site-header__controls-slot { display: none; }
 
       @media(max-width:759px) {
         .site-header__context { position:fixed; top:calc(env(safe-area-inset-top) + 8px); left:142px; right:max(12px,env(safe-area-inset-right)); max-width:none; z-index:43; }
@@ -2620,7 +2484,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
     </style>
   </head>
-  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="2" data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingIslandsPopular ? 'popular' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="3" data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingPageContext ? 'site' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
@@ -2637,25 +2501,30 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
                 <span class="site-header__context-title" data-floating-page-title></span>
               </Button>
             </div>
-            {hasFloatingIslandsPopular && <button class="site-header__section-context" type="button" data-floating-section-context hidden>
-              <span class="site-header__section-context-title" data-floating-section-title></span>
+            {hasFloatingPageContext && <button class="site-header__section-context" type="button" data-floating-section-context hidden>
+              <span class="site-header__section-slot"><span class="site-header__section-context-title" data-floating-section-outgoing aria-hidden="true"></span><span class="site-header__section-context-title" data-floating-section-title></span></span>
             </button>}
-            {hasFloatingIslandsPopular && <div class="site-header__controls-slot" data-floating-controls-slot hidden></div>}
+            {hasFloatingPageContext && <div class="site-header__utility-slot" data-floating-utility-slot hidden></div>}
+            {hasFloatingPageContext && <div class="site-header__controls-slot" data-floating-controls-slot hidden></div>}
           </div>
         )}
         <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={sharedHeaderBadge} />
         <nav class="site-nav" aria-label="Разделы афиши">
           {visibleHeaderNavigation.map((item) => (
-            <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined} data-unusual-nav-link={item.key === 'unusual' ? '' : undefined}>
+            <a data-island-nav-link href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined} data-unusual-nav-link={item.key === 'unusual' ? '' : undefined}>
               {item.label}
               {item.key === 'unusual' && <span class="unusual-nav-dot" data-unusual-nav-dot hidden aria-hidden="true"></span>}
               {sharedHeaderBadge?.key === item.key && (
-                <span class="site-header__badge" data-header-badge={item.key} hidden={!sharedHeaderBadge.text} aria-live="polite">
-                  <span data-header-badge-count>{sharedHeaderBadge.text}</span>
+                <span class="site-header__badge" data-header-badge={item.key} hidden={!sharedHeaderBadge.text.match(/\d+/u)} aria-label={sharedHeaderBadge.text} aria-live="polite">
+                  <span data-header-badge-count>{sharedHeaderBadge.text.match(/\d+/u)?.[0] || ''}</span>
                 </span>
               )}
             </a>
           ))}
+          <details data-island-nav-more hidden>
+            <summary>Ещё разделы</summary>
+            <div data-island-nav-panel></div>
+          </details>
         </nav>
       </div>
     </header>
@@ -2664,6 +2533,18 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <StaticSiteAuthRuntime />
     <UnusualUnreadRuntime />
     <slot />
+    {String(import.meta.env.PUBLIC_PREVIEW_BUILD_ID || '').includes('archetypes') && <script is:inline define:vars={{reviewRoutes:JSON.parse(import.meta.env.STATIC_SITE_FOCUSED_ROUTES || '[]'),reviewBase:BASE_PATH}}>
+      document.addEventListener('click',event=>{
+        const link=event.target.closest?.('a[href]');if(!link)return;
+        const url=new URL(link.href,location.href);if(url.origin!==location.origin||!url.pathname.startsWith(reviewBase+'/')||url.hash)return;
+        const path=url.pathname.slice(reviewBase.length);if(reviewRoutes.includes(path)||path==='/__preview/'||/\.[a-z0-9]+$/i.test(path))return;
+        event.preventDefault();let dialog=document.querySelector('[data-archetype-only-note]');
+        if(!dialog){dialog=document.createElement('dialog');dialog.dataset.archetypeOnlyNote='';dialog.style.cssText='max-width:320px;padding:24px;border:1px solid #eadfd0;border-radius:20px;background:#fffcf6;color:#241d17;font:16px/1.5 system-ui';dialog.innerHTML='<p>Этот маршрут не включён в выборочную сборку. Сейчас доступны только примеры архетипов.</p><form method="dialog"><button style="min-height:44px;padding:8px 18px">Продолжить просмотр</button></form>';document.body.append(dialog);}
+        dialog.showModal();
+      },true);
+    </script>}
+
+    {String(import.meta.env.PUBLIC_PREVIEW_BUILD_ID || '').includes('archetypes') && <p style="margin:24px 16px 120px;padding:8px 16px;background:#fff8ed;color:#786e64;font:12px/1.5 system-ui">Дизайн-превью архетипов · исторический срез 23 июля 2026, не актуальная афиша. <a href={withBase('/__preview/')}>Все примеры</a></p>}
     <StandardOnboardingPlacementContext pathname={Astro.url.pathname} />
     {focusPageFamily && (
       <FocusGroupLabPanel
@@ -2683,6 +2564,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {resolvedMobileBottomMode !== 'none' && <MobileBottomNav current={mobileSection} />}
 
     <script>
+      import { initShellFloatingIslands } from '../lib/shellFloatingIslands.mjs';
       import { shellOccupiedSpace } from '../lib/shellOccupiedSpace.mjs';
       import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
       import { packRelatedCardRows, planRelatedCardRows, relatedCardMediaFrameBinding, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
@@ -2690,104 +2572,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       import { composeEventShareImage } from '../lib/eventShareImage.mjs';
       import { getResilientDataClient } from '../lib/resilientDataClient';
       import { EXHIBITIONS_STATE_KEY, exhibitionsUnreadBadge } from '../lib/exhibitionsPersonal';
-      // FI-P1: one existing shell writer composes the Popular context row.
-      // H1/H2 stay in their original sections; the row only receives locators
-      // and the already-owned rail controls while the reading title is past it.
-      const pageContext = document.querySelector<HTMLElement>('[data-floating-page-context]');
-      const topBand = document.querySelector<HTMLElement>('[data-floating-top-band]');
-      const sectionContext = document.querySelector<HTMLButtonElement>('[data-floating-section-context]');
-      const sectionLabel = document.querySelector<HTMLElement>('[data-floating-section-title]');
-      const controlsSlot = document.querySelector<HTMLElement>('[data-floating-controls-slot]');
-      const isPopularIslands = document.body.dataset.floatingIslands === 'popular';
-      const topBandDesktop = matchMedia('(min-width: 760px)');
-      const rail = isPopularIslands
-        ? document.querySelector<HTMLElement>('[data-islands-eligible-controls]')
-        : null;
-      const railHome = rail?.parentNode || null;
-      const railMarker = rail && railHome ? document.createComment('floating-islands-rail-home') : null;
-      let activeSection: { title: string; target: HTMLElement } | null = null;
-      let title: HTMLElement | undefined;
-      let scheduled = false;
-      const visible = (node: Element) => {
-        const box=node.getBoundingClientRect();
-        return box.width>2 && box.height>2 && getComputedStyle(node).visibility!=='hidden';
-      };
-      const restoreRail = () => {
-        if (!rail || !railHome || !railMarker || rail.parentNode === railHome) return;
-        railMarker.replaceWith(rail);
-      };
-      const moveRailToTopBand = () => {
-        if (!rail || !railHome || !railMarker || !controlsSlot || rail.parentNode === controlsSlot) return;
-        rail.before(railMarker);
-        controlsSlot.append(rail);
-      };
-      const updateContext = () => {
-        scheduled=false;
-        title=[...document.querySelectorAll<HTMLElement>('h1')].find(node=>visible(node) && !node.classList.contains('sr-only'))
-          || document.querySelector<HTMLElement>('[data-floating-context-label]') || undefined;
-        if (!pageContext || !title) {
-          pageContext?.setAttribute('hidden', '');
-          controlsSlot?.setAttribute('hidden', '');
-          sectionContext?.setAttribute('hidden', '');
-          restoreRail();
-          document.body.dataset.floatingContext='unavailable';
-          return;
-        }
-        const text=(title.dataset.floatingContextLabel || title.textContent || '').replace(/\s+/gu,' ').trim();
-        const suspended=[...document.querySelectorAll('details[data-mobile-discovery-menu][open],dialog[open],[aria-modal="true"]')].some(visible);
-        const pastTitle=title.getBoundingClientRect().bottom<64;
-        const show=!suspended && (pastTitle || pageContext.contains(document.activeElement));
-        const useTopBand=isPopularIslands && topBandDesktop.matches && !suspended && pastTitle;
-        const mobileSummary=!topBandDesktop.matches && activeSection?.title
-          ? `${text} · ${activeSection.title}`
-          : text;
-        const label = pageContext.querySelector<HTMLElement>('[data-floating-page-title]');
-        const trigger = pageContext.querySelector<HTMLButtonElement>('button');
-        if (label) label.textContent=mobileSummary;
-        trigger?.setAttribute('aria-label',`Наверх, к заголовку «${text}»`);
-        pageContext.hidden=!show;
-        controlsSlot && (controlsSlot.hidden=!useTopBand);
-        if (sectionContext) {
-          sectionContext.hidden=!(useTopBand && activeSection);
-          sectionContext.setAttribute('aria-label', activeSection ? `Текущий раздел: ${activeSection.title}. Перейти к заголовку раздела` : 'Текущий раздел');
-        }
-        if (sectionLabel) sectionLabel.textContent=activeSection?.title || '';
-        const focusLocked=Boolean(rail?.contains(document.activeElement));
-        if (useTopBand && !focusLocked) moveRailToTopBand();
-        else if (!useTopBand) restoreRail();
-        topBand?.toggleAttribute('data-floating-top-band-active', useTopBand);
-        document.body.dataset.floatingContext=suspended?'suspended':show?'visible':'at-title';
-      };
-      const scheduleContext = () => { if (!scheduled) { scheduled=true; requestAnimationFrame(updateContext); } };
-      document.addEventListener('kenigevents:section-context', ((event: CustomEvent<{ title?: string; target?: HTMLElement }>) => {
-        const detail=event.detail;
-        activeSection=detail?.title && detail.target ? { title:detail.title, target:detail.target } : null;
-        scheduleContext();
-      }) as EventListener);
-      window.addEventListener('scroll',scheduleContext,{passive:true});
-      window.addEventListener('resize',scheduleContext,{passive:true});
-      topBandDesktop.addEventListener?.('change',scheduleContext);
-      window.addEventListener('pageshow',scheduleContext);
-      document.addEventListener('toggle',scheduleContext,true);
-      document.addEventListener('focusin',scheduleContext);
-      document.addEventListener('focusout',scheduleContext);
-      pageContext?.querySelector<HTMLButtonElement>('button')?.addEventListener('click',()=>{
-        if (!title) return;
-        const target=title, previous=target.getAttribute('tabindex');
-        target.setAttribute('tabindex','-1'); target.focus({preventScroll:true});
-        target.addEventListener('blur',()=>{if(previous===null)target.removeAttribute('tabindex');else target.setAttribute('tabindex',previous);},{once:true});
-        window.scrollTo({top:0,behavior:'instant'}); scheduleContext();
-      });
-      sectionContext?.addEventListener('click',()=>{
-        const target=activeSection?.target;
-        if (!target) return;
-        const previous=target.getAttribute('tabindex');
-        target.setAttribute('tabindex','-1');
-        target.focus({preventScroll:true});
-        target.scrollIntoView({block:'start',behavior:'smooth'});
-        target.addEventListener('blur',()=>{if(previous===null)target.removeAttribute('tabindex');else target.setAttribute('tabindex',previous);},{once:true});
-      });
-      updateContext();
+      initShellFloatingIslands();
       // AR-17: the existing shell owns the measured lower stack. Surface
       // runtimes keep their queue/modality/actions; they consume one offset.
       {
@@ -2823,7 +2608,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             // The menu summary is already the mobile-brand participant above;
             // do not bind it again as a desktop menu rectangle.
             ['section-context','[data-floating-section-context]'],
-            ['eligible-controls','[data-floating-controls-slot] > [data-islands-eligible-controls]'],
+            ['eligible-controls','[data-floating-controls-slot] [data-island-city-toggle], [data-floating-controls-slot] [data-listing-city-filter], [data-floating-controls-slot] [data-mobile-v23-city-picker] > summary'],
+            ['section-navigation','.site-nav'],
+            ['period-time','[data-floating-utility-slot] > [data-island-utility]'],
+            ['weekend-days','body[data-floating-context="visible"] .ke-weekend-heads'],
+            ['city-disclosure','[data-island-city-open] [data-island-city-panel]'],
             ['date','[data-mobile-date-accessory]'], ['event-cta','.mobile-sticky-cta'],
             ['notification','[data-mobile-toast-region]'],
           ];
@@ -2842,6 +2631,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         window.visualViewport?.addEventListener('resize',scheduleLowerStack,{passive:true});
         window.visualViewport?.addEventListener('scroll',scheduleLowerStack,{passive:true});
         document.addEventListener('toggle',scheduleLowerStack,true);
+        document.addEventListener('kenigevents:island-layout',scheduleLowerStack);
         // A fading dialog is observable before it is visually modal: the mutation
         // from `hidden=false` / `.is-open` can land while opacity is still zero.
         // Sync again when that same surface settles (or its fade is cancelled).
@@ -2866,10 +2656,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         try { stored = JSON.parse(localStorage.getItem(EXHIBITIONS_STATE_KEY) || 'null'); } catch {}
         const value = exhibitionsUnreadBadge(Array.isArray(ids) ? ids : [], stored);
         document.querySelectorAll<HTMLElement>('[data-header-badge="exhibitions"]').forEach(badge => {
-          badge.hidden = value.hidden;
+          const compact = Boolean(badge.closest('.site-nav,[data-mobile-discovery-menu]'));
+          badge.hidden = compact ? value.count === 0 : value.hidden;
+          if (compact) badge.setAttribute('aria-label', value.text);
           badge.classList.toggle('is-soft', value.soft);
           const text = badge.querySelector('[data-header-badge-count]');
-          if (text) text.textContent = value.text;
+          if (text) text.textContent = compact ? String(value.count) : value.text;
         });
       };
       syncExhibitionsBadge();

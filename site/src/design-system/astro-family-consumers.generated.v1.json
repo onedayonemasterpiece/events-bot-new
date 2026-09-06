@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "19d1be363c5347743ff4f75f69bb032017a7ee8161aa6418b29a9e75c23c0eca",
+  "registry_sha256": "3763067fa4f5a530691d93c74c6b05735fd544df19bd3f8936ee2a856deb8627",
   "source_root": "site/src",
-  "import_inventory_sha256": "5afa24e20e6608779e15ac98431bbed9dc63fe3e7d59190c527e8c49d3c4d2bf",
+  "import_inventory_sha256": "9657c3325a416dfdedb0513078865e0a1fde178c4ae6ca3c2186f0170ba05936",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -249,8 +249,10 @@
       "site/src/lib/clubs.ts",
       "site/src/lib/connectivityDiagnostic.test.ts",
       "site/src/lib/connectivityDiagnostic.ts",
+      "site/src/lib/contentFloatingIslands.mjs",
       "site/src/lib/desktopEventPresentation.ts",
       "site/src/lib/desktopEventTransport.ts",
+      "site/src/lib/desktopFloatingIslands.mjs",
       "site/src/lib/emailOtp.test.ts",
       "site/src/lib/emailOtp.ts",
       "site/src/lib/event-medallions.test.mjs",
@@ -287,12 +289,14 @@
       "site/src/lib/icsFilenames.mjs",
       "site/src/lib/idempotentOutbox.ts",
       "site/src/lib/imageCrop.mjs",
+      "site/src/lib/islandSurface.mjs",
       "site/src/lib/keyboardEventNavigation.mjs",
       "site/src/lib/listing-medallions.test.mjs",
       "site/src/lib/listingChronology.ts",
       "site/src/lib/listingPresentation.ts",
       "site/src/lib/listingVenueMedallions.ts",
       "site/src/lib/mobileDiscoveryRoutes.ts",
+      "site/src/lib/mobileFloatingIslands.mjs",
       "site/src/lib/mobileListingRailMedia.mjs",
       "site/src/lib/onboarding/standard-placement-context.test.ts",
       "site/src/lib/onboarding/standard-placement-context.ts",
@@ -321,6 +325,7 @@
       "site/src/lib/savedEvents.ts",
       "site/src/lib/seo.ts",
       "site/src/lib/service-share/controller.js",
+      "site/src/lib/shellFloatingIslands.mjs",
       "site/src/lib/shellOccupiedSpace.mjs",
       "site/src/lib/staticAuthReset.ts",
       "site/src/lib/staticCollections.ts",
@@ -376,6 +381,8 @@
       "site/src/pages/zavtra/index.astro",
       "site/src/scripts/prelaunchForm.ts",
       "site/src/styles/design-system.css",
+      "site/src/styles/floating-islands.css",
+      "site/src/styles/mobile-floating-islands.css",
       "site/src/styles/prelaunch-calibration.css",
       "site/src/styles/prelaunch-consent.css",
       "site/src/styles/prelaunch-page.css",
@@ -387,17 +394,17 @@
   "summary": {
     "product_family_count": 107,
     "family_count": 109,
-    "source_file_count": 322,
-    "import_edge_count": 822,
-    "direct_consumer_edges": 275,
+    "source_file_count": 329,
+    "import_edge_count": 829,
+    "direct_consumer_edges": 273,
     "protocol_consumer_edges": 33,
     "runtime_factory_edges": 1,
-    "runtime_consumer_edges": 4,
-    "production_route_edges": 547,
+    "runtime_consumer_edges": 6,
+    "production_route_edges": 545,
     "unique_direct_consumers": 119,
     "unique_protocol_consumers": 33,
     "unique_runtime_factories": 1,
-    "unique_runtime_consumers": 4,
+    "unique_runtime_consumers": 5,
     "unique_production_routes": 27
   },
   "families": {
@@ -1049,7 +1056,7 @@
       ]
     },
     "PopularListingSurface": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/PopularListingSurface.astro",
       "style_owners": [],
       "direct_component_consumers": [
@@ -1107,10 +1114,12 @@
       ]
     },
     "EventLayout": {
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
-        "site/src/layouts/EventLayout.astro"
+        "site/src/layouts/EventLayout.astro",
+        "site/src/styles/floating-islands.css",
+        "site/src/styles/mobile-floating-islands.css"
       ],
       "direct_component_consumers": [
         "site/src/pages/[preview]/index.astro",
@@ -1233,6 +1242,18 @@
           "path": "site/src/layouts/EventLayout.astro",
           "symbols": [
             "shellOccupiedSpace"
+          ]
+        },
+        {
+          "path": "site/src/layouts/EventLayout.astro",
+          "symbols": [
+            "initShellFloatingIslands"
+          ]
+        },
+        {
+          "path": "site/src/lib/shellFloatingIslands.mjs",
+          "symbols": [
+            "initShellFloatingIslands"
           ]
         },
         {
@@ -2600,28 +2621,15 @@
       "version": 6,
       "astro_root": "site/src/components/listings/ListingMobileDensitySwitch.astro",
       "style_owners": [],
-      "direct_component_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
-      "direct_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_consumers": [],
       "runtime_factories": [],
       "runtime_clients": [],
-      "production_routes": [
-        {
-          "pattern": "/populyarnoe/",
-          "source": "site/src/pages/populyarnoe/index.astro"
-        }
-      ],
-      "production_route_patterns": [
-        "/populyarnoe/"
-      ],
-      "production_route_sources": [
-        "site/src/pages/populyarnoe/index.astro"
-      ]
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
     },
     "ArtifactCollection": {
       "version": 1,
@@ -4099,7 +4107,7 @@
       ]
     },
     "ListingControls": {
-      "version": 1,
+      "version": 6,
       "astro_root": "site/src/components/listings/ListingControls.astro",
       "style_owners": [],
       "direct_component_consumers": [
@@ -4565,28 +4573,15 @@
       "version": 1,
       "astro_root": "site/src/components/listings/PopularMobileAdaptiveRows.astro",
       "style_owners": [],
-      "direct_component_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
-      "direct_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_consumers": [],
       "runtime_factories": [],
       "runtime_clients": [],
-      "production_routes": [
-        {
-          "pattern": "/populyarnoe/",
-          "source": "site/src/pages/populyarnoe/index.astro"
-        }
-      ],
-      "production_route_patterns": [
-        "/populyarnoe/"
-      ],
-      "production_route_sources": [
-        "site/src/pages/populyarnoe/index.astro"
-      ]
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
     },
     "PopularMobileBehaviorRows": {
       "version": 1,
@@ -4616,7 +4611,7 @@
       ]
     },
     "PopularMobileGroupContext": {
-      "version": 1,
+      "version": 3,
       "astro_root": "site/src/components/listings/PopularMobileGroupContext.astro",
       "style_owners": [],
       "direct_component_consumers": [

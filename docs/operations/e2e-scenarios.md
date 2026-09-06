@@ -123,3 +123,7 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - ссылка на `/log <event_id>`,
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
+
+### Floating-island archetype review
+
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/island-archetypes.playwright.mjs` runs the seven specimens defined in `site/scripts/write-island-archetype-index.mjs`: anonymous Chromium384/1440, top/mid/settled geometry, city disclosure and real original mobile filtering. This is L1 preview evidence, not live Telegram E2E or Android/iOS acceptance. Canonical scope: [Astro preview](../features/static-site-pages/astro-preview.md#floating-island-archetypes--2026-09-06-owner-review).

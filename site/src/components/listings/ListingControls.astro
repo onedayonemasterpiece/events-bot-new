@@ -13,10 +13,12 @@ const showCities = cities.length > 1;
   class="ke-listing-controls"
   aria-label="Фильтры списка"
   data-ds-component="ListingControls"
-  data-ds-version="5"
+  data-ds-version="6"
   data-listing-controls
 >
   {showCities ? (
+    <button type="button" data-island-city-toggle aria-expanded="false" aria-label="Выбор городов" hidden><span>Все города</span></button>
+    <div data-island-city-panel>
     <fieldset class="ke-city-filter ke-city-filter--direct" data-listing-city-filter>
       <legend>Города</legend>
       <label class="ke-filter-chip ke-filter-chip--all" data-listing-city-count={total}>
@@ -32,6 +34,8 @@ const showCities = cities.length > 1;
         </label>
       ))}
     </fieldset>
+    <button type="button" data-island-city-close hidden>Закрыть</button>
+    </div>
   ) : null}
   <p class="ke-visually-hidden" role="status" aria-live="polite" data-listing-result-status></p>
   <div class="ke-listing-empty" data-listing-empty hidden>

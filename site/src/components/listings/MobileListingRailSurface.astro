@@ -65,13 +65,13 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
   <div class="feed-head">
     <div class="feed-head__copy"><strong>{feedTitle}</strong><span>{feedMeta}</span></div>
     {cities.length > 1 ? (
-      <details class="city-picker" data-mobile-v23-city-picker>
-        <summary data-mobile-v23-city-label>Вся область</summary>
-        <div class="city-picker__panel" role="group" aria-label="Города">
+      <div class="city-picker" data-mobile-v23-city-picker data-listing-controls>
+        <span data-mobile-v23-city-label hidden>Вся область</span><button type="button" data-island-city-toggle aria-expanded="false">Выбрать город</button>
+        <div class="city-picker__panel" data-island-city-panel><div data-listing-city-filter role="group" aria-label="Города">
           <button type="button" data-mobile-v23-city="all" aria-pressed="true"><span>Вся область</span><b>{total}</b></button>
           {cities.map((city) => <button type="button" data-mobile-v23-city={city.name} aria-pressed="false"><span>{city.name}</span><b>{city.count}</b></button>)}
-        </div>
-      </details>
+        </div><button type="button" data-island-city-close hidden>Закрыть</button></div>
+      </div>
     ) : <span class="city-pill">Вся область</span>}
   </div>
   <div class="mobile-v23-sections">

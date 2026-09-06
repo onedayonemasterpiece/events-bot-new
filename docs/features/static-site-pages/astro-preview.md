@@ -1279,3 +1279,50 @@ failed this stale post-build source assertion, so it was not published. The fail
 run removed its transient dist before archiving; the checked artifact is absent,
 so a checker-fixed successor requires a new same-corpus build, not an unchecked
 upload or false resume of a nonexistent archive.
+
+
+## Floating-island archetypes — 2026-09-06 owner review
+
+The owner accepted mobile12 as the base (not a production release). This branch
+imports that exact city kinetic approach into the shared EventLayout, replacing
+its old Popular-only observer. Mobile city docking begins within48px, uses
+540ms `cubic-bezier(.25,.1,.25,1)` and native sticky holding plus180ms settling;
+no animation time seeking, scroll-written city Y, font-size animation or text
+crossfade. Original tag, card/media owners and lower occupied-space owner remain.
+
+`islandSurface.mjs` adapts original ListingControls checkboxes and mobile rail city
+buttons, delegating selection to their existing filtering/storage handlers.
+Date/weekend use their visible representation's heading/filter, never the hidden
+desktop H1. The retired mobile sticky title and second sticky day label are
+suppressed; day headings remain in normal flow and full text becomes context.
+Desktop parallel weekend lanes do not claim a single active day. The nav fits
+whole destinations; overflow retains the current route and Clubs.
+
+Pages without city controls use `contentFloatingIslands.mjs`: no invented filter
+or second shell. On mobile the actual H1 retains its flow placeholder and travels
+on the browser scroll timeline into a separately revealing skin; full visible H2
+supplies context. On desktop only section context is shown, not a duplicate page
+menu label. Exhibition modes/categories, festival month links and event actions
+retain their original owners; old top control rails no longer create a fixed
+second tier. Long festival headings are intentionally a stress specimen.
+
+Bounded build `preview-islands-20260906-archetypes1`: seven real routes (Popular,
+Today, explicit23July, Weekend, Exhibitions, Festivals, event5370), plus the review
+index and robots. No full build, Kaggle, main/root promotion or voice changes.
+`site/scripts/write-island-archetype-index.mjs` writes the focused index; all pages
+carry a truthful historical23July catalog disclosure. Other routes are not part
+of this preview; shared-source rollout is not a claim that the full site shipped.
+
+Checks (`anonymous`, trigger tags `static-route,visual-layout`):
+- `node --test site/tests/island-archetypes.test.mjs` — fitting, original city-owner
+  delegation, route coverage/exclusions, accepted time easing.
+- `CHECK_BASE=<prefix URL> CHECK_OUTPUT=<artifacts dir> node
+  site/tests/island-archetypes.playwright.mjs` — real rendered384/1440 specimens,
+  top/intermediate/settled states, horizontal overflow, runtime errors, city popup
+  and actual mobile row filtering. `CHECK_WIDTHS` selects additional widths.
+- Evidence under `artifacts/codex/islands-archetypes-20260906/`; no video.
+
+This is a source-saved review preview, not DS/Penpot certification, current-event
+validation, authenticated API acceptance, native Android/iOS or production release.
+The owner will inspect the phone. Full catalog/emulator/native-system runs are not
+part of this bounded CSS/DOM archetype review; no Auth/PWA/provider changes made.

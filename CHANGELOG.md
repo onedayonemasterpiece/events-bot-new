@@ -13,6 +13,10 @@ public festival/club counts and native Penpot acceptance remain open.
 
 ## [Unreleased]
 
+### Changed
+- Extend accepted mobile12 floating-island kinetics to date/weekend city owners and city-free content archetypes; preserve original filters, full section headings and actions. Add a seven-page focused review index and browser checks, without a full site build or root publication.
+
+
 ### Fixed
 - Listing cards now also fill their frames after natural-ratio allocation; shared MediaFrame replaces a competing route-level contain rule that left small bands on Today/Tomorrow/Date. Mobile rails retain natural dimensions while absorbing thumbnail rounding without bands. Missing/broken resource behavior is preserved.
 - Token-impact graph and consumer-closure checks recognize the approved exhibition shared-card radius alias and reject private literal substitutions; frozen preview runtime is unchanged.
