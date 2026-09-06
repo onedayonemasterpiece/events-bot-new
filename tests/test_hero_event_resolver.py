@@ -1,22 +1,17 @@
 from datetime import datetime, timezone
 from dataclasses import replace
-import importlib.util
-from pathlib import Path
 import sqlite3
-import sys
 
 import pytest
+import pytest_asyncio
+from hero_talk import resolver as r
 from db import Database
 from models import Event
 from static_site_release import event_public_revision
 
-spec = importlib.util.spec_from_file_location('tested_hero_resolver', Path(__file__).parents[1] / 'hero_talk/resolver.py')
-r = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = r
-spec.loader.exec_module(r)
 NOW = datetime(2026, 9, 6, 10, tzinfo=timezone.utc)
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def canonical(tmp_path, monkeypatch):
     monkeypatch.setenv('DB_INIT_SKIP_VK_SOURCES_SEED', '1')
     db = Database(str(tmp_path / 'event.sqlite'))
