@@ -74,3 +74,26 @@ shared assistant tests retain capture/compression/streaming/worklet/dialogue cov
 Physical-phone microphone, real Auth/ASR/provider checks, rendered final home composition
 and published preview acceptance belong to the integration owner; no full build or
 production promotion is authorized by this lane.
+
+## Home review: navigation-only launcher (v2)
+
+The home review uses the existing `floating-link` variant without starting capture on
+home. It preserves `inline-capture` and its durable handoff contract for consumers
+that explicitly choose it. The floating link now displays the **unchanged** microphone
+SVG from `ConversationalSearch.astro` (26px outline microphone), verified against the
+published `/preview-voice-plan-20260906/poisk/` HTML on 2026-09-06; it is not the lower
+navigation magnifying-glass icon and introduces no new icon geometry.
+
+The launcher resolves `/poisk/` with `mobileDiscoveryHref`, `BASE_PATH` and the same
+`PUBLIC_MOBILE_SEARCH_BASE_URL` used by the existing mobile discovery navigation.
+The integration review config must set that base to
+`https://kenigevents.ru/preview-voice-plan-20260906`, so it opens the approved Search
+prototype rather than the old bundled Search page. No hostname/prefix is hardcoded in
+the component; normal local-prefix fallback remains available outside that review.
+The launcher is a link: activation navigates but does not request microphone permission.
+
+`HomeQuickNav` v2 variant `rectangular-grid` consumes shared `Button secondary` controls,
+uses the existing control-radius role, fills each cell, and lays out two equal columns
+on mobile and three from 768px. Available collection filtering and existing destination
+paths remain unchanged. Parent integration owns registry/CHANGELOG synchronization and
+final page publication. Narrow regression test: `site/tests/home-voice-review.test.mjs`.
