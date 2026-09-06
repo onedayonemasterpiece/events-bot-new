@@ -45,7 +45,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   const pendingTurns=new Map<string,ConversationTurn>();
   const auth=getStaticSiteAuth({supabaseUrl:search.dataset.supabaseUrl||'',relayUrl:search.dataset.supabaseRelayUrl||'',publishableKey:search.dataset.supabaseKey||'',provider:search.dataset.yandexProvider});
   const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner,()=>!captureOnly,root.dataset.assistantHost==='devcoveer');
-  const showError=(error:unknown,searchId?:string)=>{const turn=searchId?pendingTurns.get(searchId):undefined;if(turn){settleConversationTurn(turn,'error',errorText(error));turn.body.append(button('Проверить обработку',()=>controller?.resume()));}processing.textContent=errorText(error);if(!capture||!['requesting','recording'].includes(capture.status))presentation?.message(processing.textContent);resume.hidden=!state.draft;};
+  const showError=(error:unknown,searchId?:string)=>{const turn=searchId?pendingTurns.get(searchId):undefined;if(turn){settleConversationTurn(turn,'error',errorText(error));turn.body.append(button('Проверить обработку',()=>controller?.resume()));}processing.textContent=errorText(error);if(!capture||!['requesting','recording'].includes(capture.status))presentation?.setCapture('error',processing.textContent);resume.hidden=!state.draft;};
   const showComposer=()=>presentation?presentation.open():get('composer').scrollIntoView({block:'start'});
   const stopForOverlay=async()=>{if(capture&&['requesting','recording','stopping'].includes(capture.status))await capture.stop('interrupted');};
   root.dataset.assistantStartup='opening_storage';delete root.dataset.assistantStartupError;
@@ -159,7 +159,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   text.addEventListener('input',()=>{transcriptRevision++;});
   async function transcribeRecording(own:string,id:string,revision=transcriptRevision,autoSend=false,anchor=new Date().toISOString()){
     if(captureOnly||owner!==own)return;
-    processing.textContent='Распознаю речь…';presentation?.message(processing.textContent);
+    processing.textContent='Распознаю речь…';if(!capture||!['requesting','recording','stopping'].includes(capture.status))presentation?.setCapture('transcribing',processing.textContent);else presentation?.message(processing.textContent);
     try{
       const result=await api.transcribe(own,id,await store.parts(own,id),root.dataset.assistantHost==='devcoveer'?await store.compressed(own,id):null);
       if(result.state!=='completed')throw new Error(result.error||`voice_${result.state}`);
@@ -261,7 +261,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     void presentation?.close();
     const turn=createConversationTurn(raw);answers.append(turn.section);
     turn.section.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
-    presentation?.message('Ищу события · можно дополнить голосом');
+    if(!capture||!['requesting','recording','stopping'].includes(capture.status))presentation?.setCapture('idle','Ищу события · можно дополнить голосом');
     const active=controller,own=owner,currentMode=mode,parent=selectedBase,ids=visibleIds(parent);
     if(!controllerReady||!active){settleConversationTurn(turn,'error','Поиск ещё подключается. Запрос сохранён в записи; повторите после подключения.');return;}
     try{

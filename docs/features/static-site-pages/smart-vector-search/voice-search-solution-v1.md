@@ -559,3 +559,16 @@ clarification and verified factual answers retain precedence. No extra model cal
 or billable replay. Legacy receipts without the optional field remain readable.
 `title` is prompted as the minimal what/where/when set (prefer <=80 characters);
 it is not obtained by truncating the raw question.
+
+
+Integration checks before publication: 110 unit/kernel/provider-fixture tests,
+14 host/SQLite tests, strict assistant TypeScript (dependency declarations skipped),
+provider audit (`allowlisted_debt=0`, `unapproved=0`), source-surface contract PASS.
+Native integration: 13 browser cases PASS; the actual-freeze case requires
+`xvfb-run -a` and passed separately (the initial headless invocation correctly
+failed its headed-visibility precondition). Shell boundary fixture: four rendered
+widths (320, 390, 430, 1440) PASS after isolating the explicit fixture adapter from
+the real state owner and using instant test scrolling rather than sampling mid
+smooth-scroll. These fixtures are not substitutes for the following live checks.
+ASR waiting uses the mic ring loader with reduced-motion support; the skeleton
+begins only once actual ASR text is available.

@@ -7,6 +7,8 @@ if(!base||!out)throw Error('CHECK_BASE and CHECK_OUTPUT are required');
 mkdirSync(out,{recursive:true});const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined}),checks=[];
 for(const width of [320,390,430,1440]) {
   const page=await browser.newPage({viewport:{width,height:900}});
+  // Isolate the shell adapter fixture from the real Search state owner.
+  await page.route('**/ConversationalSearch*.js',route=>route.fulfill({contentType:'text/javascript',body:''}));
   await page.goto(`${base}/poisk/`);await page.evaluate(()=>document.fonts.ready);
   const locator=page.locator('[data-search-topic-locator]');assert.equal(await locator.count(),1);
   const first='Джаз в Калининграде завтра вечером',second='Бесплатные выставки в Светлогорске в следующие выходные';
@@ -27,7 +29,7 @@ for(const width of [320,390,430,1440]) {
   for(const [id,title] of [['topic-a',first],['topic-b',second]]) {
     await page.evaluate(({id,title})=>{
       window.__topicState={...window.__topicState,viewedSectionId:id,viewedTitle:title};
-      document.getElementById(`assistant-answer-${id}`).scrollIntoView();
+      document.getElementById(`assistant-answer-${id}`).scrollIntoView({behavior:'instant'});
       window.dispatchEvent(new CustomEvent('kenigevents:search-context-changed',{detail:window.__topicState}));
     },{id,title});await page.waitForTimeout(150);
     if(width<760){

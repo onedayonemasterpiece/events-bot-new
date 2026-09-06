@@ -5,7 +5,8 @@
 
 - Changed: conversational voice preview sends fresh complete ASR into the existing
   durable Search flow without mandatory confirmation, immediately showing the full
-  question as a chat bubble and shared answer/card skeletons. Replies replace their
+  question as a chat bubble and shared answer/card skeletons; an accessible mic-ring
+  loader marks ASR waiting, with reduced-motion support. Replies replace their
   own pending state, follow-ups append, and failed/superseded turns stop shimmering.
   Optional typed input and recovery remain available without a recording modal.
   Conservative silence endpointing auto-stops complete utterances without trimming
