@@ -1730,3 +1730,18 @@ state are preserved. This is anonymous L1 native Chromium touch injection, not
 physical-phone certification. Focused successor: `preview-islands-menu-20260906`,
 same historical corpus and approved editorial drafts; no full build or root
 promotion. Evidence: `artifacts/codex/islands-menu-20260906/`.
+
+Published source: `591a1e06148e07dfec1910db9623ccf5a3f4aa30`, PR639.
+[Date](https://kenigevents.ru/preview-islands-menu-20260906/date-2026-07-23/),
+[Weekend](https://kenigevents.ru/preview-islands-menu-20260906/vyhodnye/).
+All15 route/support files and the public manifest were read back byte-exact.
+PASS:20 L0, surface contract, local/public native menu suite4 plus no-JS and
+reduced motion; local sequential city/calendar320/390/430 plus reduced motion.
+The menu suite also checks service/back, collections reset and breakpoint
+close/release. Supplementary public checks verify expanded-calendar occlusion
+and preservation of the page's scrolled position. Public screenshots inspected.
+CI [34030418199](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34030418199)
+contract/facts/gate PASS; CI browser skipped, public L1 was run separately.
+The optional desktop outside-click probe was not applicable at1440px, where
+this mobile disclosure is hidden in favor of normal desktop navigation; it is
+not counted as passing desktop interaction evidence.
