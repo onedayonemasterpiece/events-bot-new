@@ -206,3 +206,33 @@ probe or database metadata events were in this first report; user asked to run
 the explicit isolated probe and resend. No data reset, schema bypass or second
 recording/search kernel was introduced. Physical report artifact:
 `artifacts/codex/voice-diagnostics-20260906/phone/telegram-1453.json`.
+
+### Physical isolated probe and restart recovery — 2026-09-06
+
+- Correct report arrived in Telegram1454 after user clarified earlier copies
+  were pasted into Saved Messages, not topic1030. The diagnostic UI was not
+  shown to be broken; both agent and parent native-touch/copy checks passed.
+  Additional diagnostic-entry UX work is superseded, not deployed.
+- Physical Chrome152: main attempt still had no terminal event at146321ms;
+  metadata reports voice DB **version2**, isolated v1 probe succeeds in34ms
+  (146321→146355), exact disposable cleanup complete at146360ms. This rules out
+  blanket IndexedDB unavailability in this measured context, and localizes the
+  wait to the existing voice DB/version transition. Saved unchanged as
+  `artifacts/codex/voice-diagnostics-20260906/phone/telegram-1454.json`.
+- Native supplementary causal reproduction: raw CDP in headed Chrome143,
+  synthetic isolated profile, genuine hidden/freeze events on a v2 connection
+  that DOES have `onversionchange => close()`: v3 waits silently for8.26s;
+  independent v1 opens; resume dispatches versionchange/close then upgrade and
+  success; sentinel bytes17,29 unchanged. Unlike the earlier focus-emulated
+  Playwright attempt, actual freeze was observed. Worker artifacts:
+  `voice-regression/artifacts/codex/voice-regression/raw-cdp-freeze-8s.{json,mjs}`.
+  Spec opening step10.3 waits for versionchange dispatch before deciding blocked:
+  https://w3c.github.io/IndexedDB/#opening . This reproduces the mechanism but
+  does not identify which earlier context on the user's phone held a connection.
+- User independently rebooted the phone and reported recording restored, with
+  ready-to-confirm transcript. No agent deletion/reset/uninstall performed.
+  DevCoveer read-only metadata corroborates two new ASR operations completed:
+  11:49:22→11:49:25UTC and11:49:57→11:50:00UTC. No audio/transcript content read.
+- Immediate user impact recovered; no permanent prevention claim yet. Await
+  user card/search/refinement confirmation. Do not replace the kernel or create
+  a second recording database merely to bypass this diagnosed upgrade lock.
