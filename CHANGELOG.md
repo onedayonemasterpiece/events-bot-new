@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added immutable operation-specific domain receipts in the canonical Event
+  transaction and current partner ownership/policy guards for every accepted
+  Smart Update path; foreign merges roll back before commit, and receipts never
+  imply publication success or source-URL-only recovery (#643).
+
 - Added current durable partner actor-policy resolution over existing grants and credential epochs without manufacturing an OAuth identity; token scope checks remain mandatory for live callers (#643).
 
 - Registered all #643 HT-AF-01…22 and MCP-HT-01…06 acceptance IDs in the existing MCP v2 registry, explicitly distinguishing partial component tests from unrun full/live acceptance.

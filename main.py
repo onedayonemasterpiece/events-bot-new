@@ -17405,8 +17405,14 @@ async def add_events_from_text(
     require_single_event: bool = False,
     allow_festival_queue: bool = True,
     allow_lifecycle_actions: bool = True,
+    event_operation_context: dict[str, Any] | None = None,
 
 ) -> AddEventsResult:
+    from event_operation_receipts import validate_event_operation_context
+
+    event_operation_context = validate_event_operation_context(event_operation_context)
+    if event_operation_context is not None and not require_single_event:
+        raise ValueError("event_operation_context_requires_single_event")
     logging.info(
         "add_events_from_text start: len=%d source=%s", len(text), source_link
     )
@@ -18105,6 +18111,7 @@ async def add_events_from_text(
                 else ("vk" if is_vk_wall_url(source_link) else "manual")
             )
             candidate = EventCandidate(
+                event_operation_context=event_operation_context,
                 source_type=source_type_override or computed_source_type,
                 source_url=source_url_override or source_link or source_marker,
                 source_text=source_text_clean,

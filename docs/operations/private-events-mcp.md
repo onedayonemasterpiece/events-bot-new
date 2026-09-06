@@ -356,6 +356,65 @@ content. Integration must inject current tenant policy and attach it to the
 accepted-operation read path. Tests:
 `tests/test_private_events_mcp_event_publication_receipts.py`.
 
+### Transactional domain acceptance proof and partner mutation guard (#643)
+
+The internal `main.add_events_from_text(..., event_operation_context=...)` input
+is optional and requires `require_single_event=True`. Context consists of exact
+`operation_ref`, `action_digest`, `actor_subject`, `actor_client_id`,
+`actor_audience`; partner actors additionally require positive
+`partner_policy_revision`. Only the trusted MCP adapter supplies it after its
+atomic processing claim. It is copied into `EventCandidate` as private provenance,
+excluded from repr, source identity, packet fingerprint and model prompt fields.
+The existing candidate-attempt `candidate_payload` may persist it privately;
+public EventSource text/facts and Event fields must never receive it.
+
+`event_operation_receipts.record_event_operation_receipt` writes only additive
+nullable `event_change_log.domain_receipt_json` in the **same SQLAlchemy session
+and transaction before the accepted Event/EventSource commit**. Covered paths:
+normal create, normal merge, final-probe race merge, context attachment and exact
+packet no-op. The no-op path opens its own receipt transaction and rechecks the
+exact EventSource candidate/occurrence/fingerprint, never just the source URL.
+No context means a strict no-op, preserving legacy intake and previous-binary
+compatibility; `Database.init` adds the nullable column idempotently.
+
+Receipt schema `event-operation-domain-receipt-v1` contains the context fields
+plus `event_id`, `effect` (`created|merged|noop_exact_replay`), `candidate_key`,
+`occurrence_key`, `candidate_state_id`, `attempt_no`, `source_fingerprint`.
+The helper requires the exact processing create ledger binding, an existing
+positive Event ID, and the matching open SmartUpdateAttempt whose candidate
+payload carries that context. Stored proof is immutable; conflicting proof,
+actor, digest, attempt or state rolls back the containing Event/source/fact
+transaction. It never overwrites `organizer_comment`, `result_json` or operation
+status and makes no publication/fan-out claim. Mutable source revisions cannot
+overwrite the operation-specific historical receipt.
+
+For partner contexts, `guard_event_operation_context` reuses current
+`PartnerAccessStore.resolve_durable` through the **same connection**, without a
+new token/identity or a second policy connection. It enforces current principal,
+client/resource, epoch, active/expiry, `partner:events:propose`, `event_create`,
+and the exact policy revision in both stored request and current grant. A
+resolved existing target requires this exact principal's current portfolio
+ownership. Foreign merges/context/no-op are rejected and rolled back; they are
+never converted into a forced new event. Guards run when targets resolve and
+again at the final receipt boundary. SQLite write ownership is acquired only at
+that final boundary, not held across LLM calls. A concurrent policy change must
+be observed or cause a failed write upgrade/rollback, never a stale commit.
+
+Crash limits remain explicit: parser/model work, private/public poster ingress,
+candidate-attempt and identity-decision audit writes can precede canonical
+acceptance and are not rolled back by the domain transaction. Topic/holiday/
+linked-event derived work, attempt acknowledgement, fan-out and partner portfolio
+assignment can follow the receipt and fail separately. A receipt proves only
+that domain acceptance committed for this exact operation; it does not prove
+current public content, publication completion or present-day ownership. Missing
+proof remains `outcome_unknown`; source URL/current candidate state alone must
+never authorize recovery. Integration/reconciliation must independently enforce
+current policy, effect-specific partner assignment and honest fan-out status,
+without replaying the parser.
+
+Tests: `tests/test_event_operation_receipts.py`, existing source-identity and
+linear-terminal regression suites.
+
 ## ChatGPT social workspace
 
 When the universal workspace is enabled, ChatGPT can discover only the tools
