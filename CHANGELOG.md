@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added bounded queued-only Events MCP create recovery with persisted actor/digest
+  checks, atomic worker claims and mandatory current authorization; interrupted
+  processing/unknown operations are never automatically replayed (#643).
+
 - Added default-off partner access foundation: independent public OAuth clients
   with S256 PKCE and browser-only partner login, canonical principal/tenant/
   organization/portfolio policy, owner credential lifecycle and per-request

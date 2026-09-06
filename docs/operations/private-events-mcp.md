@@ -173,6 +173,32 @@ source evidence. Until exact-main deploy, OAuth scope refresh and authenticated
 readback pass, this section describes staged runtime code rather than a live
 production capability.
 
+### Queued create restart recovery (#643)
+
+`EventCreateRuntime.recover_queued(authorize=..., limit=100)` provides a bounded
+restart/scheduled recovery hook over the existing canonical ledger. The host
+must invoke it only for the enabled runtime, after database initialization,
+and supply an async current actor-policy check. The check runs after the atomic
+queued→processing claim immediately before the executor; denial records
+`EVENT_CREATE_ACCESS_REVOKED` without a parser/canonical mutation. Policy errors
+fail closed as `outcome_unknown`, not automatic retries.
+
+Recovery preserves the stored subject/client/audience and exact action digest;
+it never creates a Telegram identity. The raw idempotency key is not stored:
+the internal restored request has an empty key and its original persisted hash,
+and goes directly to `_execute`, never prepare/commit. Existing retries retain
+the same ledger identity. Corrupt/unsupported request payloads are atomically
+claimed and quarantined with `EVENT_CREATE_RECOVERY_REQUEST_INVALID`.
+`processing`, `outcome_unknown` and terminal records are never replayed; they
+still require canonical source/event reconciliation. Multiple workers share the
+existing compare-and-set claim. The return value counts locally scheduled tasks,
+not accepted events; callers use operation readback for the outcome.
+
+This hook alone does not install startup scheduling or authorize partner writes.
+The application integration must wire the current policy callback and repeat
+bounded recovery passes for queues larger than the batch limit. Dedicated SQLite
+regressions: `tests/test_private_events_mcp_event_create_recovery.py`.
+
 ## ChatGPT social workspace
 
 When the universal workspace is enabled, ChatGPT can discover only the tools
