@@ -357,12 +357,13 @@ async function captureRuntimeStructuralProjection({
     const home = root.querySelector('[data-home-page]');
     const composition = [...home.querySelectorAll('[data-ds-family]')]
       .map(node => node.dataset.dsFamily)
-      .filter(family => ['HomeHeroTalk','HomeSearchEntry','HomeQuickNav','HomeColdStartFeed','HeroTalkPageEnd'].includes(family));
+      .filter(family => ['HomeHeroTalk','HomeQuickNav','HomeColdStartFeed','HeroTalkPageEnd'].includes(family));
     const pageEnd = home.querySelector('[data-ds-family="HeroTalkPageEnd"]');
     const mode = feed.dataset.homeFeedMode || '';
     return { ...base, route: '/', profile_id: 'home.owner-review.v1', composition,
       shell: { policy: root.dataset.shellComposition || root.dataset.shellPolicy || '',
         global_navigation: Boolean(root.querySelector('.site-nav') && root.querySelector('[data-reference4-fullscreen]')),
+        header_in_flow: !['absolute','fixed'].includes(getComputedStyle(root.querySelector('.site-header')).position),
         top_participant_count: [...root.querySelectorAll('[data-floating-page-context], [data-floating-islands-controls], .site-header__top-band')].filter(visible).length,
         lower_island_count: [...root.querySelectorAll('[data-mobile-bottom-nav]')].filter(visible).length,
         home_chat_count: home.querySelectorAll('[data-conversation-turn], [data-conversation-history], [data-search-result-host]').length },
@@ -413,7 +414,7 @@ async function captureRuntimeStructuralProjection({
   if (surface === 'home') {
     result.provenance.profile_sha256 = sha(readFileSync(profilePath));
     result.behavior_bindings = [...new Set([homeProfile.route_policy.source,
-      ...(homeProfile.behavior_sources || []), ...Object.values(homeProfile.capture_handoff).filter(value => typeof value === 'string' && /\.ts$/u.test(value))])]
+      ...(homeProfile.behavior_sources || []), ...Object.values(homeProfile.capture_handoff || {}).filter(value => typeof value === 'string' && /\.ts$/u.test(value))])]
       .map(path => ({ path, sha256: sha(source(path)) }));
     result.fixture_state = fixtureState;
     validate(result, { expectedSha, expectedEventIds, repoRoot, profilePath });

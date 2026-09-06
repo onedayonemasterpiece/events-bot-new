@@ -7,11 +7,11 @@
   "source_root": "site/src",
   "source_inventory_sha256": "3b82bbe72433da1f5bfdbaa65127f525b60d2eb42e9e3d27343d9e944b69b7ab",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "7912e04509ae507f13a8bdef72c4722c409c71252a179963821a2539e0ed36b1",
+  "astro_family_graph_sha256": "136d8826c9e0df66487c7f29b1ead19c15b604c6a2ab936544e06ec4a8d4fa41",
   "summary": {
     "token_count": 2541,
     "definition_count": 2849,
-    "consumer_count": 3654,
+    "consumer_count": 3661,
     "alias_edge_count": 897,
     "family_count": 112
   },
@@ -2762,6 +2762,36 @@
       "site/src/pages/vystavki/index.astro",
       "site/src/pages/zakrytaya-afisha/index.astro"
     ],
+    "components-43cebdbaff5eb63a": [
+      "site/src/components/brand/AnnouncementsLockup.astro",
+      "site/src/components/design-system/Foundations.astro",
+      "site/src/components/DesktopEventPage.astro",
+      "site/src/components/EventCard.astro",
+      "site/src/components/EventHero.astro",
+      "site/src/components/FocusGroupFeedback.astro",
+      "site/src/components/HomeSearchEntry.astro",
+      "site/src/components/MobileBottomNav.astro",
+      "site/src/components/MobileSearchBottomNav.astro",
+      "site/src/components/SiteFooter.astro",
+      "site/src/layouts/EventLayout.astro",
+      "site/src/pages/artefakty/index.astro",
+      "site/src/pages/dlya-menya/index.astro",
+      "site/src/pages/festivali/index.astro",
+      "site/src/pages/fokus-gruppa/index.astro",
+      "site/src/pages/index.astro",
+      "site/src/pages/izbrannoe/index.astro",
+      "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "site/src/pages/kluby-po-interesam/index.astro",
+      "site/src/pages/partners/index.astro",
+      "site/src/pages/partnerstvo/index.astro",
+      "site/src/pages/podborki/[slug]/index.astro",
+      "site/src/pages/podborki/index.astro",
+      "site/src/pages/poisk/index.astro",
+      "site/src/pages/segodnya/index.astro",
+      "site/src/pages/sobytiya/[slug].astro",
+      "site/src/pages/vystavki/index.astro",
+      "site/src/pages/zakrytaya-afisha/index.astro"
+    ],
     "components-d9837a26710e5395": [
       "site/src/components/AdaptiveEventCardGrid.astro",
       "site/src/components/artifacts/ArtifactCollection.astro",
@@ -5065,7 +5095,7 @@
       "site/src/components/listings/WeekendTimeMatrix.astro",
       "site/src/pages/segodnya/index.astro"
     ],
-    "components-170a8441708b2d6f": [
+    "components-e041dec8b11a9cef": [
       "site/src/components/brand/AnnouncementsLockup.astro",
       "site/src/components/design-system/Foundations.astro",
       "site/src/components/DesktopEventPage.astro",
@@ -5073,6 +5103,7 @@
       "site/src/components/EventHero.astro",
       "site/src/components/FocusGroupFeedback.astro",
       "site/src/components/HeroTalkPageEnd.astro",
+      "site/src/components/HomeSearchEntry.astro",
       "site/src/components/MobileToastRegion.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/layouts/EventLayout.astro",
@@ -32543,6 +32574,341 @@
         ]
       }
     ],
+    "families-70e6b1a4a2be5963": [
+      {
+        "id": "AnnouncementsLockup",
+        "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ArtifactCollectionRouteComposition",
+        "astro_root": "site/src/pages/artefakty/index.astro",
+        "production_route_patterns": [
+          "/artefakty/"
+        ]
+      },
+      {
+        "id": "ClosedFocusHubRouteComposition",
+        "astro_root": "site/src/pages/zakrytaya-afisha/index.astro",
+        "production_route_patterns": [
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "CollectionCatalogRouteComposition",
+        "astro_root": "site/src/pages/podborki/index.astro",
+        "production_route_patterns": [
+          "/podborki/"
+        ]
+      },
+      {
+        "id": "DesktopEventDetailSurface",
+        "astro_root": "site/src/components/DesktopEventPage.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventCard",
+        "astro_root": "site/src/components/EventCard.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "EventDetailRouteComposition",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventHero",
+        "astro_root": "site/src/components/EventHero.astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "EventLayout",
+        "astro_root": "site/src/layouts/EventLayout.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "ExhibitionsRouteComposition",
+        "astro_root": "site/src/pages/vystavki/index.astro",
+        "production_route_patterns": [
+          "/vystavki/"
+        ]
+      },
+      {
+        "id": "FavoritesRouteComposition",
+        "astro_root": "site/src/pages/izbrannoe/index.astro",
+        "production_route_patterns": [
+          "/izbrannoe/"
+        ]
+      },
+      {
+        "id": "FestivalsTimelineRouteComposition",
+        "astro_root": "site/src/pages/festivali/index.astro",
+        "production_route_patterns": [
+          "/festivali/"
+        ]
+      },
+      {
+        "id": "FocusGroupFeedback",
+        "astro_root": "site/src/components/FocusGroupFeedback.astro",
+        "production_route_patterns": [
+          "/dlya-menya/",
+          "/zakrytaya-afisha/"
+        ]
+      },
+      {
+        "id": "FocusGroupProgrammeSurface",
+        "astro_root": "site/src/pages/fokus-gruppa/index.astro",
+        "production_route_patterns": [
+          "/fokus-gruppa/"
+        ]
+      },
+      {
+        "id": "ForMeRouteComposition",
+        "astro_root": "site/src/pages/dlya-menya/index.astro",
+        "production_route_patterns": [
+          "/dlya-menya/"
+        ]
+      },
+      {
+        "id": "Foundations",
+        "astro_root": "site/src/components/design-system/Foundations.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/fokus-gruppa/",
+          "/fokus-gruppa/kollektsiya/",
+          "/fokus-gruppa/priglashenie/",
+          "/fokus-gruppa/zavershenie/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zakrytaya-afisha/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "HomePage",
+        "astro_root": "site/src/pages/index.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "HomeSearchEntry",
+        "astro_root": "site/src/components/HomeSearchEntry.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "InterestClubDetailRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/*/"
+        ]
+      },
+      {
+        "id": "InterestClubsIndexRouteComposition",
+        "astro_root": "site/src/pages/kluby-po-interesam/index.astro",
+        "production_route_patterns": [
+          "/kluby-po-interesam/"
+        ]
+      },
+      {
+        "id": "MaterializedCollectionRouteComposition",
+        "astro_root": "site/src/pages/podborki/[slug]/index.astro",
+        "production_route_patterns": [
+          "/podborki/*/"
+        ]
+      },
+      {
+        "id": "MobileBottomNav",
+        "astro_root": "site/src/components/MobileBottomNav.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "MobileEventDetailSurface",
+        "astro_root": "site/src/pages/sobytiya/[slug].astro",
+        "production_route_patterns": [
+          "/sobytiya/*/"
+        ]
+      },
+      {
+        "id": "MobileSearchBottomNav",
+        "astro_root": "site/src/components/MobileSearchBottomNav.astro",
+        "production_route_patterns": []
+      },
+      {
+        "id": "PartnershipRouteComposition",
+        "astro_root": "site/src/pages/partnerstvo/index.astro",
+        "production_route_patterns": [
+          "/partnerstvo/"
+        ]
+      },
+      {
+        "id": "PartnersRouteComposition",
+        "astro_root": "site/src/pages/partners/index.astro",
+        "production_route_patterns": [
+          "/partners/"
+        ]
+      },
+      {
+        "id": "SearchRouteComposition",
+        "astro_root": "site/src/pages/poisk/index.astro",
+        "production_route_patterns": [
+          "/poisk/"
+        ]
+      },
+      {
+        "id": "SiteFooter",
+        "astro_root": "site/src/components/SiteFooter.astro",
+        "production_route_patterns": [
+          "/",
+          "/artefakty/",
+          "/date-*/",
+          "/dlya-menya/",
+          "/festivali/",
+          "/izbrannoe/",
+          "/kluby-po-interesam/",
+          "/kluby-po-interesam/*/",
+          "/neobychnoe/",
+          "/partners/",
+          "/partnerstvo/",
+          "/podborki/",
+          "/podborki/*/",
+          "/podborki/gastronomiya/",
+          "/poisk/",
+          "/populyarnoe/",
+          "/segodnya/",
+          "/sobytiya/*/",
+          "/vyhodnye/",
+          "/vyhodnye/*/",
+          "/vystavki/",
+          "/zavtra/"
+        ]
+      },
+      {
+        "id": "TodayReviewGuard",
+        "astro_root": "site/src/pages/segodnya/index.astro",
+        "production_route_patterns": [
+          "/segodnya/"
+        ]
+      }
+    ],
     "families-ba38e43943656555": [
       {
         "id": "AdaptiveEventCardGrid",
@@ -50844,7 +51210,7 @@
         "production_route_patterns": []
       }
     ],
-    "families-14719c4e14778a62": [
+    "families-0a8c580787912ea0": [
       {
         "id": "AnnouncementsLockup",
         "astro_root": "site/src/components/brand/AnnouncementsLockup.astro",
@@ -51057,6 +51423,13 @@
       {
         "id": "HomePage",
         "astro_root": "site/src/pages/index.astro",
+        "production_route_patterns": [
+          "/"
+        ]
+      },
+      {
+        "id": "HomeSearchEntry",
+        "astro_root": "site/src/components/HomeSearchEntry.astro",
         "production_route_patterns": [
           "/"
         ]
@@ -66295,7 +66668,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4809,
+          "line": 4810,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -66323,7 +66696,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4808,
+          "line": 4809,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67059,7 +67432,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2645,
+          "line": 2646,
           "scope": "style=",
           "kind": "css",
           "value": "url('${withBase('/assets/ui/desktop-head-leather-r5.webp')",
@@ -67085,7 +67458,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6173,
+          "line": 6174,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67934,7 +68307,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4807,
+          "line": 4808,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67943,7 +68316,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4844,
+          "line": 4845,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67952,7 +68325,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4897,
+          "line": 4898,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68979,7 +69352,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6129,
+          "line": 6130,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -69005,7 +69378,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6127,
+          "line": 6128,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -69031,7 +69404,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6126,
+          "line": 6127,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -74394,6 +74767,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-mobile-nav-border",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-mobile-rail-time-ink",
           "path": "site/src/components/listings/mobile-listing-foundation-bindings.css",
           "line": 164,
@@ -78190,6 +78569,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-mobile-nav-surface",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-personalization-paper",
           "path": "site/src/components/InterestProfile.astro",
           "line": 563,
@@ -79516,6 +79901,12 @@
         "--ke-color-mobile-nav-border"
       ],
       "direct_consumers": [
+        {
+          "token": "--ke-color-mobile-nav-border",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
         {
           "token": "--ke-color-mobile-nav-border",
           "path": "site/src/components/MobileBottomNav.astro",
@@ -83107,6 +83498,12 @@
           "token": "--ke-color-action-primary-strong",
           "path": "site/src/components/FocusGroupFeedback.astro",
           "line": 354,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-mobile-nav-border",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
           "has_fallback": false
         },
         {
@@ -88061,7 +88458,7 @@
         {
           "token": "--ke-color-text-secondary",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 32,
+          "line": 42,
           "has_fallback": false
         },
         {
@@ -104310,13 +104707,19 @@
       "direct_consumers": [
         {
           "token": "--ke-color-mobile-nav-border",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-mobile-nav-border",
           "path": "site/src/components/MobileBottomNav.astro",
           "line": 53,
           "has_fallback": false
         }
       ],
-      "component_set": "components-2cc96efde1546c99",
-      "astro_family_set": "families-6fafd76ef1b5e8f0",
+      "component_set": "components-43cebdbaff5eb63a",
+      "astro_family_set": "families-70e6b1a4a2be5963",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-mobile-nav-inactive": {
@@ -104366,13 +104769,19 @@
       "direct_consumers": [
         {
           "token": "--ke-color-mobile-nav-surface",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-mobile-nav-surface",
           "path": "site/src/components/MobileBottomNav.astro",
           "line": 54,
           "has_fallback": false
         }
       ],
-      "component_set": "components-2cc96efde1546c99",
-      "astro_family_set": "families-6fafd76ef1b5e8f0",
+      "component_set": "components-43cebdbaff5eb63a",
+      "astro_family_set": "families-70e6b1a4a2be5963",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-color-mobile-rail-canvas": {
@@ -112365,6 +112774,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-mobile-nav-surface",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-personalization-paper",
           "path": "site/src/components/InterestProfile.astro",
           "line": 563,
@@ -119177,7 +119592,7 @@
         {
           "token": "--ke-color-text-secondary",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 32,
+          "line": 42,
           "has_fallback": false
         }
       ],
@@ -127130,6 +127545,12 @@
       "direct_consumers": [
         {
           "token": "--ke-elevation-mobile-nav",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-elevation-mobile-nav",
           "path": "site/src/components/MobileBottomNav.astro",
           "line": 54,
           "has_fallback": false
@@ -127141,8 +127562,8 @@
           "has_fallback": false
         }
       ],
-      "component_set": "components-2cc96efde1546c99",
-      "astro_family_set": "families-6fafd76ef1b5e8f0",
+      "component_set": "components-43cebdbaff5eb63a",
+      "astro_family_set": "families-70e6b1a4a2be5963",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-elevation-mobile-review-dock": {
@@ -142088,7 +142509,7 @@
         {
           "token": "--ke-font-size-small",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 32,
+          "line": 42,
           "has_fallback": true
         }
       ],
@@ -149449,7 +149870,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2838,
+          "line": 2839,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -149506,6 +149927,12 @@
         },
         {
           "token": "--ke-lower-surface-offset",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": true
+        },
+        {
+          "token": "--ke-lower-surface-offset",
           "path": "site/src/components/MobileToastRegion.astro",
           "line": 211,
           "has_fallback": true
@@ -149519,7 +149946,7 @@
         {
           "token": "--ke-lower-surface-offset",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2641,
+          "line": 2642,
           "has_fallback": true
         },
         {
@@ -149529,8 +149956,8 @@
           "has_fallback": true
         }
       ],
-      "component_set": "components-170a8441708b2d6f",
-      "astro_family_set": "families-14719c4e14778a62",
+      "component_set": "components-e041dec8b11a9cef",
+      "astro_family_set": "families-0a8c580787912ea0",
       "production_route_set": "routes-e561c0806280701b"
     },
     "--ke-lower-surface-radius": {
@@ -162090,6 +162517,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-radius-pill",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-shape-radius-pill",
           "path": "site/src/components/InterestClubCard.astro",
           "line": 163,
@@ -167971,7 +168404,7 @@
         {
           "token": "--ke-space-2",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 30,
+          "line": 40,
           "has_fallback": true
         },
         {
@@ -168250,13 +168683,25 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 29,
+          "line": 35,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 35,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
+          "path": "site/src/components/HomeSearchEntry.astro",
+          "line": 39,
           "has_fallback": true
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 30,
+          "line": 40,
           "has_fallback": true
         },
         {
@@ -169682,7 +170127,7 @@
         {
           "token": "--ke-space-4",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2641,
+          "line": 2642,
           "has_fallback": false
         },
         {
@@ -169888,7 +170333,7 @@
         {
           "token": "--ke-space-5",
           "path": "site/src/components/HomeSearchEntry.astro",
-          "line": 29,
+          "line": 39,
           "has_fallback": true
         },
         {
@@ -179351,7 +179796,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4893,
+          "line": 4894,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -180090,7 +180535,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4806,
+          "line": 4807,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -180099,7 +180544,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4843,
+          "line": 4844,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -180108,7 +180553,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4916,
+          "line": 4917,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -180245,7 +180690,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4805,
+          "line": 4806,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -180254,7 +180699,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4844,
+          "line": 4845,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -180263,7 +180708,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4896,
+          "line": 4897,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -180490,7 +180935,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2641,
+          "line": 2642,
           "has_fallback": true
         },
         {
@@ -180641,7 +181086,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2641,
+          "line": 2642,
           "has_fallback": true
         },
         {
@@ -181705,7 +182150,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6091,
+          "line": 6092,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",

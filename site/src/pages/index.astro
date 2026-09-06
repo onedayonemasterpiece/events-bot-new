@@ -68,7 +68,7 @@ const description = 'Афиша Калининграда без шума: пол
     >
       <div class="page-shell home-page__shell">
         <HomeHeroTalk scenes={heroScenes} />
-        <HomeSearchEntry />
+        <HomeSearchEntry variant="floating-link" />
         <HomeQuickNav />
         <HomeColdStartFeed events={feed} />
         <HeroTalkPageEnd context={{route:'home',placement:'page_end',readyCapabilities:homeSearchCapability(import.meta.env) ? ['search'] : [],upperSceneIds:heroScenes.map(scene => scene.editorialId)}} />

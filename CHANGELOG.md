@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Latest Home review: Hero starts at page top and a floating Search link replaces the inline input; shared desktop/mobile navigation remains.
 - Home keeps shared desktop navigation island and mobile Reference4 menu; only contextual upper islands are suppressed.
 
 ### Added

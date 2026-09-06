@@ -11,7 +11,7 @@ const source=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
 const home:HeroTalkPlacementContext={route:'home',placement:'page_end',readyCapabilities:['search']};
 
 test('home alone selects lower-only participants before mount; other archetypes unchanged',()=>{
- for(const path of ['/',''])assert.deepEqual(shellCompositionForRoute(path),{version:'shell-composition-v1',id:'home-navigation-only',topParticipants:false,globalNavigation:true,brandInFlow:true,lowerNavigation:'afisha'});
+ for(const path of ['/',''])assert.deepEqual(shellCompositionForRoute(path),{version:'shell-composition-v1',id:'home-navigation-only',topParticipants:false,globalNavigation:true,brandInFlow:false,lowerNavigation:'afisha'});
  for(const path of ['/poisk','/segodnya','/podborki/besplatnye-sobytiya','/vyhodnye','/sobytiya/event','/populyarnoe']) {
   const policy=shellCompositionForRoute(path);assert.equal(policy.id,'contextual');assert.equal(policy.topParticipants,true);assert.equal(policy.brandInFlow,false);
  }

@@ -7,7 +7,7 @@ export function shellCompositionForRoute(routePath: string) {
     id: home ? 'home-navigation-only' : 'contextual',
     topParticipants: !home,
     globalNavigation: true,
-    brandInFlow: home,
+    brandInFlow: false,
     lowerNavigation: home ? 'afisha' : 'route',
   } as const);
 }

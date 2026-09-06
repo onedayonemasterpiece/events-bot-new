@@ -31,8 +31,11 @@ try{
    assert.equal(await page.locator('body').getAttribute('data-shell-composition'),'home-navigation-only');
    assert.equal(await page.locator('[data-floating-top-band],[data-floating-page-context]').count(),0);
    assert.equal(await page.locator('[data-mobile-bottom-nav]').count(),1);
+   assert.equal(await page.locator('[data-home-search-entry]').count(),0);
+   assert.equal(await page.locator('[data-home-search-launcher]').count(),1);
+   assert.ok(Math.abs((await page.locator('[data-home-hero-talk]').boundingBox()).y)<=1,'Hero starts at page top');
    assert.equal(await page.locator('[data-mobile-nav-section="afisha"]').getAttribute('aria-current'),'page');
-   const order=await page.evaluate(()=>['[data-home-hero-talk]','[data-home-search-entry]','[data-home-quick-nav]','[data-home-cold-start-feed]','[data-hero-talk-page-end]'].map(selector=>{const el=document.querySelector(selector);return el&&!el.hidden?el.getBoundingClientRect().top:null;}));
+   const order=await page.evaluate(()=>['[data-home-hero-talk]','[data-home-quick-nav]','[data-home-cold-start-feed]','[data-hero-talk-page-end]'].map(selector=>{const el=document.querySelector(selector);return el&&!el.hidden?el.getBoundingClientRect().top:null;}));
    for(let i=1;i<order.length;i++)if(order[i]!==null&&order[i-1]!==null)assert.ok(order[i]>=order[i-1],`block order ${i}`);
    assert.equal(await page.locator('[data-reference4-fullscreen]').count(),1);
    if(width>=760) { assert.equal(await page.locator('.site-nav').evaluate(n=>getComputedStyle(n).position),'fixed'); }

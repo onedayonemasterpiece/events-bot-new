@@ -3,9 +3,16 @@ import Button from './design-system/Button.astro';
 import Field from './design-system/Field.astro';
 import {withBase} from '../lib/events';
 import {homeSearchCapability} from '../lib/assistant/homeSearchCapability';
+interface Props { variant?: 'inline-capture' | 'floating-link'; }
+const {variant='inline-capture'}=Astro.props;
 const enabled=homeSearchCapability(import.meta.env);
 ---
-<section class="home-search-entry" data-home-search-entry data-ds-family="HomeSearchEntry" data-ds-version="1" data-ds-variant="inline-capture" data-ds-state={enabled?'signed-out':'disabled'} data-search-enabled="false" data-home-search-state={enabled?'signed-out':'disabled'} data-capability={String(enabled)} data-prefix={withBase('/')} data-worklet={withBase('/voice/pcm-capture-worklet.js')} data-supabase-url={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL||''} data-supabase-relay-url={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL||''} data-supabase-key={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY||''} data-yandex-provider={import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER||'custom:yandex'}>
+{variant === 'floating-link' ? (
+  <a class="home-search-launcher" href={withBase('/poisk/')} aria-label="Поиск событий — голосом или текстом"
+    data-home-search-launcher data-ds-family="HomeSearchEntry" data-ds-version="2" data-ds-variant="floating-link" data-ds-state="ready">
+    <img src={withBase('/assets/icons/reference4-v8/search-thin.svg')} width="28" height="28" alt="" />
+  </a>
+) : <section class="home-search-entry" data-home-search-entry data-ds-family="HomeSearchEntry" data-ds-version="2" data-ds-variant="inline-capture" data-ds-state={enabled?'signed-out':'disabled'} data-search-enabled="false" data-home-search-state={enabled?'signed-out':'disabled'} data-capability={String(enabled)} data-prefix={withBase('/')} data-worklet={withBase('/voice/pcm-capture-worklet.js')} data-supabase-url={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL||''} data-supabase-relay-url={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL||''} data-supabase-key={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY||''} data-yandex-provider={import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER||'custom:yandex'}>
   <form data-home-form>
     <div data-home-text><Field id="home-search-question" label="Что вам хочется?" placeholder="Расскажите голосом или напишите" /></div>
     <div class="home-search-entry__actions">
@@ -19,12 +26,15 @@ const enabled=homeSearchCapability(import.meta.env);
     </div>
   </form>
   <p role="status" aria-live="polite" data-home-status>{enabled?'Подключаю поиск…':'Разговорный поиск пока недоступен.'}</p>
-</section>
+</section>}
 <script>
  import {mountHomeSearchEntry} from '../lib/assistant/homeSearchEntry';
  for(const root of document.querySelectorAll<HTMLElement>('[data-home-search-entry]')) void mountHomeSearchEntry(root);
 </script>
 <style>
+ .home-search-launcher{position:fixed;z-index:39;right:max(var(--ke-space-3),env(safe-area-inset-right));bottom:calc(max(var(--ke-lower-surface-offset,84px),84px) + var(--ke-space-3));width:56px;height:56px;display:grid;place-items:center;border-radius:var(--ke-radius-pill);background:var(--ke-color-mobile-nav-surface);border:1px solid var(--ke-color-mobile-nav-border);box-shadow:var(--ke-elevation-mobile-nav)}
+ :global(body[data-lower-surface-state="modal"]) .home-search-launcher,:global(body[data-lower-surface-state="keyboard"]) .home-search-launcher{visibility:hidden;pointer-events:none}
+
  .home-search-entry:not([data-home-ready]) form{visibility:hidden}
  .home-search-entry{max-width:48rem;margin:var(--ke-space-5,1.25rem) auto;display:grid;gap:var(--ke-space-3,.75rem)}
  .home-search-entry__actions{display:flex;flex-wrap:wrap;align-items:center;gap:var(--ke-space-2,.5rem);margin-top:var(--ke-space-3,.75rem)}

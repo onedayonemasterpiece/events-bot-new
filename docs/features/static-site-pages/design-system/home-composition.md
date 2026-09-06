@@ -1,3 +1,5 @@
+> Latest owner override: Hero begins at viewport top, header occupies no flow space. HomeSearchEntry v2 floating-link opens existing /poisk/; no inline field or mounted capture controller on Home. Content order is Hero → quick links → feed → page-end. Earlier inline capture remains a reusable compatibility variant, not the Home composition.
+
 # Home composition: global navigation without context islands
 
 Runtime owner: `EventLayout` v3 with `shellCompositionForRoute` /

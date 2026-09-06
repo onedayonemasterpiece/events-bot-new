@@ -3705,13 +3705,14 @@
     },
     {
       "id": "HomeSearchEntry",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HomeSearchEntry.astro",
       "style_owners": [
         "site/src/components/HomeSearchEntry.astro"
       ],
       "variants": [
-        "inline-capture"
+        "inline-capture",
+        "floating-link"
       ],
       "states": [
         "disabled",
@@ -3721,7 +3722,8 @@
         "recording",
         "saving",
         "submitted",
-        "error"
+        "error",
+        "ready"
       ],
       "nested_families": [
         "Button",

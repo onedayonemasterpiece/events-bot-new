@@ -1,3 +1,5 @@
+> **Последнее уточнение владельца:** Hero-talk начинается с верха страницы. На главной нет поля ввода: HomeSearchEntry v2 — плавающая иконка-ссылка в /poisk/. После Hero сразу быстрые ссылки и лента. Общая навигация desktop/mobile сохраняется. Предыдущая inline-capture композиция ниже описывает superseded решение, не текущую главную.
+
 > **Уточнение владельца 2026-09-06:** общая верхняя навигация desktop и Reference4-меню mobile обязательны на главной. Исключены только контекстные верхние острова. Это уточнение имеет приоритет над прежней формулировкой «только нижний остров».
 
 # Главная KenigEvents — итоговая MVP-концепция
@@ -16,7 +18,7 @@
 [home-feed](design-system/home-feed.md). Набор: [durable handoff](smart-vector-search/home-entry-handoff.md), общее ядро Search#587;
 ответы и история остаются только на `/poisk/`.
 
-Исполняемый UI SoT: `lovekgd-design-system` @ `c627ac62021d7aa20952bfd23c739801d749521e`,
+Исполняемый UI SoT: `lovekgd-design-system` @ `1b372a979f27d8518d2192d39448c3fda0bf5b6b`,
 `contracts/page-profiles/home.owner-review.v1.json`. Home structural capture —
 расширение `scripts/current_ui_resource_graph/v1/specimens/capture.mjs`; native
 Penpot round-trip не заявлен.
