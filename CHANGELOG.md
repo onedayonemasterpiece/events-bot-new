@@ -4878,6 +4878,9 @@
   terminal save failure stays recoverable and never reports a completed save.
   Existing Auth/audio storage is retained; preview still does not enable ASR.
 
+- Added: DevCoveer protected voice host reuses existing Search/Auth/provider/quota core, with durable private receipts and no audio transit through Supabase.
+- Changed: voice uploads prefer native 32kbps Opus with AAC/PCM compatibility, preserving existing local recordings and final-write acknowledgement.
+
 ## [1.12.0] - 2026-03-04
 ### Highlights
 - **Smart Update (feature bundle)**: unified create/merge pipeline for VK/TG/`/parse` with source logs, Telegraph consistency, festival-context routing, and out-of-region filtering safeguards.

@@ -545,3 +545,57 @@ Donor source snapshots inspected: Wonderful Lections `cceac0c1fbab6cdca881f642ac
 - Evidence: `artifacts/codex/voice-orb-20260906/{all-public-files.json,public-readback.json,public.log,public/,ci.json,telegram-direct-links-receipt.json}`.
 
 Telegram direct link delivered and read back in topic 1030: https://t.me/c/4337049383/1443 .
+
+## DevCoveer host and efficient wire audio (2026-09-06)
+
+User explicitly selected existing DevCoveer for audio instead of Supabase media
+transit. This supersedes the Edge-only publication blocker for this preview.
+The existing Search core exports a host-independent dependency factory; the Node
+adapter in `scripts/voice/server.mjs` hosts **the same** handler, Auth verification,
+interpreter, catalog retrieval, personalization and shared Google quota adapter.
+No replacement search engine, owner token, IdeaHub publishing, root promotion or
+production Supabase Edge/schema rollout. Private preview operation/history/media
+receipts use the existing repository interface backed by DevCoveer SQLite
+(WAL/FULL, private directory/files), following donor disk/checkpoint discipline.
+They are not copied to Supabase; canonical user/profile/saved-events/quota remain
+on their existing Supabase backend. Preview histories are not merged into other
+stores. Do not delete receipts to reset a dispatched or uncertain provider call.
+
+Browser wire uses native Opus WebM/Ogg at requested32kbps, then supported MP4/AAC;
+actual MIME is authoritative. Continuous MediaRecorder fragments are durably
+saved every approximately1s and joined as **one container** after final stop/write
+acknowledgement. PCM worklet checkpoints remain a local compatibility/recovery
+backup. When native compression is unavailable or fails, intact PCM is sent only
+to DevCoveer; no silent rejection, fake AAC label, lost tail, VAD or trimmed pause.
+Existing IndexedDB safely upgrades v2→v3 by adding compressedParts; old audio and
+Auth sessions remain. Small binary media upload avoids base64 browser overhead.
+The host checks immutable digest/size, codec/mono/rate and bounded full decode
+before receipt. Original encoded bytes go to Gemini (no second lossy encode).
+[Gemini formats](https://ai.google.dev/gemini-api/docs/generate-content/audio).
+
+Host config (server-only): `VOICE_STATE_FILE`, `VOICE_SOURCE_SHA`,
+`VOICE_SERVER_AUTOSTART=1`, `PORT=14320`, `VOICE_FFMPEG`, `VOICE_FFPROBE`, existing
+`PERSONALIZATION_SUPABASE_*`, explicitly mapped `SUPABASE_URL`/`SUPABASE_ANON_KEY`,
+existing registered Google key lane, `EVENT_SEARCH_ASSISTANT_*` policy/model/
+ordinary-user allowlist/origins. Never combine legacy Supabase URL with personal
+service key. HTTP loopback only. Public existing shared edge namespace:
+`https://mcp-datahub.kenigevents.ru/kenig-audio/`; exact origin/JWT gates enforced
+by backend, no donor ownerAuth. Public build flag
+`PUBLIC_EVENT_SEARCH_ASSISTANT_HOST=devcoveer` chooses that fixed destination
+through existing DataClient, while normal Search/Auth retain their transport.
+Control is selected-once plus same-ID status reconciliation, no provider retry.
+
+Build: `node scripts/voice/build-runtime.mjs <private-release>/runtime.mjs`.
+Use a clean exact-source release under user systemd, private environment outside
+Git. `GET /kenig-audio/healthz` proves host/source only, never full acceptance.
+The shared edge route belongs to canonical vpn-server renderer opt-in
+`LOCAL_MCP_EDGE_KENIG_AUDIO_ENABLED=1`, separate reviewed commit e35f850; preserve
+all active origins, mounted inode, queue-preserving controlbot and VPN services.
+
+Targeted checks: compression native/unit, store realSQLite/reopen/crash fencing,
+HTTP host Auth/origin/body constraints and real Opus/AAC decode, existing assistant
+unit/native and TypeScript; live session_fixture→compressed speech→ASR→confirmed
+text→catalog→refinement/history. Physical Safari/AAC microphone remains separate
+from MIME mocks or FFmpeg AAC-container validation. Device/PWA lifecycle cannot
+be certified from desktop viewport tests. Evidence/results appended after actual
+runs; `artifacts/codex/voice-devcoveer-20260906/` remains ignored/private.

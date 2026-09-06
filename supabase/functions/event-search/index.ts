@@ -18,7 +18,7 @@ import {
   withSharedGoogleQuotaAttempt,
 } from "./google-quota.ts";
 import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts";
-import { handleAssistant } from "./assistant-handler.ts";
+import { handleAssistant, type AssistantDependencies, type AssistantRepository } from "./assistant-handler.ts";
 import { assistantGenerator } from "./assistant-provider.ts";
 import { assistantRepository } from "./assistant-repository.ts";
 import { eligible as assistantEligible, reject as assistantReject, type Intent as AssistantIntent } from "./assistant-intent.ts";
@@ -99,7 +99,8 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function env(name: string, fallback = ""): string {
-  return Deno.env.get(name) || fallback;
+  const runtime = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } };
+  return (typeof Deno !== "undefined" ? Deno.env.get(name) : runtime.process?.env?.[name]) || fallback;
 }
 
 function googleModelId(value: string, fallback: string): string {
@@ -2929,11 +2930,11 @@ async function assistantCurrentCards(service: any, ids: string[]): Promise<Recor
   ).map(normalizeCandidate);
 }
 
-async function runAssistant(request: Request): Promise<SearchHandlerResult> {
+export function createAssistantDependencies(repository?: AssistantRepository): AssistantDependencies {
   const supabaseUrl = env("SUPABASE_URL") || env("PERSONALIZATION_SUPABASE_URL");
   let service: any = null;
   const enabled = env("EVENT_SEARCH_ASSISTANT_ENABLED") === "1" && Boolean(env("EVENT_SEARCH_ASSISTANT_POLICY_REF"));
-  return handleAssistant(request, {
+  return {
     enabled,
     // Fixed deployment origins; never trust an arbitrary supplied upstream.
     allowedOrigins: env("EVENT_SEARCH_ASSISTANT_ORIGINS", "https://kenigevents.ru").split(",").map(value => value.trim()),
@@ -2951,7 +2952,7 @@ async function runAssistant(request: Request): Promise<SearchHandlerResult> {
       if (!allowed.includes(data.user.id)) assistantReject("assistant_preview_access_required", 403);
       service = personalizationServiceClient(supabaseUrl);
       if (!service) assistantReject("service_unavailable", 503);
-      return { owner: data.user.id, repo: assistantRepository(service) };
+      return { owner: data.user.id, repo: repository || assistantRepository(service) };
     },
     generate: assistantGenerator({backend: sharedGoogleQuotaBackend(supabaseUrl), keys: providerKeyPool("LLM"), env: name => env(name)}),
     async search(req, intent, operationId) {
@@ -2964,10 +2965,14 @@ async function runAssistant(request: Request): Promise<SearchHandlerResult> {
       return result.body;
     },
     currentCards: async (_owner, ids) => assistantCurrentCards(service, ids),
-  });
+  };
 }
 
-Deno.serve(async (request) => {
+async function runAssistant(request: Request): Promise<SearchHandlerResult> {
+  return handleAssistant(request, createAssistantDependencies());
+}
+
+export async function handleSearchRequest(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
   const requestStartedAt = performance.now();
   if (request.method === "OPTIONS") {
@@ -3007,4 +3012,6 @@ Deno.serve(async (request) => {
 
   const result = await runEventSearch(request, requestId, requestStartedAt);
   return jsonResponse(result.body, result.status);
-});
+}
+
+if (typeof Deno !== "undefined") Deno.serve(handleSearchRequest);

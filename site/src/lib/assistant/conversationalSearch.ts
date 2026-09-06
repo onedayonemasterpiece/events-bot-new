@@ -40,7 +40,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   let measurement=new AssistantMeasurement();const rendered=new Map<string,{element:HTMLElement;result:any;count:number;ids:string[]}>();
   const objectUrls=new Set<string>();
   const auth=getStaticSiteAuth({supabaseUrl:search.dataset.supabaseUrl||'',relayUrl:search.dataset.supabaseRelayUrl||'',publishableKey:search.dataset.supabaseKey||'',provider:search.dataset.yandexProvider});
-  const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner,()=>!captureOnly);
+  const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner,()=>!captureOnly,root.dataset.assistantHost==='devcoveer');
   const showError=(error:unknown)=>{processing.textContent=errorText(error);if(!capture||!['requesting','recording'].includes(capture.status))presentation?.message(processing.textContent);resume.hidden=!state.draft;};
   const showComposer=()=>presentation?presentation.open():get('composer').scrollIntoView({block:'start'});
   const stopForOverlay=async()=>{if(capture&&['requesting','recording','stopping'].includes(capture.status))await capture.stop('interrupted');};
@@ -120,9 +120,9 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   text.addEventListener('input',()=>{transcriptRevision++;});
   async function transcribeRecording(own:string,id:string,revision=transcriptRevision){
     if(captureOnly||owner!==own)return;
-    processing.textContent='Распознаю речь…';
+    processing.textContent='Распознаю речь…';presentation?.message(processing.textContent);
     try{
-      const result=await api.transcribe(own,id,await store.parts(own,id));
+      const result=await api.transcribe(own,id,await store.parts(own,id),root.dataset.assistantHost==='devcoveer'?await store.compressed(own,id):null);
       if(result.state!=='completed')throw new Error(result.error||`voice_${result.state}`);
       await store.setTranscript(own,id,result.result.text);
       if(owner!==own)return;
@@ -130,7 +130,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       else {processing.textContent='Текст уже изменён. Поздняя расшифровка доступна в «Аудио и восстановление» и не заменяет ваш запрос.';await loadRecordings();return;}
       get('composer').hidden=false;
       processing.textContent=result.result.uncertain?.length?'Есть неразборчивые места — поправьте запрос.':'Запрос готов. Можно исправить текст и найти события.';
-      await loadRecordings();
+      presentation?.message(processing.textContent);await loadRecordings();
     }catch(error){if(owner!==own)return;showError(error);get<HTMLDetailsElement>('recordings')?.setAttribute('open','');}
   }
   async function loadRecordings(){
@@ -183,7 +183,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       }catch(error){if(owner===own){receiptRetry=true;get('save-retry').hidden=false;presentation?.setCapture('error','Не удалось завершить сохранение. Аудио не удалено; повторите сохранение.');processing.textContent='Не удалось завершить сохранение. Повторите локальное сохранение, не закрывая вкладку.';showComposer();}}
       finally{pendingCommit=false;}
     };
-    capture=new MicrophoneCapture({workletUrl:root.dataset.assistantWorklet||'',budget:AUDIO_BUDGET,onPart:async part=>{await created;await store.putPart(own,id,part);},
+    capture=new MicrophoneCapture({workletUrl:root.dataset.assistantWorklet||'',budget:AUDIO_BUDGET,onPart:async part=>{await created;await store.putPart(own,id,part);},onCompressedPart:async part=>{await created;await store.putCompressedPart(own,id,part);},
       onStatus:(status:CaptureStatus,reason)=>{
         if(owner!==own)return;
         stop.hidden=!['requesting','recording','stopping'].includes(status);stop.disabled=status==='stopping';record.disabled=!stop.hidden;record.hidden=!stop.hidden;

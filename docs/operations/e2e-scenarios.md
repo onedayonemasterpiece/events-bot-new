@@ -167,3 +167,5 @@ single mic/no focus trap/explicit recovery, not the superseded modal close test.
 recordings, delayed/failed terminal receipt and same-audio retry/reload.
 `voice-browser.integration.mjs` checks durable periodic audio before Stop and
 abrupt page closure. Auth snapshots/device audio remain injected; no phone claim.
+
+Voice DevCoveer preview: `site/tests/voice-devcoveer-host.test.mjs` (HTTP/media fixtures; real Opus/AAC decode, not live ASR), `voice-receipt-store.test.mjs` (real SQLite durability), `voice-compression.integration.mjs` (native synthetic microphone+IndexedDB). Canonical live receipt and limitations: `docs/features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md`.

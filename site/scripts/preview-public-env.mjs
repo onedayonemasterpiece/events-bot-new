@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const PUBLIC_SEARCH_KEYS = Object.freeze({
+  PUBLIC_EVENT_SEARCH_ASSISTANT_HOST: ['PUBLIC_EVENT_SEARCH_ASSISTANT_HOST'],
   PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY: ['PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY', 'STATIC_SITE_PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY'],
   PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED: ['PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED', 'STATIC_SITE_PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED'],
   PUBLIC_PERSONALIZATION_SUPABASE_URL: [
@@ -97,6 +98,7 @@ export function loadPreviewPublicConfig(siteDir, runtimeEnv = process.env) {
   ) {
     throw new Error('PUBLIC_AUTHORIZED_SEARCH_TRANSPORT must be json or ndjson');
   }
+  if (values.PUBLIC_EVENT_SEARCH_ASSISTANT_HOST && values.PUBLIC_EVENT_SEARCH_ASSISTANT_HOST !== 'devcoveer') throw new Error('Unapproved voice host');
   if (values.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED && !/^[01]$/u.test(values.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED)) throw new Error('PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED must be 0 or 1');
   if (values.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY && !/^[01]$/u.test(values.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY)) throw new Error('PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY must be 0 or 1');
   const configured = Boolean(

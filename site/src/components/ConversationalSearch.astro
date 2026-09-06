@@ -5,7 +5,7 @@ const { catalog = false } = Astro.props;
 const captureOnly = import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY === '1';
 const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED === '1' && import.meta.env.PUBLIC_SITE_MODE !== 'production');
 ---
-{enabled && <div class="assistant" data-assistant data-assistant-capture-only={captureOnly ? 'true' : undefined} data-ds-component="ConversationalSearch" data-ds-version="1" data-assistant-catalog={catalog ? 'true' : undefined} data-assistant-worklet={withBase('/voice/pcm-capture-worklet.js')} data-nosnippet>
+{enabled && <div class="assistant" data-assistant data-assistant-host={import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_HOST === 'devcoveer' ? 'devcoveer' : undefined} data-assistant-capture-only={captureOnly ? 'true' : undefined} data-ds-component="ConversationalSearch" data-ds-version="1" data-assistant-catalog={catalog ? 'true' : undefined} data-assistant-worklet={withBase('/voice/pcm-capture-worklet.js')} data-nosnippet>
   <div class="assistant__voice-dock" data-assistant-dock data-capture-state="idle">
     <div class="assistant__voice-info">
       <span data-assistant-timer hidden aria-hidden="true">0:00</span>

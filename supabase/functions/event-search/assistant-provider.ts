@@ -28,7 +28,7 @@ export function assistantGenerator(config:{backend:GoogleQuotaBackend|null;keys:
       consumer:`kenigevents.voice.${options.kind}.v1`,accountName:'kenigevents',readEnv:config.env,
       execute:async(apiKey,lease)=>{
         await options.dispatched();
-        const parts:any[]=[{text:options.prompt}];if(options.audio)parts.push({inlineData:{mimeType:'audio/wav',data:encoded(options.audio)}});
+        const parts:any[]=[{text:options.prompt}];if(options.audio)parts.push({inlineData:{mimeType:options.audioMimeType||'audio/wav',data:encoded(options.audio)}});
         const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);
         try{
           const response=await (config.fetchImpl||fetch)(googleModelActionUrl(model,'generateContent'),{

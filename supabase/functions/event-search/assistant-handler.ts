@@ -21,11 +21,12 @@ export interface AssistantDependencies {
   authenticate(request:Request):Promise<{owner:string;repo:AssistantRepository}>;
   enabled:boolean;
   allowedOrigins:readonly string[];
-  generate(options:{kind:'asr'|'interpret';prompt:string;schema:unknown;audio?:Uint8Array;sampleRate?:number;frames?:number;
+  generate(options:{kind:'asr'|'interpret';prompt:string;schema:unknown;audio?:Uint8Array;audioMimeType?:string;sampleRate?:number;frames?:number;
     validate:(value:unknown)=>unknown;dispatched:()=>Promise<void>;completed:(value:unknown,accounting:unknown)=>Promise<void>;accounted:()=>Promise<void>}):Promise<unknown>;
   search(request:Request,intent:Intent,operationId:string):Promise<Record<string,any>>;
   currentCards(owner:string,ids:string[]):Promise<Record<string,any>[]>;
   maxAudioBytes:number;
+  loadCompressedAudio?:(repo:AssistantRepository,owner:string,id:string,manifest:any)=>Promise<{bytes:Uint8Array;mimeType:string}>;
 }
 export function publicOperation(row:Operation):Record<string,unknown> {
   const stale=row.state==='processing' && Date.now()-Date.parse(row.updated_at || '')>300000;
@@ -46,7 +47,10 @@ export async function boundedJson(request:Request,limit:number):Promise<any> {
 }
 const fromBase64=(value:string):Uint8Array=>{try{return Uint8Array.from(atob(value),c=>c.charCodeAt(0));}catch{return reject('invalid_audio_encoding');}};
 function manifest(value:unknown,maxBytes:number):any {
-  const row=object(value,['frames','sampleRate','partCount']);
+  const row=object(value,['frames','sampleRate','partCount','mimeType','digest','byteLength']);
+  if(row.mimeType!==undefined){
+    if(!['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/webm','audio/ogg','audio/mp4','audio/mp4;codecs=mp4a.40.2'].includes(row.mimeType)||typeof row.digest!=='string'||!/^[a-f0-9]{64}$/.test(row.digest)||!Number.isSafeInteger(row.byteLength)||row.byteLength<1||row.byteLength>16*1024*1024||row.partCount!==1)reject('invalid_compressed_manifest');
+  } else if(row.digest!==undefined||row.byteLength!==undefined)reject('invalid_manifest');
   if(!Number.isSafeInteger(row.frames)||row.frames<1||row.frames*2+44>maxBytes)reject('audio_capacity',413);
   if(!Number.isInteger(row.sampleRate)||row.sampleRate<8000||row.sampleRate>96000||!Number.isInteger(row.partCount)||row.partCount<1||row.partCount>256)reject('invalid_manifest');
   return row;
@@ -119,7 +123,8 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
       const parentId=interpreted.outcome.result.parentId;
       if(parentId){parent=await completedDependency(repo,owner,parentId,'search');if(!parent)return{status:202,body:{...publicOperation(row),waiting:'parent'}};}
     }
-    const audio=body.kind==='asr'?await assemble(await repo.audio(owner,id),payload):undefined;
+    const compressed=body.kind==='asr'&&payload.mimeType?(deps.loadCompressedAudio?await deps.loadCompressedAudio(repo,owner,id,payload):reject('compressed_audio_unavailable',415)):undefined;
+    const audio=body.kind==='asr'?(compressed?.bytes||await assemble(await repo.audio(owner,id),payload)):undefined;
     const claim=await repo.claim(owner,id);
     if(!claim.claimed){row=(await repo.get(owner,id))!;return{status:202,body:publicOperation(row)};}
     let sent=false;let durable=false;let savedOutcome:any;
@@ -131,7 +136,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
     try{
       if(body.kind==='asr'){
         await deps.generate({kind:'asr',prompt:transcriptionPrompt(),
-          schema:TRANSCRIPT_SCHEMA,audio,sampleRate:payload.sampleRate,frames:payload.frames,dispatched:dispatch,completed:complete,accounted,
+          schema:TRANSCRIPT_SCHEMA,audio,audioMimeType:compressed?.mimeType,sampleRate:payload.sampleRate,frames:payload.frames,dispatched:dispatch,completed:complete,accounted,
           validate:value=>{const r=object(value,['text','uncertain']);text(r.text,65536,true);if(!Array.isArray(r.uncertain)||r.uncertain.length>256||r.uncertain.some((v:unknown)=>typeof v!=='string'||v.length>512))reject('invalid_transcript');return {...r,vocabulary_version:ASR_VOCABULARY_VERSION};}});
       } else if(body.kind==='interpret'){
         const input=payload as ConfirmedInput;
