@@ -126,11 +126,22 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 
 ### Conversational website Search / voice prototype
 
-Canonical cases `voice.spool_recovery`, `voice.stale_membership` and
-`voice.real_quality` live in
+Canonical cases `voice.spool_recovery`, `voice.stale_membership`,
+`voice.real_quality` and `voice.capture_only` live in
 [`static-site-autotest-scenarios.v1.yml`](../testing/static-site-autotest-scenarios.v1.yml).
 `site/tests/voice-browser.integration.mjs` uses actual full Chromium capture,
 AudioWorklet and IndexedDB with a **synthetic device**; it does not run Telegram,
 external ASR, real-phone permissions or deployed RLS. For authorized phone
 checks preserve installed PWA/session/audio/queues and follow the
 [existing voice integration handoff](../features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md).
+
+`voice.capture_only` is the desktop local-recording preview contract:
+[`site/tests/voice-capture-only.integration.mjs`](../../site/tests/voice-capture-only.integration.mjs)
+checks actual Chromium mount/IndexedDB/playback/reload with explicit Auth/WAV
+fixtures and zero assistant-network requests (not real login/ASR). Published
+[Search capture-only preview](https://kenigevents.ru/preview-voice-desktop-capture-20260906/poisk/)
+uses source `f0dd8cca6e4dc07352eebbfb1e64b68be4191b42`; public anonymous desktop
+checks passed. User live path: ordinary login → explicit record/stop → open saved
+recordings → playback → reload/playback. Never capture ambient audio automatically;
+keep session/audio/queues. Real authenticated capture and ASR remain separately
+unverified; see the canonical handoff's published receipt, not unit-test inference.

@@ -137,3 +137,13 @@ Chromium tests PASS with synthetic microphone (explicitly not real audio);
 compiler diagnostics []; design-system production surface source gate PASS.
 Real read-only Auth allowlist HTTP200 confirms `https://kenigevents.ru/**` covers
 the planned prefix. Login itself remains untested. No build was run in this lane.
+
+
+## Published handoff (documentation-only follow-up)
+
+Source/build f0dd8cca6e4dc07352eebbfb1e64b68be4191b42 is published at
+https://kenigevents.ru/preview-voice-desktop-capture-20260906/poisk/ and delivered
+via Telegram1440. Canonical Codex handoff contains parent exact-byte/public-anon
+checks and limitations; operating E2E index now routes capture-only explicitly.
+Source CI34019001634 completed success (3 real jobs), not live microphone/ASR.
+This docs receipt commit is newer than built source; do not claim its SHA deployed.

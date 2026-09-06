@@ -298,3 +298,38 @@ The requested `/preview-voice-desktop-capture-20260906/poisk/` matches the exist
 Only these public URL fields were retained; no raw auth config or secrets.
 This verifies configuration, **not an OAuth login or authenticated capture**.
 Local sanitized receipt: `artifacts/codex/voice-desktop-real/auth-redirect-readonly.json`.
+
+### Published desktop capture-only receipt (2026-09-06)
+
+User-test-ready static preview:
+[desktop Search / local voice capture](https://kenigevents.ru/preview-voice-desktop-capture-20260906/poisk/).
+**Built source SHA:** `f0dd8cca6e4dc07352eebbfb1e64b68be4191b42`.
+This later documentation receipt does not change the published build identity.
+Existing `build:preview` produced only two pages (Search + preview index) and
+three support routes; existing publisher wrote the new immutable prefix only.
+No full catalog/Kaggle build, shared Edge/DB mutation or root promotion.
+
+Parent verified 7 exact byte readbacks (five routes, preview-build manifest,
+worklet), public Chromium signed-out desktop 1440/1280 plus manifest scope
+(3 checks PASS), configured ordinary Auth, visible capture-only notice, disabled
+signed-out controls, correct worklet MIME, zero assistant calls/page errors;
+local/public screenshots were inspected. Source lane independently read back
+HTTP200, SSR capture-only marker and notice. Link delivered and read back in
+[Telegram message 1440](https://t.me/c/4337049383/1440).
+Sanitized publication/browser/TG receipts:
+`artifacts/codex/voice-desktop-preview-20260906/` in the primary checkout.
+
+**Current source CI:** [run 34019001634](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34019001634),
+exact `f0dd8cca6e4dc07352eebbfb1e64b68be4191b42`, completed/success with all three
+jobs (`smart-update-identity-state-machine`, `static-browser-release-gate`,
+`python-ci`) success. This is actual CI PASS, unlike the historical empty-jobs
+run above, but still **not real microphone, Auth login or ASR proof**.
+
+Done: source integration, deterministic/native-fixture checks, focused static
+publication, anonymous public desktop/render/network checks, existing redirect
+allowlist verification, user link delivery. Partial: authenticated capture on
+user's desktop (ordinary login + explicit microphone action + playback/reload
+awaiting user execution). Blocked: live ASR/interpretation/dialogue/cards/actions
+acceptance on the still-unbound assistant runtime; policy/model and shared
+runtime/schema boundary remain as documented. Phone is a separate remaining
+PWA acceptance scenario, not a prerequisite for the published desktop slice.
