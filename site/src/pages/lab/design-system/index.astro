@@ -1,4 +1,5 @@
 ---
+import ConversationalSearch from '../../../components/ConversationalSearch.astro';
 import EventLayout from '../../../layouts/EventLayout.astro';
 import Badge from '../../../components/design-system/Badge.astro';
 import Button from '../../../components/design-system/Button.astro';
@@ -436,6 +437,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="ListingPersonalFilter" data-ds-version="2" data-ds-replaced-by="ListingPersonalFilter@3"><td>ListingPersonalFilter · explicit full default</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>replaced on listing surfaces: inline placement overloaded the sticky discovery plane</td></tr>
                 <tr data-ds-component="ListingPersonalFilter" data-ds-version="1" data-ds-replaced-by="ListingPersonalFilter@2"><td>ListingPersonalFilter · implicit personal</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>replaced by ListingPersonalFilter v2; catalog-only</td></tr>
                 <tr data-ds-component="PersonalFeedSlot" data-ds-version="1"><td>PersonalFeedSlot</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
+                <tr data-ds-component="ConversationalSearch" data-ds-version="1"><td>ConversationalSearch</td><td><code>v1</code></td><td><Badge tone="warning">preview-only candidate</Badge></td><td><code>components/ConversationalSearch.astro</code></td><td>inline composer, capture, recovery; native P pending</td></tr>
                 <tr data-ds-component="AuthorizedEventSearch" data-ds-version="1"><td>AuthorizedEventSearch</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td><a href={withBase('/poisk/')}>auth/search route</a></td></tr>
                 <tr data-ds-component="IconSocialIcon" data-ds-version="1"><td>Icon / SocialIcon</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/Icon.astro</code></td><td>complete visible icon inventory</td></tr>
                 <tr data-ds-component="AnnouncementsLockup" data-ds-version="1"><td>AnnouncementsLockup</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/brand/AnnouncementsLockup.astro</code></td><td>desktop/mobile/favicon sizes</td></tr>
@@ -443,6 +445,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
               </tbody>
             </table>
           </div>
+          <ConversationalSearch catalog />
           <p class="muted-note">Правило: материальная переработка создаёт следующую версию компонента. Старая и новая версии остаются видимыми до sign-off, затем все production consumers переходят на новую версию, а старая становится deprecated и удаляется после нулевого consumer audit. Локальные копии утверждённой геометрии запрещены.</p>
         </div>
       </section>

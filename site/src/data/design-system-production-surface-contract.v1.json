@@ -235,6 +235,7 @@
       "required": true,
       "source_files": [
         "site/src/components/AuthorizedEventSearch.astro",
+        "site/src/components/ConversationalSearch.astro",
         "site/src/components/SearchCollectionLinks.astro",
         "site/src/components/MobileSearchBottomNav.astro"
       ]

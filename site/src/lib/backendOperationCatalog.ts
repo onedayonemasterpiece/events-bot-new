@@ -153,6 +153,16 @@ export function classifyBackendOperation(
     );
   }
 
+  if (path.startsWith('/functions/v1/event-search/assistant/')) {
+    const route = path.slice('/functions/v1/event-search/assistant/'.length);
+    if (route === 'status' && method === 'GET') return definition('assistant.control.read', 'functions', 'safe-read', 'buffered-json', FUNCTION_RESPONSE_LIMIT);
+    // Upload receipts compare exact bytes and ownership in the primary DB.
+    if (route === 'audio' && method === 'POST') return definition('assistant.audio-upload', 'functions', 'idempotent-replay', 'buffered-json', AUTH_RESPONSE_LIMIT);
+    // Do not blindly repeat a control request after an ambiguous outcome.
+    if (route === 'control' && method === 'POST') return definition('assistant.control.write', 'functions', 'selected-once', 'buffered-json', FUNCTION_RESPONSE_LIMIT);
+    throw new UnclassifiedBackendOperationError(method, path);
+  }
+
   if (path === '/functions/v1/event-search') {
     if (method !== 'POST') throw new UnclassifiedBackendOperationError(method, path);
     const streaming = headerValue(input, init, 'accept').includes('application/x-ndjson');

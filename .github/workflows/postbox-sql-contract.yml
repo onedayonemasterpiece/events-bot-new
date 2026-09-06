@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - '.github/workflows/postbox-sql-contract.yml'
+      - 'supabase/migrations/20260906013000_event_search_assistant_receipts.sql'
+      - 'supabase/tests/event_search_assistant_contract.sql'
       - 'supabase/migrations/20260711203940_email_control_plane_v1.sql'
       - 'supabase/migrations/20260712072912_email_postbox_event_consumer_v2.sql'
       - 'supabase/migrations/20260712083037_email_postbox_worker_v1.sql'
@@ -55,3 +57,15 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260801222242_focus_auth_delivery_attempt_v1.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260804190000_postbox_auth_feedback_correlation_v1.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/email_postbox_auth_feedback_contract.sql
+      - name: Apply private voice receipts and rollback-only SQL contracts
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -c 'alter table auth.users add column if not exists is_anonymous boolean default false'
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260906013000_event_search_assistant_receipts.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/event_search_assistant_contract.sql

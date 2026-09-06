@@ -874,6 +874,87 @@ paths:
         timeouts:
           connect: 3
           read: 55
+  /functions/v1/event-search/assistant/control:
+    post:
+      operationId: assistantControl
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/event-search/assistant/control
+        headers:
+          '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 55
+  /functions/v1/event-search/assistant/audio:
+    post:
+      operationId: assistantAudio
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/event-search/assistant/audio
+        headers:
+          '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 55
+  /functions/v1/event-search/assistant/status:
+    get:
+      operationId: assistantStatus
+      responses:
+        'default':
+          description: Fixed-upstream Supabase response
+      x-yc-apigateway-integration:
+        type: http
+        url: https://epyznmylqmchteykjsqj.supabase.co/functions/v1/event-search/assistant/status
+        headers:
+          '*': '*'
+          # Supabase reflects Origin; never forward an untrusted caller value.
+          Origin: https://kenigevents.ru
+          Host: ''
+          Cookie: ''
+          Forwarded: ''
+          X-Forwarded-For: ''
+          X-Forwarded-Host: ''
+          X-Forwarded-Proto: ''
+          X-Real-IP: ''
+        query:
+          '*': '*'
+        omitEmptyHeaders: true
+        omitEmptyQueryParameters: true
+        timeouts:
+          connect: 3
+          read: 55
   /functions/v1/transport-probe:
     post:
       operationId: transportFunctionProbe

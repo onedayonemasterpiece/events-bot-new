@@ -2599,7 +2599,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         const discoveryStores = new WeakMap();
         const servedListByFeed = new WeakMap();
         let shareCalloutTimer = 0;
-        let pendingConsentAction = null;
         let personalFeedRequest = null;
         const personalFeedMemoryCache = new Map();
 
@@ -3013,42 +3012,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           return writeJson(PROFILE_KEY, compactPersonalizationProfile(profile));
         }
 
-        function ensureProfileAfterConsent(seed) {
+        function ensureProfileForAgreement(seed) {
           const existing = readProfile();
           if (isCompatibleProfile(existing)) return existing;
           const profile = createEmptyProfile(seed);
-          saveProfile(profile);
-          return profile;
-        }
-
-        function consentBanner() {
-          let banner = document.querySelector('[data-personalization-consent]');
-          if (banner) return banner;
-          banner = document.createElement('div');
-          banner.className = 'personalization-consent';
-          banner.dataset.personalizationConsent = 'true';
-          banner.setAttribute('role', 'dialog');
-          banner.setAttribute('aria-live', 'polite');
-          banner.innerHTML = `<p><strong>Настроить рекомендации?</strong> Лайки и отметки «не интересно» сохранятся только в этом браузере и помогут убрать неподходящее.</p><div class="personalization-consent__actions"><button type="button" class="secondary-button" data-personalization-consent-dismiss>Пока нет</button><button type="button" class="cta-button" data-personalization-consent-accept>ОК</button></div>`;
-          document.body.appendChild(banner);
-          banner.querySelector('[data-personalization-consent-dismiss]')?.addEventListener('click', () => {
-            pendingConsentAction = null;
-            banner.classList.remove('is-visible');
-          });
-          banner.querySelector('[data-personalization-consent-accept]')?.addEventListener('click', async () => {
-            ensureProfileAfterConsent();
-            banner.classList.remove('is-visible');
-            const action = pendingConsentAction;
-            pendingConsentAction = null;
-            await applyFeedbackState();
-            if (typeof action === 'function') setTimeout(action, 0);
-          });
-          return banner;
-        }
-
-        function requestConsent(action) {
-          pendingConsentAction = action || null;
-          consentBanner().classList.add('is-visible');
+          return saveProfile(profile) ? profile : null;
         }
 
         function mapScore(map, key) {
@@ -4098,11 +4066,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         function createStrongAction(kind, item, context, extra = {}) {
           return {
             event_kind: kind,
+            section_id: context?.sectionId || null,
             event_id: item && item.event_id != null ? item.event_id : null,
             rank: item && item.rank != null ? item.rank : null,
             served_list_id: context?.servedListId || null,
             served_list_hash: context?.servedListHash || null,
-            surface: SURFACE_EVENT_DETAIL_RELATED,
+            surface: context?.surface || SURFACE_EVENT_DETAIL_RELATED,
             viewport_class: context?.viewportClass || viewportClass(window.innerWidth || 1024),
             layout_mode: context?.layoutMode || relatedLayoutMode(),
             presentation_mode: context?.presentationMode || relatedPresentationMode(window.innerWidth || 1024),
@@ -4519,9 +4488,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function contextForCard(card) {
-          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot]');
+          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot], [data-search-result-host]');
           const summary = feed ? servedListByFeed.get(feed) : null;
           return {
+            surface: summary?.surface || SURFACE_EVENT_DETAIL_RELATED,
+            sectionId: summary?.section_id || null,
             servedListId: summary?.served_list_id || null,
             servedListHash: summary?.served_list_hash || null,
             viewportClass: summary?.viewport_class || viewportClass(window.innerWidth || 1024),
@@ -4722,10 +4693,28 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         window.applyFeedbackState = applyFeedbackState;
+        // Search contributes candidates and served-list identity to the same
+        // action/profile owner. This port owns no card rendering or ranking.
+        const searchCardStores = new WeakMap();
+        window.KenigEventsSearchCardHost = {
+          hiddenIds: () => Array.from(hiddenSet(activeProfile())),
+          register: (grid, candidates, context) => {
+            grid.dataset.searchResultHost = 'true';
+            searchCardStores.set(grid, {
+              manifest: { feature_schema_version: FEATURE_SCHEMA_VERSION, taxonomy_version: TAXONOMY_VERSION, related_static: candidates },
+              ranked: candidates.map((candidate, rank) => ({ candidate, event_id: candidateId(candidate), rank })),
+            });
+            servedListByFeed.set(grid, { served_list_id: context.servedListId,
+              served_list_hash: context.servedListHash, algorithm_id: context.algorithmId,
+              section_id: context.sectionId, surface: 'search_results' });
+          },
+          sync: () => applyFeedbackState({ skipDiscoveryHydration: true }),
+        };
 
         async function controllerForCard(card) {
-          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot]');
+          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot], [data-search-result-host]');
           if (!feed) return { feed: null, store: null };
+          if (feed.matches('[data-search-result-host]')) return { feed, store: searchCardStores.get(feed) || null };
           if (feed.matches('[data-personal-feed-slot]')) {
             const section = feed.closest('[data-personal-feed-section]');
             return { feed, store: section ? personalFeedStores.get(section) || null : null };
@@ -4739,11 +4728,10 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (!eventId) return;
           const card = button.closest('[data-event-card]');
           const { store } = await controllerForCard(card);
-          const profile = activeProfile(store?.manifest);
-          if (!profile) {
-            requestConsent(() => handleFeedbackButton(button));
-            return;
-          }
+          // Technical profile creation follows an explicit product action under
+          // the User Agreement. Optional analytics consent is unrelated.
+          const profile = activeProfile(store?.manifest) || ensureProfileForAgreement();
+          if (!profile) return; // Storage failure is not a committed action.
           const candidate = store ? candidateById(store, eventId) : null;
           const current = eventState(profile, eventId);
           const title = button.dataset.eventTitle || scope?.dataset.eventTitle || '';
@@ -4762,7 +4750,10 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           }
           if (!action) return;
           const next = updateProfileForAction(profile, eventId, action, candidate);
-          saveProfile(next);
+          if (!saveProfile(next)) return;
+          window.dispatchEvent(new CustomEvent('kenigevents:profile-changed', {
+            detail: { eventId: String(eventId), action: typeof action === 'string' ? action : 'share_event', sourceCard: card },
+          }));
           const context = contextForCard(card);
           const item = card && store ? cardRankedItem(card, store) : { event_id: Number(eventId), rank: null };
           appendLog(createStrongAction(action, item, context, { event_title: title, action }), next);
@@ -4796,7 +4787,10 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const title = button.dataset.shareEventTitle || button.dataset.shareTitle || scope?.dataset.eventTitle || '';
           const candidate = store ? candidateById(store, eventId) : null;
           const next = updateProfileForAction(profile, eventId, 'share_event', candidate);
-          saveProfile(next);
+          if (!saveProfile(next)) return;
+          window.dispatchEvent(new CustomEvent('kenigevents:profile-changed', {
+            detail: { eventId: String(eventId), action: typeof action === 'string' ? action : 'share_event', sourceCard: card },
+          }));
           const context = contextForCard(card);
           const item = card && store ? cardRankedItem(card, store) : { event_id: Number(eventId), rank: null };
           appendLog(createStrongAction('share_event', item, context, { event_title: title, action: 'share_event' }), next);

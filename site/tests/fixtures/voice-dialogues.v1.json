@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "anchor": "2026-09-06T10:00:00.000Z",
+  "timezone": "Europe/Kaliningrad",
+  "status": "frozen input oracle; live audio and model execution NOT performed",
+  "cases": [
+    {
+      "id": "negative",
+      "text": "Не концерт. Лучше лекция завтра вечером.",
+      "assertions": [
+        "excludedFormats:concert",
+        "timeOfDay:evening",
+        "dateFrom:2026-09-07"
+      ]
+    },
+    {
+      "id": "free",
+      "text": "В Зеленоградске бесплатно.",
+      "assertions": [
+        "localityIds:zelenogradsk",
+        "freeOnly:true"
+      ]
+    },
+    {
+      "id": "price-replacement",
+      "text": "Нет, можно платные, но до пятисот рублей.",
+      "assertions": [
+        "freeOnly:false",
+        "maxPrice:500"
+      ]
+    },
+    {
+      "id": "coast",
+      "text": "Лучше на побережье, а не в Калининграде.",
+      "assertions": [
+        "localityIds:zelenogradsk,svetlogorsk,yantarny,baltiysk"
+      ]
+    },
+    {
+      "id": "correction",
+      "text": "В субботу… нет, в воскресенье.",
+      "assertions": [
+        "dateFrom:2026-09-06"
+      ]
+    },
+    {
+      "id": "parent",
+      "text": "Из этой подборки оставь бесплатные.",
+      "assertions": [
+        "mode:refine_selection",
+        "membership:subset"
+      ]
+    },
+    {
+      "id": "expand",
+      "text": "Найди ещё, можно в других городах.",
+      "assertions": [
+        "mode:expand_selection"
+      ]
+    },
+    {
+      "id": "ordinal",
+      "text": "А где проходит второе из показанных?",
+      "assertions": [
+        "explanationKind:address",
+        "ordinal:2",
+        "source:canonical"
+      ]
+    },
+    {
+      "id": "quiet",
+      "text": "Лекция для детей, только не концерт.",
+      "assertions": [
+        "excludedFormats:concert",
+        "audience:children"
+      ]
+    },
+    {
+      "id": "clarify",
+      "text": "Там же, как в прошлый раз.",
+      "assertions": [
+        "clarification:required-without-evidence"
+      ]
+    }
+  ]
+}
