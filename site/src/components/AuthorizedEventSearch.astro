@@ -1,4 +1,5 @@
 ---
+import ConversationalSearch from './ConversationalSearch.astro';
 interface Props {
   compact?: boolean;
   standalone?: boolean;
@@ -56,6 +57,7 @@ const HeadingTag = headingLevel;
       <span class="authorized-search__submit-label" data-search-submit-label>{enabled ? 'Искать' : 'Поиск пока не запускается'}</span>
     </button>
   </form>
+  <ConversationalSearch />
   <div class="authorized-search__progress" data-search-progress role="progressbar" aria-label="Ход поиска" aria-valuemin="0" aria-valuemax="100" hidden>
     <span class="authorized-search__progress-bar" data-search-progress-bar aria-hidden="true"></span>
   </div>

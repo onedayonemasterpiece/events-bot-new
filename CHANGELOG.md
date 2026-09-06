@@ -5024,6 +5024,34 @@
 - **VK Auto Queue / Event Parse**: Added a conservative prefilter for obvious long historical/admin non-event VK posts before full `event_parse`; ambiguous or event-like posts still go through the normal LLM parse unchanged, reducing wasted TPM on repeated non-events.
 - **General Stats / Festivals Queue**: `/general_stats` now shows current festival queue snapshot (`total/pending/running/done/error`), active backlog (`pending+running`), and active breakdown by source (`vk/tg/url`) in addition to daily inflow.
 
+- Fixed: conversational Search audio recovery now serializes retries, updates the
+  durable frame receipt and preserves interrupted/partial capture truth; first
+  signed-out state now explains the shared sign-in requirement. Added
+  full-Chromium microphone/IndexedDB recovery tests and corrected the native
+  permission descriptor. Bounded result membership is disclosed rather than
+  claimed as the full catalogue; ASR uses versioned public regional vocabulary
+  hints without forced replacement or private donor terminology. Preview-only,
+  not evidence of deployed ASR, phone acceptance or production promotion.
+  Added explicit local-only desktop capture preview with shared Auth and zero
+  assistant network calls, plus the existing canonical focused-route filter
+  backport for a Search-only preview (no new builder or production enablement).
+
+- Fixed: voice Search preview now has a responsive floating microphone and an
+  on-demand composer instead of an inline recorder dashboard. Guest/login and
+  microphone initialization failures give visible feedback; recovery is secondary.
+  Completed user-stopped audio enters ASR directly only when the assistant runtime
+  is enabled, with stale-transcript guards. Capture-only preview keeps all
+  assistant network calls disabled; this is not live ASR acceptance.
+
+- Fixed: voice capture now uses one circular, gently pulsing start/stop control
+  without a modal or recording-time focus takeover, reusing the proven donor
+  interaction. Audio is checkpointed locally at one-second frame boundaries;
+  terminal save failure stays recoverable and never reports a completed save.
+  Existing Auth/audio storage is retained; preview still does not enable ASR.
+
+- Added: DevCoveer protected voice host reuses existing Search/Auth/provider/quota core, with durable private receipts and no audio transit through Supabase.
+- Changed: voice uploads prefer native 32kbps Opus with AAC/PCM compatibility, preserving existing local recordings and final-write acknowledgement.
+
 ## [1.12.0] - 2026-03-04
 ### Highlights
 - **Smart Update (feature bundle)**: unified create/merge pipeline for VK/TG/`/parse` with source logs, Telegraph consistency, festival-context routing, and out-of-region filtering safeguards.

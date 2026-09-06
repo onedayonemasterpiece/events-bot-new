@@ -18,12 +18,16 @@ import {
   withSharedGoogleQuotaAttempt,
 } from "./google-quota.ts";
 import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts";
+import { handleAssistant, type AssistantDependencies, type AssistantRepository } from "./assistant-handler.ts";
+import { assistantGenerator } from "./assistant-provider.ts";
+import { assistantRepository } from "./assistant-repository.ts";
+import { eligible as assistantEligible, reject as assistantReject, type Intent as AssistantIntent } from "./assistant-intent.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-client-request-id",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, GET, HEAD, OPTIONS",
   "Access-Control-Expose-Headers":
     "X-KenigEvents-Search-Contract, X-KenigEvents-Search-Revision",
 };
@@ -95,7 +99,8 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function env(name: string, fallback = ""): string {
-  return Deno.env.get(name) || fallback;
+  const runtime = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } };
+  return (typeof Deno !== "undefined" ? Deno.env.get(name) : runtime.process?.env?.[name]) || fallback;
 }
 
 function googleModelId(value: string, fallback: string): string {
@@ -688,6 +693,7 @@ async function embedQuery(
   quotaBackend: GoogleQuotaBackend | null,
   cache?: QueryEmbeddingCacheOptions,
   counters: SearchAttemptCounters = emptyAttemptCounters(),
+  singleAttempt = false,
 ): Promise<EmbeddingResult> {
   const model = googleModelId(
     env("EVENT_SEARCH_EMBEDDING_MODEL"),
@@ -824,6 +830,7 @@ async function embedQuery(
     } catch (error) {
       const message = errorMessage(error).slice(0, 120);
       errors.push(`${key.limiter_env_name}:${message}`);
+      if (singleAttempt) throw error;
       if (shouldTryNextSharedQuotaKey(error)) {
         if (
           error instanceof SharedGoogleQuotaError &&
@@ -1048,6 +1055,19 @@ function normalizeCandidate(
     id: eventId,
     title: snapshot.title || row.title || display.title || "Событие",
     category: snapshot.category || row.category || "event",
+    city: row.city ?? snapshot.city,
+    start_date: row.start_date ?? row.date_local ?? snapshot.start_date ?? snapshot.date,
+    start_time: row.start_time ?? row.time_local ?? snapshot.start_time,
+    audience_tags: row.audience_tags ?? snapshot.audience_tags,
+    format_tags: row.format_tags ?? snapshot.format_tags,
+    min_price: row.min_price ?? row.price_min ?? snapshot.min_price ?? snapshot.price_min,
+    end_date: row.end_date ?? snapshot.end_date,
+    time_of_day: row.time_of_day ?? snapshot.time_of_day,
+    is_free: row.is_free ?? snapshot.is_free,
+    ticket_kind: row.ticket_kind ?? snapshot.ticket_kind,
+    admission_type: row.admission_type ?? snapshot.admission_type,
+    lifecycle_status: row.lifecycle_status ?? snapshot.lifecycle_status,
+    active: row.active ?? snapshot.active,
     tags: Array.isArray(snapshot.tags)
       ? snapshot.tags
       : Array.isArray(row.tags)
@@ -2003,7 +2023,15 @@ async function runEventSearch(
   requestId: string,
   requestStartedAt: number,
   progress?: ProgressCallback,
+  assistantIntent?: AssistantIntent,
 ): Promise<SearchHandlerResult> {
+  const recordVoiceAwareRequest = (...args: Parameters<typeof recordSearchRequest>) => {
+    const [client, owner, record] = args;
+    return recordSearchRequest(client, owner, assistantIntent ? { ...record,
+      p_metadata: { ...(record.p_metadata as Record<string, unknown> || {}),
+        traffic_class: "voice_preview", exclude_from_product_metrics: true } } : record);
+  };
+
   await progress?.({ stage: "auth", progress: 5, label: "Проверяю вход" });
   const supabaseUrl = env("SUPABASE_URL") ||
     env("PERSONALIZATION_SUPABASE_URL");
@@ -2112,8 +2140,10 @@ async function runEventSearch(
     };
   }
   const quotaOperationId = requestedOperationId || requestId;
-  const queryFacets = parseQueryFacets(query);
-  const limit = clampInt(body.limit, DEFAULT_LIMIT, 1, MAX_LIMIT);
+  const queryFacets: QueryFacets = assistantIntent
+    ? { weekday_iso: null, weekday_ru: null, time_of_day: assistantIntent.timeOfDay || null, admission: assistantIntent.freeOnly ? "free" : null }
+    : parseQueryFacets(query);
+  const limit = clampInt(body.limit, DEFAULT_LIMIT, 1, assistantIntent ? 60 : MAX_LIMIT);
   const offset = clampInt(body.offset, 0, 0, 500);
   const verificationWindow = clampInt(
     body.candidate_window,
@@ -2147,8 +2177,8 @@ async function runEventSearch(
   const requestedLlm = requestedExecutionMode === "cold_vector_llm" ||
     requestedExecutionMode === "degraded_vector_fallback";
   const useLlmVerifier = requestedLlm && llmEnvironmentEnabled;
-  const bypassResultCache = isCanary &&
-    requestedExecutionMode !== "cached_vector";
+  const bypassResultCache = Boolean(assistantIntent) || (isCanary &&
+    requestedExecutionMode !== "cached_vector");
   const bypassQueryEmbeddingCache = isCanary &&
     requestedExecutionMode !== "cached_vector";
   const deterministicLlmFailure = isCanary &&
@@ -2180,7 +2210,7 @@ async function runEventSearch(
     };
   }
   const timings: Record<string, number> = {};
-  const dateFrom = new Date().toISOString().slice(0, 10);
+  const dateFrom = assistantIntent?.dateFrom || new Date().toISOString().slice(0, 10);
   const allowLlmFallback = body.allow_llm_fallback !== false;
   const llmPolicySignature = JSON.stringify({
     enabled: useLlmVerifier,
@@ -2297,7 +2327,12 @@ async function runEventSearch(
     label: "Проверяю лимит поиска",
   });
   const quotaStartedAt = performance.now();
-  const { data: quotaRows, error: quotaError } = await service.rpc(
+  // The protected voice lane is admitted against actual shared provider
+  // capacity below, not the legacy small ordinary-search allowance. This is
+  // an internal capability; the public POST body cannot select it.
+  const { data: quotaRows, error: quotaError } = assistantIntent
+    ? { data: [{ plan_id: "voice_shared_capacity", admission: "provider_reservation_required", llm_reserved: false }], error: null }
+    : await service.rpc(
     "reserve_event_search_quota_internal_v1",
     {
       p_user_id: userId,
@@ -2308,7 +2343,7 @@ async function runEventSearch(
   );
   timings.quota_ms = nowMs() - Math.round(quotaStartedAt);
   if (quotaError) {
-    await recordSearchRequest(service, userId, {
+    await recordVoiceAwareRequest(service, userId, {
       p_request_kind: "vector_search",
       p_query_hash: queryHash,
       p_query_length: query.length,
@@ -2390,6 +2425,7 @@ async function runEventSearch(
         bypassRead: bypassQueryEmbeddingCache,
       },
       counters,
+      Boolean(assistantIntent),
     );
     const embedding = embeddingResult.values;
     timings.embedding_ms = nowMs() - Math.round(embeddingStartedAt);
@@ -2412,7 +2448,7 @@ async function runEventSearch(
         p_match_count: 60,
         p_offset_count: 0,
         p_date_from: dateFrom,
-        p_date_to: null,
+        p_date_to: assistantIntent?.dateTo || null,
         p_city_filter: null,
         p_category_filter: null,
         p_embedding_model: embeddingModel,
@@ -2425,9 +2461,17 @@ async function runEventSearch(
     );
     timings.search_rpc_ms = nowMs() - Math.round(searchStartedAt);
     if (searchError) throw new Error(`db_search:${searchError.message}`);
-    const rankedCandidates = (Array.isArray(rows) ? rows : []).map(
-      normalizeCandidate,
-    );
+    let rankedCandidates = (Array.isArray(rows) ? rows : []).map(normalizeCandidate);
+    if (assistantIntent) {
+      // Refresh facts from the same primary catalog before strict filtering.
+      // SQL returns a bounded ranked window, not the whole universe of events.
+      const fresh = await assistantCurrentCards(service, rankedCandidates.map(candidate => String(candidate.event_id)));
+      const facts = new Map(fresh.map(candidate => [String(candidate.event_id), candidate]));
+      rankedCandidates = rankedCandidates.filter(candidate => {
+        const current = facts.get(String(candidate.event_id));
+        return current && assistantEligible(current, assistantIntent);
+      }).map(candidate => ({ ...candidate, ...facts.get(String(candidate.event_id)), base_similarity: candidate.base_similarity }));
+    }
     const familyPage = paginateOccurrenceFamilies(
       rankedCandidates,
       offset,
@@ -2633,9 +2677,9 @@ async function runEventSearch(
       timings_ms: timings,
     };
     let resultCacheStatus = "skipped";
-    const resultCacheWriteAllowed = !isCanary ||
+    const resultCacheWriteAllowed = !assistantIntent && (!isCanary ||
       requestedExecutionMode === "cached_vector" ||
-      requestedExecutionMode === "cold_vector";
+      requestedExecutionMode === "cold_vector");
     if (resultCacheWriteAllowed && (llmResult.used || !useLlmVerifier)) {
       const cacheStoreStartedAt = performance.now();
       counters.result_cache_write_attempts += 1;
@@ -2671,7 +2715,7 @@ async function runEventSearch(
       });
     }
 
-    await recordSearchRequest(service, userId, {
+    await recordVoiceAwareRequest(service, userId, {
       p_request_kind: llmResult.used ? "llm_rerank" : "vector_search",
       p_query_hash: queryHash,
       p_query_length: query.length,
@@ -2746,7 +2790,7 @@ async function runEventSearch(
 
     return { status: 200, body: responseBody };
   } catch (error) {
-    await recordSearchRequest(service, userId, {
+    await recordVoiceAwareRequest(service, userId, {
       p_request_kind: "vector_search",
       p_query_hash: queryHash,
       p_query_length: query.length,
@@ -2874,11 +2918,71 @@ function progressStreamResponse(
   });
 }
 
-Deno.serve(async (request) => {
+async function assistantCurrentCards(service: any, ids: string[]): Promise<Record<string, any>[]> {
+  if (!ids.length) return [];
+  const { data, error } = await service.from("event_search_documents")
+    .select("*").in("event_id", ids).eq("active", true).eq("is_public", true).eq("is_searchable", true);
+  if (error) assistantReject("catalog_unavailable", 503);
+  return (data || []).filter((row: any) =>
+    !["cancelled", "postponed", "deleted"].includes(row.lifecycle_status) &&
+    !["cancelled", "postponed"].includes(row.availability_status) &&
+    row.is_public !== false && row.is_searchable !== false && row.visibility !== "private"
+  ).map(normalizeCandidate);
+}
+
+export function createAssistantDependencies(repository?: AssistantRepository): AssistantDependencies {
+  const supabaseUrl = env("SUPABASE_URL") || env("PERSONALIZATION_SUPABASE_URL");
+  let service: any = null;
+  const enabled = env("EVENT_SEARCH_ASSISTANT_ENABLED") === "1" && Boolean(env("EVENT_SEARCH_ASSISTANT_POLICY_REF"));
+  return {
+    enabled,
+    // Fixed deployment origins; never trust an arbitrary supplied upstream.
+    allowedOrigins: env("EVENT_SEARCH_ASSISTANT_ORIGINS", "https://kenigevents.ru").split(",").map(value => value.trim()),
+    maxAudioBytes: envInt("EVENT_SEARCH_ASSISTANT_AUDIO_MAX_BYTES", 16 * 1024 * 1024, 1024, 64 * 1024 * 1024),
+    async authenticate(req) {
+      const token = bearerToken(req.headers.get("Authorization"));
+      if (!token) assistantReject("auth_required", 401);
+      const client = createClient(supabaseUrl, env("SUPABASE_ANON_KEY") || env("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY"), {
+        global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await client.auth.getUser(token);
+      if (error || !data?.user || data.user.is_anonymous) assistantReject("eligible_user_required", 401);
+      const allowed = env("EVENT_SEARCH_ASSISTANT_PREVIEW_USER_IDS").split(",").map(value => value.trim());
+      // This source slice is protected preview only. No public/owner-auth bypass.
+      if (!allowed.includes(data.user.id)) assistantReject("assistant_preview_access_required", 403);
+      service = personalizationServiceClient(supabaseUrl);
+      if (!service) assistantReject("service_unavailable", 503);
+      return { owner: data.user.id, repo: repository || assistantRepository(service) };
+    },
+    generate: assistantGenerator({backend: sharedGoogleQuotaBackend(supabaseUrl), keys: providerKeyPool("LLM"), env: name => env(name)}),
+    async search(req, intent, operationId) {
+      const headers = new Headers(req.headers); headers.delete("Content-Length");
+      const internal = new Request(req.url, {method: "POST", headers,
+        body: JSON.stringify({query: intent.goal, limit: 60, candidate_window: 60, client_request_id: operationId,
+          include_fallback: false, use_llm_verifier: false, allow_llm_fallback: false})});
+      const result = await runEventSearch(internal, operationId, performance.now(), undefined, intent);
+      if (result.status >= 400) assistantReject(result.body.error === "quota_exceeded" ? "quota_exceeded" : "search_failed", result.status);
+      return result.body;
+    },
+    currentCards: async (_owner, ids) => assistantCurrentCards(service, ids),
+  };
+}
+
+async function runAssistant(request: Request): Promise<SearchHandlerResult> {
+  return handleAssistant(request, createAssistantDependencies());
+}
+
+export async function handleSearchRequest(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
   const requestStartedAt = performance.now();
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
+  }
+  if (/\/event-search\/assistant\/(control|audio|status)$/.test(new URL(request.url).pathname)) {
+    const result = await runAssistant(request);
+    const response = jsonResponse(result.body, result.status);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   }
   // Side-effect-free release probe. It performs no Auth, quota, database,
   // provider or product Search work and exposes only the public contract id.
@@ -2908,4 +3012,6 @@ Deno.serve(async (request) => {
 
   const result = await runEventSearch(request, requestId, requestStartedAt);
   return jsonResponse(result.body, result.status);
-});
+}
+
+if (typeof Deno !== "undefined") Deno.serve(handleSearchRequest);

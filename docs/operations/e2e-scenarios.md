@@ -123,3 +123,49 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - ссылка на `/log <event_id>`,
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
+
+### Conversational website Search / voice prototype
+
+Canonical cases `voice.spool_recovery`, `voice.stale_membership`,
+`voice.real_quality` and `voice.capture_only` live in
+[`static-site-autotest-scenarios.v1.yml`](../testing/static-site-autotest-scenarios.v1.yml).
+`site/tests/voice-browser.integration.mjs` uses actual full Chromium capture,
+AudioWorklet and IndexedDB with a **synthetic device**; it does not run Telegram,
+external ASR, real-phone permissions or deployed RLS. For authorized phone
+checks preserve installed PWA/session/audio/queues and follow the
+[existing voice integration handoff](../features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md).
+
+`voice.capture_only` is the desktop local-recording preview contract:
+[`site/tests/voice-capture-only.integration.mjs`](../../site/tests/voice-capture-only.integration.mjs)
+checks actual Chromium mount/IndexedDB/playback/reload with explicit Auth/WAV
+fixtures and zero assistant-network requests (not real login/ASR). Published
+[Search capture-only preview](https://kenigevents.ru/preview-voice-desktop-capture-20260906/poisk/)
+uses source `f0dd8cca6e4dc07352eebbfb1e64b68be4191b42`; public anonymous desktop
+checks passed. User live path: ordinary login → explicit record/stop → open saved
+recordings → playback → reload/playback. Never capture ambient audio automatically;
+keep session/audio/queues. Real authenticated capture and ASR remain separately
+unverified; see the canonical handoff's published receipt, not unit-test inference.
+
+Voice floating-entry correction: `site/tests/voice-composer.integration.mjs`
+checks real Chromium modal/focus/stop ordering with injected callbacks;
+`site/tests/voice-composer-preview.integration.mjs` checks actual anonymous
+rendered preview at 1440/1280/390px (`VOICE_PREVIEW_BASE` required), visible guest
+feedback, no nav overlap, keyboard reopen, reload and zero assistant requests.
+These are not authenticated speech/ASR acceptance. The capture-only harness also
+covers resolved-false OAuth feedback; native capture tests cover AudioContext
+constructor failure. Current receipt is in the existing voice integration handoff.
+`site/tests/voice-flow.integration.mjs` is a separate synthetic orchestration
+fixture: user Stop starts ASR once, late transcript preserves edited text,
+interrupted capture is not auto-sent. It does not replace `voice.real_quality`.
+Real provider availability (not `voice.real_quality` acceptance) was additionally
+checked with the documented synthetic Wonderful Lections WAV through its pinned
+GoogleAI client and the actual KenigEvents assistantGenerator/strict limiter.
+Exact usage/checkpoints and preview 1441 receipt: existing voice integration handoff.
+The voice composer is now nonmodal: `voice-composer.integration.mjs` asserts
+single mic/no focus trap/explicit recovery, not the superseded modal close test.
+`voice-capture-only.integration.mjs` additionally covers two real synthetic-device
+recordings, delayed/failed terminal receipt and same-audio retry/reload.
+`voice-browser.integration.mjs` checks durable periodic audio before Stop and
+abrupt page closure. Auth snapshots/device audio remain injected; no phone claim.
+
+Voice DevCoveer preview: `site/tests/voice-devcoveer-host.test.mjs` (HTTP/media fixtures; real Opus/AAC decode, not live ASR), `voice-receipt-store.test.mjs` (real SQLite durability), `voice-compression.integration.mjs` (native synthetic microphone+IndexedDB). Canonical live receipt and limitations: `docs/features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md`.

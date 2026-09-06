@@ -1,0 +1,160 @@
+// Native Chromium capture + IndexedDB; synthetic device, NOT an ASR/phone test.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { build } from 'esbuild';
+import { chromium } from 'playwright';
+const root = new URL('../', import.meta.url).pathname;
+let server, browser, origin, bundle;
+test.before(async () => {
+  bundle = (await build({ stdin: { contents: `
+    import { MicrophoneCapture } from './src/lib/assistant/microphoneCapture.ts';
+    import { VoiceStore } from './src/lib/assistant/voiceStore.ts';
+    window.modules = { MicrophoneCapture, VoiceStore };
+    `, resolveDir: root, loader: 'ts' }, bundle: true, write: false, format: 'esm' })).outputFiles[0].text;
+  const worklet = await readFile(new URL('../public/voice/pcm-capture-worklet.js', import.meta.url));
+  server = createServer((req, res) => {
+    if (req.url === '/bundle.js') { res.setHeader('Content-Type','text/javascript'); res.end(bundle); }
+    else if (req.url === '/voice/pcm-capture-worklet.js') { res.setHeader('Content-Type','text/javascript'); res.end(worklet); }
+    else { res.setHeader('Content-Type','text/html'); res.end('<!doctype html><button id="start">Запись</button><button id="stop">Стоп</button><script type="module" src="/bundle.js"></script>'); }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  origin = `http://127.0.0.1:${server.address().port}`;
+  browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? undefined : 'chromium', executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+    args: ['--use-fake-device-for-media-stream', '--no-sandbox'] });
+});
+test.after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); });
+async function setup(permissions = ['microphone']) {
+  const context = await browser.newContext({ permissions }); const page = await context.newPage();
+  await page.goto(origin); await page.waitForFunction(() => !!window.modules);
+  return { context, page };
+}
+test('native microphone/worklet stop acknowledges all locally committed WAV parts; reload retains owner-scoped data', async () => {
+  const {context, page} = await setup();
+  await page.evaluate(async () => {
+    const {VoiceStore, MicrophoneCapture} = window.modules;
+    window.store = await VoiceStore.open(); await store.create('owner-a','recording-a');
+    window.states = [];
+    window.capture = new MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',
+      budget: {maxWireBytes:32768,envelopeBytes:2048,encoding:'base64'},
+      onPart: part => store.putPart('owner-a','recording-a',part), onStatus: (status,reason) => { states.push(status); window.captureReason=reason; }});
+    document.querySelector('#start').onclick = () => { window.start = capture.start().catch(error=>{window.captureError=error.message;}); };
+    document.querySelector('#stop').onclick = () => { window.stop = capture.stop().then(async receipt => {
+      await store.finish('owner-a','recording-a',receipt); return receipt;
+    }); };
+  });
+  await page.click('#start'); await page.waitForFunction(() => states.includes('recording')||states.includes('error'));
+  assert.equal(await page.evaluate(()=>JSON.stringify({states,reason:window.captureReason,error:window.captureError})).then(value=>JSON.parse(value).states.includes('recording')),true,await page.evaluate(()=>JSON.stringify({states,reason:window.captureReason,error:window.captureError})));
+  await page.waitForTimeout(750); await page.click('#stop');
+  const receipt = await page.evaluate(() => window.stop);
+  assert.equal(receipt.complete, true); assert.ok(receipt.frames > 1000);
+  assert.equal(receipt.frames, receipt.savedFrames); assert.ok(receipt.partCount > 1);
+  assert.ok([16000,44100,48000].includes(receipt.sampleRate));
+  await page.reload(); await page.waitForFunction(() => !!window.modules);
+  const result = await page.evaluate(async () => {
+    const store = await window.modules.VoiceStore.open();
+    const own = await store.page('recordings','owner-a'); const other = await store.page('recordings','owner-b');
+    const parts = await store.parts('owner-a','recording-a');
+    const before = own[0].partCount; await store.putPart('owner-a','recording-a',parts[0]);
+    let conflict = false;
+    try { const bad = structuredClone(parts[0]); bad.bytes[45] ^= 1; await store.putPart('owner-a','recording-a',bad); }
+    catch (e) { conflict = e.message === 'audio_payload_conflict'; }
+    const after = (await store.page('recordings','owner-a'))[0].partCount;
+    return { own, other, frames: parts.reduce((n,p)=>n+p.frameCount,0), indexes:parts.map(p=>p.index), before,after,conflict };
+  });
+  assert.equal(result.own[0].state,'saved'); assert.equal(result.other.length,0);
+  assert.equal(result.frames,receipt.frames); assert.equal(result.before,result.after); assert.equal(result.conflict,true);
+  assert.deepEqual(result.indexes,Array.from({length:receipt.partCount},(_,i)=>i));
+  await context.close();
+});
+test('native permission denial has no fabricated transcript, part or successful receipt', async () => {
+  const {context,page} = await setup([]);
+  const cdp = await context.newCDPSession(page);
+  const {targetInfo}=await cdp.send('Target.getTargetInfo');
+  await cdp.send('Browser.setPermission', { permission:{name:'microphone'}, setting:'denied', origin, browserContextId:targetInfo.browserContextId });
+  const result = await page.evaluate(async () => {
+    let saved=0; const states=[];
+    const capture = new window.modules.MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',
+      budget:{maxWireBytes:32768,envelopeBytes:2048,encoding:'base64'},onPart:async()=>{saved++;},onStatus:(state,reason)=>states.push({state,reason})});
+    try { await capture.start(); } catch {}
+    return {saved,states};
+  });
+  assert.equal(result.saved,0); assert.equal(result.states.at(-1).state,'error');
+  assert.equal(result.states.at(-1).reason,'microphone_denied'); await context.close();
+});
+test('local answer history paginates without erasing earlier pages or another owner', async () => {
+  const {context,page}=await setup();
+  const result=await page.evaluate(async()=>{
+    const store=await window.modules.VoiceStore.open();
+    for(let i=0;i<55;i++) await store.saveAnswer('owner-a',`answer-${String(i).padStart(2,'0')}`,{items:[],title:`Answer ${i}`});
+    const first=await store.page('answers','owner-a',undefined,20); const last=first.at(-1);
+    const second=await store.page('answers','owner-a',[last.createdAt,last.id],20);
+    return {first:first.map(r=>r.id),second:second.map(r=>r.id),other:await store.page('answers','owner-b')};
+  });
+  assert.equal(result.first.length,20); assert.equal(result.second.length,20);
+  assert.equal(new Set([...result.first,...result.second]).size,40); assert.equal(result.other.length,0);
+  await context.close();
+});
+test('native storage retry is serialized and commits a corrected receipt without inventing an uninterrupted capture', async()=>{
+  const {context,page}=await setup();
+  await page.evaluate(async()=>{
+    const {VoiceStore,MicrophoneCapture}=window.modules;window.store=await VoiceStore.open();await store.create('owner-a','retry-a');
+    window.fail=true;window.writes=[];
+    window.capture=new MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',budget:{maxWireBytes:32768,envelopeBytes:2048,encoding:'base64'},
+      onPart:async part=>{if(window.fail)throw new Error('test quota fault');await new Promise(r=>setTimeout(r,20));writes.push(part.index);await store.putPart('owner-a','retry-a',part);},onStatus:()=>{}});
+    document.querySelector('#start').onclick=()=>{window.started=capture.start();};
+  });
+  await page.click('#start');await page.waitForFunction(()=>capture.status==='partial');
+  const result=await page.evaluate(async()=>{
+    const before=capture.receipt();await store.finish('owner-a','retry-a',before);window.fail=false;
+    const retry1=capture.retryUnsaved(),retry2=capture.retryUnsaved();const same=retry1===retry2;
+    await Promise.all([retry1,retry2]);const after=capture.receipt();await store.finish('owner-a','retry-a',after);
+    return {before,after,same,writes,stored:(await store.page('recordings','owner-a'))[0],stopped:await capture.stop()};
+  });
+  assert.equal(result.same,true);assert.equal(new Set(result.writes).size,result.writes.length);
+  assert.equal(result.after.savedFrames,result.after.frames);assert.equal(result.after.complete,false);
+  assert.equal(result.stored.state,'partial');assert.equal(result.stored.receipt.savedFrames,result.after.frames);
+  assert.deepEqual(result.stopped,result.after);await context.close();
+});
+test('user stop with a tail-only storage fault becomes saved only after durable local recovery',async()=>{
+ const {context,page}=await setup();
+ await page.evaluate(async()=>{
+  const {VoiceStore,MicrophoneCapture}=window.modules;window.store=await VoiceStore.open();await store.create('owner-a','tail-a');window.fail=true;
+  window.capture=new MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',budget:{maxWireBytes:1024*1024,envelopeBytes:8192,encoding:'base64'},
+   onPart:async part=>{if(window.fail)throw new Error('test disk fault');await store.putPart('owner-a','tail-a',part);},onStatus:()=>{}});
+  document.querySelector('#start').onclick=()=>{window.started=capture.start();};
+ });
+ await page.click('#start');await page.waitForFunction(()=>capture.status==='recording');await page.waitForTimeout(150);
+ const result=await page.evaluate(async()=>{
+  const before=await capture.stop();await store.finish('owner-a','tail-a',before);window.fail=false;await capture.retryUnsaved();
+  const after=capture.receipt();await store.finish('owner-a','tail-a',after);
+  return {before,after,row:(await store.page('recordings','owner-a'))[0]};
+ });
+ assert.equal(result.before.complete,false);assert.equal(result.before.captureComplete,true);
+ assert.equal(result.after.complete,true);assert.equal(result.row.state,'saved');assert.equal(result.row.receipt.frames,result.row.receipt.savedFrames);
+ await context.close();
+});
+test('AudioContext construction failure reaches terminal error, not endless requesting',async()=>{
+ const {context,page}=await setup();
+ const result=await page.evaluate(async()=>{
+  const states=[];const Real=window.AudioContext;window.AudioContext=class{constructor(){throw new Error('device unavailable');}};
+  const capture=new window.modules.MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',budget:{maxWireBytes:32768,envelopeBytes:2048,encoding:'base64'},onPart:async()=>{},onStatus:(state,reason)=>states.push({state,reason})});
+  try{await capture.start();}catch{}finally{window.AudioContext=Real;}
+  return {status:capture.status,states};
+ });
+ assert.equal(result.status,'error');assert.deepEqual(result.states.map(x=>x.state),['requesting','error']);await context.close();
+});
+test('default wire budget checkpoints during recording; abrupt page closure retains accepted audio',async()=>{
+ const {context,page}=await setup();
+ await page.evaluate(async()=>{
+  const {VoiceStore,MicrophoneCapture}=window.modules;const store=await VoiceStore.open();await store.create('durable-owner','abrupt-test');
+  window.capture=new MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',budget:{maxWireBytes:1048576,envelopeBytes:8192,encoding:'base64'},onPart:part=>store.putPart('durable-owner','abrupt-test',part),onStatus:()=>{}});
+  document.querySelector('#start').onclick=()=>{void window.capture.start();};
+ });
+ await page.click('#start');await page.waitForFunction(()=>window.capture.status==='recording');
+ await page.evaluate(async()=>{const deadline=Date.now()+6000;while(Date.now()<deadline){const store=await window.modules.VoiceStore.open();const rows=await store.page('recordings','durable-owner');store.close();if(rows[0]?.partCount>=2)return;await new Promise(r=>setTimeout(r,100));}throw Error('No periodic durable audio checkpoints');});
+ await page.close();const next=await context.newPage();await next.goto(origin);await next.waitForFunction(()=>window.modules);
+ const persisted=await next.evaluate(async()=>{const store=await window.modules.VoiceStore.open();const rows=await store.page('recordings','durable-owner');const parts=await store.parts('durable-owner','abrupt-test');return {state:rows[0].state,parts:parts.length,frames:parts.reduce((n,p)=>n+p.frameCount,0),rate:parts[0].sampleRate};});
+ assert.ok(persisted.parts>=2);assert.ok(persisted.frames>=persisted.rate*2);assert.equal(persisted.state,'recording');await context.close();
+});

@@ -55,7 +55,10 @@
       ],
       "functions": [
         "POST /functions/v1/event-search",
-        "POST /functions/v1/transport-probe"
+        "POST /functions/v1/transport-probe",
+        "POST /functions/v1/event-search/assistant/control",
+        "POST /functions/v1/event-search/assistant/audio",
+        "GET /functions/v1/event-search/assistant/status"
       ],
       "storage": [
         "POST /storage/v1/object/focus-feedback/{path+}",

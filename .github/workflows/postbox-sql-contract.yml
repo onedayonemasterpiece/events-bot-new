@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - '.github/workflows/postbox-sql-contract.yml'
+      - 'supabase/migrations/20260906013000_event_search_assistant_receipts.sql'
+      - 'supabase/tests/event_search_assistant_contract.sql'
       - 'supabase/migrations/20260711203940_email_control_plane_v1.sql'
       - 'supabase/migrations/20260712072912_email_postbox_event_consumer_v2.sql'
       - 'supabase/migrations/20260712083037_email_postbox_worker_v1.sql'
@@ -55,3 +57,96 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260801222242_focus_auth_delivery_attempt_v1.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260804190000_postbox_auth_feedback_correlation_v1.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/email_postbox_auth_feedback_contract.sql
+      - name: Apply private voice receipts and rollback-only SQL contracts
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -c 'alter table auth.users add column if not exists is_anonymous boolean default false'
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260906013000_event_search_assistant_receipts.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/event_search_assistant_contract.sql
+
+  # Temporary exact-source document materialization; no commit/ref mutations.
+  voice-document-blobs:
+    if: github.event.pull_request.number == 587 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'docs/agent-assisted-event-discovery-20260826'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve exact documents and insert scoped voice evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, os, subprocess, urllib.request
+          from pathlib import Path
+          repo='onedayonemasterpiece/events-bot-new'
+          entry='''- Added: protected preview voice conversational Search on the existing Search/Auth/
+            transport and shared Google quota path: continuous PCM capture, owner-scoped
+            IndexedDB audio and accepted input, explicit ASR confirmation, durable private
+            operation receipts, ordered interpretation and normal card/history integration.
+            Added additive service-only SQL, independent semantic filters, reconciliation,
+            synthetic capture/HTTP contracts and read-only Android preflight. The shared
+            action owner no longer adds a separate personalization activation dialog.
+            Live ASR, environment rollout, PWA and native A=S=P remain unverified; optional
+            analytics consent is unchanged and no production/root promotion is included.
+          '''
+          specs=[('CHANGELOG.md','ad55719e66dbeeec867c037f02ed91c597f95d49'),
+                 ('docs/operations/e2e-scenarios.md','9bccda0bdf879f51946910ffb3db3cfa1fdd73d9')]
+          result=[]
+          for path,sha in specs:
+              before=subprocess.check_output(['git','cat-file','blob',sha])
+              assert hashlib.sha1(b'blob '+str(len(before)).encode()+b'\0'+before).hexdigest()==sha
+              text=before.decode()
+              if path=='CHANGELOG.md':
+                  anchor='\n## [1.12.0] - 2026-03-04\n'
+                  assert text.count(anchor)==1 and text.index('## [Unreleased]')<text.index(anchor)
+                  text=text.replace(anchor,'\n'+entry+'\n'+anchor,1)
+              else:
+                  assert '## Voice conversational Search: 2026-09-06 implementation' not in text
+                  text+='''
+          ## Voice conversational Search: 2026-09-06 implementation
+
+          Existing Search scenario family, not a new QA runner. Product contract:
+          [voice v1](../features/static-site-pages/smart-vector-search/voice-search-solution-v1.md).
+          Execution/readout boundary and remaining live work:
+          [manual integration handoff](../features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md).
+
+          | Contract | Executable evidence | Boundary |
+          |---|---|---|
+          | voice.capture.continuity / permission / local persistence | `site/tests/assistant-worklet.test.mjs`, `assistant-streaming.test.mjs`, `voice-browser.integration.mjs` | Native Chromium uses a synthetic device; not actual ASR or Android |
+          | voice.dialogue.order / old-base / explicit expansion / late result | `site/tests/assistant-conversation.test.mjs`, `assistant-controller.test.mjs` | Deterministic kernel/controller, not live model accuracy |
+          | voice.http.owner / immutable audio / once-only provider / outcome reconciliation | `site/tests/assistant-handler.test.mjs` | Real Request/Response objects with injected provider/repository |
+          | voice.storage.private / claim / immutable payload / unknown outcome | `supabase/tests/event_search_assistant_contract.sql` in existing Postbox SQL CI | Real PostgreSQL rollback-only contracts; deployed grants still require readback |
+          | voice.measurement.rendered_seen_committed | `site/tests/assistant-controller.test.mjs` | Local preview aggregate; does not certify remote analytics sink or dashboard |
+          | voice.live.asr / canonical cards / profile / sink / phone | `site/tests/fixtures/voice-dialogues.v1.json`, `scripts/ops/voice_pwa_device_probe.py`, integration handoff | Required live work; corpus text and ADB script alone are NOT_RUN, not PASS |
+
+          The earlier 32 planned quality scenarios are not 32 successful runs. Keep
+          CI source SHA, native-browser receipt, actual provider usage, allowed test
+          identity and device result separate. Test traffic is excluded from product
+          metrics. Never publish raw speech, queries, tokens or private device data.
+          '''
+              data=text.encode()
+              body=json.dumps({'encoding':'base64','content':base64.b64encode(data).decode()}).encode()
+              request=urllib.request.Request('https://api.github.com/repos/'+repo+'/git/blobs',data=body,
+                  headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/json'})
+              with urllib.request.urlopen(request,timeout=45) as response: created=json.load(response)
+              expected=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              assert created['sha']==expected
+              result.append({'path':path,'mode':'100644','type':'blob','sha':expected,'before':sha})
+          Path('/tmp/voice-document-blobs.json').write_text(json.dumps({'files':result,'refs_written':False},indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-document-blobs
+          path: /tmp/voice-document-blobs.json
+          retention-days: 2

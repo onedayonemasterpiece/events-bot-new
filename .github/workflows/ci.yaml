@@ -109,14 +109,26 @@ jobs:
           node-version: '22.12.0'
           cache: npm
           cache-dependency-path: site/package-lock.json
+      - name: Run offline voice dialogue and audio contracts
+        run: node --experimental-strip-types --test tests/assistant-*.test.mjs
       - name: Install pinned site dependencies
         run: npm ci --no-audit --no-fund
+      - name: Typecheck voice browser and server domain modules
+        working-directory: .
+        run: >-
+          npm exec --yes --package typescript@5.8.3 -- tsc
+          --noEmit --strict --skipLibCheck --allowJs --target es2023
+          --module esnext --moduleResolution bundler --lib es2023,dom,dom.iterable
+          --allowImportingTsExtensions site/src/lib/assistant/*.ts
+          supabase/functions/event-search/assistant-*.ts
       - name: Validate design-system production surface contract
         run: npm run check:design-system-production-surfaces
       - name: Inventory design-system iconography
         run: npm run check:design-system-iconography -- --out artifacts/design-system/iconography-inventory.json
       - name: Install pinned Chromium and system dependencies
         run: npx playwright install --with-deps chromium
+      - name: Run native voice capture and IndexedDB integration
+        run: node --test tests/voice-browser.integration.mjs
       - name: Run browser gate receipt contracts
         run: npm run test:browser-release-gate
       - name: Run external focus OTP harness contracts
@@ -135,6 +147,7 @@ jobs:
       - name: Build real static event pages
         env:
           PREVIEW_BUILD_ID: preview-ci-browser-gate
+          PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED: '1'
           # Build the preview through the same keyboard path as the immutable
           # production/candidate artifacts; ordinary local previews stay inert.
           PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE: '1'
