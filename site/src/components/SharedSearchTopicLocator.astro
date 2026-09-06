@@ -1,5 +1,6 @@
 <!-- Shared header owns this non-heading locator; Search retains semantic H2s. -->
 <span class="shared-search-topic-locator" data-search-topic-locator hidden></span>
+<button type="button" class="shared-search-nav-toggle" data-search-nav-toggle aria-expanded="false" aria-controls="search-shared-site-nav" hidden>Разделы <span aria-hidden="true">⌄</span></button>
 <style>
   .shared-search-topic-locator {
     position:absolute; box-sizing:border-box; max-width:calc(100% - 24px);
@@ -10,6 +11,8 @@
     font-family:inherit; font-weight:700; font-size:14px; line-height:20px; overflow-wrap:anywhere;
     display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
   }
+  .shared-search-nav-toggle { position:absolute; right:12px; top:16px; display:flex; align-items:center; gap:20px; justify-content:center; width:144px; height:44px; border:1px solid #ffffffaa; border-radius:16px; background:var(--surface,#fffcf8); color:inherit; font:inherit; font-size:14px; cursor:pointer; box-shadow:0 4px 9px #38231613,0 12px 28px #38231610; }
+  .shared-search-nav-toggle[hidden] { display:none!important; }
   .shared-search-topic-locator[hidden] {display:none!important;}
   @media(min-width:760px){.shared-search-topic-locator{padding:6px 12px;max-height:56px;}}
 </style>

@@ -607,3 +607,18 @@ abuse controls and measurable false-positive tolerance before any guest release.
 Do not add covert fingerprinting or a guest bypass now. Current delivery priority
 is the working AUTHENTICATED end-to-end scenario; the existing auth gate and
 shared provider limiter remain mandatory.
+
+
+Clean-preview integration details: the `compact` shared sign-in variant is mounted
+with the same Search Auth instance; guest mic / send opens sign-in and never
+starts recording automatically after login. An authenticated quick-line send uses
+the same durable conversation controller. First view does not auto-render old
+answer history over the landing mic; explicit history remains available. Shared
+mobile menu awaits the existing capture/overlay handshake before hiding the dock.
+On desktop, while a topic is active, the SAME primary nav links are disclosed by
+an accessible compact menu button in their original header rather than consuming
+the topic's space. The locator retains the previous crossed topic across gaps
+until the next section crosses; the full question remains in flow. Mobile bottom
+nav uses the existing component with light island/shadow treatment; quick input
+and mic clear it. Production gating is unchanged: this clean treatment is only
+for the enabled standalone voice preview, not a root-page promotion.

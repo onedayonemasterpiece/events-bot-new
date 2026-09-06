@@ -1,5 +1,6 @@
 ---
 import { withBase } from '../lib/events';
+import '../styles/staticSiteSignIn.css';
 interface Props { catalog?: boolean; clean?: boolean; }
 const { catalog = false, clean = false } = Astro.props;
 const captureOnly = import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY === '1';

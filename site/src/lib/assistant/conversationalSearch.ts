@@ -1,4 +1,5 @@
 import { createConversationTurn, settleConversationTurn, type ConversationTurn } from './conversationTurn.ts';
+import { mountStaticSiteSignIn } from '../staticSiteSignIn.ts';
 import { mountVoiceDiagnostics } from './voiceDiagnostics.ts';
 import { getStaticSiteAuth } from '../staticSiteAuth';
 import { MicrophoneCapture, type CaptureStatus } from './microphoneCapture.ts';
@@ -45,6 +46,9 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   const objectUrls=new Set<string>();
   const pendingTurns=new Map<string,ConversationTurn>();
   const auth=getStaticSiteAuth({supabaseUrl:search.dataset.supabaseUrl||'',relayUrl:search.dataset.supabaseRelayUrl||'',publishableKey:search.dataset.supabaseKey||'',provider:search.dataset.yandexProvider});
+  const signInContainer=root.querySelector<HTMLElement>('[data-assistant-sign-in]');
+  const signIn=signInContainer?mountStaticSiteSignIn(signInContainer,auth,{variant:'compact'}):null;
+  root.querySelector('[data-assistant-sign-in-open]')?.addEventListener('click',()=>signIn?.open(presentation?.launcher));
   const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner,()=>!captureOnly,root.dataset.assistantHost==='devcoveer');
   const showError=(error:unknown,searchId?:string)=>{const turn=searchId?pendingTurns.get(searchId):undefined;if(turn){settleConversationTurn(turn,'error',errorText(error));turn.body.append(button('Проверить обработку',()=>controller?.resume()));}processing.textContent=errorText(error);if(!capture||!['requesting','recording'].includes(capture.status))presentation?.setCapture('error',processing.textContent);resume.hidden=!state.draft;};
   const showComposer=()=>presentation?presentation.open():get('composer').scrollIntoView({block:'start'});
@@ -74,6 +78,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   }
   root.dataset.assistantStartup='checking_auth';processing.textContent='';
   get('login')?.addEventListener('click',()=>{
+    if(signIn){signIn.open(presentation?.launcher);return;}
     get('auth').textContent='Открываю вход через Яндекс…';
     void auth.signIn().then(ok=>{if(!ok)get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';}).catch(()=>{get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';});
   });
@@ -205,6 +210,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   }
   record.addEventListener('click',()=>{
     if(!owner&&authStatus==='checking'){presentation?.message(get('auth').textContent||'Проверяю сохранённый вход…');return;}
+    if(!owner&&signIn){signIn.open(presentation?.launcher);return;}
     if(!owner){showComposer();get('auth').textContent='Войдите, чтобы начать голосовой поиск. Микрофон не включится автоматически после входа.';get<HTMLButtonElement>('login')?.focus();return;}
     if(pendingCommit){presentation?.message('Сохраняю запись. Дождитесь завершения.');return;}
     if(receiptRetry){showComposer();presentation?.message('Не удалось завершить сохранение. Повторите локальное сохранение, не закрывая вкладку.');return;}
@@ -328,6 +334,8 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     for(const url of objectUrls)URL.revokeObjectURL(url);objectUrls.clear();for(const timer of dwell.values())clearTimeout(timer);dwell.clear();exposure.disconnect();visibility.disconnect();rendered.clear();pendingTurns.clear();answers.replaceChildren();historyList.replaceChildren();recordings.replaceChildren();measurement=new AssistantMeasurement();lastAction.clear();
     for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=true;
     record.disabled=false;record.hidden=!owner;captureStatus.hidden=!owner;
+    const signInOpen=root.querySelector<HTMLElement>('[data-assistant-sign-in-open]');if(signInOpen)signInOpen.hidden=Boolean(owner);
+    const recoveryOpen=root.querySelector<HTMLElement>('[data-assistant-recovery-open]');if(recoveryOpen)recoveryOpen.hidden=!owner;
     const login=get('login');if(login)login.hidden=Boolean(owner);
     const history=get('history');if(history)history.hidden=captureOnly||!owner;
     const recovery=get('recordings');if(recovery)recovery.hidden=true;

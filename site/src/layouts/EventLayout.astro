@@ -427,6 +427,10 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       body:has([data-reference4-fullscreen][open]) [data-assistant-clean-ui="true"] .assistant__voice-dock { visibility:hidden; pointer-events:none; }
       body:has([data-assistant-clean="true"]) .site-header { background:transparent; border:0; box-shadow:none; }
       body:has([data-assistant-clean="true"]) .site-nav { background:var(--surface,#fffcf8); border-radius:18px; padding:5px; box-shadow:0 4px 9px #38231613,0 12px 28px #38231610; }
+      @media(min-width:760px) {
+        body:has([data-assistant-clean="true"]) .site-header[data-search-topic-compact="true"] .site-nav { display:none; }
+        body:has([data-assistant-clean="true"]) .site-header[data-search-topic-compact="true"][data-search-nav-open="true"] .site-nav { display:flex; position:absolute; right:12px; top:72px; width:min(520px,calc(100vw - 32px)); max-width:none; flex-wrap:wrap; padding:12px; z-index:3; }
+      }
       body:has([data-assistant-clean="true"]) .site-nav a::after { display:none; }
       body:has([data-assistant-clean="true"]) .site-nav a[aria-current="page"] { background:#f3e7dc; border-radius:12px; }
       @media(max-width:759px) {
@@ -5355,7 +5359,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               menu.classList.remove('is-closing');
             }, 340);
           };
-          const openMenu = () => {
+          let menuOpening = false;
+          const openMenu = async () => {
+            if(menuOpening)return;menuOpening=true;
+            try { await window.KenigEventsSearchAdapterV1?.beforeOverlayOpen?.(); } catch { menuOpening=false;return; }
+            menuOpening=false;
             window.clearTimeout(drawerTimer);
             openedAtY = window.scrollY || 0;
             menu.setAttribute('open', '');

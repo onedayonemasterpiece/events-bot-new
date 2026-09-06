@@ -7,7 +7,10 @@
   microphone, then moves the same mic into a compact lower-right composer after
   first ASR/typed intake. Shared-shell surfaces retain the site's light floating
   treatment; audio-responsive shadow, reduced motion and focus restoration are
-  supported. Guest-trial quotas remain documented to-be, not enabled.
+  supported. Shared Yandex/email OTP sign-in is connected to the same Auth instance;
+  the existing desktop navigation compacts when a topic needs the shared row.
+  Opening the mobile menu stops capture before hiding controls. Guest-trial quotas
+  remain documented to-be, not enabled.
 
 - Added: a neutral inline sign-in block with compact/card variants for voice
   Search hosts, reusing the existing shared Yandex/email OTP controller and

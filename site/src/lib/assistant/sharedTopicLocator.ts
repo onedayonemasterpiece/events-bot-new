@@ -12,6 +12,8 @@ export function bindSharedTopicLocator(locator:HTMLElement,win:Window=window) {
   if(!header||!inner)return()=>{};
   const owner=win as Window&{KenigEventsSearchAdapterV1?:AssistantSurfaceAdapter};
   let state:Partial<AssistantSurfaceState>={},frame=0,edge=-1;
+  const navToggle=header.querySelector<HTMLButtonElement>('[data-search-nav-toggle]');
+  const mainNav=header.querySelector<HTMLElement>('.site-nav');if(mainNav&&navToggle)mainNav.id='search-shared-site-nav';
   const menu=header.querySelector<HTMLDetailsElement>('[data-reference4-fullscreen]');
   const visible=(node:Element|null)=>Boolean(node&&node.getBoundingClientRect().width>0&&win.getComputedStyle(node).display!=='none');
   const render=()=>{
@@ -21,15 +23,19 @@ export function bindSharedTopicLocator(locator:HTMLElement,win:Window=window) {
     if(!adapter){locator.hidden=true;return;}
     const brand=Array.from(header.querySelectorAll<HTMLElement>('.site-header__brand-tag, [data-reference4-fullscreen] > summary')).find(visible);
     if(!brand){locator.hidden=true;return;}
-    const nav=header.querySelector('.site-nav');
+    const id=state.viewedSectionId,title=typeof state.viewedTitle==='string'?state.viewedTitle.trim():'';
+    const section=id?Array.from(doc.querySelectorAll<HTMLElement>('[data-assistant-section]')).find(n=>n.dataset.assistantSection===id):null;
+    const candidateEdge=Math.max(header.getBoundingClientRect().bottom,brand.getBoundingClientRect().bottom);
+    const compact=Boolean(doc.querySelector('[data-assistant-clean="true"]')&&win.innerWidth>=760&&title&&section&&section.getBoundingClientRect().top<=candidateEdge+1);
+    header.dataset.searchTopicCompact=String(compact);if(navToggle)navToggle.hidden=!compact;
+    if(!compact){delete header.dataset.searchNavOpen;navToggle?.setAttribute('aria-expanded','false');}
+    const nav=compact?navToggle:mainNav;
     const geometry=topicLocatorGeometry({header:header.getBoundingClientRect(),inner:inner.getBoundingClientRect(),brand:brand.getBoundingClientRect(),nav:visible(nav)?nav!.getBoundingClientRect():null});
     if(edge!==geometry.edge){
       edge=geometry.edge;
       doc.documentElement.style.setProperty('--ke-assistant-locator-edge',`${edge}px`);
       win.dispatchEvent(new CustomEvent('kenigevents:search-locator-geometry',{detail:{edge}}));
     }
-    const id=state.viewedSectionId,title=typeof state.viewedTitle==='string'?state.viewedTitle.trim():'';
-    const section=id?Array.from(doc.querySelectorAll<HTMLElement>('[data-assistant-section]')).find(n=>n.dataset.assistantSection===id):null;
     const active=Boolean(title&&section?.matches('[data-assistant-section]')&&section.getBoundingClientRect().top<=edge+1&&geometry.width>=120);
     locator.hidden=!active;
     if(!active)return;
@@ -39,9 +45,12 @@ export function bindSharedTopicLocator(locator:HTMLElement,win:Window=window) {
     locator.dataset.viewedSectionId=id!;
     locator.style.left=`${geometry.left}px`;
     locator.style.top=`${geometry.top}px`;
-    locator.style.width=`${geometry.width}px`;
+    locator.style.width=`${Math.min(geometry.width,520)}px`;
   };
   const schedule=()=>{if(!frame)frame=win.requestAnimationFrame(render);};
+  navToggle?.addEventListener('click',()=>{const open=header.dataset.searchNavOpen!=='true';header.dataset.searchNavOpen=String(open);navToggle.setAttribute('aria-expanded',String(open));});
+  header.addEventListener('keydown',event=>{if(event.key==='Escape'&&header.dataset.searchNavOpen==='true'){delete header.dataset.searchNavOpen;navToggle?.setAttribute('aria-expanded','false');navToggle?.focus();}});
+  doc.addEventListener('click',event=>{if(event.target instanceof Node&&!mainNav?.contains(event.target)&&!navToggle?.contains(event.target)){delete header.dataset.searchNavOpen;navToggle?.setAttribute('aria-expanded','false');}});
   const ready=()=>{state=owner.KenigEventsSearchAdapterV1?.getState()||{};schedule();};
   const context=(event:Event)=>{state=(event as CustomEvent<AssistantSurfaceState>).detail||{};schedule();};
   win.addEventListener('kenigevents:search-adapter-ready',ready);
