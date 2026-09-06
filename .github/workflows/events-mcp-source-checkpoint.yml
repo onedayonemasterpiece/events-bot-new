@@ -32,21 +32,42 @@ jobs:
           r0_sha=$(git rev-parse origin/feature/events-mcp-queue-observability-r0)
           base_sha=$(git merge-base HEAD "$main_sha")
           printf 'head=%s\nmain=%s\nr0=%s\nmerge_base=%s\n' "$(git rev-parse HEAD)" "$main_sha" "$r0_sha" "$base_sha" > artifacts/events-mcp-source/refs.txt
-          for pair in "head:HEAD" "main:$main_sha" "r0:$r0_sha" "base:$base_sha"; do
-            name=${pair%%:*}
-            ref=${pair#*:}
-            git archive --format=tar.gz "$ref" > "artifacts/events-mcp-source/$name.tar.gz"
-          done
+          python - <<'PY'
+          import json, pathlib, subprocess, tarfile
+          root = pathlib.Path('artifacts/events-mcp-source')
+          refs = dict(line.split('=', 1) for line in (root/'refs.txt').read_text().splitlines())
+          extensions = {'.py', '.md', '.yml', '.yaml', '.json', '.toml', '.txt', '.ini', '.html', '.sql', '.sh', '.astro', '.ts', '.mjs', '.js', '.csv', '.svg', '.css'}
+          for name, ref in [('head', refs['head']), ('main', refs['main']), ('r0', refs['r0']), ('base', refs['merge_base'])]:
+              excluded = []
+              proc = subprocess.Popen(['git', 'archive', '--format=tar', ref], stdout=subprocess.PIPE)
+              with tarfile.open(fileobj=proc.stdout, mode='r|') as src, tarfile.open(root/f'{name}.tar.gz', 'w:gz') as dst:
+                  for item in src:
+                      path = pathlib.PurePosixPath(item.name)
+                      keep = item.isfile() and (path.suffix.lower() in extensions or path.name in {'.env.example', '.gitattributes', '.gitignore', '.editorconfig', 'Dockerfile', 'Makefile'} or (item.name.startswith('tests/') and item.size <= 1024*1024))
+                      if keep:
+                          dst.addfile(item, src.extractfile(item))
+                      elif item.isfile():
+                          excluded.append({'path': item.name, 'bytes': item.size})
+              if proc.wait() != 0:
+                  raise SystemExit('git archive failed')
+              (root/f'{name}-excluded.json').write_text(json.dumps(excluded, indent=2))
+          PY
           git diff --binary "$base_sha" HEAD > artifacts/events-mcp-source/r1-from-base.patch
           git diff --binary "$base_sha" "$main_sha" > artifacts/events-mcp-source/main-from-base.patch
           sha256sum artifacts/events-mcp-source/*.tar.gz > artifacts/events-mcp-source/SHA256SUMS
-      - name: Export installable Python test dependencies
-        run: |
-          python -m pip wheel -r requirements.txt -w artifacts/events-mcp-source/wheels
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: events-mcp-source-${{ github.sha }}
           path: artifacts/events-mcp-source/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Export installable Python test dependencies
+        run: |
+          python -m pip wheel -r requirements.txt -w artifacts/events-mcp-wheels
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: events-mcp-wheels-${{ github.sha }}
+          path: artifacts/events-mcp-wheels/
           retention-days: 7
           if-no-files-found: error
