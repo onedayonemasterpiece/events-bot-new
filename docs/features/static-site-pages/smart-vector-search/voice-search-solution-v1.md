@@ -930,9 +930,11 @@ visible open-bound labels use «с …»/«до …». Existing frozen outcomes 
 
 ### TO-BE: один планировщик, адаптивное знание и уместные уточнения
 
-Статус: согласуемый целевой контракт по уточнениям пользователя; runtime web
-lookup и новая политика вопросов ещё НЕ включены. Это расширение существующего
-interpret, а не отдельный classifier перед каждым поиском или второй Search.
+Статус: частично реализовано в текущей PR-ветке: единый `adaptivePlan` внутри
+interpret, blocking/optional вопросы и post-search refinement. Активирование и
+live-evidence фиксируются в `INC-2026-09-06-voice-search-relevance.md`; локальные
+тесты сами по себе не означают доставку. Runtime web lookup НЕ включён. Это
+расширение существующего interpret, не отдельный classifier или второй Search.
 
 Один вызов interpret получает текущую реплику, релевантный проверенный контекст,
 предыдущие выбранные условия и известные возможности внутреннего каталога. Модель
@@ -1003,3 +1005,45 @@ Acceptance TO-BE: одинаковые диалоги с внутренним, �
 вопрос без блокировки результатов, blocking без лишних расходов, совет только
 после фактической выдачи, внешние инструкции, web timeout и отсутствие событий.
 Не считать маршрутизацию/grounding доказанными по одному ответу или unit-тестам.
+
+
+#### Реализованная часть адаптивного контракта
+
+`assistant-adaptive-plan.ts` валидирует `knowledgeAction`, `externalNeed` и
+`externalQuery` (nullable краткие строки), `clarification`, `question`, до двух
+`assumptions`, nullable `refinementOpportunity`. Включается в существующий schema
+через `adaptivePlanEnabled`, вместе с `structuredPlanEnabled`; одна интерпретация
+остаётся одним provider-вызовом. Старые durable receipts не переписываются.
+
+- `blocking`: существующее верхнее `clarification` заполняется вопросом;
+  Search возвращает его без retrieval, verifier или editorial.
+- `optional`: верхнее `clarification=null`, обычные verified карточки не блокируются.
+  Предположение/вопрос входят в существующий текст перед карточками, без нового UI.
+- Ответ на blocking получает оригинальный неразрешённый вопрос в planning input
+  для буквального provenance; сырой новый ввод в receipt остаётся неизменным.
+  Уточнения и отступление к новой теме по-прежнему решает модель, не regex.
+- Существующий editorial получает фактическое количество и проверенные карточки,
+  оценивает `refinementOpportunity`, выдаёт nullable `refinement`. При уже заданном
+  optional вопросе schema/validator допускают только `refinement=null`. Подсказки
+  не являются обязательными, не исполняют скрыто дополнительный поиск.
+- При недоступности/stale editorial карточки и optional вопрос сохраняются без
+  регенерации; status не дописывает вопрос повторно. При нуле карточек editorial
+  не вызывается: отдельный результат-зависимый совет для пустой выдачи пока не реализован.
+
+Web capability явно unavailable в planner prompt. Неразрешимая внешняя отсылка
+может быть отмечена `web_lookup`, но только вместе с blocking вопросом,
+позволяющим пояснить её без выдуманной внешней справки. Это **не выполненный веб-поиск**.
+Обычные известные жанры/названия интерпретируются внутренне без лишнего запроса.
+
+Перед web execution остаются: отдельный grounded prose вызов одобренной модели
+через общий limiter, точный учёт usage даже при post-response validation error,
+search-query budget/diagnostics, отдельное представление источников и Search
+Suggestions с корректной политикой хранения. Schema+search для используемого
+Flash-Lite не подтверждено специализированной документацией; нельзя просто
+добавить `googleSearch` к текущему JSON-вызову. REST GoogleSearch не документирует
+жёсткий maxQueries, а один вызов может вызвать несколько оплачиваемых поисков.
+Проверенные первичные источники:
+[structured outputs](https://ai.google.dev/gemini-api/docs/generate-content/structured-output),
+[GoogleSearch API](https://ai.google.dev/api/generate-content#GoogleSearch),
+[grounding billing](https://ai.google.dev/gemini-api/docs/google-search),
+[provider terms](https://ai.google.dev/gemini-api/terms).

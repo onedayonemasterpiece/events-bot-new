@@ -2976,6 +2976,7 @@ export function createAssistantDependencies(repository?: AssistantRepository): A
   return {
     enabled,
     structuredPlanEnabled: true,
+    adaptivePlanEnabled: true,
     editorialEnabled: true,
     editorialFacts: async (_owner, ids) => {
       const cards=await assistantCurrentCards(service,ids);

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Changed: one conversational interpreter now plans blocking/optional clarification and important assumptions; optional questions preserve verified cards and appear inline without another shell or footer. Grounding execution remains disabled.
+- Added: result-dependent, nullable refinement in the existing grounded editorial; blocking replies retain the original unresolved request for provenance, with raw new speech preserved.
+
 - Docs: TO-BE single conversational planner chooses internal/web knowledge needs and blocking/optional clarification independently; result-grounded refinement suggestions remain optional within the existing clean answer. No runtime web activation.
 
 - Changed: conversational inheritance is model-led per relevant condition, informed by the actual predecessor question; a topic change can keep the discussed dates without retaining the old genre. No automatic full-question/undated reset.

@@ -1,3 +1,4 @@
+import { adaptiveAnswer } from './assistant-adaptive-plan.ts';
 import type {QueryPlan} from './assistant-query-plan.ts';
 import {SharedGoogleQuotaError} from './google-quota.ts';
 import {editorialSchema,editorialPrompt,validateEditorial,editorialText} from './assistant-editorial.ts';
@@ -29,6 +30,7 @@ export interface AssistantDependencies {
   search(request:Request,intent:Intent,operationId:string,parentCandidates?:Record<string,any>[],queryPlan?:QueryPlan):Promise<Record<string,any>>;
   currentCards(owner:string,ids:string[]):Promise<Record<string,any>[]>;
   structuredPlanEnabled?:boolean;
+  adaptivePlanEnabled?:boolean;
   editorialEnabled?:boolean;
   editorialFacts?:(owner:string,ids:string[])=>Promise<Record<string,any>[]>;
   maxAudioBytes:number;
@@ -117,10 +119,10 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
             } catch (_) { /* An unverified old comment must not break refreshed cards. */ }
             if(!valid) {
               (projection.result as any).editorial={status:'stale'};
-              (projection.result as any).answer=searchAnswer(row.outcome.result,(projection.result as any).items.length);
+              (projection.result as any).answer=adaptiveAnswer(searchAnswer(row.outcome.result,(projection.result as any).items.length),row.outcome.result.adaptivePlan);
             }
           } else if(row.outcome.result.responseSummary&&!row.outcome.result.clarification&&row.outcome.result.explanationKind==='none')
-            (projection.result as any).answer=searchAnswer(row.outcome.result,(projection.result as any).items.length);
+            (projection.result as any).answer=adaptiveAnswer(searchAnswer(row.outcome.result,(projection.result as any).items.length),row.outcome.result.adaptivePlan);
         }
         return {status:200,body:projection};}
       const before=url.searchParams.get('before')||undefined;
@@ -181,13 +183,15 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
         const basePlan=previous?.outcome.result.queryPlan||parent?.outcome.result.queryPlan||null;
         // Owner-checked durable predecessor, not a client-supplied history blob.
         const predecessor=previous?.outcome.result||parent?.outcome.result;
-        const conversationContext=predecessor?{question:String(predecessor.question||'').slice(0,8192),title:predecessor.title,resultCount:parent?itemsOf(parent).length:null,clarification:predecessor.clarification||null}:null;
+        const conversationContext=predecessor?{question:String(predecessor.question||'').slice(0,8192),title:predecessor.title,resultCount:parent?itemsOf(parent).length:null,clarification:predecessor.clarification||predecessor.adaptivePlan?.question||null}:null;
         const parentItems=itemsOf(parent);
         if(input.visibleIds.some(v=>!parentItems.some(item=>String(item.event_id??item.id)===v)))reject('untrusted_visible_ids',409);
-        const question=previous?`${previous.outcome.result.question}\n${input.text}`:input.text;
+        const unresolved=previous||((deps.adaptivePlanEnabled&&parent?.outcome.result.clarification)?parent:null);
+        const question=unresolved?`${unresolved.outcome.result.question}\n${input.text}`:input.text;
+        const planningInput=deps.adaptivePlanEnabled&&unresolved?{...input,text:question}:input;
         if(question.length>65536)reject('draft_capacity',413);
-        await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan,conversationContext):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?structuredInterpretationSchema(input,basePlan):INTERPRETATION_SCHEMA,
-          dispatched:dispatch,completed:complete,accounted,validate:value=>({...(deps.structuredPlanEnabled?structuredInterpretation(value,input,base,basePlan):interpretation(value,base)),question,parentId:input.parentId,
+        await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(planningInput,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan,conversationContext,deps.adaptivePlanEnabled):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?structuredInterpretationSchema(planningInput,basePlan,deps.adaptivePlanEnabled):INTERPRETATION_SCHEMA,
+          dispatched:dispatch,completed:complete,accounted,validate:value=>({...(deps.structuredPlanEnabled?structuredInterpretation(value,planningInput,base,basePlan,deps.adaptivePlanEnabled):interpretation(value,base)),question,parentId:input.parentId,
             mode:previous?.outcome.result.mode||input.mode,anchor:input.anchor,visibleIds:input.visibleIds})});
       } else {
         const result=interpreted!.outcome.result;let answer:string='';let search:any={items:[],catalog_revision:parent?.outcome?.result?.catalog_revision||'facts-v1'};
@@ -224,7 +228,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
         const exactIds=new Set((search.semantic_verification?.exact_ids||[]).map(String));
         const items=Array.isArray(search.items)?search.items.filter((i:any)=>exactIds.has(String(i.event_id??i.id))):[];
         const finalResult={...search,...result,id,items,parentId:result.parentId,
-          title:result.title,answer:answer||searchAnswer({...result,...search},items.length),
+          title:result.title,answer:answer||adaptiveAnswer(searchAnswer({...result,...search},items.length),result.adaptivePlan),
           served_list_id:crypto.randomUUID(),served_list_hash:await sha256(new TextEncoder().encode(JSON.stringify(items.map((i:any)=>i.event_id??i.id)))),
           source_served_list_id:search.served_list_id||null,has_more:search.has_more===true,
           membership_complete:search.membership_complete===true, membership_scope:'bounded_canonical_search_window'};
@@ -234,9 +238,9 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
             const allowed=new Set(items.map((i:any)=>Number(i.event_id??i.id)));
             const grounded=facts.filter(c=>allowed.has(Number(c.event_id??c.id))&&typeof c.search_digest==='string'&&c.search_digest.trim());
             if(!grounded.length)throw new Error('editorial_facts_missing');
-            await deps.generate({kind:'editorial',prompt:editorialPrompt(result.question,result.intent,grounded),schema:editorialSchema(grounded),
-              validate:value=>validateEditorial(value,grounded),dispatched:dispatch,accounted,
-              completed:async(value:any,accounting)=>complete({...finalResult,answer:editorialText(value,grounded),editorial:{status:'complete',...value,source_hashes:await editorialHashes(grounded.filter(c=>value.recommendations.some((r:any)=>r.event_id===Number(c.event_id??c.id))))}},accounting)});
+            await deps.generate({kind:'editorial',prompt:editorialPrompt(result.question,result.intent,grounded,result.adaptivePlan,items.length),schema:editorialSchema(grounded,Boolean(result.adaptivePlan),!result.adaptivePlan?.question),
+              validate:value=>validateEditorial(value,grounded,Boolean(result.adaptivePlan),!result.adaptivePlan?.question),dispatched:dispatch,accounted,
+              completed:async(value:any,accounting)=>complete({...finalResult,answer:adaptiveAnswer(editorialText(value,grounded),result.adaptivePlan),editorial:{status:'complete',...value,source_hashes:await editorialHashes(grounded.filter(c=>value.recommendations.some((r:any)=>r.event_id===Number(c.event_id??c.id))))}},accounting)});
           } catch (error) {
             const failure=error instanceof AssistantError?error.code:error instanceof SharedGoogleQuotaError?`shared_quota_${error.stage}`:'editorial_provider_unavailable';
             if(!durable)await complete({...finalResult,editorial:{status:'unavailable',failure_reason:failure}},error instanceof SharedGoogleQuotaError&&error.stage==='finalize'?{pending:true,state:'unknown',stage:'editorial_finalize'}:null);

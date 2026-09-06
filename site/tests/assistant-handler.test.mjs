@@ -279,3 +279,55 @@ test('model-led interpretation receives the owner-checked actual predecessor mes
  h.deps.generate=async o=>{assert.ok(o.prompt.includes('CONVERSATION_CONTEXT='));assert.ok(o.prompt.includes(original));await o.dispatched();const result=o.validate(parsed({intent:{...intent(),dateFrom:null,dateTo:null},queryPlan:{contextMode:'patch',dateMode:'inherit',scope:'constrained',groups:[{dimension:'format',alternatives:['лекция'],sourceQuote:'Подбери лекции',source:'current'}]}}));await o.completed(result);return result;};
  const r=await h.control(uid(),'interpret',input({text:'Подбери лекции',mode:'expand_selection',parentId}));assert.equal(r.body.state,'completed');assert.equal(r.body.result.intent.dateFrom,'2026-09-07');assert.equal(r.body.result.intent.dateTo,'2026-09-13');assert.doesNotMatch(r.body.result.intent.goal,/научпоп/);
 });
+
+// Adaptive strategy stays inside the existing interpreter and authenticated lane.
+const adaptive=(extra={})=>({knowledgeAction:'internal',externalNeed:null,externalQuery:null,clarification:'none',question:null,assumptions:[],refinementOpportunity:null,...extra});
+function adaptiveProvider(h,plan,queryPlan={contextMode:'replace',dateMode:'from_today',scope:'constrained',groups:[{dimension:'format',alternatives:['лекция'],sourceQuote:'Хочу на лекцию',source:'current'}]}){
+ h.deps.structuredPlanEnabled=true;h.deps.adaptivePlanEnabled=true;
+ h.deps.generate=async o=>{h.calls.push(o.kind);assert.ok(o.schema.required.includes('adaptivePlan'));await o.dispatched();const value=o.validate(parsed({adaptivePlan:plan,queryPlan}));await o.completed(value);return value;};
+}
+test('adaptive internal plan uses exactly one interpret call and does not force questions',async()=>{
+ const h=harness();adaptiveProvider(h,adaptive());const i=uid(),s=uid();const r=await h.control(i,'interpret',input());
+ assert.equal(r.body.state,'completed');assert.equal(r.body.result.clarification,null);
+ const found=await h.control(s,'search',{interpretationId:i});assert.equal(found.body.result.items.length,1);assert.deepEqual(h.calls,['interpret','search']);
+});
+test('blocking clarification does not run retrieval, verification or editorial',async()=>{
+ const h=harness();h.deps.editorialEnabled=true;h.deps.editorialFacts=async()=>{throw Error('must not fetch');};
+ adaptiveProvider(h,adaptive({clarification:'blocking',question:'Какую именно лекцию вы имеете в виду?'}));
+ const i=uid();await h.control(i,'interpret',input());const r=await h.control(uid(),'search',{interpretationId:i});
+ assert.equal(r.body.result.answer,'Какую именно лекцию вы имеете в виду?');assert.deepEqual(r.body.result.items,[]);assert.deepEqual(h.calls,['interpret']);
+});
+test('optional question does not block cards, appears once, survives readback',async()=>{
+ const h=harness();const question='Вам интереснее история или искусство?';adaptiveProvider(h,adaptive({clarification:'optional',question}));
+ const i=uid(),s=uid();await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
+ assert.equal(r.body.result.items.length,1);assert.equal(r.body.result.clarification,null);assert.equal(r.body.result.answer.split(question).length,2);
+ const read=await h.request(`status?id=${s}`);assert.equal(read.body.result.answer,r.body.result.answer);assert.deepEqual(h.calls,['interpret','search']);
+});
+test('unavailable web reference asks rather than pretends to search externally',async()=>{
+ const h=harness();adaptiveProvider(h,adaptive({knowledgeAction:'web_lookup',externalNeed:'Неизвестный исполнитель',externalQuery:'исполнитель жанр',clarification:'blocking',question:'Какой жанр у этого исполнителя?'}));
+ const i=uid();await h.control(i,'interpret',input());const r=await h.control(uid(),'search',{interpretationId:i});
+ assert.equal(r.body.result.adaptivePlan.knowledgeAction,'web_lookup');assert.deepEqual(r.body.result.items,[]);assert.deepEqual(h.calls,['interpret']);
+});
+test('answer to blocking question retains original request as grounded input without replacing raw speech',async()=>{
+ const h=harness();adaptiveProvider(h,adaptive({clarification:'blocking',question:'На какую тему?'}));const i=uid(),s=uid();
+ await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
+ let prompt,schema;adaptiveProvider(h,adaptive());const generate=h.deps.generate;h.deps.generate=o=>{prompt=o.prompt;schema=o.schema;return generate(o);};
+ const next=uid();const r=await h.control(next,'interpret',input({text:'История края',mode:'expand_selection',parentId:s}));
+ assert.equal(r.body.state,'completed');assert.equal(h.rows.get(next).payload.text,'История края');assert.equal(r.body.result.question,'Хочу на лекцию\nИстория края');
+ assert.ok(prompt.includes('На какую тему?'));assert.ok(schema.properties.queryPlan.properties.groups.items.properties.sourceQuote.enum.some(q=>q.includes('Хочу на лекцию')));
+});
+test('optional question context is available to next interpreter, without forcing inheritance',async()=>{
+ const h=harness();adaptiveProvider(h,adaptive({clarification:'optional',question:'На какую тему?'}));const i=uid(),s=uid();await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
+ let prompt;adaptiveProvider(h,adaptive(),{contextMode:'replace',dateMode:'from_today',scope:'all_events',groups:[]});const generate=h.deps.generate;h.deps.generate=o=>{prompt=o.prompt;return generate(o);};
+ const r=await h.control(uid(),'interpret',input({text:'Нет, любые события',mode:'expand_selection',parentId:s}));
+ assert.equal(r.body.state,'completed');assert.equal(r.body.result.question,'Нет, любые события');assert.equal(r.body.result.queryPlan.scope,'all_events');assert.ok(prompt.includes('На какую тему?'));
+});
+test('adaptive editorial uses actual candidates and optional question is composed exactly once',async()=>{
+ const h=harness(),question='Какую тему предпочитаете?';adaptiveProvider(h,adaptive({clarification:'optional',question,refinementOpportunity:'Уточнить тему при необходимости'}));
+ h.deps.editorialEnabled=true;h.deps.editorialFacts=async()=>[{event_id:1,title:'Лекция',search_digest:'История региона'}];
+ const interpret=h.deps.generate;h.deps.generate=async o=>{if(o.kind==='interpret')return interpret(o);h.calls.push(o.kind);assert.match(o.prompt,/"resultCount":1/);assert.deepEqual(o.schema.properties.refinement.enum,[null]);await o.dispatched();const value=o.validate({intro:'Есть историческая лекция.',recommendations:[{event_id:1,comment:'Познакомит с прошлым региона.',evidence_index:0}],refinement:null});await o.completed(value);};
+ const i=uid(),s=uid();await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
+ assert.equal(r.body.result.editorial.status,'complete');assert.equal(r.body.result.answer.split(question).length,2);assert.equal(r.body.result.items.length,1);assert.deepEqual(h.calls,['interpret','search','editorial']);
+ assert.equal((await h.request(`status?id=${s}`)).body.result.answer,r.body.result.answer);
+ h.deps.editorialFacts=async()=>[];const stale=await h.request(`status?id=${s}`);assert.equal(stale.body.result.editorial.status,'stale');assert.equal(stale.body.result.answer.split(question).length,2);
+});

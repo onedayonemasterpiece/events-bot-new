@@ -248,3 +248,12 @@ Model-led inheritance amendment: handler regression includes the owner-checked
 actual predecessor question; plan tests allow topical replacement with date
 carryover. Real contextual-topic-change, explicit followup, explicit restart and
 broad city-question probes are recorded separately in the relevance incident.
+
+Adaptive planner regression (`assistant-adaptive-plan.test.mjs` and
+`assistant-handler.test.mjs`): one interpreter call; blocking means zero retrieval/
+editorial; optional question plus ordinary cards; clarification continuation with
+literal source provenance and unchanged raw speech; nullable refinement based on
+actual candidates; stable/stale status without duplicated question; unavailable
+web cannot masquerade as successful grounding. These are injected dependency
+checks, not live model/phone evidence; protected live acceptance remains in the
+voice-search relevance incident.
