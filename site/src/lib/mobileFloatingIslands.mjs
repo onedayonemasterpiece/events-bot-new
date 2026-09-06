@@ -61,10 +61,10 @@ export function initMobileFloatingIslands(doc=document,win=window){
   // picker. One-day pages instead use a named, content-sized picker without
   // a duplicate title. The pre-dock row retains maximal whole-item fit.
   const labelProbe=doc.createElement('span');labelProbe.textContent=compactLabel();labelProbe.style.cssText='position:fixed;visibility:hidden;white-space:nowrap;font:650 12px/1 Inter,ui-sans-serif,system-ui,sans-serif;';doc.body.append(labelProbe);
-  const targetWidth=singleDay?Math.min(Math.max(112,Math.ceil(labelProbe.getBoundingClientRect().width)+32),win.innerWidth-left-inset):cityWidth;labelProbe.remove();
+  const targetWidth=singleDay?Math.min(Math.max(112,Math.ceil(labelProbe.getBoundingClientRect().width)+48),win.innerWidth-left-inset):cityWidth;labelProbe.remove();
   marker.style.height=`${contextHeight}px`;
   const cr=controls.getBoundingClientRect(),mr=marker.getBoundingClientRect();
-  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:singleDay?left:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:singleDay?44:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
+  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:singleDay?44:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
   titleMarker.style.position='';marker.style.position='';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${geometry.approachTop}px`);
   title.style.cssText=titleStyle;
   if(!nativeTimeline){title.style.animation='none';titleSkin.style.animation='none';}

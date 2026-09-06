@@ -1407,10 +1407,12 @@ stay in normal flow; neither date nor “По времени” becomes a top is
 permanent feed-order/gesture-instruction row is removed from this mobile view;
 this review does not introduce a replacement tutorial overlay. The actual city
 filter retains its native sticky/540ms easing mechanism. The B4 fitting row
-beside the brand is superseded by the owner-requested B5 compact state: one
+beside the brand is superseded by the owner-requested compact state (B6 corrects B5 anchoring): one
 content-sized “Все города” button (44px island height, top20px), or the actual
-selected city name. It sits directly beside the unchanged brand instead of
-filling all remaining width with “Все +N”. Long names are width-capped and
+selected city name. It docks12px from the right viewport edge, not next to the brand. A visible
+downward chevron identifies it as a picker and turns upward while open; its
+width includes the arrow budget. This corrects the B5 regression that wrongly
+left-anchored a label-only button. It does not fill the remaining row with “Все +N”. Long names are width-capped and
 ellipsized with the full accessible selection retained. The original popover
 contains every city; the normal-flow row still fits whole choices plus overflow. Its normal-flow reserve is56px with8px
 margins, not72px with12/24px margins. One-city/empty days keep a static heading
@@ -1427,11 +1429,13 @@ three full rows in384×720 without reducing cards, dates or the brand. The initi
 200–220px proposal was an estimate; the acceptance check allows230px and separately
 requires three complete rows at720px/four at844px when the route has enough events.
 `site/tests/single-day-density.playwright.mjs` covers320/384/430px, three day routes,
-static heading exit, content-sized compact picker beside the brand, real city filtering
+static heading exit, right-aligned content-sized compact picker with an open/closed chevron, real city filtering
 and live counts, single-city routing, reduced motion and the Weekend exception.
 `site/tests/date-dock.playwright.mjs` remains the calendar and unchanged-lower-nav
 regression. Evidence: `artifacts/codex/date-page-clean-20260906/`. Same eight routes,
 review index and historical snapshot. B5 follow-up evidence is in
 `artifacts/codex/date-city-compact-20260906/`, preview prefix
-`preview-islands-20260906-archetypes-date-b5`; not a full build, native phone, Auth/PWA,
+`preview-islands-20260906-archetypes-date-b5`. The B6 right-edge/affordance
+correction is published at `preview-islands-20260906-archetypes-date-b6`, with
+evidence in `artifacts/codex/date-city-right-20260906/`; not a full build, native phone, Auth/PWA,
 Penpot certification or production/root release.

@@ -151,5 +151,9 @@ body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked=
 
 /* A one-day dock has no duplicate title: one content-sized city picker, with
    all original choices in its popover. The expanded flow row is unchanged. */
-body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle] {display:block;height:44px;min-height:44px;padding:0 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;}
+body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle] {display:block;height:44px;min-height:44px;padding:0 32px 0 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;}
 body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle].has-selected::after {display:none;}
+
+body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle]::before {content:"";position:absolute;right:16px;top:17px;width:6px;height:6px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg);transition:transform 180ms ease;pointer-events:none;}
+body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle][aria-expanded="true"]::before {transform:translateY(3px) rotate(225deg);}
+@media(prefers-reduced-motion:reduce){body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle]::before {transition:none;}}
