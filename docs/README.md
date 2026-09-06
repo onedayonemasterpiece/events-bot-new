@@ -54,7 +54,7 @@
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Postbox feedback correlation and bounded DLQ recovery:
   `docs/operations/postbox-feedback-dlq-recovery.md`; active incident:
-    `docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-recovery.md`
+  `docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-correlation.md`
 - External focus-group mailbox OTP E2E: `docs/testing/external-focus-email-otp.md`
 - Static-site deterministic direct/relay fault profiles:
   `docs/testing/transport-fault-profiles.v1.yml`
@@ -74,7 +74,7 @@
 - Расписание / cron / scheduler routing: `docs/operations/cron.md`
   - дефолты APScheduler: `scheduling.py`
   - production overrides: `fly.toml` (`[env]`)
-  - локальный/env шаблон — `.env.example`
+  - локальный/env шаблон: `.env.example`
 - Region Talk / «О Калининграде говорят»: `docs/features/region-talk-channel/README.md`
 - Telegram link inspection через Telethon: `docs/operations/telegram-link-inspection.md`
 - LLM: `docs/llm/` (промпты, формат запросов, классификатор тем)
