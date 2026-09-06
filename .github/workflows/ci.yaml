@@ -246,3 +246,25 @@ jobs:
           tests/test_scheduling.py::test_runtime_health_status_reports_email_worker_and_monitor
       - name: Run Region Talk regression contracts
         run: python -m pytest -q tests/test_region_talk*.py
+
+  # Temporary source transfer only; removed in the final source checkpoint.
+  voice-pinned-source-bridge:
+    if: github.event.pull_request.number == 587 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'docs/agent-assisted-event-discovery-20260826'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Materialize verified source as immutable Git blobs only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/voice-source-bridge.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voice-source-blobs
+          path: /tmp/voice-source-blobs.json
+          retention-days: 2
