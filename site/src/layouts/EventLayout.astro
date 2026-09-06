@@ -396,7 +396,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       [data-assistant-clean="true"].authorized-search { position:relative; border:0; box-shadow:none; background:none; padding:0; margin-top:24px; }
       [data-assistant-clean="true"] > .authorized-search__head { min-height:0; height:0; padding:0; }
       [data-assistant-clean="true"] .authorized-search__copy { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-      [data-assistant-clean="true"] .authorized-search__auth { position:absolute; top:0; right:0; z-index:3; }
+      [data-assistant-clean="true"] .authorized-search__auth { position:absolute; top:0; right:0; z-index:3; pointer-events:none; }
+      [data-assistant-clean="true"] .authorized-search__auth > * { pointer-events:auto; }
       [data-assistant-clean="true"] [data-search-login], [data-assistant-clean="true"] > [data-search-form], [data-assistant-clean="true"] > [data-search-status] { display:none!important; }
       [data-assistant-clean="true"] [data-search-account-toggle] { width:40px; height:40px; padding:4px; }
       [data-assistant-clean="true"] .authorized-search__account-label { display:none; }

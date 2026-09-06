@@ -648,3 +648,29 @@ above the AI reply. History is disclosed through its secondary opener instead of
 occupying the initial conversation. The existing catalog inconsistency remains:
 a typed-free result can carry a paid label in display data. This is a separate
 known data-quality limitation; no regex rewriting of price semantics was applied.
+
+
+Final clean preview live check (frontend `b981f7b4199562c53494e14f9cd1f831d9268dcf`,
+DevCoveer `fb28280d7cec103d87313b4e9d7cf78045ec3449`): native Chromium with the
+provenance-locked synthetic WAV produced exact ASR «Я бы хотел сходить на джаз
+на выходных.», auto-submitted, and appended a second free-weekend query. There
+were 12 then 11 ordinary cards; counts are not certification of relevance or
+price correctness. User bubble and skeleton shared the 11607.7 ms observation;
+first cards at 16047.3 ms. No page errors or raw media to Supabase.
+Evidence: `artifacts/codex/voice-chat-20260906/live-browser-final-receipt.json`.
+
+Follow-up rendered QA found a transparent full-width Auth positioning wrapper
+intercepting mobile History clicks. Only its actual children now receive pointer
+events; the wrapper lets clicks through. The public clean-preview browser test
+includes native hit-testing of History at 320/390/1440. A black poster screenshot
+was not reproduced after loading: canonical event 2182 returned HTTP 200 and
+naturalWidth 1280 on mobile and desktop with the same URL. Wait for image decode
+before taking media screenshots; this specimen is not a recovered QA answer.
+
+Acceptance boundaries: real synthetic-input ASR/backend flow is checked, not
+physical-phone speech/PWA or real email delivery through the newly styled OTP
+consumer. Restoring two saved QA answers did not yield sections in the 10-second
+supplementary check; stable recovered-history topic switching remains unverified.
+The latest GitHub head had no check runs at inspection; do not call this CI PASS.
+Existing catalog price/date quality and aggregate analytics remain separate gaps.
+Anonymous three-run access stays TO-BE, not enabled.

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: clean voice preview Auth positioning layer no longer intercepts the
+  mobile History button; added rendered hit-test regression.
+- Docs: documented safe completed-worktree cleanup and voice preview live-check
+  evidence, with physical-phone, OTP delivery and history acceptance gaps.
+
 
 - Changed: preview Search starts with one minimal message line and a large
   microphone, then moves the same mic into a compact lower-right composer after

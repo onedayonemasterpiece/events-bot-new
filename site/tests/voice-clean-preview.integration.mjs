@@ -12,6 +12,10 @@ for(const width of[320,390,1440])test(`clean voice landing/auth/compact geometry
  await mic.click();assert.equal(await page.locator('[data-assistant-sign-in]').isVisible(),true);assert.equal(await page.getByRole('button',{name:'Войти через Яндекс',exact:true}).filter({visible:true}).count(),1);assert.equal(await page.locator('.static-sign-in input[type=email]').isVisible(),true);
  if(out)await page.screenshot({path:`${out}/${width}-sign-in.png`});
  await page.getByRole('button',{name:'Закрыть вход',exact:true}).click();assert.equal(await mic.evaluate(e=>document.activeElement===e),true);
+ // Transparent full-width auth positioning wrapper must not intercept History.
+ const history=page.locator('[data-assistant-recovery-open]');
+ await history.evaluate(e=>{e.hidden=false;});
+ await history.click({trial:true});
  // Explicit geometry fixture only; ASR-to-transition is checked by the live lane.
  await page.evaluate(()=>{document.querySelector('[data-assistant]').dataset.assistantPhase='conversation';});
  const r=await mic.boundingBox(),q=await input.boundingBox();assert.equal(Math.round(r.width),width<760?56:64);assert.ok(q.x+q.width<r.x);assert.ok(r.x+r.width<=width-12);
