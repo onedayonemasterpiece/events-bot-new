@@ -1647,3 +1647,19 @@ Checks: `islands-review.test.mjs`, `island-archetypes.test.mjs`,
 source production-surface gate. Tags: static-data, static-route, visual-layout;
 auth_mode=anonymous. L0/L1 only; no Auth/native-system change, L2/L3 not claimed.
 Artifacts: `artifacts/codex/islands-review-20260906/`.
+
+Published review receipt: source
+`cd90e408d526259cbb2411032f8489694b38feee`, [PR639](https://github.com/onedayonemasterpiece/events-bot-new/pull/639)
+against `feature/islands-archetypes-20260906`, not voice/main.
+- [Date + day editorial](https://kenigevents.ru/preview-islands-review-20260906/date-2026-07-23/)
+- [Popular](https://kenigevents.ru/preview-islands-review-20260906/populyarnoe/)
+- [Free](https://kenigevents.ru/preview-islands-review-20260906/podborki/besplatnye-sobytiya/)
+- [Weekend](https://kenigevents.ru/preview-islands-review-20260906/vyhodnye/)
+
+PASS:16 L0 tests; source-surface contract;6 native city swipe/filter/reversal
+cases;7 Weekend delayed/no-JS cases;6 dedicated route/width cases both locally
+and against the published target (320/390/430 plus desktop1440).
+All13 emitted route/support files and `preview-build.json` read back byte-exact.
+CI [34024739021](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34024739021)
+completed its contract/facts/gate jobs successfully; its browser job was skipped,
+not presented as the separate public L1 run. No phone/production certification.
