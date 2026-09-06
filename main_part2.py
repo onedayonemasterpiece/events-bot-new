@@ -9223,6 +9223,16 @@ async def init_db_and_scheduler(
 ) -> None:
     logging.info("Initializing database")
     await db.init()
+    from private_events_mcp.integration import recover_private_event_creates
+    from private_events_mcp.server import SERVER_APP_KEY
+
+    async def _recover_mcp_event_creates():
+        return await recover_private_event_creates(app)
+
+    try:
+        await _recover_mcp_event_creates()
+    except Exception:
+        logging.exception("mcp_event_create startup recovery failed")
     try:
         from ops_run import cleanup_running_ops_runs_on_startup
         from vk_review import release_all_locks
@@ -9270,7 +9280,14 @@ async def init_db_and_scheduler(
         logging.info("No webhook URL provided, skipping webhook setup (dev mode)")
     
     try:
-        scheduler_startup(db, bot)
+        mcp_server = app.get(SERVER_APP_KEY)
+        scheduler_startup(
+            db, bot, event_create_recovery=(
+                _recover_mcp_event_creates
+                if mcp_server is not None and mcp_server.event_create_runtime is not None
+                else None
+            ),
+        )
     except Exception:
         logging.exception("scheduler_startup failed; continuing without scheduler")
     try:
@@ -22577,27 +22594,28 @@ def create_app() -> web.Application:
     private_mcp_workspace_adapters = None
     private_mcp_asset_store = None
     if private_mcp_config.enabled:
+        if private_mcp_config.asset_ingress_enabled:
+            from private_events_mcp_media import SecureMediaAssetStore
+
+            private_mcp_asset_store = SecureMediaAssetStore(
+                private_mcp_config.media_root,
+                allowed_hosts=private_mcp_config.media_allowed_hosts,
+                max_asset_bytes=private_mcp_config.max_asset_bytes,
+                max_document_bytes=private_mcp_config.max_document_bytes,
+                max_store_bytes=private_mcp_config.max_store_bytes,
+                ttl_seconds=private_mcp_config.asset_ttl_seconds,
+                timeout_seconds=private_mcp_config.download_timeout_seconds,
+                max_width=private_mcp_config.max_width,
+                max_height=private_mcp_config.max_height,
+                max_pixels=private_mcp_config.max_pixels,
+            )
+            private_mcp_asset_store.cleanup_expired()
+
         if private_mcp_config.universal_social_enabled:
             from private_events_mcp_workspace_providers import (
                 build_private_events_mcp_workspace_adapters,
             )
 
-            if private_mcp_config.asset_ingress_enabled:
-                from private_events_mcp_media import SecureMediaAssetStore
-
-                private_mcp_asset_store = SecureMediaAssetStore(
-                    private_mcp_config.media_root,
-                    allowed_hosts=private_mcp_config.media_allowed_hosts,
-                    max_asset_bytes=private_mcp_config.max_asset_bytes,
-                    max_document_bytes=private_mcp_config.max_document_bytes,
-                    max_store_bytes=private_mcp_config.max_store_bytes,
-                    ttl_seconds=private_mcp_config.asset_ttl_seconds,
-                    timeout_seconds=private_mcp_config.download_timeout_seconds,
-                    max_width=private_mcp_config.max_width,
-                    max_height=private_mcp_config.max_height,
-                    max_pixels=private_mcp_config.max_pixels,
-                )
-                private_mcp_asset_store.cleanup_expired()
 
             private_mcp_workspace_adapters = (
                 build_private_events_mcp_workspace_adapters(

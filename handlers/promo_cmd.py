@@ -334,6 +334,7 @@ async def _video_publication_groups_for_campaign(
 
 def _activity_label(activity: PromoActivity) -> str:
     surface_label = {
+        "hero_talk": "Hero-talk · видимость в браузере",
         "video_general": "Видеоанонс",
         "daily_highlight": "Ежедневная подборка",
         "telegraph_month": "Telegraph: месяц",

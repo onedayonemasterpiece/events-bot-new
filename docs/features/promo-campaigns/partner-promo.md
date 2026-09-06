@@ -73,6 +73,21 @@ Phase B (открыто, см. §10):
   `dedup window`, `vk_rate_limited`, `window closed`);
 - кнопка `🌐 Сайт` — пока plain alert.
 
+### Общая транзакционная граница (#643)
+
+`create_partner_event_promo_campaign` сохраняет campaign, event-target, выбранную
+activity и стандартную TG-button activity одной транзакцией. Ошибка после
+выделения campaign ID не оставляет активную пустую кампанию. Оба существующих
+сервиса создания кампании и добавления activity принимают необязательный
+`session`: при его передаче выполняется только flush, а commit/rollback остаётся
+у application caller. Это позволяет присоединить проверку актуальных прав и
+operation receipt к той же транзакции, не копируя правила promo в MCP.
+Без session старые FSM callers сохраняют прежнее поведение с одним commit.
+Авторизация по-прежнему обязательна на caller boundary; session не является
+правом доступа, а эта подготовка не включает OAuth promo tools или выдачу прав.
+Добавление activity не возобновляет paused campaign. Проверки атомарности и
+rollback: `tests/test_promo_transaction_boundary.py`.
+
 ## 3. Роли и доступ
 
 В системе реально две роли: `is_partner` и `is_superadmin`.

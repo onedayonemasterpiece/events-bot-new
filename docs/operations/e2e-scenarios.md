@@ -123,3 +123,13 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - ссылка на `/log <event_id>`,
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
+
+### Hero-talk and partner MCP #643
+
+The existing [MCP v2 scenario registry](../testing/private-events-mcp-event-operations-scenarios.v2.yml)
+now retains `HT-AF-01…22` and `MCP-HT-01…06`. `partial_test_files` records
+component evidence only; it does not satisfy the full scenario, native
+Astro/SoT/Penpot parity, or real OAuth/live acceptance. All new acceptance rows
+remain `not_run`; missing mappings and partial journeys block full #643 release
+acceptance under that registry's existing policy. R0 read-only release evidence
+is separate from later event/promo/Hero capability activation.

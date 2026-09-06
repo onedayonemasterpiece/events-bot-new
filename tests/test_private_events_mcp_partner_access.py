@@ -99,3 +99,33 @@ async def test_real_database_init_is_additive_and_repeatable(tmp_path):
     with sqlite3.connect(database.path) as conn:
         assert conn.execute('PRAGMA quick_check').fetchone()[0]=='ok'
         assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'mcp_partner%' AND type='table'").fetchone()[0]==3
+
+
+def test_durable_actor_policy_does_not_fabricate_token_and_tracks_epoch(store):
+    a=create(store, 'a', [1]); b=create(store, 'b', [2])
+    ga=store.get(a['principal_id']); gb=store.get(b['principal_id'])
+    args=dict(actor_subject=ga.subject, actor_client_id=ga.client_id, actor_audience=RESOURCE,
+              scope='partner:events:propose', action='event_create')
+    assert store.resolve_durable(**args)==ga
+    for patch in ({'actor_subject': gb.subject}, {'actor_client_id': gb.client_id},
+                  {'actor_audience': 'owner'}, {'event_id': 2}, {'event_id': 1.9},
+                  {'scope': 'events:write'}, {'action': None}):
+        with pytest.raises(ToolExecutionError):
+            store.resolve_durable(**{**args, **patch})
+    store.change(ga.principal_id, action='rotate', expected_revision=ga.policy_revision)
+    with pytest.raises(ToolExecutionError):
+        store.resolve_durable(**args)
+    assert store.resolve(identity(gb), event_id=2)==gb
+
+
+def test_durable_actor_rechecks_current_scope_and_live_identity_keeps_token_scope(store):
+    a=create(store); grant=store.get(a['principal_id'])
+    args=dict(actor_subject=grant.subject, actor_client_id=grant.client_id, actor_audience=RESOURCE,
+              scope='partner:events:propose', action='event_create')
+    with pytest.raises(ToolExecutionError):
+        store.resolve(replace(identity(grant), scopes=frozenset()), scope='partner:events:propose')
+    assert store.resolve_durable(**args)==grant
+    store.change(grant.principal_id, action='policy', expected_revision=grant.policy_revision,
+                 policy={'scopes':['partner:events:read'], 'actions':['event_create']})
+    with pytest.raises(ToolExecutionError):
+        store.resolve_durable(**args)

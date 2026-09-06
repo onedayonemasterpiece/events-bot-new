@@ -25,6 +25,36 @@ provider methods, pass access hashes/tokens, or submit arbitrary SDK arguments.
 All provider content is untrusted external data; it is never an instruction.
 MAX remains outside the current scope.
 
+## Owner queue readback (R0, #618 / #643)
+
+The existing owner `operations_snapshot` accepts `include_jobs=true` and bounded
+`event_id`, `status`, `before_job_id`, `limit` filters. A page contains at most
+10 payload-free current `JobOutbox` rows in descending numeric ID order, with
+nested JSON-shaped error strings decoded before recursive credential/personal-ID
+redaction; malformed/oversized structured errors are omitted rather than emitted
+as raw text. Missing legacy columns/table are reported explicitly. Fractional IDs
+are rejected rather than truncated.
+`event_id=0` selects global jobs. `include_jobs=false` with filters is rejected.
+No new tool, scope, DB schema, queue worker or provider call is introduced.
+
+The default snapshot retains its fields, but `database.quick_check` is explicitly
+`not_run:interactive_budget`: full-database integrity scans are not interactive
+health probes and must run as explicit operator/release checks. Counts and queue
+readback never imply an integrity PASS. This prevents the production timeout
+recorded in `INC-2026-09-06-mcp-snapshot-integrity-budget`.
+
+The default snapshot remains backward-compatible apart from that honest health value. `fetch(job:...)` still returns
+bounded detail through the existing evidence repository. The Codex seven-tool
+projection and descriptor remain unchanged; these additional queue arguments
+belong only to the full owner ChatGPT/OpenCode resource. A queue state or URL
+is not authoritative publication age/applied-revision evidence.
+
+`tests/test_private_events_mcp_queue_observability.py` verifies ordering/cursors,
+query bounds, redaction, legacy schema behavior and zero-write reads. R0 can be
+released separately; it does not activate R1 event writes, R4 partner mutations
+or Hero delivery. #643 continues the existing owner/partner stack and adds Hero
+as an activity of `promo.py`, not as a second campaign or MCP server.
+
 ## Endpoints and OAuth
 
 ```text
@@ -172,6 +202,365 @@ must not create a new idempotency key blindly; first inspect canonical event and
 source evidence. Until exact-main deploy, OAuth scope refresh and authenticated
 readback pass, this section describes staged runtime code rather than a live
 production capability.
+
+### Queued create restart recovery (#643)
+
+`EventCreateRuntime.recover_queued(authorize=..., limit=100)` provides a bounded
+restart/scheduled recovery hook over the existing canonical ledger. The host
+must invoke it only for the enabled runtime, after database initialization,
+and supply an async current actor-policy check. The check runs after the atomic
+queued→processing claim immediately before the executor; denial records
+`EVENT_CREATE_ACCESS_REVOKED` without a parser/canonical mutation. Policy errors
+fail closed as `outcome_unknown`, not automatic retries.
+
+Recovery preserves the stored subject/client/audience and exact action digest;
+it never creates a Telegram identity. The raw idempotency key is not stored:
+the internal restored request has an empty key and its original persisted hash,
+and goes directly to `_execute`, never prepare/commit. Existing retries retain
+the same ledger identity. Corrupt/unsupported request payloads are atomically
+claimed and quarantined with `EVENT_CREATE_RECOVERY_REQUEST_INVALID`.
+`processing`, `outcome_unknown` and terminal records are never replayed; they
+still require canonical source/event reconciliation. Multiple workers share the
+existing compare-and-set claim. The return value counts locally scheduled tasks,
+not accepted events; callers use operation readback for the outcome.
+
+This hook alone does not install startup scheduling or authorize partner writes.
+The application integration must wire the current policy callback and repeat
+bounded recovery passes for queues larger than the batch limit. Dedicated SQLite
+regressions: `tests/test_private_events_mcp_event_create_recovery.py`.
+
+### Event-scoped private image inputs (#643)
+
+`private_events_mcp.event_assets.EventAssetService` reuses the existing
+`SecureMediaAssetStore` through `AssetIngestor`; it does not call social
+`stage_asset`, provider upload, or create a public event. The host injects a
+stable secret `binding_key`, the durable secure store, and mandatory async
+`authorize(context, action)` for `stage`, `read`, and `use`. Authorization is
+checked before and after I/O. The host callback must enforce current principal,
+resource, grant/epoch, scopes/actions and suspension/revocation policy.
+
+- `await stage(ChatGPTFile(...), context)` returns an opaque `ing_...` asset ref,
+  exact `sha256:` content digest, measured MIME/bytes/dimensions, role and expiry.
+- `await read(asset_ref, context)` reopens/verifies the stored image and returns
+  only that safe metadata, never a download URL, path or owner-binding material.
+- `await reverify(asset_ref, context, expected_digest=...)` returns an **internal**
+  `VerifiedAsset` for the intake adapter. It must not be serialized to MCP.
+  The adapter can use the same store's `open_verified(storage_ref, owner_binding)`
+  to obtain freshly hashed bytes for existing event intake media handling.
+
+Bindings are HMAC-separated for event images and include exact
+client/subject/resource. Another principal, resource or social asset binding
+cannot borrow the ref. Only JPEG/PNG/WebP images are supported; ingestion uses
+existing `event_image` validation and canonical stored role `image`. Reads/use
+recheck expiry, role, owner, byte limits and content integrity. Errors fail closed
+without exposing storage or upstream exception details.
+
+References survive process restart only while the same secure-store directory,
+manifest, owner-key material and service binding key are retained. Default
+service retention is one hour; configurable retention is bounded to 24 hours
+and must not exceed the injected store's TTL. Read/reverify never extends expiry.
+Owner review must finish before expiry or request a newly staged image and a new
+prepared/approved digest; refs are **not indefinitely durable review attachments**.
+Existing secure-store cleanup still applies, including uploads whose access was
+revoked during ingestion. This module adds no cleanup scheduler, MCP tool wiring,
+review transition or EventCreateRequest field: those are application integration
+steps, with renewed authorization and exact digest verification before mutation.
+
+Regression evidence: `tests/test_private_events_mcp_event_assets.py` plus the
+existing secure-store suite use actual local manifests/files and deterministic
+HTTP transport, with no live provider calls.
+### Durable partner create owner review (#643)
+
+`PartnerEventReviewService` in `private_events_mcp/partner_event_review.py` uses
+only existing canonical `event_change_log` rows. `submit(request)` invokes current
+submission authorization and reserves `initial_status=review_required` with the
+original actor/client/resource, action digest and idempotency binding. No Event,
+Telegram actor, provider call or worker task is created. A duplicate submission
+returns the existing operation unchanged; it never switches queued/review state.
+The store's optional `initial_status` accepts only `queued` or `review_required`;
+normal owner create retains `queued` as its default.
+
+`decide(operation_ref, expected_action_digest=..., decision="approve"|"reject",
+owner_context=...)` requires an injected async current-policy callback over the
+owner context, immutable `ReviewTarget` actor/digest binding and decision.
+That callback must authenticate/authorize the owner and revalidate the stored
+partner's current grant, credential epoch, expiry, scopes/actions and applicable
+organization policy. Missing/failed policy fails closed. It runs under the short
+canonical SQLite write lock to serialize revocation and decision: **DB/read-only,
+no provider/LLM/network, and no writes on a second connection**. Submission also
+requires its own current-policy callback. These are service contracts, not new
+OAuth claims or bypasses around `PartnerAccessStore`.
+
+Approval only transitions `review_required` to `queued`; rejection records
+terminal `rejected` with `EVENT_CREATE_OWNER_REJECTED`. Both require the exact
+expected action digest. `organizer_comment` stores private immutable review audit
+JSON (decision, digest, owner subject/client/audience, timestamp), deliberately
+separate from `result_json`, which executor completion replaces. No public Event
+field receives that audit. Repeating the same decision returns `changed=false`
+and the current operation state with the original audit, even after execution;
+an opposite decision/different digest conflicts and cannot resurrect work.
+
+The existing runtime must separately recover/execute approved queued operations
+with current partner authorization and media/digest rechecks at the mutation
+boundary. Review approval is not publication or acceptance of a canonical event.
+Partner reads continue through exact actor-bound `EventCreateOperationStore.get`;
+owner listing/tool wiring, media approval binding and UI are integration work,
+not implemented by this ledger service. Tests cover restart, competing decisions,
+repeat decisions after finish/rejection, two actors, and real PartnerAccessStore
+expiry/suspension/scope revocation: `tests/test_private_events_mcp_partner_event_review.py`.
+
+### Dynamic publication evidence for accepted creates (#643)
+
+`EventPublicationReceiptService` in
+`private_events_mcp/event_publication_receipts.py` provides a read-only projection:
+`await service.read(operation_ref, context)`. The caller supplies no event ID.
+The service looks up the create operation by the exact current subject/client/
+resource and uses only its accepted positive canonical `event_id`, cross-checked
+against the single `result_json.event_ids` identity. Missing, invalid, multiple or
+mismatched IDs fail closed. Unaccepted operations return no event/publications.
+
+Required async `authorize(context, event_id_or_none)` checks current general
+publication-read rights before ledger access, current tenant/portfolio rights
+before event/job access, and again after that read. `None` requests the general
+scope/current-principal check; an integer requires current access to that exact
+event. The callback must use current policy, not stale creation-time grants.
+Actor-bound operation lookup is never relaxed for caller-provided IDs.
+
+Each read fetches current canonical Event publication fields and current
+`JobOutbox` rows, rather than the frozen create-result job snapshot. Relevant
+jobs (`telegraph_build`, `vk_sync`, `tg_event_publish`, `tg_premium_emoji_edit`,
+`event_media_review`, `static_site_build`) expose only ID/task and normalized
+`queued|running|done|error|paused|unknown` state. Results are newest-first and
+bounded (default 50, maximum 100) with explicit `jobs_truncated`; payloads,
+`last_error`, `last_result` and unrelated-event jobs are not returned.
+
+Publications use `tg_event_post_url`, `source_vk_post_url`, `vk_repost_url`,
+`telegraph_url`. Supported HTTPS Telegram public-message, VK wall and Telegraph
+page URLs are narrowly validated; private invites/messages, arbitrary hosts,
+credentials, ports, query strings and fragments are suppressed. A valid stored
+URL means **`recorded_public_url`**, not a newly verified live publication.
+The response explicitly sets `live_verified=false` and
+`evidence_source=canonical_database`: no provider or public-page calls occur.
+Job `done` without a stored public URL remains `no_public_receipt`.
+
+Authoritative writers remain existing `main.job_publish_tg_event_post`,
+`main._persist_vk_source_post_result`, `vk_review.save_repost_url`, and Telegraph
+builders. Their persisted links may later become stale; this projection does not
+claim otherwise. Static build completion/global release receipts never prove
+one event's inclusion: static output is always `event_inclusion_unverified`
+until a separate event-specific verification contract exists. Missing canonical
+Event returns `canonical_event_missing`, not a fabricated receipt.
+
+This service does not add MCP tools, mutate operations, schedule jobs or publish
+content. Integration must inject current tenant policy and attach it to the
+accepted-operation read path. Tests:
+`tests/test_private_events_mcp_event_publication_receipts.py`.
+
+### Transactional domain acceptance proof and partner mutation guard (#643)
+
+The internal `main.add_events_from_text(..., event_operation_context=...)` input
+is optional and requires `require_single_event=True`. Context consists of exact
+`operation_ref`, `action_digest`, `actor_subject`, `actor_client_id`,
+`actor_audience`; partner actors additionally require positive
+`partner_policy_revision`. Only the trusted MCP adapter supplies it after its
+atomic processing claim. It is copied into `EventCandidate` as private provenance,
+excluded from repr, source identity, packet fingerprint and model prompt fields.
+The existing candidate-attempt `candidate_payload` may persist it privately;
+public EventSource text/facts and Event fields must never receive it.
+
+`event_operation_receipts.record_event_operation_receipt` writes only additive
+nullable `event_change_log.domain_receipt_json` in the **same SQLAlchemy session
+and transaction before the accepted Event/EventSource commit**. Covered paths:
+normal create, normal merge, final-probe race merge, context attachment and exact
+packet no-op. The no-op path opens its own receipt transaction and rechecks the
+exact EventSource candidate/occurrence/fingerprint, never just the source URL.
+No context means a strict no-op, preserving legacy intake and previous-binary
+compatibility; `Database.init` adds the nullable column idempotently.
+
+Receipt schema `event-operation-domain-receipt-v1` contains the context fields
+plus `event_id`, `effect` (`created|merged|noop_exact_replay`), `candidate_key`,
+`occurrence_key`, `candidate_state_id`, `attempt_no`, `source_fingerprint`.
+The helper requires the exact processing create ledger binding, an existing
+positive Event ID, and the matching open SmartUpdateAttempt whose candidate
+payload carries that context. Stored proof is immutable; conflicting proof,
+actor, digest, attempt or state rolls back the containing Event/source/fact
+transaction. It never overwrites `organizer_comment`, `result_json` or operation
+status and makes no publication/fan-out claim. Mutable source revisions cannot
+overwrite the operation-specific historical receipt.
+
+For partner contexts, `guard_event_operation_context` reuses current
+`PartnerAccessStore.resolve_durable` through the **same connection**, without a
+new token/identity or a second policy connection. It enforces current principal,
+client/resource, epoch, active/expiry, `partner:events:propose`, `event_create`,
+and the exact policy revision in both stored request and current grant. A
+resolved existing target requires this exact principal's current portfolio
+ownership. Foreign merges/context/no-op are rejected and rolled back; they are
+never converted into a forced new event. Guards run when targets resolve and
+again at the final receipt boundary. SQLite write ownership is acquired only at
+that final boundary, not held across LLM calls. A concurrent policy change must
+be observed or cause a failed write upgrade/rollback, never a stale commit.
+
+Crash limits remain explicit: parser/model work, private/public poster ingress,
+candidate-attempt and identity-decision audit writes can precede canonical
+acceptance and are not rolled back by the domain transaction. Topic/holiday/
+linked-event derived work, attempt acknowledgement, fan-out and partner portfolio
+assignment can follow the receipt and fail separately. A receipt proves only
+that domain acceptance committed for this exact operation; it does not prove
+current public content, publication completion or present-day ownership. Missing
+proof remains `outcome_unknown`; source URL/current candidate state alone must
+never authorize recovery. Integration/reconciliation must independently enforce
+current policy, effect-specific partner assignment and honest fan-out status,
+without replaying the parser.
+
+`EventCreateReconciler` runs before queued recovery in the existing startup and
+five-minute scheduler hook. It considers only receipt-bearing unknown operations
+or processing claims older than 30 minutes, skips local active tasks, restores
+the frozen request and checks its digest, exact receipt identity, current policy,
+canonical Event and effect-specific portfolio assignment. A compare-and-set
+records domain acceptance without re-entering the parser or touching JobOutbox.
+Missing, conflicting, revoked or noncanonical proof stays unresolved. Recovery
+explicitly returns `publication_state=reconciliation_required` and
+`jobs_scope=not_reconstructed_by_domain_recovery`; fan-out repair and public
+verification are separate pending work, not silently inferred success.
+
+Partner operation reads recheck current portfolio access for accepted IDs and
+exclude global ingestion/candidate diagnostics. The adapter restricts candidate
+lookups to the operation's private correlation rather than exposing historical
+rows selected only by source URL.
+
+Tests: `tests/test_event_operation_receipts.py`, existing source-identity and
+linear-terminal regressions, and
+`tests/test_private_events_mcp_event_create_reconciliation.py`. The real local
+OAuth integration in `tests/test_private_events_mcp_partner_event_operations.py`
+uses the actual parser facade/Smart Update with isolated semantic-provider
+fixtures, loses the completion write after domain commit, and verifies recovery
+of one Event without a Telegram creator, parser replay or duplicated jobs. A
+second real HTTP partner using the same source cannot mutate or accept that
+foreign Event: canonical Event/source/jobs/portfolio remain unchanged, and no
+receipt can promote the denied operation. This is domain crash/isolation acceptance, not live content/upload/publication acceptance.
+
+### Default-OFF owner promo creation (#643; R1b source slice)
+
+`PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED=1` requires owner event-create capability
+and adds only `promo_capabilities`, `promo_campaigns_list`, `promo_campaign_get`,
+`promo_campaign_create_prepare`, `promo_campaign_create_commit`,
+`promo_activity_add_prepare`, `promo_activity_add_commit` and `promo_operation_get` to the existing owner resource. Explicit new
+`promo:write` / `promo:read` OAuth consent is required; previous tokens are not
+expanded. Partner and Codex resources receive none of these tools.
+
+This is a **separate** operation after the same OAuth actor's accepted create
+operation identifies one raw canonical Event. `promo_capabilities` resolves that
+exact accepted reference/ID and returns the current raw canonical revision and
+supported input registries. Clients obtain the CAS token through MCP, not private
+SQLite or a guessed hash. This read is not complete business eligibility proof.
+Preparation binds that operation,
+exact Event ID/public revision, selected existing surface/profile/slot/count,
+period and disclosure to an actor-bound frozen ten-minute record in the existing
+`event_change_log`. There is no new campaign/operation database, Telegram actor or
+synthetic User. Preparation creates no campaign, does not extend on replay, and
+explicitly reports `planned_campaign_status=active` and
+`business_validation=commit_recheck_required` rather than a completed business
+preview.
+
+Commit accepts only the stored preparation ref and digest. Current owner
+client/resource/scopes/expiry/flags, canonical identity/revision and accepted-ID
+binding are rechecked under the same SQLite write lock. The existing
+`create_partner_event_promo_campaign` service validates business eligibility and
+atomically creates its campaign, target and activities with the operation
+receipt. `created_by=NULL` is valid OAuth attribution, not a Telegram identity or
+privilege grant; private original OAuth attribution stays in the operation
+ledger. Legacy Telegram callers and business rules remain unchanged.
+
+**Commit creates an active campaign.** Existing schedulers may subsequently
+publish from its activities. The tool does not itself call a provider or claim
+publication success: the result reports `publication_state=not_observed` and
+historical `campaign_status_at_commit`. Idempotent replay rechecks current
+access, returns that historical receipt and never recreates or resumes a
+campaign. A later pause therefore remains a pause. Timeout/receipt failure
+cannot commit a campaign without its matching durable operation receipt.
+
+`promo_campaigns_list` provides current owner-authorized shared campaign state
+with bounded keyset pagination; `promo_campaign_get` reads current campaign,
+target/activity projections and a deterministic complete-snapshot revision.
+This is separate from historical operation acceptance, so a paused campaign
+reads as paused after restart/replay. Config blobs and private target queries
+are not exposed. Details display at most sixteen targets/activities, scan at
+most 257 each, and distinguish exact counts from lower bounds. If a complete
+snapshot exceeds 256 rows in either collection, its revision is unavailable;
+a partial prefix is never passed off as a full CAS hash. Legacy campaign caps
+are explicitly publication units, not qualified Hero browser visibility.
+Delivery statistics remain unavailable rather than fabricated zeroes.
+`recorded_exposures` is a separate, indexed page of at most sixteen existing
+`promo_exposure` rows plus `has_more` (seventeen rows read). It exposes only
+recorded scalar IDs, surface/placement, publish status, target count and timestamp;
+no provider URLs, private JSON or credentials. Its explicit scope is
+`recent_recorded_rows_only`: neither an empty page nor a recorded success is
+live delivery verification or a qualified browser impression count. Current
+authorization and the same read transaction cover this page.
+
+Activity addition is its own frozen `promo_activity_add` operation on the same
+ledger. `promo_campaign_get` supplies the complete current campaign revision;
+prepare/commit recheck it under current owner authorization. The existing
+`add_partner_activity_to_campaign` service appends exactly one activity in the
+same transaction as its operation receipt, without changing campaign status,
+window, caps, targets or prior activities. A paused campaign stays paused;
+replaying after an activity is disabled does not re-enable it. Activity operations
+leave Event ID/revision fields NULL rather than mislabeling a campaign revision
+as an Event revision. Cross-kind commit calls fail closed. A 256-activity snapshot
+cannot append an unhashable 257th activity through this path.
+
+For VK reposts, public `profile_key` and `slot_policy` must both be NULL: the
+existing service actually uses `diverse_shuffle`, not video slot placement.
+Video requests select a real existing video profile and slot policy. Capabilities
+and preparations expose the effective policy. Unsupported VK first-slot intent
+is rejected, never silently accepted and ignored. This does not change legacy
+Telegram callers or introduce new slot/business rules.
+
+This slice supports only the existing `video_general` / `vk_repost` surfaces and
+existing video-profile/slot registries. Full eligibility/execution reports,
+partner promo policy/review, full publication readback and Hero's typed browser
+accounting remain separate missing integration work. Do not enable this flag as
+an R1b acceptance shortcut or treat fixture content as approved public material.
+Tests: `tests/test_private_events_mcp_promo_operations.py`,
+`tests/test_private_events_mcp_promo_tools.py`, `tests/test_promo_oauth_creator.py`.
+
+### Exact-ID lifecycle transaction core (#643; not exposed)
+
+`event_lifecycle_operations.apply_lifecycle_operation` is an internal canonical
+transaction boundary for explicit reviewed `CANCEL` / `POSTPONE` only. It does
+not parse notices, choose a target, impersonate a Telegram user, reserve/review
+an operation or advertise a new MCP capability. General edits/rescheduling still
+need extraction of the existing domain side effects and are not supported here.
+
+The caller must supply an existing processing `event_cancel` / `event_postpone`
+row in `event_change_log`, frozen exact target/original OAuth actor/action digest
+and expected `event_public_revision`. Partner actors additionally require a
+positive frozen `partner_policy_revision` inside the action digest, so the host
+can reject a changed current grant revision. Independent current-authorization and
+immutable-review-verification callbacks run on the same `BEGIN IMMEDIATE`
+connection; they must be local, bounded and read-only. The host must wire actual
+current owner/partner scopes, grants and exact portfolio membership. The current
+create-only review service is not assumed to authorize lifecycle operations.
+
+Only an active raw canonical, non-merged Event at that exact revision can change.
+The core updates lifecycle status only, preserves silent state and all unrelated
+Events/fields, and atomically writes existing before/after/changed-fields history
+and accepted result. A conflict or denied callback rolls back the entire change.
+A currently authorized replay returns the immutable historical result without
+reapplying it—even after a later valid edit. Historical acceptance is not a claim
+about the Event's present lifecycle state.
+
+Every result explicitly says `downstream=reconciliation_required`. No JobOutbox,
+provider request, public retraction or notification is performed. Cancellation
+cannot rely on ordinary update scheduling: inactive Events are skipped there,
+while already-published projections need explicit reconciled repair. MCP exposure
+and production activation remain blocked until those application/review/fan-out
+boundaries and their acceptance tests are connected.
+
+Tests: `tests/test_event_lifecycle_operations.py`; existing VK replay regression
+contract: [INC-2026-08-24](../reports/incidents/INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost.md).
+This is deterministic execution of an explicit reviewed action, not heuristic
+semantic lifecycle inference or a new incident repair/publication.
 
 ## ChatGPT social workspace
 
@@ -1411,3 +1800,86 @@ Rollout remains R0 -> R1 -> R1b -> R2 -> R3 -> R4. This source checkpoint is an
 R4 prerequisite behind its own flag, not permission to enable R4 before the
 preceding product gates. Rollback disables the flag first and keeps additive
 tables; it never deletes partner history or rewrites the canonical event DB.
+
+### Event image tool wiring (#643, default OFF)
+
+`PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED=1` adds owner ChatGPT/OpenCode
+`event_asset_stage` and `event_asset_get` behind `events:write`. The exact owner
+subject, current configured client/resource, token expiry and flag are checked
+before/after storage I/O. Codex receives neither tool; partner ingress requires the separate partner
+create flag described below. The shared private media ingress store is initialized independently
+of social providers; event-only ingress does not enable social media tools.
+The existing media host allowlist, byte/store/dimension limits and retention
+settings remain mandatory. Stage advertises `openai/fileParams: ["file"]`, returns
+bounded digest-bound metadata and never publishes or exposes a signed URL/path.
+Owner event-create now accepts up to three unique `{asset_ref, content_digest}`
+entries in `media`. Prepare reverifies their current actor binding; the frozen
+action digest includes exact refs/digests. Text-only R1 digests remain unchanged.
+After a restart, queued requests retain the same media identities. Immediately
+before the existing parser, durable reads check current owner/capability policy,
+expiry and actual-byte digests without constructing an OAuth identity or token;
+the existing `media=[(bytes, filename)]` path handles posters and Smart Update.
+Failures known to precede the parser are rejected, not marked outcome-unknown.
+No Telegram owner is invented and no public upload occurs at staging. Partner
+create/review wiring is described below; edit/lifecycle/promo remain pending.
+No production flag has been enabled.
+
+Owner `event_publications_get(operation_ref)` is now attached with the event-create
+capability and `operations:read`. It uses the exact operation actor/client/resource
+and current flag/owner checks, returns current safe canonical public URLs plus
+bounded queue states, and never turns a queued job or static build into a verified
+publication. This read is uncached; Codex does not receive the tool. Partner
+exposure uses its separate current portfolio policy, never owner authority.
+
+`PartnerAccessStore.resolve_durable` is the internal policy boundary for already
+authorized, immutable operation-ledger actors. It checks current principal state,
+credential epoch/expiry, client/resource, explicit scope/action and optional
+portfolio ID without creating a token. It is not a login or an MCP tool; live
+`resolve(identity)` still additionally enforces the caller token's scopes.
+
+### Partner create/review integration (#643, default OFF)
+
+`PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED` requires both existing partner
+and owner-create capabilities. On the separate partner resource it adds
+`event_create_prepare`, `event_create_commit`, `event_operation_get` and
+`event_publications_get`; image ingress additionally requires the event-assets
+flag. No owner search, incident, social or owner-review tools cross that resource.
+The workspace exposes granular `event_create`; broad event/promo operations
+remain false because edit/lifecycle/promo are not yet delivered.
+
+Prepare freezes the current partner policy revision into the action digest.
+Commit requires that revision and current OAuth grants. Without current explicit
+`event_create` auto-approval, the existing ledger holds `review_required`. Owner
+`partner_event_review_get`, `partner_event_review_image` and
+`partner_event_review_decide` require the exact configured owner plus
+`partners:manage`. The image tool returns a metadata-stripped bounded thumbnail
+through the existing thumbnail renderer, after current owner/partner/asset checks.
+Approval only queues; the existing recovery scheduler claims execution.
+
+Normal and recovered workers recheck current principal/epoch, exact resource and
+client, scope/action and policy revision. No HTTP token or Telegram identity is
+manufactured for durable execution. After canonical acceptance, an atomic
+existing-portfolio insert requires one actual Event and explicit `created`
+provenance. A merge is accepted for assignment only when that exact principal
+already owns the Event. Foreign or unassigned existing merges are denied inside the canonical transaction,
+not granted rights after mutation. An assignment failure after
+parser entry remains `outcome_unknown`, never a blind retry.
+
+Isolated real HTTP/OAuth/SQLite tests cover poster/review/queued worker/accepted ID,
+portfolio/receipt isolation, policy-revision conflict and suspension before the
+executor. The basic wiring cases use a deterministic executor; the crash-recovery case uses
+actual Smart Update with isolated semantic-provider fixtures. Neither constitutes
+production content approval, provider-publication receipts or live upload acceptance.
+
+
+### Hero private draft capability (#643, default OFF)
+
+The existing owner resource gains four narrowly scoped Hero draft tools only
+when `PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED=1`: `hero_talk_prepare`,
+`hero_talk_commit`, `hero_talk_get`, `hero_talk_operation_get`. Explicit
+`hero:read`/`hero:write` and exact current owner policy are required; Codex and
+partner projections are unchanged. Only private verbatim editorial draft upsert
+is implemented, with durable preparation/digest/expiry and same-transaction CAS.
+No generated copy, media publication, public activation or campaign operation is
+implied. Canonical content/storage/acceptance details remain in
+[Hero-talk](../features/hero-talk/README.md#default-off-owner-draft-tools).

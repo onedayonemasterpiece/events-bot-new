@@ -66,13 +66,14 @@ def build_partner_admin_tools(store: PartnerAccessStore, config):
     )
 
 
-def build_partner_read_tools(store: PartnerAccessStore):
+def build_partner_read_tools(store: PartnerAccessStore, *, event_create_enabled=False):
     async def workspace(args, context):
         grant = await asyncio.to_thread(store.resolve, context.identity, scope='partner:events:read')
         return dict(grant.public(), telegram_required=False, capabilities={
             'events_read': True,
             # Do not advertise not-yet-wired mutations or placeholder placements.
             'event_operations': False, 'promo_operations': False,
+            'event_create': event_create_enabled,
         })
 
     def read_events(args, identity):

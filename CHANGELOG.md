@@ -1,6 +1,67 @@
 # Changelog
 
 ## [Unreleased]
+- Added bounded, indexed owner promo recorded-exposure observations without private payloads or fabricated live delivery/impression claims (#643).
+
+- Added owner promo activity prepare/commit with complete campaign CAS and atomic existing-service append; preserves paused campaigns and disabled activity replay, and rejects unsupported VK slot intent instead of silently ignoring it (#643).
+
+- Added bounded current owner promo campaign inventory/detail readback, complete-snapshot CAS revisions and explicit legacy cap units; historical operation acceptance never substitutes for current paused state (#643).
+
+- Added default-OFF owner promo prepare/commit/status over existing atomic campaign services and the canonical operation ledger; explicit OAuth scopes and accepted Event binding, no fabricated Telegram creator or publication receipt (#643).
+
+- Added an unexposed exact-ID reviewed CANCEL/POSTPONE transaction core with current authorization, revision CAS and atomic existing history; downstream public repair remains explicitly unresolved (#643).
+
+- **Added / Hero Talk**: bounded read-only canonical event token resolver with existing event revisions, Kaliningrad eligibility deadlines and exact expiring route-evidence binding; missing route/media proof remains unresolved.
+
+- Added canonical Hero draft/version storage with current same-transaction authorization, idempotent CAS and preserved campaign origin; corrected media receipts to distinguish encoded-byte SHA from geometry-bound pixel SHA. Added default-OFF owner-only Hero verbatim draft prepare/commit/read tools with explicit scopes; no generation/publication/activation enabled (#643).
+
+- Added pure shared-placement Hero pack compilation with exact Unicode, locked tokens, semantic-input binding, media/dependency gates and deterministic hashes; restored owner-assigned Hero contracts without UI restoration or activation (#643).
+- **Fixed / VK event jobs**: recheck canonical lifecycle and silent state before automatic VK sync, skipping stale jobs for hidden/cancelled/postponed events without provider calls; explicit lower-level repair remains unchanged.
+
+- Made existing partner promo campaign/target/default activities atomic and exposed a caller-owned transaction option for shared campaign/activity services, without changing authorization or activating campaigns through MCP (#643).
+
+- Recover receipt-proven MCP domain acceptance without replaying the parser; preserve explicit unresolved fan-out status and restrict partner operation diagnostics to current authorized portfolio scope (#643).
+
+- Connected default-off partner event create, private posters, owner review/image readback, current-policy queued execution, canonical accepted-ID portfolio assignment and tenant-scoped publication evidence; no synthetic Telegram/OAuth actor or implicit promo operation (#643).
+- Added immutable operation-specific domain receipts in the canonical Event
+  transaction and current partner ownership/policy guards for every accepted
+  Smart Update path; foreign merges roll back before commit, and receipts never
+  imply publication success or source-URL-only recovery (#643).
+
+- Added current durable partner actor-policy resolution over existing grants and credential epochs without manufacturing an OAuth identity; token scope checks remain mandatory for live callers (#643).
+
+- Registered all #643 HT-AF-01…22 and MCP-HT-01…06 acceptance IDs in the existing MCP v2 registry, explicitly distinguishing partial component tests from unrun full/live acceptance.
+
+- Wired owner `event_publications_get` to current accepted-operation publication evidence; exact actor/resource policy is rechecked and Codex remains unchanged (#643).
+
+- Connected digest-bound private event images to owner prepare/commit, durable recovery and the existing Smart Update parser media path, with execution-time policy/expiry/byte checks and no synthetic Telegram/OAuth actor (#643).
+
+- Added default-off owner OAuth event image stage/get tools with private attachment metadata, independent of social publishing flags; Codex remains read-only (#643).
+- Added current tenant-authorized publication evidence for accepted event-create
+  operations: canonical public URL records and bounded live JobOutbox state,
+  without fabricating live verification or static event-inclusion receipts (#643).
+
+- Added event-scoped private image staging/read/reverification over the existing
+  secure media store, with durable principal-bound refs, exact digest/expiry
+  checks and mandatory current authorization; no social provider upload (#643).
+- Added durable partner create owner-review transitions on the existing event
+  operation ledger, exact-digest approval/rejection and immutable owner audit;
+  approval only queues work with separate execution-time policy checks (#643).
+
+- Connected queued Events MCP create recovery to canonical-DB startup and the
+  existing five-minute scheduler, with owner resource/client/capability checks
+  immediately before both normal and recovered execution. Partner/Codex jobs do
+  not cross the R1 owner mutation boundary; unknown outcomes remain non-replayed.
+
+- Added the Hero-talk promo activity service foundation in the existing campaign
+  model: explicit upper/lower placements, current campaign/activity gates and
+  dynamic program targets, with unsupported publication/browser cap mixing
+  rejected. Existing `/promo` activity controls and labels remain shared. This
+  does not activate Hero delivery or new MCP grants. Updated legacy promo test
+  expectations to preserve the already-shipped default TG button activity.
+- Added bounded queued-only Events MCP create recovery with persisted actor/digest
+  checks, atomic worker claims and mandatory current authorization; interrupted
+  processing/unknown operations are never automatically replayed (#643).
 
 - Added default-off partner access foundation: independent public OAuth clients
   with S256 PKCE and browser-only partner login, canonical principal/tenant/
@@ -16,7 +77,18 @@
   canonical event DB; keeps Codex read-only; and suppresses legacy immediate
   page/provider projections for this queue-owned entry point. Multi-event and
   festival-program packets fail closed before canonical event/job mutation.
+### Added
+- Owner MCP queue readback in the existing `operations_snapshot`: bounded
+  payload-free JobOutbox pages, event/status filters and stable numeric cursor.
+  Existing detail fetch and the Codex seven-tool projection remain unchanged;
+  no write capability, provider effect or schema migration is introduced (R0).
+
 ### Fixed
+- Decode JSON-shaped queue error text before recursive secret/personal-ID
+  redaction, and reject fractional queue IDs instead of truncating them (R0).
+- Prevent full SQLite integrity scans from exhausting owner MCP snapshot latency:
+  return explicit `not_run:interactive_budget`, preserving bounded queue/count
+  readback without pretending that integrity was checked (INC-2026-09-06).
 - Repair album release-gate fixture to implement asset reverification without weakening production media checks (INC-2026-09-05 release unblock).
 - VK auto import checks volume headroom before claiming a batch, preserving pending carriers instead of mass-terminalizing them when storage admission is blocked (INC-2026-09-05).
 

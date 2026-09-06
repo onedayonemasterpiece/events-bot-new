@@ -196,7 +196,11 @@ class PrivateEventsMCPConfig:
     repository_slug: str
     repository_sha_file: str
     event_create_enabled: bool = False
+    hero_drafts_enabled: bool = False
+    owner_promo_enabled: bool = False
+    event_assets_enabled: bool = False
     partner_enabled: bool = False
+    partner_event_create_enabled: bool = False
     universal_social_enabled: bool = False
     universal_social_telegram_enabled: bool = False
     universal_social_vk_enabled: bool = False
@@ -251,7 +255,11 @@ class PrivateEventsMCPConfig:
             "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED",
             mcp_enabled=enabled,
         )
-        asset_ingress_enabled = media_story_enabled or file_send_enabled
+        event_assets_enabled = _strict_feature_bool(
+            "PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED", mcp_enabled=enabled,
+        )
+        image_ingress_enabled = media_story_enabled or event_assets_enabled
+        asset_ingress_enabled = image_ingress_enabled or file_send_enabled
         config = cls(
             enabled=enabled,
             # Disabled means inert even when stale deployment variables remain.
@@ -294,9 +302,19 @@ class PrivateEventsMCPConfig:
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
             ).strip(),
+            hero_drafts_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED", mcp_enabled=enabled,
+            ),
+            owner_promo_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED", mcp_enabled=enabled,
+            ),
+            partner_event_create_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED", mcp_enabled=enabled,
+            ),
             partner_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_PARTNER_ENABLED", mcp_enabled=enabled,
             ),
+            event_assets_enabled=event_assets_enabled,
             event_create_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED",
                 mcp_enabled=enabled,
@@ -387,7 +405,7 @@ class PrivateEventsMCPConfig:
                 30 * 1024 * 1024,
                 low=1,
                 high=64 * 1024 * 1024,
-                enabled=media_story_enabled,
+                enabled=image_ingress_enabled,
             ),
             max_document_bytes=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_DOCUMENT_MAX_ASSET_BYTES",
@@ -422,21 +440,21 @@ class PrivateEventsMCPConfig:
                 8192,
                 low=1,
                 high=8192,
-                enabled=media_story_enabled,
+                enabled=image_ingress_enabled,
             ),
             max_height=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT",
                 8192,
                 low=1,
                 high=8192,
-                enabled=media_story_enabled,
+                enabled=image_ingress_enabled,
             ),
             max_pixels=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS",
                 40_000_000,
                 low=1,
                 high=40_000_000,
-                enabled=media_story_enabled,
+                enabled=image_ingress_enabled,
             ),
             access_ttl_seconds=_int(
                 "PRIVATE_EVENTS_MCP_ACCESS_TTL_SECONDS", 900, low=300, high=3600
@@ -508,6 +526,10 @@ class PrivateEventsMCPConfig:
         return config
 
     def validate(self) -> None:
+        if self.owner_promo_enabled and not self.event_create_enabled:
+            raise ValueError("owner promo requires the owner event-create capability")
+        if self.partner_event_create_enabled and not (self.partner_enabled and self.event_create_enabled):
+            raise ValueError("partner event create requires partner and owner event-create capabilities")
         if not self.public_base_url:
             raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL is required")
         _normalise_base_url(self.public_base_url)
@@ -593,7 +615,7 @@ class PrivateEventsMCPConfig:
             )
         if self.asset_ingress_enabled:
             largest_asset = max(
-                self.max_asset_bytes if self.universal_social_media_story_enabled else 0,
+                self.max_asset_bytes if (self.universal_social_media_story_enabled or self.event_assets_enabled) else 0,
                 self.max_document_bytes if self.universal_social_file_send_enabled else 0,
             )
             if self.max_store_bytes < largest_asset:
@@ -614,7 +636,8 @@ class PrivateEventsMCPConfig:
     @property
     def asset_ingress_enabled(self) -> bool:
         return (
-            self.universal_social_media_story_enabled
+            self.event_assets_enabled
+            or self.universal_social_media_story_enabled
             or self.universal_social_file_send_enabled
         )
 

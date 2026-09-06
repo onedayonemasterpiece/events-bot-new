@@ -50,7 +50,7 @@ class FakeExecutor:
         return dict(self.result)
 
 
-def _owner(config: PrivateEventsMCPConfig, *, subject: str = "operator") -> AccessIdentity:
+def _owner(config: PrivateEventsMCPConfig, *, subject: str = "events-bot-owner") -> AccessIdentity:
     return AccessIdentity(
         subject=subject,
         client_id=config.oauth_client_id,

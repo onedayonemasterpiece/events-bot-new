@@ -300,3 +300,69 @@ def test_github_reaction_custom_emoji_id_is_strict_and_server_side(monkeypatch) 
     )
     with pytest.raises(ValueError, match="GITHUB_REACTION_CUSTOM_EMOJI_ID"):
         PrivateEventsMCPConfig.from_env()
+
+
+def test_event_only_asset_ingress_needs_no_social_provider(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID', 'codex-public-client')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED', '1')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS', 'files.example')
+    config = PrivateEventsMCPConfig.from_env()
+    assert config.event_assets_enabled and config.asset_ingress_enabled
+    assert not config.universal_social_enabled
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH', 'invalid')
+    with pytest.raises(ValueError, match='MAX_WIDTH'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.delenv('PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES', '1')
+    with pytest.raises(ValueError, match='largest enabled asset class'):
+        PrivateEventsMCPConfig.from_env()
+
+
+def test_event_asset_flag_default_off_and_disabled_mcp_inert(monkeypatch):
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED', '0')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED', 'not-a-boolean')
+    assert not PrivateEventsMCPConfig.from_env().event_assets_enabled
+
+
+def test_partner_event_create_flag_requires_existing_capabilities(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID','codex-public-client')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED','1')
+    with pytest.raises(ValueError,match='requires partner and owner event-create'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_PARTNER_ENABLED','1')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED','1')
+    assert PrivateEventsMCPConfig.from_env().partner_event_create_enabled
+
+
+def test_hero_draft_flag_default_off_strict_and_inert_when_mcp_disabled(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID','codex-public-client')
+    monkeypatch.delenv('PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED',raising=False)
+    assert not PrivateEventsMCPConfig.from_env().hero_drafts_enabled
+
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED','not-a-boolean')
+    with pytest.raises(ValueError,match='HERO_DRAFTS_ENABLED'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED','0')
+    assert not PrivateEventsMCPConfig.from_env().hero_drafts_enabled
+
+
+def test_owner_promo_flag_default_off_strict_and_requires_event_create(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID','codex-public-client')
+    monkeypatch.delenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED',raising=False)
+    assert not PrivateEventsMCPConfig.from_env().owner_promo_enabled
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED','not-a-boolean')
+    with pytest.raises(ValueError,match='OWNER_PROMO_ENABLED'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED','1')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED','0')
+    with pytest.raises(ValueError,match='owner promo requires'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED','1')
+    assert PrivateEventsMCPConfig.from_env().owner_promo_enabled
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED','0')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED','not-a-boolean')
+    assert not PrivateEventsMCPConfig.from_env().owner_promo_enabled

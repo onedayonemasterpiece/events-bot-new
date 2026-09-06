@@ -417,3 +417,21 @@ registry.
 Основная реализация выполняется в ChatGPT на одной integration branch малыми
 проверяемыми commits. Codex получает только release integration после зелёных
 этапов и не дописывает пропущенные крупные функции на deployment checkout.
+
+
+### #643 queued recovery runtime integration
+
+`init_db_and_scheduler` invokes `recover_private_event_creates(app)` after
+canonical `Database.init()` and registers the same bounded callback in the
+existing APScheduler (`mcp_event_create_recovery`, every 300 seconds, coalesced,
+one instance). No second scheduler/outbox is created. Disabled/absent owner
+runtime registers no recovery job. Each pass considers at most 25 queued rows;
+processing/unknown rows remain explicit reconciliation work, never blind replay.
+
+The R1 adapter checks the current configured owner subject/resource/client and
+capability before the executor for **both** normal commits and recovered jobs.
+Partner subjects and Codex clients cannot enter this owner-only boundary.
+Removing a configured client or disabling the capability on restart does not
+execute its old queued operations. A partner mutation stage must provide its
+own per-request live grant/credential/portfolio check, not reuse this owner
+allowlist. OAuth test identities use the same subject as actual owner issuance.

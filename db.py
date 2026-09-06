@@ -704,6 +704,7 @@ class Database:
                 )
                 """
             )
+            await _add_column(conn, "event_change_log", "domain_receipt_json JSON")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_change_log_status_updated "
                 "ON event_change_log(status,updated_at)"
@@ -712,6 +713,11 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_event_change_log_event "
                 "ON event_change_log(event_id,created_at)"
             )
+            # Additive Hero draft/version history; no startup backfill, worker or activation.
+            from hero_talk.store import SCHEMA as hero_schema
+            for statement in hero_schema.split(";"):
+                if statement.strip():
+                    await conn.execute(statement)
             # Canonical partner policy is separate from OAuth / Social Workspace state.
             # Additive DDL only; no credentials or portfolio backfill at startup.
             from private_events_mcp.partner_access import SCHEMA as partner_schema

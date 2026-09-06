@@ -7,8 +7,8 @@ import json
 import logging
 import re
 import time
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Protocol
 from urllib.parse import urlsplit
@@ -107,6 +107,32 @@ def _idempotency_key(value: Any) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class EventImageRef:
+    asset_ref: str
+    content_digest: str
+
+
+def parse_event_images(value: Any) -> tuple[EventImageRef, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list) or len(value) > 3:
+        raise InvalidArgumentsError("media must contain at most three staged event images")
+    images = []
+    seen = set()
+    for item in value:
+        if (not isinstance(item, Mapping) or set(item) != {"asset_ref", "content_digest"}
+                or not isinstance(item["asset_ref"], str)
+                or not re.fullmatch(r"ing_[A-Za-z0-9_-]{24,160}", item["asset_ref"])
+                or not isinstance(item["content_digest"], str)
+                or not re.fullmatch(r"sha256:[a-f0-9]{64}", item["content_digest"])
+                or item["asset_ref"] in seen):
+            raise InvalidArgumentsError("media requires unique staged references and exact digests")
+        seen.add(item["asset_ref"])
+        images.append(EventImageRef(item["asset_ref"], item["content_digest"]))
+    return tuple(images)
+
+
+@dataclass(frozen=True, slots=True)
 class EventCreateRequest:
     raw_text: str
     source_url: str | None
@@ -117,9 +143,13 @@ class EventCreateRequest:
     actor_subject: str
     actor_client_id: str
     actor_audience: str
+    _persisted_idempotency_hash: str | None = None
+    media: tuple[EventImageRef, ...] = ()
+    partner_policy_revision: int | None = None
+    _operation_ref: str | None = None
 
     def canonical_action(self) -> dict[str, Any]:
-        return {
+        action = {
             "schema": "events-mcp-owner-create-r1",
             "raw_text": self.raw_text,
             "source_url": self.source_url,
@@ -127,6 +157,13 @@ class EventCreateRequest:
             "source_locator": self.source_locator,
             "text_policy": self.text_policy,
         }
+        # Existing text-only R1 digests survive unchanged across recovery.
+        if self.media:
+            action["media"] = [{"asset_ref": item.asset_ref, "content_digest": item.content_digest}
+                               for item in self.media]
+        if self.partner_policy_revision is not None:
+            action["partner_policy_revision"] = self.partner_policy_revision
+        return action
 
     @property
     def action_digest(self) -> str:
@@ -136,7 +173,7 @@ class EventCreateRequest:
 
     @property
     def idempotency_hash(self) -> str:
-        return secret_hash(self.idempotency_key)
+        return self._persisted_idempotency_hash or secret_hash(self.idempotency_key)
 
     def stored_request(self) -> dict[str, Any]:
         return {
@@ -248,7 +285,11 @@ class EventCreateOperationStore:
         await cursor.close()
         return row
 
-    async def reserve(self, request: EventCreateRequest) -> tuple[dict[str, Any], bool]:
+    async def reserve(
+        self, request: EventCreateRequest, *, initial_status: str = "queued",
+    ) -> tuple[dict[str, Any], bool]:
+        if initial_status not in {"queued", "review_required"}:
+            raise ValueError("invalid initial event operation status")
         async with self.database.raw_conn() as conn:
             conn.row_factory = aiosqlite.Row
             await conn.execute("BEGIN IMMEDIATE")
@@ -279,7 +320,7 @@ class EventCreateOperationStore:
                         operation_ref,operation_kind,actor_subject,actor_client_id,
                         actor_audience,idempotency_hash,action_digest,source_type,
                         source_url,request_json,status,created_at,updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?, 'queued',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
                     """,
                     (
                         operation_ref,
@@ -292,6 +333,7 @@ class EventCreateOperationStore:
                         "manual",
                         request.source_locator,
                         _canonical_json(request.stored_request()),
+                        initial_status,
                     ),
                 )
                 await conn.commit()
@@ -306,6 +348,22 @@ class EventCreateOperationStore:
             except BaseException:
                 await conn.rollback()
                 raise
+
+    async def queued(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        """Internal recovery input; never expose request_json through MCP."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("recovery limit must be between 1 and 1000")
+        async with self.database.raw_conn() as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(
+                "SELECT operation_ref,actor_subject,actor_client_id,actor_audience,"
+                "action_digest,idempotency_hash,request_json FROM event_change_log "
+                "WHERE operation_kind='create' AND status='queued' "
+                "ORDER BY created_at,operation_ref LIMIT ?", (limit,),
+            )
+            rows = await cursor.fetchall()
+            await cursor.close()
+        return [dict(row) for row in rows]
 
     async def mark_processing(self, operation_ref: str) -> bool:
         async with self.database.raw_conn() as conn:
@@ -390,10 +448,13 @@ class EventCreateRuntime:
         config: Any,
         database: Any,
         executor: EventCreateExecutor,
+        authorize: Callable[[EventCreateRequest], Awaitable[bool]] | None = None,
     ) -> None:
         self.config = config
         self.store = EventCreateOperationStore(database)
         self.executor = executor
+        self.authorize = authorize
+        self.on_accepted = None
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
     @staticmethod
@@ -422,7 +483,7 @@ class EventCreateRuntime:
             )
         source_locator = source_url
         if source_locator is None:
-            source_locator = "mcp-owner:" + hashlib.sha256(
+            source_locator = ("mcp-partner:" if context.identity.subject.startswith("partner:") else "mcp-owner:") + hashlib.sha256(
                 f"{context.identity.client_id}:{source_external_id}".encode("utf-8")
             ).hexdigest()
         return EventCreateRequest(
@@ -435,11 +496,14 @@ class EventCreateRuntime:
             actor_subject=context.identity.subject,
             actor_client_id=context.identity.client_id,
             actor_audience=context.identity.audience,
+            media=parse_event_images(arguments.get("media")),
         )
 
     def prepare(
         self, request: EventCreateRequest, *, now: int | None = None
     ) -> dict[str, Any]:
+        if request.media and not self.config.event_assets_enabled:
+            raise ToolExecutionError("EVENT_ASSETS_DISABLED", "Event image ingress is disabled.")
         issued = int(time.time()) if now is None else int(now)
         expires = issued + _PREPARATION_TTL_SECONDS
         payload = {
@@ -465,6 +529,8 @@ class EventCreateRuntime:
             "expires_at": expires,
             "committable": True,
             "preview": {
+                "media": [{"asset_ref": image.asset_ref, "content_digest": image.content_digest}
+                          for image in request.media],
                 "text_policy": request.text_policy,
                 "raw_text_chars": len(request.raw_text),
                 "raw_text_preview": request.raw_text[:600],
@@ -538,11 +604,14 @@ class EventCreateRuntime:
                     retry_safe=True,
                 )
 
-    def _spawn(self, operation_ref: str, request: EventCreateRequest) -> None:
+    def _spawn(
+        self, operation_ref: str, request: EventCreateRequest,
+        *, authorize: Callable[[EventCreateRequest], Awaitable[bool]] | None = None,
+    ) -> None:
         if operation_ref in self._tasks:
             return
         task = asyncio.create_task(
-            self._execute(operation_ref, request),
+            self._execute(operation_ref, request, authorize=authorize),
             name=f"events-mcp-create:{operation_ref}",
         )
         self._tasks[operation_ref] = task
@@ -570,11 +639,20 @@ class EventCreateRuntime:
         task.add_done_callback(_done)
 
     async def _execute(
-        self, operation_ref: str, request: EventCreateRequest
+        self, operation_ref: str, request: EventCreateRequest,
+        *, authorize: Callable[[EventCreateRequest], Awaitable[bool]] | None = None,
     ) -> None:
         if not await self.store.mark_processing(operation_ref):
             return
         try:
+            current_authorize = authorize or self.authorize
+            if current_authorize is not None and await current_authorize(request) is not True:
+                await self.store.finish(
+                    operation_ref, status="rejected", result={"status": "rejected"},
+                    error_code="EVENT_CREATE_ACCESS_REVOKED",
+                )
+                return
+            request = replace(request, _operation_ref=operation_ref)
             raw_result = await self.executor.create(request)
             result = redact_and_clip_untrusted(dict(raw_result), limit=12_000)
             raw_status = str(result.get("status") or "failed")
@@ -598,6 +676,8 @@ class EventCreateRuntime:
                     "status": "failed",
                     "error_code": "EVENT_CREATE_RESULT_INVALID",
                 }
+            if status == "accepted" and self.on_accepted is not None:
+                await self.on_accepted(request, dict(raw_result))
             error_code = None if status == "accepted" else str(
                 result.get("error_code") or "EVENT_CREATE_NOT_ACCEPTED"
             )[:120]
@@ -663,6 +743,49 @@ class EventCreateRuntime:
             )
         return operation
 
+    async def recover_queued(
+        self, *, authorize: Callable[[EventCreateRequest], Awaitable[bool]],
+        limit: int = 100,
+    ) -> int:
+        """Resume only unclaimed intents with current mutation-boundary policy.
+
+        Processing/unknown operations require explicit canonical reconciliation.
+        Multiple runtimes compete through the atomic mark_processing claim.
+        """
+        if not callable(authorize):
+            raise TypeError("recovery requires a current authorization callback")
+        scheduled = 0
+        for row in await self.store.queued(limit=limit):
+            operation_ref = row["operation_ref"]
+            if operation_ref in self._tasks:
+                continue
+            try:
+                stored = json.loads(row["request_json"])
+                if stored.get("schema") != "events-mcp-owner-create-r1":
+                    raise ValueError("unsupported stored request schema")
+                request = EventCreateRequest(
+                    raw_text=stored["raw_text"], source_url=stored["source_url"],
+                    source_external_id=stored["source_external_id"],
+                    source_locator=stored["source_locator"], text_policy=stored["text_policy"],
+                    actor_subject=row["actor_subject"], actor_client_id=row["actor_client_id"],
+                    actor_audience=row["actor_audience"], idempotency_key="",
+                    _persisted_idempotency_hash=row["idempotency_hash"],
+                    media=parse_event_images(stored.get("media")),
+                    partner_policy_revision=stored.get("partner_policy_revision"),
+                )
+                if not constant_time_equal(request.action_digest, row["action_digest"]):
+                    raise ValueError("stored request digest mismatch")
+            except (ValueError, KeyError, TypeError, AttributeError):
+                if await self.store.mark_processing(operation_ref):
+                    await self.store.finish(
+                        operation_ref, status="failed", result={"status": "failed"},
+                        error_code="EVENT_CREATE_RECOVERY_REQUEST_INVALID",
+                    )
+                continue
+            self._spawn(operation_ref, request, authorize=authorize)
+            scheduled += 1
+        return scheduled
+
     async def wait_for_operation(
         self, operation_ref: str, *, timeout: float = 10.0
     ) -> None:
@@ -679,6 +802,11 @@ class EventCreateRuntime:
 
 
 _INPUT_PROPERTIES = {
+    "media": {"type": "array", "maxItems": 3, "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["asset_ref", "content_digest"], "properties": {
+            "asset_ref": {"type": "string", "pattern": "^ing_[A-Za-z0-9_-]{24,160}$"},
+            "content_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}}},
     "raw_text": {
         "type": "string",
         "minLength": 10,
@@ -703,11 +831,17 @@ _GENERIC_OUTPUT = {"type": "object", "additionalProperties": True}
 
 def build_event_create_tools(
     runtime: EventCreateRuntime,
+    *, asset_service=None,
 ) -> tuple[ToolSpec, ...]:
     async def prepare(
         arguments: Mapping[str, Any], context: ToolCallContext
     ) -> dict[str, Any]:
         request = runtime.request_from_arguments(arguments, context)
+        if request.media:
+            if asset_service is None:
+                raise ToolExecutionError("EVENT_ASSETS_DISABLED", "Event image ingress is disabled.")
+            for image in request.media:
+                await asset_service.reverify(image.asset_ref, context, expected_digest=image.content_digest)
         return runtime.prepare(request)
 
     async def commit(
@@ -736,8 +870,8 @@ def build_event_create_tools(
             name="event_create_prepare",
             title="Prepare canonical event creation",
             description=(
-                "Validate and freeze one owner event-create request. R1 supports raw text only, "
-                "text_policy=smart_rewrite, and no media or promo. This tool does not mutate "
+                "Validate and freeze one owner event-create request with smart_rewrite text and "
+                "optional digest-bound staged images when enabled; no promo. This tool does not mutate "
                 "Event, EventSource, promo or JobOutbox."
             ),
             input_schema={

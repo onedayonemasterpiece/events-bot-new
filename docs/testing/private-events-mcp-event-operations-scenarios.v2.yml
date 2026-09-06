@@ -396,10 +396,16 @@ scenarios:
     layer: integration
     title: Promo create requires accepted existing event ID
     expect: [missing_or_unaccepted_event_rejected]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_promo_operations.py", "tests/test_private_events_mcp_promo_tools.py", "tests/test_promo_oauth_creator.py"]
   - id: PRM-002
     layer: integration
     title: MCP uses existing promo campaign services
     expect: [no_parallel_promo_model]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_promo_operations.py", "tests/test_private_events_mcp_promo_tools.py", "tests/test_promo_oauth_creator.py", "tests/test_private_events_mcp_promo_activity_operations.py", "tests/test_private_events_mcp_promo_reads.py"]
   - id: PRM-003
     layer: integration
     title: Reschedule never silently extends campaign period budget or goal
@@ -505,3 +511,189 @@ scenarios:
     layer: isolated_live
     title: Production destination identifiers are rejected in test mode
     expect: [PRODUCTION_TARGET_FORBIDDEN, provider_mutation_0]
+
+  # #643 acceptance IDs: component tests are partial evidence, never live acceptance.
+  - id: HT-AF-01
+    layer: integration
+    title: "Cold/warm compile: same plan/hash, warm0 model sends/новых content writes"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_talk_compiler.py"]
+  - id: HT-AF-02
+    layer: integration
+    title: "Invalid model output/facts/links/truncation/quota → bounded retry/defer, valid fallback"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_talk_compiler.py"]
+  - id: HT-AF-03
+    layer: integration
+    title: "Cancel/reschedule/price/identity change → старый dependency больше не получает permit"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_event_resolver.py"]
+  - id: HT-AF-04
+    layer: integration
+    title: "Kaliningrad day/start/deadline boundaries без LLM"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_event_resolver.py"]
+  - id: HT-AF-05
+    layer: integration
+    title: "Pause/OFF/owner edit vs late job → no stale activation"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-06
+    layer: integration
+    title: "Новое событие живой программы входит без ручного списка IDs"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_promo_hero_activity.py"]
+  - id: HT-AF-07
+    layer: integration
+    title: "Verbatim exact text/order/identities через edit/render/rollback, stale literal не переписывается"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_talk_compiler.py", "tests/test_hero_talk_store.py", "tests/test_private_events_mcp_hero_drafts.py"]
+  - id: HT-AF-08
+    layer: integration
+    title: "Exact photo/meme role, права, entity/crop match, missing-media fallback"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_event_create_media.py", "tests/test_hero_talk_compiler.py"]
+  - id: HT-AF-09
+    layer: integration
+    title: "Stale index, publish crash, missing pack, live readback и обновление без full rebuild"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-10
+    layer: integration
+    title: "SW/offline/hidden/resume/BFCache/clock jump, измеренная граница freshness"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-11
+    layer: integration
+    title: "No-JS/reduced-motion/mobile/desktop, first-click/finite cursor, navigation и layout"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-12
+    layer: integration
+    title: "Общий home/page-end/cross-tab cap, no duplicate exposure from remount"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-13
+    layer: integration
+    title: "Page/action context, pending/success/undo/search error, без false success/duplicate related"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-14
+    layer: integration
+    title: "Disabled/mastered/dismissed capability, absent delta/cohort → честный fallback"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-15
+    layer: integration
+    title: "MCP auth/actor/resource/revision/idempotency/timeout, no duplicate mutation"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_event_create_recovery.py", "tests/test_private_events_mcp_event_create_reconciliation.py", "tests/test_event_operation_receipts.py", "tests/test_hero_talk_store.py", "tests/test_private_events_mcp_hero_drafts.py"]
+  - id: HT-AF-16
+    layer: integration
+    title: "Prompt injection/HTML/URL/private assets → no execution/SSRF/secret leak"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_event_assets.py", "tests/test_private_events_mcp_event_asset_tools.py", "tests/test_hero_talk_compiler.py"]
+  - id: HT-AF-17
+    layer: integration
+    title: "Analytics denied/down/delayed/test → корректные coverage/denominators, site работает"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-18
+    layer: integration
+    title: "Promo units/caps: не смешивать публикации и browser impressions"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_promo_hero_activity.py"]
+  - id: HT-AF-19
+    layer: integration
+    title: "Additive schema, previous binary/restart/worker lease recovery"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_event_create_recovery.py", "tests/test_private_events_mcp_event_create_reconciliation.py", "tests/test_event_operation_receipts.py", "tests/test_hero_talk_store.py", "tests/test_private_events_mcp_hero_drafts.py"]
+  - id: HT-AF-20
+    layer: integration
+    title: "Astro=executable SoT=Penpot на общих facts/media/state fixtures"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-21
+    layer: isolated_live
+    title: "Полный owner Hero путь, включая production readback"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: HT-AF-22
+    layer: isolated_live
+    title: "Полный automatic путь, source update, нагрузка и actual model/control budget"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run
+  - id: MCP-HT-01
+    layer: integration
+    title: "Existing campaign с работающей другой activity → добавить Hero → обе видны в том же campaign → выключить только Hero → исходная activity неизменна"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_promo_hero_activity.py"]
+  - id: MCP-HT-02
+    layer: integration
+    title: "Campaign pause из существующего `/promo`/shared service → Hero снимается; resume проходит current gates; отдельный Hero state не противоречит campaign"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_promo_hero_activity.py"]
+  - id: MCP-HT-03
+    layer: isolated_live
+    title: "Owner назначил двух изолированных партнёров → OAuth без Telegram → event+афиша/review/accepted ID → publication status → отдельное promo действие; чужие IDs/read/status запрещены"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_partner_event_review.py", "tests/test_private_events_mcp_event_publication_receipts.py", "tests/test_private_events_mcp_partner_event_operations.py"]
+  - id: MCP-HT-04
+    layer: integration
+    title: "Partner подготовил write → owner изменил portfolio/права или suspend/revoke → commit/refresh/queued worker запрещены до mutation boundary; другой tenant продолжает работу"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_partner_event_review.py", "tests/test_private_events_mcp_partner_event_operations.py", "tests/test_event_operation_receipts.py", "tests/test_hero_talk_store.py", "tests/test_private_events_mcp_hero_drafts.py"]
+  - id: MCP-HT-05
+    layer: integration
+    title: "Existing owner/partner MCP + Telegram/VK/manual intake + старые promo activities + Codex readonly projection не регрессировали после общего release"
+    expect: [full_contract_verified]
+    implementation_status: partial
+    acceptance_status: not_run
+    partial_test_files: ["tests/test_private_events_mcp_server.py", "tests/test_partner_promo.py"]
+  - id: MCP-HT-06
+    layer: isolated_live
+    title: "Production exact main/backend/site versions → authenticated tools/capabilities → реальные операции/readback → marked telemetry receipt → pause/restart/rollback; не только local mock"
+    expect: [full_contract_verified]
+    implementation_status: missing
+    acceptance_status: not_run

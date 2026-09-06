@@ -43,6 +43,7 @@
   - active scheduled-publication recovery incident:
     `docs/reports/incidents/INC-2026-08-31-mcp-scheduled-readback-reschedule.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
+- Hero-talk shared home/page-end content, compiler and staged implementation: `docs/features/hero-talk/README.md`.
 - Event-media automatic gate: `docs/features/event-media/README.md`
 - Telegram vertical-video quality, SHA cache, Yandex CDN and ranking:
   `docs/features/telegram-monitoring/video-quality.md`

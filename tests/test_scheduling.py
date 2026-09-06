@@ -241,8 +241,14 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
             partner_notification_scheduler=lambda *a, **k: None,
             nightly_page_sync=lambda *a, **k: None,
             rebuild_fest_nav_if_changed=lambda *a, **k: None,
+            event_create_recovery=lambda: None,
         )
         assert isinstance(scheduler, DummyScheduler)
+        recovery = scheduler.jobs["mcp_event_create_recovery"]
+        assert recovery.trigger == "interval"
+        assert recovery.kwargs["seconds"] == 300
+        assert recovery.kwargs["max_instances"] == 1
+        assert recovery.kwargs["coalesce"] is True
         assert "main" not in sys.modules
         assert "vk_crawl_continuation_worker" in scheduler.jobs
         assert scheduler.jobs["vk_crawl_continuation_worker"].trigger == "interval"
