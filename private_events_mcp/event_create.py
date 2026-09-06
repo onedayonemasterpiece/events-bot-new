@@ -7,7 +7,7 @@ import json
 import logging
 import re
 import time
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -117,6 +117,7 @@ class EventCreateRequest:
     actor_subject: str
     actor_client_id: str
     actor_audience: str
+    _persisted_idempotency_hash: str | None = None
 
     def canonical_action(self) -> dict[str, Any]:
         return {
@@ -136,7 +137,7 @@ class EventCreateRequest:
 
     @property
     def idempotency_hash(self) -> str:
-        return secret_hash(self.idempotency_key)
+        return self._persisted_idempotency_hash or secret_hash(self.idempotency_key)
 
     def stored_request(self) -> dict[str, Any]:
         return {
@@ -306,6 +307,22 @@ class EventCreateOperationStore:
             except BaseException:
                 await conn.rollback()
                 raise
+
+    async def queued(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        """Internal recovery input; never expose request_json through MCP."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+            raise ValueError("recovery limit must be between 1 and 1000")
+        async with self.database.raw_conn() as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(
+                "SELECT operation_ref,actor_subject,actor_client_id,actor_audience,"
+                "action_digest,idempotency_hash,request_json FROM event_change_log "
+                "WHERE operation_kind='create' AND status='queued' "
+                "ORDER BY created_at,operation_ref LIMIT ?", (limit,),
+            )
+            rows = await cursor.fetchall()
+            await cursor.close()
+        return [dict(row) for row in rows]
 
     async def mark_processing(self, operation_ref: str) -> bool:
         async with self.database.raw_conn() as conn:
@@ -538,11 +555,14 @@ class EventCreateRuntime:
                     retry_safe=True,
                 )
 
-    def _spawn(self, operation_ref: str, request: EventCreateRequest) -> None:
+    def _spawn(
+        self, operation_ref: str, request: EventCreateRequest,
+        *, authorize: Callable[[EventCreateRequest], Awaitable[bool]] | None = None,
+    ) -> None:
         if operation_ref in self._tasks:
             return
         task = asyncio.create_task(
-            self._execute(operation_ref, request),
+            self._execute(operation_ref, request, authorize=authorize),
             name=f"events-mcp-create:{operation_ref}",
         )
         self._tasks[operation_ref] = task
@@ -570,11 +590,18 @@ class EventCreateRuntime:
         task.add_done_callback(_done)
 
     async def _execute(
-        self, operation_ref: str, request: EventCreateRequest
+        self, operation_ref: str, request: EventCreateRequest,
+        *, authorize: Callable[[EventCreateRequest], Awaitable[bool]] | None = None,
     ) -> None:
         if not await self.store.mark_processing(operation_ref):
             return
         try:
+            if authorize is not None and await authorize(request) is not True:
+                await self.store.finish(
+                    operation_ref, status="rejected", result={"status": "rejected"},
+                    error_code="EVENT_CREATE_ACCESS_REVOKED",
+                )
+                return
             raw_result = await self.executor.create(request)
             result = redact_and_clip_untrusted(dict(raw_result), limit=12_000)
             raw_status = str(result.get("status") or "failed")
@@ -662,6 +689,47 @@ class EventCreateRuntime:
                 actor_audience=request.actor_audience,
             )
         return operation
+
+    async def recover_queued(
+        self, *, authorize: Callable[[EventCreateRequest], Awaitable[bool]],
+        limit: int = 100,
+    ) -> int:
+        """Resume only unclaimed intents with current mutation-boundary policy.
+
+        Processing/unknown operations require explicit canonical reconciliation.
+        Multiple runtimes compete through the atomic mark_processing claim.
+        """
+        if not callable(authorize):
+            raise TypeError("recovery requires a current authorization callback")
+        scheduled = 0
+        for row in await self.store.queued(limit=limit):
+            operation_ref = row["operation_ref"]
+            if operation_ref in self._tasks:
+                continue
+            try:
+                stored = json.loads(row["request_json"])
+                if stored.get("schema") != "events-mcp-owner-create-r1":
+                    raise ValueError("unsupported stored request schema")
+                request = EventCreateRequest(
+                    raw_text=stored["raw_text"], source_url=stored["source_url"],
+                    source_external_id=stored["source_external_id"],
+                    source_locator=stored["source_locator"], text_policy=stored["text_policy"],
+                    actor_subject=row["actor_subject"], actor_client_id=row["actor_client_id"],
+                    actor_audience=row["actor_audience"], idempotency_key="",
+                    _persisted_idempotency_hash=row["idempotency_hash"],
+                )
+                if not constant_time_equal(request.action_digest, row["action_digest"]):
+                    raise ValueError("stored request digest mismatch")
+            except (ValueError, KeyError, TypeError, AttributeError):
+                if await self.store.mark_processing(operation_ref):
+                    await self.store.finish(
+                        operation_ref, status="failed", result={"status": "failed"},
+                        error_code="EVENT_CREATE_RECOVERY_REQUEST_INVALID",
+                    )
+                continue
+            self._spawn(operation_ref, request, authorize=authorize)
+            scheduled += 1
+        return scheduled
 
     async def wait_for_operation(
         self, operation_ref: str, *, timeout: float = 10.0
