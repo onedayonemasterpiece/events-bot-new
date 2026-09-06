@@ -9223,6 +9223,16 @@ async def init_db_and_scheduler(
 ) -> None:
     logging.info("Initializing database")
     await db.init()
+    from private_events_mcp.integration import recover_private_event_creates
+    from private_events_mcp.server import SERVER_APP_KEY
+
+    async def _recover_mcp_event_creates():
+        return await recover_private_event_creates(app)
+
+    try:
+        await _recover_mcp_event_creates()
+    except Exception:
+        logging.exception("mcp_event_create startup recovery failed")
     try:
         from ops_run import cleanup_running_ops_runs_on_startup
         from vk_review import release_all_locks
@@ -9270,7 +9280,14 @@ async def init_db_and_scheduler(
         logging.info("No webhook URL provided, skipping webhook setup (dev mode)")
     
     try:
-        scheduler_startup(db, bot)
+        mcp_server = app.get(SERVER_APP_KEY)
+        scheduler_startup(
+            db, bot, event_create_recovery=(
+                _recover_mcp_event_creates
+                if mcp_server is not None and mcp_server.event_create_runtime is not None
+                else None
+            ),
+        )
     except Exception:
         logging.exception("scheduler_startup failed; continuing without scheduler")
     try:

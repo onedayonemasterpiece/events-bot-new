@@ -150,3 +150,54 @@ async def test_recovery_requires_callback_and_policy_errors_fail_closed(tmp_path
     assert same['status'] == 'outcome_unknown'
     assert not executor.requests
     assert await runtime.recover_queued(authorize=allowed) == 0
+
+
+@pytest.mark.asyncio
+async def test_normal_commit_worker_also_uses_current_runtime_policy(tmp_path):
+    database, runtime, executor, request = await setup(tmp_path)
+    async def denied(_):
+        return False
+    runtime.authorize = denied
+    operation, _ = await runtime.store.reserve(request)
+    runtime._spawn(operation['operation_ref'], request)
+    await runtime.wait_for_operation(operation['operation_ref'])
+    assert executor.requests == []
+    result = await runtime.store.get(operation['operation_ref'], actor_subject=request.actor_subject,
+                                    actor_client_id=request.actor_client_id, actor_audience=request.actor_audience)
+    assert result['status'] == 'rejected'
+    assert result['error_code'] == 'EVENT_CREATE_ACCESS_REVOKED'
+
+
+@pytest.mark.asyncio
+async def test_existing_app_recovery_hook_is_bounded_and_current_owner_only(tmp_path):
+    from dataclasses import replace
+    from aiohttp import web
+    from private_events_mcp.integration import event_create_actor_is_current, recover_private_event_creates
+    from private_events_mcp.server import SERVER_APP_KEY
+
+    database, runtime, executor, original = await setup(tmp_path)
+    config = SimpleNamespace(enabled=True, event_create_enabled=True, resource='owner-resource',
+                             oauth_client_id='owner-client', opencode_oauth_client_id='opencode-client')
+    request = replace(original, actor_subject='events-bot-owner', actor_client_id='owner-client',
+                      actor_audience='owner-resource')
+    assert event_create_actor_is_current(config, request)
+    for changed in (replace(request, actor_subject='partner:actual-principal'),
+                    replace(request, actor_client_id='codex-client'),
+                    replace(request, actor_audience='partner-resource')):
+        assert not event_create_actor_is_current(config, changed)
+    async def current(req):
+        return event_create_actor_is_current(config, req)
+    runtime.authorize = current
+    app = web.Application()
+    assert await recover_private_event_creates(app) == 0
+    app[SERVER_APP_KEY] = SimpleNamespace(config=config, event_create_runtime=runtime)
+    operation, _ = await runtime.store.reserve(request)
+    # A disable leaves an unclaimed operation queued, not executed or destroyed.
+    config.event_create_enabled = False
+    assert await recover_private_event_creates(app) == 0
+    config.event_create_enabled = True
+    assert await recover_private_event_creates(app) == 1
+    # Owner client removed after scan but before worker mutation boundary.
+    config.oauth_client_id = 'rotated-client'
+    await runtime.wait_for_operation(operation['operation_ref'])
+    assert not executor.requests

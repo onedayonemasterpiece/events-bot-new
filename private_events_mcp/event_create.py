@@ -407,10 +407,12 @@ class EventCreateRuntime:
         config: Any,
         database: Any,
         executor: EventCreateExecutor,
+        authorize: Callable[[EventCreateRequest], Awaitable[bool]] | None = None,
     ) -> None:
         self.config = config
         self.store = EventCreateOperationStore(database)
         self.executor = executor
+        self.authorize = authorize
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
     @staticmethod
@@ -596,7 +598,8 @@ class EventCreateRuntime:
         if not await self.store.mark_processing(operation_ref):
             return
         try:
-            if authorize is not None and await authorize(request) is not True:
+            current_authorize = authorize or self.authorize
+            if current_authorize is not None and await current_authorize(request) is not True:
                 await self.store.finish(
                     operation_ref, status="rejected", result={"status": "rejected"},
                     error_code="EVENT_CREATE_ACCESS_REVOKED",

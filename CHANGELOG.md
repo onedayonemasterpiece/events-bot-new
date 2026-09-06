@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Connected queued Events MCP create recovery to canonical-DB startup and the
+  existing five-minute scheduler, with owner resource/client/capability checks
+  immediately before both normal and recovered execution. Partner/Codex jobs do
+  not cross the R1 owner mutation boundary; unknown outcomes remain non-replayed.
+
 - Added the Hero-talk promo activity service foundation in the existing campaign
   model: explicit upper/lower placements, current campaign/activity gates and
   dynamic program targets, with unsupported publication/browser cap mixing

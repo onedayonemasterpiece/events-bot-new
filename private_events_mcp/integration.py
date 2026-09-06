@@ -11,7 +11,7 @@ from aiohttp import web
 from .chatgpt_refresh_policy import install_chatgpt_refresh_policy
 from .config import PrivateEventsMCPConfig
 from .media_contract import AssetIngestor
-from .event_create import EventCreateRuntime
+from .event_create import EventCreateRequest, EventCreateRuntime
 from .event_create_adapter import MainEventCreateExecutor
 from .queue_read import attach_owner_queue_observability
 from .server import (
@@ -84,6 +84,34 @@ def _install_access_log_redaction(config: PrivateEventsMCPConfig) -> None:
     access_logger.addFilter(_PrivateEventsMCPAccessLogFilter(secrets))
 
 
+
+def event_create_actor_is_current(config: PrivateEventsMCPConfig, request: EventCreateRequest) -> bool:
+    """R1 owner boundary, including durable jobs; never infer partner grants.
+
+    Owner identity is the current configured resource/client/subject. Partner
+    mutations require their own live grant check and are deliberately not accepted
+    by this owner-only stage. Removing an owner client or disabling the capability
+    on restart prevents its queued work from crossing the executor boundary.
+    """
+    from .oauth import SUBJECT
+    return bool(config.enabled and config.event_create_enabled
+                and request.actor_subject == SUBJECT
+                and request.actor_audience == config.resource
+                and request.actor_client_id in {config.oauth_client_id, config.opencode_oauth_client_id}
+                and bool(request.actor_client_id))
+
+
+async def recover_private_event_creates(app: web.Application) -> int:
+    """Existing scheduler/startup hook; call only after canonical DB init."""
+    server = app.get(SERVER_APP_KEY)
+    if server is None or server.event_create_runtime is None:
+        return 0
+    runtime = server.event_create_runtime
+    if not server.config.enabled or not server.config.event_create_enabled:
+        return 0
+    return await runtime.recover_queued(authorize=runtime.authorize, limit=25)
+
+
 def attach_private_events_mcp(
     app: web.Application,
     config: PrivateEventsMCPConfig | None = None,
@@ -113,10 +141,14 @@ def attach_private_events_mcp(
             raise ValueError(
                 "event create requires the canonical EventsBot Database instance"
             )
+        async def _authorize_event_create(request: EventCreateRequest) -> bool:
+            return event_create_actor_is_current(resolved, request)
+
         event_create_runtime = EventCreateRuntime(
             config=resolved,
             database=event_database,
             executor=MainEventCreateExecutor(event_database),
+            authorize=_authorize_event_create,
         )
     server = PrivateEventsMCPServer(
         resolved,
