@@ -227,7 +227,7 @@ function enableEditorial(h,{fail=false,accountingFailure=false}={}) {
  h.deps.generate=async o=>{
   if(o.kind!=='editorial')return original(o);
   h.calls.push('editorial');await o.dispatched();if(fail)throw Error('quota_or_timeout');
-  const value=o.validate({intro:'Я бы начал с этого варианта.',recommendations:[{event_id:1,comment:'Можно глубже познакомиться с архитектурой города.',evidence:'об архитектуре старого города'}]});
+  const value=o.validate({intro:'Я бы начал с этого варианта.',recommendations:[{event_id:1,comment:'Можно глубже познакомиться с архитектурой города.',evidence_index:0}]});
   await o.completed(value,{pending:true});if(accountingFailure)throw Error('finalize unavailable');await o.accounted();return value;
  };
 }
@@ -248,4 +248,15 @@ test('no editorial provider spend on unverified or empty result sets',async()=>{
  for(const search of [{items:[],semantic_verification:{status:'complete',exact_ids:[],unchecked_ids:[]}},{items:[{event_id:1}],verification_unavailable:true}]){
   const h=harness();enableEditorial(h);h.deps.search=async()=>search;const i=uid(),s=uid();await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});assert.ok(!h.calls.includes('editorial'));
  }
+});
+test('changed editorial public facts invalidate commentary on refresh without regenerating',async()=>{
+ const h=harness();enableEditorial(h);const i=uid(),s=uid();await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
+ h.deps.editorialFacts=async()=>[{event_id:1,title:'Лекция',search_digest:'Программа изменилась.'}];
+ const r=await h.request(`status?id=${s}`);assert.equal(r.body.result.editorial.status,'stale');assert.doesNotMatch(r.body.result.answer,/архитектур/);assert.equal(r.body.result.items.length,1);assert.equal(h.calls.filter(c=>c==='editorial').length,1);
+});
+test('editorial failure plus unresolved quota finalize preserves cards AND pending accounting',async()=>{
+ const {SharedGoogleQuotaError}=await import('../../supabase/functions/event-search/google-quota.ts');
+ const h=harness();enableEditorial(h);const original=h.deps.generate;h.deps.generate=async o=>{if(o.kind==='editorial')throw new SharedGoogleQuotaError('finalize','synthetic');return original(o);};
+ const i=uid(),s=uid();await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
+ assert.equal(r.body.state,'completed');assert.equal(r.body.result.items.length,1);assert.equal(r.body.accounting_pending,true);assert.equal(r.body.result.editorial.failure_reason,'shared_quota_finalize');
 });

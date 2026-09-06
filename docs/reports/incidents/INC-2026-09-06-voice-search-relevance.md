@@ -312,3 +312,22 @@ Clean UI footer removal delegated in bounded source-only worker; no second shell
 Evidence: `artifacts/codex/voice-dialogue-review-20260906/` scoped
 `user-chain.private.json`, public `projection-window.json`, `inventory.log`.
 Source/live checks and exact delivery SHA will follow; old receipts remain frozen.
+
+First new three-turn live replay:5→5→14cards, all verification windows complete;
+correct7–13→14–20→12–13dates and music cleared for children. No footer controls,
+all14children cards rendered. Editorial was complete only on the second turn;
+first/third fallback means editorial acceptance FAILED, although retrieval/UI
+checks passed. Shared request ledger confirms first failure `ungrounded_editorial`
+(`d5c2c523-04f8-4d15-89da-c03c87112648`), not retrieval/quota inference. Third had
+no sent editorial attempt in the inspected ledger; precise fallback reason was
+not stored in first implementation and is not guessed.
+
+Targeted official provider research after repeated editorial failures:
+https://ai.google.dev/gemini-api/docs/structured-output — schema-shaped JSON is
+not semantic validation. Replace copied quote with indexed public fact reference;
+keep ID/index validation and add sanitized failure diagnostics. Internal read-only
+review also identified stale editorial after same-ID fact changes and hidden
+pending accounting on provider+finalize failure; both now have regression tests.
+Only two concise recommendations, not a card cap. No extraneous child-age question
+in music-only commentary.54focused regressions and strict typecheck are the gate
+before a second live replay (record exact pass result below).

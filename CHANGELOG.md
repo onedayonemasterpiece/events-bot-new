@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: editorial provenance uses indexed source facts; changed facts invalidate stale recommendations without regeneration, and unresolved quota finalization stays visible in accounting.
+
 - Fixed: conversational Search no longer eliminates all family candidates for missing audience metadata; grounded week arithmetic and flexible topic/alternative interpretation.
 - Added: optional post-search editorial guidance based on verified event facts, with shared quota, durable outcome and nonblocking fallback; personalization remains to-be.
 - Changed: clean conversation results omit technical selection footer controls/details while preserving all returned cards and normal event actions.

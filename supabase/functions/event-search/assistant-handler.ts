@@ -1,3 +1,4 @@
+import {SharedGoogleQuotaError} from './google-quota.ts';
 import {editorialSchema,editorialPrompt,validateEditorial,editorialText} from './assistant-editorial.ts';
 import { ASR_VOCABULARY_VERSION, transcriptionPrompt } from './assistant-vocabulary.ts';
 import { assemble, sha256 } from './assistant-media.ts';
@@ -72,6 +73,14 @@ function searchAnswer(result:any,count:number):string {
   return summary?`${summary}\n${facts}`:count?'Подобрал события по указанным условиям.':facts;
 }
 const itemsOf=(row:Operation|null):any[]=>Array.isArray(row?.outcome?.result?.items)?row!.outcome.result.items:[];
+async function editorialHashes(cards:Record<string,any>[]):Promise<Record<string,string>> {
+  const entries=await Promise.all(cards.map(async card=> {
+    const facts=JSON.stringify({title:card.title,digest:card.search_digest||''});
+    const hash=await sha256(new TextEncoder().encode(facts));
+    return [String(card.event_id??card.id),hash];
+  }));
+  return Object.fromEntries(entries);
+}
 async function completedDependency(repo:AssistantRepository,owner:string,id:string,kind:string):Promise<Operation|null>{
   const row=await repo.get(owner,id);
   if(!row)return null;
@@ -94,8 +103,17 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
           projection.result={...row.outcome.result,logical_event_ids:original.map(i=>String(i.event_id??i.id)),
             items:original.map(i=>lookup.get(String(i.event_id??i.id))).filter(Boolean),facts_refreshed_at:new Date().toISOString()};
           if(row.outcome.result.editorial?.status==='complete') {
-            const remaining=new Set(((projection.result as any).items||[]).map((i:any)=>Number(i.event_id??i.id)));
-            if(!row.outcome.result.editorial.recommendations.every((r:any)=>remaining.has(r.event_id))) {
+            const editorial=row.outcome.result.editorial;
+            const ids=editorial.recommendations.map((r:any)=>String(r.event_id));
+            const remaining=new Set(((projection.result as any).items||[]).map((i:any)=>String(i.event_id??i.id)));
+            let valid=false;
+            try {
+              if(deps.editorialFacts&&ids.every((id:string)=>remaining.has(id))) {
+                const hashes=await editorialHashes(await deps.editorialFacts(owner,ids));
+                valid=ids.every((id:string)=>Boolean(hashes[id])&&hashes[id]===editorial.source_hashes?.[id]);
+              }
+            } catch (_) { /* An unverified old comment must not break refreshed cards. */ }
+            if(!valid) {
               (projection.result as any).editorial={status:'stale'};
               (projection.result as any).answer=searchAnswer(row.outcome.result,(projection.result as any).items.length);
             }
@@ -212,9 +230,10 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
             if(!grounded.length)throw new Error('editorial_facts_missing');
             await deps.generate({kind:'editorial',prompt:editorialPrompt(result.question,result.intent,grounded),schema:editorialSchema(grounded),
               validate:value=>validateEditorial(value,grounded),dispatched:dispatch,accounted,
-              completed:async(value:any,accounting)=>complete({...finalResult,answer:editorialText(value,grounded),editorial:{status:'complete',...value}},accounting)});
-          } catch (_) {
-            if(!durable)await complete({...finalResult,editorial:{status:'unavailable'}});
+              completed:async(value:any,accounting)=>complete({...finalResult,answer:editorialText(value,grounded),editorial:{status:'complete',...value,source_hashes:await editorialHashes(grounded.filter(c=>value.recommendations.some((r:any)=>r.event_id===Number(c.event_id??c.id))))}},accounting)});
+          } catch (error) {
+            const failure=error instanceof AssistantError?error.code:error instanceof SharedGoogleQuotaError?`shared_quota_${error.stage}`:'editorial_provider_unavailable';
+            if(!durable)await complete({...finalResult,editorial:{status:'unavailable',failure_reason:failure}},error instanceof SharedGoogleQuotaError&&error.stage==='finalize'?{pending:true,state:'unknown',stage:'editorial_finalize'}:null);
           }
         } else await complete(finalResult);
       }

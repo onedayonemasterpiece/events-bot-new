@@ -825,9 +825,9 @@ no regex/keyword search or deterministic genre interpretation is introduced.
   This does not bypass verification or accept unknown suitability as exact.
   Voice fact budget is2400characters, preserving the metadata tail when truncated.
 - After verified results, one optional shared-limiter **editorial** call comments
-  on up to3of the first12returned events (not a3-result cap). It receives only
+  on up to2of the first12returned events (not a result-count cap). It receives only
   selected public facts, full question and interpreted intent. Each recommendation
-  must reference a selected ID and a verbatim supporting fact; canonical titles
+  must reference a selected ID and the index of a supplied supporting fact line; canonical titles
   are rendered by the server. The text offers grounded editorial judgement,
   not claimed objective ranking or fabricated personalization. Complete outcome
   is checkpointed before accounting finalize; retries/status never regenerate it.
@@ -837,3 +837,13 @@ no regex/keyword search or deterministic genre interpretation is introduced.
   not another toggle or separate profile. Current editorial is general guidance,
   explicitly not a claim of knowing this user's preferences. Unknown child age
   may be asked conversationally without blocking known family candidates.
+
+Editorial hardening: source fact-line indexes replace model-copied quotes (live
+copy mismatch caused `ungrounded_editorial`). Validate index membership; this is
+provenance validation, not proof that a model comment is semantically infallible.
+Bind recommendations to SHA256 of canonical title+digest. Status refresh marks
+changed/unavailable source facts stale and uses plain fallback, never auto-calls
+the model. Provider failure plus unresolved shared quota finalize preserves
+`accounting_pending=true` even when verified cards are delivered. Failure reason
+is a sanitized code, not provider payload/secrets. A child-age question is only
+allowed when the user's current intent concerns children/family, not music alone.
