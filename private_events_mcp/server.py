@@ -85,6 +85,38 @@ class PrivateEventsMCPServer:
             else ()
         )
         self.event_create_runtime = event_create_runtime
+        self.event_assets = None
+        event_asset_tools = ()
+        if config.enabled and config.event_assets_enabled:
+            from .event_assets import EventAssetService
+            from .event_asset_tools import build_event_asset_tools
+            from .oauth import SUBJECT
+
+            if asset_ingestor is None:
+                raise ValueError("event asset ingress requires secure private storage")
+
+            async def authorize_event_asset(context, action):
+                identity = context.identity
+                return bool(
+                    self.config.enabled and self.config.event_assets_enabled
+                    and identity.subject == SUBJECT
+                    and identity.audience == self.config.resource
+                    and context.resource == self.config.resource
+                    and identity.client_id
+                    and identity.client_id in {self.config.oauth_client_id, self.config.opencode_oauth_client_id}
+                    and "events:write" in identity.scopes
+                    and identity.expires_at > int(time.time())
+                )
+
+            self.event_assets = EventAssetService(
+                ingestor=asset_ingestor, binding_key=config.signing_key,
+                authorize=authorize_event_asset,
+                max_bytes=min(config.max_asset_bytes, 30 * 1024 * 1024),
+                ttl_seconds=config.asset_ttl_seconds,
+            )
+            event_asset_tools = build_event_asset_tools(
+                self.event_assets, timeout_seconds=config.download_timeout_seconds + 5,
+            )
         social_tools = build_social_tools(
             store=self.oauth.store,
             policy=self.target_policy,
@@ -191,16 +223,16 @@ class PrivateEventsMCPServer:
                     "edit_delete": config.universal_social_edit_delete_enabled,
                     "media_story": config.universal_social_media_story_enabled,
                     "file_send": config.universal_social_file_send_enabled,
-                    "asset_ingress": config.asset_ingress_enabled,
-                    "social_asset_stage": config.asset_ingress_enabled,
-                    "social_asset_status": config.asset_ingress_enabled,
+                    "asset_ingress": (config.universal_social_media_story_enabled or config.universal_social_file_send_enabled),
+                    "social_asset_stage": (config.universal_social_media_story_enabled or config.universal_social_file_send_enabled),
+                    "social_asset_status": (config.universal_social_media_story_enabled or config.universal_social_file_send_enabled),
                     "social_asset_preview": config.universal_social_media_story_enabled,
                     "social_content_stories": config.universal_social_media_story_enabled,
                 },
                 capability_policy={name: name in expected for name in ("telegram", "vk")},
             )
         self.protocol = MCPProtocol(
-            (*read_tools, *event_create_tools, *partner_admin_tools, *social_tools, *workspace_tools),
+            (*read_tools, *event_create_tools, *event_asset_tools, *partner_admin_tools, *social_tools, *workspace_tools),
             cache_ttl_seconds=config.cache_ttl_seconds,
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),

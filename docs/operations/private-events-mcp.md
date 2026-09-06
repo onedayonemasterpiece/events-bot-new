@@ -1547,3 +1547,17 @@ Rollout remains R0 -> R1 -> R1b -> R2 -> R3 -> R4. This source checkpoint is an
 R4 prerequisite behind its own flag, not permission to enable R4 before the
 preceding product gates. Rollback disables the flag first and keeps additive
 tables; it never deletes partner history or rewrites the canonical event DB.
+
+### Event image tool wiring (#643, default OFF)
+
+`PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED=1` adds owner ChatGPT/OpenCode
+`event_asset_stage` and `event_asset_get` behind `events:write`. The exact owner
+subject, current configured client/resource, token expiry and flag are checked
+before/after storage I/O. Codex receives neither tool; partner grant wiring is a
+later stage. The shared private media ingress store is initialized independently
+of social providers; event-only ingress does not enable social media tools.
+The existing media host allowlist, byte/store/dimension limits and retention
+settings remain mandatory. Stage advertises `openai/fileParams: ["file"]`, returns
+bounded digest-bound metadata and never publishes or exposes a signed URL/path.
+This is attachment ingress only: event-create consumption and partner tools are
+not yet connected at this checkpoint. No production flag has been enabled.

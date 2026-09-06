@@ -300,3 +300,26 @@ def test_github_reaction_custom_emoji_id_is_strict_and_server_side(monkeypatch) 
     )
     with pytest.raises(ValueError, match="GITHUB_REACTION_CUSTOM_EMOJI_ID"):
         PrivateEventsMCPConfig.from_env()
+
+
+def test_event_only_asset_ingress_needs_no_social_provider(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID', 'codex-public-client')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED', '1')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS', 'files.example')
+    config = PrivateEventsMCPConfig.from_env()
+    assert config.event_assets_enabled and config.asset_ingress_enabled
+    assert not config.universal_social_enabled
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH', 'invalid')
+    with pytest.raises(ValueError, match='MAX_WIDTH'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.delenv('PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES', '1')
+    with pytest.raises(ValueError, match='largest enabled asset class'):
+        PrivateEventsMCPConfig.from_env()
+
+
+def test_event_asset_flag_default_off_and_disabled_mcp_inert(monkeypatch):
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED', '0')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED', 'not-a-boolean')
+    assert not PrivateEventsMCPConfig.from_env().event_assets_enabled

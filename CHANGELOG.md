@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added default-off owner OAuth event image stage/get tools with private attachment metadata, independent of social publishing flags; Codex remains read-only (#643).
+
 - Added event-scoped private image staging/read/reverification over the existing
   secure media store, with durable principal-bound refs, exact digest/expiry
   checks and mandatory current authorization; no social provider upload (#643).
