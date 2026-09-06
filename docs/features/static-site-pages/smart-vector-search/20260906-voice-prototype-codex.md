@@ -660,3 +660,18 @@ No physical Safari claim: AAC native selection fallback uses mocks; AAC encoded
 media decode+actual provider acceptance are separately real checks.
 
 Direct voice link sent/read back in Telegram topic1030: https://t.me/c/4337049383/1445 . Parallel islands review is a separate PR #639 and source cd90e408d; its date-recommendation draft is explicitly historical, not the live voice catalog.
+
+
+### Follow-up: Telegram Android startup screenshot1446
+
+Preview-only startup mitigation published at
+https://kenigevents.ru/preview-voice-startup-20260906/poisk/
+from `f4a92b19bd010255b06821bdf8e494d62d72195d` (PR587).
+Bounded local-store startup and explicit non-destructive retry replace the
+unbounded pre-bind wait; signed-in ordinary Search no longer retains guest copy
+when quota lookup fails. Existing backend remains source923915eb.
+Actual bundles + real ordinary QA Auth passed native capture/durable reload and
+separately labelled IDB/quota fault recovery. No ASR was requested by these startup
+checks. Exact test/CI evidence and remaining physical-device confirmation are
+tracked in [INC-2026-09-06-voice-preview-startup](../../../reports/incidents/INC-2026-09-06-voice-preview-startup.md);
+not a claim that the physical Telegram WebView cause has been confirmed.

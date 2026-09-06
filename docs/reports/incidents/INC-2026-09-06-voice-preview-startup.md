@@ -78,7 +78,8 @@ signed_in even if quota fails; repeated Auth snapshots preserve Search output.
 - Reproduction: isolated worktree `voice-startup`,
   `artifacts/codex/voice-startup/mobile-auth-reproduction.json` and
   `mobile-auth-{normal,idb-stall}.png`; synthetic QA identity only.
-- Fixed commit / preview publication: pending parent integration; no deployment.
+- Worker commit `1ff8979bcd1d9d8dcc49da75ff850153f9955b62`; integrated/pushed in PR #587 as `f4a92b19bd010255b06821bdf8e494d62d72195d`.
+- Published preview only: https://kenigevents.ru/preview-voice-startup-20260906/poisk/ . Existing DevCoveer backend source remains `923915eb`; no backend/production change.
 - Local regressions: 22 unit checks passed (`voice-startup-store`,
   `search-auth-startup`, `search-initial-state`, `search-recovery`,
   `static-site-auth`); 24 browser checks passed (`voice-startup`,
@@ -91,9 +92,30 @@ signed_in even if quota fails; repeated Auth snapshots preserve Search output.
   zero assistant requests. `patched-mobile-auth-readback.json`,
   `patched-mobile-auth-{normal,idb-stall}.png`, `patched-storage-error.png`.
   Screenshots inspected; these are not deployed-bundle/physical-device proofs.
-- This record remains open until preview readback; no production rollout is implied.
+- Published exact-bundle readback PASS: 7 route/support files byte-identical to
+  source `f4a92b19b`; focused 2-page build, 5 parent startup tests, source-surface
+  contract and 3 anonymous rendered viewport checks PASS.
+- Real ordinary QA Auth fixture, actual public JS (no replacement), Pixel7
+  emulation: normal native capture and durable reload PASS (203652B PCM/8074B
+  Opus, 101760frames); **injected** IDB callback stall -> timeout with zero mic
+  calls -> explicit retry closes one late connection -> ready/idle -> next
+  gesture records. Separately injected quota503 retains signed-in Search copy.
+  Zero page errors/assistant requests in these startup tests; intentionally
+  interrupted stop avoided ASR. This is NOT a new end-to-end ASR acceptance.
+  Fixture cleanup PASS. Worker evidence: `voice-startup/artifacts/codex/voice-startup/public-readback/`;
+  parent publication/layout: `voice-search-implementation/artifacts/codex/voice-startup-20260906/`.
+  Parent inspected timeout screenshot; visible error/retry and existing nav fit.
+- CI status at delivery: no PR check runs were attached to `f4a92b19b`.
+  Push run34028857535 is a different existing `region-talk-research-remediation-export`
+  workflow failing before jobs (jobs/check-runs empty, no logs); not a failed
+  startup test and not represented as CI PASS. Relevant local/public checks above
+  were run independently. No unrelated workflow edits.
+- Telegram direct-link delivery/readback: https://t.me/c/4337049383/1448 .
+- Mitigation published; record remains open for physical Telegram Android
+  confirmation. The triggering physical storage condition is still unknown;
+  no production rollout or physical-device PASS is implied.
 
 ## Follow-up Actions
 
-- [ ] Parent: integrate committed fix into PR #587 and publish only authorized preview.
+- [x] Parent: integrate committed fix into PR #587 and publish only authorized preview.
 - [ ] Parent/user: verify the same Telegram Android surface, without clearing data.
