@@ -917,6 +917,71 @@ class SecureMediaAssetStore:
                     with contextlib.suppress(FileNotFoundError):
                         final_path.unlink()
 
+    async def ingest_provider_bytes(
+        self, content: bytes, *, owner_binding: str, max_bytes: int,
+        expires_at: int, content_digest: str | None = None,
+        mime_type: str | None = None,
+    ) -> Any:
+        """Persist bytes from an authenticated provider read after full validation."""
+        if type(content) is not bytes or not content or len(content) > min(max_bytes, self._max_asset_bytes):
+            raise MediaIngressRejected("media exceeds byte limit")
+        now = int(self._clock())
+        if not isinstance(expires_at, int) or isinstance(expires_at, bool):
+            raise MediaIngressRejected("invalid expiry")
+        if expires_at <= now or expires_at > now + self._max_ttl:
+            raise MediaIngressRejected("expiry must be in the next 24 hours")
+        owner_mac = self._owner_mac(owner_binding)
+        digest = hashlib.sha256(content).hexdigest()
+        measured_digest = "sha256:" + digest
+        if content_digest is not None and (not isinstance(content_digest, str) or not hmac.compare_digest(content_digest, measured_digest)):
+            raise MediaIntegrityError("provider media digest mismatch")
+        temp_path = self._root / (".ingress-" + secrets.token_hex(32))
+        final_path: Path | None = None
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(temp_path, flags, 0o600)
+        try:
+            view = memoryview(content)
+            written = 0
+            while written < len(view):
+                written += os.write(fd, view[written:])
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        try:
+            detected_mime, width, height = self._verify_image(temp_path)
+            if mime_type is not None and (not isinstance(mime_type, str) or _mime_without_parameters(mime_type) != detected_mime):
+                raise MediaIntegrityError("provider media MIME mismatch")
+            storage_ref = "ing_" + secrets.token_urlsafe(32)
+            filename = secrets.token_hex(32) + ".asset"
+            final_path = self._root / filename
+            self._publish_temp(temp_path, final_path)
+            with self._manifest_lock, self._db() as db:
+                db.execute("BEGIN IMMEDIATE")
+                retained = int(db.execute("SELECT COALESCE(SUM(byte_length), 0) FROM media_assets").fetchone()[0])
+                if retained + len(content) > self._max_store_bytes:
+                    raise MediaIngressRejected("media store capacity exceeded")
+                classification = "image_" + detected_mime.removeprefix("image/")
+                db.execute("""INSERT INTO media_assets
+                    (storage_ref,filename,owner_mac,file_id_mac,sha256,detected_mime,
+                     byte_length,width,height,duration,created_at,expires_at,role,display_name,classification)
+                    VALUES(?,?,?,?,?,?,?,?,?,NULL,?,?,'image',NULL,?)""",
+                    (storage_ref, filename, owner_mac, self._file_id_mac(measured_digest), digest,
+                     detected_mime, len(content), width, height, now, expires_at, classification))
+            asset = StoredMediaAsset(storage_ref=storage_ref, _path=final_path, sha256=digest,
+                detected_mime=detected_mime, bytes=len(content), width=width, height=height,
+                duration=None, created_at=now, expires_at=expires_at, role="image",
+                classification="image_" + detected_mime.removeprefix("image/"))
+            return self._contract_asset(asset, owner_binding)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                temp_path.unlink()
+            if final_path is not None:
+                with self._db() as db:
+                    present = db.execute("SELECT 1 FROM media_assets WHERE filename=?", (final_path.name,)).fetchone()
+                if present is None:
+                    with contextlib.suppress(FileNotFoundError):
+                        final_path.unlink()
+
     async def _download_to_exclusive_temp(
         self,
         url: str,

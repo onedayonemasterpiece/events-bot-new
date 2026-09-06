@@ -306,6 +306,15 @@ class FakeAlbumIngestor:
         self.assets.append(asset)
         return asset
 
+    def reverify(self, storage_ref, *, owner_binding, max_bytes, role):
+        # Match the production ingestor contract used by prepare/commit.
+        # Returning a different album asset would hide ordering/binding bugs.
+        asset = next(item for item in self.assets if item.storage_ref == storage_ref)
+        assert asset.owner_binding == owner_binding
+        assert asset.byte_length <= max_bytes
+        assert asset.role == role
+        return asset
+
 
 class FakeAlbumAdapter(FakeAdapter):
     def __init__(self) -> None:
@@ -3485,3 +3494,65 @@ def test_refresh_allowed_scope_gate_precedes_revocation(tmp_path) -> None:
         now=1_900_000_002,
     )
     assert grant.scopes == {"offline_access", "telegram:dm:send"}
+
+@pytest.mark.asyncio
+async def test_owned_schedule_pre_provider_commit_failures_do_not_spend_attempt_budget(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = OAuthStateStore(str(tmp_path / "attempt-accounting.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store, adapters={"telegram": adapter},
+        encryption_key="attempt-accounting-key-long-enough",
+        budget_dimension_limits={"attempts": {
+            "global": 1, "principal": 1, "target": 1, "action": 1,
+        }},
+    )
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "owned-schedule-target", "telegram", principal)
+    prepared = await service.prepare(validate_prepare_request({
+        "platform": "telegram", "action": "schedule",
+        "idempotency_key": "owned-schedule-budget-0001", "target_ref": target,
+        "schedule_at": "2027-01-15T20:00:00Z",
+        "content": {"text": "scheduled", "entities": [], "media": []},
+    }), context())
+    for _ in range(5):
+        with pytest.raises(SocialWorkspaceRuntimeError):
+            await service.commit({
+                "preparation_ref": prepared["preparation_ref"],
+                "action_digest": "0" * 64,
+            }, context())
+    with sqlite3.connect(store.path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM social_workspace_budget WHERE metric='attempts'").fetchone()[0] == 0
+    result = await service.commit({
+        "preparation_ref": prepared["preparation_ref"],
+        "action_digest": prepared["action_digest"],
+    }, context())
+    assert result["status"] == "succeeded"
+    assert adapter.executions == 1
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["edit", "delete"])
+async def test_scheduled_queue_edit_delete_is_direct_but_published_still_requires_approval(runtime, action) -> None:
+    service, adapter, _store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "owned-vk-community", "vk", principal)
+    scheduled = service._mint_ref("item", "native-postponed-42", "vk", principal)
+    service._store_item_preview(scheduled, {
+        "item_ref": scheduled, "target_ref": target, "kind": "scheduled_post",
+        "queue": "scheduled", "scheduled_at": "2026-09-03T18:00:00Z",
+        "text": "queued",
+    })
+    payload = {"platform": "vk", "action": action,
+        "idempotency_key": f"scheduled-{action}-direct-0001", "item_ref": scheduled}
+    if action == "edit":
+        payload["content"] = {"text": "corrected", "entities": [], "media": []}
+    prepared = await service.prepare(validate_prepare_request(payload), context())
+    assert prepared["status"] == "approved"
+
+    published = service._mint_ref("item", "native-live-43", "vk", principal)
+    service._store_item_preview(published, {
+        "item_ref": published, "target_ref": target, "kind": "post",
+        "published_at": "2026-09-03T16:00:00Z", "text": "live",
+    })
+    live_payload = {**payload, "idempotency_key": f"live-{action}-approval-0001", "item_ref": published}
+    live = await service.prepare(validate_prepare_request(live_payload), context())
+    assert live["status"] == "awaiting_human_approval"

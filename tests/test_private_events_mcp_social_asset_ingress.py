@@ -156,7 +156,14 @@ class FakeIngestor:
             "height": 1600,
         }
         values.update(self.override)
-        return VerifiedAsset(**values)
+        asset = VerifiedAsset(**values)
+        self.last_asset = asset
+        return asset
+
+    def reverify(self, storage_ref, *, owner_binding, max_bytes, role):
+        asset = self.last_asset
+        assert asset.storage_ref == storage_ref and asset.owner_binding == owner_binding
+        return asset
 
 
 class FakeAdapter:
@@ -295,8 +302,9 @@ def test_official_file_param_descriptor_and_schema_are_exact(asset_runtime) -> N
         schema["$defs"]["OpenAIFile"]
         == SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA["$defs"]["OpenAIFile"]
     )
-    assert schema["required"] == ["platform", "file", "role"]
-    assert set(schema["properties"]) == {"platform", "file", "role"}
+    assert schema["required"] == ["platform", "role"]
+    assert {tuple(rule.get("required", ())) for rule in schema["oneOf"]} == {("file",), ("source_asset_ref",)}
+    assert set(schema["properties"]) == {"platform", "file", "source_asset_ref", "role"}
     assert schema["properties"]["role"]["enum"] == ["image"]
     file_schema = schema["$defs"]["OpenAIFile"]
     assert set(file_schema["properties"]) == {
@@ -975,3 +983,63 @@ async def test_document_validation_uses_remaining_timeout_and_cleans_partial(
         assert db.execute("SELECT COUNT(*) FROM media_assets").fetchone()[0] == 0
     # Let the canceled executor call finish before pytest removes tmp_path.
     await asyncio.sleep(0.12)
+
+@pytest.mark.asyncio
+async def test_provider_read_image_rematerializes_for_vk_and_telegram_schedule(tmp_path: Path) -> None:
+    from PIL import Image
+
+    now = [1_800_000_000]
+    image = BytesIO()
+    Image.new("RGB", (64, 48), (20, 80, 140)).save(image, format="PNG")
+    payload = image.getvalue()
+
+    class ReadAdapter(FakeAdapter):
+        async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+            assert asset_ref == "provider-read-image"
+            assert len(owner_binding) == 64 and len(payload) <= max_bytes
+            return payload
+
+        async def stage_asset(self, asset, *, role):
+            self.staged.append((asset, role))
+            return "provider-outbound-image"
+
+    vk, telegram = ReadAdapter(), ReadAdapter()
+    store = SecureMediaAssetStore(
+        tmp_path / "media", allowed_hosts=["files.example.test"], clock=lambda: now[0]
+    )
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"vk": vk, "telegram": telegram},
+        encryption_key="provider-read-promotion-key-long-enough",
+        asset_ingestor=store, clock=lambda: now[0],
+    )
+    ctx = _context(scopes=frozenset({"vk:publish", "telegram:publish"}))
+    principal = RuntimePrincipal.from_context(ctx)
+    source = runtime._mint_ref("asset", "provider-read-image", "vk", principal)
+
+    for platform in ("vk", "telegram"):
+        staged = await runtime.stage_asset(validate_asset_stage_request({
+            "platform": platform, "source_asset_ref": source, "role": "image",
+        }), ctx)
+        assert set(staged) == {"asset_ref", "status"}
+        target = runtime._mint_ref("target", f"owned-{platform}", platform, principal)
+        prepared = await runtime.prepare(validate_prepare_request({
+            "platform": platform, "action": "schedule",
+            "idempotency_key": f"provider-read-{platform}-schedule-0001",
+            "target_ref": target, "schedule_at": "2027-01-15T20:00:00Z",
+            "content": {"text": "owned schedule", "entities": [], "media": [
+                {"asset_ref": staged["asset_ref"], "role": "image"}
+            ]},
+        }), ctx)
+        assert prepared["status"] == "approved"
+        assert len((vk if platform == "vk" else telegram).staged) == 1
+
+    with pytest.raises(SocialWorkspaceRuntimeError):
+        await runtime.stage_asset(validate_asset_stage_request({
+            "platform": "telegram", "source_asset_ref": source, "role": "image",
+        }), _context(subject="mallory", scopes=frozenset({"telegram:publish"})))
+    for forbidden in ("https://example.test/image.jpg", "/tmp/image.jpg"):
+        with pytest.raises(SocialWorkspaceValidationError):
+            validate_asset_stage_request({
+                "platform": "vk", "source_asset_ref": forbidden, "role": "image",
+            })

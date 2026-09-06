@@ -58,6 +58,17 @@ class AssetIngestor(Protocol):
         role: str = "story_media",
     ) -> VerifiedAsset: ...
 
+    async def ingest_provider_bytes(
+        self,
+        content: bytes,
+        *,
+        owner_binding: str,
+        max_bytes: int,
+        expires_at: int,
+        content_digest: str | None = None,
+        mime_type: str | None = None,
+    ) -> VerifiedAsset: ...
+
     def reverify(
         self,
         storage_ref: str,
