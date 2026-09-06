@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Added bounded, indexed owner promo recorded-exposure observations without private payloads or fabricated live delivery/impression claims (#643).
+
 - Added owner promo activity prepare/commit with complete campaign CAS and atomic existing-service append; preserves paused campaigns and disabled activity replay, and rejects unsupported VK slot intent instead of silently ignoring it (#643).
 
 - Added bounded current owner promo campaign inventory/detail readback, complete-snapshot CAS revisions and explicit legacy cap units; historical operation acceptance never substitutes for current paused state (#643).

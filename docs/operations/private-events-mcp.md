@@ -490,6 +490,13 @@ snapshot exceeds 256 rows in either collection, its revision is unavailable;
 a partial prefix is never passed off as a full CAS hash. Legacy campaign caps
 are explicitly publication units, not qualified Hero browser visibility.
 Delivery statistics remain unavailable rather than fabricated zeroes.
+`recorded_exposures` is a separate, indexed page of at most sixteen existing
+`promo_exposure` rows plus `has_more` (seventeen rows read). It exposes only
+recorded scalar IDs, surface/placement, publish status, target count and timestamp;
+no provider URLs, private JSON or credentials. Its explicit scope is
+`recent_recorded_rows_only`: neither an empty page nor a recorded success is
+live delivery verification or a qualified browser impression count. Current
+authorization and the same read transaction cover this page.
 
 Activity addition is its own frozen `promo_activity_add` operation on the same
 ledger. `promo_campaign_get` supplies the complete current campaign revision;

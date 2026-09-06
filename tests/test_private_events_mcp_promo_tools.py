@@ -128,6 +128,10 @@ async def test_oauth_prepare_commit_replay_without_telegram_creator(config,tmp_p
         assert current['campaign']['status']=='paused'
         assert len(current['campaign_revision'])==64
         assert current['publication_state']=='not_observed'
+        assert current['delivery_stats']=='unavailable'
+        assert current['recorded_exposures']=={
+            'source':'promo_exposure','scope':'recent_recorded_rows_only',
+            'rows':[],'has_more':False}
         page=await call('promo_campaigns_list',{'status':'paused','limit':1})
         assert [c['campaign_id'] for c in page['campaigns']]==[committed['campaign_id']]
         assert not page['has_more']
