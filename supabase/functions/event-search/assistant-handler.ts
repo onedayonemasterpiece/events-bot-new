@@ -7,7 +7,7 @@ export { assemble, sha256 } from './assistant-media.ts';
 import { validateAudioParts } from './assistant-audio.ts';
 import { initialState } from './assistant-dialogue.ts';
 import { AUDIO_BUDGET, ASSISTANT_CONTRACT, AssistantError, confirmedInput, eligible, interpretation,
-  structuredInterpretation, structuredInterpreterPrompt, STRUCTURED_INTERPRETATION_SCHEMA, interpreterPrompt, INTERPRETATION_SCHEMA, TRANSCRIPT_SCHEMA, object, reject, text, uuid,
+  structuredInterpretation, structuredInterpretationSchema, structuredInterpreterPrompt, STRUCTURED_INTERPRETATION_SCHEMA, interpreterPrompt, INTERPRETATION_SCHEMA, TRANSCRIPT_SCHEMA, object, reject, text, uuid,
   type Intent, type ConfirmedInput } from './assistant-intent.ts';
 export type Operation = {id:string;owner_id:string;kind:string;payload:any;state:string;dispatched:boolean;outcome?:any;error_code?:string;updated_at?:string;created_at?:string};
 export interface AssistantRepository {
@@ -183,7 +183,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
         if(input.visibleIds.some(v=>!parentItems.some(item=>String(item.event_id??item.id)===v)))reject('untrusted_visible_ids',409);
         const question=previous?`${previous.outcome.result.question}\n${input.text}`:input.text;
         if(question.length>65536)reject('draft_capacity',413);
-        await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?STRUCTURED_INTERPRETATION_SCHEMA:INTERPRETATION_SCHEMA,
+        await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?structuredInterpretationSchema(input,basePlan):INTERPRETATION_SCHEMA,
           dispatched:dispatch,completed:complete,accounted,validate:value=>({...(deps.structuredPlanEnabled?structuredInterpretation(value,input,base,basePlan):interpretation(value,base)),question,parentId:input.parentId,
             mode:previous?.outcome.result.mode||input.mode,anchor:input.anchor,visibleIds:input.visibleIds})});
       } else {

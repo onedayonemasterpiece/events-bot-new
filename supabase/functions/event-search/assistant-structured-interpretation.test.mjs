@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {structuredInterpretation,STRUCTURED_INTERPRETATION_SCHEMA} from './assistant-intent.ts';
+import {structuredInterpretation,structuredInterpretationSchema,sourceFragments,STRUCTURED_INTERPRETATION_SCHEMA} from './assistant-intent.ts';
 import {initialState} from './assistant-dialogue.ts';
 const base={...initialState().activeIntent,goal:'экскурсии краеведческие',dateFrom:'2026-09-07',dateTo:'2026-09-13',timeOfDay:null,audience:[],timezone:'Europe/Kaliningrad'};
 const input={text:'Какие события пройдут в Светлогорске на следующей неделе?',anchor:'2026-09-06T15:09:37.000Z',mode:'expand_selection',parentId:crypto.randomUUID(),previousId:null,visibleIds:[]};
@@ -20,4 +20,10 @@ test('full predicates survive independent from bounded embedding hint',()=>{
 test('relative mode is authoritative even if model emits reversed or malformed date strings',()=>{
  const r=structuredInterpretation({...value,intent:{...value.intent,dateFrom:'nonsense',dateTo:'2026-01-01'}},input,base);
  assert.equal(r.intent.dateFrom,'2026-09-07');assert.equal(r.intent.dateTo,'2026-09-13');
+});
+
+test('provider quote enum covers literal input chunks; examples cannot leak into copied evidence',()=>{
+ const q='Какие просветительские мероприятия, ну, наверное, научпоп мероприятия, будут на следующей неделе?';
+ const schema=structuredInterpretationSchema({...input,text:q},null);assert.deepEqual(schema.properties.queryPlan.properties.groups.items.properties.sourceQuote.enum,[q]);
+ const long='много разных слов '.repeat(80);assert.equal(sourceFragments(long).join(' '),long.trim());assert.ok(sourceFragments(long).every(p=>p.length<=240));
 });

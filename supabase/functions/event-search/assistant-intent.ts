@@ -84,6 +84,19 @@ export const INTERPRETATION_SCHEMA = { type:'object', additionalProperties:false
 export const STRUCTURED_INTERPRETATION_SCHEMA = {...INTERPRETATION_SCHEMA,
  required:[...INTERPRETATION_SCHEMA.required,'queryPlan'],
  properties:{...INTERPRETATION_SCHEMA.properties,queryPlan:QUERY_PLAN_SCHEMA}};
+/** Literal provider choices avoid brittle model copying/paraphrasing of source quotes.
+ * These are text chunks, NOT semantic keyword extraction. Every character is kept. */
+export function sourceFragments(text:string):string[] {
+ const parts:string[]=[];let rest=text;
+ while(rest.length){let end=Math.min(240,rest.length);if(end<rest.length){const space=rest.lastIndexOf(' ',end);if(space>0)end=space;}const part=rest.slice(0,end).trim();if(part)parts.push(part);rest=rest.slice(end).trimStart();}
+ return parts;
+}
+export function structuredInterpretationSchema(input:ConfirmedInput,basePlan:QueryPlan|null) {
+ const quotes=[...new Set([...sourceFragments(input.text),...(basePlan?.groups.map(g=>g.sourceQuote)||[])])];
+ return {...STRUCTURED_INTERPRETATION_SCHEMA,properties:{...STRUCTURED_INTERPRETATION_SCHEMA.properties,
+ queryPlan:{...QUERY_PLAN_SCHEMA,properties:{...QUERY_PLAN_SCHEMA.properties,
+ groups:{...QUERY_PLAN_SCHEMA.properties.groups,items:{...QUERY_PLAN_SCHEMA.properties.groups.items,properties:{...QUERY_PLAN_SCHEMA.properties.groups.items.properties,sourceQuote:{type:'string',enum:quotes}}}}}}}};
+}
 export function structuredInterpretation(value:unknown,input:ConfirmedInput,base:Intent,basePlan:QueryPlan|null=null):Interpretation {
   try {
     const raw=object(value,['intent','title','responseSummary','clarification','explanationKind','ordinal','queryPlan']);
@@ -111,6 +124,7 @@ intent: goal <=180символов — краткий предмет поиск�
 Для относительных dateMode intent.dateFrom/dateTo=null: сервер вычислит даты. explicit — только действительные ISOдаты выбранного интервала. Не пропускай указанный период: «на выходных и на следующей неделе» обязательно weekend_and_next_week, НЕ from_today и не отдельная неделя после выходных. Последняя конкретизация важнее вводного «ближайшие».
 title <=100символов — краткие что/где, БЕЗ дат и слов «на следующей неделе»: сервер добавит период. responseSummary=null. clarification=null если данных хватает; иначе один конкретный вопрос. explanationKind=none, ordinal=null по умолчанию. Для вопроса адреса/фактов о выбранной карточке explanationKind=address/facts и ordinal по INPUT.visibleIds; не сочиняй ответ сам.
 ${queryPlanPrompt(input,basePlan)}
+sourceQuote выбирай только из перечисленных в JSON-schema буквальных фрагментов текущей речи/старого плана. Не цитируй примеры инструкции. Один фрагмент может подтверждать несколько разных групп.
 BASE_INTENT=${JSON.stringify(base)}
 PARENT_FACTS=${JSON.stringify(parentFacts)}`;
 }

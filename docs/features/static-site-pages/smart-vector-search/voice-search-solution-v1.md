@@ -904,3 +904,13 @@ and editorial profiles are unchanged. This follows the [official Gemini3
 contract](https://ai.google.dev/gemini-api/docs/generate-content/gemini-3), not a
 claim that structured JSON alone guarantees meaning. Shared-quota rejection is
 reported by sanitized stage, never by private provider/key contents.
+
+
+Provenance transport tightening: the interpreter sourceQuote schema is a dynamic
+enum of literal current-input chunks (<=240characters, all input retained) and
+persisted parent quotes. This prevents copying a similar instructional example
+instead of actual speech without adding keyword parsing. Per-candidate semantic
+verification also distinguishes direct program evidence from context-only
+parent-festival/venue/incidental-topic mentions; context-only evidence cannot
+admit an exact result even when model verdict says exact. Broad index tags are
+not adequate proof of a requested genre/format.
