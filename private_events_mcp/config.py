@@ -196,6 +196,7 @@ class PrivateEventsMCPConfig:
     repository_slug: str
     repository_sha_file: str
     event_create_enabled: bool = False
+    partner_enabled: bool = False
     universal_social_enabled: bool = False
     universal_social_telegram_enabled: bool = False
     universal_social_vk_enabled: bool = False
@@ -293,6 +294,9 @@ class PrivateEventsMCPConfig:
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
             ).strip(),
+            partner_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_PARTNER_ENABLED", mcp_enabled=enabled,
+            ),
             event_create_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED",
                 mcp_enabled=enabled,
@@ -621,6 +625,22 @@ class PrivateEventsMCPConfig:
     @property
     def mcp_path(self) -> str:
         return f"{self.private_prefix}/mcp"
+
+    @property
+    def partner_mcp_path(self) -> str:
+        return f"{self.private_prefix}/events-partner/mcp"
+
+    @property
+    def partner_resource(self) -> str:
+        return f"{self.public_base_url}{self.partner_mcp_path}"
+
+    @property
+    def partner_resource_metadata_path(self) -> str:
+        return f"/.well-known/oauth-protected-resource{self.partner_mcp_path}"
+
+    @property
+    def partner_resource_metadata_url(self) -> str:
+        return f"{self.public_base_url}{self.partner_resource_metadata_path}"
 
     @property
     def codex_mcp_path(self) -> str:

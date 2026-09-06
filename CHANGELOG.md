@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added default-off partner access foundation: independent public OAuth clients
+  with S256 PKCE and browser-only partner login, canonical principal/tenant/
+  organization/portfolio policy, owner credential lifecycle and per-request
+  revocation. Local HTTP tests onboard two partners through real owner MCP and
+  isolate portfolio reads. Event/promo mutations are not advertised by this
+  checkpoint; it is not a partner product release or production acceptance.
+
 - Added a source-default-off owner Events MCP creation path with typed
   prepare/commit/status tools. It reuses the existing parser, full Smart Update
   identity/provenance boundary and standard `JobOutbox` fan-out; supports one

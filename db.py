@@ -712,6 +712,12 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_event_change_log_event "
                 "ON event_change_log(event_id,created_at)"
             )
+            # Canonical partner policy is separate from OAuth / Social Workspace state.
+            # Additive DDL only; no credentials or portfolio backfill at startup.
+            from private_events_mcp.partner_access import SCHEMA as partner_schema
+            for statement in partner_schema.split(";"):
+                if statement.strip():
+                    await conn.execute(statement)
             dbg("eventposter")
 
             eventposter_columns_before = await (
