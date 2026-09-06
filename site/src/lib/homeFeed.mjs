@@ -1,65 +1,82 @@
-const PROFILE_VERSION = 'anon-profile-v1';
-const FEATURE_SCHEMA_VERSION = 'event-detail-related-v1';
-const TAXONOMY_VERSION = 'event-taxonomy-v1';
+import { parseLegacyProfileV1 } from './personalization/legacy/profile-v1.ts';
+import {
+  LEGACY_SCORING_CONFIG_V1,
+  legacyPersonalFeedSignalCountV1,
+  legacyRankEventDetailRelatedV1,
+  legacyRankPersonalFeedV1,
+} from './personalization/legacy/scorer-v1.ts';
 
-function values(value) {
-  return Array.isArray(value) ? value : [];
+export const HOME_FEED_LIMIT = 30;
+export const HOME_FEED_COMPATIBILITY = Object.freeze({
+  featureSchemaVersion: 'event-detail-related-v1', taxonomyVersion: 'event-taxonomy-v1',
+});
+export const homeCandidateId = (candidate) => String(candidate.event_id ?? candidate.id);
+export const homeCandidateFamily = (candidate) => [...new Set([
+  homeCandidateId(candidate), ...(candidate.display?.occurrence_member_ids || []).map(String),
+])];
+
+export function parseHomeProfile(serialized) {
+  return parseLegacyProfileV1(serialized, HOME_FEED_COMPATIBILITY).profile;
 }
-
-function id(value) {
-  const normalized = String(value ?? '').trim();
-  return normalized ? normalized : null;
-}
-
-function numericMap(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).map(([key, score]) => [String(key), Number(score) || 0]));
-}
-
 export function compatibleHomeProfile(profile) {
-  return Boolean(
-    profile
-    && profile.consent_ok === true
-    && profile.profile_version === PROFILE_VERSION
-    && profile.feature_schema_version === FEATURE_SCHEMA_VERSION
-    && profile.taxonomy_version === TAXONOMY_VERSION
-    && !Object.prototype.hasOwnProperty.call(profile, 'negative_tags'),
-  );
+  try { return Boolean(parseHomeProfile(JSON.stringify(profile))); } catch { return false; }
 }
-
 export function homeProfileSignalCount(profile) {
-  if (!compatibleHomeProfile(profile)) return 0;
-  const shares = Object.values(numericMap(profile.share_counts)).reduce((sum, value) => sum + Math.max(0, value), 0);
-  return (
-    values(profile.liked_event_ids).length
-    + values(profile.not_interested_event_ids).length
-    + values(profile.hidden_event_ids).length
-    + Math.min(8, shares)
-  );
+  return compatibleHomeProfile(profile) ? legacyPersonalFeedSignalCountV1(profile) : 0;
+}
+export function homeHiddenIds(profile) {
+  return new Set(compatibleHomeProfile(profile)
+    ? [...profile.hidden_event_ids, ...profile.not_interested_event_ids].map(String) : []);
 }
 
+/** The shared legacy scorer is an applied compatibility path, not the shadow target presenter. */
+export function rankHomeCandidates(candidates, profile = null) {
+  let active = null;
+  try { active = parseHomeProfile(JSON.stringify(profile)); } catch {}
+  const hidden = homeHiddenIds(active);
+  const seen = new Set();
+  const eligible = candidates.filter((candidate) => {
+    const family = homeCandidateFamily(candidate);
+    if (family.some((id) => seen.has(id))) return false;
+    family.forEach((id) => seen.add(id));
+    return !family.some((id) => hidden.has(id));
+  });
+  const manifest = { feature_schema_version: HOME_FEED_COMPATIBILITY.featureSchemaVersion,
+    taxonomy_version: HOME_FEED_COMPATIBILITY.taxonomyVersion, related_static: eligible };
+  const personalized = Boolean(active && legacyPersonalFeedSignalCountV1(active) >= 3);
+  const plan = personalized
+    ? legacyRankPersonalFeedV1(manifest, active, LEGACY_SCORING_CONFIG_V1)
+    : legacyRankEventDetailRelatedV1(manifest, null, LEGACY_SCORING_CONFIG_V1);
+  return { items: plan.items, personalized };
+}
+
+/** Old metadata adapter retained for non-runtime consumers; no separate scoring formula. */
 export function rankHomeFeedItems(items, profile) {
-  const source = Array.isArray(items) ? items : [];
-  if (!compatibleHomeProfile(profile)) return source.map((item, index) => ({ ...item, rank: index, score: -index }));
-  const liked = new Set(values(profile.liked_event_ids).map(id).filter(Boolean));
-  const hidden = new Set([
-    ...values(profile.not_interested_event_ids),
-    ...values(profile.hidden_event_ids),
-  ].map(id).filter(Boolean));
-  const positive = numericMap(profile.positive_tags);
-  const negative = numericMap(profile.negative_interest_tags);
-  return source
-    .filter((item) => !hidden.has(id(item.id)))
-    .map((item, index) => {
-      const tags = new Set([
-        String(item.category || ''),
-        ...values(item.tags).map(String),
-      ].filter(Boolean));
-      const affinity = [...tags].reduce((sum, tag) => sum + (positive[tag] || 0) - 1.35 * (negative[tag] || 0), 0);
-      const likedBoost = liked.has(id(item.id)) ? 8 : 0;
-      const score = likedBoost + affinity - Number(item.baseRank ?? index) * 0.018;
-      return { ...item, originalIndex: index, score };
-    })
-    .sort((left, right) => right.score - left.score || left.originalIndex - right.originalIndex || Number(left.id) - Number(right.id))
-    .map((item, rank) => ({ ...item, rank }));
+  const byId = new Map(items.map((item) => [String(item.id), item]));
+  return rankHomeCandidates(items.map((item, index) => ({
+    ...item, event_id: item.id, static_score: Math.max(0, 1 - index / Math.max(1, items.length)),
+  })), profile).items.map((item) => ({ ...byId.get(String(item.event_id)), rank:item.rank, score:item.personal_score }));
+}
+
+/** Preserve the observed prefix, including hidden slots so Undo returns to the exact place.
+ * Re-rank only the unseen suffix; hidden slots do not consume the 30 visible-card budget.
+ */
+export function reconcileHomeOrder({ previous = [], locked = 0, ranked = [], candidates = [], hidden = new Set(), limit = HOME_FEED_LIMIT }) {
+  const byId = new Map(candidates.map((candidate) => [homeCandidateId(candidate), candidate]));
+  const isHidden = (id) => homeCandidateFamily(byId.get(id)).some((member) => hidden.has(member));
+  const prefix = [...new Set(previous.slice(0, locked).map(String))].filter((id) => byId.has(id));
+  const order = [...prefix];
+  const overflow = new Set();
+  let visible = 0;
+  for (const id of prefix) {
+    if (isHidden(id)) continue;
+    if (visible >= limit) overflow.add(id);
+    else visible += 1;
+  }
+  for (const item of ranked) {
+    const id = String(item.event_id);
+    if (!byId.has(id) || order.includes(id) || isHidden(id) || visible >= limit) continue;
+    order.push(id); visible += 1;
+  }
+  return { order, visible, hidden:order.filter((id) => isHidden(id) || overflow.has(id)), locked:prefix.length };
 }
