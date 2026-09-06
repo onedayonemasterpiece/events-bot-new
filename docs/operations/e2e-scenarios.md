@@ -261,3 +261,8 @@ voice-search relevance incident.
 Verifier schema-budget regression: 59 candidates / three groups are checked in
 13/13/13/13/7 batches; four groups in 10/10/10/10/10/9. Failure after an earlier
 successful batch still returns unavailable, never a truncated “complete” list.
+
+Voice deadline admission regression: actual shared-reservation wrapper receives
+a >=10s window in provider tests; an explicit 8s remaining window must perform
+zero reserve/mark-sent/provider calls. Mocked provider timing is not a claim
+that Gemini accepts sub-minimum server deadlines.
