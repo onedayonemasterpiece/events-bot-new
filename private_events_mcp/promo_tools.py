@@ -53,6 +53,16 @@ class CapabilitiesInput(StrictInput):
     event_id: Annotated[int, Field(ge=1, le=2**63-1)]
 
 
+class CampaignInput(StrictInput):
+    campaign_id: Annotated[int, Field(ge=1, le=2**63-1)]
+
+
+class CampaignsInput(StrictInput):
+    after_id: Annotated[int, Field(ge=0, le=2**63-1)] = 0
+    limit: Annotated[int, Field(ge=1, le=50)] = 20
+    status: Literal['draft', 'active', 'paused', 'archived'] | None = None
+
+
 def _parse(model, args):
     try:
         return model.model_validate(args)
@@ -108,6 +118,16 @@ class OwnerPromoTools:
         return await self._run(store.capabilities(parsed.accepted_event_operation_ref,
                                                  parsed.event_id, actor=actor))
 
+    async def campaign_get(self, args, context):
+        parsed = _parse(CampaignInput, args)
+        store, actor = self._store(context, 'promo:read')
+        return await self._run(store.campaign_get(parsed.campaign_id, actor=actor))
+
+    async def campaigns_list(self, args, context):
+        parsed = _parse(CampaignsInput, args)
+        store, actor = self._store(context, 'promo:read')
+        return await self._run(store.campaigns_list(actor=actor, **parsed.model_dump()))
+
     async def commit(self, args, context):
         parsed = _parse(CommitInput, args)
         store, actor = self._store(context, 'promo:write')
@@ -120,6 +140,10 @@ class OwnerPromoTools:
 
     def tools(self):
         specs = (
+            ('promo_campaigns_list', CampaignsInput, 'promo:read', self.campaigns_list, False,
+             'Read bounded current shared campaigns with keyset pagination; no delivery success implied'),
+            ('promo_campaign_get', CampaignInput, 'promo:read', self.campaign_get, False,
+             'Read current campaign status, targets and activities separately from historical operation receipts'),
             ('promo_capabilities', CapabilitiesInput, 'promo:read', self.capabilities, False,
              'Read your accepted Event current revision and supported promo inputs; commit rechecks eligibility'),
             ('promo_campaign_create_prepare', PrepareInput, 'promo:write', self.prepare, True,

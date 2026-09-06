@@ -442,8 +442,9 @@ receipt can promote the denied operation. This is domain crash/isolation accepta
 ### Default-OFF owner promo creation (#643; R1b source slice)
 
 `PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED=1` requires owner event-create capability
-and adds only `promo_capabilities`, `promo_campaign_create_prepare`, `promo_campaign_create_commit`
-and `promo_operation_get` to the existing owner resource. Explicit new
+and adds only `promo_capabilities`, `promo_campaigns_list`, `promo_campaign_get`,
+`promo_campaign_create_prepare`, `promo_campaign_create_commit` and
+`promo_operation_get` to the existing owner resource. Explicit new
 `promo:write` / `promo:read` OAuth consent is required; previous tokens are not
 expanded. Partner and Codex resources receive none of these tools.
 
@@ -478,8 +479,20 @@ access, returns that historical receipt and never recreates or resumes a
 campaign. A later pause therefore remains a pause. Timeout/receipt failure
 cannot commit a campaign without its matching durable operation receipt.
 
+`promo_campaigns_list` provides current owner-authorized shared campaign state
+with bounded keyset pagination; `promo_campaign_get` reads current campaign,
+target/activity projections and a deterministic complete-snapshot revision.
+This is separate from historical operation acceptance, so a paused campaign
+reads as paused after restart/replay. Config blobs and private target queries
+are not exposed. Details display at most sixteen targets/activities, scan at
+most 257 each, and distinguish exact counts from lower bounds. If a complete
+snapshot exceeds 256 rows in either collection, its revision is unavailable;
+a partial prefix is never passed off as a full CAS hash. Legacy campaign caps
+are explicitly publication units, not qualified Hero browser visibility.
+Delivery statistics remain unavailable rather than fabricated zeroes.
+
 This slice supports only the existing `video_general` / `vk_repost` surfaces and
-existing video-profile/slot registries. Full eligibility/inventory/activity-add,
+existing video-profile/slot registries. Full eligibility/activity-add,
 partner promo policy/review, full publication readback and Hero's typed browser
 accounting remain separate missing integration work. Do not enable this flag as
 an R1b acceptance shortcut or treat fixture content as approved public material.
