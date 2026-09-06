@@ -1138,7 +1138,7 @@ async def add_partner_activity_to_campaign(
     db: Database,
     spec: PartnerActivitySpec,
     *,
-    actor_user_id: int,
+    actor_user_id: int | None,
     now_utc: datetime | None = None,
     session: Any | None = None,
 ) -> PromoCreateResult:
