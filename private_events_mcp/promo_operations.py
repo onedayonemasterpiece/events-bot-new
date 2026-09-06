@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 from sqlalchemy import text
 from static_site_release import event_public_revision
-from promo import PartnerPromoSpec, create_partner_event_promo_campaign, PARTNER_PROMO_VIDEO_PROFILES, PARTNER_PROMO_SLOT_POLICIES
+from promo import PartnerActivitySpec, add_partner_activity_to_campaign, PartnerPromoSpec, create_partner_event_promo_campaign, PARTNER_PROMO_VIDEO_PROFILES, PARTNER_PROMO_SLOT_POLICIES
 from .oauth import SUBJECT
 
 FIELDS = frozenset({'accepted_event_operation_ref','event_id','event_revision','surface',
@@ -24,6 +24,8 @@ FIELDS = frozenset({'accepted_event_operation_ref','event_id','event_revision','
 REF = re.compile(r'evt_op_[A-Za-z0-9_-]{20,120}')
 SHA = re.compile(r'[a-f0-9]{64}')
 KIND = 'promo_campaign_create'
+ACTIVITY_KIND = 'promo_activity_add'
+ACTIVITY_FIELDS = frozenset({'campaign_id','campaign_revision','surface','profile_key','slot_policy','count'})
 
 
 class PromoOperationError(ValueError):
@@ -182,6 +184,25 @@ class PromoOperationStore:
                 await session.rollback()
                 raise
 
+    async def _campaign_snapshot(self,session,campaign_id):
+        campaign=(await session.execute(text('SELECT * FROM promo_campaign WHERE id=:id'),
+            {'id':campaign_id})).mappings().first()
+        if campaign is None:
+            fail('PROMO_CAMPAIGN_NOT_FOUND')
+        snapshots={}
+        for table in ('promo_target','promo_activity'):
+            snapshots[table]=(await session.execute(text('SELECT * FROM '+table+
+                ' WHERE campaign_id=:id ORDER BY id ASC LIMIT 257'),{'id':campaign_id})).mappings().all()
+        targets=snapshots['promo_target']
+        activities=snapshots['promo_activity']
+        complete=len(targets)<=256 and len(activities)<=256
+        # Hash every field in the bounded complete raw business snapshot,
+        # including hidden config; never return its content or hash a prefix.
+        campaign_revision=digest({'schema':'promo-campaign-revision-v1',
+            'campaign':dict(campaign),'targets':[dict(row) for row in targets],
+            'activities':[dict(row) for row in activities]}) if complete else None
+        return campaign,targets,activities,campaign_revision
+
     async def campaign_get(self,campaign_id,*,actor):
         actor.validate()
         if type(campaign_id) is not int or not 1<=campaign_id<=2**63-1:
@@ -190,22 +211,8 @@ class PromoOperationStore:
             try:
                 await session.execute(text('BEGIN'))
                 await self._authorize(session,actor,'campaign_get',{'campaign_id':campaign_id})
-                campaign=(await session.execute(text('SELECT * FROM promo_campaign WHERE id=:id'),
-                    {'id':campaign_id})).mappings().first()
-                if campaign is None:
-                    fail('PROMO_CAMPAIGN_NOT_FOUND')
-                snapshots={}
-                for table in ('promo_target','promo_activity'):
-                    snapshots[table]=(await session.execute(text('SELECT * FROM '+table+
-                        ' WHERE campaign_id=:id ORDER BY id ASC LIMIT 257'),{'id':campaign_id})).mappings().all()
-                targets=snapshots['promo_target']
-                activities=snapshots['promo_activity']
-                complete=len(targets)<=256 and len(activities)<=256
-                # Hash every field in the bounded complete raw business snapshot,
-                # including hidden config; never return its content or hash a prefix.
-                campaign_revision=digest({'schema':'promo-campaign-revision-v1',
-                    'campaign':dict(campaign),'targets':[dict(row) for row in targets],
-                    'activities':[dict(row) for row in activities]}) if complete else None
+                campaign,targets,activities,campaign_revision=await self._campaign_snapshot(session,campaign_id)
+                complete=campaign_revision is not None
                 public_targets=[{'target_id':row['id'],'target_type':str(row['target_type'])[:80],
                     'event_id':row['event_id'] if row['target_type']=='event' else None} for row in targets[:16]]
                 public_activities=[]
@@ -334,9 +341,9 @@ class PromoOperationStore:
         return await self._read_or_commit(preparation_ref,actor,action_digest)
 
     async def operation_get(self,operation_ref,*,actor):
-        return await self._read_or_commit(operation_ref,actor,None)
+        return await self._read_or_commit(operation_ref,actor,None,expected_kind=None)
 
-    async def _read_or_commit(self,ref,actor,expected_digest):
+    async def _read_or_commit(self,ref,actor,expected_digest,expected_kind=KIND):
         actor.validate()
         if not isinstance(ref,str) or REF.fullmatch(ref) is None:
             fail('PROMO_OPERATION_NOT_FOUND')
@@ -344,6 +351,12 @@ class PromoOperationStore:
             try:
                 await session.execute(text('BEGIN IMMEDIATE'))
                 row=(await session.execute(text('SELECT * FROM event_change_log WHERE operation_ref=:ref'),{'ref':ref})).mappings().first()
+                if row is not None and row['operation_kind']==ACTIVITY_KIND and expected_kind in (None,ACTIVITY_KIND):
+                    response=await self._activity_read_or_apply(session,row,actor,expected_digest)
+                    await session.commit()
+                    return response
+                if expected_kind==ACTIVITY_KIND:
+                    fail('PROMO_OPERATION_KIND_CONFLICT')
                 envelope,request=self._stored(row,actor)
                 await self._authorize(session,actor,'commit' if expected_digest is not None else 'operation_get',request)
                 if expected_digest is not None and expected_digest!=row['action_digest']:
@@ -380,3 +393,139 @@ class PromoOperationStore:
             except BaseException:
                 await session.rollback()
                 raise
+
+    @staticmethod
+    def _activity_request(request):
+        if not isinstance(request,dict) or set(request)!=ACTIVITY_FIELDS:
+            fail('PROMO_INVALID_REQUEST')
+        if (type(request['campaign_id']) is not int or not 1<=request['campaign_id']<=2**63-1
+                or not isinstance(request['campaign_revision'],str) or SHA.fullmatch(request['campaign_revision']) is None
+                or type(request['count']) is not int or not 1<=request['count']<=10000
+                or request['surface'] not in ('video_general','vk_repost')
+                or not isinstance(request['slot_policy'],str) or request['slot_policy'] not in PARTNER_PROMO_SLOT_POLICIES):
+            fail('PROMO_INVALID_REQUEST')
+        profile=request['profile_key']
+        if ((request['surface']=='video_general' and (not isinstance(profile,str) or profile not in PARTNER_PROMO_VIDEO_PROFILES))
+                or (request['surface']=='vk_repost' and profile is not None)):
+            fail('PROMO_INVALID_REQUEST')
+        return dict(request)
+
+    def _activity_stored(self,row,actor):
+        if (row is None or row['operation_kind']!=ACTIVITY_KIND
+                or any(row['actor_'+key]!=value for key,value in asdict(actor).items())):
+            fail('PROMO_OPERATION_NOT_FOUND')
+        try:
+            envelope=json.loads(row['request_json'])
+            request=self._activity_request(envelope['request'])
+            if (set(envelope)!={'schema','actor','request','expires_at'} or envelope['schema']!='promo-activity-preparation-v1'
+                    or envelope['actor']!=asdict(actor) or type(envelope['expires_at']) is not int
+                    or digest(envelope)!=row['action_digest'] or row['event_id'] is not None
+                    or row['base_event_revision'] is not None):
+                fail('PROMO_OPERATION_CONFLICT')
+        except (ValueError,TypeError,KeyError):
+            fail('PROMO_OPERATION_CONFLICT')
+        return envelope,request
+
+    def _activity_prepared(self,row,envelope):
+        return {'operation_ref':row['operation_ref'],'preparation_ref':row['operation_ref'],
+            'action_digest':row['action_digest'],'expires_at':envelope['expires_at'],
+            'status':'expired' if row['status']=='prepared' and self.clock()>=envelope['expires_at'] else row['status'],
+            'planned_campaign_status':'unchanged','planned_activity_enabled':True}
+
+    async def _activity_snapshot(self,session,request):
+        campaign,targets,activities,current=await self._campaign_snapshot(session,request['campaign_id'])
+        if current is None:
+            fail('PROMO_CAMPAIGN_SNAPSHOT_TOO_LARGE')
+        if campaign['status']=='archived':
+            fail('PROMO_CAMPAIGN_ARCHIVED')
+        if campaign['status'] not in ('draft','active','paused'):
+            fail('PROMO_CAMPAIGN_STATUS_INVALID')
+        if len(activities)>=256:
+            fail('PROMO_CAMPAIGN_SNAPSHOT_TOO_LARGE')
+        if current!=request['campaign_revision']:
+            fail('PROMO_CAMPAIGN_REVISION_CONFLICT')
+        return campaign,targets,activities
+
+    async def prepare_activity(self,request,*,actor,idempotency_key):
+        actor.validate()
+        request=self._activity_request(request)
+        if not isinstance(idempotency_key,str) or re.fullmatch(r'[A-Za-z0-9._~:@/-]{8,160}',idempotency_key) is None:
+            fail('PROMO_INVALID_IDEMPOTENCY_KEY')
+        key=hashlib.sha256(idempotency_key.encode()).hexdigest()
+        async with self.database.get_session() as session:
+            try:
+                await session.execute(text('BEGIN IMMEDIATE'))
+                await self._authorize(session,actor,'prepare_activity',request)
+                row=(await session.execute(text('SELECT * FROM event_change_log WHERE operation_kind=:kind AND actor_subject=:subject AND actor_client_id=:client_id AND actor_audience=:audience AND idempotency_hash=:key'),
+                    {**asdict(actor),'kind':ACTIVITY_KIND,'key':key})).mappings().first()
+                if row:
+                    envelope,stored=self._activity_stored(row,actor)
+                    if stored!=request:
+                        fail('PROMO_IDEMPOTENCY_CONFLICT')
+                    if row['status'] not in ('prepared','accepted'):
+                        fail('PROMO_OPERATION_CONFLICT')
+                    if row['status']=='prepared' and self.clock()<envelope['expires_at']:
+                        await self._activity_snapshot(session,request)
+                    response=self._activity_prepared(row,envelope)
+                else:
+                    await self._activity_snapshot(session,request)
+                    envelope={'schema':'promo-activity-preparation-v1','actor':asdict(actor),'request':request,'expires_at':int(self.clock())+600}
+                    ref='evt_op_'+secrets.token_urlsafe(24)
+                    values={**asdict(actor),'ref':ref,'kind':ACTIVITY_KIND,'key':key,'digest':digest(envelope),'request':canonical(envelope)}
+                    await session.execute(text("INSERT INTO event_change_log(operation_ref,operation_kind,actor_subject,actor_client_id,actor_audience,idempotency_hash,action_digest,source_type,source_url,request_json,status) VALUES(:ref,:kind,:subject,:client_id,:audience,:key,:digest,'owner_oauth','',:request,'prepared')"),values)
+                    response=self._activity_prepared({'operation_ref':ref,'action_digest':values['digest'],'status':'prepared'},envelope)
+                await session.commit()
+                return response
+            except BaseException:
+                await session.rollback()
+                raise
+
+    async def commit_activity(self,preparation_ref,*,action_digest,actor):
+        if not isinstance(action_digest,str) or SHA.fullmatch(action_digest) is None:
+            fail('PROMO_ACTION_DIGEST_CONFLICT')
+        return await self._read_or_commit(preparation_ref,actor,action_digest,expected_kind=ACTIVITY_KIND)
+
+    async def _activity_read_or_apply(self,session,row,actor,expected_digest):
+        envelope,request=self._activity_stored(row,actor)
+        await self._authorize(session,actor,'commit_activity' if expected_digest is not None else 'operation_get',request)
+        if expected_digest is not None and expected_digest!=row['action_digest']:
+            fail('PROMO_ACTION_DIGEST_CONFLICT')
+        if row['status']=='accepted':
+            try:
+                receipt=json.loads(row['result_json'])
+                expected={'schema':'promo-activity-result-v1','status':'accepted','operation_ref':row['operation_ref'],
+                    'action_digest':row['action_digest'],'campaign_id':request['campaign_id'],'activity_id':receipt['activity_id'],
+                    'campaign_status_at_commit':receipt['campaign_status_at_commit'],
+                    'activity_enabled_at_commit':True,'publication_state':'not_observed'}
+                if (receipt!=expected or receipt.get('activity_enabled_at_commit') is not True or type(receipt['activity_id']) is not int or receipt['activity_id']<1
+                        or receipt['campaign_status_at_commit'] not in ('draft','active','paused')):
+                    fail('PROMO_OPERATION_CONFLICT')
+                return receipt
+            except (ValueError,TypeError,KeyError):
+                fail('PROMO_OPERATION_CONFLICT')
+        if row['status']!='prepared':
+            fail('PROMO_OPERATION_CONFLICT')
+        if expected_digest is None:
+            return self._activity_prepared(row,envelope)
+        if self.clock()>=envelope['expires_at']:
+            fail('PROMO_PREPARATION_EXPIRED')
+        campaign,targets,activities=await self._activity_snapshot(session,request)
+        if any(row[field] for field in ('before_json','after_json','changed_fields_json','result_event_revision','domain_receipt_json','result_json')):
+            fail('PROMO_OPERATION_CONFLICT')
+        spec=PartnerActivitySpec(**{key:request[key] for key in ('campaign_id','surface','profile_key','slot_policy','count')})
+        result=await add_partner_activity_to_campaign(self.database,spec,actor_user_id=None,
+            now_utc=datetime.fromtimestamp(self.clock(),timezone.utc),session=session)
+        if result.campaign is None or result.status!='created':
+            fail('PROMO_BUSINESS_VALIDATION_FAILED')
+        added=(await session.execute(text('SELECT id FROM promo_activity WHERE campaign_id=:id AND id>:previous ORDER BY id LIMIT 2'),
+            {'id':request['campaign_id'],'previous':max((item['id'] for item in activities),default=0)})).scalars().all()
+        if len(added)!=1:
+            fail('PROMO_ACTIVITY_RESULT_CONFLICT')
+        response={'schema':'promo-activity-result-v1','status':'accepted','operation_ref':row['operation_ref'],
+            'action_digest':row['action_digest'],'campaign_id':request['campaign_id'],'activity_id':int(added[0]),
+            'campaign_status_at_commit':campaign['status'],'activity_enabled_at_commit':True,'publication_state':'not_observed'}
+        changed=await session.execute(text("UPDATE event_change_log SET status='accepted',result_json=:result,updated_at=CURRENT_TIMESTAMP,completed_at=CURRENT_TIMESTAMP WHERE operation_ref=:ref AND operation_kind=:kind AND status='prepared' AND action_digest=:digest"),
+            {'result':canonical(response),'ref':row['operation_ref'],'kind':ACTIVITY_KIND,'digest':row['action_digest']})
+        if changed.rowcount!=1:
+            fail('PROMO_OPERATION_CONFLICT')
+        return response
