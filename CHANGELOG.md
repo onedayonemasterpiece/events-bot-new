@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added current tenant-authorized publication evidence for accepted event-create
+  operations: canonical public URL records and bounded live JobOutbox state,
+  without fabricating live verification or static event-inclusion receipts (#643).
+
 - Added event-scoped private image staging/read/reverification over the existing
   secure media store, with durable principal-bound refs, exact digest/expiry
   checks and mandatory current authorization; no social provider upload (#643).

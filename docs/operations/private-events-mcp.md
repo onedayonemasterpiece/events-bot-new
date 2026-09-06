@@ -309,6 +309,53 @@ not implemented by this ledger service. Tests cover restart, competing decisions
 repeat decisions after finish/rejection, two actors, and real PartnerAccessStore
 expiry/suspension/scope revocation: `tests/test_private_events_mcp_partner_event_review.py`.
 
+### Dynamic publication evidence for accepted creates (#643)
+
+`EventPublicationReceiptService` in
+`private_events_mcp/event_publication_receipts.py` provides a read-only projection:
+`await service.read(operation_ref, context)`. The caller supplies no event ID.
+The service looks up the create operation by the exact current subject/client/
+resource and uses only its accepted positive canonical `event_id`, cross-checked
+against the single `result_json.event_ids` identity. Missing, invalid, multiple or
+mismatched IDs fail closed. Unaccepted operations return no event/publications.
+
+Required async `authorize(context, event_id_or_none)` checks current general
+publication-read rights before ledger access, current tenant/portfolio rights
+before event/job access, and again after that read. `None` requests the general
+scope/current-principal check; an integer requires current access to that exact
+event. The callback must use current policy, not stale creation-time grants.
+Actor-bound operation lookup is never relaxed for caller-provided IDs.
+
+Each read fetches current canonical Event publication fields and current
+`JobOutbox` rows, rather than the frozen create-result job snapshot. Relevant
+jobs (`telegraph_build`, `vk_sync`, `tg_event_publish`, `tg_premium_emoji_edit`,
+`event_media_review`, `static_site_build`) expose only ID/task and normalized
+`queued|running|done|error|paused|unknown` state. Results are newest-first and
+bounded (default 50, maximum 100) with explicit `jobs_truncated`; payloads,
+`last_error`, `last_result` and unrelated-event jobs are not returned.
+
+Publications use `tg_event_post_url`, `source_vk_post_url`, `vk_repost_url`,
+`telegraph_url`. Supported HTTPS Telegram public-message, VK wall and Telegraph
+page URLs are narrowly validated; private invites/messages, arbitrary hosts,
+credentials, ports, query strings and fragments are suppressed. A valid stored
+URL means **`recorded_public_url`**, not a newly verified live publication.
+The response explicitly sets `live_verified=false` and
+`evidence_source=canonical_database`: no provider or public-page calls occur.
+Job `done` without a stored public URL remains `no_public_receipt`.
+
+Authoritative writers remain existing `main.job_publish_tg_event_post`,
+`main._persist_vk_source_post_result`, `vk_review.save_repost_url`, and Telegraph
+builders. Their persisted links may later become stale; this projection does not
+claim otherwise. Static build completion/global release receipts never prove
+one event's inclusion: static output is always `event_inclusion_unverified`
+until a separate event-specific verification contract exists. Missing canonical
+Event returns `canonical_event_missing`, not a fabricated receipt.
+
+This service does not add MCP tools, mutate operations, schedule jobs or publish
+content. Integration must inject current tenant policy and attach it to the
+accepted-operation read path. Tests:
+`tests/test_private_events_mcp_event_publication_receipts.py`.
+
 ## ChatGPT social workspace
 
 When the universal workspace is enabled, ChatGPT can discover only the tools
