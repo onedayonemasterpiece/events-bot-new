@@ -4861,6 +4861,9 @@
   claimed as the full catalogue; ASR uses versioned public regional vocabulary
   hints without forced replacement or private donor terminology. Preview-only,
   not evidence of deployed ASR, phone acceptance or production promotion.
+  Added explicit local-only desktop capture preview with shared Auth and zero
+  assistant network calls, plus the existing canonical focused-route filter
+  backport for a Search-only preview (no new builder or production enablement).
 
 ## [1.12.0] - 2026-03-04
 ### Highlights

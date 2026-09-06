@@ -5,9 +5,10 @@ export type Command = {id:string;searchId:string;payload:Record<string,any>;inpu
 export interface AuthPort {client:{auth:{getSession():Promise<any>}};dataClient:{request(input:string,init?:RequestInit):Promise<Response>};}
 /** No new transport, auth session, URL selector or replay loop. */
 export class AssistantClient {
-  private auth:AuthPort;private base:string;private key:string;private owner:()=>string;
-  constructor(auth:AuthPort,base:string,key:string,owner:()=>string){this.auth=auth;this.base=base.replace(/\/+$/,'')+'/functions/v1/event-search/assistant';this.key=key;this.owner=owner;}
+  private auth:AuthPort;private base:string;private key:string;private owner:()=>string;private networkEnabled:()=>boolean;
+  constructor(auth:AuthPort,base:string,key:string,owner:()=>string,networkEnabled:()=>boolean=()=>true){this.networkEnabled=networkEnabled;this.auth=auth;this.base=base.replace(/\/+$/,'')+'/functions/v1/event-search/assistant';this.key=key;this.owner=owner;}
   async request(route:string,owner:string,body?:unknown):Promise<any>{
+    if(!this.networkEnabled())throw new Error('voice_capture_only');
     if(!owner||this.owner()!==owner)throw new Error('voice_identity_changed');
     const {data,error}=await this.auth.client.auth.getSession();
     const session=data?.session;

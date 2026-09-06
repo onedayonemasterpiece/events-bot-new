@@ -2,12 +2,14 @@
 import { withBase } from '../lib/events';
 interface Props { catalog?: boolean; }
 const { catalog = false } = Astro.props;
+const captureOnly = import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY === '1';
 const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED === '1' && import.meta.env.PUBLIC_SITE_MODE !== 'production');
 ---
-{enabled && <div class="assistant" data-assistant data-ds-component="ConversationalSearch" data-ds-version="1" data-assistant-catalog={catalog ? 'true' : undefined} data-assistant-worklet={withBase('/voice/pcm-capture-worklet.js')} data-nosnippet>
+{enabled && <div class="assistant" data-assistant data-assistant-capture-only={captureOnly ? 'true' : undefined} data-ds-component="ConversationalSearch" data-ds-version="1" data-assistant-catalog={catalog ? 'true' : undefined} data-assistant-worklet={withBase('/voice/pcm-capture-worklet.js')} data-nosnippet>
   <div data-assistant-composer>
     <p class="eyebrow">Разговорный поиск · прототип</p>
-    <p>Расскажите, куда хочется сходить. Сначала проверьте распознанный текст, затем подтвердите запрос. Запись работает, пока это окно открыто.</p>
+    {captureOnly && <p data-assistant-preview-limit role="note">Проверка записи на вашем компьютере: запись → сохранение → прослушивание → перезагрузка. Аудио остаётся в этом браузере и не отправляется на сервер. Распознавание и разговорный поиск здесь пока отключены.</p>}
+    <p>{captureOnly ? 'Войдите через основной поиск и нажмите «Записать голосом». Запись работает, пока это окно открыто. После остановки откройте сохранённые записи ниже.' : 'Расскажите, куда хочется сходить. Сначала проверьте распознанный текст, затем подтвердите запрос. Запись работает, пока это окно открыто.'}</p>
     <p data-assistant-auth role="status">Используется вход основного поиска.</p>
     <div class="assistant__controls">
       <button class="secondary-button" type="button" data-assistant-record disabled>Записать голосом</button>

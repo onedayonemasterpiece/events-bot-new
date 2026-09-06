@@ -965,6 +965,21 @@ scenarios:
       pull_request: protected_live_gate
       release: true_for_voice_enablement
 
+  voice.capture_only:
+    title: Desktop capture-only prevents assistant network on mount and reload
+    status: implemented_local
+    layers: [L1]
+    platforms: [desktop_chromium]
+    trigger_tags: [voice, capture_only, privacy]
+    cost: low
+    auth_mode: injected_snapshot_not_live_auth
+    side_effects: isolated_browser_indexeddb_only
+    target: site/tests/voice-capture-only.integration.mjs
+    evidence: zero_assistant_requests_local_audio_reload_no_real_asr_claim
+    blocking:
+      pull_request: direct_voice_search_change
+      release: true_for_capture_only_preview
+
 policies:
   full_catalog_on_emulators: forbidden
   mobile_viewport_substitutes_android_or_ios: false

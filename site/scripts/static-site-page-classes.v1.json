@@ -1,0 +1,51 @@
+{
+  "schema_version": "kenigevents_static_site_page_classes_v1",
+  "classes": {
+    "event": [
+      "src/pages/sobytiya/",
+      "src/pages/data/discovery/"
+    ],
+    "date": [
+      "src/pages/index.astro",
+      "src/pages/segodnya/",
+      "src/pages/zavtra/",
+      "src/pages/date-[date].astro",
+      "src/pages/data/event-dates.json.ts"
+    ],
+    "weekend": [
+      "src/pages/vyhodnye/"
+    ],
+    "collection": [
+      "src/pages/artefakty/",
+      "src/pages/festivali/",
+      "src/pages/kluby-po-interesam/",
+      "src/pages/neobychnoe/",
+      "src/pages/podborki/",
+      "src/pages/populyarnoe/",
+      "src/pages/vystavki/"
+    ],
+    "personal": [
+      "src/pages/data/personal-feed.json.ts",
+      "src/pages/dlya-menya/",
+      "src/pages/izbrannoe/",
+      "src/pages/manifest.webmanifest.ts",
+      "src/pages/poisk/",
+      "src/pages/pwa-sw.js.ts",
+      "src/pages/zakrytaya-afisha/"
+    ],
+    "focus": [
+      "src/pages/fokus-gruppa/"
+    ],
+    "partner": [
+      "src/pages/partners/",
+      "src/pages/partnerstvo/"
+    ],
+    "lab": [
+      "src/pages/lab/"
+    ]
+  },
+  "always_preview_components": [
+    "src/pages/[preview]/index.astro",
+    "src/pages/robots.txt.ts"
+  ]
+}

@@ -25,6 +25,7 @@ const errorText=(error:unknown):string=>{
 export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
   if(root.dataset.assistantBound==='true')return;root.dataset.assistantBound='true';
   if(root.dataset.assistantCatalog==='true')return;
+  const captureOnly=root.dataset.assistantCaptureOnly==='true';
   const search=root.closest<HTMLElement>('[data-authorized-search]');if(!search)return;
   const get=<T extends HTMLElement>(name:string)=>root.querySelector<T>(`[data-assistant-${name}]`)!;
   const record=get<HTMLButtonElement>('record'),stop=get<HTMLButtonElement>('stop'),submit=get<HTMLButtonElement>('submit');
@@ -37,7 +38,7 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
   let measurement=new AssistantMeasurement();const rendered=new Map<string,{element:HTMLElement;result:any;count:number;ids:string[]}>();
   const objectUrls=new Set<string>();
   const auth=getStaticSiteAuth({supabaseUrl:search.dataset.supabaseUrl||'',relayUrl:search.dataset.supabaseRelayUrl||'',publishableKey:search.dataset.supabaseKey||'',provider:search.dataset.yandexProvider});
-  const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner);
+  const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner,()=>!captureOnly);
   const showError=(error:unknown)=>{processing.textContent=errorText(error);resume.hidden=!state.draft;};
   try{store=await VoiceStore.open();}catch{processing.textContent='Не удалось открыть локальное хранилище. Голос отключён, чтобы не потерять запись; обычный поиск доступен.';return;}
   const notify=()=>window.dispatchEvent(new CustomEvent('kenigevents:search-context-changed',{detail:{viewedSectionId:viewed,refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}}));
@@ -113,7 +114,8 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     recordings.replaceChildren();
     for(const row of rows){
       const panel=node('div');const label=node('p',`${new Date(row.createdAt).toLocaleString('ru-RU')} · ${row.state==='saved'?'сохранена':row.state==='partial'?'сохранена частично':'незавершённая запись'} · ${Math.round(row.bytes/1024)} КБ`);panel.append(label);
-      panel.append(button('Распознать / проверить ответ',async()=>{
+      const transcribe=button(captureOnly?'Распознавание в этом превью отключено':'Распознать / проверить ответ',async()=>{
+        if(captureOnly)return;
         try{
           if(owner!==own)throw new Error('voice_identity_changed');
           if(row.state!=='saved'){processing.textContent='Запись прервана. Сохранённое аудио можно прослушать, но оно не выдаётся за полную реплику.';return;}
@@ -126,7 +128,8 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
           processing.textContent=result.result.uncertain?.length?'Есть неразборчивые места. Проверьте текст перед подтверждением.':'Распознанный текст готов. Проверьте и подтвердите запрос.';
           await loadRecordings();
         }catch(error){showError(error);}
-      }));
+      });
+      transcribe.disabled=captureOnly;panel.append(transcribe);
       if(row.transcript!==undefined)panel.append(button('Вставить распознанный текст',()=>{if(owner===own){text.value=text.value?`${text.value}\n${row.transcript}`:row.transcript||'';text.focus();}}));
       panel.append(button('Прослушать сохранённое аудио',async()=>{
         try{const parts=await store.parts(own,row.id);if(owner!==own)return;
@@ -150,7 +153,7 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
       onStatus:(status:CaptureStatus,reason)=>{
         if(owner!==own)return;
         stop.hidden=!['requesting','recording','stopping'].includes(status);stop.disabled=status==='stopping';record.disabled=!owner||!stop.hidden||Boolean(capture?.unsavedParts().length);
-        const labels:Record<string,string>={requesting:'Ожидаю разрешение микрофона. Можно отменить.',recording:'Идёт запись. Остановить — кнопка «Остановить запись» или Escape.',stopping:'Сохраняю конец записи.',saved:'Запись сохранена. Её можно распознать ниже.',partial:'Запись прервана; сохранённая часть доступна ниже.',error:reason==='microphone_denied'?'Разрешение микрофона не получено. Текстовый ввод доступен.':'Запись не началась.',idle:'Микрофон выключен.'};
+        const labels:Record<string,string>={requesting:'Ожидаю разрешение микрофона. Можно отменить.',recording:'Идёт запись. Остановить — кнопка «Остановить запись» или Escape.',stopping:'Сохраняю конец записи.',saved:captureOnly?'Запись сохранена в этом браузере. Её можно прослушать ниже.':'Запись сохранена. Её можно распознать ниже.',partial:'Запись прервана; сохранённая часть доступна ниже.',error:reason==='microphone_denied'?'Разрешение микрофона не получено. Текстовый ввод доступен.':'Запись не началась.',idle:'Микрофон выключен.'};
         captureStatus.textContent=labels[status]||status;get('save-retry').hidden=reason!=='storage_failed';notify();
       },onStopped:receipt=>{void finalize(receipt);}});
     void capture.start().catch(()=>{void finalize({complete:false,reason:'capture_failed',frames:0,savedFrames:0,sampleRate:0,partCount:0});});void created.catch(showError);
@@ -163,20 +166,20 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
       const receipt=active.receipt();if(receipt)await store.finish(own,id,receipt);
       if(owner!==own||capture!==active)return;
       retry.hidden=left===0;record.disabled=!owner||left>0;
-      captureStatus.textContent=left?'Часть аудио пока остаётся только в памяти.':receipt?.complete?'Запись полностью сохранена. Её можно распознать ниже.':'Сохранённая часть записи доступна ниже. Прерывание записи не отменено.';
+      captureStatus.textContent=left?'Часть аудио пока остаётся только в памяти.':receipt?.complete?(captureOnly?'Запись полностью сохранена в этом браузере. Её можно прослушать ниже.':'Запись полностью сохранена. Её можно распознать ниже.'):'Сохранённая часть записи доступна ниже. Прерывание записи не отменено.';
       await loadRecordings();
     }).catch(showError).finally(()=>{retry.disabled=false;});
   });
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&capture?.status==='recording'){event.preventDefault();void capture.stop();}});
   get<HTMLFormElement>('form').addEventListener('submit',event=>{
-    event.preventDefault();if(!controller||!text.value.trim()||accepting)return;accepting=true;const raw=text.value;const active=controller;
+    event.preventDefault();if(captureOnly||!controller||!text.value.trim()||accepting)return;accepting=true;const raw=text.value;const active=controller;
     transition=transition.then(async()=>{try{await active.submit(raw,mode,selectedBase,visibleIds(selectedBase));if(controller===active&&text.value===raw)text.value='';}catch(error){showError(error);}finally{accepting=false;}});
   });
   get('new').addEventListener('click',()=>{void controller?.newTask().then(()=>{selectedBase=null;mode='new_search';baseLabel.textContent='Новый поиск';notify();}).catch(showError);});
   resume.addEventListener('click',()=>{void controller?.resume();});
   get('latest').addEventListener('click',()=>{if(latest)rendered.get(latest)?.element.scrollIntoView({block:'start'});});
   get('history-load').addEventListener('click',async()=>{
-    const own=owner;if(!own)return;
+    const own=owner;if(captureOnly||!own)return;
     try{const result=await api.history(own,cursor);if(owner!==own)return;
       for(const row of result.items){historyList.append(button(row.title,async()=>{
         try{const receipt=await api.status(own,row.id);if(owner!==own)return;if(receipt.state==='completed'){await store.saveAnswer(own,row.id,receipt.result);renderAnswer(receipt.result,true);}}
@@ -212,9 +215,10 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     if(capture&&['requesting','recording'].includes(capture.status))void capture.stop('interrupted');
     selectedBase=null;mode='new_search';viewed=null;latest=null;cursor=undefined;state=initialState();controller=null;text.value='';
     for(const url of objectUrls)URL.revokeObjectURL(url);objectUrls.clear();for(const timer of dwell.values())clearTimeout(timer);dwell.clear();exposure.disconnect();visibility.disconnect();rendered.clear();answers.replaceChildren();historyList.replaceChildren();recordings.replaceChildren();measurement=new AssistantMeasurement();lastAction.clear();
-    for(const name of ['record','submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=!owner;
+    for(const name of ['record','submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=!owner||(captureOnly&&name!=='record');
     get('auth').textContent=owner?'Используется существующая сессия поиска.':'Войдите через основной поиск. Вход не отправит запрос автоматически.';resume.hidden=true;
     if(!owner)return;
+    if(captureOnly){processing.textContent='Только локальная проверка записи. Распознавание, отправка запросов и серверная история отключены.';void loadRecordings().catch(showError);return;}
     const active=new ConversationController(owner,store,api,{change:value=>{if(epoch!==generation)return;state=value;resume.hidden=!state.draft;notify();},answer:(result,visible)=>{if(epoch===generation&&visible){renderAnswer(result);selectedBase=result.id;mode=result.clarification?'expand_selection':'refine_selection';baseLabel.textContent=`База: ${result.title}`;notify();}},status:message=>{if(epoch===generation)processing.textContent=message;},error:error=>{if(epoch===generation)showError(error);}});
     controller=active;
     void active.initialize().then(async()=>{

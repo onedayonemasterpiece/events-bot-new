@@ -227,3 +227,74 @@ Sanitized local evidence: `artifacts/codex/voice-integration-discovery/`
 (`management-access.json`, `runtime-metadata.json`, `schema-readonly.json`,
 `shared-model-registry.json`, `donor-runtime-config.json`, PR/readback/Actions).
 В Git сохраняется этот сводный readout, не credentials, raw речи или аудио.
+
+### Desktop capture-only slice (2026-09-06; not ASR acceptance)
+
+Отсутствие телефона **не блокирует desktop**. В существующий Search добавлен
+preview-only режим `PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY=1` вместе с
+`PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED=1`. Оба флага browser-safe; capture-only
+проверяется loader-ом как `0|1` (также разрешён `STATIC_SITE_PUBLIC_*` alias).
+SSR выводит `data-assistant-capture-only="true"` и явный дисклеймер: локальная
+запись/сохранение/прослушивание, распознавание ещё не подключено. Обычный Auth
+не обходится: до входа запись disabled; смена аккаунта скрывает чужие записи.
+AudioWorklet/owner-scoped IndexedDB не заменены новым recorder/store.
+
+В этом режиме отсутствуют **все assistant network calls**, включая status
+сохранённой истории при Auth initialize, ручную историю, интерпретацию и ASR.
+Два слоя защиты: UI не создаёт ConversationController и не включает server
+controls; AssistantClient отказывает до getSession/transport. Обычные Search и
+Auth запросы этим режимом не запрещаются. Это не обещание offline-входа.
+Аудио остаётся в текущем browser profile/origin; не очищать сессию, site data,
+очереди или аудио. Mic запускается только явной кнопкой пользователя.
+
+**Реальная desktop preflight:** full Chromium `143.0.7499.4` без fake-device
+flag: secure context, MediaDevices и AudioWorklet доступны; audio input/output
+count = **0/0**, `/dev/snd` без PCM capture nodes, Pulse/PipeWire socket нет.
+`getUserMedia`/запись не запускались, чужие аудиофайлы не читались. Это ограничение
+данного dev-host, не браузера пользователя. Существующий remote browser bridge
+доступен, но обнаруженные профили не подтверждают обычную KenigEvents сессию или
+микрофон; сторонние профили не заимствованы. Нужен пользовательский Chrome/Edge:
+обычный вход → «Записать голосом» → Stop → раскрыть сохранённые записи →
+«Прослушать» → reload и повторное прослушивание. Публичный prefix готовит parent;
+до HTTP/SSR readback публикация и реальная пользовательская запись не PASS.
+
+**Честное разделение проверок:**
+- `site/tests/assistant-capture-only.test.mjs`: 2 unit PASS; все server routes
+  отклонены до Auth/session/network, public flag validated.
+- `site/tests/voice-capture-only.integration.mjs`: full Chromium PASS, реальный
+  DOM mount/IndexedDB/WAV decoding/reload; **Auth snapshot и сохранённый WAV —
+  test fixtures**, не реальная речь/вход. Зафиксированы 0 assistant requests
+  browser-side и server-side, 0 session reads, disabled submit/history/ASR,
+  локальное аудио после reload, signout блокирует record и скрывает записи.
+- Ранее 5 capture tests используют synthetic microphone; их PASS не становится
+  real ASR, физической записью или phone acceptance.
+- Live ASR/interpretation/Search/dialogue остаются на описанном выше отсутствии
+  KenigEvents policy/model binding и assistant schema/runtime; телефон к этому
+  desktop blocker не относится. Local запуск existing handler допустим как host,
+  но без bindings реальная обработка потребовала бы тех же shared DB/limiter
+  writes. Dummy repo/policy или donor owner auth не добавлены.
+
+**Focused build, не full catalog:** из уже существующей islands ветки
+`960c90ef5aced6b2e51b1f65fd08041efa055f9e` переиспользованы без изменений
+`site/scripts/page-class-build-filter.mjs`, versioned page-class JSON и его 8
+behavior tests; стандартная integration добавлена в `astro.config.mjs`.
+Default `all` сохраняет прежнее поведение; новый builder/entrypoint не создан.
+Для existing `build:preview` parent использует `STATIC_SITE_PAGE_CLASSES=personal`
+и `STATIC_SITE_FOCUSED_ROUTES` с `/poisk/`, `/__preview/`, `/robots.txt`,
+`/manifest.webmanifest`, `/pwa-sw.js`. Registry относит Search/manifest/SW к
+personal; preview/robots остаются обязательной поддержкой. Auth redirectTo
+использует `cleanStaticAuthUrl()` текущего `/poisk/`; отдельного callback route
+нет. `PUBLIC_PWA_START_URL` должен указывать на `/poisk/` **в том же prefix**.
+Публикуется только immutable static prefix, не shared Edge/DB и не root.
+Source lane не запускает build и не меняет `site/dist`; публикацию/readback
+выполняет parent из clean exact SHA. Sanitized dev preflight сохранён локально в
+`artifacts/codex/voice-desktop-real/`, не коммитится с raw media/credentials.
+
+Read-only Auth redirect verification (Management API HTTP **200**, no changes):
+`site_url=https://kenigevents.ru`,
+`uri_allow_list=https://kenigevents.ru/**,https://www.kenigevents.ru/**`.
+The requested `/preview-voice-desktop-capture-20260906/poisk/` matches the existing
+`**` rule per [Supabase redirect wildcard contract](https://supabase.com/docs/guides/auth/redirect-urls).
+Only these public URL fields were retained; no raw auth config or secrets.
+This verifies configuration, **not an OAuth login or authenticated capture**.
+Local sanitized receipt: `artifacts/codex/voice-desktop-real/auth-redirect-readonly.json`.

@@ -113,3 +113,27 @@ Current shared event-search v79 exists, assistant schema/secrets do not;
 existing CLI management credential works, stale project env PAT does not.
 No cloud/DB writes or device actions occurred. Static prefix publication and
 shared production Edge/DB mutation are explicitly distinguished.
+
+
+## Desktop capture-only source handoff
+
+Capture-only preview is explicit, ordinary Auth retained, all assistant routes
+blocked before session/network; see canonical Codex handoff **Desktop capture-only
+slice** for flags, exact focused routes, checks and non-synthetic dev preflight.
+Existing focused-filter/registry/tests copied byte-identically from islands
+`960c90ef5aced6b2e51b1f65fd08041efa055f9e`; parent owns build/dist/publication.
+2 unit and 1 actual Chromium mount/reload zero-network contract PASS (Auth/WAV
+fixtures clearly synthetic, not physical capture or login). Filter 8 tests PASS.
+Dev-host physical audio inputs = 0; no microphone started or ambient audio read.
+This does not block user's desktop: immutable capture-only link is user-test-ready
+only after parent publication/readback. Full live ASR/Auth/UI/phone is not PASS.
+No schema/Edge/provider writes, no paid provider calls, no full or Kaggle build.
+Source commits are pushed/read back in PR587 before parent builds exact SHA.
+
+Final local gates for capture-only source: 82 assistant unit tests PASS; 5 native
+Chromium tests PASS with synthetic microphone (explicitly not real audio);
+1 Chromium capture-only mount/reload/no-network test PASS with injected Auth/WAV;
+8 canonical focused-filter tests PASS; strict TypeScript PASS; Astro component
+compiler diagnostics []; design-system production surface source gate PASS.
+Real read-only Auth allowlist HTTP200 confirms `https://kenigevents.ru/**` covers
+the planned prefix. Login itself remains untested. No build was run in this lane.
