@@ -518,3 +518,30 @@ remain on the same origin and unchanged owner-scoped DB.
 Artifacts: `artifacts/codex/voice-orb-20260906/` in the voice worktree.
 
 Donor source snapshots inspected: Wonderful Lections `cceac0c1fbab6cdca881f642accf5f87cf802487`; record-idea-hub `294c3485f377570505800516e2e86e58a6141781`. Full-mount capture-only suite: 3/3 PASS, including failed final receipt and same-record local retry.
+
+### Published orb review receipt
+
+- Published source: `50ec4746f7408c4119bcca7f2f1cbd74bf549eb9`, pushed to PR #587.
+- Direct review: https://kenigevents.ru/preview-voice-orb-20260906/poisk/ .
+  Existing focused preview builder: 2 pages + supporting routes, capture-only,
+  browser-safe Auth configured, no root/current promotion or Kaggle/catalog build.
+- Existing preview publisher process ended with 143 before its wrapper saved a
+  terminal log. Do **not** call this a clean publisher PASS. Independent recovery
+  verification downloaded **all 325 files** and matched their SHA-256 against
+  the exact source build, including all JS/CSS/worklet assets. Manifest is served
+  as `application/manifest+json`. Seven key-route readbacks additionally passed.
+  No blind re-upload, source overwrite or infrastructure change was performed.
+- Public rendered Chromium checks: **3/3 PASS** at 1440/1280/390px; screenshots
+  inspected. Local same-build render checks: 3/3 PASS. Native synthetic-device
+  capture: 7/7; full mount capture-only: 3/3; presentation + orchestration fixtures:
+  5/5; unit: 83/83. Strict TypeScript, design-system source contract and search
+  revision consistency PASS. None substitutes for physical-phone/real-ASR checks.
+- CI **34023128597: completed/success** for the exact source SHA, including
+  `static-browser-release-gate`. Unrelated pre-existing workflow run 34023126414
+  failed with `jobs=[]`; it is not the voice CI result.
+- Remaining: real Android/iOS microphone/PWA, ordinary-user live ASR → confirmed
+  input → cards/clarifications/actions/measurement. Capture-only remains enabled;
+  shared Edge/schema rollout and provider enablement were not performed.
+- Evidence: `artifacts/codex/voice-orb-20260906/{all-public-files.json,public-readback.json,public.log,public/,ci.json,telegram-direct-links-receipt.json}`.
+
+Telegram direct link delivered and read back in topic 1030: https://t.me/c/4337049383/1443 .
