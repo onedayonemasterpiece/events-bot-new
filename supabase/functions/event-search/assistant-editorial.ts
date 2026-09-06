@@ -18,17 +18,17 @@ INTENT=${JSON.stringify(intent)}
 CANDIDATES=${JSON.stringify(cards.map(c=>({event_id:Number(c.event_id??c.id),title:c.title,facts:editorialFactLines(c).map((text,index)=>({index,text}))})))}`;
 }
 export function validateEditorial(value:unknown,cards:Card[]) {
-  const row=object(value,['intro','recommendations']);text(row.intro,220);
+  const row=object(value,['intro','recommendations']);if(typeof row.intro!=='string'||!row.intro.trim())reject('editorial_intro_empty');text(row.intro,600);
   if(!Array.isArray(row.recommendations)||row.recommendations.length<1||row.recommendations.length>2)reject('invalid_editorial');
   const byId=new Map(cards.map(c=>[Number(c.event_id??c.id),c]));const seen=new Set();
   for(const value of row.recommendations){const r=object(value,['event_id','comment','evidence_index']);const card=byId.get(r.event_id);
     if(!card||seen.has(r.event_id))reject('invalid_editorial_event');seen.add(r.event_id);
-    text(r.comment,250);
+    if(typeof r.comment!=='string'||!r.comment.trim())reject('editorial_comment_empty');text(r.comment,600);
     if(!Number.isSafeInteger(r.evidence_index)||r.evidence_index<0||r.evidence_index>=editorialFactLines(card).length)reject('ungrounded_editorial');
   }
   return row;
 }
 export function editorialText(editorial:any,cards:Card[]):string {
   const byId=new Map(cards.map(c=>[Number(c.event_id??c.id),c]));
-  return [editorial.intro,...editorial.recommendations.map((r:any)=>`«${byId.get(r.event_id)?.title}» — ${r.comment}`)].join('\n');
+  return [editorial.intro,...editorial.recommendations.map((r:any)=>`${byId.get(r.event_id)?.title} — ${r.comment}`)].join('\n');
 }

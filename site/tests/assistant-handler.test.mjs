@@ -233,7 +233,7 @@ function enableEditorial(h,{fail=false,accountingFailure=false}={}) {
 }
 test('editorial follows verified results, is durable and never regenerated on retry/status',async()=>{
  const h=harness();enableEditorial(h);const i=uid(),s=uid();await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
- assert.equal(r.body.result.editorial.status,'complete');assert.match(r.body.result.answer,/«Лекция»/);assert.doesNotMatch(r.body.result.answer,/Событий в текущей/);
+ assert.equal(r.body.result.editorial.status,'complete');assert.match(r.body.result.answer,/Лекция —/);assert.doesNotMatch(r.body.result.answer,/Событий в текущей/);
  await h.control(s,'search',{interpretationId:i});const status=await h.request(`status?id=${s}`);
  assert.equal(status.body.result.answer,r.body.result.answer);assert.equal(h.calls.filter(x=>x==='editorial').length,1);
 });

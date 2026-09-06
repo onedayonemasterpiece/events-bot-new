@@ -847,3 +847,10 @@ the model. Provider failure plus unresolved shared quota finalize preserves
 `accounting_pending=true` even when verified cards are delivered. Failure reason
 is a sanitized code, not provider payload/secrets. A child-age question is only
 allowed when the user's current intent concerns children/family, not music alone.
+
+Writer asks for220-character intro/250-character comments; runtime allows bounded
+600-character fields rather than discarding otherwise grounded answers on modest
+provider length overshoot. Empty/oversized text remains invalid. Canonical titles
+are not wrapped in another pair of quotation marks. Exact/possible classification
+is model output, so repeated searches can differ; counts are not a completeness
+certificate and old completed answers are not recomputed to hide that variance.

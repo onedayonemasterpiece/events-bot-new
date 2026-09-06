@@ -331,3 +331,12 @@ pending accounting on provider+finalize failure; both now have regression tests.
 Only two concise recommendations, not a card cap. No extraneous child-age question
 in music-only commentary.54focused regressions and strict typecheck are the gate
 before a second live replay (record exact pass result below).
+
+Second three-turn replay:5→4→10 verified cards, correct dates/topic change, no UI
+footer. Editorial complete on first/third, second failed with stored `invalid_text`.
+Do not claim this was a full editorial pass or suppress the observed model count
+variance. Runtime now tolerates modest text-length overshoot up to600characters
+(prompt still220/250), preserves selected-ID/fact-index validation, rejects empty
+text explicitly and avoids double quotation around already quoted canonical titles.
+This is a formatting guard adjustment, not relaxation of relevance admission.
+Source tests cover moderate overshoot and reject empty/601-character fields.

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: bounded editorial text tolerates modest model length overshoot instead of dropping grounded commentary; canonical event titles avoid duplicated quotation marks.
+
 - Fixed: editorial provenance uses indexed source facts; changed facts invalidate stale recommendations without regeneration, and unresolved quota finalization stays visible in accounting.
 
 - Fixed: conversational Search no longer eliminates all family candidates for missing audience metadata; grounded week arithmetic and flexible topic/alternative interpretation.
