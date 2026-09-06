@@ -333,3 +333,59 @@ awaiting user execution). Blocked: live ASR/interpretation/dialogue/cards/action
 acceptance on the still-unbound assistant runtime; policy/model and shared
 runtime/schema boundary remain as documented. Phone is a separate remaining
 PWA acceptance scenario, not a prerequisite for the published desktop slice.
+
+## Product correction: floating voice entry (2026-09-06)
+
+The recorder dashboard in the desktop-capture preview is **superseded as product
+UI**, not accepted as conversational Search. Product answer history means
+previous query/result sections, not a user-managed file-saving workflow.
+The original product/v1 specification was reread with the implementation worker.
+
+- Entry is a floating microphone on desktop/mobile. Existing `EventLayout` owns
+  its position relative to the existing bottom navigation; Search does not
+  introduce a second navigation shell or sticky heading. The existing adapter
+  opens the same composer, and results remain ordinary in-flow sections with
+  semantic H2, explanation, common cards and refinement actions. Full FI-16/17
+  occupied-rectangle routing/native component certification remains incomplete.
+- The composer opens on explicit action rather than occupying the initial page.
+  Local audio protection stays automatic; playback/recovery is secondary and
+  appears only when audio exists. Previous selections are not a “save answer” step.
+- Guest microphone clicks open a visible sign-in explanation. The same Auth
+  controller handles login without invoking classic Search's draft/auto-run
+  click handler. OAuth errors (including a resolved `false`) appear in the
+  composer. Login never automatically starts recording or sends a request.
+- Complete user-stopped capture in an enabled environment now requests ASR
+  directly, without a separate “save → recognize” journey. The transcript is
+  editable before Search submission. A revision guard prevents late ASR from
+  replacing typed input/new recording/new search/refinement context. Partial or
+  interrupted capture is not auto-sent; unknown provider outcome is not retried.
+- Close/Escape awaits recording stop and returns focus to the mic. Missing mic,
+  denied permission, AudioContext construction failure, storage failure and
+  mount failure have explicit feedback; startup failure never leaves a silent
+  disabled launcher. Browser dialog behavior follows the
+  [native dialog contract](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal).
+
+**Confirmed reproduction:** anonymous Chromium on the old public preview:
+`data-assistant-record.disabled=true`; a real mouse click changed neither status
+nor Auth prompt. This does not identify the user's authenticated-session state.
+
+**Scope of this correction:** the preview still uses capture-only safeguards.
+ASR/AI/cards from speech remain unavailable until the already-documented actual
+model-policy/runtime/schema integration is resolved. The microphone UI is not
+proof of live conversational Search. No root promotion, production Edge/DB
+change, fabricated AI results, deleted sessions/audio or Kaggle build.
+
+Checks/evidence are recorded below after rendered-preview verification. Local
+artifacts: `artifacts/codex/voice-floating-composer-20260906/` in the voice worktree.
+
+Correction validation before publication: 82 assistant unit tests PASS; 6 native
+Chromium synthetic-device capture cases PASS; 1 mount/reload/false-OAuth fixture
+PASS; 2 composer close/focus/failure cases PASS; 3 capture→transcript orchestration
+fixtures PASS (normal, late result after edit, interrupted capture not sent).
+The latter explicitly inject capture/provider/controller, not live model output.
+Strict TypeScript, Astro compile, revision check, source-surface gate and diff
+whitespace check PASS. Anonymous local rendered checks at 1440/1280/390px PASS;
+page/composer screenshots inspected. An initial harness-only login failure was
+fixed by removing the fixture's unintended disabled attribute from login.
+The shared-shell selector review also caught and corrected an accidental H1
+selector grouping before publication. No new live ASR/Auth/phone claim.

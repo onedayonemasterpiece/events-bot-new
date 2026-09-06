@@ -55,12 +55,14 @@ export class MicrophoneCapture {
     this.lastReceipt = null; this.stopping = null;
     this.savedFrames = 0; this.parts = 0; this.pendingBytes = 0; this.storageFailed = false; this.captureFailed = false;
     this.tail = Promise.resolve();
-    const context = new AudioContext();
-    this.context = context;
-    // Resume in the user gesture, before waiting for the permission dialogue.
-    const resumed = context.resume().catch(() => undefined);
+    let context: AudioContext | null = null;
     let stream: MediaStream | null = null;
     try {
+      context = new AudioContext();
+      this.context = context;
+      // Resume in the user gesture, before waiting for the permission dialogue.
+      const resumed = context.resume().catch(() => undefined);
+      const activeContext = context;
       stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 }, video: false });
       if (generation !== this.generation) { stream.getTracks().forEach(t => t.stop()); await context.close(); return; }
       this.stream = stream;
@@ -72,12 +74,12 @@ export class MicrophoneCapture {
       node.port.onmessage = ({ data }) => {
         if (generation !== this.generation) return;
         if (data?.type === 'stopped') {
-          if (data.frames === this.segmenter!.frames && data.sampleRate === context.sampleRate) this.acknowledge?.();
+          if (data.frames === this.segmenter!.frames && data.sampleRate === activeContext.sampleRate) this.acknowledge?.();
           return;
         }
         if (data?.type !== 'pcm') return;
         try {
-          if (data.sampleRate !== context.sampleRate) throw new Error('mixed_sample_rates');
+          if (data.sampleRate !== activeContext.sampleRate) throw new Error('mixed_sample_rates');
           for (const part of this.segmenter!.push(data.pcm, data.firstFrame)) this.persist(part);
         } catch { this.captureFailed = true; void this.stop('capture_failed'); }
       };
@@ -88,7 +90,7 @@ export class MicrophoneCapture {
       if (generation !== this.generation) return;
       stream.getAudioTracks().forEach(track => { track.onended = () => { void this.stop('device_lost'); }; });
       context.onstatechange = () => {
-        if (context.state !== 'running' && this.status === 'recording') void this.stop('interrupted');
+        if (activeContext.state !== 'running' && this.status === 'recording') void this.stop('interrupted');
       };
       document.addEventListener('visibilitychange', this.visibility);
       window.addEventListener('pagehide', this.pagehide);
@@ -96,9 +98,9 @@ export class MicrophoneCapture {
       if (document.hidden) void this.stop('background');
     } catch (error) {
       stream?.getTracks().forEach(t => t.stop());
-      if (context.state !== 'closed') await context.close().catch(() => undefined);
+      if (context && context.state !== 'closed') await context.close().catch(() => undefined);
       if (generation === this.generation) {
-        this.setStatus('error', error instanceof DOMException && error.name === 'NotAllowedError' ? 'microphone_denied' : 'capture_failed');
+        this.setStatus('error', error instanceof DOMException && error.name === 'NotAllowedError' ? 'microphone_denied' : error instanceof DOMException && error.name === 'NotFoundError' ? 'microphone_not_found' : 'capture_failed');
       }
       throw new Error('capture_start_failed');
     }

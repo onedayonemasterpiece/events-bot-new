@@ -6,6 +6,7 @@ import { ConversationController } from './conversationController.ts';
 import { initialState, type Section, type Mode } from './conversationState.ts';
 import { AUDIO_BUDGET } from '../../../../supabase/functions/event-search/assistant-intent.ts';
 import { announceAssistantSurface } from './assistantSurface.ts';
+import type { mountComposerPresentation } from './composerPresentation.ts';
 import { AssistantMeasurement } from './measurement.ts';
 type CardHost={hiddenIds:()=>string[];register:(element:HTMLElement,items:any[],context:any)=>void;sync:()=>Promise<void>};
 type Host=Window&{KenigEventsSearchCardHost?:CardHost;KenigEventsCreateEventCard?:(item:any,variant:string,layout:any)=>HTMLElement;
@@ -22,7 +23,7 @@ const errorText=(error:unknown):string=>{
   if(code.includes('quota'))return 'Сейчас нет доступной ёмкости модели. Ввод сохранён; микрофон и история остаются доступны.';
   return 'Обработка не подтверждена. Ввод сохранён; воспользуйтесь проверкой статуса. Обычный поиск остаётся доступным.';
 };
-export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
+export async function mountConversationalSearch(root:HTMLElement,presentation?:ReturnType<typeof mountComposerPresentation>):Promise<void>{
   if(root.dataset.assistantBound==='true')return;root.dataset.assistantBound='true';
   if(root.dataset.assistantCatalog==='true')return;
   const captureOnly=root.dataset.assistantCaptureOnly==='true';
@@ -40,7 +41,13 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
   const auth=getStaticSiteAuth({supabaseUrl:search.dataset.supabaseUrl||'',relayUrl:search.dataset.supabaseRelayUrl||'',publishableKey:search.dataset.supabaseKey||'',provider:search.dataset.yandexProvider});
   const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner,()=>!captureOnly);
   const showError=(error:unknown)=>{processing.textContent=errorText(error);resume.hidden=!state.draft;};
-  try{store=await VoiceStore.open();}catch{processing.textContent='Не удалось открыть локальное хранилище. Голос отключён, чтобы не потерять запись; обычный поиск доступен.';return;}
+  const showComposer=()=>presentation?presentation.open():get('composer').scrollIntoView({block:'start'});
+  const stopForOverlay=async()=>{if(capture&&['requesting','recording','stopping'].includes(capture.status))await capture.stop('interrupted');};
+  get('login')?.addEventListener('click',()=>{
+    get('auth').textContent='Открываю вход через Яндекс…';
+    void auth.signIn().then(ok=>{if(!ok)get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';}).catch(()=>{get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';});
+  });
+  try{store=await VoiceStore.open();}catch{processing.textContent='Не удалось открыть локальное хранилище. Голос отключён, чтобы не потерять запись; обычный поиск доступен.';presentation?.bind(()=>{},async()=>{});record.disabled=true;return;}
   const notify=()=>window.dispatchEvent(new CustomEvent('kenigevents:search-context-changed',{detail:{viewedSectionId:viewed,refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}}));
   const visibility=new IntersectionObserver(entries=>{
     const visible=entries.filter(entry=>entry.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];
@@ -64,7 +71,7 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     if(state.draft){processing.textContent='Сначала завершите текущий запрос или нажмите «Новый поиск». Просмотр истории не меняет его базу.';return;}
     const section:Section={id:result.id,parentId:result.parentId||null,mode:result.mode||'new_search',title:result.title,question:result.question,answer:result.answer,
       eventIds:result.items.map((item:any)=>String(item.event_id??item.id)),catalogRevision:result.catalog_revision,intent:result.intent,through:0,epoch:state.epoch};
-    await controller?.rememberSection(section);selectedBase=result.id;mode=nextMode;baseLabel.textContent=`База: ${result.title}`;text.focus();notify();
+    transcriptRevision++;await controller?.rememberSection(section);selectedBase=result.id;mode=nextMode;baseLabel.textContent=`База: ${result.title}`;showComposer();text.focus();notify();
   };
   const syncOverlay=()=>{
     const hidden=new Set(host.KenigEventsSearchCardHost?.hiddenIds()||[]);
@@ -105,32 +112,39 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     controls.append(button(result.clarification?'Ответить на уточнение':'Уточнить эту подборку',()=>chooseBase(result,result.clarification?'expand_selection':'refine_selection')),
       button('Изменить условия и искать заново',()=>chooseBase(result,'expand_selection')),button('Спросить о событии',()=>chooseBase(result,'explain_selection')));
     section.append(controls);answers.append(section);appendCards(entry);visibility.observe(section);
-    latest=result.id;get('latest').hidden=false;
+    latest=result.id;get('latest').hidden=false;get('history')?.removeAttribute('hidden');
     if(scroll)section.scrollIntoView({block:'start'});
+  }
+  let transcriptRevision=0;
+  text.addEventListener('input',()=>{transcriptRevision++;});
+  async function transcribeRecording(own:string,id:string,revision=transcriptRevision){
+    if(captureOnly||owner!==own)return;
+    processing.textContent='Распознаю речь…';
+    try{
+      const result=await api.transcribe(own,id,await store.parts(own,id));
+      if(result.state!=='completed')throw new Error(result.error||`voice_${result.state}`);
+      await store.setTranscript(own,id,result.result.text);
+      if(owner!==own)return;
+      if(revision===transcriptRevision){text.value=text.value?`${text.value}\n${result.result.text}`:result.result.text;transcriptRevision++;}
+      else {processing.textContent='Текст уже изменён. Поздняя расшифровка доступна в «Аудио и восстановление» и не заменяет ваш запрос.';await loadRecordings();return;}
+      processing.textContent=result.result.uncertain?.length?'Есть неразборчивые места — поправьте запрос.':'Запрос готов. Можно исправить текст и найти события.';
+      await loadRecordings();
+    }catch(error){if(owner!==own)return;showError(error);get<HTMLDetailsElement>('recordings')?.setAttribute('open','');}
   }
   async function loadRecordings(){
     const own=owner;if(!own)return;
     const rows=await store.page<Recording>('recordings',own);if(owner!==own)return;
     recordings.replaceChildren();
+    const recovery=get('recordings');if(recovery)recovery.hidden=rows.length===0;
     for(const row of rows){
       const panel=node('div');const label=node('p',`${new Date(row.createdAt).toLocaleString('ru-RU')} · ${row.state==='saved'?'сохранена':row.state==='partial'?'сохранена частично':'незавершённая запись'} · ${Math.round(row.bytes/1024)} КБ`);panel.append(label);
       const transcribe=button(captureOnly?'Распознавание в этом превью отключено':'Распознать / проверить ответ',async()=>{
         if(captureOnly)return;
-        try{
-          if(owner!==own)throw new Error('voice_identity_changed');
-          if(row.state!=='saved'){processing.textContent='Запись прервана. Сохранённое аудио можно прослушать, но оно не выдаётся за полную реплику.';return;}
-          processing.textContent='Распознаю сохранённое аудио. Микрофон можно использовать для следующей записи.';
-          const result=await api.transcribe(own,row.id,await store.parts(own,row.id));
-          if(result.state!=='completed')throw new Error(result.error||`voice_${result.state}`);
-          await store.setTranscript(own,row.id,result.result.text);
-          if(owner!==own)return;
-          if(!text.value)text.value=result.result.text;
-          processing.textContent=result.result.uncertain?.length?'Есть неразборчивые места. Проверьте текст перед подтверждением.':'Распознанный текст готов. Проверьте и подтвердите запрос.';
-          await loadRecordings();
-        }catch(error){showError(error);}
+        if(row.state!=='saved'){processing.textContent='Запись прервана; сохранённая часть доступна для прослушивания.';return;}
+        await transcribeRecording(own,row.id);
       });
       transcribe.disabled=captureOnly;panel.append(transcribe);
-      if(row.transcript!==undefined)panel.append(button('Вставить распознанный текст',()=>{if(owner===own){text.value=text.value?`${text.value}\n${row.transcript}`:row.transcript||'';text.focus();}}));
+      if(row.transcript!==undefined)panel.append(button('Вставить распознанный текст',()=>{if(owner===own){transcriptRevision++;text.value=text.value?`${text.value}\n${row.transcript}`:row.transcript||'';text.focus();}}));
       panel.append(button('Прослушать сохранённое аудио',async()=>{
         try{const parts=await store.parts(own,row.id);if(owner!==own)return;
           const {assemble,sha256}=await import('../../../../supabase/functions/event-search/assistant-media.ts');
@@ -144,21 +158,26 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     }
   }
   record.addEventListener('click',()=>{
-    if(!owner||!store||capture?.unsavedParts().length)return;
+    showComposer();
+    if(!owner){get('auth').textContent='Войдите, чтобы начать голосовой поиск. Микрофон не включится автоматически после входа.';get<HTMLButtonElement>('login')?.focus();return;}
+    if(!store){processing.textContent='Локальное хранилище недоступно. Запись не начата.';return;}
+    if(capture?.unsavedParts().length){processing.textContent='Не всё аудио сохранено. Сначала сохраните оставшуюся запись.';return;}
+    if(capture&&['requesting','recording','stopping'].includes(capture.status)){processing.textContent='Запись уже начата. Нажмите «Остановить запись».';return;}
+    const revision=++transcriptRevision;
     const own=owner,id=crypto.randomUUID();recordingId=id;recordingOwner=own;
     const created=store.create(own,id); // AudioContext starts in this user gesture.
     let finished=false;
-    const finalize=async(receipt:any)=>{if(finished)return;finished=true;try{await created;await store.finish(own,id,receipt);if(owner===own)await loadRecordings();}catch(error){showError(error);}};
+    const finalize=async(receipt:any)=>{if(finished)return;finished=true;try{await created;await store.finish(own,id,receipt);if(owner===own){await loadRecordings();if(receipt.complete&&receipt.reason==='user'&&!captureOnly)await transcribeRecording(own,id,revision);}}catch(error){showError(error);}};
     capture=new MicrophoneCapture({workletUrl:root.dataset.assistantWorklet||'',budget:AUDIO_BUDGET,onPart:async part=>{await created;await store.putPart(own,id,part);},
       onStatus:(status:CaptureStatus,reason)=>{
         if(owner!==own)return;
-        stop.hidden=!['requesting','recording','stopping'].includes(status);stop.disabled=status==='stopping';record.disabled=!owner||!stop.hidden||Boolean(capture?.unsavedParts().length);
-        const labels:Record<string,string>={requesting:'Ожидаю разрешение микрофона. Можно отменить.',recording:'Идёт запись. Остановить — кнопка «Остановить запись» или Escape.',stopping:'Сохраняю конец записи.',saved:captureOnly?'Запись сохранена в этом браузере. Её можно прослушать ниже.':'Запись сохранена. Её можно распознать ниже.',partial:'Запись прервана; сохранённая часть доступна ниже.',error:reason==='microphone_denied'?'Разрешение микрофона не получено. Текстовый ввод доступен.':'Запись не началась.',idle:'Микрофон выключен.'};
+        stop.hidden=!['requesting','recording','stopping'].includes(status);stop.disabled=status==='stopping';record.disabled=!stop.hidden||Boolean(capture?.unsavedParts().length);record.hidden=!stop.hidden;
+        const labels:Record<string,string>={requesting:'Ожидаю разрешение микрофона. Можно отменить.',recording:'Идёт запись. Остановить — кнопка «Остановить запись» или Escape.',stopping:'Сохраняю конец записи.',saved:captureOnly?'Запись сохранена в этом браузере. Её можно прослушать ниже.':'Запись завершена.',partial:'Запись прервана; сохранённая часть доступна ниже.',error:reason==='microphone_denied'?'Доступ к микрофону запрещён. Разрешите его в настройках сайта.':reason==='microphone_not_found'?'Микрофон не найден. Подключите его и повторите.':reason==='microphone_unavailable'?'В этом браузере запись недоступна. Нужны HTTPS и поддержка микрофона.':'Не удалось включить микрофон. Проверьте устройство и разрешения браузера.',idle:'Микрофон выключен.'};
         captureStatus.textContent=labels[status]||status;get('save-retry').hidden=reason!=='storage_failed';notify();
       },onStopped:receipt=>{void finalize(receipt);}});
     void capture.start().catch(()=>{void finalize({complete:false,reason:'capture_failed',frames:0,savedFrames:0,sampleRate:0,partCount:0});});void created.catch(showError);
   });
-  stop.addEventListener('click',()=>{const id=recordingId,own=recordingOwner;void capture?.stop().then(async receipt=>{if(id){await store.finish(own,id,receipt);if(owner===own)await loadRecordings();}}).catch(showError);});
+  stop.addEventListener('click',()=>{void capture?.stop().catch(showError);});
   get('save-retry').addEventListener('click',()=>{
     const active=capture,id=recordingId,own=recordingOwner;if(!active||!id)return;
     const retry=get<HTMLButtonElement>('save-retry');retry.disabled=true;
@@ -172,10 +191,10 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
   });
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&capture?.status==='recording'){event.preventDefault();void capture.stop();}});
   get<HTMLFormElement>('form').addEventListener('submit',event=>{
-    event.preventDefault();if(captureOnly||!controller||!text.value.trim()||accepting)return;accepting=true;const raw=text.value;const active=controller;
-    transition=transition.then(async()=>{try{await active.submit(raw,mode,selectedBase,visibleIds(selectedBase));if(controller===active&&text.value===raw)text.value='';}catch(error){showError(error);}finally{accepting=false;}});
+    event.preventDefault();if(captureOnly||!controller||!text.value.trim()||accepting)return;accepting=true;transcriptRevision++;const raw=text.value;const active=controller;
+    transition=transition.then(async()=>{try{await active.submit(raw,mode,selectedBase,visibleIds(selectedBase));if(controller===active&&text.value===raw){text.value='';transcriptRevision++;await presentation?.close();}}catch(error){showError(error);}finally{accepting=false;}});
   });
-  get('new').addEventListener('click',()=>{void controller?.newTask().then(()=>{selectedBase=null;mode='new_search';baseLabel.textContent='Новый поиск';notify();}).catch(showError);});
+  get('new').addEventListener('click',()=>{transcriptRevision++;void controller?.newTask().then(()=>{selectedBase=null;mode='new_search';baseLabel.textContent='Новый поиск';notify();}).catch(showError);});
   resume.addEventListener('click',()=>{void controller?.resume();});
   get('latest').addEventListener('click',()=>{if(latest)rendered.get(latest)?.element.scrollIntoView({block:'start'});});
   get('history-load').addEventListener('click',async()=>{
@@ -206,19 +225,24 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
   window.addEventListener('storage',event=>{if(event.key==='ke_personalization_profile')syncOverlay();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden){for(const timer of dwell.values())clearTimeout(timer);dwell.clear();}});
   announceAssistantSurface({version:'1.0.0',element:get('composer'),getState:()=>({viewedSectionId:viewed,refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}),
-    showComposer:()=>get('composer').scrollIntoView({block:'start'}),showSection:id=>rendered.get(id)?.element.scrollIntoView({block:'start'}),
-    beforeOverlayOpen:async()=>{if(capture&&['requesting','recording'].includes(capture.status))await capture.stop('interrupted');},
+    showComposer,showSection:id=>rendered.get(id)?.element.scrollIntoView({block:'start'}),
+    beforeOverlayOpen:stopForOverlay,
     diagnostic:()=>({contract:'kenigevents.voice-diagnostic.v1',capture:capture?.status||'idle',pending:!!state.draft,acceptedThrough:state.acceptedThrough,processedThrough:state.processedThrough,readout:measurement.readout()})});
   auth.subscribe(snapshot=>{
+    if(snapshot.status==='checking'||snapshot.status==='error')get('auth').textContent=snapshot.message;
     const next=snapshot.status==='signed_in'&&snapshot.user&&!snapshot.user.is_anonymous?snapshot.user.id:'';
-    if(authSeen&&next===owner)return;authSeen=true;owner=next;const epoch=++generation;
+    if(authSeen&&next===owner)return;authSeen=true;owner=next;transcriptRevision++;const epoch=++generation;
     if(capture&&['requesting','recording'].includes(capture.status))void capture.stop('interrupted');
     selectedBase=null;mode='new_search';viewed=null;latest=null;cursor=undefined;state=initialState();controller=null;text.value='';
     for(const url of objectUrls)URL.revokeObjectURL(url);objectUrls.clear();for(const timer of dwell.values())clearTimeout(timer);dwell.clear();exposure.disconnect();visibility.disconnect();rendered.clear();answers.replaceChildren();historyList.replaceChildren();recordings.replaceChildren();measurement=new AssistantMeasurement();lastAction.clear();
-    for(const name of ['record','submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=!owner||(captureOnly&&name!=='record');
-    get('auth').textContent=owner?'Используется существующая сессия поиска.':'Войдите через основной поиск. Вход не отправит запрос автоматически.';resume.hidden=true;
+    for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=!owner||captureOnly;
+    record.disabled=Boolean(capture?.unsavedParts().length);record.hidden=!owner;captureStatus.hidden=!owner;
+    const login=get('login');if(login)login.hidden=Boolean(owner);
+    const history=get('history');if(history)history.hidden=captureOnly||!owner;
+    const recovery=get('recordings');if(recovery)recovery.hidden=true;
+    get('auth').textContent=(snapshot.status==='checking'||snapshot.status==='error')?snapshot.message:owner?'':'Войдите, чтобы начать голосовой поиск. Микрофон не включится автоматически после входа.';resume.hidden=true;
     if(!owner)return;
-    if(captureOnly){processing.textContent='Только локальная проверка записи. Распознавание, отправка запросов и серверная история отключены.';void loadRecordings().catch(showError);return;}
+    if(captureOnly){processing.textContent='';void loadRecordings().catch(showError);return;}
     const active=new ConversationController(owner,store,api,{change:value=>{if(epoch!==generation)return;state=value;resume.hidden=!state.draft;notify();},answer:(result,visible)=>{if(epoch===generation&&visible){renderAnswer(result);selectedBase=result.id;mode=result.clarification?'expand_selection':'refine_selection';baseLabel.textContent=`База: ${result.title}`;notify();}},status:message=>{if(epoch===generation)processing.textContent=message;},error:error=>{if(epoch===generation)showError(error);}});
     controller=active;
     void active.initialize().then(async()=>{
@@ -231,5 +255,6 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
       await loadRecordings();if(state.draft)processing.textContent='Найден сохранённый незавершённый запрос. Обработка возобновится только по кнопке.';
     }).catch(showError);
   });
+  presentation?.bind(()=>record.disabled?showComposer():record.click(),stopForOverlay);
   await auth.initialize();
 }

@@ -6,45 +6,61 @@ const captureOnly = import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY =
 const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED === '1' && import.meta.env.PUBLIC_SITE_MODE !== 'production');
 ---
 {enabled && <div class="assistant" data-assistant data-assistant-capture-only={captureOnly ? 'true' : undefined} data-ds-component="ConversationalSearch" data-ds-version="1" data-assistant-catalog={catalog ? 'true' : undefined} data-assistant-worklet={withBase('/voice/pcm-capture-worklet.js')} data-nosnippet>
-  <div data-assistant-composer>
-    <p class="eyebrow">Разговорный поиск · прототип</p>
-    {captureOnly && <p data-assistant-preview-limit role="note">Проверка записи на вашем компьютере: запись → сохранение → прослушивание → перезагрузка. Аудио остаётся в этом браузере и не отправляется на сервер. Распознавание и разговорный поиск здесь пока отключены.</p>}
-    <p>{captureOnly ? 'Войдите через основной поиск и нажмите «Записать голосом». Запись работает, пока это окно открыто. После остановки откройте сохранённые записи ниже.' : 'Расскажите, куда хочется сходить. Сначала проверьте распознанный текст, затем подтвердите запрос. Запись работает, пока это окно открыто.'}</p>
-    <p data-assistant-auth role="status">Используется вход основного поиска.</p>
+  <button type="button" class="assistant__launcher" data-assistant-launcher aria-label="Голосовой поиск" aria-haspopup="dialog" aria-controls="voice-composer" aria-expanded="false" title="Голосовой поиск">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg>
+    <span>Голосом</span>
+  </button>
+  <dialog id="voice-composer" data-assistant-composer aria-labelledby="voice-composer-title">
+    <div class="assistant__dialog-head"><h2 id="voice-composer-title">Куда хочется сходить?</h2><button type="button" data-assistant-close aria-label="Закрыть голосовой поиск">×</button></div>
+    {captureOnly && <p data-assistant-preview-limit role="note">Распознавание и ответы нейросети пока не подключены. Здесь можно проверить микрофон; аудио остаётся в этом браузере и не отправляется на сервер.</p>}
+    <p data-assistant-auth role="status">Подключаю существующий вход поиска…</p>
+    <button type="button" class="cta-button" data-assistant-login hidden>Войти через Яндекс</button>
     <div class="assistant__controls">
-      <button class="secondary-button" type="button" data-assistant-record disabled>Записать голосом</button>
+      <button class="secondary-button" type="button" data-assistant-record>Начать запись</button>
       <button class="cta-button" type="button" data-assistant-stop hidden>Остановить запись</button>
       <button class="secondary-button" type="button" data-assistant-save-retry hidden>Сохранить оставшееся аудио</button>
     </div>
     <p data-assistant-capture role="status" aria-live="polite">Микрофон выключен.</p>
-    <p data-assistant-base>Новый поиск</p>
-    <form data-assistant-form>
-      <label class="ke-field">
-        <span class="ke-field__label">Подтверждённый запрос</span>
-        <textarea class="ke-field__control" rows="3" data-assistant-text aria-describedby="assistant-input-help" placeholder="Например: завтра вечером на побережье, не концерт" disabled></textarea>
+    <form data-assistant-form hidden={captureOnly}>
+      <p data-assistant-base>Новый поиск</p>
+      <label class="ke-field"><span class="ke-field__label">Ваш запрос — можно исправить или написать</span>
+        <textarea class="ke-field__control" rows="2" data-assistant-text placeholder="Например: завтра вечером на побережье, не концерт" disabled></textarea>
       </label>
-      <p id="assistant-input-help" class="muted-note">Текст можно исправить или дополнить. Условия этого поиска не становятся постоянными интересами.</p>
       <div class="assistant__controls">
-        <button class="cta-button" type="submit" data-assistant-submit disabled>Подтвердить и искать</button>
+        <button class="cta-button" type="submit" data-assistant-submit disabled>Найти события</button>
         <button class="secondary-button" type="button" data-assistant-new disabled>Новый поиск</button>
-        <button class="secondary-button" type="button" data-assistant-resume hidden>Проверить и продолжить обработку</button>
+        <button class="secondary-button" type="button" data-assistant-resume hidden>Проверить обработку</button>
       </div>
     </form>
-    <p data-assistant-processing role="status" aria-live="polite">Обработка не запущена.</p>
-  </div>
-  <details data-assistant-recordings><summary>Сохранённые записи на этом устройстве</summary><div data-assistant-recording-list></div></details>
-  <details data-assistant-history><summary>История ответов</summary><button type="button" class="secondary-button" data-assistant-history-load disabled>Загрузить историю</button><div data-assistant-history-list></div></details>
+    <p data-assistant-processing role="status" aria-live="polite"></p>
+    <details data-assistant-recordings hidden><summary>Аудио и восстановление</summary><div data-assistant-recording-list></div></details>
+  </dialog>
+  <details data-assistant-history hidden><summary>Предыдущие подборки</summary><button type="button" class="secondary-button" data-assistant-history-load disabled>Показать предыдущие</button><div data-assistant-history-list></div></details>
   <button type="button" class="secondary-button" data-assistant-latest hidden>Новый ответ ↓</button>
   <div data-assistant-answers aria-label="Ответы поиска"></div>
   {catalog && <p class="muted-note">Каталожный образец, без входа и обращений к модели. Состояния: запись, сохранение, частичная запись, ожидание, ответ, уточнение, восстановление.</p>}
 </div>}
 <script>
+  import { mountComposerPresentation } from '../lib/assistant/composerPresentation';
   import { mountConversationalSearch } from '../lib/assistant/conversationalSearch';
-  document.querySelectorAll<HTMLElement>('[data-assistant]').forEach(root => { void mountConversationalSearch(root); });
+  document.querySelectorAll<HTMLElement>('[data-assistant]').forEach(root => {
+    const presentation = mountComposerPresentation(root);
+    void mountConversationalSearch(root, presentation).catch(() => presentation.fail());
+  });
 </script>
 <style is:global>
   [data-assistant] { display: grid; gap: var(--ke-space-4); margin-block: var(--ke-space-6); }
   [data-assistant] [hidden] { display: none !important; }
+  [data-assistant-composer] { border:1px solid #e6dcd2; border-radius:26px; background:#fffcf7; color:#2b221b; padding:24px; width:min(480px, calc(100vw - 32px)); max-height:calc(100dvh - 48px); box-sizing:border-box; box-shadow:0 18px 56px #38271c33; }
+  [data-assistant-composer]::backdrop { background:rgb(38 28 20 / .22); }
+  [data-assistant-composer] > * + * { margin-block-start:16px; }
+  .assistant__dialog-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .assistant__dialog-head h2 { font-size:22px; margin:0; }
+  [data-assistant-close] { border:0; background:transparent; color:inherit; font-size:28px; width:44px; height:44px; cursor:pointer; flex-shrink:0; }
+  [data-assistant-preview-limit] { font-size:14px; line-height:1.5; background:#f4ede5; border-radius:14px; padding:12px; }
+  [data-assistant-auth]:empty, [data-assistant-processing]:empty { display:none; }
+  [data-assistant] button:disabled { opacity:.45; cursor:not-allowed; }
+  [data-assistant] button:focus-visible { outline:3px solid #984321; outline-offset:3px; }
   .assistant__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ke-space-2); }
   [data-assistant] textarea { resize: vertical; min-block-size: 7rem; width: 100%; box-sizing: border-box; }
   [data-assistant] details { overflow-wrap: anywhere; }

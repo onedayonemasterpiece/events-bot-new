@@ -135,3 +135,13 @@ test('user stop with a tail-only storage fault becomes saved only after durable 
  assert.equal(result.after.complete,true);assert.equal(result.row.state,'saved');assert.equal(result.row.receipt.frames,result.row.receipt.savedFrames);
  await context.close();
 });
+test('AudioContext construction failure reaches terminal error, not endless requesting',async()=>{
+ const {context,page}=await setup();
+ const result=await page.evaluate(async()=>{
+  const states=[];const Real=window.AudioContext;window.AudioContext=class{constructor(){throw new Error('device unavailable');}};
+  const capture=new window.modules.MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',budget:{maxWireBytes:32768,envelopeBytes:2048,encoding:'base64'},onPart:async()=>{},onStatus:(state,reason)=>states.push({state,reason})});
+  try{await capture.start();}catch{}finally{window.AudioContext=Real;}
+  return {status:capture.status,states};
+ });
+ assert.equal(result.status,'error');assert.deepEqual(result.states.map(x=>x.state),['requesting','error']);await context.close();
+});

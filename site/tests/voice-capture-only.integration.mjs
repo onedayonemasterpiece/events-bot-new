@@ -7,16 +7,16 @@ import {build} from 'esbuild';
 import {chromium} from 'playwright';
 let server,browser,origin,assistantRequests=0;
 const root=new URL('../',import.meta.url).pathname;
-const controls=['record','stop','submit','new','resume','latest','save-retry','history-load'];
+const controls=['record','stop','submit','new','resume','latest','save-retry','history-load','login'];
 const labels=['processing','capture','base','answers','history-list','recording-list','auth'];
-const html=`<!doctype html><div data-authorized-search><div data-assistant data-assistant-capture-only="true"><div data-assistant-composer>${controls.map(n=>`<button type="button" data-assistant-${n} disabled>${n}</button>`).join('')}${labels.map(n=>`<div data-assistant-${n}></div>`).join('')}<form data-assistant-form><textarea data-assistant-text disabled></textarea></form></div></div></div><script type="module" src="/bundle.js"></script>`;
+const html=`<!doctype html><div data-authorized-search><div data-assistant data-assistant-capture-only="true"><div data-assistant-composer>${controls.map(n=>`<button type="button" data-assistant-${n} ${n==='login'?'':'disabled'}>${n}</button>`).join('')}${labels.map(n=>`<div data-assistant-${n}></div>`).join('')}<form data-assistant-form><textarea data-assistant-text disabled></textarea></form></div></div></div><script type="module" src="/bundle.js"></script>`;
 test.before(async()=>{
  const bundle=(await build({stdin:{contents:`
  import {mountConversationalSearch} from './src/lib/assistant/conversationalSearch.ts';
  import {VoiceStore} from './src/lib/assistant/voiceStore.ts';
  import {segmentPcm16} from './src/lib/assistant/audioSegments.ts';
  window.sessionReads=0;window.snap={status:'signed_in',user:{id:'test-owner',is_anonymous:false}};
- window.auth={client:{auth:{getSession:async()=>{window.sessionReads++;return {data:{session:{access_token:'fixture',user:window.snap.user}}};}}},dataClient:{request:(...args)=>fetch(...args)},subscribe:fn=>{window.notifyAuth=fn;},initialize:async()=>window.notifyAuth(window.snap)};
+ window.auth={signIn:async()=>false,client:{auth:{getSession:async()=>{window.sessionReads++;return {data:{session:{access_token:'fixture',user:window.snap.user}}};}}},dataClient:{request:(...args)=>fetch(...args)},subscribe:fn=>{window.notifyAuth=fn;},initialize:async()=>window.notifyAuth(window.snap)};
  const store=await VoiceStore.open();
  if(!(await store.page('recordings','test-owner')).length){
  await store.create('test-owner','synthetic-recording');
@@ -50,7 +50,11 @@ test('capture-only mount/reload keeps local playback, denies submit/history/stat
   if(pass===0){await page.reload();await page.waitForFunction(()=>window.ready);}
  }
  await page.evaluate(()=>window.notifyAuth({status:'signed_out',user:null}));
- assert.equal(await page.locator('[data-assistant-record]').isDisabled(),true);
+ assert.equal(await page.locator('[data-assistant-record]').isDisabled(),false);
+ await page.locator('[data-assistant-record]').evaluate(button=>button.click());
+ assert.match(await page.locator('[data-assistant-auth]').textContent(),/Войдите/);
+ await page.locator('[data-assistant-login]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-assistant-auth]').textContent.includes('Не удалось открыть вход'));
  assert.equal(await page.locator('[data-assistant-recording-list]').textContent(),'');
  assert.deepEqual(errors,[]);assert.equal(observed,0);assert.equal(assistantRequests,0);
  await context.close();

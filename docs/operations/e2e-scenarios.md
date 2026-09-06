@@ -145,3 +145,15 @@ checks passed. User live path: ordinary login → explicit record/stop → open 
 recordings → playback → reload/playback. Never capture ambient audio automatically;
 keep session/audio/queues. Real authenticated capture and ASR remain separately
 unverified; see the canonical handoff's published receipt, not unit-test inference.
+
+Voice floating-entry correction: `site/tests/voice-composer.integration.mjs`
+checks real Chromium modal/focus/stop ordering with injected callbacks;
+`site/tests/voice-composer-preview.integration.mjs` checks actual anonymous
+rendered preview at 1440/1280/390px (`VOICE_PREVIEW_BASE` required), visible guest
+feedback, no nav overlap, keyboard reopen, reload and zero assistant requests.
+These are not authenticated speech/ASR acceptance. The capture-only harness also
+covers resolved-false OAuth feedback; native capture tests cover AudioContext
+constructor failure. Current receipt is in the existing voice integration handoff.
+`site/tests/voice-flow.integration.mjs` is a separate synthetic orchestration
+fixture: user Stop starts ASR once, late transcript preserves edited text,
+interrupted capture is not auto-sent. It does not replace `voice.real_quality`.
