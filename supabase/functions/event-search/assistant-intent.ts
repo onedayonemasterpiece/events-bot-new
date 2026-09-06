@@ -108,7 +108,7 @@ export function structuredInterpretation(value:unknown,input:ConfirmedInput,base
     const goal=queryPlan.scope==='all_events'?'события':queryPlan.groups.map(g=>`(${g.alternatives.join(' ИЛИ ')})`).join(' И ');
     if(parsed.intent.audience?.length&&!queryPlan.groups.some(g=>g.dimension==='audience'))reject('invalid_query_plan');
     const intent={...parsed.intent,...dates,goal:goal.slice(0,180)};
-    const dateLabel=[dates.dateFrom,dates.dateTo].filter((d,i,a)=>d&&a.indexOf(d)===i).map(d=>new Intl.DateTimeFormat('ru',{day:'numeric',month:'long',timeZone:'Europe/Kaliningrad'}).format(new Date(d+'T12:00:00Z'))).join(' — ');
+    const dateLabel=(dates.dateFrom&&!dates.dateTo?'с ':!dates.dateFrom&&dates.dateTo?'до ':'')+[dates.dateFrom,dates.dateTo].filter((d,i,a)=>d&&a.indexOf(d)===i).map(d=>new Intl.DateTimeFormat('ru',{day:'numeric',month:'long',timeZone:'Europe/Kaliningrad'}).format(new Date(d+'T12:00:00Z'))).join(' — ');
     const title=parsed.title+(dateLabel&&parsed.title.length+dateLabel.length+3<=160?` · ${dateLabel}`:'');
     return {...parsed,intent,queryPlan,title,responseSummary:null};
   } catch(error) {

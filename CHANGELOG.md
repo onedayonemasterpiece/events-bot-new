@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: open-ended conversational periods are labelled “с …”/“до …”, not as a single day.
+
 - Fixed: interpretation source references select literal input fragments instead of copying prompt examples; voice verification separates direct event properties from parent-festival/incidental context.
 
 - Fixed: structured voice interpretation/verification uses documented medium-thinking Gemini3 configuration and a concise non-conflicting prompt; quota-stage failures are distinguishable without leaking provider data.

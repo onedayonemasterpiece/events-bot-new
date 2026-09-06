@@ -225,3 +225,21 @@ no replay. `assistant-editorial.test.mjs` checks selected IDs and factual eviden
 `voice-clean-results.integration.mjs` exercises clean footer-free results and all
 returned cards, composer clarification/history/owner isolation in a mocked UI
 runtime; real three-turn acceptance is tracked in the relevance incident.
+
+
+Structured conversational drift regression (protected preview, not ordinary
+Search or full-catalog acceptance):
+- `assistant-query-plan.test.mjs` and `assistant-structured-interpretation.test.mjs`
+  cover calendar enum resolution, literal provenance schema, replace/patch,
+  AND/OR groups, hidden audience and malformed relative model dates.
+- `assistant-plan-verification.test.mjs` covers complete per-clause evidence,
+  direct versus parent/incidental context, and exact admission.
+- `shared-topic-locator.playwright.mjs`: 156-character full title at
+  320/390/430/1440, 200% mobile text, measured reading edge and non-oscillating
+  adjacent section transition. Run on published CHECK_BASE without
+  CHECK_LOCATOR_SOURCE for built-page evidence; injected topic data is a UI
+  fixture, not a live interpretation claim.
+- Actual five-turn festival/science/local-history/city chain, provider failures,
+  controlled QA Auth cleanup and immutable deployment revisions are tracked in
+  `INC-2026-09-06-voice-search-relevance.md`; no physical-phone claim inferred
+  from emulated mobile viewport.

@@ -914,3 +914,11 @@ verification also distinguishes direct program evidence from context-only
 parent-festival/venue/incidental-topic mentions; context-only evidence cannot
 admit an exact result even when model verdict says exact. Broad index tags are
 not adequate proof of a requested genre/format.
+
+
+Standalone new-topic replacement without a date may select from_today instead
+of inheriting an old window; this is explicit in the durable plan and visible as
+«с …» in its title (an open end must not look like a one-day query). Explicitly
+requested periods are never silently widened. Calendar acceptance therefore
+checks stated dates and the selected dateMode, not an assumed hard inheritance
+for every untimed follow-up.

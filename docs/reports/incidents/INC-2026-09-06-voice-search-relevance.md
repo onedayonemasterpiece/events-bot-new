@@ -421,3 +421,59 @@ medium reasoning plus simplified one-call interpreter prompt, with real shared
 reservation adjusted to bounded output budgets. Public UI long-title boundary
 checks PASS at320/390/430/1440 including200% mobile text; source injection OFF.
 Public byte readback7routes matches8c03373d98c39c72160a3cc6db270eacdaac03af.
+
+### Five-turn drift delivery / protected preview
+
+UI published at https://kenigevents.ru/preview-voice-plan-20260906/poisk/
+from `8c03373d98c39c72160a3cc6db270eacdaac03af` (exact7route byte readback).
+The successful provider chain below ran backend
+`265b1d9a671c33a6b7d277469e0c9375fbf94bab`. It follows a failed medium-only
+attempt and a single diagnostic interpreter probe: the latter proved that the
+model copied a near-identical instructional example as sourceQuote. The dynamic
+literal enum fixes that provenance failure, not a retry of a frozen user ID.
+
+| Query class | Durable search ID | Exact / checked | UI latency |
+| --- | --- | --- | --- |
+| Festivals, weekend plus next week | `27a1c0d5-93e2-43bf-8ce5-d5eaaf5b1735` |7/58 |25.702s |
+| Science self-correction | `4a26619c-cc62-44bd-825c-17b9f8824fcb` |2/57 |29.881s |
+| Local-history formats, no new date | `828213ed-b90d-469d-8fbf-d717f4ae94fc` |10/56 |28.785s |
+| New Zelenogradsk query | `75e1f096-a6ea-468d-8671-4026ce0db7dd` |1/1 |7.998s |
+| New Svetlogorsk query | `a24822b5-bd70-474a-b41f-afec361110c8` |14/14 |5.942s |
+
+All5provider chains complete, all5editorials complete, all returned cards rendered,
+no unchecked candidates or page errors. The4explicit week queries use7–13Sept;
+city queries have all_events/empty groups, no historical theme. Independent
+read-only projection comparison matches city memberships:1Zelenogradsk,
+15Svetlogorsk rows collapsing to14explicit families (7215/8269). This proves the
+bounded current-city projection coverage, NOT full live canonical catalog recall.
+Science now returns4648/8212, not household lecture7720; standalone festival
+results no longer contain the inspected concert/film/exhibition subevents.
+
+The original harness still reports `wrong_calendar_2`: it incorrectly demanded
+inherited dates on the untimed standalone third question. Preserve that failed
+receipt. `live-acceptance-audit.json` explicitly corrects the assumption: the
+plan is replace/from_today, as allowed by the contract, not an explicit-week
+query widened silently. A final display-only correction labels open bounds
+«с …»/«до …» instead of a misleading one-day title. Previous completed answers
+stay frozen. No full five-query re-spend is needed for this label-only change;
+source tests and final runtime readback are the distinct acceptance evidence.
+
+Evidence root `artifacts/codex/voice-drift-20260906/`: `provenance/` contains real
+public-UI text replay and5mobile screenshots; `live-acceptance-audit.json` checks
+semantic exclusions and city family coverage; `public-locator/` proves full156char
+title including200% text and boundary stability at320/390/430/1440 without source
+injection. Rendered390normal/200% and actual card results inspected. QA ordinary
+session owner-probe and cleanup PASS.184broad tests passed before last bounded
+provenance/title changes;85focused tests plus strict index typecheck pass after.
+No new physical-phone/ASR claim. Two worker commits are patch-equivalent to parent;
+both completed worktrees removed (~44MB), shared dependency source preserved.
+
+Requirement status: mobile full title **Done**; observed date/city drift and
+inspected false-positive classes **Partial** (corrected in this real chain,
+model quality remains probabilistic); full-catalog recall/freshness and Pro
+independent audit **Open**. Source metadata itself can contain broad or misleading
+festival/topic tags; direct program evidence must outrank them. The earlier
+pre-dispatch fourth-turn generic failure is not retrospectively assigned an
+unproven cause; new failures expose a sanitized shared-quota stage. Long semantic
+requests now take25–30seconds in this sample. No production/root/index guard
+mutation, user audio/session clearing, anonymous launch or quota bypass.

@@ -27,3 +27,7 @@ test('provider quote enum covers literal input chunks; examples cannot leak into
  const schema=structuredInterpretationSchema({...input,text:q},null);assert.deepEqual(schema.properties.queryPlan.properties.groups.items.properties.sourceQuote.enum,[q]);
  const long='много разных слов '.repeat(80);assert.equal(sourceFragments(long).join(' '),long.trim());assert.ok(sourceFragments(long).every(p=>p.length<=240));
 });
+
+test('open date bounds are visible as from/until, not a misleading single-day title',()=>{
+ const r=structuredInterpretation({...value,queryPlan:{...value.queryPlan,dateMode:'from_today'}},input,base);assert.match(r.title,/с 6 сентября/);assert.equal(r.intent.dateTo,null);
+});
