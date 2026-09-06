@@ -1370,7 +1370,7 @@ prefix; browser touch emulation is not native phone/PWA acceptance. No video,
 Kaggle, full build, production/root promotion or voice changes.
 
 
-The owner-approved compact successor `preview-islands-20260906-archetypes-date-b2`
+The first compact successor `preview-islands-20260906-archetypes-date-b2` (superseded below)
 keeps the same selected routes and calendar behavior. Only the two-tier date dock
 uses text-only lower navigation (44px); its horizontal date row is also44px,
 with weekday/number/month inline. The shared skin occupies90px including borders,
@@ -1381,3 +1381,19 @@ The existing browser scenario additionally asserts90px geometry, four labels,
 no visible icons in the date dock, and four retained icons on Popular.
 Evidence: `artifacts/codex/date-dock-compact-20260906/`; the same preview-only and
 historical-data limitations apply.
+
+
+Owner correction: `preview-islands-20260906-archetypes-date-b3` restores the exact
+B1 date row (64px, stacked weekday/number/month and48px chips); **only** the lower
+nav is compact/text-only (44px). The shared dock is110px with borders, not90px.
+The B2 inline-date reduction was explicitly rejected. Existing calendar, swipe,
+empty-day behavior, single-tier icons and top-island kinetics remain unchanged.
+
+The mobile title and metadata had lost their horizontal gutter because the
+native-sticky wrapper uses `display:contents`. Keep that required full scroll
+range; apply the shared12px mobile gutter to its actual title-origin/metadata
+children, not to the boxless wrapper. Do not change title transforms or add a
+short containing block. Browser checks assert title/meta x=12px,64px rail,48px
+stacked date chips and110px total; existing archetype checks cover sticky/context
+and city filtering on Date/Today/Weekend. Evidence is under
+`artifacts/codex/date-dock-correction-20260906/`; preview-only limitations unchanged.

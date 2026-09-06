@@ -126,7 +126,7 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 
 ### Mobile date dock B
 
-`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/date-dock.playwright.mjs` checks the actual rendered date rail and calendar with Chromium touch input at320/384/430px, future month arrows/swipe, empty-date disabling, navigation to the real23April2027 specimen, stationary lower nav and desktop breakpoint restoration. Compact B additionally asserts90px dock height, four text-only destinations and unchanged icon+label navigation on Popular. L1 anonymous preview evidence only; no phone/PWA or current-data claim. Canonical contract: [Date composition B](../features/static-site-pages/astro-preview.md#date-composition-b--2026-09-06).
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/date-dock.playwright.mjs` checks the actual rendered date rail and calendar with Chromium touch input at320/384/430px, future month arrows/swipe, empty-date disabling, navigation to the real23April2027 specimen, stationary lower nav and desktop breakpoint restoration. Compact B additionally asserts110px dock height, original64px stacked date rail,12px title/metadata gutters, four text-only destinations and unchanged icon+label navigation on Popular. L1 anonymous preview evidence only; no phone/PWA or current-data claim. Canonical contract: [Date composition B](../features/static-site-pages/astro-preview.md#date-composition-b--2026-09-06).
 
 ### Floating-island archetype review
 

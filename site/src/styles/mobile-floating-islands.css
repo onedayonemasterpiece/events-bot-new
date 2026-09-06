@@ -106,6 +106,10 @@ body[data-fi-mobile] [data-listing-controls][data-fi-docked="true"] [data-island
 /* Shared date/weekend city owner: old title rail is not another sticky floor. */
 body[data-fi-mobile] .mobile-listing-sticky-title {display:none!important;}
 body[data-fi-mobile] .ke-mobile-listing-rails .page-head {display:contents;}
+/* display:contents must keep the full sticky range, so gutters belong to its
+   actual flow children rather than the boxless heading wrapper. */
+body[data-fi-mobile] .ke-mobile-listing-rails .page-head > .fi-mobile-title-origin,
+body[data-fi-mobile] .ke-mobile-listing-rails .page-head > p {margin-inline:var(--ke-container-gutter-mobile,12px);}
 body[data-fi-mobile] .ke-mobile-listing-rails .fi-mobile-title-origin h1 {font-size:38px;line-height:1.1;color:var(--ke-color-text-primary);}
 body[data-fi-mobile] .ke-mobile-listing-rails .feed-head {position:static;}
 body[data-fi-mobile] .ke-mobile-listing-rails .group-head {position:relative;top:auto;}
