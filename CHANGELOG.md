@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 - Connected default-off partner event create, private posters, owner review/image readback, current-policy queued execution, canonical accepted-ID portfolio assignment and tenant-scoped publication evidence; no synthetic Telegram/OAuth actor or implicit promo operation (#643).
+- Added immutable operation-specific domain receipts in the canonical Event
+  transaction and current partner ownership/policy guards for every accepted
+  Smart Update path; foreign merges roll back before commit, and receipts never
+  imply publication success or source-URL-only recovery (#643).
 
 - Added current durable partner actor-policy resolution over existing grants and credential epochs without manufacturing an OAuth identity; token scope checks remain mandatory for live callers (#643).
 

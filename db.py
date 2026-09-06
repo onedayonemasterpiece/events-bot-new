@@ -704,6 +704,7 @@ class Database:
                 )
                 """
             )
+            await _add_column(conn, "event_change_log", "domain_receipt_json JSON")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_change_log_status_updated "
                 "ON event_change_log(status,updated_at)"
