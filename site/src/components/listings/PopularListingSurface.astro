@@ -39,7 +39,7 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   data-mobile-card-density="large"
 >
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={visibleEvents.length} current="popular" />
-  <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} topBandCandidate />
+  <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} topBandCandidate compactInitially />
   <div class="ke-popular-desktop" data-popular-representation="desktop">
     <PopularBehaviorRows groups={desktop.groups}>
       <PopularPersonalizedRow events={desktopPersonalizationCandidates} />

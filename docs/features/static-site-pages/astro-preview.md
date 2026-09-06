@@ -1614,3 +1614,36 @@ editorial remain in this focused preview. Acceptance compares B9/B10 rendered
 geometry and upper shadows, single/composed lower shadows, calendar and CTA
 states, and initial Weekend before script enhancement. Evidence:
 `artifacts/codex/lower-island-shadow-20260906/`. No root/full-catalog promotion.
+
+### Owner review corrections: compact entry and contained city motion — 2026-09-06
+
+- Card admission is now `Бесплатно` via `eventCardAdmissionLabel`; detailed
+  registration/booking conditions remain on event details. Sold-out precedence
+  is unchanged. This is presentation only, not classification of event facts.
+- Mobile city content has one rounded, two-axis clipping viewport inside the
+  actual animated surface. Its width/height follow that same finite540ms eased
+  animation; the shadow remains outside. The former independently scaled skin
+  could become44px high while its54px text row painted beyond the edge. The
+  two-phase row/picker handoff remains, including reversal and native horizontal
+  scroll before docking. No opacity flashes or text scaling were introduced.
+- Mobile Popular starts with the compact right-hand picker in server HTML/CSS,
+  even while scripts are withheld. Its enhancer preserves that state at scroll0
+  and on return to the top. Desktop continues to expose the maximal fitting
+  city choices; it is not reduced to a mobile-only ellipsis.
+- The Date specimen now includes a mobile bottom editorial block with three
+  real internal links, prepared before build. Provenance, historical-data scope
+  and production-generation gap are documented in the existing
+  [editorial owner](weekend-editorial-review.md#date-specimen-extension--2026-09-06).
+
+Review prefix: `preview-islands-review-20260906`; direct specimens are
+`/date-2026-07-23/`, `/populyarnoe/`, `/vyhodnye/` and
+`/podborki/besplatnye-sobytiya/`, not a design-system catalog.
+The same historical23July snapshot/reference date is deliberately retained for
+comparison; this is not a current September-event freshness acceptance.
+
+Checks: `islands-review.test.mjs`, `island-archetypes.test.mjs`,
+`islands-review.playwright.mjs`, `mobile-city-scroll.playwright.mjs`
+(date/Weekend only: Popular no longer has an expanded mobile initial row), and
+source production-surface gate. Tags: static-data, static-route, visual-layout;
+auth_mode=anonymous. L0/L1 only; no Auth/native-system change, L2/L3 not claimed.
+Artifacts: `artifacts/codex/islands-review-20260906/`.

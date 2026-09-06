@@ -11,8 +11,9 @@ interface Props {
     weekday: string;
   };
   topBandCandidate?: boolean;
+  compactInitially?: boolean;
 }
-const { cities, total, label, hasTime = true, dateContext, topBandCandidate = false } = Astro.props;
+const { cities, total, label, hasTime = true, dateContext, topBandCandidate = false, compactInitially = false } = Astro.props;
 ---
 <div
   class:list={[
@@ -23,6 +24,7 @@ const { cities, total, label, hasTime = true, dateContext, topBandCandidate = fa
   data-ds-component="ListingDiscoveryRail"
   data-ds-version="5"
   data-listing-discovery-rail
+  data-fi-compact-initial-rail={compactInitially || undefined}
   data-has-time={hasTime ? 'true' : 'false'}
   data-islands-eligible-controls={topBandCandidate ? '' : undefined}
 >
@@ -33,7 +35,7 @@ const { cities, total, label, hasTime = true, dateContext, topBandCandidate = fa
         <small>{dateContext.weekday}</small>
       </div>
     ) : null}
-    <ListingControls cities={cities} total={total} label={label} />
+    <ListingControls cities={cities} total={total} label={label} compactInitially={compactInitially} />
     {hasTime ? <div class="ke-listing-discovery-rail__time"><slot /></div> : null}
   </div>
 </div>

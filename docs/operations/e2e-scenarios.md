@@ -171,3 +171,13 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 ### Lower-island shadow parity
 
 `CHECK_BEFORE=<previous preview> CHECK_BASE=<candidate> CHECK_OUTPUT=<artifacts> node site/tests/lower-island-shadow.playwright.mjs` compares actual standalone/date/Weekend/Buy surfaces, lower geometry and unchanged upper shadow at mobile widths plus desktop. Nested dock navigation must not gain a second shadow. Pair with Weekend delayed/no-JS first paint and existing event-dock action-state checks; this is rendered CSS acceptance, not physical-phone or purchase acceptance.
+
+### Compact Popular entry, bounded city text and day editorial
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/islands-review.playwright.mjs`
+checks Popular before withheld scripts and without JavaScript, then the same
+compact picker after enhancement; mobile date frame-by-frame surface/content
+bounds, three real day-editorial event navigations and desktop behavior.
+Pair with `mobile-city-scroll.playwright.mjs` using
+`CHECK_ROUTES='["/date-2026-07-23/","/vyhodnye/"]'` for native swipe/filter/reversal.
+Anonymous L1, not phone certification, fresh live data or automated LLM evidence.

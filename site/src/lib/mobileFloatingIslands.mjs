@@ -11,6 +11,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  const contextParent=context.parentNode,sectionParent=section.parentNode,contextNext=context.nextSibling,sectionNext=section.nextSibling;
  const originalContextStyle=context.getAttribute('style')||'',originalControlsStyle=controls.getAttribute('style')||'',originalNavStyle=nav.getAttribute('style')||'';
  const controlParent=controls.parentNode,controlNext=controls.nextSibling;
+ const initiallyCompact=controls.hasAttribute('data-fi-compact-initial');
  const prepared=controls.hasAttribute('data-fi-ssr-city');
  const marker=prepared?controls.parentElement:doc.createElement('div');if(!prepared){marker.className='fi-mobile-city-origin';controls.before(marker);marker.append(controls);}
  const shortRail=marker.closest('.ke-listing-discovery-rail'),feed=marker.closest('.feed-head');if(shortRail)shortRail.before(marker);else if(feed)feed.before(marker);
@@ -34,6 +35,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const name=button.querySelector('span')||doc.createElement('span'),count=button.querySelector('small')||doc.createElement('small');name.textContent=singleDay&&input.value==='all'?'Все':entry.name;button.setAttribute('aria-label',entry.name);button.append(name,count);row.append(button);
   on(button,'click',()=>{input.checked=!input.checked;input.dispatchEvent(new Event('change',{bubbles:true}));});return{...entry,button,count};
  });
+ const content=doc.createElement('div');content.className='fi-city-content';controls.append(content);content.append(row,toggle);
  row.append(toggle);toggle.hidden=true;toggle.setAttribute('aria-haspopup','dialog');panel.hidden=true;closeButton.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Остальные города');
  let geometry=null,ready=false,dead=false,frame=0,measureNeeded=true,opened=false,visibleCount=items.length,activeHeading=null,lastScope='',sectionRanges=[],widths=[],docked=null,motions=[],settleTimer=0;
  let selectionLabel='';
@@ -68,15 +70,15 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const targetWidth=singleDay?Math.min(Math.max(112,Math.ceil(labelProbe.getBoundingClientRect().width)+48),win.innerWidth-left-inset):cityWidth;labelProbe.remove();
   marker.style.height=`${contextHeight}px`;
   const cr=controls.getBoundingClientRect(),mr=marker.getBoundingClientRect();
-  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:singleDay||weekend?44:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
+  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:singleDay||weekend?44:initiallyCompact?70:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
   titleMarker.style.position='';marker.style.position='';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${geometry.approachTop}px`);
   title.style.cssText=titleStyle;
   if(!nativeTimeline){title.style.animation='none';titleSkin.style.animation='none';}
   context.style.cssText=`--fi-title-height:${singleDay?38:contextHeight}px;--fi-title-x:${left+pad-tr.x}px;--fi-title-scale:${geometry.title.scale};--fi-title-end:${titleEnd}px;--fi-skin-x:${left-tr.x}px;--fi-skin-width:${contextWidth}px;`;
   if(weekend){context.style.setProperty('--fi-title-height','44px');weekendNav.style.cssText=`left:${left-tr.x}px;width:${contextWidth}px;`;title.style.cssText=titleStyle;}
   section.style.cssText=`left:${left+pad-tr.x}px;top:30px;width:${contextWidth-2*pad}px;height:${contextHeight-38}px;`;section.hidden=true;
-  controls.style.cssText='';controls.append(toggle);toggle.style.cssText='position:absolute;left:0;top:0;width:44px;';row.style.width=`${originWidth}px`;
-  ranges();docked=null;setDocked(win.scrollY>=geometry.threshold,false);row.scrollLeft=savedScroll;measureNeeded=false;
+  controls.style.cssText='';content.append(row,toggle);toggle.style.cssText='position:absolute;left:0;top:0;width:44px;';row.style.width=`${originWidth}px`;
+  ranges();docked=null;setDocked(initiallyCompact||win.scrollY>=geometry.threshold,false);row.scrollLeft=savedScroll;measureNeeded=false;
  }
  function fit(){
   // Native scrolling owns overflow before docking; the compact picker owns all
@@ -111,14 +113,14 @@ export function initMobileFloatingIslands(doc=document,win=window){
   toggle.hidden=false;
   const timing={duration:540,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
   controls.dataset.fiMoving='true';
-  const move=controls.animate([{transform:`translate3d(${before.x-geometry.markerX}px,0,0)`},{transform:`translate3d(${x}px,0,0)`}],timing);
+  const move=controls.animate([{width:`${before.width}px`,height:`${before.height}px`,minHeight:`${before.height}px`,transform:`translate3d(${before.x-geometry.markerX}px,0,0)`},{width:`${target.width}px`,height:`${target.height}px`,minHeight:`${target.height}px`,transform:`translate3d(${x}px,0,0)`}],timing);
   // A shared two-phase clipping handoff: the row leaves BEFORE the compact
   // caption enters (the reverse on expansion). No intersecting text layers,
   // opacity fade, font scaling, DOM replacement or scroll-time seeking.
   const rowStart=beforeRowClip==='none'?fullRow:beforeRowClip;
   const toggleStart=beforeToggleClip==='none'?fullToggle:beforeToggleClip;
   const handoff=next ? 0.58 : 0.42;
-  motions=[move,skin.animate([{transform:`scale(${skinWidth/target.width},${skinHeight/target.height})`},{transform:'scale(1,1)'}],timing),
+  motions=[move,
    row.animate([{clipPath:rowStart},{clipPath:next?emptyRow:rowStart,offset:handoff},{clipPath:rowClip}],timing),
    toggle.animate([{transform:`translate(${beforeToggleX}px,${beforeToggleY}px)`},{transform:`translate(${toggleX}px,${toggleY}px)`}],timing),
    toggle.animate([{clipPath:toggleStart},{clipPath:next?toggleStart:emptyToggle,offset:handoff},{clipPath:toggleClip}],timing)];
@@ -135,7 +137,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  function render(){
   frame=0;if(dead||!ready)return;if(measureNeeded)measure();
   const g=geometry,y=win.scrollY;
-  if(!docked&&y>=g.threshold)setDocked(true);else if(docked&&y<=Math.max(0,g.threshold-24))setDocked(false);
+  if(!docked&&y>=g.threshold)setDocked(true);else if(!initiallyCompact&&docked&&y<=Math.max(0,g.threshold-24))setDocked(false);
   if(opened){placePanel();if(motions.length||settleTimer)schedule();}
   const line=y+g.context.y+g.context.height+12;let active=sectionRanges[0];for(const r of sectionRanges)if(r.top<=line)active=r;
   activeHeading=active?.heading;const text=activeHeading?.textContent.trim()||'';
@@ -163,7 +165,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
  band.__islands={get geometry(){return geometry},destroy(){dead=true;personalObserver.disconnect();cancelMotion();abort.abort();win.cancelAnimationFrame(frame);close(false);
  titleParent.insertBefore(title,titleNext);title.style.cssText=titleStyle;flow.forEach(n=>delete n.dataset.fiMobileFlow);titleSkin.remove();weekendNav?.remove();
  contextParent.insertBefore(context,contextNext);sectionParent.insertBefore(section,sectionNext);context.style.cssText=originalContextStyle;section.style.cssText='';if(pageButton)pageButton.hidden=false;
- if(!prepared){row.remove();skin.remove();}else{row.style.cssText='';row.inert=false;items.forEach(i=>i.button.inert=false);marker.style.cssText='';toggle.hidden=true;}controls.prepend(toggle);toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);if(!prepared)marker.remove();titleMarker.remove();panel.hidden=prepared;delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete doc.body.dataset.fiWeekend;delete band.__islands;}};
+ if(!prepared){row.remove();skin.remove();}else{row.style.cssText='';row.inert=false;items.forEach(i=>i.button.inert=false);marker.style.cssText='';toggle.hidden=true;}controls.prepend(toggle);if(prepared)controls.append(row);content.remove();toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);if(!prepared)marker.remove();titleMarker.remove();panel.hidden=prepared;delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete doc.body.dataset.fiWeekend;delete band.__islands;}};
  sync();ready=true;measure();render();doc.body.dataset.fiMotion='ready';
  doc.fonts.ready.then(()=>{if(!dead)schedule(true);});return band.__islands;
 }

@@ -5416,6 +5416,12 @@ public festival/club counts and native Penpot acceptance remain open.
 - **VK Auto Queue / Event Parse**: Added a conservative prefilter for obvious long historical/admin non-event VK posts before full `event_parse`; ambiguous or event-like posts still go through the normal LLM parse unchanged, reducing wasted TPM on repeated non-events.
 - **General Stats / Festivals Queue**: `/general_stats` now shows current festival queue snapshot (`total/pending/running/done/error`), active backlog (`pending+running`), and active breakdown by source (`vk/tg/url`) in addition to daily inflow.
 
+### Fixed
+- Mobile island review: city text clips to the actual eased surface bounds; Popular starts compact in static HTML/CSS rather than flashing expanded. Free event cards say only «Бесплатно» while detail conditions stay intact.
+
+### Added
+- Source-bound, preview-only mobile Date editorial draft with three real event links; extends the existing documented Weekend prototype without runtime generation or current-data claims.
+
 ## [1.12.0] - 2026-03-04
 ### Highlights
 - **Smart Update (feature bundle)**: unified create/merge pipeline for VK/TG/`/parse` with source logs, Telegraph consistency, festival-context routing, and out-of-region filtering safeguards.

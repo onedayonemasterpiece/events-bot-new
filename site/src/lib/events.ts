@@ -971,6 +971,10 @@ export function eventAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status
   return event.status_label || ticket.label || 'Условия уточняются';
 }
 
+export function eventCardAdmissionLabel(event: Pick<PreviewEvent, 'ticket' | 'status_label'>): string {
+  return event.ticket.is_free && !isTicketSoldOut(event) ? 'Бесплатно' : eventAdmissionLabel(event);
+}
+
 export function eventTicketActionLabel(event: PreviewEvent): string {
   if (isTicketSoldOut(event)) {
     return 'Билеты закончились';
