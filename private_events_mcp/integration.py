@@ -109,7 +109,9 @@ async def recover_private_event_creates(app: web.Application) -> int:
     runtime = server.event_create_runtime
     if not server.config.enabled or not server.config.event_create_enabled:
         return 0
-    return await runtime.recover_queued(authorize=runtime.authorize, limit=25)
+    from .event_create_reconciliation import EventCreateReconciler
+    recovered = await EventCreateReconciler(runtime).recover(limit=25)
+    return recovered + await runtime.recover_queued(authorize=runtime.authorize, limit=25)
 
 
 def attach_private_events_mcp(

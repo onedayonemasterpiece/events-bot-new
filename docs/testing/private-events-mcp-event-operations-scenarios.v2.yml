@@ -599,7 +599,7 @@ scenarios:
     expect: [full_contract_verified]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_private_events_mcp_event_create_recovery.py"]
+    partial_test_files: ["tests/test_private_events_mcp_event_create_recovery.py", "tests/test_private_events_mcp_event_create_reconciliation.py", "tests/test_event_operation_receipts.py"]
   - id: HT-AF-16
     layer: integration
     title: "Prompt injection/HTML/URL/private assets → no execution/SSRF/secret leak"
@@ -626,7 +626,7 @@ scenarios:
     expect: [full_contract_verified]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_private_events_mcp_event_create_recovery.py"]
+    partial_test_files: ["tests/test_private_events_mcp_event_create_recovery.py", "tests/test_private_events_mcp_event_create_reconciliation.py", "tests/test_event_operation_receipts.py"]
   - id: HT-AF-20
     layer: integration
     title: "Astro=executable SoT=Penpot на общих facts/media/state fixtures"
@@ -665,14 +665,14 @@ scenarios:
     expect: [full_contract_verified]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_private_events_mcp_partner_event_review.py", "tests/test_private_events_mcp_event_publication_receipts.py"]
+    partial_test_files: ["tests/test_private_events_mcp_partner_event_review.py", "tests/test_private_events_mcp_event_publication_receipts.py", "tests/test_private_events_mcp_partner_event_operations.py"]
   - id: MCP-HT-04
     layer: integration
     title: "Partner подготовил write → owner изменил portfolio/права или suspend/revoke → commit/refresh/queued worker запрещены до mutation boundary; другой tenant продолжает работу"
     expect: [full_contract_verified]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_private_events_mcp_partner_event_review.py"]
+    partial_test_files: ["tests/test_private_events_mcp_partner_event_review.py", "tests/test_private_events_mcp_partner_event_operations.py", "tests/test_event_operation_receipts.py"]
   - id: MCP-HT-05
     layer: integration
     title: "Existing owner/partner MCP + Telegram/VK/manual intake + старые promo activities + Codex readonly projection не регрессировали после общего release"

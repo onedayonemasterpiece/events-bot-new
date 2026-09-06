@@ -72,7 +72,7 @@ async def test_partner_oauth_image_review_acceptance_portfolio_and_receipts(conf
             async with db.get_session() as session:
                 session.add(Event(id=501,title='Isolated fixture',description='Fixture',source_text='Isolated test source',date='2099-01-01',time='19:00',location_name='Fixture'))
                 await session.commit()
-            return {'status':'accepted','event_ids':[501], 'events':[{'event_id':501,'result':'created'}], 'jobs':[]}
+            return {'status':'accepted','event_ids':[501], 'events':[{'event_id':501,'result':'created'}], 'jobs':[], 'candidate_receipts':[{'accepted_event_id':999}]}
         server.event_create_runtime.executor.create=execute
         ctx=owner(cfg, scopes=frozenset({'partners:manage'}))
         reviewed=await server.protocol.by_name['partner_event_review_get'].handler({'operation_ref':operation['operation_ref']},ctx)
@@ -87,6 +87,7 @@ async def test_partner_oauth_image_review_acceptance_portfolio_and_receipts(conf
         await server.event_create_runtime.wait_for_operation(operation['operation_ref'])
         _, got=await rpc(client,cfg.partner_mcp_path,token,'event_operation_get',{'operation_ref':operation['operation_ref']})
         assert content(got)['status']=='accepted',got
+        assert 'candidate_receipts' not in content(got)['result']
         _, portfolio=await rpc(client,cfg.partner_mcp_path,token,'partner_events_list',{})
         assert [row['id'] for row in content(portfolio)['events']]==[501]
         _, receipt=await rpc(client,cfg.partner_mcp_path,token,'event_publications_get',{'operation_ref':operation['operation_ref']})
@@ -97,6 +98,9 @@ async def test_partner_oauth_image_review_acceptance_portfolio_and_receipts(conf
             _, result=await rpc(client,cfg.partner_mcp_path,foreign,tool,arguments)
             assert result['result']['isError']
         assert len(calls)==1 and len(fetcher.calls)==1
+        server.partners.change(partners[0]['principal_id'], action='portfolio', expected_revision=1, event_ids=[])
+        _, removed=await rpc(client,cfg.partner_mcp_path,token,'event_operation_get',{'operation_ref':operation['operation_ref']})
+        assert removed['result']['isError']
     finally:
         await client.close(); await db.close()
 
@@ -155,3 +159,60 @@ async def test_queued_partner_worker_rechecks_revocation_before_executor(config,
         assert not calls
     finally:
         release.set(); await client.close(); await db.close()
+
+
+@pytest.mark.asyncio
+async def test_real_smart_update_partner_receipt_recovers_lost_completion(config,tmp_path,monkeypatch):
+    """Real parser facade/Smart Update/outbox/ledger; only semantic providers are fakes."""
+    import asyncio
+    import json
+    from datetime import date,timedelta
+    from sqlalchemy import select,func
+    import main
+    import smart_event_update as smart_update_module
+    cfg,db,app,server,client,partners,_=await setup(config,tmp_path,automatic=True)
+    future=(date.today()+timedelta(days=30)).isoformat()
+    async def parse(text,*unused,**kwargs):
+        return [{'title':'Изолированная лекция о городе','short_description':'Встреча о городской истории.',
+                 'date':future,'time':'19:00','location_name':'Музейный зал','location_address':'ул. Тестовая, 1',
+                 'city':'Калининград','event_type':'лекция'}]
+    async def topics(event): return ['LECTURES']
+    monkeypatch.setattr(main,'parse_event_via_llm',parse)
+    monkeypatch.setattr(main,'classify_event_topics',topics)
+    monkeypatch.setattr(smart_update_module,'SMART_UPDATE_LLM_DISABLED',True)
+    original_finish=server.event_create_runtime.store.finish
+    crashed=False
+    async def lose_completion(ref,**kwargs):
+        nonlocal crashed
+        if kwargs['status']=='accepted' and not crashed:
+            crashed=True
+            raise RuntimeError('simulated lost completion after committed domain receipt')
+        return await original_finish(ref,**kwargs)
+    server.event_create_runtime.store.finish=lose_completion
+    try:
+        _,tokens=await login(client,cfg,partners[0]); token=tokens['access_token']
+        request={**args(),'raw_text':f'Изолированная лекция о городе {future} в 19:00 в музейном зале, Калининград.'}
+        _,body=await rpc(client,cfg.partner_mcp_path,token,'event_create_prepare',request); prep=content(body)
+        _,body=await rpc(client,cfg.partner_mcp_path,token,'event_create_commit',
+            {**request,**{key:prep[key] for key in ('preparation_ref','action_digest','policy_revision')}})
+        operation=content(body)
+        await server.event_create_runtime.wait_for_operation(operation['operation_ref'],timeout=30)
+        await asyncio.sleep(0)
+        async with db.raw_conn() as conn:
+            row=await (await conn.execute('SELECT status,domain_receipt_json FROM event_change_log WHERE operation_ref=?',(operation['operation_ref'],))).fetchone()
+            before_jobs=(await (await conn.execute('SELECT COUNT(*) FROM joboutbox')).fetchone())[0]
+        assert row[0]=='outcome_unknown' and crashed
+        receipt=json.loads(row[1]); assert receipt['effect']=='created'
+        assert receipt['actor_subject'].startswith('partner:')
+        assert await recover_private_event_creates(app)==1
+        _,body=await rpc(client,cfg.partner_mcp_path,token,'event_operation_get',{'operation_ref':operation['operation_ref']})
+        recovered=content(body)
+        assert recovered['status']=='accepted' and recovered['event_id']==receipt['event_id']
+        assert recovered['result']['publication_state']=='reconciliation_required'
+        async with db.raw_conn() as conn:
+            assert (await (await conn.execute('SELECT COUNT(*) FROM event')).fetchone())[0]==1
+            assert (await (await conn.execute('SELECT creator_id FROM event')).fetchone())[0] is None
+            assert (await (await conn.execute('SELECT COUNT(*) FROM joboutbox')).fetchone())[0]==before_jobs
+        assert await recover_private_event_creates(app)==0
+    finally:
+        await client.close(); await db.close()

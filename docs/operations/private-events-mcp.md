@@ -412,8 +412,30 @@ never authorize recovery. Integration/reconciliation must independently enforce
 current policy, effect-specific partner assignment and honest fan-out status,
 without replaying the parser.
 
+`EventCreateReconciler` runs before queued recovery in the existing startup and
+five-minute scheduler hook. It considers only receipt-bearing unknown operations
+or processing claims older than 30 minutes, skips local active tasks, restores
+the frozen request and checks its digest, exact receipt identity, current policy,
+canonical Event and effect-specific portfolio assignment. A compare-and-set
+records domain acceptance without re-entering the parser or touching JobOutbox.
+Missing, conflicting, revoked or noncanonical proof stays unresolved. Recovery
+explicitly returns `publication_state=reconciliation_required` and
+`jobs_scope=not_reconstructed_by_domain_recovery`; fan-out repair and public
+verification are separate pending work, not silently inferred success.
+
+Partner operation reads recheck current portfolio access for accepted IDs and
+exclude global ingestion/candidate diagnostics. The adapter restricts candidate
+lookups to the operation's private correlation rather than exposing historical
+rows selected only by source URL.
+
 Tests: `tests/test_event_operation_receipts.py`, existing source-identity and
-linear-terminal regression suites.
+linear-terminal regressions, and
+`tests/test_private_events_mcp_event_create_reconciliation.py`. The real local
+OAuth integration in `tests/test_private_events_mcp_partner_event_operations.py`
+uses the actual parser facade/Smart Update with isolated semantic-provider
+fixtures, loses the completion write after domain commit, and verifies recovery
+of one Event without a Telegram creator, parser replay or duplicated jobs. This
+is domain crash acceptance, not live content/upload/publication acceptance.
 
 ## ChatGPT social workspace
 
@@ -1714,11 +1736,12 @@ client, scope/action and policy revision. No HTTP token or Telegram identity is
 manufactured for durable execution. After canonical acceptance, an atomic
 existing-portfolio insert requires one actual Event and explicit `created`
 provenance. A merge is accepted for assignment only when that exact principal
-already owns the Event. Foreign or unassigned existing merges require owner
-reconciliation, not automatic rights acquisition. An assignment failure after
+already owns the Event. Foreign or unassigned existing merges are denied inside the canonical transaction,
+not granted rights after mutation. An assignment failure after
 parser entry remains `outcome_unknown`, never a blind retry.
 
 Isolated real HTTP/OAuth/SQLite tests cover poster/review/queued worker/accepted ID,
 portfolio/receipt isolation, policy-revision conflict and suspension before the
-executor. Their executor is a deterministic fixture; these are not production
-content approval, provider-publication receipts or live upload acceptance.
+executor. The basic wiring cases use a deterministic executor; the crash-recovery case uses
+actual Smart Update with isolated semantic-provider fixtures. Neither constitutes
+production content approval, provider-publication receipts or live upload acceptance.

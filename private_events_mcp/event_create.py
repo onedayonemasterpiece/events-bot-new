@@ -8,7 +8,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any, Protocol
 from urllib.parse import urlsplit
@@ -146,6 +146,7 @@ class EventCreateRequest:
     _persisted_idempotency_hash: str | None = None
     media: tuple[EventImageRef, ...] = ()
     partner_policy_revision: int | None = None
+    _operation_ref: str | None = None
 
     def canonical_action(self) -> dict[str, Any]:
         action = {
@@ -651,6 +652,7 @@ class EventCreateRuntime:
                     error_code="EVENT_CREATE_ACCESS_REVOKED",
                 )
                 return
+            request = replace(request, _operation_ref=operation_ref)
             raw_result = await self.executor.create(request)
             result = redact_and_clip_untrusted(dict(raw_result), limit=12_000)
             raw_status = str(result.get("status") or "failed")

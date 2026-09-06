@@ -21,6 +21,8 @@ class MainEventCreateExecutor:
         from models import Event, JobOutbox, SmartUpdateCandidateState
         from smart_event_update import canonicalize_identity_url
 
+        if request.actor_subject.startswith("partner:") and request._operation_ref is None:
+            return {"status": "rejected", "error_code": "PARTNER_OPERATION_CONTEXT_REQUIRED", "event_ids": [], "jobs": []}
         media = None
         if request.media:
             from .tool_catalog import ToolExecutionError
@@ -31,6 +33,14 @@ class MainEventCreateExecutor:
             except ToolExecutionError as exc:
                 # Proven pre-parser failure, not an ambiguous post-write outcome.
                 return {"status": "rejected", "error_code": exc.error_code, "event_ids": [], "jobs": []}
+        operation_context = {}
+        if request._operation_ref is not None:
+            context = {"operation_ref": request._operation_ref, "action_digest": request.action_digest,
+                       "actor_subject": request.actor_subject, "actor_client_id": request.actor_client_id,
+                       "actor_audience": request.actor_audience}
+            if request.partner_policy_revision is not None:
+                context["partner_policy_revision"] = request.partner_policy_revision
+            operation_context["event_operation_context"] = context
         try:
             result = await main.add_events_from_text(
                 self.database,
@@ -51,6 +61,7 @@ class MainEventCreateExecutor:
                 require_single_event=True,
                 allow_festival_queue=False,
                 allow_lifecycle_actions=False,
+                **operation_context,
             )
         except main.MultiEventSourceRequiresSeparateRequests:
             return {
@@ -102,6 +113,24 @@ class MainEventCreateExecutor:
                 }
             )
 
+        if event_ids and request.actor_subject.startswith("partner:"):
+            import aiosqlite
+            from .event_create_reconciliation import verified_receipt
+            from .tool_catalog import ToolExecutionError
+            try:
+                async with self.database.raw_conn() as conn:
+                    conn.row_factory = aiosqlite.Row
+                    row = await (await conn.execute(
+                        "SELECT * FROM event_change_log WHERE operation_ref=?", (request._operation_ref,)
+                    )).fetchone()
+                receipt = verified_receipt(row, request)
+                if event_ids != [receipt["event_id"]]:
+                    raise ValueError("domain receipt does not match accepted result")
+            except Exception:
+                # Parser has run; do not claim non-acceptance or replay it.
+                raise ToolExecutionError("EVENT_DOMAIN_RECEIPT_UNVERIFIED") from None
+            events[0]["result"] = "created" if receipt["effect"] == "created" else "merged_or_replay"
+
         canonical_locator = canonicalize_identity_url(request.source_locator)
         async with self.database.get_session() as session:
             jobs = []
@@ -123,16 +152,17 @@ class MainEventCreateExecutor:
                     for job in rows
                     if job.id is not None
                 ]
-            candidate_rows = (
-                await session.execute(
-                    select(SmartUpdateCandidateState)
-                    .where(
-                        SmartUpdateCandidateState.canonical_source_url
-                        == canonical_locator
-                    )
-                    .order_by(SmartUpdateCandidateState.id.asc())
+            candidate_query = select(SmartUpdateCandidateState).where(
+                SmartUpdateCandidateState.canonical_source_url == canonical_locator
+            )
+            if request._operation_ref is not None:
+                candidate_query = candidate_query.where(
+                    SmartUpdateCandidateState.candidate_payload["event_operation_context"]["operation_ref"].as_string()
+                    == request._operation_ref
                 )
-            ).scalars().all()
+            candidate_rows = (await session.execute(
+                candidate_query.order_by(SmartUpdateCandidateState.id.asc())
+            )).scalars().all()
 
         candidate_receipts = [
             {

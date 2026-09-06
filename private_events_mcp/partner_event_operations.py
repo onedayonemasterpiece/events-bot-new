@@ -87,6 +87,18 @@ class PartnerEventOperations:
         return {**result, 'owner_review_required': 'event_create' not in grant.auto_approve,
                 'policy_revision': grant.policy_revision}
 
+    async def visible_operation(self, operation, context, *, scope):
+        event_id = operation.get('event_id')
+        await self.grant(context, scope=scope, action=None, event_id=event_id)
+        result = operation.get('result')
+        if isinstance(result, dict):
+            # Candidate/attempt diagnostics belong to the global ingestion engine,
+            # not the partner status surface, even when a source URL is shared.
+            allowed = {'status','event_ids','events','jobs','job_status_counts','error_code',
+                       'domain_recovery','publication_state','jobs_scope'}
+            operation = {**operation, 'result': {key:value for key,value in result.items() if key in allowed}}
+        return operation
+
     async def commit(self, arguments, context):
         grant = await self.grant(context)
         revision = arguments.get('policy_revision')
@@ -96,17 +108,18 @@ class PartnerEventOperations:
         self.runtime.verify_preparation(request, preparation_ref=arguments.get('preparation_ref'),
                                         action_digest=arguments.get('action_digest'))
         if 'event_create' not in grant.auto_approve:
-            return (await self.review.submit(request))['operation']
-        return await self.runtime.commit(request, preparation_ref=arguments.get('preparation_ref'),
-                                         action_digest=arguments.get('action_digest'))
+            result = (await self.review.submit(request))['operation']
+        else:
+            result = await self.runtime.commit(request, preparation_ref=arguments.get('preparation_ref'),
+                                               action_digest=arguments.get('action_digest'))
+        return await self.visible_operation(result, context, scope='partner:events:propose')
 
     async def operation_get(self, arguments, context):
         await self.grant(context, scope='partner:events:read', action=None)
         result = await self.runtime.store.get(arguments.get('operation_ref'),
             actor_subject=context.identity.subject, actor_client_id=context.identity.client_id,
             actor_audience=context.identity.audience)
-        await self.grant(context, scope='partner:events:read', action=None)
-        return result
+        return await self.visible_operation(result, context, scope='partner:events:read')
 
     async def review_get(self, arguments, context):
         self.owner(context)
