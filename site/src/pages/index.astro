@@ -38,6 +38,8 @@ for (const event of [...popular, ...fallback]) {
   familyIds.forEach((id) => offeredFamilyIds.add(id));
 }
 const heroScenes = buildHomeHeroTalkDeck(getEvents(), currentDate, `home:${currentDate}`);
+const upperHeroIds=new Set(heroScenes.map(scene=>scene.event.id));
+const endHeroScenes=buildHomeHeroTalkDeck(getEvents().filter(event=>!upperHeroIds.has(event.id)),currentDate,`home-end:${currentDate}`);
 const title = SITE_NAME;
 const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';
 ---
@@ -71,7 +73,7 @@ const description = 'Афиша Калининграда без шума: пол
         <HomeSearchEntry variant="floating-link" />
         <HomeQuickNav />
         <HomeColdStartFeed events={feed} />
-        <HeroTalkPageEnd context={{route:'home',placement:'page_end',readyCapabilities:homeSearchCapability(import.meta.env) ? ['search'] : [],upperSceneIds:heroScenes.map(scene => scene.editorialId)}} />
+        <HeroTalkPageEnd scenes={endHeroScenes} context={{route:'home',placement:'page_end',readyCapabilities:homeSearchCapability(import.meta.env) ? ['search'] : [],upperSceneIds:heroScenes.map(scene => scene.editorialId)}} />
       </div>
     </main>
   </EventLayout>

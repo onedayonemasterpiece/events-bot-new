@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{readFileSync}from'node:fs';import vm from'node:vm';
+const source=readFileSync(new URL('../src/lib/events.ts',import.meta.url),'utf8');
+const body=source.slice(source.indexOf('export function eventCalendarHref('),source.indexOf('\n}\n',source.indexOf('export function eventCalendarHref('))+2).replace('export ','').replace("event: Pick<PreviewEvent, 'id' | 'slug'>",'event').replace('): string',')');
+test('preview uses its packaged ICS even with external CDN override; production retains stable route',()=>{for(const [production,expected] of [[false,'/preview/sobytiya/example/event.ics'],[true,'https://static.example/ics/42.ics']]){const c={IS_PRODUCTION:production,IS_SECRET_CANDIDATE:false,ICS_BASE_URL:'https://static.example/ics',withBase:p=>'/preview'+p};vm.createContext(c);vm.runInContext(body,c);assert.equal(c.eventCalendarHref({id:42,slug:'example'}),expected)}});

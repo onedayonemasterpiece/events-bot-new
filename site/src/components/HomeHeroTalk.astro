@@ -5,8 +5,9 @@ import { genericHeroTalkMessage } from '../lib/heroTalkPlacement.ts';
 import { eventHref, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
-interface Props { scenes: HomeHeroTalkScene[]; }
-const { scenes } = Astro.props;
+interface Props { scenes: HomeHeroTalkScene[]; placement?: string; }
+const { scenes, placement='home_intro' } = Astro.props;
+const titleId = `home-hero-talk-title-${placement}`;
 const visibleScenes = scenes.slice(0, 4);
 const generic = genericHeroTalkMessage('home_intro');
 const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
@@ -16,15 +17,15 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   <section
     class="home-hero-talk"
     data-ds-family="HomeHeroTalk"
-    data-ds-version="2"
+    data-ds-version="3"
     data-ds-variant="editorial-scenes"
     data-ds-state="populated"
     data-floating-context-label="Анонсы"
     data-home-hero-talk
     data-scene-count={visibleScenes.length}
-    aria-labelledby="home-hero-talk-title"
+    aria-labelledby={titleId}
   >
-    <h1 id="home-hero-talk-title" class="home-hero-talk__sr-only">О чём говорит афиша</h1>
+    <h1 id={titleId} class="home-hero-talk__sr-only">О чём говорит афиша</h1>
     <div class="home-hero-talk__stage" data-home-hero-stage>
       {visibleScenes.map((scene, sceneIndex) => {
         const asset = scene.asset;
@@ -57,16 +58,16 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
                         data-fragment-index={fragmentIndex}
                         style={`--fragment-delay:${100 + fragmentIndex * 185}ms`}
                         href={eventHref(scene.event)}
-                        aria-label={`${fragment.text} Открыть событие «${scene.event.title}»`}
+                        aria-label={`${fragment.text.split(/(\s+)/u).map((word, wordIndex, words) => /^\s+$/u.test(word) ? word : <span class="home-hero-talk__word" style={`--word-delay:${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)}ms`}>{word}</span>)} Открыть событие «${scene.event.title}»`}
                         tabindex={sceneIndex === 0 ? '0' : '-1'}
-                      >{fragment.text}</a>
+                      >{fragment.text.split(/(\s+)/u).map((word, wordIndex, words) => /^\s+$/u.test(word) ? word : <span class="home-hero-talk__word" style={`--word-delay:${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)}ms`}>{word}</span>)}</a>
                     ) : (
                       <span
                         class:list={['home-hero-talk__fragment', fragment.accent && 'home-hero-talk__fragment--accent']}
                         data-home-hero-fragment
                         data-fragment-index={fragmentIndex}
                         style={`--fragment-delay:${100 + fragmentIndex * 185}ms`}
-                      >{fragment.text}</span>
+                      >{fragment.text.split(/(\s+)/u).map((word, wordIndex, words) => /^\s+$/u.test(word) ? word : <span class="home-hero-talk__word" style={`--word-delay:${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)}ms`}>{word}</span>)}</span>
                     )}
                     {fragment.breakAfter ? <br /> : ' '}
                   </>
@@ -104,11 +105,11 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
 
 {visibleScenes.length === 0 && (
   <section class="home-hero-talk home-hero-talk--generic" data-home-hero-talk data-scene-count="0"
-    data-ds-family="HomeHeroTalk" data-ds-version="2" data-ds-variant="service-fallback" data-ds-state="generic"
-    aria-labelledby="home-hero-talk-title">
+    data-ds-family="HomeHeroTalk" data-ds-version="3" data-ds-variant="service-fallback" data-ds-state="generic"
+    aria-labelledby={titleId}>
     <div class="home-hero-talk__scene">
       <div class="home-hero-talk__generic-copy">
-        <h1 id="home-hero-talk-title">{generic.fragments.map(fragment => fragment.text).join(' ')}</h1>
+        <h1 id={titleId}>{generic.fragments.map(fragment => fragment.text).join(' ')}</h1>
         <p>{generic.description}</p>
         <Button variant="quiet" href={withBase(generic.action.path)}>{generic.action.label}</Button>
       </div>
@@ -197,9 +198,9 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   }
   .home-hero-talk__media.is-present .home-hero-talk__tile { opacity:var(--tile-opacity); }
   .home-hero-talk__media.is-entering .home-hero-talk__tile { opacity:0;transition:none; }
-  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__fragment {
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__word {
     opacity:0;transform:translateY(.28em);filter:blur(1px);
-    animation:home-hero-fragment-in 340ms cubic-bezier(.16,1,.3,1) var(--fragment-delay) forwards;
+    animation:home-hero-fragment-in 240ms cubic-bezier(.16,1,.3,1) var(--word-delay) forwards;
   }
   .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__fragment:last-of-type::after {
     content:"";display:inline-block;width:.11em;height:.78em;margin-left:.08em;background:var(--ke-color-action-primary);
@@ -218,12 +219,12 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     .home-hero-talk__scene { padding-inline:1rem; }
     .home-hero-talk__message { width:100%;max-width:none;align-self:center;margin:0; }
     .home-hero-talk__message h2 { max-width:20ch;font-size:var(--ke-type-display-home-size-compact);line-height:1; }
-    .home-hero-talk__media { display:none; }
+    .home-hero-talk__media { display:block; width:100vw; height:calc(100vw / 3.6); top:65%; right:0; }
   }
   @media (prefers-reduced-motion:reduce) {
     .home-hero-talk__scene:not(:first-child) { display:none!important; }
     .home-hero-talk__scene:first-child { position:relative!important;opacity:1!important;visibility:visible!important; }
-    .home-hero-talk__fragment { animation:none!important;opacity:1!important;transform:none!important;filter:none!important; }
+    .home-hero-talk__word, .home-hero-talk__fragment { animation:none!important;opacity:1!important;transform:none!important;filter:none!important; }
     .home-hero-talk__fragment::after { display:none!important; }
     .home-hero-talk__tile { transition:none!important;opacity:var(--tile-opacity,0)!important; }
   }
@@ -264,7 +265,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
       return (hash>>>0)/4294967295;
     };
     const nearestLevel = (value:number) => LEVELS.reduce((best,level) => Math.abs(level-value)<Math.abs(best-value)?level:best,LEVELS[0]);
-    const columnsForViewport = () => window.innerWidth>=1792?20:window.innerWidth>=1536?18:16;
+    const columnsForViewport = () => window.innerWidth>=1792?20:window.innerWidth>=1536?18:window.innerWidth<1024?8:16;
     const decodeImage = async (image:HTMLImageElement) => {
       if (!image.complete || !image.naturalWidth) await new Promise<void>((resolve,reject) => {
         const timer=window.setTimeout(()=>reject(new Error('image timeout')),4000);
@@ -291,7 +292,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
       const mosaic=scene.querySelector<HTMLElement>('[data-home-hero-mosaic]');
       const image=scene.querySelector<HTMLImageElement>('[data-home-hero-image]');
       const allTiles=[...scene.querySelectorAll<HTMLElement>('[data-home-hero-tile]')];
-      if(!media||!mosaic||!image||window.innerWidth<1024) return false;
+      if(!media||!mosaic||!image) return false;
       try { await decodeImage(image); } catch { media.hidden=true;return false; }
       const columns=columnsForViewport(),activeCount=columns*5,scenario=scene.dataset.editorialId||'scene';
       media.style.setProperty('--mosaic-columns',String(columns));mosaic.style.setProperty('--mosaic-columns',String(columns));

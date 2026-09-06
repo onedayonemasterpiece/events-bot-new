@@ -2639,6 +2639,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         body[data-shell-composition="home-navigation-only"] .site-header__brand-tag { display:none; }
       }
       body.mobile-shell-reference4[data-mobile-bottom-mode="nav"][data-shell-composition="home-navigation-only"] > main { padding-top:0; }
+      body.mobile-shell-reference4[data-shell-composition="home-navigation-only"] .site-footer { display:block!important; }
       body[data-primary-island="true"] :is(main a, main button, main input, main textarea, main [tabindex]) { scroll-margin-block-end:calc(max(var(--ke-lower-surface-offset, 0px), var(--mobile-bottom-stack-h, 84px)) + var(--ke-space-4)); }
       body[data-lower-surface-state="keyboard"] .mobile-bottom-nav { visibility:hidden; pointer-events:none; }
     </style>
@@ -3199,7 +3200,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               markCalendarAdded(eventId, expiryDay);
               syncCalendarControls();
             } catch (_) {
-              fallbackCalendarNavigation(anchor);
+              showMobileActionToast('Не удалось получить календарь. Попробуйте ещё раз.', 'error', `calendar-error-${eventId}`);
             } finally {
               delete anchor.dataset.calendarPending;
             }
@@ -5403,6 +5404,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         async function applyFeedbackState(options = {}) {
+          const homeAction = options.anchorEventId != null && document.querySelector(`[data-home-feed-grid] > [data-event-id="${CSS.escape(String(options.anchorEventId))}"]`);
+          const readingY = homeAction ? scrollY : null;
           const profile = readProfile();
           syncCardsFeedbackState(profile);
           if (!options.skipDiscoveryHydration) {
@@ -5411,6 +5414,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           syncListingPersonalFilter();
           renderFeedbackReport();
           window.KenigEventsHomeCardHost?.sync('feedback');
+          if (readingY !== null) requestAnimationFrame(() => {
+            if (scrollY !== readingY) scrollTo({top:readingY,behavior:'instant'});
+          });
         }
 
         window.applyFeedbackState = applyFeedbackState;

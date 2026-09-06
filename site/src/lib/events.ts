@@ -241,7 +241,7 @@ export function eventAbsoluteUrl(event: Pick<PreviewEvent, 'slug'>): string {
 export function eventCalendarHref(event: Pick<PreviewEvent, 'id' | 'slug'>): string {
   // A bearer-link candidate must be self-contained.  It may never mutate or
   // point at stable production /ics keys while it is under review.
-  if (IS_SECRET_CANDIDATE) return withBase(`/sobytiya/${event.slug}/event.ics`);
+  if (!IS_PRODUCTION || IS_SECRET_CANDIDATE) return withBase(`/sobytiya/${event.slug}/event.ics`);
   if (ICS_BASE_URL) return `${ICS_BASE_URL}/${event.id}.ics`;
   return withBase(`/sobytiya/${event.slug}/event.ics`);
 }

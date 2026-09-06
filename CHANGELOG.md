@@ -14,6 +14,8 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Home Hero word timing and mobile mosaic rendering; page-end reuses the animated Hero renderer with a separate event deck.
+- Home voice-review fixes: preview calendar links use packaged ICS, failed downloads stay on page, and feedback reconciliation preserves reading position.
 - Shared “Афиша” bottom navigation returns Home; mobile menu exposes an explicit “Главная” link.
 - Latest Home review: Hero starts at page top with internal mobile menu clearance and a floating Search link replaces the inline input; shared desktop/mobile navigation remains.
 - Home keeps shared desktop navigation island and mobile Reference4 menu; only contextual upper islands are suppressed.

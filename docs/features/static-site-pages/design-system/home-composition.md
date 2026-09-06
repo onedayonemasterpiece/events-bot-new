@@ -82,3 +82,13 @@ Shared bottom “Афиша” links to the base-prefixed Home `/`, not Popular.
 ## Preview validation boundary
 
 The 2026-09-06 all-pages candidate `da3ea046` built successfully but failed `check:unified-prototype`: the 300-event real slice contained no bus-navigation specimen. It was not published. Home review uses the existing bounded page-class rail (event/date/weekend/collection/personal/partner) and `check:preview-slice`; the full-site transportation gate is unchanged and remains unverified for this corpus. This is not production/full-site acceptance.
+
+## Voice review 2026-09-06 22:01–22:08
+
+Source: IdeaHub `0ad65c3725b88a2cd9791be7fc539708c0055740`, `inbox/voice/2026/09/voice-20260906-220155-703a0cf7.md` (full transcript, not inferred summary).
+
+In progress: calendar 404; negative-feedback scroll stability; approved voice Search destination/icon; two-column rectangular quick links; honest feed label/badge; mobile Hero imagery/word timing; shared animated page-end; footer/lower-shadow consistency. Footer docking remains a proposed behavior, not silent acceptance.
+
+Reproduced on published b7431426: event8339 calendar href points to CDN root `/8339.ics`, HTTP404. Negative feedback hides the card in a valid fresh local profile but changes scroll position; preserve reading position during feedback reconciliation. Preview calendars now reference packaged event.ics; download failures show an error rather than navigate to known failed URL. Actual OS calendar insertion cannot be confirmed by browser download alone.
+
+Hero review implementation (not yet rendered acceptance): HomeHeroTalk v3 reveals words at 190ms intervals instead of animating an entire catalog-title fragment at once. Mobile media CSS and runtime no longer exclude mosaic; crop/face/upscale guards remain. HeroTalkPageEnd v2 reuses the same renderer with a separately seeded catalog deck excluding upper event IDs. Reduced-motion remains static. This supersedes the compact-only page-end target for Home.

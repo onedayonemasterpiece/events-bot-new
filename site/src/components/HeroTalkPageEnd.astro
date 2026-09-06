@@ -1,16 +1,18 @@
 ---
+import HomeHeroTalk from './HomeHeroTalk.astro';
+import type {HomeHeroTalkScene} from '../lib/homeHeroTalk';
 import Button from './design-system/Button.astro';
 import { withBase } from '../lib/events';
 import { HERO_TALK_PLACEMENT_VERSION, resolveHeroTalkPlacement, type HeroTalkMessage, type HeroTalkPlacementContext } from '../lib/heroTalkPlacement.ts';
-interface Props { context: HeroTalkPlacementContext & { placement: 'page_end' }; nextStep?: HeroTalkMessage; }
-const { context, nextStep } = Astro.props;
+interface Props { context: HeroTalkPlacementContext & { placement: 'page_end' }; nextStep?: HeroTalkMessage; scenes?: HomeHeroTalkScene[]; }
+const { context, nextStep, scenes } = Astro.props;
 const message = resolveHeroTalkPlacement(context, nextStep);
 const titleId = `hero-talk-page-end-${context.route}`;
 ---
-{message && (
+{scenes ? <section data-hero-talk-page-end data-hero-talk-placement="page_end" data-ds-family="HeroTalkPageEnd" data-ds-version="2" data-ds-variant="animated-scenes" data-ds-state="service-continuation"><HomeHeroTalk scenes={scenes} placement="page_end" /></section> : message && (
   <section class="hero-talk-page-end" data-hero-talk-page-end data-hero-talk-placement="page_end"
     data-hero-talk-message-id={message.id} data-hero-talk-context-version={HERO_TALK_PLACEMENT_VERSION}
-    data-hero-talk-route={context.route} data-ds-family="HeroTalkPageEnd" data-ds-version="1"
+    data-hero-talk-route={context.route} data-ds-family="HeroTalkPageEnd" data-ds-version="2"
     data-ds-variant="compact-service" data-ds-state="service-continuation" aria-labelledby={titleId}>
     <div class="hero-talk-page-end__copy">
       <h2 id={titleId}>{message.fragments.map(fragment => <span>{fragment.text} </span>)}</h2>

@@ -2304,7 +2304,7 @@
     },
     {
       "id": "HomeHeroTalk",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
@@ -3679,20 +3679,22 @@
     },
     {
       "id": "HeroTalkPageEnd",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HeroTalkPageEnd.astro",
       "style_owners": [
         "site/src/components/HeroTalkPageEnd.astro"
       ],
       "variants": [
-        "compact-service"
+        "compact-service",
+        "animated-scenes"
       ],
       "states": [
         "service-continuation",
         "suppressed"
       ],
       "nested_families": [
-        "Button"
+        "Button",
+        "HomeHeroTalk"
       ],
       "runtime_factories": [],
       "runtime_clients": [],

@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "4c0b3129d453f2c70ba3f25a0f4dc92fbb1c74d6dc36a683dac4b15f9b24a7f3",
+  "registry_sha256": "6cf7d793df69545761058158e0f185d72c690b41b17acd97353800abe814c250",
   "source_root": "site/src",
-  "import_inventory_sha256": "8342d40c474e4541e0a578e3214ab7064f0ba0800bd5b961f21ca4dfc64b0a2a",
+  "import_inventory_sha256": "757ae7b87705b6c89a1ea4b2cd33ac564b9fa3f3442bbc5774a26dbbb38afce7",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -421,8 +421,8 @@
     "product_family_count": 110,
     "family_count": 112,
     "source_file_count": 355,
-    "import_edge_count": 905,
-    "direct_consumer_edges": 286,
+    "import_edge_count": 907,
+    "direct_consumer_edges": 287,
     "protocol_consumer_edges": 33,
     "runtime_factory_edges": 2,
     "runtime_consumer_edges": 9,
@@ -3571,21 +3571,24 @@
       ]
     },
     "HomeHeroTalk": {
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
       ],
       "direct_component_consumers": [
+        "site/src/components/HeroTalkPageEnd.astro",
         "site/src/pages/index.astro",
         "site/src/pages/lab/design-system/index.astro"
       ],
       "direct_style_consumers": [
+        "site/src/components/HeroTalkPageEnd.astro",
         "site/src/pages/index.astro",
         "site/src/pages/lab/design-system/index.astro"
       ],
       "protocol_consumers": [],
       "direct_consumers": [
+        "site/src/components/HeroTalkPageEnd.astro",
         "site/src/pages/index.astro",
         "site/src/pages/lab/design-system/index.astro"
       ],
@@ -6669,7 +6672,7 @@
       ]
     },
     "HeroTalkPageEnd": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HeroTalkPageEnd.astro",
       "style_owners": [
         "site/src/components/HeroTalkPageEnd.astro"
