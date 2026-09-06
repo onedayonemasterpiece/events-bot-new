@@ -41,7 +41,7 @@ class LifecycleAction:
             raise LifecycleOperationError('action_invalid')
         if not isinstance(self.base_event_revision, str) or not re.fullmatch(r'[a-f0-9]{64}', self.base_event_revision):
             raise LifecycleOperationError('revision_invalid')
-        if any(not isinstance(value, str) or not value.strip() or len(value) > 2048 for value in
+        if any(not isinstance(value, str) or not value.strip() or len(value) > 2048 or any(ord(char) < 32 or ord(char) == 127 for char in value) for value in
                (self.actor_subject, self.actor_client_id, self.actor_audience)):
             raise LifecycleOperationError('actor_invalid')
         return {'schema': 'event-lifecycle-action-v1', **asdict(self)}
@@ -75,7 +75,8 @@ def apply_lifecycle_operation(database_path: str | Path, *, operation_ref: str,
     """
     payload = action.payload()
     digest = action.digest
-    if expected_action_digest != digest or not isinstance(operation_ref, str) or not operation_ref:
+    if (expected_action_digest != digest or not isinstance(operation_ref, str)
+            or re.fullmatch(r'evt_op_[A-Za-z0-9_-]{20,120}', operation_ref) is None):
         raise LifecycleOperationError('action_digest_conflict')
     if not callable(authorize) or not callable(verify_review):
         raise LifecycleOperationError('authorization_required')
@@ -125,7 +126,7 @@ def apply_lifecycle_operation(database_path: str | Path, *, operation_ref: str,
         if current_revision != action.base_event_revision or event['lifecycle_status'] != 'active':
             raise LifecycleOperationError('event_revision_conflict')
         if (ledger['before_json'] or ledger['after_json'] or ledger['result_event_revision']
-                or ledger['changed_fields_json'] or ledger['domain_receipt_json']):
+                or ledger['changed_fields_json'] or ledger['domain_receipt_json'] or ledger['result_json']):
             raise LifecycleOperationError('operation_history_conflict')
         before = {'lifecycle_status': event['lifecycle_status']}
         after = {'lifecycle_status': target_status}
