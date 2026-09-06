@@ -1,16 +1,19 @@
 ---
 import Button from './design-system/Button.astro';
 import Field from './design-system/Field.astro';
-import {withBase} from '../lib/events';
+import {mobileDiscoveryHref} from '../lib/mobileDiscoveryRoutes';
+import {BASE_PATH,withBase} from '../lib/events';
 import {homeSearchCapability} from '../lib/assistant/homeSearchCapability';
 interface Props { variant?: 'inline-capture' | 'floating-link'; }
 const {variant='inline-capture'}=Astro.props;
 const enabled=homeSearchCapability(import.meta.env);
+const searchHref=mobileDiscoveryHref('/poisk/',{searchBase:import.meta.env.PUBLIC_MOBILE_SEARCH_BASE_URL},BASE_PATH);
 ---
 {variant === 'floating-link' ? (
-  <a class="home-search-launcher" href={withBase('/poisk/')} aria-label="Поиск событий — голосом или текстом"
+  <a class="home-search-launcher" href={searchHref} aria-label="Поиск событий — голосом или текстом"
     data-home-search-launcher data-ds-family="HomeSearchEntry" data-ds-version="2" data-ds-variant="floating-link" data-ds-state="ready">
-    <img src={withBase('/assets/icons/reference4-v8/search-thin.svg')} width="28" height="28" alt="" />
+    <!-- Reused verbatim from approved ConversationalSearch launcher, not a new icon drawing. -->
+    <svg class="assistant__mic-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg>
   </a>
 ) : <section class="home-search-entry" data-home-search-entry data-ds-family="HomeSearchEntry" data-ds-version="2" data-ds-variant="inline-capture" data-ds-state={enabled?'signed-out':'disabled'} data-search-enabled="false" data-home-search-state={enabled?'signed-out':'disabled'} data-capability={String(enabled)} data-prefix={withBase('/')} data-worklet={withBase('/voice/pcm-capture-worklet.js')} data-supabase-url={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL||''} data-supabase-relay-url={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL||''} data-supabase-key={import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY||''} data-yandex-provider={import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER||'custom:yandex'}>
   <form data-home-form>
@@ -32,7 +35,7 @@ const enabled=homeSearchCapability(import.meta.env);
  for(const root of document.querySelectorAll<HTMLElement>('[data-home-search-entry]')) void mountHomeSearchEntry(root);
 </script>
 <style>
- .home-search-launcher{position:fixed;z-index:39;right:max(var(--ke-space-3),env(safe-area-inset-right));bottom:calc(max(var(--ke-lower-surface-offset,84px),84px) + var(--ke-space-3));width:56px;height:56px;display:grid;place-items:center;border-radius:var(--ke-radius-pill);background:var(--ke-color-mobile-nav-surface);border:1px solid var(--ke-color-mobile-nav-border);box-shadow:var(--ke-elevation-mobile-nav)}
+ .home-search-launcher{position:fixed;z-index:39;right:max(var(--ke-space-3),env(safe-area-inset-right));bottom:calc(max(var(--ke-lower-surface-offset,84px),84px) + var(--ke-space-3));width:56px;height:56px;display:grid;place-items:center;border-radius:var(--ke-radius-pill);background:var(--ke-color-mobile-nav-surface);border:1px solid var(--ke-color-mobile-nav-border);box-shadow:var(--ke-elevation-mobile-nav);color:var(--ke-color-action-primary)}
  :global(body[data-lower-surface-state="modal"]) .home-search-launcher,:global(body[data-lower-surface-state="keyboard"]) .home-search-launcher{visibility:hidden;pointer-events:none}
 
  .home-search-entry:not([data-home-ready]) form{visibility:hidden}
