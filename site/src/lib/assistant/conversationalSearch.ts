@@ -30,6 +30,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   if(root.dataset.assistantBound==='true')return;root.dataset.assistantBound='true';
   if(root.dataset.assistantCatalog==='true')return;
   const captureOnly=root.dataset.assistantCaptureOnly==='true';
+  const cleanUi=root.dataset.assistantCleanUi==='true';
   const search=root.closest<HTMLElement>('[data-authorized-search]');if(!search)return;
   const get=<T extends HTMLElement>(name:string)=>root.querySelector<T>(`[data-assistant-${name}]`)!;
   const quick=root.querySelector<HTMLInputElement>('[data-assistant-quick-input]');
@@ -130,7 +131,8 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     const grid=entry.element.querySelector<HTMLElement>('[data-assistant-cards]')!;
     const maker=host.KenigEventsCreateEventCard;const media=host.KenigEventsResolveMobileEventCardMedia;
     if(!maker||!media){processing.textContent='Ответ сохранён, но общий компонент карточек не загрузился. Обновите страницу.';return;}
-    const items=entry.result.items.slice(entry.count,entry.count+12);
+    // Clean conversation answers have no pagination footer; keep every returned card reachable.
+    const items=entry.result.items.slice(entry.count,cleanUi?undefined:entry.count+12);
     for(const [index,candidate]of items.entries()){
       const rank=entry.count+index;const card=maker({candidate,rank,personal_score:candidate.semantic_score||candidate.base_similarity||0},'split-actions',media(candidate));
       if(!card)continue;card.dataset.assistantSectionId=entry.result.id;card.dataset.servedListId=entry.result.served_list_id||'';
@@ -153,12 +155,14 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     body.append(node('p',result.answer||''));
     const grid=node('div');grid.className='cards-grid cards-grid--immersive';grid.dataset.assistantCards='';body.append(grid);
     const entry={element:section,result,count:0,ids:[] as string[]};rendered.set(result.id,entry);
-    const more=button('Показать ещё',()=>appendCards(entry));more.dataset.assistantMore='';body.append(more);
-    const controls=node('div');controls.className='assistant__controls';
-    controls.append(button(result.clarification?'Ответить на уточнение':'Уточнить эту подборку',()=>chooseBase(result,result.clarification?'expand_selection':'refine_selection')),
-      button('Изменить условия и искать заново',()=>chooseBase(result,'expand_selection')),button('Спросить о событии',()=>chooseBase(result,'explain_selection')));
-    body.append(controls);
-    if(result.membership_complete!==true&&!result.clarification&&result.explanationKind==='none'){const coverage=node('details');coverage.append(node('summary','Об этой подборке'),node('p','Это ограниченная подборка, не весь каталог. «Уточнить эту подборку» проверяет её события; обычное новое сообщение ищет по каталогу с учётом контекста.'));body.append(coverage);}
+    if(!cleanUi){
+      const more=button('Показать ещё',()=>appendCards(entry));more.dataset.assistantMore='';body.append(more);
+      const controls=node('div');controls.className='assistant__controls';
+      controls.append(button(result.clarification?'Ответить на уточнение':'Уточнить эту подборку',()=>chooseBase(result,result.clarification?'expand_selection':'refine_selection')),
+        button('Изменить условия и искать заново',()=>chooseBase(result,'expand_selection')),button('Спросить о событии',()=>chooseBase(result,'explain_selection')));
+      body.append(controls);
+      if(result.membership_complete!==true&&!result.clarification&&result.explanationKind==='none'){const coverage=node('details');coverage.append(node('summary','Об этой подборке'),node('p','Это ограниченная подборка, не весь каталог. «Уточнить эту подборку» проверяет её события; обычное новое сообщение ищет по каталогу с учётом контекста.'));body.append(coverage);}
+    }
     if(!section.isConnected)answers.append(section);appendCards(entry);visibility.observe(section);scheduleViewed();
     latest=result.id;get('latest').hidden=section.getBoundingClientRect().top>=0&&section.getBoundingClientRect().top<innerHeight;get('history')?.removeAttribute('hidden');
     if(scroll){presentation?.enterConversation();section.scrollIntoView({block:'start'});}
@@ -352,7 +356,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=false;
       const saved=await store.page<StoredAnswer>('answers',owner,undefined,10);
       if(epoch!==generation)return;
-      for(const row of root.dataset.assistantCleanUi==='true'?[]:saved.reverse()){
+      for(const row of cleanUi?[]:saved.reverse()){
         try{const fresh=await api.status(owner,row.id);if(epoch!==generation)return;if(fresh.state==='completed')renderAnswer(fresh.result);}
         catch{if(epoch!==generation)return;processing.textContent='История сохранена на устройстве, но актуальность событий пока не проверена. Карточки не показаны как текущие.';}
       }
