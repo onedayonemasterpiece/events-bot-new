@@ -133,7 +133,7 @@ export function bindHomeFeeds() {
         root.dataset.homeStablePrefix = 'true';
         root.dataset.dsState = `${mode} ${next.visible ? 'populated' : 'empty'}`;
         const status = root.querySelector('[data-home-feed-status]');
-        if (status) status.textContent = personalized ? 'С учётом ваших интересов' : 'Общая подборка';
+        if (status) status.textContent = personalized ? 'По вашим действиям на сайте' : 'Общая подборка';
         const empty = root.querySelector<HTMLElement>('[data-home-feed-empty]');
         if (empty) empty.hidden = next.visible > 0;
         markObserved(); save();

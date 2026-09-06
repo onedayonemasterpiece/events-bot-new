@@ -3198,7 +3198,18 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               const blob = await response.blob();
               triggerCalendarDownload(blob, eventId);
               markCalendarAdded(eventId, expiryDay);
+              const card = anchor.closest('[data-event-card]');
+              const {store} = await controllerForCard(card);
+              const profile = activeProfile(store?.manifest);
+              if (profile && !eventState(profile,eventId).liked) {
+                const candidate = store ? candidateById(store,eventId) : null;
+                const next = updateProfileForAction(profile,eventId,'like_event',candidate);
+                saveProfile(next);
+                appendLog(createStrongAction('like_event',card && store ? cardRankedItem(card,store) : {event_id:Number(eventId),rank:null},contextForCard(card),{action:'like_event',source:'calendar'}),next);
+                await applyFeedbackState({anchorEventId:eventId});
+              }
               syncCalendarControls();
+              showMobileActionToast(profile ? 'Файл календаря готов. Событие в избранном.' : 'Файл календаря готов. Откройте его для добавления.', 'success', `calendar-${eventId}`);
             } catch (_) {
               showMobileActionToast('Не удалось получить календарь. Попробуйте ещё раз.', 'error', `calendar-error-${eventId}`);
             } finally {

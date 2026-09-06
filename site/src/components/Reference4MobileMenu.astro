@@ -54,7 +54,7 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('squares-four-thin.svg')}')`}></span></span><span>Подборки</span><i aria-hidden="true"></i>
           </button>
           <a class="reference4-menu__row" href={route('/vystavki/')} aria-current={isCurrent('exhibitions') ? 'page' : undefined}>
-            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('palette-thin.svg')}')`}></span></span><span>Выставки</span><i aria-hidden="true"></i>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('palette-thin.svg')}')`}></span></span><span>Выставки{badge?.key === 'exhibitions' && <small class="reference4-menu__section-badge"> · {badge.text}</small>}</span><i aria-hidden="true"></i>
           </a>
           <a class="reference4-menu__row" href={route('/festivali/')} aria-current={isCurrent('festivals') ? 'page' : undefined}>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('buildings-thin.svg')}')`}></span></span><span>Фестивали</span><i aria-hidden="true"></i>

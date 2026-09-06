@@ -30,7 +30,7 @@ test('synthetic DOM: outside-30 materialization, stable observed prefix, family 
     await bind();
     const ids=()=>page.locator('[data-home-feed-item]:not([hidden])').evaluateAll(nodes=>nodes.map(x=>x.dataset.eventId));
     assert.equal((await ids())[0],'41');assert.equal((await ids()).length,30);
-    assert.equal(await page.locator('[data-home-feed-status]').textContent(),'С учётом ваших интересов');
+    assert.equal(await page.locator('[data-home-feed-status]').textContent(),'По вашим действиям на сайте');
     await page.evaluate(()=>scrollTo(0,1100));await page.waitForTimeout(80);
     const before=await ids();
     await page.evaluate(()=>{

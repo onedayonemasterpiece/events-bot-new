@@ -32,7 +32,7 @@
   --ke-color-mobile-nav-inactive: #766b62;
   --ke-color-mobile-nav-active: var(--ke-color-text-primary);
   --ke-color-mobile-nav-active-icon-surface: color-mix(in srgb, var(--ke-color-text-primary) 8%, transparent);
-  --ke-elevation-mobile-nav: 0 -9px 24px rgba(72, 45, 25, 0.07);
+  --ke-elevation-mobile-nav: 0 12px 26px rgba(72, 45, 25, 0.20), 0 3px 8px rgba(72, 45, 25, 0.12), 0 -3px 14px rgba(72, 45, 25, 0.06);
   --ke-mobile-nav-icon-size: var(--ke-icon-size-control);
   --ke-mobile-nav-icon-container-width: 38px;
   --ke-mobile-nav-icon-container-height: 28px;

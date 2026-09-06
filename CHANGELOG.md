@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Shared lower-island shadow, contextual exhibition badge in mobile menu, and clearer Home feed labels.
 - Home Hero word timing and mobile mosaic rendering; page-end reuses the animated Hero renderer with a separate event deck.
 - Home voice-review fixes: preview calendar links use packaged ICS, failed downloads stay on page, and feedback reconciliation preserves reading position.
 - Shared “Афиша” bottom navigation returns Home; mobile menu exposes an explicit “Главная” link.
