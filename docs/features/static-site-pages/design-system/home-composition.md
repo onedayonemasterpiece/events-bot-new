@@ -74,3 +74,11 @@ Focused fixture results do not prove the published route, live voice/ASR,
 authenticated personalization, native keyboard behavior or Penpot conformance.
 The integration owner synchronizes registry/catalog/SoT, CHANGELOG, and immutable
 preview acceptance for this delivery; no standalone component publication.
+
+## Return to Home
+
+Shared bottom “Афиша” links to the base-prefixed Home `/`, not Popular. Mobile Reference4 also exposes an explicit “Главная” link in addition to its linked brand. Popular remains a separate destination.
+
+## Preview validation boundary
+
+The 2026-09-06 all-pages candidate `da3ea046` built successfully but failed `check:unified-prototype`: the 300-event real slice contained no bus-navigation specimen. It was not published. Home review uses the existing bounded page-class rail (event/date/weekend/collection/personal/partner) and `check:preview-slice`; the full-site transportation gate is unchanged and remains unverified for this corpus. This is not production/full-site acceptance.

@@ -68119,7 +68119,7 @@
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 226,
+          "line": 230,
           "scope": "@media (max-width:759px) > body.mobile-shell-reference4 .mobile-discovery-menu--reference4",
           "kind": "css",
           "value": "cubic-bezier(.22,.86,.32,1)",
@@ -68142,7 +68142,7 @@
         {
           "token": "--drawer-ease",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 230,
+          "line": 234,
           "has_fallback": false
         },
         {
@@ -76465,13 +76465,13 @@
         {
           "token": "--ke-color-background-header",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 165,
+          "line": 169,
           "has_fallback": false
         },
         {
           "token": "--ke-color-background-header",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 195,
+          "line": 199,
           "has_fallback": false
         },
         {
@@ -84548,7 +84548,7 @@
         {
           "token": "--ke-color-canvas",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 187,
+          "line": 191,
           "has_fallback": false
         },
         {
@@ -88464,13 +88464,13 @@
         {
           "token": "--ke-color-copy",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 166,
+          "line": 170,
           "has_fallback": false
         },
         {
           "token": "--ke-color-copy",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 191,
+          "line": 195,
           "has_fallback": false
         },
         {
@@ -100055,13 +100055,13 @@
         {
           "token": "--ke-color-background-header",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 165,
+          "line": 169,
           "has_fallback": false
         },
         {
           "token": "--ke-color-background-header",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 195,
+          "line": 199,
           "has_fallback": false
         },
         {
@@ -103687,25 +103687,13 @@
         {
           "token": "--ke-color-line",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 162,
+          "line": 166,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 185,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-line",
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 198,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-line",
-          "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 199,
+          "line": 189,
           "has_fallback": false
         },
         {
@@ -103717,13 +103705,25 @@
         {
           "token": "--ke-color-line",
           "path": "site/src/components/Reference4MobileMenu.astro",
+          "line": 203,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-line",
+          "path": "site/src/components/Reference4MobileMenu.astro",
           "line": 206,
           "has_fallback": false
         },
         {
           "token": "--ke-color-line",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 208,
+          "line": 210,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-line",
+          "path": "site/src/components/Reference4MobileMenu.astro",
+          "line": 212,
           "has_fallback": false
         },
         {
@@ -162162,7 +162162,7 @@
         {
           "token": "--ke-radius-lg",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 186,
+          "line": 190,
           "has_fallback": false
         },
         {
@@ -164531,7 +164531,7 @@
         {
           "token": "--ke-shadow-3",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 188,
+          "line": 192,
           "has_fallback": false
         },
         {
@@ -184022,7 +184022,7 @@
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 100,
+          "line": 102,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('handshake-thin.svg')",
@@ -184031,7 +184031,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 103,
+          "line": 105,
           "scope": "></span></span><span>Стать партнёром</span><i aria-hidden=\"true\"></i> </a> <a class=\"reference4-menu__row\" href=\"mailto:info@kenigevents.ru?subject=Правообладателям\"> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('handshake-thin.svg')",
@@ -184040,7 +184040,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 126,
+          "line": 128,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('heart-thin.svg')",
@@ -184049,7 +184049,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 138,
+          "line": 140,
           "scope": "></span></span><span>Избранное</span> </a> </div> <span class=\"sr-only\" data-static-auth-status role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></span> <button class=\"reference4-menu__share\" type=\"button\" data-service-share-button data-service-share-intent=\"mobile\" aria-label=\"Поделиться анонсами KenigEvents\" aria-describedby=\"reference4-service-share-status\" aria-busy=\"false\" ><span>Поделиться</span><span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('share-network-thin.svg')",
@@ -184058,7 +184058,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 52,
+          "line": 54,
           "scope": "₽</span><span>Бесплатно</span><i aria-hidden=\"true\"></i> </a> <button class=\"reference4-menu__row reference4-menu__row--collections\" type=\"button\" data-reference4-collections-open aria-expanded=\"false\"> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('squares-four-thin.svg')",
@@ -184067,7 +184067,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 55,
+          "line": 57,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('palette-thin.svg')",
@@ -184076,7 +184076,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 58,
+          "line": 60,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('buildings-thin.svg')",
@@ -184085,7 +184085,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 61,
+          "line": 63,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('popular-trend-up-thin.svg')",
@@ -184094,7 +184094,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 64,
+          "line": 66,
           "scope": "></span></span><span>Популярное</span><i aria-hidden=\"true\"></i> </a> <button class=\"reference4-menu__row reference4-menu__row--service\" type=\"button\" data-reference4-service-open aria-expanded=\"false\"> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('handshake-thin.svg')",
@@ -184103,7 +184103,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 67,
+          "line": 69,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('search-thin.svg')",
@@ -184112,7 +184112,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 70,
+          "line": 72,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('user-focus-thin.svg')",
@@ -184121,7 +184121,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 79,
+          "line": 81,
           "scope": "></span></span><span>Для меня</span><i aria-hidden=\"true\"></i> </a> </nav> <nav class=\"reference4-menu__list-plane\" aria-label=\"Подборки\" data-reference4-collections aria-hidden=\"true\"> <button class=\"reference4-menu__row reference4-menu__row--back\" type=\"button\" data-reference4-collections-back> <span class=\"reference4-menu__back-icon\" aria-hidden=\"true\"></span><span>Назад к афише</span> </button> > data-unusual-nav-link> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('sparkle-thin.svg')",
@@ -184130,7 +184130,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 85,
+          "line": 87,
           "scope": "<anonymous> > > <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('squares-four-thin.svg')",
@@ -184139,7 +184139,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 88,
+          "line": 90,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('chats-thin.svg')",
@@ -184148,7 +184148,7 @@
         },
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 97,
+          "line": 99,
           "scope": "> <span class=\"reference4-icon\" aria-hidden=\"true\"><span style=",
           "kind": "css",
           "value": "url('${icon('handshake-thin.svg')",
@@ -184162,13 +184162,13 @@
         {
           "token": "--reference4-icon",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 314,
+          "line": 318,
           "has_fallback": false
         },
         {
           "token": "--reference4-icon",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 314,
+          "line": 318,
           "has_fallback": false
         }
       ],
@@ -184194,7 +184194,7 @@
         {
           "token": "--reference4-tag",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 251,
+          "line": 255,
           "has_fallback": false
         }
       ],
@@ -184520,7 +184520,7 @@
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 226,
+          "line": 230,
           "scope": "@media (max-width:759px) > body.mobile-shell-reference4 .mobile-discovery-menu--reference4",
           "kind": "css",
           "value": "84px",
@@ -184534,7 +184534,7 @@
         {
           "token": "--shell-tag-h",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 244,
+          "line": 248,
           "has_fallback": false
         }
       ],
@@ -184546,7 +184546,7 @@
       "definitions": [
         {
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 226,
+          "line": 230,
           "scope": "@media (max-width:759px) > body.mobile-shell-reference4 .mobile-discovery-menu--reference4",
           "kind": "css",
           "value": "120px",
@@ -184560,7 +184560,7 @@
         {
           "token": "--shell-tag-w",
           "path": "site/src/components/Reference4MobileMenu.astro",
-          "line": 243,
+          "line": 247,
           "has_fallback": false
         }
       ],

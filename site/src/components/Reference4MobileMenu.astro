@@ -37,6 +37,8 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
         <AnnouncementsWordmark class="reference4-menu__wordmark" />
       </a>
 
+      <a class="reference4-menu__home" href={siteHomeHref()} aria-current={isCurrent('all', 'home') ? 'page' : undefined}>Главная</a>
+
       <nav class="reference4-menu__dates" aria-label="Быстрый выбор даты">
         <a href={route('/segodnya/')} aria-current={isCurrent('today') ? 'page' : undefined}>Сегодня</a>
         <a href={route('/zavtra/')} aria-current={isCurrent('tomorrow') ? 'page' : undefined}>Завтра</a>
@@ -144,6 +146,8 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
 </details>
 
 <style is:global>
+  .reference4-menu__home { display:block; padding:12px 16px; color:inherit; font-weight:760; text-decoration:none; }
+
   /* FI-P1 reuses the existing disclosure owner on Popular desktop. It is a
      compact presentation of the same menu, not a second navigation controller. */
   @media (min-width:760px) {
