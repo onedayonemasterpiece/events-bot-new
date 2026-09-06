@@ -76,7 +76,7 @@ test("Edge handler wires collapse before pagination, after rerank and into fallb
 
   assert.match(source, /p_match_count:\s*60,[\s\S]*p_offset_count:\s*0,/u);
   assert.match(source, /paginateOccurrenceFamilies\(\s*rankedCandidates,\s*offset,\s*verificationWindow,/u);
-  assert.match(source, /items\s*=\s*collapseOccurrenceFamilies\(\s*llmResult\.used/u);
+  assert.match(source, /items\s*=\s*collapseOccurrenceFamilies\(\s*assistantIntent \? llmResult\.exact : llmResult\.used/u);
   assert.match(
     source,
     /collapseOccurrenceFamilies\(\s*llmResult\.possible,\s*new Set\(items\.map\(occurrenceFamilyKey\)\),?\s*\)/u,

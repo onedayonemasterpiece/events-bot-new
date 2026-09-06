@@ -23,7 +23,7 @@ export interface AssistantDependencies {
   allowedOrigins:readonly string[];
   generate(options:{kind:'asr'|'interpret';prompt:string;schema:unknown;audio?:Uint8Array;audioMimeType?:string;sampleRate?:number;frames?:number;
     validate:(value:unknown)=>unknown;dispatched:()=>Promise<void>;completed:(value:unknown,accounting:unknown)=>Promise<void>;accounted:()=>Promise<void>}):Promise<unknown>;
-  search(request:Request,intent:Intent,operationId:string):Promise<Record<string,any>>;
+  search(request:Request,intent:Intent,operationId:string,parentCandidates?:Record<string,any>[]):Promise<Record<string,any>>;
   currentCards(owner:string,ids:string[]):Promise<Record<string,any>[]>;
   maxAudioBytes:number;
   loadCompressedAudio?:(repo:AssistantRepository,owner:string,id:string,manifest:any)=>Promise<{bytes:Uint8Array;mimeType:string}>;
@@ -63,6 +63,7 @@ function validPart(value:any):any {
   return {...row,bytes};
 }
 function searchAnswer(result:any,count:number):string {
+  if(result.verification_unavailable)return 'Не удалось завершить проверку соответствия событий вашему запросу. Непроверенные варианты не показаны; это не означает, что подходящих событий нет.';
   const summary=typeof result.responseSummary==='string'?result.responseSummary.trim():'';
   const facts=count?`Событий в текущей выдаче: ${count}.`:'В текущем поисковом окне нет событий с подтверждёнными условиями.';
   return summary?`${summary}\n${facts}`:count?'Подобрал события по указанным условиям.':facts;
@@ -90,7 +91,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
           projection.result={...row.outcome.result,logical_event_ids:original.map(i=>String(i.event_id??i.id)),
             items:original.map(i=>lookup.get(String(i.event_id??i.id))).filter(Boolean),facts_refreshed_at:new Date().toISOString()};
           if(row.outcome.result.responseSummary&&!row.outcome.result.clarification&&row.outcome.result.explanationKind==='none')
-            projection.result.answer=searchAnswer(row.outcome.result,projection.result.items.length);
+            (projection.result as any).answer=searchAnswer(row.outcome.result,(projection.result as any).items.length);
         }
         return {status:200,body:projection};}
       const before=url.searchParams.get('before')||undefined;
@@ -173,14 +174,24 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
           const parentItems=itemsOf(parent);const fresh=await deps.currentCards(owner,parentItems.map(i=>String(i.event_id??i.id)));
           const byId=new Map(fresh.map(i=>[String(i.event_id??i.id),i]));
           // Full parent membership, NOT the currently rendered page; preserve rank.
-          search={...parent!.outcome.result,items:parentItems.map(i=>byId.get(String(i.event_id??i.id))).filter(i=>i&&eligible(i,result.intent)),has_more:false};
+          const candidates=parentItems.map(i=>byId.get(String(i.event_id??i.id))).filter((i): i is Record<string,any>=>Boolean(i)&&eligible(i!,result.intent));
+          await dispatch();
+          search=await deps.search(request,result.intent,id,candidates);
+          // Refine may never expand outside the refreshed logical parent set.
+          const allowed=new Set(candidates.map(i=>String(i.event_id??i.id)));
+          search.items=(search.items||[]).filter((i:any)=>allowed.has(String(i.event_id??i.id)));
+          search.has_more=false;
         } else {
           await dispatch();search=await deps.search(request,result.intent,id);
           if(search.error)reject('search_failed',502);
         }
-        const items=Array.isArray(search.items)?search.items:[];
+        if(!result.clarification&&result.explanationKind==='none'&&(search.semantic_verification?.status!=='complete'||!Array.isArray(search.semantic_verification.exact_ids)||!Array.isArray(search.semantic_verification.unchecked_ids)||search.semantic_verification.unchecked_ids.length)) {
+          search={...search,items:[],verification_unavailable:true,semantic_verification:search.semantic_verification||{status:'unavailable',failure_reason:'missing_verification_receipt'}};
+        }
+        const exactIds=new Set((search.semantic_verification?.exact_ids||[]).map(String));
+        const items=Array.isArray(search.items)?search.items.filter((i:any)=>exactIds.has(String(i.event_id??i.id))):[];
         await complete({...search,...result,id,items,parentId:result.parentId,
-          title:result.title,answer:answer||searchAnswer(result,items.length),
+          title:result.title,answer:answer||searchAnswer({...result,...search},items.length),
           served_list_id:crypto.randomUUID(),served_list_hash:await sha256(new TextEncoder().encode(JSON.stringify(items.map((i:any)=>i.event_id??i.id)))),
           source_served_list_id:search.served_list_id||null,has_more:search.has_more===true,
           membership_complete:search.membership_complete===true, membership_scope:'bounded_canonical_search_window'});

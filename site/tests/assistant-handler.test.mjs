@@ -25,7 +25,7 @@ function harness(){
  const deps={enabled:true,allowedOrigins:[origin],maxAudioBytes:16*1024*1024,
   async authenticate(req){if(req.headers.get('authorization')!=='Bearer test')throw new AssistantError('auth_required',401);return{owner:activeOwner,repo};},
   async generate(o){calls.push(o.kind);await o.dispatched();const value=o.validate(o.kind==='asr'?{text:'Не концерт, лучше лекция',uncertain:[]}:parsed());await o.completed(value,{pending:true,lease:'private'});await o.accounted();return value;},
-  async search(){calls.push('search');return{items:[{event_id:1,title:'Лекция',start_date:'2026-09-06',category:'lecture'}],catalog_revision:'facts-v1'};},
+  async search(){calls.push('search');return{items:[{event_id:1,title:'Лекция',start_date:'2026-09-06',category:'lecture'}],catalog_revision:'facts-v1',semantic_verification:{status:'complete',exact_ids:[1],possible_ids:[],rejected_ids:[],unchecked_ids:[],checked_count:1}};},
   async currentCards(who,ids){return ids.map(event_id=>({event_id:Number(event_id),title:'Актуальная лекция',start_date:'2026-09-06',category:'lecture'}));}
  };
  const request=(route,body,headers={})=>handleAssistant(new Request(`https://api.example/event-search/assistant/${route}`,{method:body?'POST':'GET',headers:{origin,authorization:'Bearer test',...headers},...(body?{body:JSON.stringify(body)}:{})}),deps);
@@ -147,7 +147,7 @@ test('summary never masks zero matches and refreshed projections recount without
  assert.match(refreshed.body.result.answer,/нет событий с подтверждёнными условиями/);
  assert.match(h.rows.get(s).outcome.result.answer,/выдаче: 1/);
  assert.deepEqual(h.calls,['interpret','search']);
- const empty=harness(),j=uid(),k=uid();summaryProvider(empty);empty.deps.search=async()=>({items:[]});
+ const empty=harness(),j=uid(),k=uid();summaryProvider(empty);empty.deps.search=async()=>({items:[],semantic_verification:{status:'complete',exact_ids:[],possible_ids:[],rejected_ids:[],unchecked_ids:[],checked_count:0}});
  await empty.control(j,'interpret',input());
  const done=await empty.control(k,'search',{interpretationId:j});
  assert.match(done.body.result.answer,/нет событий с подтверждёнными условиями/);
@@ -164,4 +164,37 @@ test('clarification and canonical card explanations take precedence over generat
  const reply=await fresh.control(answer,'search',{interpretationId:explain});
  assert.equal(reply.body.result.answer,'Проверенный адрес');
  const status=await fresh.request(`status?id=${answer}`);assert.equal(status.body.result.answer,'Проверенный адрес');
+});
+
+// Strict voice admission uses a known classifier receipt; these are contract fixtures, not live semantic evidence.
+test('vector-only/missing verifier and timeout are explicit unavailable, not jazz matches or a false zero; no same-ID replay',async()=>{
+ for(const semantic_verification of [undefined,{status:'unavailable',failure_reason:'timeout',unchecked_ids:[8680]}]){
+  const h=harness(),i=uid(),s=uid();let searches=0;
+  h.deps.search=async()=>{searches++;return {items:[{event_id:8680,title:'Rap at Jazz Club'}],semantic_verification};};
+  await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
+  assert.equal(r.body.state,'completed');assert.deepEqual(r.body.result.items,[]);assert.equal(r.body.result.verification_unavailable,true);
+  assert.match(r.body.result.answer,/Не удалось завершить проверку/);assert.doesNotMatch(r.body.result.answer,/нет событий с подтверждёнными/);
+  await h.control(s,'search',{interpretationId:i});assert.equal(searches,1);
+ }
+});
+test('refine semantically verifies changed intent over refreshed full parent subset, never current visible page or catalog expansion',async()=>{
+ const h=harness(),i=uid(),s=uid();await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
+ const j=uid(),k=uid();h.deps.generate=async o=>{await o.dispatched();await o.completed(o.validate(parsed({intent:{...intent(),goal:'джаз'}})),null);await o.accounted();};
+ let captured;
+ h.deps.search=async(_req,nextIntent,_id,parentCandidates)=>{captured={nextIntent,parentCandidates};return{items:[{event_id:999,title:'Injected outside parent'},{event_id:1,title:'Confirmed parent'}],semantic_verification:{status:'complete',exact_ids:[1],possible_ids:[],rejected_ids:[],unchecked_ids:[]}};};
+ await h.control(j,'interpret',input({mode:'refine_selection',parentId:s,visibleIds:[]}));
+ const r=await h.control(k,'search',{interpretationId:j});
+ assert.equal(captured.nextIntent.goal,'джаз');assert.deepEqual(captured.parentCandidates.map(x=>x.event_id),[1]);assert.deepEqual(r.body.result.items.map(x=>x.event_id),[1]);assert.equal(r.body.result.has_more,false);
+});
+test('expand semantically checks the new intent without a parent-only candidate bound',async()=>{
+ const h=harness(),i=uid(),s=uid();await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});
+ const j=uid(),k=uid();let captured;
+ h.deps.search=async(_req,nextIntent,_id,parentCandidates)=>{captured=parentCandidates;return{items:[],semantic_verification:{status:'complete',exact_ids:[],unchecked_ids:[]}};};
+ await h.control(j,'interpret',input({mode:'expand_selection',parentId:s}));await h.control(k,'search',{interpretationId:j});assert.equal(captured,undefined);
+});
+test('interpreter has no default-city narrowing when base and question provide no city',()=>{
+ const emptyBase={...intent(),localityIds:[]};const prompt=interpreterPrompt(input({text:'Джаз на выходных'}),emptyBase,[]);
+ assert.match(prompt,/BASE.localityIds пуст/);assert.match(prompt,/intent.localityIds должен остаться \[\]/);assert.match(prompt,/Не добавляй kaliningrad по умолчанию/);
+ assert.deepEqual(interpretation(parsed({intent:emptyBase})).intent.localityIds,[]);
+ assert.ok(eligible({event_id:8580,title:'FOXTROT JAZZ BAND',city:'Светлогорск',start_date:'2026-09-12'}, {...emptyBase,dateFrom:'2026-09-12',dateTo:'2026-09-13'}));
 });

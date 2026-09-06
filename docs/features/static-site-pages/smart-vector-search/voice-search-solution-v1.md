@@ -704,9 +704,78 @@ were preserved. Exact source-equivalence and retained-artifact hash receipts:
 
 User review proved the earlier successful transport/card-count check was NOT
 semantic acceptance: «Джаз на выходных» returned50unverified vector candidates.
-The voice adapter explicitly disables verifier, runtime defaults it off, and the
-voice quota branch separately prevents its admission. Legacy Search promotes
+At incident capture, the voice adapter explicitly disabled verifier, runtime
+defaulted it off, and the voice quota branch separately prevented its admission. Legacy Search promotes
 possible candidates when verification is unused; voice must not inherit this as
 confirmed matches. Exact evidence, correction requirements and regression gate:
 [INC-2026-09-06-voice-search-relevance](../../../reports/incidents/INC-2026-09-06-voice-search-relevance.md).
 This is an open defect; investigation did not deploy a fix or alter user history.
+
+
+### Voice-only strict semantic admission — R1 source correction (2026-09-06)
+
+Incident contract: `INC-2026-09-06-voice-search-relevance`. The authenticated
+voice adapter now requests the existing Search verifier rather than presenting
+vector recall as genre matches. Ordinary `/poisk/` keeps its documented
+vector-first / fail-open policy; no SQL threshold or keyword genre classifier
+was introduced.
+
+Voice admission permits a verifier attempt against the **actual shared provider
+reservation**, not `llm_reserved:true`, a canary persona or the ordinary small
+Search quota. Each provider send still executes through
+`withSharedGoogleQuotaAttempt`: resolve registered key metadata →
+`google_ai_reserve` → `google_ai_mark_sent` → provider → `google_ai_finalize`.
+There is no new provider/model/key lane or separate billing mechanism.
+
+`verifyVoiceWindow` checks the entire current bounded candidate set in sequential
+batches of at most20. Voice disables adaptive prefix shrink and model overflow.
+Every batch requires digest facts for every candidate; a valid response partitions
+all provided IDs exactly once into exact/possible/rejected. Unknown, duplicate,
+conflicting or missing IDs fail closed. Missing facts, disabled verifier, shared
+quota denial, timeout, malformed/partial classification or exhausted total budget
+produce `semantic_verification.status=unavailable`, `verification_unavailable=true`
+and **no primary items**. The answer explicitly says verification was not completed,
+not that no suitable events exist. Successful all-rejected classification is a
+valid verified empty set. An actually empty current retrieval window needs no LLM.
+
+The durable receipt retains `candidate_ids`, `candidate_count`, `checked_count`,
+`exact_ids`, `possible_ids`, `rejected_ids`, `unchecked_ids`, failure reason and
+sanitized attempt accounting. Partial successful classifications remain in these
+metadata, but their exact IDs are not rendered as a completed result set when any
+part of the window is unresolved. No raw key or key-environment name is added to
+public attempt metadata. Count/membership describes the bounded Search window,
+**not the complete regional catalog**; vector recall coverage remains a separate
+acceptance gate.
+
+New search and expansion use the same Search recall + strict verifier. Refinement
+refreshes the complete logical parent membership, applies typed eligibility, then
+re-verifies that subset against the **changed full intent**; it does not fetch or
+admit outside-parent cards and does not use only the currently visible page.
+Explanations/clarifications remain no-search paths. Same operation IDs retain the
+existing durable completion/no-replay ownership contract, including explicit
+verification-unavailable outcomes.
+
+Voice prompt facts include typed dates/place/admission/audience and up to1200
+characters of digest per candidate. Genre must be supported by programme facts,
+not a Jazz-named venue; nonliteral but supported jazz repertoire is allowed. The
+interpreter explicitly leaves localityIds=[] when neither raw input nor base
+provides a city: KenigEvents is not an implicit Kaliningrad-city restriction.
+No global weekend interpretation policy was invented in this correction.
+
+Deployment prerequisites (not activated by this source lane):
+- `EVENT_SEARCH_LLM_ENABLED=1` and existing shared Google key metadata/reservation
+  capacity; disabling must visibly yield verification unavailable.
+- Voice-specific defaults: `EVENT_SEARCH_ASSISTANT_VERIFIER_TIMEOUT_MS=15000`,
+  `EVENT_SEARCH_ASSISTANT_VERIFIER_TOTAL_BUDGET_MS=45000`,
+  `EVENT_SEARCH_ASSISTANT_VERIFIER_FACT_CHARS=1200`; at most20 candidates/request,
+  output budget2048. The total budget bounds classification, not embedding/fact
+  retrieval; caller control timeout must also cover these stages (60s is marginal).
+- No full site build, environment edit, provider live call or deployment was made
+  by this implementation lane. Source tests use injected classifiers/provider/DB
+  metadata, including rap-at-Jazz-venue, exhibition, classical, related-festival
+  negatives and positive nonliteral jazz. They prove admission/accounting, not
+  model precision on the live catalog.
+- External Opus consultation was attempted by the parent via a-opus and Claude
+  Opus; both were authentication-blocked. No valid external review is claimed.
+  Full live authenticated relevance/date/locality acceptance on the deployed SHA
+  and physical-phone verification remain integration responsibilities.
