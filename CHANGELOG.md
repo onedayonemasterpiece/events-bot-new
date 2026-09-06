@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Connected default-off partner event create, private posters, owner review/image readback, current-policy queued execution, canonical accepted-ID portfolio assignment and tenant-scoped publication evidence; no synthetic Telegram/OAuth actor or implicit promo operation (#643).
+
 - Added current durable partner actor-policy resolution over existing grants and credential epochs without manufacturing an OAuth identity; token scope checks remain mandatory for live callers (#643).
 
 - Registered all #643 HT-AF-01…22 and MCP-HT-01…06 acceptance IDs in the existing MCP v2 registry, explicitly distinguishing partial component tests from unrun full/live acceptance.

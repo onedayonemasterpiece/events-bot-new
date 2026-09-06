@@ -60,5 +60,28 @@ or partner notification is authorized/needed.
 
 ## Release evidence
 
-Pending. Do not mark closed until deployed SHA and actual authenticated readback
-are recorded. Rollback is previous exact-main image; no schema migration exists.
+R0 deployed through clean exact-main `scripts/deploy_fly_main.sh --remote-only`:
+`f872ad9f358de5a1528d36f3be1621c9b20e6b2a` (#618, following #644).
+Image digest: `sha256:ef16057ffa96bbe2af5df2b3218fc9fef645cbb7064e6ad3fdf94010f5113486`.
+Before deployment explicit production integrity scan returned `ok` in 10.029s;
+this is separate from interactive snapshot health. Existing volume snapshot was
+verified; no schema migration exists. Rollback remains the previous exact-main image.
+
+At 2026-09-06 19:03 UTC, both real connected owner OAuth and Codex snapshots
+succeeded, returned this deployed SHA, and reported
+`quick_check=not_run:interactive_budget`. Authenticated `fetch(job:1)` succeeded;
+`/healthz` reported ready=true and issues=[]. R0 suite: 587 tests passed and all
+three #618 CI jobs passed. Internal security review resolved structured-error
+redaction and fractional-ID validation findings before deployment.
+
+The incident remains open for one explicit acceptance gap: the connected client
+still advertises the old empty snapshot input schema. Supplying additive queue
+arguments returned the cached default snapshot, not a bounded owner queue page.
+This is not claimed as queue-page acceptance. Refresh the existing connection in
+place/start a new chat per the MCP runbook; never rename or recreate credentials.
+No future mutation flag was enabled to work around this client descriptor gap.
+
+Remote progress/readback: [#643 R0 evidence](https://github.com/onedayonemasterpiece/events-bot-new/issues/643#issuecomment-5561474669).
+Private artifacts: `artifacts/codex/hero-talk-643/r0_after_owner.json`,
+`r0_after_codex.json`; deploy log and preflight integrity log under the R0 release
+worktree's `artifacts/codex/r0-release/`.

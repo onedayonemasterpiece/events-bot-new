@@ -1600,8 +1600,8 @@ tables; it never deletes partner history or rewrites the canonical event DB.
 `PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED=1` adds owner ChatGPT/OpenCode
 `event_asset_stage` and `event_asset_get` behind `events:write`. The exact owner
 subject, current configured client/resource, token expiry and flag are checked
-before/after storage I/O. Codex receives neither tool; partner grant wiring is a
-later stage. The shared private media ingress store is initialized independently
+before/after storage I/O. Codex receives neither tool; partner ingress requires the separate partner
+create flag described below. The shared private media ingress store is initialized independently
 of social providers; event-only ingress does not enable social media tools.
 The existing media host allowlist, byte/store/dimension limits and retention
 settings remain mandatory. Stage advertises `openai/fileParams: ["file"]`, returns
@@ -1615,17 +1615,51 @@ expiry and actual-byte digests without constructing an OAuth identity or token;
 the existing `media=[(bytes, filename)]` path handles posters and Smart Update.
 Failures known to precede the parser are rejected, not marked outcome-unknown.
 No Telegram owner is invented and no public upload occurs at staging. Partner
-mutation wiring is still pending. No production flag has been enabled.
+create/review wiring is described below; edit/lifecycle/promo remain pending.
+No production flag has been enabled.
 
 Owner `event_publications_get(operation_ref)` is now attached with the event-create
 capability and `operations:read`. It uses the exact operation actor/client/resource
 and current flag/owner checks, returns current safe canonical public URLs plus
 bounded queue states, and never turns a queued job or static build into a verified
 publication. This read is uncached; Codex does not receive the tool. Partner
-exposure will use its separate current portfolio policy, not owner authority.
+exposure uses its separate current portfolio policy, never owner authority.
 
 `PartnerAccessStore.resolve_durable` is the internal policy boundary for already
 authorized, immutable operation-ledger actors. It checks current principal state,
 credential epoch/expiry, client/resource, explicit scope/action and optional
 portfolio ID without creating a token. It is not a login or an MCP tool; live
 `resolve(identity)` still additionally enforces the caller token's scopes.
+
+### Partner create/review integration (#643, default OFF)
+
+`PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED` requires both existing partner
+and owner-create capabilities. On the separate partner resource it adds
+`event_create_prepare`, `event_create_commit`, `event_operation_get` and
+`event_publications_get`; image ingress additionally requires the event-assets
+flag. No owner search, incident, social or owner-review tools cross that resource.
+The workspace exposes granular `event_create`; broad event/promo operations
+remain false because edit/lifecycle/promo are not yet delivered.
+
+Prepare freezes the current partner policy revision into the action digest.
+Commit requires that revision and current OAuth grants. Without current explicit
+`event_create` auto-approval, the existing ledger holds `review_required`. Owner
+`partner_event_review_get`, `partner_event_review_image` and
+`partner_event_review_decide` require the exact configured owner plus
+`partners:manage`. The image tool returns a metadata-stripped bounded thumbnail
+through the existing thumbnail renderer, after current owner/partner/asset checks.
+Approval only queues; the existing recovery scheduler claims execution.
+
+Normal and recovered workers recheck current principal/epoch, exact resource and
+client, scope/action and policy revision. No HTTP token or Telegram identity is
+manufactured for durable execution. After canonical acceptance, an atomic
+existing-portfolio insert requires one actual Event and explicit `created`
+provenance. A merge is accepted for assignment only when that exact principal
+already owns the Event. Foreign or unassigned existing merges require owner
+reconciliation, not automatic rights acquisition. An assignment failure after
+parser entry remains `outcome_unknown`, never a blind retry.
+
+Isolated real HTTP/OAuth/SQLite tests cover poster/review/queued worker/accepted ID,
+portfolio/receipt isolation, policy-revision conflict and suspension before the
+executor. Their executor is a deterministic fixture; these are not production
+content approval, provider-publication receipts or live upload acceptance.

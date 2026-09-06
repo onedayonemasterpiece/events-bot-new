@@ -323,3 +323,14 @@ def test_event_asset_flag_default_off_and_disabled_mcp_inert(monkeypatch):
     monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED', '0')
     monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_ASSETS_ENABLED', 'not-a-boolean')
     assert not PrivateEventsMCPConfig.from_env().event_assets_enabled
+
+
+def test_partner_event_create_flag_requires_existing_capabilities(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID','codex-public-client')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED','1')
+    with pytest.raises(ValueError,match='requires partner and owner event-create'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_PARTNER_ENABLED','1')
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED','1')
+    assert PrivateEventsMCPConfig.from_env().partner_event_create_enabled

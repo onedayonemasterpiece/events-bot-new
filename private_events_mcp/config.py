@@ -198,6 +198,7 @@ class PrivateEventsMCPConfig:
     event_create_enabled: bool = False
     event_assets_enabled: bool = False
     partner_enabled: bool = False
+    partner_event_create_enabled: bool = False
     universal_social_enabled: bool = False
     universal_social_telegram_enabled: bool = False
     universal_social_vk_enabled: bool = False
@@ -299,6 +300,9 @@ class PrivateEventsMCPConfig:
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
             ).strip(),
+            partner_event_create_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED", mcp_enabled=enabled,
+            ),
             partner_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_PARTNER_ENABLED", mcp_enabled=enabled,
             ),
@@ -514,6 +518,8 @@ class PrivateEventsMCPConfig:
         return config
 
     def validate(self) -> None:
+        if self.partner_event_create_enabled and not (self.partner_enabled and self.event_create_enabled):
+            raise ValueError("partner event create requires partner and owner event-create capabilities")
         if not self.public_base_url:
             raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL is required")
         _normalise_base_url(self.public_base_url)

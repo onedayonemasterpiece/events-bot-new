@@ -145,6 +145,7 @@ class EventCreateRequest:
     actor_audience: str
     _persisted_idempotency_hash: str | None = None
     media: tuple[EventImageRef, ...] = ()
+    partner_policy_revision: int | None = None
 
     def canonical_action(self) -> dict[str, Any]:
         action = {
@@ -159,6 +160,8 @@ class EventCreateRequest:
         if self.media:
             action["media"] = [{"asset_ref": item.asset_ref, "content_digest": item.content_digest}
                                for item in self.media]
+        if self.partner_policy_revision is not None:
+            action["partner_policy_revision"] = self.partner_policy_revision
         return action
 
     @property
@@ -450,6 +453,7 @@ class EventCreateRuntime:
         self.store = EventCreateOperationStore(database)
         self.executor = executor
         self.authorize = authorize
+        self.on_accepted = None
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
     @staticmethod
@@ -478,7 +482,7 @@ class EventCreateRuntime:
             )
         source_locator = source_url
         if source_locator is None:
-            source_locator = "mcp-owner:" + hashlib.sha256(
+            source_locator = ("mcp-partner:" if context.identity.subject.startswith("partner:") else "mcp-owner:") + hashlib.sha256(
                 f"{context.identity.client_id}:{source_external_id}".encode("utf-8")
             ).hexdigest()
         return EventCreateRequest(
@@ -670,6 +674,8 @@ class EventCreateRuntime:
                     "status": "failed",
                     "error_code": "EVENT_CREATE_RESULT_INVALID",
                 }
+            if status == "accepted" and self.on_accepted is not None:
+                await self.on_accepted(request, dict(raw_result))
             error_code = None if status == "accepted" else str(
                 result.get("error_code") or "EVENT_CREATE_NOT_ACCEPTED"
             )[:120]
@@ -763,6 +769,7 @@ class EventCreateRuntime:
                     actor_audience=row["actor_audience"], idempotency_key="",
                     _persisted_idempotency_hash=row["idempotency_hash"],
                     media=parse_event_images(stored.get("media")),
+                    partner_policy_revision=stored.get("partner_policy_revision"),
                 )
                 if not constant_time_equal(request.action_digest, row["action_digest"]):
                     raise ValueError("stored request digest mismatch")

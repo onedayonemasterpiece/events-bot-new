@@ -158,12 +158,30 @@ def attach_private_events_mcp(
         event_create_runtime=event_create_runtime,
     )
     if event_create_runtime is not None:
+        async def current_create_policy(request: EventCreateRequest) -> bool:
+            if request.actor_audience == server.config.partner_resource:
+                return bool(server.partner_event_operations is not None
+                            and await server.partner_event_operations.authorize_request(request))
+            return event_create_actor_is_current(server.config, request)
+
+        async def assign_partner_accepted(request, result):
+            if request.actor_audience == server.config.partner_resource:
+                import asyncio
+                from .partner_accepted_event import assign_accepted_event
+                if not await current_create_policy(request):
+                    from .tool_catalog import ToolExecutionError
+                    raise ToolExecutionError("PARTNER_EVENT_ACCESS_DENIED")
+                await asyncio.to_thread(assign_accepted_event, server.partners, request, result)
+
+        event_create_runtime.authorize = current_create_policy
+        event_create_runtime.on_accepted = assign_partner_accepted
+
         async def _resolve_event_media(request: EventCreateRequest):
             from .tool_catalog import ToolExecutionError
 
             async def current_policy() -> bool:
                 return bool(server.config.event_assets_enabled
-                            and event_create_actor_is_current(server.config, request))
+                            and await current_create_policy(request))
 
             if server.event_assets is None or not await current_policy():
                 raise ToolExecutionError("EVENT_ASSETS_DISABLED", "Event image ingress is disabled.")
