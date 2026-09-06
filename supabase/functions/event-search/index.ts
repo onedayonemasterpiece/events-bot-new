@@ -17,7 +17,7 @@ import {
   SharedGoogleQuotaError,
   withSharedGoogleQuotaAttempt,
 } from "./google-quota.ts";
-import { classifyVoiceSchemaPayload, voiceVerifierSchema, verifyVoiceWindow, voiceVerifierPrompt } from "./assistant-verification.ts";
+import { classifyVoiceSchemaPayload, voiceVerifierSchema, voiceCandidateFacts, verifyVoiceWindow, voiceVerifierPrompt } from "./assistant-verification.ts";
 import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts";
 import { handleAssistant, type AssistantDependencies, type AssistantRepository } from "./assistant-handler.ts";
 import { assistantGenerator } from "./assistant-provider.ts";
@@ -1433,7 +1433,7 @@ async function llmVerify(
   const shouldTryFallback = options.gemma_overflow_allowed &&
     fallbackEnabled &&
     fallbackModels.length > 0;
-  const factMaxChars = options.voiceIntent ? envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_FACT_CHARS", 1200, 500, 2400) : envInt("EVENT_SEARCH_LLM_FACT_MAX_CHARS", 180, 120, 800);
+  const factMaxChars = options.voiceIntent ? envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_FACT_CHARS", 2400, 1000, 4000) : envInt("EVENT_SEARCH_LLM_FACT_MAX_CHARS", 180, 120, 800);
   const maxLlmCandidates = Math.min(
     candidates.length,
     options.voiceIntent ? candidates.length : envInt("EVENT_SEARCH_LLM_MAX_CANDIDATES", 20, 1, 60),
@@ -1451,7 +1451,7 @@ async function llmVerify(
       const display = (candidate.display as Candidate | undefined) || {};
       const id = candidateId(candidate);
       const facts = truncateText(
-        options.voiceIntent ? (id === null ? null : candidateDigests.get(id)) : compactSearchDigest(id === null ? null : candidateDigests.get(id)),
+        options.voiceIntent ? voiceCandidateFacts(id === null ? null : candidateDigests.get(id), factMaxChars) : compactSearchDigest(id === null ? null : candidateDigests.get(id)),
         factMaxChars,
       );
       return {
@@ -2495,7 +2495,7 @@ async function runEventSearch(
       const facts = new Map(fresh.map(candidate => [String(candidate.event_id), candidate]));
       rankedCandidates = rankedCandidates.filter(candidate => {
         const current = facts.get(String(candidate.event_id));
-        return current && assistantEligible(current, assistantIntent);
+        return current && assistantEligible(current, assistantIntent, true);
       }).map(candidate => ({ ...candidate, ...facts.get(String(candidate.event_id)), base_similarity: candidate.base_similarity }));
     }
     const familyPage = paginateOccurrenceFamilies(
@@ -2968,6 +2968,12 @@ export function createAssistantDependencies(repository?: AssistantRepository): A
   const enabled = env("EVENT_SEARCH_ASSISTANT_ENABLED") === "1" && Boolean(env("EVENT_SEARCH_ASSISTANT_POLICY_REF"));
   return {
     enabled,
+    editorialEnabled: true,
+    editorialFacts: async (_owner, ids) => {
+      const cards=await assistantCurrentCards(service,ids);
+      const digests=await fetchCandidateDigests(supabaseUrl,ids.map(Number));
+      return cards.map(card=>({...card,search_digest:digests.get(Number(card.event_id))||''}));
+    },
     // Fixed deployment origins; never trust an arbitrary supplied upstream.
     allowedOrigins: env("EVENT_SEARCH_ASSISTANT_ORIGINS", "https://kenigevents.ru").split(",").map(value => value.trim()),
     maxAudioBytes: envInt("EVENT_SEARCH_ASSISTANT_AUDIO_MAX_BYTES", 16 * 1024 * 1024, 1024, 64 * 1024 * 1024),

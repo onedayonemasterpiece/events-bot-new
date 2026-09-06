@@ -218,3 +218,10 @@ ASR-driven transition belongs to the authorized live preview evidence.
  90s control versus60s status deadlines.
 - Live recall/precision acceptance and projection-freshness constraints:
   `docs/reports/incidents/INC-2026-09-06-voice-search-relevance.md`.
+
+Conversation follow-up regression: `assistant-handler.test.mjs` covers deferred
+audience verification, calendar next week, editorial durable checkpoint/failure/
+no replay. `assistant-editorial.test.mjs` checks selected IDs and factual evidence.
+`voice-clean-results.integration.mjs` exercises clean footer-free results and all
+returned cards, composer clarification/history/owner isolation in a mocked UI
+runtime; real three-turn acceptance is tracked in the relevance incident.

@@ -1,3 +1,4 @@
+import {editorialSchema,editorialPrompt,validateEditorial,editorialText} from './assistant-editorial.ts';
 import { ASR_VOCABULARY_VERSION, transcriptionPrompt } from './assistant-vocabulary.ts';
 import { assemble, sha256 } from './assistant-media.ts';
 export { assemble, sha256 } from './assistant-media.ts';
@@ -21,10 +22,12 @@ export interface AssistantDependencies {
   authenticate(request:Request):Promise<{owner:string;repo:AssistantRepository}>;
   enabled:boolean;
   allowedOrigins:readonly string[];
-  generate(options:{kind:'asr'|'interpret';prompt:string;schema:unknown;audio?:Uint8Array;audioMimeType?:string;sampleRate?:number;frames?:number;
+  generate(options:{kind:'asr'|'interpret'|'editorial';prompt:string;schema:unknown;audio?:Uint8Array;audioMimeType?:string;sampleRate?:number;frames?:number;
     validate:(value:unknown)=>unknown;dispatched:()=>Promise<void>;completed:(value:unknown,accounting:unknown)=>Promise<void>;accounted:()=>Promise<void>}):Promise<unknown>;
   search(request:Request,intent:Intent,operationId:string,parentCandidates?:Record<string,any>[]):Promise<Record<string,any>>;
   currentCards(owner:string,ids:string[]):Promise<Record<string,any>[]>;
+  editorialEnabled?:boolean;
+  editorialFacts?:(owner:string,ids:string[])=>Promise<Record<string,any>[]>;
   maxAudioBytes:number;
   loadCompressedAudio?:(repo:AssistantRepository,owner:string,id:string,manifest:any)=>Promise<{bytes:Uint8Array;mimeType:string}>;
 }
@@ -90,7 +93,13 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
           const lookup=new Map(fresh.map(i=>[String(i.event_id??i.id),i]));
           projection.result={...row.outcome.result,logical_event_ids:original.map(i=>String(i.event_id??i.id)),
             items:original.map(i=>lookup.get(String(i.event_id??i.id))).filter(Boolean),facts_refreshed_at:new Date().toISOString()};
-          if(row.outcome.result.responseSummary&&!row.outcome.result.clarification&&row.outcome.result.explanationKind==='none')
+          if(row.outcome.result.editorial?.status==='complete') {
+            const remaining=new Set(((projection.result as any).items||[]).map((i:any)=>Number(i.event_id??i.id)));
+            if(!row.outcome.result.editorial.recommendations.every((r:any)=>remaining.has(r.event_id))) {
+              (projection.result as any).editorial={status:'stale'};
+              (projection.result as any).answer=searchAnswer(row.outcome.result,(projection.result as any).items.length);
+            }
+          } else if(row.outcome.result.responseSummary&&!row.outcome.result.clarification&&row.outcome.result.explanationKind==='none')
             (projection.result as any).answer=searchAnswer(row.outcome.result,(projection.result as any).items.length);
         }
         return {status:200,body:projection};}
@@ -174,7 +183,7 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
           const parentItems=itemsOf(parent);const fresh=await deps.currentCards(owner,parentItems.map(i=>String(i.event_id??i.id)));
           const byId=new Map(fresh.map(i=>[String(i.event_id??i.id),i]));
           // Full parent membership, NOT the currently rendered page; preserve rank.
-          const candidates=parentItems.map(i=>byId.get(String(i.event_id??i.id))).filter((i): i is Record<string,any>=>Boolean(i)&&eligible(i!,result.intent));
+          const candidates=parentItems.map(i=>byId.get(String(i.event_id??i.id))).filter((i): i is Record<string,any>=>Boolean(i)&&eligible(i!,result.intent,true));
           await dispatch();
           search=await deps.search(request,result.intent,id,candidates);
           // Refine may never expand outside the refreshed logical parent set.
@@ -190,11 +199,24 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
         }
         const exactIds=new Set((search.semantic_verification?.exact_ids||[]).map(String));
         const items=Array.isArray(search.items)?search.items.filter((i:any)=>exactIds.has(String(i.event_id??i.id))):[];
-        await complete({...search,...result,id,items,parentId:result.parentId,
+        const finalResult={...search,...result,id,items,parentId:result.parentId,
           title:result.title,answer:answer||searchAnswer({...result,...search},items.length),
           served_list_id:crypto.randomUUID(),served_list_hash:await sha256(new TextEncoder().encode(JSON.stringify(items.map((i:any)=>i.event_id??i.id)))),
           source_served_list_id:search.served_list_id||null,has_more:search.has_more===true,
-          membership_complete:search.membership_complete===true, membership_scope:'bounded_canonical_search_window'});
+          membership_complete:search.membership_complete===true, membership_scope:'bounded_canonical_search_window'};
+        if(deps.editorialEnabled&&deps.editorialFacts&&items.length&&!answer&&!search.verification_unavailable) {
+          try {
+            const facts=await deps.editorialFacts(owner,items.slice(0,12).map((i:any)=>String(i.event_id??i.id)));
+            const allowed=new Set(items.map((i:any)=>Number(i.event_id??i.id)));
+            const grounded=facts.filter(c=>allowed.has(Number(c.event_id??c.id))&&typeof c.search_digest==='string'&&c.search_digest.trim());
+            if(!grounded.length)throw new Error('editorial_facts_missing');
+            await deps.generate({kind:'editorial',prompt:editorialPrompt(result.question,result.intent,grounded),schema:editorialSchema(grounded),
+              validate:value=>validateEditorial(value,grounded),dispatched:dispatch,accounted,
+              completed:async(value:any,accounting)=>complete({...finalResult,answer:editorialText(value,grounded),editorial:{status:'complete',...value}},accounting)});
+          } catch (_) {
+            if(!durable)await complete({...finalResult,editorial:{status:'unavailable'}});
+          }
+        } else await complete(finalResult);
       }
     }catch(error){
       if(!durable){

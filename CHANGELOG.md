@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed: conversational Search no longer eliminates all family candidates for missing audience metadata; grounded week arithmetic and flexible topic/alternative interpretation.
+- Added: optional post-search editorial guidance based on verified event facts, with shared quota, durable outcome and nonblocking fallback; personalization remains to-be.
+- Changed: clean conversation results omit technical selection footer controls/details while preserving all returned cards and normal event actions.
+
 - Fixed: voice verifier schema requires a verdict for each candidate ID; interpreter receives anchor-grounded Saturday/Sunday dates and exposes resolved dates instead of inventing Sunday/Monday weekends. Live regression and acceptance remain recorded in the relevance incident.
 
 - Fixed: voice control timeout covers bounded full-window semantic verification;

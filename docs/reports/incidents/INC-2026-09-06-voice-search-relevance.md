@@ -285,3 +285,30 @@ history restoration is also not closed by this new-conversation test.
 Telegram delivery verified by exact text/topic readback:
 https://t.me/c/4337049383/1458 (topic1030). It explicitly asks for a **new** query,
 not recalculation of old history, and separates the open freshness/phone/UI gaps.
+
+### User's subsequent three-turn chain (14:20–14:22 UTC)
+
+Read-only inspection scoped to the known user's text/search receipts; no audio,
+other users' histories, user state mutation or automatic replay.
+
+1. `9d228dd8-cdb9-4977-b1ec-8e3b93c0ef6c`: symphonic music / organ next week.
+  59checked,3exact7322/7424/7425,3possible. Date interpretation incorrectly used
+  September14–20 on SundaySeptember6 (correct next calendar week is7–13).
+2. `a5d24ed7-ea1b-4c45-aa94-67fe01e83a40`: “А если через неделю?” →21–27,
+ 57checked,3*different*exact7362/7427/7428,5possible. No cap3; catalog re-query.
+3. `ceb5110e-2331-48ad-9d25-9ddee0fe4619`: “Куда можно пойти с детьми на
+  ближайших выходных?” →12–13, children; **music goal correctly removed**.
+  Zero candidates reached semantic verification. Confirmed cause: strict
+  audience_tags prefilter on a field missing from the projection, not parent
+  membership restricting the children query. All220active searchable projection
+  rows in7–27September lack audience_tags in their card snapshots.
+
+Source correction defers audience to mandatory verifier, preserves metadata tail,
+clarifies union vs conjunction, next-week arithmetic and contextual topic change.
+The current pre-search acknowledgement is not editorial: added optional grounded
+post-search commentary through the same provider/limiter/checkpoint lifecycle.
+Clean UI footer removal delegated in bounded source-only worker; no second shell.
+
+Evidence: `artifacts/codex/voice-dialogue-review-20260906/` scoped
+`user-chain.private.json`, public `projection-window.json`, `inventory.log`.
+Source/live checks and exact delivery SHA will follow; old receipts remain frozen.

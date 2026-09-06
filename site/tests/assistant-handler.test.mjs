@@ -208,3 +208,44 @@ test('nearest weekend calendar grounding spans Saturday/Sunday with local timezo
  const prompt=interpreterPrompt({anchor:'2026-09-06T14:00:00Z'}, {}, null);
  assert.match(prompt,/2026-09-12/);assert.match(prompt,/воскресенье–понедельник/);
 });
+
+test('missing audience projection is deferred to strict semantic verifier, not silently accepted or prefiltered',()=>{
+ const event={event_id:7,start_date:'2026-09-12',category:'theatre'};const i={...intent(),audience:['children']};
+ assert.equal(eligible(event,i),false);assert.equal(eligible(event,i,true),true);
+ assert.equal(eligible({...event,lifecycle_status:'cancelled'},i,true),false);
+});
+test('calendar next week starts tomorrow on Sunday; context prompt supports union and topic replacement',async()=>{
+ const {nextCalendarWeek}=await import('../../supabase/functions/event-search/assistant-intent.ts');
+ assert.deepEqual(nextCalendarWeek('2026-09-06T14:00:00Z'),{dateFrom:'2026-09-07',dateTo:'2026-09-13'});
+ assert.deepEqual(nextCalendarWeek('2026-09-07T14:00:00Z'),{dateFrom:'2026-09-14',dateTo:'2026-09-20'});
+ const p=interpreterPrompt(input(),intent(),[]);assert.match(p,/неизменяемый фильтр/);assert.match(p,/ИЛИ/);assert.match(p,/сдвигает интервал BASE на 7/);
+});
+function enableEditorial(h,{fail=false,accountingFailure=false}={}) {
+ h.deps.editorialEnabled=true;
+ h.deps.editorialFacts=async()=>[{event_id:1,title:'Лекция',search_digest:'Разговор об архитектуре старого города.'}];
+ const original=h.deps.generate;
+ h.deps.generate=async o=>{
+  if(o.kind!=='editorial')return original(o);
+  h.calls.push('editorial');await o.dispatched();if(fail)throw Error('quota_or_timeout');
+  const value=o.validate({intro:'Я бы начал с этого варианта.',recommendations:[{event_id:1,comment:'Можно глубже познакомиться с архитектурой города.',evidence:'об архитектуре старого города'}]});
+  await o.completed(value,{pending:true});if(accountingFailure)throw Error('finalize unavailable');await o.accounted();return value;
+ };
+}
+test('editorial follows verified results, is durable and never regenerated on retry/status',async()=>{
+ const h=harness();enableEditorial(h);const i=uid(),s=uid();await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
+ assert.equal(r.body.result.editorial.status,'complete');assert.match(r.body.result.answer,/«Лекция»/);assert.doesNotMatch(r.body.result.answer,/Событий в текущей/);
+ await h.control(s,'search',{interpretationId:i});const status=await h.request(`status?id=${s}`);
+ assert.equal(status.body.result.answer,r.body.result.answer);assert.equal(h.calls.filter(x=>x==='editorial').length,1);
+});
+test('optional editorial failure preserves verified cards, and finalize failure preserves generated reply',async()=>{
+ for(const config of [{fail:true},{accountingFailure:true}]){
+  const h=harness();enableEditorial(h,config);const i=uid(),s=uid();await h.control(i,'interpret',input());const r=await h.control(s,'search',{interpretationId:i});
+  assert.equal(r.body.state,'completed');assert.equal(r.body.result.items.length,1);assert.equal(r.body.result.editorial.status,config.fail?'unavailable':'complete');
+  await h.control(s,'search',{interpretationId:i});assert.equal(h.calls.filter(x=>x==='editorial').length,1);
+ }
+});
+test('no editorial provider spend on unverified or empty result sets',async()=>{
+ for(const search of [{items:[],semantic_verification:{status:'complete',exact_ids:[],unchecked_ids:[]}},{items:[{event_id:1}],verification_unavailable:true}]){
+  const h=harness();enableEditorial(h);h.deps.search=async()=>search;const i=uid(),s=uid();await h.control(i,'interpret',input());await h.control(s,'search',{interpretationId:i});assert.ok(!h.calls.includes('editorial'));
+ }
+});

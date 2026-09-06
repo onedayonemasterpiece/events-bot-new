@@ -805,3 +805,35 @@ the following Saturday). Explicit dates/«сегодня»/«эти выходн
 follow-up dates take precedence. Show resolved concrete dates in the reply/title
 so the user can correct the default. Calendar arithmetic only grounds the prompt;
 no regex/keyword search or deterministic genre interpretation is introduced.
+
+### Conversation review correction (2026-09-06, to-be → source implementation)
+
+- Clean conversation sections end with ordinary event cards only: no selection
+  control buttons or “about this selection” expander. All returned cards remain
+  accessible without a technical pagination footer; card like/share/ticket actions
+  and the common message/microphone composer remain.
+- Parent linkage is dialogue context, not candidate membership. Ordinary follow-up
+  searches the catalog again. Short deltas preserve relevant unchanged conditions;
+  a self-contained new topic clears unrelated old constraints. Explicit subset
+  refinement remains an internal supported mode, not the clean UI's default.
+- Optional genre alternatives are a union (symphonic music OR organ), not a demand
+  for both in one event. “Next week” is the next local Monday–Sunday; on Sunday it
+  starts tomorrow. “A week later” relative to a selection shifts its interval7days.
+- `audience_tags` is absent from the current projection: do not treat absent
+  metadata as rejection before verification. Defer audience semantics to the
+  mandatory full-window verifier using actual public programme/age/family facts.
+  This does not bypass verification or accept unknown suitability as exact.
+  Voice fact budget is2400characters, preserving the metadata tail when truncated.
+- After verified results, one optional shared-limiter **editorial** call comments
+  on up to3of the first12returned events (not a3-result cap). It receives only
+  selected public facts, full question and interpreted intent. Each recommendation
+  must reference a selected ID and a verbatim supporting fact; canonical titles
+  are rendered by the server. The text offers grounded editorial judgement,
+  not claimed objective ranking or fabricated personalization. Complete outcome
+  is checkpointed before accounting finalize; retries/status never regenerate it.
+  Failure/denial retains verified cards with a plain fallback, without a second
+  provider attempt. No editorial spend on empty/unverified selections.
+- Personalization remains **to-be** through the existing shared profile/consent,
+  not another toggle or separate profile. Current editorial is general guidance,
+  explicitly not a claim of knowing this user's preferences. Unknown child age
+  may be asked conversationally without blocking known family candidates.
