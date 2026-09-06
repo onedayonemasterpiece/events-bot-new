@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 - Added default-off owner OAuth event image stage/get tools with private attachment metadata, independent of social publishing flags; Codex remains read-only (#643).
+- Added current tenant-authorized publication evidence for accepted event-create
+  operations: canonical public URL records and bounded live JobOutbox state,
+  without fabricating live verification or static event-inclusion receipts (#643).
 
 - Added event-scoped private image staging/read/reverification over the existing
   secure media store, with durable principal-bound refs, exact digest/expiry
