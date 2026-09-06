@@ -257,8 +257,21 @@ export async function captureWithExactPlaywright({ nodeModules, dist, outputDir,
 export function observationDigest(rows) { return stableHash(rows); }
 
 /** Read-only resolved composition export; no native Penpot IDs or writes. */
-export async function captureFreeCollectionStructuralProjection({
+export async function captureFreeCollectionStructuralProjection(options) {
+  return captureRuntimeStructuralProjection({ ...options, surface: 'free-collection' });
+}
+
+/** Home is a second consumer of the same source/DOM/asset exporter, not a copy. */
+export async function captureHomeStructuralProjection(options) {
+  if (typeof options.validate !== 'function' || !options.profilePath) {
+    throw new Error('Home projection requires the executable DS profile and validator');
+  }
+  return captureRuntimeStructuralProjection({ ...options, surface: 'home' });
+}
+
+async function captureRuntimeStructuralProjection({
   page, manifestUrl, expectedSha, snapshot, repoRoot, expectedEventIds,
+  surface, profilePath, fixtureState = 'general-top-hydrated', validate,
 }) {
   const response = await page.request.get(manifestUrl);
   if (response.status() !== 200) throw new Error('Projection manifest is not HTTP 200');
@@ -274,21 +287,24 @@ export async function captureFreeCollectionStructuralProjection({
     sha256: sha(source(family.astro_root)),
     styles: family.style_owners.map((file) => ({ path: file, sha256: sha(source(file)) })),
     variants: family.variants, states: family.states, nested_families: family.nested_families,
+    penpot_binding: family.penpot_binding,
     token_refs: [...new Set([family.astro_root, ...family.style_owners].flatMap((file) =>
       [...source(file).toString('utf8').matchAll(/var\(\s*(--ke-[A-Za-z0-9_-]+)/gu)].map((match) => match[1])))].sort(),
   }));
-  const raw = await page.evaluate(({ sourceBindings, expectedEventIds }) => {
-    const root = document.querySelector('[data-free-collection-surface]');
-    const grid = root?.querySelector('[data-adaptive-event-card-grid]');
-    if (!root || !grid) throw new Error('Free collection root/grid missing');
+  const raw = await page.evaluate(({ sourceBindings, expectedEventIds, surface }) => {
+    const isHome = surface === 'home';
+    const root = isHome ? document.body : document.querySelector('[data-free-collection-surface]');
+    const feed = isHome ? root.querySelector('[data-home-cold-start-feed]') : root;
+    const grid = feed?.querySelector('[data-adaptive-event-card-grid]');
+    if (!root || !grid) throw new Error('Projection root/grid missing');
     const allCards = [...grid.querySelectorAll(':scope > [data-event-card]')];
-    const catalogNode = root.querySelector('#free-collection-catalog[type="application/json"]');
+    const catalogNode = !isHome && root.querySelector('#free-collection-catalog[type="application/json"]');
     const catalog = catalogNode ? JSON.parse(catalogNode.textContent || '{}') : null;
-    if (root.getAttribute('data-ds-variant') !== 'standard-free-listing' || !catalog
+    if (!isHome && (root.getAttribute('data-ds-variant') !== 'standard-free-listing' || !catalog
         || catalog.eligibility_filter !== 'confirmed-free' || catalog.page_size !== 12
         || catalog.preload_target !== 12 || !Array.isArray(catalog.related_static)
-        || catalog.related_static.some((candidate) => candidate?.is_free !== true)) throw new Error('Free ordinary filtered-list contract missing');
-    const cards = allCards.slice(0, 5);
+        || catalog.related_static.some((candidate) => candidate?.is_free !== true))) throw new Error('Free ordinary filtered-list contract missing');
+    const cards = isHome ? allCards.filter(card => !card.hidden) : allCards.slice(0, 5);
     const eventIds = cards.map((card) => card.dataset.eventId);
     if (JSON.stringify(eventIds) !== JSON.stringify(expectedEventIds)) throw new Error('Projection event order mismatch');
     const selected = new Set(cards);
@@ -333,14 +349,32 @@ export async function captureFreeCollectionStructuralProjection({
       item.children = [...node.childNodes].map((child, index) => walk(child, `${anatomyPath}/${index}`, owner)).filter(Boolean);
       return item;
     };
-    return { tree: walk(root, 'free-collection', null), tokens, event_ids: eventIds,
+    const base = { tree: walk(root, surface, null), tokens, event_ids: eventIds,
       viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio }, url: location.href,
-      total_grid_cards: allCards.length, sample_size: cards.length, catalog_total: catalog.related_static.length,
-      eligibility_filter: catalog.eligibility_filter };
-  }, { sourceBindings, expectedEventIds });
+      total_grid_cards: allCards.length, sample_size: cards.length };
+    if (!isHome) return { ...base, catalog_total: catalog.related_static.length, eligibility_filter: catalog.eligibility_filter };
+    const visible = node => node instanceof HTMLElement && !node.hidden && getComputedStyle(node).display !== 'none';
+    const home = root.querySelector('[data-home-page]');
+    const composition = [...home.querySelectorAll('[data-ds-family]')]
+      .map(node => node.dataset.dsFamily)
+      .filter(family => ['HomeHeroTalk','HomeQuickNav','HomeColdStartFeed','HeroTalkPageEnd'].includes(family));
+    const pageEnd = home.querySelector('[data-ds-family="HeroTalkPageEnd"]');
+    const mode = feed.dataset.homeFeedMode || '';
+    return { ...base, route: '/', profile_id: 'home.owner-review.v1', composition,
+      shell: { policy: root.dataset.shellComposition || root.dataset.shellPolicy || '',
+        global_navigation: Boolean(root.querySelector('.site-nav') && root.querySelector('[data-reference4-fullscreen]')),
+        header_in_flow: !['absolute','fixed'].includes(getComputedStyle(root.querySelector('.site-header')).position),
+        top_participant_count: [...root.querySelectorAll('[data-floating-page-context], [data-floating-islands-controls], .site-header__top-band')].filter(visible).length,
+        lower_island_count: [...root.querySelectorAll('[data-mobile-bottom-nav]')].filter(visible).length,
+        home_chat_count: home.querySelectorAll('[data-conversation-turn], [data-conversation-history], [data-search-result-host]').length },
+      page_end: { state: visible(pageEnd) ? 'shown' : 'suppressed', reason: visible(pageEnd) ? null : pageEnd?.dataset.suppressionReason || 'placement-not-eligible' },
+      feed: { budget: 30, candidate_pool_count: Number(home.dataset.homeEligibleCount),
+        mode: !cards.length ? 'empty' : ['personal','personalized','profile_feedback'].includes(mode) ? 'personal' : 'general',
+        stable_visible_prefix: feed.dataset.homeStablePrefix === 'true' } };
+  }, { sourceBindings, expectedEventIds, surface });
   const nodes = [];
   const annotate = (node, parentId = null) => {
-    node.stable_id = `free-collection.${stableHash(node.anatomy_path).slice(0, 24)}`;
+    node.stable_id = `${surface}.${stableHash(node.anatomy_path).slice(0, 24)}`;
     node.parent_id = parentId;
     if (node.svg) node.svg.sha256 = sha(node.svg.markup);
     nodes.push(node);
@@ -348,6 +382,8 @@ export async function captureFreeCollectionStructuralProjection({
   };
   annotate(raw.tree);
   const used = new Set(nodes.map((node) => node.containing_family).filter(Boolean));
+  const homeProfile = surface === 'home' ? JSON.parse(readFileSync(profilePath, 'utf8')) : null;
+  if (homeProfile) for (const id of [...homeProfile.families.map(row => row.id), ...homeProfile.shared_owners]) used.add(id);
   for (const id of used) for (const nested of sourceBindings.find((row) => row.id === id)?.nested_families || []) used.add(nested);
   const projectedBindings = sourceBindings.filter((row) => used.has(row.id));
   const referencedTokens = new Set(projectedBindings.flatMap((row) => row.token_refs));
@@ -366,7 +402,7 @@ export async function captureFreeCollectionStructuralProjection({
     node.image.asset_sha256 = assets[url].sha256;
   }
   const result = {
-    schema: 'current_ui_free_collection_structural_projection_v1',
+    schema: surface === 'home' ? 'current_ui_home_structural_projection_v1' : 'current_ui_free_collection_structural_projection_v1',
     status: 'STRUCTURAL_EXPORT_VALIDATED_NOT_PENPOT_ROUND_TRIP',
     provenance: { repo_sha: expectedSha, manifest_url: manifestUrl, manifest_sha256: sha(manifestBytes), manifest,
       snapshot, registry_path: registryPath, registry_sha256: sha(registryBytes),
@@ -375,6 +411,13 @@ export async function captureFreeCollectionStructuralProjection({
     assets,
     ...raw,
   };
-  assertFreeCollectionStructuralProjection(result, { expectedSha, expectedEventIds, repoRoot });
+  if (surface === 'home') {
+    result.provenance.profile_sha256 = sha(readFileSync(profilePath));
+    result.behavior_bindings = [...new Set([homeProfile.route_policy.source,
+      ...(homeProfile.behavior_sources || []), ...Object.values(homeProfile.capture_handoff || {}).filter(value => typeof value === 'string' && /\.ts$/u.test(value))])]
+      .map(path => ({ path, sha256: sha(source(path)) }));
+    result.fixture_state = fixtureState;
+    validate(result, { expectedSha, expectedEventIds, repoRoot, profilePath });
+  } else assertFreeCollectionStructuralProjection(result, { expectedSha, expectedEventIds, repoRoot });
   return result;
 }

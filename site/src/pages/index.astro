@@ -4,6 +4,9 @@ import PrelaunchLayout from '../layouts/PrelaunchLayout.astro';
 import HomeColdStartFeed from '../components/HomeColdStartFeed.astro';
 import HomeHeroTalk from '../components/HomeHeroTalk.astro';
 import { buildHomeHeroTalkDeck } from '../lib/homeHeroTalk.ts';
+import { homeSearchCapability } from '../lib/assistant/homeSearchCapability.ts';
+import HomeSearchEntry from '../components/HomeSearchEntry.astro';
+import HeroTalkPageEnd from '../components/HeroTalkPageEnd.astro';
 import HomeQuickNav from '../components/HomeQuickNav.astro';
 import PrelaunchPage from '../components/PrelaunchPage.astro';
 import type { PreviewEvent } from '../lib/types';
@@ -35,6 +38,8 @@ for (const event of [...popular, ...fallback]) {
   familyIds.forEach((id) => offeredFamilyIds.add(id));
 }
 const heroScenes = buildHomeHeroTalkDeck(getEvents(), currentDate, `home:${currentDate}`);
+const upperHeroIds=new Set(heroScenes.map(scene=>scene.event.id));
+const endHeroScenes=buildHomeHeroTalkDeck(getEvents().filter(event=>!upperHeroIds.has(event.id)),currentDate,`home-end:${currentDate}`);
 const title = SITE_NAME;
 const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';
 ---
@@ -56,7 +61,7 @@ const description = 'Афиша Калининграда без шума: пол
       id="main"
       class="home-page"
       data-ds-family="HomePage"
-      data-ds-version="1"
+      data-ds-version="2"
       data-ds-variant="cold-start"
       data-ds-state={feed.length ? 'populated' : 'empty'}
       data-home-page
@@ -65,15 +70,17 @@ const description = 'Афиша Калининграда без шума: пол
     >
       <div class="page-shell home-page__shell">
         <HomeHeroTalk scenes={heroScenes} />
+        <HomeSearchEntry variant="floating-link" />
         <HomeQuickNav />
         <HomeColdStartFeed events={feed} />
+        <HeroTalkPageEnd scenes={endHeroScenes} context={{route:'home',placement:'page_end',readyCapabilities:homeSearchCapability(import.meta.env) ? ['search'] : [],upperSceneIds:heroScenes.map(scene => scene.editorialId)}} />
       </div>
     </main>
   </EventLayout>
 )}
 
 <style>
-  .home-page { padding: 0 0 5rem; }
+  .home-page { padding: 0 0 calc(max(var(--ke-lower-surface-offset, 0px), var(--mobile-bottom-stack-h, 84px)) + var(--ke-space-6)); }
   .home-page__shell { width: min(1240px, calc(100% - 2rem)); }
   @media (max-width: 620px) {
     .home-page__shell { width: min(100% - 1rem, 46rem); padding-inline: 0; }

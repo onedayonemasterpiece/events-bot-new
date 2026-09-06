@@ -1,5 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import ConversationalSearch from '../../components/ConversationalSearch.astro';
 import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
 import SearchCollectionLinks from '../../components/SearchCollectionLinks.astro';
 import { absoluteUrl, SITE_NAME } from '../../lib/events';
@@ -17,7 +18,7 @@ const description = 'Векторный поиск по событиям Кал�
     data-ds-state="runtime-pending"
   >
     <div class="page-shell page-shell--search">
-      <AuthorizedEventSearch standalone headingLevel="h1" />
+      <AuthorizedEventSearch standalone headingLevel="h1"><ConversationalSearch /></AuthorizedEventSearch>
       <SearchCollectionLinks />
     </div>
   </main>

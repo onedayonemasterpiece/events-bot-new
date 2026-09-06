@@ -1,0 +1,130 @@
+---
+import { withBase } from '../lib/events';
+import '../styles/staticSiteSignIn.css';
+interface Props { catalog?: boolean; clean?: boolean; }
+const { catalog = false, clean = false } = Astro.props;
+const captureOnly = import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY === '1';
+const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED === '1' && import.meta.env.PUBLIC_SITE_MODE !== 'production');
+---
+{enabled && <div class="assistant" data-assistant data-assistant-clean-ui={clean ? 'true' : undefined} data-assistant-phase="landing" data-assistant-host={import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_HOST === 'devcoveer' ? 'devcoveer' : undefined} data-assistant-capture-only={captureOnly ? 'true' : undefined} data-ds-component="ConversationalSearch" data-ds-family="ConversationalSearch" data-ds-version="1" data-ds-variant="conversation" data-ds-state="landing" data-assistant-catalog={catalog ? 'true' : undefined} data-assistant-worklet={withBase('/voice/pcm-capture-worklet.js')} data-nosnippet>
+  {clean && <div class="assistant__minimal-tools">
+    <button type="button" data-assistant-sign-in-open>Войти</button>
+    <button type="button" data-assistant-recovery-open aria-label="История и восстановление записей" title="История и записи">История</button>
+  </div>}
+  {clean && <div data-assistant-sign-in hidden></div>}
+  <div class="assistant__voice-dock" data-assistant-dock data-capture-state="idle">
+    {clean && <form class="assistant__quick-form" data-assistant-quick-form>
+      <label class="sr-only" for="voice-quick-message">Что хочется найти?</label>
+      <input id="voice-quick-message" data-assistant-quick-input type="text" maxlength="8192" placeholder="Что хочется найти?" autocomplete="off" enterkeyhint="send" />
+      <button type="submit" aria-label="Отправить сообщение" title="Отправить"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </form>}
+    <div class="assistant__voice-info">
+      <span data-assistant-timer hidden aria-hidden="true">0:00</span>
+      <span data-assistant-live role="status" aria-live="polite">Голосовой поиск</span>
+      <button type="button" data-assistant-details aria-controls="voice-composer" aria-expanded="false">Написать сообщение</button>
+    </div>
+    <button type="button" class="assistant__launcher" data-assistant-launcher aria-label="Начать запись голосом" aria-pressed="false" title="Начать запись голосом">
+      <span class="assistant__mic-halo" aria-hidden="true"></span>
+      <svg class="assistant__mic-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg>
+      <span class="assistant__stop-icon" aria-hidden="true"></span>
+    </button>
+  </div>
+  <section id="voice-composer" data-assistant-composer aria-labelledby="voice-composer-title" hidden>
+    <div class="assistant__dialog-head"><h2 id="voice-composer-title">Куда хочется сходить?</h2><button type="button" data-assistant-close aria-label="Свернуть запрос и записи">×</button></div>
+    {captureOnly && <p data-assistant-preview-limit role="note">Распознавание и ответы нейросети пока не подключены. Здесь можно проверить микрофон; аудио остаётся в этом браузере и не отправляется на сервер.</p>}
+    <p data-assistant-auth role="status">Подключаю существующий вход поиска…</p>
+    <button type="button" class="cta-button" data-assistant-login hidden>Войти через Яндекс</button>
+    <div class="assistant__controls">
+      <button class="secondary-button" type="button" data-assistant-record>Начать запись</button>
+      <button class="cta-button" type="button" data-assistant-stop hidden>Остановить запись</button>
+      <button class="secondary-button" type="button" data-assistant-save-retry hidden>Сохранить оставшееся аудио</button>
+    </div>
+    <p data-assistant-capture>Микрофон выключен.</p>
+    <form data-assistant-form hidden={captureOnly}>
+      <p data-assistant-base>Новый поиск</p>
+      <label class="ke-field"><span class="ke-field__label">Ваш запрос — можно исправить или написать</span>
+        <textarea class="ke-field__control" rows="2" data-assistant-text placeholder="Например: завтра вечером на побережье, не концерт" disabled></textarea>
+      </label>
+      <div class="assistant__controls">
+        <button class="cta-button" type="submit" data-assistant-submit disabled>Отправить</button>
+        <button class="secondary-button" type="button" data-assistant-new disabled>Новый поиск</button>
+        <button class="secondary-button" type="button" data-assistant-resume hidden>Проверить обработку</button>
+      </div>
+    </form>
+    <p data-assistant-processing></p>
+    <details data-assistant-recordings hidden><summary>Аудио и восстановление</summary><div data-assistant-recording-list></div></details>
+  </section>
+  <details data-assistant-history hidden><summary>Предыдущие подборки</summary><button type="button" class="secondary-button" data-assistant-history-load disabled>Показать предыдущие</button><div data-assistant-history-list></div></details>
+  <button type="button" class="secondary-button" data-assistant-latest hidden>Новый ответ ↓</button>
+  <div data-assistant-answers aria-label="Переписка с поиском"></div>
+  {catalog && <p class="muted-note">Каталожный образец, без входа и обращений к модели. Состояния: запись, сохранение, частичная запись, ожидание, ответ, уточнение, восстановление.</p>}
+</div>}
+<script>
+  import { mountComposerPresentation } from '../lib/assistant/composerPresentation';
+  import { mountConversationalSearch } from '../lib/assistant/conversationalSearch';
+  document.querySelectorAll<HTMLElement>('[data-assistant]').forEach(root => {
+    const presentation = mountComposerPresentation(root);
+    void mountConversationalSearch(root, presentation).catch(() => presentation.fail());
+  });
+</script>
+<style is:global>
+  [data-assistant] { display: grid; gap: var(--ke-space-4); margin-block: var(--ke-space-6); }
+  [data-assistant] [hidden] { display: none !important; }
+  [data-assistant-composer] { border:1px solid #e6dcd2; border-radius:26px; background:#fffcf7; color:#2b221b; padding:24px; width:100%; max-height:none; box-sizing:border-box; box-shadow:0 18px 56px #38271c33; }
+  [data-assistant-composer] > * + * { margin-block-start:16px; }
+  .assistant__dialog-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .assistant__dialog-head h2 { font-size:22px; margin:0; }
+  [data-assistant-close] { border:0; background:transparent; color:inherit; font-size:28px; width:44px; height:44px; cursor:pointer; flex-shrink:0; }
+  [data-assistant-preview-limit] { font-size:14px; line-height:1.5; background:#f4ede5; border-radius:14px; padding:12px; }
+  [data-assistant-auth]:empty, [data-assistant-processing]:empty { display:none; }
+  .assistant__voice-info { max-width:min(280px, calc(100vw - 124px)); background:#fffcf7; padding:10px 14px; border-radius:18px; box-shadow:0 4px 16px #38231620; font-size:13px; line-height:1.4; }
+  [data-assistant-live] { display:block; }
+  [data-assistant-timer] { font-variant-numeric:tabular-nums; font-size:17px; font-weight:750; }
+  [data-assistant-details] { display:block; border:0; background:none; padding:5px 0; color:#974324; font:inherit; cursor:pointer; }
+  .assistant__mic-halo { position:absolute; inset:-7px; border-radius:50%; border:2px solid #a0442560; pointer-events:none; }
+  [data-capture-state="recording"] .assistant__mic-halo { animation:assistant-mic-breathe 1.8s ease-in-out infinite; }
+  [data-capture-state="transcribing"] .assistant__mic-halo { border-color:#a0442525; border-top-color:#a04425; animation:assistant-asr-spin 1.1s linear infinite; }
+  @keyframes assistant-asr-spin { to {transform:rotate(360deg);} }
+  @keyframes assistant-mic-breathe { 50% { transform:scale(1.15); opacity:.3; } }
+  .assistant__stop-icon { display:none; width:19px; height:19px; border-radius:4px; background:currentColor; }
+  [data-capture-state="recording"] .assistant__stop-icon, [data-capture-state="requesting"] .assistant__stop-icon { display:block; }
+  [data-capture-state="recording"] .assistant__mic-icon, [data-capture-state="requesting"] .assistant__mic-icon { display:none; }
+  [data-capture-state="stopping"] .assistant__mic-halo { border-style:dashed; }
+  @media(prefers-reduced-motion:reduce) { [data-capture-state="recording"] .assistant__mic-halo, [data-capture-state="transcribing"] .assistant__mic-halo { animation:none; } }
+  [data-assistant] button:disabled { opacity:.45; cursor:not-allowed; }
+  [data-assistant] button:focus-visible { outline:3px solid #984321; outline-offset:3px; }
+  .assistant__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ke-space-2); }
+  [data-assistant] textarea { resize: vertical; min-block-size: 7rem; width: 100%; box-sizing: border-box; }
+  [data-assistant] details { overflow-wrap: anywhere; }
+  [data-assistant-recording-list], [data-assistant-history-list] { display: grid; gap: var(--ke-space-3); margin-block: var(--ke-space-3); }
+  [data-assistant-answers] { display: grid; gap: var(--ke-space-8); }
+  [data-assistant-section] { display: grid; gap: var(--ke-space-4); padding-block: var(--ke-space-4); border-block-start: 1px solid var(--ke-color-line); }
+  [data-assistant-section] h2 { margin: 0; font-size: var(--ke-font-size-500); overflow-wrap: anywhere; }
+  [data-assistant-question] { white-space: pre-wrap; overflow-wrap: anywhere; }
+  [data-assistant-recording-list] audio { max-width: 100%; }
+</style>
+<style is:global>
+  .assistant__turn { display:grid; gap:24px; padding-block:20px; scroll-margin-top:130px; min-width:0; }
+  .assistant__user-message { justify-self:end; width:fit-content; max-width:min(80%,680px); padding:14px 20px; border-radius:22px 22px 6px 22px; background:#f0e3d6; color:#30241b; }
+  .assistant__speaker { display:block; color:#855138; font-size:12px; font-weight:650; margin-bottom:5px; }
+  .assistant__user-message p { margin:0; line-height:1.55; }
+  .assistant__response { display:grid; gap:16px; min-width:0; }
+  .assistant__response > p { max-width:75ch; margin:0; line-height:1.6; }
+  .assistant__turn-status { color:#796959; font-size:14px; }
+  .assistant__skeleton { display:grid; gap:24px; }
+  .assistant__skeleton-lines { display:grid; gap:10px; max-width:650px; }
+  .assistant__skeleton-lines .ke-skeleton { display:block; height:13px; }
+  .assistant__skeleton-lines .ke-skeleton:last-child { width:58%; }
+  .assistant__skeleton-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; }
+  .assistant__skeleton-card { display:grid; gap:12px; min-width:0; }
+  .assistant__skeleton-card > span { display:block; height:14px; width:88%; }
+  .assistant__skeleton-card > span:last-child { width:58%; }
+  .assistant__skeleton-poster { aspect-ratio:1.4; border-radius:18px; }
+  [data-capture-state="saved"] .assistant__mic-halo { border-color:#a0442530; }
+  @media(max-width:600px) {
+    .assistant__turn { gap:20px; }
+    .assistant__user-message { max-width:92%; padding:12px 16px; }
+    .assistant__skeleton-cards { grid-template-columns:1fr; gap:24px; }
+    .assistant__skeleton-card:last-child { display:none; }
+  }
+</style>

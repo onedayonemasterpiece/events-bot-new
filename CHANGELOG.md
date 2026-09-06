@@ -14,6 +14,19 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Fixed
+- Shared lower-island shadow, contextual exhibition badge in mobile menu, and clearer Home feed labels.
+- Home Hero word timing and mobile mosaic rendering; page-end reuses the animated Hero renderer with a separate event deck.
+- Home voice-review fixes: preview calendar links use packaged ICS, failed downloads stay on page, and feedback reconciliation preserves reading position.
+- Shared “Афиша” bottom navigation returns Home; mobile menu exposes an explicit “Главная” link.
+- Latest Home review: Hero starts at page top with internal mobile menu clearance and a floating Search link replaces the inline input; shared desktop/mobile navigation remains.
+- Home keeps shared desktop navigation island and mobile Reference4 menu; only contextual upper islands are suppressed.
+
+### Added
+- Home owner-review candidate: shared navigation without contextual upper islands, inline durable voice/text handoff to existing Search, compact quick links, full-pool shared ranked feed and shared Hero-talk page-end. Existing Hero mosaic and other page shells are preserved.
+- Source-bound Home structural export alongside the existing Free exporter, executable Home UI SoT profile and isolated preview-only assistant public configuration through the existing Kaggle rail. No production promotion.
+
+
+### Fixed
 - Listing cards now also fill their frames after natural-ratio allocation; shared MediaFrame replaces a competing route-level contain rule that left small bands on Today/Tomorrow/Date. Mobile rails retain natural dimensions while absorbing thumbnail rounding without bands. Missing/broken resource behavior is preserved.
 - Token-impact graph and consumer-closure checks recognize the approved exhibition shared-card radius alias and reject private literal substitutions; frozen preview runtime is unchanged.
 - Shared card framing now uses minimal cover as the final no-fields fallback after full-pool grouping, with honest unverified-crop diagnostics and natural mobile frames. Exhibition large corners consume common card/hero roles; redundant desktop Today/Tomorrow/Date pills are hidden without changing mobile navigation.

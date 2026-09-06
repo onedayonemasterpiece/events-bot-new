@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "19d1be363c5347743ff4f75f69bb032017a7ee8161aa6418b29a9e75c23c0eca",
+  "registry_sha256": "bf493e6049f09fc9c78563a9257657e4b0965fc2cdae4a915a2f4a71c8d66874",
   "source_root": "site/src",
-  "import_inventory_sha256": "5afa24e20e6608779e15ac98431bbed9dc63fe3e7d59190c527e8c49d3c4d2bf",
+  "import_inventory_sha256": "6e6866de6778c210be432564cf3363596a1f59cb0a0413c5b4de1426f566d907",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -92,6 +92,7 @@
       "site/src/components/ClubCatalogKeyboard.astro",
       "site/src/components/clubCatalogNavigation.mjs",
       "site/src/components/CollectionCatalog.astro",
+      "site/src/components/ConversationalSearch.astro",
       "site/src/components/design-system/Badge.astro",
       "site/src/components/design-system/Button.astro",
       "site/src/components/design-system/check-f0-exhibitions-residual-contract.mjs",
@@ -169,9 +170,11 @@
       "site/src/components/FocusPwaInstallAction.astro",
       "site/src/components/FreeCollectionSurface.astro",
       "site/src/components/GastronomyCollectionSurface.astro",
+      "site/src/components/HeroTalkPageEnd.astro",
       "site/src/components/HomeColdStartFeed.astro",
       "site/src/components/HomeHeroTalk.astro",
       "site/src/components/HomeQuickNav.astro",
+      "site/src/components/HomeSearchEntry.astro",
       "site/src/components/Icon.astro",
       "site/src/components/InterestClubCard.astro",
       "site/src/components/InterestProfile.astro",
@@ -242,6 +245,31 @@
       "site/src/layouts/PrelaunchLayout.astro",
       "site/src/lib/artifacts.mjs",
       "site/src/lib/assets.ts",
+      "site/src/lib/assistant/assistantClient.ts",
+      "site/src/lib/assistant/assistantSurface.ts",
+      "site/src/lib/assistant/audioSegments.ts",
+      "site/src/lib/assistant/composerPresentation.ts",
+      "site/src/lib/assistant/compressedCapture.ts",
+      "site/src/lib/assistant/conversationalSearch.ts",
+      "site/src/lib/assistant/conversationController.ts",
+      "site/src/lib/assistant/conversationState.ts",
+      "site/src/lib/assistant/conversationTurn.ts",
+      "site/src/lib/assistant/domain/assistant-adaptive-plan.ts",
+      "site/src/lib/assistant/domain/assistant-audio.ts",
+      "site/src/lib/assistant/domain/assistant-dialogue.ts",
+      "site/src/lib/assistant/domain/assistant-intent.ts",
+      "site/src/lib/assistant/domain/assistant-media.ts",
+      "site/src/lib/assistant/domain/assistant-query-plan.ts",
+      "site/src/lib/assistant/homeHandoffReceiver.ts",
+      "site/src/lib/assistant/homeSearchCapability.ts",
+      "site/src/lib/assistant/homeSearchEntry.ts",
+      "site/src/lib/assistant/measurement.ts",
+      "site/src/lib/assistant/microphoneCapture.ts",
+      "site/src/lib/assistant/searchHandoff.ts",
+      "site/src/lib/assistant/silenceEndpoint.ts",
+      "site/src/lib/assistant/streamingAudio.ts",
+      "site/src/lib/assistant/voiceDiagnostics.ts",
+      "site/src/lib/assistant/voiceStore.ts",
       "site/src/lib/backendOperationCatalog.ts",
       "site/src/lib/breadcrumbs.ts",
       "site/src/lib/browserStorage.ts",
@@ -281,7 +309,9 @@
       "site/src/lib/focus-personalization.ts",
       "site/src/lib/focus-pwa-install-controller.ts",
       "site/src/lib/freeCollection.mjs",
+      "site/src/lib/heroTalkPlacement.ts",
       "site/src/lib/homeFeed.mjs",
+      "site/src/lib/homeFeedRuntime.ts",
       "site/src/lib/homeHeroTalk.ts",
       "site/src/lib/ics.ts",
       "site/src/lib/icsFilenames.mjs",
@@ -321,12 +351,14 @@
       "site/src/lib/savedEvents.ts",
       "site/src/lib/seo.ts",
       "site/src/lib/service-share/controller.js",
+      "site/src/lib/shellComposition.ts",
       "site/src/lib/shellOccupiedSpace.mjs",
       "site/src/lib/staticAuthReset.ts",
       "site/src/lib/staticCollections.ts",
       "site/src/lib/staticEventDates.ts",
       "site/src/lib/staticSiteAuth.test.ts",
       "site/src/lib/staticSiteAuth.ts",
+      "site/src/lib/staticSiteSignIn.ts",
       "site/src/lib/transportExperiment.ts",
       "site/src/lib/transportExperimentClient.ts",
       "site/src/lib/transportFaultInjector.e2e.ts",
@@ -380,24 +412,25 @@
       "site/src/styles/prelaunch-consent.css",
       "site/src/styles/prelaunch-page.css",
       "site/src/styles/prelaunch-polish.css",
-      "site/src/styles/prelaunch-static.css"
+      "site/src/styles/prelaunch-static.css",
+      "site/src/styles/staticSiteSignIn.css"
     ],
     "policy": "Exclude only proven service-only closure; retain shared, explicit runtime and unresolved sources."
   },
   "summary": {
-    "product_family_count": 107,
-    "family_count": 109,
-    "source_file_count": 322,
-    "import_edge_count": 822,
-    "direct_consumer_edges": 275,
-    "protocol_consumer_edges": 33,
-    "runtime_factory_edges": 1,
-    "runtime_consumer_edges": 4,
-    "production_route_edges": 547,
-    "unique_direct_consumers": 119,
-    "unique_protocol_consumers": 33,
+    "product_family_count": 110,
+    "family_count": 112,
+    "source_file_count": 355,
+    "import_edge_count": 908,
+    "direct_consumer_edges": 288,
+    "protocol_consumer_edges": 34,
+    "runtime_factory_edges": 2,
+    "runtime_consumer_edges": 9,
+    "production_route_edges": 551,
+    "unique_direct_consumers": 122,
+    "unique_protocol_consumers": 34,
     "unique_runtime_factories": 1,
-    "unique_runtime_consumers": 4,
+    "unique_runtime_consumers": 6,
     "unique_production_routes": 27
   },
   "families": {
@@ -441,6 +474,18 @@
         },
         {
           "path": "site/src/components/FavoritesSurface.astro",
+          "symbols": [
+            "KenigEventsCreateEventCard"
+          ]
+        },
+        {
+          "path": "site/src/lib/assistant/conversationalSearch.ts",
+          "symbols": [
+            "KenigEventsCreateEventCard"
+          ]
+        },
+        {
+          "path": "site/src/lib/homeFeedRuntime.ts",
           "symbols": [
             "KenigEventsCreateEventCard"
           ]
@@ -1107,7 +1152,7 @@
       ]
     },
     "EventLayout": {
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro"
@@ -1227,12 +1272,31 @@
         "site/src/pages/vystavki/index.astro",
         "site/src/pages/zavtra/index.astro"
       ],
-      "runtime_factories": [],
+      "runtime_factories": [
+        {
+          "path": "site/src/layouts/EventLayout.astro",
+          "symbols": [
+            "KenigEventsSearchCardHost"
+          ]
+        }
+      ],
       "runtime_clients": [
         {
           "path": "site/src/layouts/EventLayout.astro",
           "symbols": [
             "shellOccupiedSpace"
+          ]
+        },
+        {
+          "path": "site/src/lib/assistant/conversationalSearch.ts",
+          "symbols": [
+            "KenigEventsSearchCardHost"
+          ]
+        },
+        {
+          "path": "site/src/lib/homeFeedRuntime.ts",
+          "symbols": [
+            "KenigEventsSearchCardHost"
           ]
         },
         {
@@ -1413,7 +1477,7 @@
       ]
     },
     "HomePage": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/pages/index.astro",
       "style_owners": [
         "site/src/pages/index.astro"
@@ -1438,7 +1502,7 @@
       ]
     },
     "HomeColdStartFeed": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HomeColdStartFeed.astro",
       "style_owners": [
         "site/src/components/HomeColdStartFeed.astro"
@@ -1454,7 +1518,15 @@
         "site/src/pages/index.astro"
       ],
       "runtime_factories": [],
-      "runtime_clients": [],
+      "runtime_clients": [
+        {
+          "path": "site/src/lib/homeFeedRuntime.ts",
+          "symbols": [
+            "KenigEventsCreateEventCard",
+            "KenigEventsSearchCardHost"
+          ]
+        }
+      ],
       "production_routes": [
         {
           "pattern": "/",
@@ -2020,7 +2092,10 @@
         "site/src/components/design-system/StatePanel.astro",
         "site/src/components/FocusGroupFeedback.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/HeroTalkPageEnd.astro",
         "site/src/components/HomeHeroTalk.astro",
+        "site/src/components/HomeQuickNav.astro",
+        "site/src/components/HomeSearchEntry.astro",
         "site/src/layouts/EventLayout.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
@@ -2033,7 +2108,10 @@
         "site/src/components/design-system/StatePanel.astro",
         "site/src/components/FocusGroupFeedback.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
+        "site/src/components/HeroTalkPageEnd.astro",
         "site/src/components/HomeHeroTalk.astro",
+        "site/src/components/HomeQuickNav.astro",
+        "site/src/components/HomeSearchEntry.astro",
         "site/src/layouts/EventLayout.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
@@ -2228,18 +2306,29 @@
       "astro_root": "site/src/components/design-system/Field.astro",
       "style_owners": [],
       "direct_component_consumers": [
+        "site/src/components/HomeSearchEntry.astro",
         "site/src/pages/lab/design-system/index.astro"
       ],
       "direct_style_consumers": [],
       "protocol_consumers": [],
       "direct_consumers": [
+        "site/src/components/HomeSearchEntry.astro",
         "site/src/pages/lab/design-system/index.astro"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
-      "production_routes": [],
-      "production_route_patterns": [],
-      "production_route_sources": []
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
     },
     "StatePanel": {
       "version": 2,
@@ -2322,6 +2411,7 @@
         "site/src/components/FocusEggSavedListDemo.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupThankYou.astro",
+        "site/src/components/HomeQuickNav.astro",
         "site/src/components/InterestClubCard.astro",
         "site/src/components/InterestProfile.astro",
         "site/src/pages/festivali/index.astro",
@@ -2350,6 +2440,7 @@
         "site/src/components/FocusGroupFeedback.astro",
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupThankYou.astro",
+        "site/src/components/HomeQuickNav.astro",
         "site/src/components/InterestClubCard.astro",
         "site/src/components/InterestProfile.astro",
         "site/src/components/listings/mobile-listing-foundation-bindings.css",
@@ -3482,20 +3573,26 @@
       ]
     },
     "HomeHeroTalk": {
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
       ],
       "direct_component_consumers": [
-        "site/src/pages/index.astro"
+        "site/src/components/HeroTalkPageEnd.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
       ],
       "direct_style_consumers": [
-        "site/src/pages/index.astro"
+        "site/src/components/HeroTalkPageEnd.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
       ],
       "protocol_consumers": [],
       "direct_consumers": [
-        "site/src/pages/index.astro"
+        "site/src/components/HeroTalkPageEnd.astro",
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -3513,20 +3610,23 @@
       ]
     },
     "HomeQuickNav": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/HomeQuickNav.astro",
       "style_owners": [
         "site/src/components/HomeQuickNav.astro"
       ],
       "direct_component_consumers": [
-        "site/src/pages/index.astro"
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
       ],
       "direct_style_consumers": [
-        "site/src/pages/index.astro"
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
       ],
       "protocol_consumers": [],
       "direct_consumers": [
-        "site/src/pages/index.astro"
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -6571,6 +6671,106 @@
         "site/src/pages/vyhodnye/index.astro",
         "site/src/pages/vystavki/index.astro",
         "site/src/pages/zavtra/index.astro"
+      ]
+    },
+    "HeroTalkPageEnd": {
+      "version": 2,
+      "astro_root": "site/src/components/HeroTalkPageEnd.astro",
+      "style_owners": [
+        "site/src/components/HeroTalkPageEnd.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
+    },
+    "HomeSearchEntry": {
+      "version": 2,
+      "astro_root": "site/src/components/HomeSearchEntry.astro",
+      "style_owners": [
+        "site/src/components/HomeSearchEntry.astro"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/index.astro",
+        "site/src/pages/lab/design-system/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/",
+          "source": "site/src/pages/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/index.astro"
+      ]
+    },
+    "ConversationalSearch": {
+      "version": 1,
+      "astro_root": "site/src/components/ConversationalSearch.astro",
+      "style_owners": [
+        "site/src/components/ConversationalSearch.astro",
+        "site/src/styles/staticSiteSignIn.css"
+      ],
+      "direct_component_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "direct_style_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "protocol_consumers": [],
+      "direct_consumers": [
+        "site/src/pages/poisk/index.astro"
+      ],
+      "runtime_factories": [],
+      "runtime_clients": [],
+      "production_routes": [
+        {
+          "pattern": "/poisk/",
+          "source": "site/src/pages/poisk/index.astro"
+        }
+      ],
+      "production_route_patterns": [
+        "/poisk/"
+      ],
+      "production_route_sources": [
+        "site/src/pages/poisk/index.astro"
       ]
     }
   }

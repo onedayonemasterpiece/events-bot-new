@@ -42,7 +42,7 @@ test('MobileBottomNav delegates visible glyphs to canonical semantic/asset owner
   assert.match(nav, /aria-label="Навигация по афише"/u);
   assert.equal(count(nav, /aria-current=\{item\.key === current/gu), 1);
   for (const [label, route] of [
-    ['Афиша', '/populyarnoe/'],
+    ['Афиша', '/'],
     ['Даты', '/segodnya/'],
     ['Поиск', '/poisk/'],
     ['Для меня', '/dlya-menya/'],
