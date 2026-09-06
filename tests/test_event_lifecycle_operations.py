@@ -25,13 +25,13 @@ async def prepared(tmp_path, monkeypatch):
         event = con.execute('SELECT * FROM event ORDER BY id').fetchone()
         action = LifecycleAction(event['id'], 'CANCEL', _revision(event), 'oauth-owner', 'client', 'resource')
         con.execute('INSERT INTO event_change_log(operation_ref,operation_kind,actor_subject,actor_client_id,actor_audience,idempotency_hash,action_digest,source_type,source_url,request_json,status,event_id,base_event_revision,organizer_comment) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            ('op-1','event_cancel',action.actor_subject,action.actor_client_id,action.actor_audience,'idem',action.digest,'owner','',json.dumps(action.payload()),'processing',action.event_id,action.base_event_revision,'private audit preserved'))
+            ('evt_op_aaaaaaaaaaaaaaaaaaaaaaaa','event_cancel',action.actor_subject,action.actor_client_id,action.actor_audience,'idem',action.digest,'owner','',json.dumps(action.payload()),'processing',action.event_id,action.base_event_revision,'private audit preserved'))
     return path, action
 
 
 def apply(prepared, **kwargs):
     path, action = prepared
-    return apply_lifecycle_operation(path, operation_ref='op-1', action=action,
+    return apply_lifecycle_operation(path, operation_ref='evt_op_aaaaaaaaaaaaaaaaaaaaaaaa', action=action,
         expected_action_digest=action.digest, authorize=kwargs.pop('authorize', lambda conn, a: True),
         verify_review=kwargs.pop('verify_review', lambda conn, a, op, digest: True), **kwargs)
 
@@ -56,7 +56,7 @@ async def test_atomic_transition_history_and_replay(prepared, kind, target):
         calls.append(id(conn))
         return True
     def review(conn,a,op,digest):
-        assert id(conn)==calls[-1] and op=='op-1' and digest==action.digest
+        assert id(conn)==calls[-1] and op=='evt_op_aaaaaaaaaaaaaaaaaaaaaaaa' and digest==action.digest
         return True
     result = apply(prepared, authorize=policy, verify_review=review)
     assert result['downstream']=='reconciliation_required'
@@ -98,6 +98,7 @@ async def test_revoked_or_unreviewed_denies_before_and_after_acceptance(prepared
     "UPDATE event_change_log SET status='rejected'",
     "UPDATE event_change_log SET status='queued'",
     "UPDATE event_change_log SET request_json='{}'",
+    "UPDATE event_change_log SET result_json='{}'",
 ])
 async def test_stale_foreign_unclaimed_denied(prepared,sql):
     with sqlite3.connect(prepared[0]) as con: con.execute(sql)
@@ -117,7 +118,7 @@ async def test_receipt_failure_rolls_back_event(prepared):
 @pytest.mark.asyncio
 async def test_tampered_receipt_and_digest_fail(prepared):
     with pytest.raises(LifecycleOperationError):
-        apply_lifecycle_operation(prepared[0],operation_ref='op-1',action=prepared[1],expected_action_digest='0'*64,authorize=lambda *a:True,verify_review=lambda *a:True)
+        apply_lifecycle_operation(prepared[0],operation_ref='evt_op_aaaaaaaaaaaaaaaaaaaaaaaa',action=prepared[1],expected_action_digest='0'*64,authorize=lambda *a:True,verify_review=lambda *a:True)
     apply(prepared)
     with sqlite3.connect(prepared[0]) as con: con.execute("UPDATE event_change_log SET after_json='{}'")
     with pytest.raises(LifecycleOperationError): apply(prepared)
@@ -159,7 +160,7 @@ async def test_current_policy_reads_exact_locked_connection(prepared):
     assert row(path)['lifecycle_status']=='active'
 
 
-@pytest.mark.parametrize('changes',[{'event_id':True},{'action':[]},{'base_event_revision':None},{'actor_subject':''}])
+@pytest.mark.parametrize('changes',[{'event_id':True},{'action':[]},{'base_event_revision':None},{'actor_subject':''},{'actor_client_id':'bad\nclient'}])
 def test_malformed_action(changes):
     action=LifecycleAction(1,'CANCEL','a'*64,'owner','client','resource')
     with pytest.raises(LifecycleOperationError): replace(action,**changes).payload()
