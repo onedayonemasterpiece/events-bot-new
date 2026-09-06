@@ -30,7 +30,7 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
   const record=get<HTMLButtonElement>('record'),stop=get<HTMLButtonElement>('stop'),submit=get<HTMLButtonElement>('submit');
   const text=get<HTMLTextAreaElement>('text'),processing=get('processing'),captureStatus=get('capture'),baseLabel=get('base');
   const answers=get('answers'),historyList=get('history-list'),recordings=get('recording-list'),resume=get<HTMLButtonElement>('resume');
-  const host=window as Host;let owner='';let generation=0;let store:VoiceStore;
+  const host=window as Host;let owner='';let authSeen=false;let generation=0;let store:VoiceStore;
   let controller:ConversationController|null=null;let capture:MicrophoneCapture|null=null;let recordingId:string|null=null;
   let recordingOwner='';let selectedBase:string|null=null;let mode:Mode='new_search';let viewed:string|null=null;let latest:string|null=null;
   let cursor:string|undefined;let state=initialState();let transition=Promise.resolve();let accepting=false;
@@ -95,6 +95,7 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     const heading=node('h2',result.title);heading.tabIndex=-1;section.append(heading);
     const question=node('details');const summary=node('summary','Исходный запрос');const raw=node('p',result.question||'');raw.dataset.assistantQuestion='';question.append(summary,raw);section.append(question);
     if(result.parentId)section.append(node('p',`Уточнение предыдущей подборки`));
+    if(result.membership_complete!==true&&!result.clarification&&result.explanationKind==='none')section.append(node('p','Это ограниченное поисковое окно, не весь каталог. «Уточнить» работает с этой подборкой; для расширения выберите «Изменить условия и искать заново».'));
     section.append(node('p',result.answer||''));
     const grid=node('div');grid.className='cards-grid cards-grid--immersive';grid.dataset.assistantCards='';section.append(grid);
     const entry={element:section,result,count:0,ids:[] as string[]};rendered.set(result.id,entry);
@@ -155,7 +156,17 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     void capture.start().catch(()=>{void finalize({complete:false,reason:'capture_failed',frames:0,savedFrames:0,sampleRate:0,partCount:0});});void created.catch(showError);
   });
   stop.addEventListener('click',()=>{const id=recordingId,own=recordingOwner;void capture?.stop().then(async receipt=>{if(id){await store.finish(own,id,receipt);if(owner===own)await loadRecordings();}}).catch(showError);});
-  get('save-retry').addEventListener('click',()=>{void capture?.retryUnsaved().then(left=>{get('save-retry').hidden=left===0;record.disabled=!owner||left>0;captureStatus.textContent=left?'Часть аудио пока остаётся только в памяти.':'Оставшееся аудио сохранено.';}).catch(showError);});
+  get('save-retry').addEventListener('click',()=>{
+    const active=capture,id=recordingId,own=recordingOwner;if(!active||!id)return;
+    const retry=get<HTMLButtonElement>('save-retry');retry.disabled=true;
+    void active.retryUnsaved().then(async left=>{
+      const receipt=active.receipt();if(receipt)await store.finish(own,id,receipt);
+      if(owner!==own||capture!==active)return;
+      retry.hidden=left===0;record.disabled=!owner||left>0;
+      captureStatus.textContent=left?'Часть аудио пока остаётся только в памяти.':receipt?.complete?'Запись полностью сохранена. Её можно распознать ниже.':'Сохранённая часть записи доступна ниже. Прерывание записи не отменено.';
+      await loadRecordings();
+    }).catch(showError).finally(()=>{retry.disabled=false;});
+  });
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&capture?.status==='recording'){event.preventDefault();void capture.stop();}});
   get<HTMLFormElement>('form').addEventListener('submit',event=>{
     event.preventDefault();if(!controller||!text.value.trim()||accepting)return;accepting=true;const raw=text.value;const active=controller;
@@ -197,7 +208,7 @@ export async function mountConversationalSearch(root:HTMLElement):Promise<void>{
     diagnostic:()=>({contract:'kenigevents.voice-diagnostic.v1',capture:capture?.status||'idle',pending:!!state.draft,acceptedThrough:state.acceptedThrough,processedThrough:state.processedThrough,readout:measurement.readout()})});
   auth.subscribe(snapshot=>{
     const next=snapshot.status==='signed_in'&&snapshot.user&&!snapshot.user.is_anonymous?snapshot.user.id:'';
-    if(next===owner)return;owner=next;const epoch=++generation;
+    if(authSeen&&next===owner)return;authSeen=true;owner=next;const epoch=++generation;
     if(capture&&['requesting','recording'].includes(capture.status))void capture.stop('interrupted');
     selectedBase=null;mode='new_search';viewed=null;latest=null;cursor=undefined;state=initialState();controller=null;text.value='';
     for(const url of objectUrls)URL.revokeObjectURL(url);objectUrls.clear();for(const timer of dwell.values())clearTimeout(timer);dwell.clear();exposure.disconnect();visibility.disconnect();rendered.clear();answers.replaceChildren();historyList.replaceChildren();recordings.replaceChildren();measurement=new AssistantMeasurement();lastAction.clear();

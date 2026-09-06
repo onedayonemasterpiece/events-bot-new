@@ -123,3 +123,14 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - ссылка на `/log <event_id>`,
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
+
+### Conversational website Search / voice prototype
+
+Canonical cases `voice.spool_recovery`, `voice.stale_membership` and
+`voice.real_quality` live in
+[`static-site-autotest-scenarios.v1.yml`](../testing/static-site-autotest-scenarios.v1.yml).
+`site/tests/voice-browser.integration.mjs` uses actual full Chromium capture,
+AudioWorklet and IndexedDB with a **synthetic device**; it does not run Telegram,
+external ASR, real-phone permissions or deployed RLS. For authorized phone
+checks preserve installed PWA/session/audio/queues and follow the
+[existing voice integration handoff](../features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md).

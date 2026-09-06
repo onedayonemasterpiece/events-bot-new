@@ -99,3 +99,16 @@ test('hard filters operate on canonical facts; unknown price/date/audience never
  const event={event_id:7,city:'Зеленоградск',category:'lecture',is_free:true,start_date:'2026-09-06',start_time:'19:00',audience_tags:['family']};
  assert.equal(eligible(event,i),true);for(const patch of [{category:'concert'},{is_free:false},{city:'Калининград'},{start_date:undefined},{audience_tags:[]},{lifecycle_status:'cancelled'}])assert.equal(eligible({...event,...patch},i),false);
 });
+test('ASR gets bounded regional hints as data and stamps the durable vocabulary version',async()=>{
+ const h=harness(),id=uid();const [part]=segmentPcm16(new Float32Array(20),44100,AUDIO_BUDGET);const manifest={frames:20,sampleRate:44100,partCount:1};await h.control(id,'asr',manifest,false);
+ const {bytes,...meta}=part;await h.request('audio',{id,part:{...meta,digest:await sha256(bytes),data:Buffer.from(bytes).toString('base64')}});
+ const original=h.deps.generate;let prompt;h.deps.generate=async o=>{prompt=o.prompt;return original(o);};
+ const done=await h.control(id,'asr',manifest);assert.equal(done.body.result.vocabulary_version,'kenigevents-regional-places-v1');
+ assert.match(prompt,/Зеленоградск/);assert.match(prompt,/акустической и контекстной совместимости/);assert.match(prompt,/Не добавляй названия/);assert.ok(prompt.length<4096);
+});
+test('bounded search membership is never relabelled as a complete catalogue',async()=>{
+ const h=harness(),i=uid(),s=uid();await h.control(i,'interpret',input());
+ const original=h.deps.search;h.deps.search=async()=>({...await original(),has_more:true});
+ const result=(await h.control(s,'search',{interpretationId:i})).body.result;
+ assert.equal(result.has_more,true);assert.equal(result.membership_complete,false);assert.equal(result.membership_scope,'bounded_canonical_search_window');
+});

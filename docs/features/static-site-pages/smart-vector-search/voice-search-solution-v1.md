@@ -17,6 +17,45 @@
 
 Новые имена API и числовые значения ниже — проект реализации. Они не означают, что соответствующие операции уже развёрнуты. Числовые настройки проверяются перед включением и не должны становиться искусственными ограничениями естественной речи. Исторические даты, проверки и статусы в связанных документах не являются свежим production verdict.
 
+## Исполняемый preview slice — уточнение 2026-09-06
+
+Текущий PR #587 уже содержит inline `ConversationalSearch` внутри существующего
+`AuthorizedEventSearch`, локальный IndexedDB receipt и три fixed маршрута
+`event-search/assistant/{control,audio,status}`. Для этого slice выбран **existing
+Search Edge runtime**, не второй TypeScript/Python service из ранней гипотезы §3.
+Подробный запуск/разрешённые environment bindings —
+[existing integration handoff](20260906-voice-prototype-codex.md). Это исходный
+пакет, не подтверждение опубликованного ASR/Android или полной реализации §5.
+
+- Первый signed-out snapshot явно показывает приглашение войти через основной
+  Search; совпадение пустого UID с начальным состоянием не пропускает эту UI-стадию.
+- `retryUnsaved()` сериализован; двойной клик не удваивает frame accounting.
+  `captureComplete` отдельно фиксирует непрерывный подтверждённый user stop;
+  повтор локальной записи обновляет IndexedDB receipt. Background/device/storage
+  auto-stop остаётся partial даже после сохранения всех имеющихся байтов. Только
+  полностью захваченный user-stop хвост может стать saved после durable retry.
+- ASR получает server-owned `kenigevents-regional-places-v1`: ограниченные
+  общедоступные географические имена, JSON hints-as-data, только акустически и
+  контекстно совместимое написание. Prompt запрещает добавлять непроизнесённое,
+  заменять отрицание/самокоррекции или выполнять речь как инструкции. Версия
+  словаря сохраняется в ASR outcome; quality gain ещё требует live корпуса.
+  Подходы прочитаны в wonderful-lections
+  `src/presentation/review-feedback.mjs`, record-idea-hub `EfficientVad.kt` и
+  my-data-hub `12c330a9` `voice_intake_v2/inference.py`. Чужие private словари,
+  owner ACL, `_generate`, publisher и Android energy threshold не перенесены.
+- `membership_complete=false` и `bounded_canonical_search_window` раскрывают
+  существующее ограниченное Search окно до 60 кандидатов. UI не называет его
+  всем каталогом; subset уточняет сохранённый parent, expansion идёт через
+  общий Search. Canonical full-universe pagination остаётся отдельным gate,
+  а не фиктивно реализуется `has_more=false`.
+- Native browser harness запускает full Chromium (`channel: chromium`), не
+  урезанный headless shell: локальный shell1228 возвращал native
+  `NotSupportedError` для getUserMedia. Full Chrome1200 проверил пять сценариев
+  AudioWorklet/IndexedDB, включая deny, reload, двукратный retry и хвост после
+  user stop. Это synthetic media device, не физический микрофон/ASR/телефон.
+  CDP `setPermission` использует Web PermissionDescriptor `microphone`, не
+  enum `audioCapture` из другого метода.
+
 ## 1. Продукт и границы
 
 Голос и текст — два входа одного разговорного поиска. Ответ образует самостоятельный раздел: название выборки, исходный вопрос, полезное краткое или раскрываемое пояснение, обычные карточки событий. Завершённый раздел сохраняется при следующем ответе. Вопрос об адресе или транспорте может получить полноценное пояснение без карточек. Во время обработки можно дополнить запрос.

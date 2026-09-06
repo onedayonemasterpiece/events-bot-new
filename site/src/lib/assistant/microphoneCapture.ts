@@ -5,7 +5,7 @@ export type CaptureReason = 'user' | 'background' | 'device_lost' | 'interrupted
   'storage_backpressure' | 'storage_failed' | 'capture_failed' | 'cancelled' | 'flush_timeout';
 export type CaptureStatus = 'idle' | 'requesting' | 'recording' | 'stopping' | 'saved' | 'partial' | 'error';
 export type CaptureReceipt = { reason: CaptureReason; sampleRate: number; frames: number;
-  savedFrames: number; partCount: number; complete: boolean };
+  savedFrames: number; partCount: number; complete: boolean; captureComplete?: boolean };
 export type CaptureOptions = {
   workletUrl: string;
   budget: WireBudget;
@@ -36,6 +36,7 @@ export class MicrophoneCapture {
   private acknowledge: (() => void) | null = null;
   private stopping: Promise<CaptureReceipt> | null = null;
   private lastReceipt: CaptureReceipt | null = null;
+  private retrying: Promise<number> | null = null;
   private visibility = () => { if (document.hidden) void this.stop('background'); };
   private pagehide = () => { void this.stop('background'); };
   private options: CaptureOptions;
@@ -114,20 +115,32 @@ export class MicrophoneCapture {
   /** Unsaved bytes remain in memory on local storage failure; never clear audio
    * or a database to recover. This retries local storage only, not the provider.
    */
-  async retryUnsaved(): Promise<number> {
-    if (['recording', 'requesting', 'stopping'].includes(this.status)) throw new Error('capture_busy');
-    const remaining: AudioPart[] = [];
-    for (const part of this.failedParts) {
-      try { await this.options.onPart(part); this.savedFrames += part.frameCount; }
-      catch { remaining.push(part); }
-    }
-    this.failedParts = remaining;
-    return remaining.length;
+  retryUnsaved(): Promise<number> {
+    if (this.retrying) return this.retrying;
+    if (['recording', 'requesting', 'stopping'].includes(this.status)) return Promise.reject(new Error('capture_busy'));
+    // One retry owns the failed list: concurrent clicks must not double-count
+    // the same durable frames or lose a still-failed part.
+    this.retrying = (async () => {
+      const remaining: AudioPart[] = [];
+      for (const part of this.failedParts) {
+        try { await this.options.onPart(part); this.savedFrames += part.frameCount; }
+        catch { remaining.push(part); }
+      }
+      this.failedParts = remaining;
+      if (this.lastReceipt) {
+        this.lastReceipt = { ...this.lastReceipt, savedFrames: this.savedFrames,
+          complete: this.lastReceipt.captureComplete === true && !remaining.length && this.savedFrames === this.lastReceipt.frames };
+        this.setStatus(this.lastReceipt.complete ? 'saved' : 'partial', remaining.length ? 'storage_failed' : this.lastReceipt.reason);
+      }
+      return remaining.length;
+    })().finally(() => { this.retrying = null; });
+    return this.retrying;
   }
+  receipt(): CaptureReceipt | null { return this.lastReceipt ? { ...this.lastReceipt } : null; }
   unsavedParts(): readonly AudioPart[] { return this.failedParts; }
   stop(reason: CaptureReason = 'user'): Promise<CaptureReceipt> {
-    if (this.stopping) return this.stopping;
     if (this.lastReceipt) return Promise.resolve(this.lastReceipt);
+    if (this.stopping) return this.stopping;
     if (this.status === 'requesting' || !this.node || !this.segmenter) {
       ++this.generation;
       this.stream?.getTracks().forEach(t => t.stop());
@@ -156,6 +169,7 @@ export class MicrophoneCapture {
         reason: this.storageFailed ? 'storage_failed' : this.captureFailed ? 'capture_failed' : !acknowledged ? 'flush_timeout' : reason,
         sampleRate: this.segmenter!.sampleRate, frames: this.segmenter!.frames,
         savedFrames: this.savedFrames, partCount: this.parts,
+        captureComplete: acknowledged && !this.captureFailed && reason === 'user' && this.segmenter!.frames > 0,
         complete: acknowledged && !this.captureFailed && !this.storageFailed && reason === 'user' && this.segmenter!.frames > 0,
       };
       this.lastReceipt = receipt;

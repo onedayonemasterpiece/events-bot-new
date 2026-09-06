@@ -915,6 +915,56 @@ scenarios:
       pull_request: advisory_unless_high_risk
       release: selector_defined
 
+
+  voice.spool_recovery:
+    title: Foreground audio durable recovery without duplicate frames or false complete
+    status: implemented_local_native_chromium_synthetic_device
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [voice, microphone, indexeddb, recovery]
+    cost: low
+    auth_mode: anonymous
+    side_effects: isolated_browser_indexeddb_only
+    target: local_source_exact_sha
+    commands:
+      - node --experimental-strip-types --test site/tests/assistant-*.test.mjs
+      - node --test site/tests/voice-browser.integration.mjs
+    evidence: synthetic_device_not_physical_microphone_or_asr
+    blocking:
+      pull_request: direct_voice_capture_or_recovery_change
+      release: true_for_voice_capture_changes
+
+  voice.stale_membership:
+    title: Bounded canonical search window is disclosed instead of called complete
+    status: implemented_deterministic_http_contract
+    layers: [L0]
+    platforms: [browser]
+    trigger_tags: [voice, search, history]
+    cost: low
+    side_effects: none_injected_provider_repository
+    target: local_source_exact_sha
+    commands:
+      - node --experimental-strip-types --test site/tests/assistant-handler.test.mjs
+    evidence: no_live_retrieval_or_full_universe_claim
+    blocking:
+      pull_request: direct_voice_search_change
+      release: true_for_voice_search_changes
+
+  voice.real_quality:
+    title: Real permitted ASR with local names, quiet negation and independent expectations
+    status: planned_protected_live
+    layers: [L2]
+    platforms: [android]
+    trigger_tags: [voice, provider, microphone, pwa]
+    cost: high
+    auth_mode: session_fixture
+    side_effects: permitted_provider_and_private_receipts_only
+    target: deployed_https_exact_repo_sha
+    evidence: real_audio_hash_and_independent_transcript_not_same_asr_oracle
+    blocking:
+      pull_request: protected_live_gate
+      release: true_for_voice_enablement
+
 policies:
   full_catalog_on_emulators: forbidden
   mobile_viewport_substitutes_android_or_ios: false
