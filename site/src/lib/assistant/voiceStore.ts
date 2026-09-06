@@ -6,9 +6,11 @@ import type { CaptureReceipt } from './microphoneCapture.ts';
 import type { CompressedPart } from './compressedCapture.ts';
 
 export type Recording = { id: string; owner: string; createdAt: string; state: 'recording' | 'saved' | 'partial';
+  compressedStorage?: 'parts-v1' | 'compressedParts';
   receipt?: CaptureReceipt; transcript?: string; partCount: number; bytes: number };
 export type StoredAnswer = { id: string; owner: string; createdAt: string; payload: Record<string, unknown> };
 type CompressedPartRow = CompressedPart & { owner: string; recordingId: string; digest: string };
+type CompatibleCompressedRow = CompressedPartRow & { kind: 'compressed-part-v1'; originalIndex: number };
 type PartRow = AudioPart & { owner: string; recordingId: string; digest: string };
 const key = (owner: string, id: string) => [owner, id];
 function identity(owner: string, id: string): void {
@@ -28,7 +30,7 @@ export class VoiceStore {
   static open({ timeoutMs = 8000 }: { timeoutMs?: number } = {}): Promise<VoiceStore> {
     if (pendingOpen) { voiceTrace('open_reused', { attempt: openAttempt }); return pendingOpen; }
     const attempt = ++openAttempt;
-    voiceTrace('open_requested', { attempt, newVersion: 3 });
+    voiceTrace('open_requested', { attempt });
     let terminal = false;
     const opening = new Promise<VoiceStore>((resolve, reject) => {
       const trace = (event: string) => voiceTrace(event, { attempt });
@@ -37,7 +39,7 @@ export class VoiceStore {
       const fail = (code: string) => { if (!settled) { settled = true; clearTimeout(timer); reject(new Error(code)); } };
       const timer = setTimeout(() => { trace('open_timeout'); fail('voice_storage_open_timeout'); }, timeoutMs);
       let request: IDBOpenDBRequest;
-      try { request = indexedDB.open('kenigevents-voice-v1', 3); }
+      try { request = indexedDB.open('kenigevents-voice-v1'); }
       catch (error) { voiceTrace('open_throw', { attempt, error: voiceErrorName(error) }); release(); fail('voice_storage_unavailable'); return; }
       request.onupgradeneeded = event => {
         voiceTrace('open_upgrade', { attempt, oldVersion: event?.oldVersion, newVersion: event?.newVersion });
@@ -48,6 +50,9 @@ export class VoiceStore {
         // not later retain a connection or run an orphan upgrade after retry.
         if (settled) { trace('late_upgrade_abort'); request.transaction?.abort(); return; }
         const db = request.result;
+        // Versionless open only upgrades a brand-new database (oldVersion 0).
+        // Existing v2/v3 schemas are never upgraded on the microphone path.
+        if (event.oldVersion !== 0) { request.transaction?.abort(); return; }
         for (const name of ['recordings', 'answers', 'commands']) {
           if (db.objectStoreNames.contains(name)) continue;
           const store = db.createObjectStore(name, { keyPath: ['owner', 'id'] });
@@ -62,6 +67,8 @@ export class VoiceStore {
       request.onsuccess = () => {
         voiceTrace(settled ? 'open_late_success' : 'open_success', { attempt, version: request.result.version }); release();
         if (settled) { request.result.close(); trace('late_connection_closed'); return; }
+        try { VoiceStore.validate(request.result); }
+        catch { trace('open_schema_unsupported'); request.result.close(); fail('voice_storage_schema_unsupported'); return; }
         settled = true; clearTimeout(timer);
         request.result.onversionchange = event => { voiceTrace('connection_versionchange', { attempt, oldVersion: event?.oldVersion, newVersion: event?.newVersion }); request.result.close(); trace('connection_closed'); };
         resolve(new VoiceStore(request.result));
@@ -71,6 +78,21 @@ export class VoiceStore {
     // instead of adding more opens to the same database's connection queue.
     if (!terminal) pendingOpen = opening;
     return opening;
+  }
+  private static validate(db: IDBDatabase): void {
+    const layouts: Record<string,string | string[]> = {
+      recordings:['owner','id'], answers:['owner','id'], commands:['owner','id'],
+      parts:['owner','recordingId','index'], conversations:'owner',
+    };
+    if (db.objectStoreNames.contains('compressedParts')) layouts.compressedParts = ['owner','recordingId','index'];
+    if (Object.keys(layouts).some(name => !db.objectStoreNames.contains(name))) throw new Error('voice_storage_schema_unsupported');
+    const tx = db.transaction(Object.keys(layouts));
+    for (const [name,keyPath] of Object.entries(layouts)) {
+      const store = tx.objectStore(name);
+      if (JSON.stringify(store.keyPath) !== JSON.stringify(keyPath)) throw new Error('voice_storage_schema_unsupported');
+      if (['recordings','answers','commands'].includes(name) &&
+          (!store.indexNames.contains('owner_created') || JSON.stringify(store.index('owner_created').keyPath) !== JSON.stringify(['owner','createdAt','id']))) throw new Error('voice_storage_schema_unsupported');
+    }
   }
   close(): void { this.db.close(); }
   private write<T>(stores: string[], apply: (tx: IDBTransaction, result: (value: T) => void) => void): Promise<T> {
@@ -127,39 +149,66 @@ export class VoiceStore {
   }
   async putCompressedPart(owner: string, id: string, part: CompressedPart): Promise<void> {
     identity(owner, id);
-    if (!Number.isSafeInteger(part.index) || part.index < 0 || !part.bytes.byteLength ||
+    // -(index+1) must remain a safe integer in the v2-compatible key domain.
+    if (!Number.isSafeInteger(part.index) || part.index < 0 || part.index >= Number.MAX_SAFE_INTEGER || !part.bytes.byteLength ||
         !/^audio\/(webm|ogg|mp4)(;[^\r\n]*)?$/.test(part.mimeType)) throw new Error('invalid_compressed_part');
     const hash = await digest(part.bytes);
-    const row: CompressedPartRow = { ...part, owner, recordingId: id, digest: hash };
-    await this.write<void>(['recordings', 'compressedParts'], (tx, result) => {
-      const recordings = tx.objectStore('recordings'); const parts = tx.objectStore('compressedParts');
+    const native = this.db.objectStoreNames.contains('compressedParts');
+    await this.write<void>(['recordings','parts', ...(native ? ['compressedParts'] : [])], (tx, result) => {
+      const recordings = tx.objectStore('recordings');
       const getRecording = recordings.get(key(owner, id));
       getRecording.onsuccess = () => {
         const recording: Recording | undefined = getRecording.result;
         if (!recording) { this.abort(tx, 'recording_not_found'); return; }
-        const get = parts.get([owner, id, part.index]);
+        // Pin each recording's format atomically. If another application later
+        // upgrades v2 to v3, its existing compatible fragments stay together.
+        const layout = recording.compressedStorage || (native ? 'compressedParts' : 'parts-v1');
+        if (!['compressedParts','parts-v1'].includes(layout) || layout === 'compressedParts' && !native) { this.abort(tx, 'voice_storage_schema_unsupported'); return; }
+        const compatible = layout === 'parts-v1';
+        const parts = tx.objectStore(compatible ? 'parts' : 'compressedParts');
+        const index = compatible ? -(part.index + 1) : part.index;
+        const row: CompressedPartRow | CompatibleCompressedRow = { ...part, owner, recordingId:id, digest:hash,
+          ...(compatible ? { index, originalIndex:part.index, kind:'compressed-part-v1' as const } : {}) };
+        const get = parts.get([owner,id,index]);
         get.onsuccess = () => {
-          const existing: CompressedPartRow | undefined = get.result;
+          const existing = get.result as CompatibleCompressedRow | undefined;
           if (existing) {
-            if (existing.digest !== hash || existing.mimeType !== part.mimeType) this.abort(tx, 'audio_payload_conflict');
+            if (existing.digest !== hash || existing.mimeType !== part.mimeType ||
+                compatible && (existing.kind !== 'compressed-part-v1' || existing.originalIndex !== part.index)) this.abort(tx, 'audio_payload_conflict');
             else result();
             return;
           }
           if (recording.receipt?.compressed?.complete) { this.abort(tx, 'compressed_recording_sealed'); return; }
-          parts.add(row); result();
+          parts.add(row); recordings.put({ ...recording, compressedStorage:layout }); result();
         };
       };
     });
   }
-  /** Only a fully sealed, contiguous original container is usable. An abrupt
-   * reload retains fragments and PCM, but never presents fragments as a file. */
+  /** Only a sealed, contiguous original container is usable. Compatible v2
+   * rows have negative keys; old and new PCM readers only select nonnegative
+   * keys. Existing v3 fragments are neither migrated nor overwritten. */
   async compressed(owner: string, id: string): Promise<{ mimeType: string; bytes: Uint8Array } | null> {
     identity(owner, id);
+    const native = this.db.objectStoreNames.contains('compressedParts');
     const { recording, parts } = await new Promise<{ recording?: Recording; parts: CompressedPartRow[] }>((resolve, reject) => {
-      const tx = this.db.transaction(['recordings', 'compressedParts']);
-      const recording = tx.objectStore('recordings').get(key(owner, id));
-      const parts = tx.objectStore('compressedParts').getAll(IDBKeyRange.bound([owner, id, 0], [owner, id, Number.MAX_SAFE_INTEGER]));
-      tx.oncomplete = () => resolve({ recording: recording.result, parts: parts.result });
+      const tx = this.db.transaction(['recordings','parts', ...(native ? ['compressedParts'] : [])]);
+      const recording = tx.objectStore('recordings').get(key(owner,id));
+      const compatible = tx.objectStore('parts').getAll(IDBKeyRange.bound([owner,id,-Number.MAX_SAFE_INTEGER],[owner,id,-1]));
+      const existing = native ? tx.objectStore('compressedParts').getAll(IDBKeyRange.bound([owner,id,0],[owner,id,Number.MAX_SAFE_INTEGER])) : null;
+      tx.oncomplete = () => {
+        const row = recording.result as Recording | undefined;
+        const layout = row?.compressedStorage || (existing?.result.length ? 'compressedParts' : 'parts-v1');
+        let parts: CompressedPartRow[] = [];
+        if (layout === 'compressedParts') parts = existing?.result || [];
+        if (layout === 'parts-v1') {
+          const rows = compatible.result as CompatibleCompressedRow[];
+          if (rows.every(part => part.kind === 'compressed-part-v1' && Number.isSafeInteger(part.originalIndex) &&
+              part.originalIndex >= 0 && part.index === -(part.originalIndex + 1))) {
+            parts = rows.map(({originalIndex,kind:_kind,...part}) => ({...part,index:originalIndex})).sort((a,b) => a.index-b.index);
+          }
+        }
+        resolve({recording:row,parts});
+      };
       tx.onabort = tx.onerror = () => reject(new Error('voice_storage_read_failed'));
     });
     const seal = recording?.receipt?.compressed;

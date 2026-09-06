@@ -75,7 +75,7 @@ storage code, без account/session/audio. После готовности adap
 IndexedDB open невозможно отменить как fetch: поздний success закрывает свою
 лишнюю connection, поздний upgrade после терминальной ошибки abort-ится.
 Blocked upgrade предлагает закрыть другую вкладку, не очистить сайт. Ни retry,
-ни timeout не меняют schema version 3, не удаляют audio/answers/conversations,
+ни timeout не повышают существующую schema version и не удаляют audio/answers/conversations,
 Auth sessions, personalization или queues. Поведение основано на
 [IndexedDB connection/upgrade contract](https://www.w3.org/TR/IndexedDB-3/).
 
@@ -467,6 +467,7 @@ causal native queue test and device acceptance gap belong to
 [`INC-2026-09-06-voice-preview-startup`](../../../reports/incidents/INC-2026-09-06-voice-preview-startup.md).
 
 
+
 ### Conversational preview UX amendment (2026-09-06)
 
 User review supersedes the mandatory manual transcript-confirmation step for a
@@ -491,3 +492,52 @@ No second sticky tier or cloned H2. Semantic heading remains in document flow.
 
 Validation and published SHA/link are recorded after integration below; this
 amendment alone is not evidence of a phone or live-ASR pass.
+
+### VoiceStore: versionless compatibility, 2026-09-06
+
+`VoiceStore.open()` uses `indexedDB.open('kenigevents-voice-v1')` with **no version**.
+Existing v2/v3 databases are not upgraded, downgraded, migrated or recreated.
+Only a genuinely new database receives its initial browser version (1) and full
+store layout. Before exposing a connection, the implementation validates required
+base stores/key paths and `owner_created` indexes, plus `compressedParts` if it
+exists. Unsupported layouts close/fail with `voice_storage_schema_unsupported`;
+there is no destructive repair. Single-flight, bounded wait and late cleanup stay.
+
+For existing v2, compressed chunks live in `parts` under numeric key `-(index+1)`,
+with `kind: compressed-part-v1` and separate `originalIndex`. Both old and current
+PCM readers select nonnegative indices only. PCM counters/bytes are unchanged.
+Existing v3 and new full-layout databases keep `compressedParts`. The first
+compressed transaction atomically pins `Recording.compressedStorage` to `parts-v1`
+or `compressedParts`; a later external upgrade cannot split that recording's
+container between stores. Legacy v3 rows without this optional field still read
+from their original store. No data is copied or removed. Compressed reads still
+require one sealed, contiguous, matching-MIME container with exact bytes/count
+and SHA-256 verification; malformed markers, gaps or corruption return null.
+
+Public APIs are unchanged. Recording, accepted commands, answers, conversation
+revision/CAS and owner-scoped history remain in the **same existing database and
+kernel**; there is no parallel journal or volatile-success fallback. This change
+removes our v2→v3 upgrade prerequisite, not every possible browser storage failure.
+Already queued requests from older bundles cannot be cancelled by newer page code.
+Hidden/freeze flush and recorder lifecycle are intentionally unchanged.
+
+Relevant regression sources:
+- `site/tests/voice-versionless-store.integration.mjs`: v2 negative-key isolation,
+  seal/hash/idempotency, existing v3 originals/reload, later external upgrade,
+  real IndexedDB + same typed-search controller/provider fixture + reload/CAS,
+  and fail-closed unsupported layout with original data intact.
+- `site/tests/voice-versionless-freeze.integration.mjs`: **raw CDP**, actual headed
+  Chrome hidden/freeze events with the old v2 `onversionchange => close()` handler.
+  New VoiceStore open/read/write succeeds while that tab stays frozen; DB remains
+  v2 and original PCM reads back unchanged. Playwright's forced focused/active
+  override is not used. Run with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=<full Chrome>
+  xvfb-run -a node --test site/tests/voice-versionless-freeze.integration.mjs`.
+- Existing compression integration additionally records native synthetic Opus on
+  an existing v2 DB and decodes the original after page reload. These tests are
+  desktop Chromium/synthetic-device evidence, not physical Android or paid ASR.
+
+The versionless contract follows [IndexedDB opening](https://w3c.github.io/IndexedDB/#opening).
+The physical incident evidence and release acceptance remain in the canonical
+incident record linked above; this storage-only change does not claim new UI or
+end-to-end search acceptance.
+

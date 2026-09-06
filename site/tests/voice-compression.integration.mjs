@@ -47,8 +47,10 @@ async function record(page, id, {failCompressed = false, noRecorder = false, rea
   return {receipt,unsealed,before,pcm:(await store.parts('owner',id)).reduce((n,p)=>n+p.bytes.length,0)};
  },{id,reason});
 }
-test('native 32kbps Opus has final tail, remains one decodable original after reload, and is far smaller than PCM',async()=>{
- const {context,page}=await setup(); const result=await record(page,'native');
+for(const version of [undefined,2])test(`native 32kbps Opus remains decodable after reload on ${version===2?'existing v2':'new DB'} and is smaller than PCM`,async()=>{
+ const {context,page}=await setup();
+ if(version===2)await page.evaluate(()=>new Promise(resolve=>{const q=indexedDB.open('kenigevents-voice-v1',2);q.onupgradeneeded=()=>{const db=q.result;for(const name of ['recordings','answers','commands']){const s=db.createObjectStore(name,{keyPath:['owner','id']});s.createIndex('owner_created',['owner','createdAt','id']);}db.createObjectStore('parts',{keyPath:['owner','recordingId','index']});db.createObjectStore('conversations',{keyPath:'owner'});};q.onsuccess=()=>{q.result.close();resolve();};}));
+ const result=await record(page,'native');
  assert.equal(result.receipt.complete,true); assert.equal(result.receipt.compressed.complete,true);
  assert.match(result.receipt.compressed.mimeType,/^audio\/webm;codecs=opus$/);
  assert.ok(result.receipt.compressed.partCount>=3); assert.ok(result.receipt.compressed.bytes<result.pcm/8);
@@ -71,7 +73,7 @@ for(const [id,options,reason] of [['unsupported',{noRecorder:true},'media_record
  assert.ok(result.pcm>0);assert.equal(await page.evaluate(id=>store.compressed('owner',id),id),null);
  await context.close();
 });
-test('additive v2 upgrade retains PCM, answers, commands and conversations; incomplete/gapped compressed rows never substitute for original',async()=>{
+test('versionless v2 open retains PCM, answers, commands and conversations; incomplete/gapped compressed rows never substitute for original',async()=>{
  const {context,page}=await setup();
  const result=await page.evaluate(async()=>{
   await new Promise((resolve,reject)=>{

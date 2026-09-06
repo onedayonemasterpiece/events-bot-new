@@ -2,11 +2,20 @@
 
 ## [Unreleased]
 
+
 - Changed: conversational voice preview sends fresh complete ASR into the existing
   durable Search flow without mandatory confirmation, immediately showing the full
   question as a chat bubble and shared answer/card skeletons. Replies replace their
   own pending state, follow-ups append, and failed/superseded turns stop shimmering.
   Optional typed input and recovery remain available without a recording modal.
+
+- Fixed: VoiceStore no longer requests a schema upgrade when opening existing
+  recording databases. v2 retains its schema and stores typed compressed chunks
+  in a separate negative-key range; existing v3 compressed audio stays readable.
+  PCM, durable receipts, owner isolation and the same conversation/CAS/history
+  remain intact. Invalid layouts fail closed without repair or deletion. Native
+  frozen-v2 tests prove new capture storage opens without waking the old tab.
+
 
 - Added: preview-only voice startup diagnostics in the existing request/details
   panel: bounded metadata trace, manual copy/download, and an explicit disposable

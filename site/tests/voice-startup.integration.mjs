@@ -40,13 +40,11 @@ test('delayed open becomes retryable; late connection closes; next gesture recor
  await page.waitForTimeout(250);await page.locator('[data-assistant-launcher]').click();await page.waitForFunction(()=>document.querySelector('[data-assistant-dock]').dataset.captureState==='saved');
  assert.equal(await page.evaluate(()=>window.micCalls),1);assert.equal(await page.evaluate(()=>window.requests),0);assert.deepEqual(errors,[]);await context.close();
 });
-test('real old v2 tab blocks upgrade; closing only its connection enables manual retry and preserves original audio',async()=>{
+test('old v2 tab needs no upgrade or closure; versionless startup preserves original audio',async()=>{
  const context=await browser.newContext({...devices['Pixel 7'],permissions:['microphone']});const old=await context.newPage();
  await old.route('**/bundle.js',route=>route.fulfill({contentType:'text/javascript',body:''}));await old.goto(origin);
  await old.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('kenigevents-voice-v1',2);request.onupgradeneeded=()=>{const db=request.result;for(const n of ['recordings','answers','commands']){const s=db.createObjectStore(n,{keyPath:['owner','id']});s.createIndex('owner_created',['owner','createdAt','id']);}db.createObjectStore('parts',{keyPath:['owner','recordingId','index']});db.createObjectStore('conversations',{keyPath:'owner'});};request.onsuccess=()=>{window.oldDb=request.result;const tx=oldDb.transaction(['recordings','parts'],'readwrite');tx.objectStore('recordings').put({id:'legacy',owner:'owner',createdAt:'2026-09-05',state:'recording',partCount:1,bytes:2});tx.objectStore('parts').put({owner:'owner',recordingId:'legacy',index:0,bytes:Uint8Array.of(17,29)});tx.oncomplete=resolve;tx.onerror=reject;};}));
- const page=await context.newPage();await page.goto(origin);await page.waitForFunction(()=>document.querySelector('[data-assistant]').dataset.assistantStartupError==='voice_storage_upgrade_blocked');
- assert.match(await page.locator('[data-assistant-live]').textContent(),/другой вкладке/);
- await old.evaluate(()=>window.oldDb.close());await page.locator('[data-assistant-launcher]').click();await page.waitForFunction(()=>document.querySelector('[data-assistant]').dataset.assistantStartup==='ready');
+ const page=await context.newPage();await page.goto(origin);await page.waitForFunction(()=>document.querySelector('[data-assistant]').dataset.assistantStartup==='ready');
  const result=await page.evaluate(async()=>{const store=await VoiceStore.open();return{bytes:[...(await store.parts('owner','legacy'))[0].bytes],rows:(await store.page('recordings','owner')).length,micCalls};});assert.deepEqual(result,{bytes:[17,29],rows:1,micCalls:0});await context.close();
 });
 test('restore gate rejects early submit and stale owner completion cannot enable another owner',async()=>{
