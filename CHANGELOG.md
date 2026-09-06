@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: authenticated voice Search now requires complete-window semantic verification for exact results, preserves uncertain/rejected/unchecked accounting, and reports verification failure explicitly. Refinement rechecks the changed intent within its parent subset; shared real provider reservations and ordinary Search fail-open behavior remain unchanged. Interpreter no longer assumes Kaliningrad when no city was supplied. Source correction only; live deployment/acceptance tracked in the voice relevance incident.
+
 - Docs: investigated voice jazz-query false positives; recorded disabled semantic
   verifier, internal quota gate and vector-to-exact contract regression with real
   bounded classifier evidence. No relevance fix deployed yet.

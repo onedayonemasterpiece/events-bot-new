@@ -17,6 +17,7 @@ import {
   SharedGoogleQuotaError,
   withSharedGoogleQuotaAttempt,
 } from "./google-quota.ts";
+import { classifyVoicePayload, verifyVoiceWindow, voiceVerifierPrompt } from "./assistant-verification.ts";
 import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts";
 import { handleAssistant, type AssistantDependencies, type AssistantRepository } from "./assistant-handler.ts";
 import { assistantGenerator } from "./assistant-provider.ts";
@@ -1106,6 +1107,7 @@ type LlmVerifyResult = {
   prompt_chars?: number;
   prompt_fact_chars?: number;
   compact_candidate_count?: number;
+  verification?: Record<string, any>;
 };
 
 type LlmVerifyOptions = {
@@ -1113,6 +1115,8 @@ type LlmVerifyOptions = {
   quota_backend: GoogleQuotaBackend | null;
   counters?: SearchAttemptCounters;
   reserve_canary_attempt?: () => Promise<boolean>;
+  voiceIntent?: AssistantIntent;
+  deadline?: number;
 };
 
 type LlmAttempt = {
@@ -1355,7 +1359,7 @@ async function llmVerify(
     };
   }
   const factCoverage = candidateDigests.size / Math.max(1, candidates.length);
-  if (factCoverage < 0.5) {
+  if (factCoverage < (options.voiceIntent ? 1 : 0.5)) {
     return {
       exact: [],
       possible: candidates,
@@ -1395,8 +1399,8 @@ async function llmVerify(
     env("EVENT_SEARCH_LLM_GEMMA_OVERFLOW_ENABLED", "1").toLowerCase(),
   );
   const policy = "lite_first_gemma_overflow";
-  const primaryAttempts = envInt("EVENT_SEARCH_LLM_LITE_ATTEMPTS", 1, 1, 4);
-  const primaryTimeoutMs = envInt(
+  const primaryAttempts = options.voiceIntent ? 1 : envInt("EVENT_SEARCH_LLM_LITE_ATTEMPTS", 1, 1, 4);
+  const primaryTimeoutMs = options.voiceIntent ? envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_TIMEOUT_MS", 15000, 1000, 30000) : envInt(
     "EVENT_SEARCH_LLM_LITE_TIMEOUT_MS",
     2600,
     500,
@@ -1408,7 +1412,7 @@ async function llmVerify(
     300,
     12000,
   );
-  const primaryTotalBudgetMs = envInt(
+  const primaryTotalBudgetMs = options.voiceIntent ? primaryTimeoutMs : envInt(
     "EVENT_SEARCH_LLM_LITE_TOTAL_BUDGET_MS",
     4300,
     800,
@@ -1429,10 +1433,10 @@ async function llmVerify(
   const shouldTryFallback = options.gemma_overflow_allowed &&
     fallbackEnabled &&
     fallbackModels.length > 0;
-  const factMaxChars = envInt("EVENT_SEARCH_LLM_FACT_MAX_CHARS", 180, 120, 800);
+  const factMaxChars = options.voiceIntent ? envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_FACT_CHARS", 1200, 500, 2400) : envInt("EVENT_SEARCH_LLM_FACT_MAX_CHARS", 180, 120, 800);
   const maxLlmCandidates = Math.min(
     candidates.length,
-    envInt("EVENT_SEARCH_LLM_MAX_CANDIDATES", 20, 1, 60),
+    options.voiceIntent ? candidates.length : envInt("EVENT_SEARCH_LLM_MAX_CANDIDATES", 20, 1, 60),
   );
   type LlmPromptProfile = {
     candidates: Candidate[];
@@ -1447,7 +1451,7 @@ async function llmVerify(
       const display = (candidate.display as Candidate | undefined) || {};
       const id = candidateId(candidate);
       const facts = truncateText(
-        compactSearchDigest(id === null ? null : candidateDigests.get(id)),
+        options.voiceIntent ? (id === null ? null : candidateDigests.get(id)) : compactSearchDigest(id === null ? null : candidateDigests.get(id)),
         factMaxChars,
       );
       return {
@@ -1461,9 +1465,10 @@ async function llmVerify(
         place: display.place || candidate.location_name,
         status: display.status_label || candidate.status || null,
         facts,
+        ...(options.voiceIntent ? { start_date: candidate.start_date, end_date: candidate.end_date, start_time: candidate.start_time, city: candidate.city, is_free: candidate.is_free, min_price: candidate.min_price, audience_tags: candidate.audience_tags, format_tags: candidate.format_tags } : {}),
       };
     });
-    const prompt = [
+    const prompt = options.voiceIntent ? voiceVerifierPrompt(options.voiceIntent, compact) : [
       "Проверь результаты поиска афиши Калининграда.",
       "Каждый candidate ID отнеси ровно в один список: exact_event_ids, possible_event_ids, rejected_event_ids.",
       "exact: факты прямо соответствуют запросу; сомнения или мало фактов — possible; явное несоответствие — rejected.",
@@ -1482,7 +1487,7 @@ async function llmVerify(
       compact_candidate_count: compact.length,
     };
   };
-  const primaryCandidateCounts = parseCandidateCountProfile(
+  const primaryCandidateCounts = options.voiceIntent ? [maxLlmCandidates] : parseCandidateCountProfile(
     env("EVENT_SEARCH_LLM_LITE_CANDIDATE_COUNTS"),
     maxLlmCandidates,
     adaptiveHalfCandidateProfile(maxLlmCandidates),
@@ -1492,7 +1497,7 @@ async function llmVerify(
     maxLlmCandidates,
     adaptiveHalfCandidateProfile(maxLlmCandidates).slice(-1),
   );
-  const maxOutputTokens = envInt(
+  const maxOutputTokens = options.voiceIntent ? 2048 : envInt(
     "EVENT_SEARCH_LLM_MAX_OUTPUT_TOKENS",
     384,
     128,
@@ -1528,6 +1533,11 @@ async function llmVerify(
       const key = llmKeys[(providerKeyCursor + keyIndex) % llmKeys.length];
       if (providerBlockedScopes.has(key.quota_scope)) continue;
       const startedAt = performance.now();
+      if (options.deadline) {
+        const remaining = options.deadline - Date.now();
+        if (remaining < 300) return null;
+        timeoutMs = Math.min(timeoutMs, remaining);
+      }
       if (options.reserve_canary_attempt) {
         let reserved = false;
         try {
@@ -1619,7 +1629,7 @@ async function llmVerify(
             }
             const text = extractGeminiText(payload);
             return {
-              value: classifyLlmPayload(text, profile.candidates),
+              value: options.voiceIntent ? classifyVoicePayload(parseLlmJson(text), profile.candidates) : classifyLlmPayload(text, profile.candidates),
               provider_status: "succeeded",
               usage,
             };
@@ -1731,7 +1741,7 @@ async function llmVerify(
         const elapsedBudgetMs = nowMs() - Math.round(primaryBudgetStartedAt);
         const remainingBudgetMs = primaryTotalBudgetMs - elapsedBudgetMs;
         if (remainingBudgetMs < 300) break;
-        const profileTimeoutMs = Math.min(
+        const profileTimeoutMs = options.voiceIntent ? Math.min(primaryTimeoutMs, remainingBudgetMs) : Math.min(
           primaryTimeoutProfileMs[
             Math.min(profileIndex, primaryTimeoutProfileMs.length - 1)
           ] || primaryTimeoutMs,
@@ -1812,6 +1822,20 @@ async function llmVerify(
     compact_candidate_count: attempts[attempts.length - 1]
       ?.compact_candidate_count,
   };
+}
+
+async function verifyAssistantWindow(supabaseUrl: string, candidates: Candidate[], intent: AssistantIntent, counters = emptyAttemptCounters()): Promise<LlmVerifyResult> {
+  const digests = await fetchCandidateDigests(supabaseUrl, candidates.map(candidateId).filter((id): id is number => id !== null));
+  const result = await verifyVoiceWindow(candidates, async (batch, deadline) => {
+    const ids = new Set(batch.map(candidateId));
+    return await llmVerify(intent.goal, batch, new Map([...digests].filter(([id]) => ids.has(id))), {
+      voiceIntent: intent, deadline, gemma_overflow_allowed: false,
+      quota_backend: sharedGoogleQuotaBackend(supabaseUrl), counters,
+    });
+  }, { budgetMs: envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_TOTAL_BUDGET_MS", 45000, 1000, 90000) });
+  return {...result, verification: {...result.verification, candidate_fact_count: digests.size},
+    policy: result.verification.policy, attempts: result.verification.attempts,
+    model: result.verification.attempts.at(-1)?.model || null};
 }
 
 async function recordSearchRequest(
@@ -2141,7 +2165,7 @@ async function runEventSearch(
   }
   const quotaOperationId = requestedOperationId || requestId;
   const queryFacets: QueryFacets = assistantIntent
-    ? { weekday_iso: null, weekday_ru: null, time_of_day: assistantIntent.timeOfDay || null, admission: assistantIntent.freeOnly ? "free" : null }
+    ? { weekday_iso: null, weekday_ru: null, time_of_day: (assistantIntent.timeOfDay || null) as QueryFacets["time_of_day"], admission: assistantIntent.freeOnly ? "free" : null }
     : parseQueryFacets(query);
   const limit = clampInt(body.limit, DEFAULT_LIMIT, 1, assistantIntent ? 60 : MAX_LIMIT);
   const offset = clampInt(body.offset, 0, 0, 500);
@@ -2404,7 +2428,9 @@ async function runEventSearch(
   const llmQuotaReserved = Boolean(
     (quotaState as Record<string, unknown> | null)?.llm_reserved,
   );
-  const llmExecutionAllowed = useLlmVerifier && (isCanary || llmQuotaReserved);
+  // Voice admission allows an attempt, not a fabricated lease: llmVerify still
+  // requires real shared google_ai_reserve/mark_sent before every provider send.
+  const llmExecutionAllowed = useLlmVerifier && (Boolean(assistantIntent) || isCanary || llmQuotaReserved);
   const llmGemmaOverflowAllowed = llmExecutionAllowed &&
     !deterministicLlmFailure && allowLlmFallback;
   const googleQuotaBackend = sharedGoogleQuotaBackend(supabaseUrl);
@@ -2495,7 +2521,7 @@ async function runEventSearch(
         query_facets: queryFacets,
         embedding_cache_status: embeddingResult.cache_status,
         quota: quotaState,
-        items: items.slice(0, limit),
+        items: assistantIntent ? [] : items.slice(0, limit),
         fallback_items: [],
         has_more: hasMore,
         next_offset: nextOffset,
@@ -2544,6 +2570,11 @@ async function runEventSearch(
       };
       timings.digest_ms = 0;
       timings.llm_ms = 0;
+    } else if (assistantIntent) {
+      const strictStartedAt = performance.now();
+      llmResult = await verifyAssistantWindow(supabaseUrl, items, assistantIntent, counters);
+      llmCandidateFactCount = Number(llmResult.verification?.candidate_fact_count || 0);
+      timings.voice_verification_ms = nowMs() - Math.round(strictStartedAt);
     } else if (llmExecutionAllowed) {
       await progress?.({
         stage: "llm_verify",
@@ -2573,7 +2604,7 @@ async function runEventSearch(
       timings.llm_ms = 0;
     }
     items = collapseOccurrenceFamilies(
-      llmResult.used ? llmResult.exact : llmResult.possible,
+      assistantIntent ? llmResult.exact : llmResult.used ? llmResult.exact : llmResult.possible,
     ).slice(0, limit);
 
     let fallbackItems: Candidate[] = llmResult.used && includeFallback
@@ -2654,6 +2685,7 @@ async function runEventSearch(
       served_from_cache: false,
       quota: quotaState,
       items,
+      ...(assistantIntent ? { semantic_verification: llmResult.verification, verification_unavailable: !llmResult.used } : {}),
       fallback_items: fallbackItems,
       has_more: hasMore,
       next_offset: nextOffset,
@@ -2955,11 +2987,18 @@ export function createAssistantDependencies(repository?: AssistantRepository): A
       return { owner: data.user.id, repo: repository || assistantRepository(service) };
     },
     generate: assistantGenerator({backend: sharedGoogleQuotaBackend(supabaseUrl), keys: providerKeyPool("LLM"), env: name => env(name)}),
-    async search(req, intent, operationId) {
+    async search(req, intent, operationId, parentCandidates) {
+      if (parentCandidates) {
+        const counters = emptyAttemptCounters();
+        const verified = await verifyAssistantWindow(supabaseUrl, parentCandidates, intent, counters);
+        return {items: verified.exact, fallback_items: [], has_more: false,
+          semantic_verification: verified.verification, verification_unavailable: !verified.used,
+          llm_verifier: {requested:true,used:verified.used,status:verified.status}, request_counters:counters};
+      }
       const headers = new Headers(req.headers); headers.delete("Content-Length");
       const internal = new Request(req.url, {method: "POST", headers,
         body: JSON.stringify({query: intent.goal, limit: 60, candidate_window: 60, client_request_id: operationId,
-          include_fallback: false, use_llm_verifier: false, allow_llm_fallback: false})});
+          include_fallback: false, use_llm_verifier: true, allow_llm_fallback: false})});
       const result = await runEventSearch(internal, operationId, performance.now(), undefined, intent);
       if (result.status >= 400) assistantReject(result.body.error === "quota_exceeded" ? "quota_exceeded" : "search_failed", result.status);
       return result.body;
