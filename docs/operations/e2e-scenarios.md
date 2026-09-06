@@ -192,3 +192,13 @@ retained month, date navigation, Escape/close/focus. Pair with native city swipe
 and `date-dock.playwright.mjs` future-month/date-strip regression. Anonymous L1;
 not physical Android/iPhone evidence. Reproduction artifacts preserve the old
 premature caption and absent downward-dismiss behavior.
+
+### Fullscreen mobile menu / composed lower dock
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/mobile-menu-dock.playwright.mjs`
+checks Date and Weekend at390x844/600: full outer dock hidden/inert, no hit-test
+occlusion through close animation, native menu scrolling, upward header/end
+swipe dismissal, short/horizontal gestures preserved, date state/focus restored,
+Escape/close, calendar reopening and real Popular link navigation. Anonymous
+L1 responsive-layout/native-touch regression, not physical-phone acceptance.
+Run alongside `islands-sequential.playwright.mjs` for prior city/calendar motion.

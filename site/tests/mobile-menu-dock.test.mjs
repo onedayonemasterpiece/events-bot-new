@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+const menu=readFileSync(new URL('../src/components/Reference4MobileMenu.astro',import.meta.url),'utf8'),layout=readFileSync(new URL('../src/layouts/EventLayout.astro',import.meta.url),'utf8');
+test('menu occludes whole composed lower owners without a z-index escalation',()=>{assert.match(menu,/:has\(\[data-mobile-discovery-menu\]\[data-reference4-fullscreen\]\[open\]\)/);assert.match(menu,/\[data-date-dock-surface\], \[data-event-dock-surface\]/);assert.match(menu,/surface.inert = wasInert/)});
+test('Reference4 owns close lifecycle and directional scroll-end gesture',()=>{assert.match(layout,/if \(!menu \|\| menu.hasAttribute\('data-reference4-fullscreen'\)\) return/);assert.match(menu,/finish.dy > -56/);assert.match(menu,/eligible:Boolean\(header \|\| atEnd\)/);assert.match(menu,/menu.open = false;[\s\S]*?reducedMotion\(\) \? 0 : 340/)});

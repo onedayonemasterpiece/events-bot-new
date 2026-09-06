@@ -1712,3 +1712,21 @@ PASS:18 L0; surface contract; sequential geometry/inert/native gestures at
 All15 route/support files plus manifest read back byte-exact. CI
 [34028608681](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34028608681)
 contract/facts/gate PASS; its browser job skipped, separate public L1 above.
+
+### Fullscreen menu owns lower-surface occlusion (2026-09-06)
+
+The mobile Date/Weekend regression was reproduced on the public sequential
+preview: the date dock (z64) remained above the menu (z60), because the old rule
+hid only its nested navigation. Reference4 now occludes and makes inert the
+whole existing composed date/event dock or standalone nav; no z-index escalation
+or second shell. Native `[open]` also occludes before controller startup. The
+previous inert state is restored only after the drawer's closing animation.
+The legacy layout controller skips Reference4, leaving a single lifecycle owner.
+
+A single-finger upward swipe over56px closes from the menu header or scroll end.
+Elsewhere a long menu scrolls natively; short and horizontal gestures do not
+close it. Escape, close button, real menu links, focus return and date/calendar
+state are preserved. This is anonymous L1 native Chromium touch injection, not
+physical-phone certification. Focused successor: `preview-islands-menu-20260906`,
+same historical corpus and approved editorial drafts; no full build or root
+promotion. Evidence: `artifacts/codex/islands-menu-20260906/`.

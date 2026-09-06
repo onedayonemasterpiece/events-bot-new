@@ -5756,7 +5756,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
         function hydrateMobileDiscoveryMenu() {
           const menu = document.querySelector('[data-mobile-discovery-menu]');
-          if (!menu) return;
+          // Reference4 owns its full drawer lifecycle and lower surfaces.
+          if (!menu || menu.hasAttribute('data-reference4-fullscreen')) return;
           const summary = menu.querySelector('summary');
           let drawerTimer = 0;
           let openedAtY = 0;
