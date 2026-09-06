@@ -477,3 +477,15 @@ pre-dispatch fourth-turn generic failure is not retrospectively assigned an
 unproven cause; new failures expose a sanitized shared-quota stage. Long semantic
 requests now take25–30seconds in this sample. No production/root/index guard
 mutation, user audio/session clearing, anonymous launch or quota bypass.
+
+Final active backend readback:
+`e9591d87c4ff16da0475f04fb304dde4f37d92d8`, revision
+`sha256:c6c6cebfcb92525d12ef1f3659efeb44b15092171834c0eaa0246868eedec5a0`.
+`final/runtime-activation.json` records clean pushed source, processing0 and
+preserved state; public health matches. Subsequent ordinary QA authenticated
+GETs of all5completed answers preserve text, all cards and complete editorials,
+with no new search/provider calls (`provenance/status-readback.json`), fixture
+cleanup PASS. Telegram report/link delivered and topic/text readback verified:
+https://t.me/c/4337049383/1460 . Latest queried PR source matches backend SHA;
+GitHub reports no checks on this head, so no new CI PASS claim. Local85focused
+regressions, typecheck and generated revision check are the executed code gates.
