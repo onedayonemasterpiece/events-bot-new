@@ -14,6 +14,12 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Changed
+- Mobile Weekend top context is now a compact «СБ · ВС» navigator with active-day tracking and jumps to the original day sections; the full H1/meta scroll away and numeric dates are not repeated.
+- Combine the mobile event action (buy/calendar/phone) and navigation into one adaptive two-tier bottom dock, preserving the existing action visibility, links and occupied-space owner.
+- Remove the top title/section island from mobile event detail pages, preserving the in-page heading, bottom navigation, event actions and desktop behavior.
+- Include the existing Free collection as a directly linked mobile/desktop review specimen in the focused floating-islands preview.
+- Add a preview-only AI-editorial draft at the bottom of mobile Weekend, with three internal links to built event detail pages; document the separate grounded-generation and freshness rollout plan.
+- Allow native horizontal swiping through all mobile cities before compaction, without +N; preserve the compact right-hand picker and separate outgoing/incoming text masks to prevent overlapping captions.
 - Restore the compact one-day city picker to the right viewport edge; add a visible disclosure chevron with open-state feedback so it reads as a selector, not a static label.
 - Compact the scrolled one-day mobile city island to one content-sized “Все города” / selected-city button, preserving the full city picker, normal-flow row, easing and bottom date dock.
 - Make one-day mobile listings content-first: static date/title with live count, no permanent order/tutorial row, and city controls filling the top space beside the brand. Preserve Weekend section context, card sizes and the110px date dock.

@@ -1,6 +1,6 @@
 import { citySurface } from './islandSurface.mjs';
 import { initContentFloatingIslands } from './contentFloatingIslands.mjs';
-import { initMobileFloatingIslands } from './mobileFloatingIslands.mjs';
+import { initMobileFloatingIslands, initMobileWeekendWithoutCities } from './mobileFloatingIslands.mjs';
 import { initDesktopFloatingIslands } from './desktopFloatingIslands.mjs';
 /** Isolated Popular review: one geometry owner; measured once, transform-only title. */
 export const FLOATING_ISLANDS_VERSION='3.0.0-review-motion';
@@ -16,6 +16,14 @@ export function initShellFloatingIslands(doc=document,win=window){
  const mount=()=>{
   band.__islands?.destroy();delete doc.body.dataset.fiMotion;
   const surface=citySurface(doc,!media.matches),rail=doc.querySelector('[data-mobile-listing-rails]');
+  // Mobile event details already own their title/content and action surfaces.
+  // Do not move the real H1 into a floating title/section island on this route.
+  if(!media.matches&&doc.querySelector('[data-mobile-event-production]')){
+   const nodes=[...band.querySelectorAll('[data-floating-page-context],[data-floating-section-context]')],hidden=nodes.map(n=>n.hidden);nodes.forEach(n=>n.hidden=true);
+   doc.body.dataset.fiEventStatic='';doc.body.dataset.fiMotion='ready';
+   band.__islands={destroy(){nodes.forEach((n,i)=>n.hidden=hidden[i]);delete doc.body.dataset.fiEventStatic;delete band.__islands;}};
+   return band.__islands;
+  }
   // A one-city/empty day has no city filter to dock and no reason to invent one.
   // Keep its real heading in flow instead of handing it to the content morph.
   if(!media.matches&&!surface&&rail?.getBoundingClientRect().height>0&&['today','tomorrow','date'].includes(rail.dataset.mobileV23Page)){
@@ -24,6 +32,7 @@ export function initShellFloatingIslands(doc=document,win=window){
    band.__islands={destroy(){nodes.forEach((n,i)=>n.hidden=hidden[i]);delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete band.__islands;}};
    return band.__islands;
   }
+  if(!media.matches&&!surface&&rail?.getBoundingClientRect().height>0&&rail.dataset.mobileV23Page==='weekend')return initMobileWeekendWithoutCities(doc,win);
   return !surface?initContentFloatingIslands(doc,win):media.matches?initDesktopFloatingIslands(doc,win):initMobileFloatingIslands(doc,win);
  };
  media.addEventListener('change',mount);band.__islandResponsive=true;return mount();

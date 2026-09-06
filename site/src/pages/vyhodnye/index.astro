@@ -1,12 +1,18 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import WeekendListingSurface from '../../components/listings/WeekendListingSurface.astro';
+import weekendEditorial from '../../data/weekend-editorial-prototype.json';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, PREVIEW_BUILD_ID, SITE_MODE, SITE_NAME } from '../../lib/events';
+import { absoluteUrl, eventHref, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, PREVIEW_BUILD_ID, SITE_MODE, SITE_NAME } from '../../lib/events';
 import { isAmberArtifactResearchEnabled, selectAmberArtifactEventId } from '../../lib/artifacts.mjs';
 
 const events = getWeekendEvents();
+const editorialItems = weekendEditorial.items.map(item => ({ ...item, event: events.find(event => event.id === item.event_id) }));
 const weekend = getWeekendRange();
+const editorialEnabled = SITE_MODE === 'preview'
+  && PREVIEW_BUILD_ID === 'preview-islands-20260906-archetypes-date-b7'
+  && weekend.start === weekendEditorial.weekend_start && weekend.end === weekendEditorial.weekend_end
+  && editorialItems.every(item => item.event);
 const ranges = getAvailableWeekendRanges();
 const index = ranges.findIndex((range) => range.start === weekend.start);
 const previousRange = index > 0 ? ranges[index - 1] : null;
@@ -47,5 +53,29 @@ const rangeLinks = ranges.slice(Math.max(0, index), Math.min(ranges.length, Math
       amberArtifactTailEventId={amberArtifactTailEventId}
     />
     <div class="ke-listing-shell"><PersonalFeedSlot context="weekend" /></div>
+    {editorialEnabled && (
+      <aside class="weekend-editorial-prototype" data-weekend-editorial-prototype aria-labelledby="weekend-editorial-title">
+        <p class="weekend-editorial-prototype__eyebrow">ИИ-обзор · пример</p>
+        <h2 id="weekend-editorial-title">На что обратить внимание</h2>
+        <p class="weekend-editorial-prototype__intro">Три разных повода выбраться на выходных 25–26 июля — по всей области.</p>
+        {editorialItems.map(({ event, lead, text }) => event && (
+          <p data-editorial-event-id={event.id}><strong>{lead}</strong> <a href={eventHref(event)}>{event.title}</a>. {text}</p>
+        ))}
+        <p class="weekend-editorial-prototype__note">Пример текста, заранее подготовленного ИИ по историческому срезу афиши от 23 июля 2026. Это не рейтинг посещаемости. Время, условия и билеты — на страницах событий.</p>
+      </aside>
+    )}
   </main>
 </EventLayout>
+<style>
+  .weekend-editorial-prototype {display:none;}
+  @media(max-width:720px) {
+    .weekend-editorial-prototype {display:block;margin:0 12px 24px;padding:22px 20px;border:1px solid #fff;border-radius:22px;background:#fffcf6;color:#241d17;box-shadow:0 8px 24px -14px #37251838;font:14px/1.65 var(--ke-font-family-sans,system-ui);}
+    .weekend-editorial-prototype h2 {margin:6px 0 12px;font-size:25px;line-height:1.16;letter-spacing:-.5px;}
+    .weekend-editorial-prototype p {margin:0 0 16px;}
+    .weekend-editorial-prototype a {color:#a54821;text-decoration:underline;text-underline-offset:3px;}
+    .weekend-editorial-prototype a:focus-visible {outline:2px solid #a54821;outline-offset:3px;}
+    .weekend-editorial-prototype .weekend-editorial-prototype__eyebrow {margin:0;color:#8b4021;font-size:11px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;}
+    .weekend-editorial-prototype .weekend-editorial-prototype__intro {color:#786e64;}
+    .weekend-editorial-prototype .weekend-editorial-prototype__note {margin:20px 0 0;padding-top:14px;border-top:1px solid #e8ded0;color:#786e64;font-size:11px;line-height:1.5;}
+  }
+</style>

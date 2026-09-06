@@ -1298,7 +1298,8 @@ suppressed; day headings remain in normal flow and full text becomes context.
 Desktop parallel weekend lanes do not claim a single active day. The nav fits
 whole destinations; overflow retains the current route and Clubs.
 
-Pages without city controls use `contentFloatingIslands.mjs`: no invented filter
+Pages without city controls use `contentFloatingIslands.mjs` (except mobile event
+details, which now keep a flow-only title): no invented filter
 or second shell. On mobile the actual H1 retains its flow placeholder and travels
 on the browser scroll timeline into a separately revealing skin; full visible H2
 supplies context. On desktop only section context is shown, not a duplicate page
@@ -1413,8 +1414,9 @@ selected city name. It docks12px from the right viewport edge, not next to the b
 downward chevron identifies it as a picker and turns upward while open; its
 width includes the arrow budget. This corrects the B5 regression that wrongly
 left-anchored a label-only button. It does not fill the remaining row with “Все +N”. Long names are width-capped and
-ellipsized with the full accessible selection retained. The original popover
-contains every city; the normal-flow row still fits whole choices plus overflow. Its normal-flow reserve is56px with8px
+ellipsized with the full accessible selection retained. The original popover contains every city. The B7 normal-flow row now contains
+all city buttons in a native horizontal touch scroller, with no +N. Desktop
+whole-item fitting is unchanged. Its normal-flow reserve is56px with8px
 margins, not72px with12/24px margins. One-city/empty days keep a static heading
 through the existing responsive shell owner: no fabricated filter or second shell.
 The original filter updates the heading count after city selection and row hiding.
@@ -1439,3 +1441,89 @@ review index and historical snapshot. B5 follow-up evidence is in
 correction is published at `preview-islands-20260906-archetypes-date-b6`, with
 evidence in `artifacts/codex/date-city-right-20260906/`; not a full build, native phone, Auth/PWA,
 Penpot certification or production/root release.
+
+### Mobile native city scrolling — 2026-09-06
+
+Owner requested faster selection without opening overflow before compaction.
+B7 (`preview-islands-20260906-archetypes-date-b7`) uses native overflow-x:auto
+for the expanded city row on day, Weekend and Popular mobile surfaces. All
+original choices remain available by horizontal swipe; vertical page gestures
+remain native. No custom drag handler or JS-driven scroll inertia is added.
+The existing compact right-hand picker remains: named/chevron on one-day pages,
+ellipsis beside section context elsewhere. The row retains its scroll offset
+through docking/expansion and delegates selection to the original filter.
+
+B6 frame inspection showed overlapping outgoing city names and incoming compact
+caption: independent mask/position animations exposed both at once. The shared moving
+wrapper also inherited overflow:hidden on date/weekend pages, prematurely
+clipping the animated skin to its compact layout width; its mobile override now
+covers every real city owner, not Popular alone. B7 uses a
+two-phase clipping handoff within the same540ms easing, without opacity fades,
+font scaling or replacing row nodes; row and compact caption are never exposed
+simultaneously during either direction or reversal. Sticky Y and180ms settling
+are unchanged. No bottom dock, desktop style, brand or card-size changes.
+
+`site/tests/mobile-city-scroll.playwright.mjs` checks real Chromium touch swipes,
+original city selection, restoration, right-edge docking and per-rAF mask
+exclusivity. Evidence and diagnostic frame captures live under
+`artifacts/codex/mobile-city-native-20260906/`. Anonymous L1 only, not native-phone
+or production acceptance. Owner receives direct page links in Telegram, not a
+new design-system catalog. Same focused date/popular/weekend routes; no full build.
+
+### Mobile Weekend editorial prototype — 2026-09-06
+
+Owner-requested mobile-only footer prototype, with pre-written AI draft and
+three internal links to real event detail pages, is included in the B7 review
+on `/vyhodnye/`. The three detail routes are explicitly included in this focused
+build. Canonical scope, provenance and follow-up plan: [Weekend editorial review](weekend-editorial-review.md).
+
+The owner also requested the missing **Free** archetype. B7 explicitly includes
+`/podborki/besplatnye-sobytiya/` (the existing FreeCollectionSurface), not a new
+`/besplatno/` alias. Its direct mobile/desktop review link is sent separately in
+Telegram. Previously supplied archetype/date prefixes did not contain this route.
+
+### Mobile event details: no top context island — 2026-09-06
+
+Owner explicitly removed the mobile event title/section island. The existing
+responsive shell recognizes `[data-mobile-event-production]`, keeps the real
+H1 in normal page content and hides its top context nodes; no content-morph
+controller or replacement header is created. Brand, lower navigation and event
+actions remain owned by their original components. Desktop context is unchanged
+and breakpoint teardown restores the prior nodes. B7 includes the previously
+shared event5370 plus the three linked Weekend review events for direct checking.
+
+### Mobile event action + navigation dock — 2026-09-06
+
+Owner requested the same single-surface composition as the date dock when
+«Купить» appears. `mobileEventDock.mjs` reparents the **actual** sticky event CTA
+and global nav into one bottom skin on mobile (≤720px). The existing hero/feed
+IntersectionObservers remain the only CTA-visibility owner: this layout listens
+to their `.is-hidden` decision, without adding a competing scroll rule.
+
+Visible CTA:64px action/date row above44px text-only nav (110px with border).
+No CTA at the hero or related feed: the same nav returns to80px icon+label mode
+inside82px skin. Labels stay bottom-aligned; height changes use340ms easing,
+not a second floating strip. Purchase/phone/calendar hrefs and action attributes
+are preserved, not duplicated. The shared occupied-space coordinator includes
+this dock and receives its size updates. Modal hiding and breakpoint restoration
+retain the existing shell contract. Desktop is unchanged.
+
+`site/tests/mobile-event-dock.playwright.mjs` covers real scroll-triggered states,
+non-overlap, original-node/URL identity, lower-space reporting,
+related-feed dismissal and resize restoration. Anonymous L1 preview only; no
+purchase is submitted and no native-phone/PWA acceptance is claimed.
+
+### Mobile Weekend: day-only context — 2026-09-06
+
+On both current and dated Weekend routes, full «Выходные» H1 and its meta stay
+in page flow and scroll away. The existing top context becomes one44px
+«СБ · ВС» day navigator beside the compact city picker, without subtitle or
+numeric dates (dates already exist below in the lower island). The relevant
+day uses a filled selected state, never an underline. Clicking a day scrolls
+to its original mobile section; scrolling updates the selection. Days without
+a visible section are disabled. Accessible names retain full dates. The
+context gradually appears over24–96px of scroll, only as its sticky slot approaches the top row; short pages do not reveal it over their content. Reduced-motion skips the fade.
+One-city/empty weekends use the same day context without inventing city choices.
+Desktop stays unchanged. `mobile-weekend-days.playwright.mjs` checks current and
+future routes at320/384/430, day navigation, lower-priority title flow, city
+alignment, reduced motion and responsive teardown.

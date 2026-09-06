@@ -135,3 +135,27 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 ### Floating-island archetype review
 
 `CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/island-archetypes.playwright.mjs` runs the seven specimens defined in `site/scripts/write-island-archetype-index.mjs`: anonymous Chromium384/1440, top/mid/settled geometry, city disclosure and real original mobile filtering. This is L1 preview evidence, not live Telegram E2E or Android/iOS acceptance. Canonical scope: [Astro preview](../features/static-site-pages/astro-preview.md#floating-island-archetypes--2026-09-06-owner-review).
+
+### Mobile city native horizontal scroll
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-city-scroll.playwright.mjs` checks the day, Weekend and Popular city rows using Chromium touch input, original filter delegation, compact/expanded restoration, frame-sampled mutually exclusive text masks and quick reversals. Anonymous L1; no native phone claim. [Contract](../features/static-site-pages/astro-preview.md#mobile-native-city-scrolling--2026-09-06).
+
+### Mobile Weekend editorial prototype
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/weekend-editorial.playwright.mjs` checks footer ordering and bottom-dock clearance at384/430px, all three actual internal event navigations, desktop hiding and exclusion on another weekend. Anonymous L1; no production LLM-generation claim. [Contract and plan](../features/static-site-pages/weekend-editorial-review.md).
+
+### Free archetype direct-link review
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/free-archetype.playwright.mjs` verifies the existing `/podborki/besplatnye-sobytiya/` at384/1440px: visible title/content, initialized shell, top/scrolled screenshots and no horizontal overflow/runtime errors. Anonymous review, not current-catalog or backend acceptance.
+
+### Mobile event without title island
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-event-no-island.playwright.mjs` checks two real event specimens at384/430px: H1 remains inside the event page, no top page/section island while scrolling, lower nav/actions retained, and desktop→mobile restoration. Anonymous L1 preview evidence.
+
+### Mobile event action/nav shared dock
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-event-dock.playwright.mjs` verifies original CTA/nav node reuse, scrolling hero→action→related feed, action/nav geometry and stable nav bottom edge, original href preservation, occupied-space updates and desktop restoration. No purchase/registration is performed.
+
+### Mobile Weekend day context
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-weekend-days.playwright.mjs` checks mobile current/future Weekend day-only context (СБ/ВС), normal-flow H1, city alignment, actual day jumps/active state, reduced motion and desktop restoration at320/384/430.

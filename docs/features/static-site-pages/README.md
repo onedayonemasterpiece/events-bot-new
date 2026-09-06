@@ -18,6 +18,10 @@ source/runtime inventory and reviewed AS-IS evidence without changing Astro or
 creating/merging design-system resources. It keeps the immutable candidate and
 the independently published prelaunch root as separate identity planes.
 
+## Weekend editorial review prototype
+
+[Mobile Weekend review: product contract, linked prototype and rollout plan](weekend-editorial-review.md). Preview-only; not production-generated editorial content.
+
 ## Focus-group product prototype (2026-07-27)
 
 The isolated focus-group branch adds page/product mechanics for a later UI

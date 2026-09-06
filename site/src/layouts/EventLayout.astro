@@ -15,6 +15,7 @@ import UnusualUnreadRuntime from '../components/UnusualUnreadRuntime.astro';
 import '../styles/design-system.css';
 import '../styles/floating-islands.css';
 import '../styles/mobile-floating-islands.css';
+import '../styles/mobile-event-dock.css';
 import { userIslandRoute } from '../lib/shellFloatingIslands.mjs';
 import { BASE_PATH, getCurrentDate, getOngoingExhibitionEvents, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { projectExhibitionsPersonal, exhibitionsUnreadBadge } from '../lib/exhibitionsPersonal';
@@ -2564,6 +2565,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {resolvedMobileBottomMode !== 'none' && <MobileBottomNav current={mobileSection} />}
 
     <script>
+      import { initMobileEventDock } from '../lib/mobileEventDock.mjs';
       import { initShellFloatingIslands } from '../lib/shellFloatingIslands.mjs';
       import { shellOccupiedSpace } from '../lib/shellOccupiedSpace.mjs';
       import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
@@ -2573,6 +2575,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       import { getResilientDataClient } from '../lib/resilientDataClient';
       import { EXHIBITIONS_STATE_KEY, exhibitionsUnreadBadge } from '../lib/exhibitionsPersonal';
       initShellFloatingIslands();
+      initMobileEventDock();
       // AR-17: the existing shell owns the measured lower stack. Surface
       // runtimes keep their queue/modality/actions; they consume one offset.
       {
@@ -2595,7 +2598,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const nav=document.querySelector('.mobile-bottom-nav');
           const navOffset=nav && visible(nav)?Math.ceil(Math.max(0,innerHeight-nav.getBoundingClientRect().top)):0;
           document.body.style.setProperty('--ke-lower-nav-offset',`${navOffset}px`);
-          const occupied=[...document.querySelectorAll('.mobile-bottom-nav,.mobile-sticky-cta,[data-date-dock-surface]')]
+          const occupied=[...document.querySelectorAll('.mobile-bottom-nav,.mobile-sticky-cta,[data-date-dock-surface],[data-event-dock-surface]')]
             .filter(visible).map(node=>Math.max(0,innerHeight-node.getBoundingClientRect().top));
           const offset=Math.ceil(Math.max(keyboardOffset,...occupied,0));
           for(const [key,value] of [['--ke-lower-surface-offset',offset],['--ke-lower-keyboard-offset',Math.ceil(keyboardOffset)],['--ke-lower-visible-height',Math.floor(viewport?.height || innerHeight)]]) {
@@ -2613,7 +2616,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             ['period-time','[data-floating-utility-slot] > [data-island-utility]'],
             ['weekend-days','body[data-floating-context="visible"] .ke-weekend-heads'],
             ['city-disclosure','[data-island-city-open] [data-island-city-panel]'],
-            ['date','[data-mobile-date-accessory]'], ['date-dock','[data-date-dock-surface]'], ['event-cta','.mobile-sticky-cta'],
+            ['date','[data-mobile-date-accessory]'], ['date-dock','[data-date-dock-surface]'], ['event-cta','.mobile-sticky-cta'], ['event-dock','[data-event-dock-surface]'],
             ['notification','[data-mobile-toast-region]'],
           ];
           occupiedSnapshot=shellOccupiedSpace({x:viewport?.offsetLeft || 0,y:viewport?.offsetTop || 0,width:viewport?.width || innerWidth,height:viewport?.height || innerHeight},
@@ -2629,6 +2632,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         window.addEventListener('scroll',scheduleLowerStack,{passive:true});
         window.addEventListener('pageshow',scheduleLowerStack);
         window.addEventListener('kenigevents:date-dock-change',scheduleLowerStack);
+        window.addEventListener('kenigevents:event-dock-change',scheduleLowerStack);
         window.visualViewport?.addEventListener('resize',scheduleLowerStack,{passive:true});
         window.visualViewport?.addEventListener('scroll',scheduleLowerStack,{passive:true});
         document.addEventListener('toggle',scheduleLowerStack,true);
@@ -5718,6 +5722,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           }, { rootMargin: '-16% 0px -54% 0px', threshold: 0.01 });
           heroObserver.observe(heroForSticky);
         }
+
 
         function hydrateImmersiveHeader() {
           const hero = document.querySelector('[data-event-hero]');
