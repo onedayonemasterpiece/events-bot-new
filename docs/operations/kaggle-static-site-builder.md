@@ -914,3 +914,5 @@ The validated transaction `build_clock` is passed to Astro as
 before archiving. Kernel wall time remains execution metadata, not page-data time.
 Golden keeps its own pinned corpus clock. Regression:
 `tests/test_static_site_builder_preview_contract.py`.
+
+Home review Search routing: preview-only PUBLIC_MOBILE_SEARCH_BASE_URL is forwarded through build_config after validation as an HTTPS kenigevents.ru/preview-* path (no query/fragment). Production-candidate does not inherit a review Search destination.

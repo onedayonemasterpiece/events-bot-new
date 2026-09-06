@@ -1105,6 +1105,12 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
     env['PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED'] = enabled if config.get('profile') == 'preview' else '0'
     env['PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY'] = capture_only
     env['PUBLIC_EVENT_SEARCH_ASSISTANT_HOST'] = host
+    from urllib.parse import urlsplit
+    search_base = str(config.get('public_mobile_search_base_url') or '').rstrip('/')
+    parsed = urlsplit(search_base)
+    if search_base and (parsed.scheme != 'https' or parsed.netloc != 'kenigevents.ru' or not parsed.path.startswith('/preview-') or parsed.query or parsed.fragment):
+        raise ValueError('Search preview override must be an immutable KenigEvents HTTPS preview')
+    env['PUBLIC_MOBILE_SEARCH_BASE_URL'] = search_base if config.get('profile') == 'preview' else ''
 
 
 def apply_interest_club_build_env(env: dict[str, str], config: dict) -> None:
