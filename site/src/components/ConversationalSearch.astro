@@ -6,12 +6,20 @@ const captureOnly = import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_CAPTURE_ONLY =
 const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLED === '1' && import.meta.env.PUBLIC_SITE_MODE !== 'production');
 ---
 {enabled && <div class="assistant" data-assistant data-assistant-capture-only={captureOnly ? 'true' : undefined} data-ds-component="ConversationalSearch" data-ds-version="1" data-assistant-catalog={catalog ? 'true' : undefined} data-assistant-worklet={withBase('/voice/pcm-capture-worklet.js')} data-nosnippet>
-  <button type="button" class="assistant__launcher" data-assistant-launcher aria-label="Голосовой поиск" aria-haspopup="dialog" aria-controls="voice-composer" aria-expanded="false" title="Голосовой поиск">
-    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg>
-    <span>Голосом</span>
-  </button>
-  <dialog id="voice-composer" data-assistant-composer aria-labelledby="voice-composer-title">
-    <div class="assistant__dialog-head"><h2 id="voice-composer-title">Куда хочется сходить?</h2><button type="button" data-assistant-close aria-label="Закрыть голосовой поиск">×</button></div>
+  <div class="assistant__voice-dock" data-assistant-dock data-capture-state="idle">
+    <div class="assistant__voice-info">
+      <span data-assistant-timer hidden aria-hidden="true">0:00</span>
+      <span data-assistant-live role="status" aria-live="polite">Голосовой поиск</span>
+      <button type="button" data-assistant-details aria-controls="voice-composer" aria-expanded="false">Запрос и записи</button>
+    </div>
+    <button type="button" class="assistant__launcher" data-assistant-launcher aria-label="Начать запись голосом" aria-pressed="false" title="Начать запись голосом">
+      <span class="assistant__mic-halo" aria-hidden="true"></span>
+      <svg class="assistant__mic-icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg>
+      <span class="assistant__stop-icon" aria-hidden="true"></span>
+    </button>
+  </div>
+  <section id="voice-composer" data-assistant-composer aria-labelledby="voice-composer-title" hidden>
+    <div class="assistant__dialog-head"><h2 id="voice-composer-title">Куда хочется сходить?</h2><button type="button" data-assistant-close aria-label="Свернуть запрос и записи">×</button></div>
     {captureOnly && <p data-assistant-preview-limit role="note">Распознавание и ответы нейросети пока не подключены. Здесь можно проверить микрофон; аудио остаётся в этом браузере и не отправляется на сервер.</p>}
     <p data-assistant-auth role="status">Подключаю существующий вход поиска…</p>
     <button type="button" class="cta-button" data-assistant-login hidden>Войти через Яндекс</button>
@@ -20,7 +28,7 @@ const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLE
       <button class="cta-button" type="button" data-assistant-stop hidden>Остановить запись</button>
       <button class="secondary-button" type="button" data-assistant-save-retry hidden>Сохранить оставшееся аудио</button>
     </div>
-    <p data-assistant-capture role="status" aria-live="polite">Микрофон выключен.</p>
+    <p data-assistant-capture>Микрофон выключен.</p>
     <form data-assistant-form hidden={captureOnly}>
       <p data-assistant-base>Новый поиск</p>
       <label class="ke-field"><span class="ke-field__label">Ваш запрос — можно исправить или написать</span>
@@ -32,9 +40,9 @@ const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLE
         <button class="secondary-button" type="button" data-assistant-resume hidden>Проверить обработку</button>
       </div>
     </form>
-    <p data-assistant-processing role="status" aria-live="polite"></p>
+    <p data-assistant-processing></p>
     <details data-assistant-recordings hidden><summary>Аудио и восстановление</summary><div data-assistant-recording-list></div></details>
-  </dialog>
+  </section>
   <details data-assistant-history hidden><summary>Предыдущие подборки</summary><button type="button" class="secondary-button" data-assistant-history-load disabled>Показать предыдущие</button><div data-assistant-history-list></div></details>
   <button type="button" class="secondary-button" data-assistant-latest hidden>Новый ответ ↓</button>
   <div data-assistant-answers aria-label="Ответы поиска"></div>
@@ -51,14 +59,25 @@ const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLE
 <style is:global>
   [data-assistant] { display: grid; gap: var(--ke-space-4); margin-block: var(--ke-space-6); }
   [data-assistant] [hidden] { display: none !important; }
-  [data-assistant-composer] { border:1px solid #e6dcd2; border-radius:26px; background:#fffcf7; color:#2b221b; padding:24px; width:min(480px, calc(100vw - 32px)); max-height:calc(100dvh - 48px); box-sizing:border-box; box-shadow:0 18px 56px #38271c33; }
-  [data-assistant-composer]::backdrop { background:rgb(38 28 20 / .22); }
+  [data-assistant-composer] { border:1px solid #e6dcd2; border-radius:26px; background:#fffcf7; color:#2b221b; padding:24px; width:100%; max-height:none; box-sizing:border-box; box-shadow:0 18px 56px #38271c33; }
   [data-assistant-composer] > * + * { margin-block-start:16px; }
   .assistant__dialog-head { display:flex; align-items:center; justify-content:space-between; gap:16px; }
   .assistant__dialog-head h2 { font-size:22px; margin:0; }
   [data-assistant-close] { border:0; background:transparent; color:inherit; font-size:28px; width:44px; height:44px; cursor:pointer; flex-shrink:0; }
   [data-assistant-preview-limit] { font-size:14px; line-height:1.5; background:#f4ede5; border-radius:14px; padding:12px; }
   [data-assistant-auth]:empty, [data-assistant-processing]:empty { display:none; }
+  .assistant__voice-info { max-width:min(280px, calc(100vw - 124px)); background:#fffcf7; padding:10px 14px; border-radius:18px; box-shadow:0 4px 16px #38231620; font-size:13px; line-height:1.4; }
+  [data-assistant-live] { display:block; }
+  [data-assistant-timer] { font-variant-numeric:tabular-nums; font-size:17px; font-weight:750; }
+  [data-assistant-details] { display:block; border:0; background:none; padding:5px 0; color:#974324; font:inherit; cursor:pointer; }
+  .assistant__mic-halo { position:absolute; inset:-7px; border-radius:50%; border:2px solid #a0442560; pointer-events:none; }
+  [data-capture-state="recording"] .assistant__mic-halo { animation:assistant-mic-breathe 1.8s ease-in-out infinite; }
+  @keyframes assistant-mic-breathe { 50% { transform:scale(1.15); opacity:.3; } }
+  .assistant__stop-icon { display:none; width:19px; height:19px; border-radius:4px; background:currentColor; }
+  [data-capture-state="recording"] .assistant__stop-icon, [data-capture-state="requesting"] .assistant__stop-icon { display:block; }
+  [data-capture-state="recording"] .assistant__mic-icon, [data-capture-state="requesting"] .assistant__mic-icon { display:none; }
+  [data-capture-state="stopping"] .assistant__mic-halo { border-style:dashed; }
+  @media(prefers-reduced-motion:reduce) { [data-capture-state="recording"] .assistant__mic-halo { animation:none; } }
   [data-assistant] button:disabled { opacity:.45; cursor:not-allowed; }
   [data-assistant] button:focus-visible { outline:3px solid #984321; outline-offset:3px; }
   .assistant__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ke-space-2); }

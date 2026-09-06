@@ -161,3 +161,9 @@ Real provider availability (not `voice.real_quality` acceptance) was additionall
 checked with the documented synthetic Wonderful Lections WAV through its pinned
 GoogleAI client and the actual KenigEvents assistantGenerator/strict limiter.
 Exact usage/checkpoints and preview 1441 receipt: existing voice integration handoff.
+The voice composer is now nonmodal: `voice-composer.integration.mjs` asserts
+single mic/no focus trap/explicit recovery, not the superseded modal close test.
+`voice-capture-only.integration.mjs` additionally covers two real synthetic-device
+recordings, delayed/failed terminal receipt and same-audio retry/reload.
+`voice-browser.integration.mjs` checks durable periodic audio before Stop and
+abrupt page closure. Auth snapshots/device audio remain injected; no phone claim.

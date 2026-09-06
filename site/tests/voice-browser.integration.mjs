@@ -145,3 +145,16 @@ test('AudioContext construction failure reaches terminal error, not endless requ
  });
  assert.equal(result.status,'error');assert.deepEqual(result.states.map(x=>x.state),['requesting','error']);await context.close();
 });
+test('default wire budget checkpoints during recording; abrupt page closure retains accepted audio',async()=>{
+ const {context,page}=await setup();
+ await page.evaluate(async()=>{
+  const {VoiceStore,MicrophoneCapture}=window.modules;const store=await VoiceStore.open();await store.create('durable-owner','abrupt-test');
+  window.capture=new MicrophoneCapture({workletUrl:'/voice/pcm-capture-worklet.js',budget:{maxWireBytes:1048576,envelopeBytes:8192,encoding:'base64'},onPart:part=>store.putPart('durable-owner','abrupt-test',part),onStatus:()=>{}});
+  document.querySelector('#start').onclick=()=>{void window.capture.start();};
+ });
+ await page.click('#start');await page.waitForFunction(()=>window.capture.status==='recording');
+ await page.evaluate(async()=>{const deadline=Date.now()+6000;while(Date.now()<deadline){const store=await window.modules.VoiceStore.open();const rows=await store.page('recordings','durable-owner');store.close();if(rows[0]?.partCount>=2)return;await new Promise(r=>setTimeout(r,100));}throw Error('No periodic durable audio checkpoints');});
+ await page.close();const next=await context.newPage();await next.goto(origin);await next.waitForFunction(()=>window.modules);
+ const persisted=await next.evaluate(async()=>{const store=await window.modules.VoiceStore.open();const rows=await store.page('recordings','durable-owner');const parts=await store.parts('durable-owner','abrupt-test');return {state:rows[0].state,parts:parts.length,frames:parts.reduce((n,p)=>n+p.frameCount,0),rate:parts[0].sampleRate};});
+ assert.ok(persisted.parts>=2);assert.ok(persisted.frames>=persisted.rate*2);assert.equal(persisted.state,'recording');await context.close();
+});

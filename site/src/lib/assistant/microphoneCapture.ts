@@ -68,7 +68,7 @@ export class MicrophoneCapture {
       this.stream = stream;
       await context.audioWorklet.addModule(this.options.workletUrl);
       if (generation !== this.generation) { stream.getTracks().forEach(t => t.stop()); if (context.state !== 'closed') await context.close(); return; }
-      this.segmenter = new StreamingPcm16(context.sampleRate, this.options.budget);
+      this.segmenter = new StreamingPcm16(context.sampleRate, this.options.budget, context.sampleRate);
       const node = new AudioWorkletNode(context, 'kenig-voice-pcm');
       this.node = node;
       node.port.onmessage = ({ data }) => {

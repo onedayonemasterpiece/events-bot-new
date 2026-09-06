@@ -4872,6 +4872,12 @@
   is enabled, with stale-transcript guards. Capture-only preview keeps all
   assistant network calls disabled; this is not live ASR acceptance.
 
+- Fixed: voice capture now uses one circular, gently pulsing start/stop control
+  without a modal or recording-time focus takeover, reusing the proven donor
+  interaction. Audio is checkpointed locally at one-second frame boundaries;
+  terminal save failure stays recoverable and never reports a completed save.
+  Existing Auth/audio storage is retained; preview still does not enable ASR.
+
 ## [1.12.0] - 2026-03-04
 ### Highlights
 - **Smart Update (feature bundle)**: unified create/merge pipeline for VK/TG/`/parse` with source logs, Telegraph consistency, festival-context routing, and out-of-region filtering safeguards.

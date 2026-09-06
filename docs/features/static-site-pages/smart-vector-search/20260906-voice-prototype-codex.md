@@ -454,3 +454,67 @@ No raw audio/transcript, credential or session is committed. Latest code push ha
 only unrelated invalid workflow run `34020265628` (`jobs=[]`); this is **not** a
 CI pass or a voice test failure. The current PR's own changelog insertion was moved
 next to its existing voice entry to avoid a conflict with parallel main entries.
+
+### Nonmodal microphone and bounded local checkpointing (2026-09-06)
+
+The modal correction above is itself **superseded**: the owner tried real
+recordings after Yandex login and rejected the window interaction. Successful
+owner login is user feedback, not a controlled Auth/device test.
+
+Read actual donor implementations rather than only ASR modules:
+- Wonderful Lections `site/public/review/review.css` (`.microphone`, `.mic-halo`,
+  1.8s ease-in-out breath and reduced-motion), `review.js` microphone toggle,
+  `starting/stopping` gates, durable `chunkWrites`/seal before saved state.
+- record-idea-hub `android/app/src/main/java/com/onedayonemasterpiece/recordideahub/`
+  `MainActivity.kt` (`animateMode`, capture vs upload/transcription status),
+  `RecordingService.kt` and `M4aChunkWriter.kt` (local commit and recovery).
+  Reused interaction/reliability rules, not owner Auth, IdeaHub publication,
+  deletion policy or native VAD. No speculative silence trimming is introduced.
+
+Existing shared EventLayout positions the same Search control: circular 64px
+(desktop)/56px (mobile), stationary hit target, halo-only pulse, stop square,
+recording timer and short adjacent status. Clicking the mic toggles capture;
+no modal/backdrop, focus trap, auto-scroll or new navigation floor. Escape stops
+capture. The same composer is an explicit in-flow `Запрос и записи` surface;
+starting a recording hides it, and successful local capture does not reopen it.
+Guest sign-in remains through the existing Auth controller. Microphone denial,
+startup failure and missing storage keep explicit feedback. Processing/persistence
+is not falsely presented as ASR completion.
+
+Reliability changes:
+- StreamingPcm16 accepts an optional max-part frame bound. Real capture uses one
+  second at the actual sample rate (or smaller if required by wire budget).
+  Every part uses the existing strict IndexedDB transaction and hash checks;
+  no resampling, silence removal, new DB name/version or user-data cleanup.
+- The stop indicator remains `saving` until the recording receipt commits.
+  Repeated clicks cannot create another recording during that commit.
+- Failed final receipt retains the same audio and exposes local save retry;
+  it does not show “saved”. Already committed parts survive an abruptly closed
+  page as unfinished recovery data. This is not zero-loss assurance: the current
+  uncommitted tail, worklet messages or pending storage transaction can be lost
+  on OS/browser termination. Periodic checkpoints reduce that window.
+- Conditional beforeunload warning covers active/pending/unsaved capture. It is
+  not a guaranteed mobile shutdown hook; existing visibility/pagehide stop stays.
+  [Browser lifecycle limitation](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event).
+
+Focused validation: 83 L0 unit checks, 7 native Chromium synthetic-device capture
+cases (including durable parts before Stop and abrupt page closure), compositor
+and full mount tests for repeated capture/no panel, terminal-save delay, local
+retry, unchanged audio after reload, and zero assistant network. Injected Auth
+snapshots and synthetic microphone are explicitly not the user's Yandex session
+or real phone. Public/rendered viewport checks cover 1440/1280/390px, circular
+hit geometry, nonmodal guest route, halo motion and reduced-motion. Recording
+screenshots in this suite are labelled render fixtures, not physical capture.
+
+Scope tags: voice/microphone/indexeddb/recovery/keyboard/animation. The skill path
+required by `site/AGENTS.md`, `.codex/skills/static-site-autotest/SKILL.md`, is absent
+in this checkout and the active primary checkout; used its named canonical
+strategy, scenario registry and release gates directly instead. Android/iOS
+system evidence remains unavailable/not run; this is an isolated review preview,
+not mobile-system certification or production promotion. No new server/model
+call or runtime enablement in this UI correction. Existing user session and audio
+remain on the same origin and unchanged owner-scoped DB.
+
+Artifacts: `artifacts/codex/voice-orb-20260906/` in the voice worktree.
+
+Donor source snapshots inspected: Wonderful Lections `cceac0c1fbab6cdca881f642accf5f87cf802487`; record-idea-hub `294c3485f377570505800516e2e86e58a6141781`. Full-mount capture-only suite: 3/3 PASS, including failed final receipt and same-record local retry.

@@ -11,10 +11,11 @@ export class StreamingPcm16 {
   private closed = false;
   readonly sampleRate: number;
   private budget: WireBudget;
-  constructor(sampleRate: number, budget: WireBudget) {
+  constructor(sampleRate: number, budget: WireBudget, maxPartFrames?: number) {
     this.sampleRate = sampleRate; this.budget = budget;
     if (!Number.isSafeInteger(sampleRate) || sampleRate < 8000 || sampleRate > 96000) throw new Error('invalid_sample_rate');
-    this.buffer = new Float32Array(Math.floor((maxWavBytes(budget) - 44) / 2));
+    if (maxPartFrames !== undefined && (!Number.isSafeInteger(maxPartFrames) || maxPartFrames < 1)) throw new Error('invalid_checkpoint_frames');
+    this.buffer = new Float32Array(Math.min(Math.floor((maxWavBytes(budget) - 44) / 2), maxPartFrames ?? Infinity));
   }
   get frames(): number { return this.emittedFrames + this.used; }
   push(pcm: Float32Array, firstFrame = this.frames): AudioPart[] {

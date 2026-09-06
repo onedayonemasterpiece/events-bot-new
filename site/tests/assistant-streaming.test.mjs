@@ -29,3 +29,9 @@ test('gap and invalid PCM are rejected before any mutation', () => {
   assert.throws(() => stream.push(new Float32Array(1), 9), /gap_or_overlap/);
   assert.equal(stream.frames, 0);
 });
+test('one-second checkpoint cap is lossless and stays within the wire budget',()=>{
+ const s=new StreamingPcm16(16000,{maxWireBytes:1048576,envelopeBytes:8192,encoding:'base64'},16000);
+ const parts=s.push(new Float32Array(36000));assert.equal(parts.length,2);assert.deepEqual(parts.map(p=>[p.firstFrame,p.frameCount]),[[0,16000],[16000,16000]]);
+ assert.equal(s.finish()[0].frameCount,4000);assert.equal(s.frames,36000);
+ assert.throws(()=>new StreamingPcm16(16000,{maxWireBytes:1048576,envelopeBytes:8192,encoding:'base64'},0),/invalid_checkpoint_frames/);
+});

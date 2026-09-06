@@ -966,11 +966,11 @@ scenarios:
       release: true_for_voice_enablement
 
   voice.capture_only:
-    title: Desktop capture-only prevents assistant network on mount and reload
+    title: Nonmodal mic start-stop, durable save gating and capture-only network isolation
     status: implemented_local
     layers: [L1]
     platforms: [desktop_chromium]
-    trigger_tags: [voice, capture_only, privacy]
+    trigger_tags: [voice, capture_only, privacy, keyboard, animation, recovery]
     cost: low
     auth_mode: injected_snapshot_not_live_auth
     side_effects: isolated_browser_indexeddb_only
