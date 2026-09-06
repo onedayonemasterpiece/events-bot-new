@@ -629,3 +629,22 @@ keep the prior interpreted context but search the current catalog again. Do not
 silently trap all following questions inside the preceding (possibly empty)
 membership. The explicit “Уточнить эту подборку” action still selects
 `refine_selection` and its bounded-subset contract; no regex guesses of intent.
+
+
+First public live clean-chat check (source `fb28280d7`, protected DevCoveer):
+native Chromium fed a provenance-locked offline eSpeak Russian jazz WAV through
+actual capture, silence stop, real Opus ASR, durable intake and live interpretation.
+ASR preserved jazz/weekend meaning but misheard the synthetic opening (“Я облик”
+instead of “Я бы”); this is not claimed as human-phone ASR accuracy. First query
+returned a valid zero-results answer; contextual free-weekend follow-up appended
+11 ordinary cards. Bubble and skeleton appeared in the SAME mutation observation
+at 11586.3 ms; first answer at 13758.3 ms. Mobile and desktop topic locator passed.
+No manual stop/confirm click; no raw media sent to Supabase. Full artifact:
+`artifacts/codex/voice-chat-20260906/live-browser-receipt.json`.
+
+Visual readback led to one presentation correction: technical coverage/subset
+explanations move into “Об этой подборке” after the result controls, not six lines
+above the AI reply. History is disclosed through its secondary opener instead of
+occupying the initial conversation. The existing catalog inconsistency remains:
+a typed-free result can carry a paid label in display data. This is a separate
+known data-quality limitation; no regex rewriting of price semantics was applied.

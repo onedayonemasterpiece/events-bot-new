@@ -148,8 +148,8 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     settleConversationTurn(turn,'ready');pendingTurns.delete(result.id);
     const section=turn.section,body=turn.body;section.id=`assistant-answer-${result.id}`;section.dataset.assistantSection=result.id;
     const heading=node('h2',result.title);heading.tabIndex=-1;body.append(heading);
-    if(result.parentId)body.append(node('p',`Уточнение предыдущей подборки`));
-    if(result.membership_complete!==true&&!result.clarification&&result.explanationKind==='none')body.append(node('p','Это ограниченное поисковое окно, не весь каталог. «Уточнить» работает с этой подборкой; для расширения выберите «Изменить условия и искать заново».'));
+    if(result.parentId)section.setAttribute('aria-description','Уточнение предыдущей подборки');
+
     body.append(node('p',result.answer||''));
     const grid=node('div');grid.className='cards-grid cards-grid--immersive';grid.dataset.assistantCards='';body.append(grid);
     const entry={element:section,result,count:0,ids:[] as string[]};rendered.set(result.id,entry);
@@ -157,8 +157,10 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     const controls=node('div');controls.className='assistant__controls';
     controls.append(button(result.clarification?'Ответить на уточнение':'Уточнить эту подборку',()=>chooseBase(result,result.clarification?'expand_selection':'refine_selection')),
       button('Изменить условия и искать заново',()=>chooseBase(result,'expand_selection')),button('Спросить о событии',()=>chooseBase(result,'explain_selection')));
-    body.append(controls);if(!section.isConnected)answers.append(section);appendCards(entry);visibility.observe(section);scheduleViewed();
-    latest=result.id;get('latest').hidden=false;get('history')?.removeAttribute('hidden');
+    body.append(controls);
+    if(result.membership_complete!==true&&!result.clarification&&result.explanationKind==='none'){const coverage=node('details');coverage.append(node('summary','Об этой подборке'),node('p','Это ограниченная подборка, не весь каталог. «Уточнить эту подборку» проверяет её события; обычное новое сообщение ищет по каталогу с учётом контекста.'));body.append(coverage);}
+    if(!section.isConnected)answers.append(section);appendCards(entry);visibility.observe(section);scheduleViewed();
+    latest=result.id;get('latest').hidden=section.getBoundingClientRect().top>=0&&section.getBoundingClientRect().top<innerHeight;get('history')?.removeAttribute('hidden');
     if(scroll){presentation?.enterConversation();section.scrollIntoView({block:'start'});}
   }
   let transcriptRevision=0;

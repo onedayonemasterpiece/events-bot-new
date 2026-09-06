@@ -13,6 +13,7 @@
   Opening the mobile menu stops capture before hiding controls. Guest-trial quotas
   remain documented to-be, not enabled. Ordinary follow-up messages search the
   catalog with context; only explicit subset refinement stays inside old results.
+  Technical coverage/history details no longer dominate the conversational reply.
 
 - Added: a neutral inline sign-in block with compact/card variants for voice
   Search hosts, reusing the existing shared Yandex/email OTP controller and

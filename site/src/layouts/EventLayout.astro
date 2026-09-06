@@ -420,7 +420,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       [data-assistant-clean-ui="true"] .assistant__minimal-tools { display:flex; align-items:center; justify-content:flex-end; gap:16px; height:40px; padding-right:48px; }
       [data-assistant-clean-ui="true"] .assistant__minimal-tools button { border:0; background:none; padding:8px 0; color:var(--text-soft,#776e66); font:inherit; font-size:13px; cursor:pointer; min-height:40px; }
       [data-assistant-clean-ui="true"] [data-assistant-sign-in-open] { color:var(--primary,#984321); }
-      [data-assistant-clean-ui="true"][data-assistant-phase="landing"] > [data-assistant-history], [data-assistant-clean-ui="true"][data-assistant-phase="landing"] > [data-assistant-latest] { display:none; }
+      [data-assistant-clean-ui="true"] > [data-assistant-history], [data-assistant-clean-ui="true"][data-assistant-phase="landing"] > [data-assistant-latest] { display:none; }
       [data-assistant-clean-ui="true"]:has([data-assistant-composer]:not([hidden])) > [data-assistant-history] { display:block; }
       [data-assistant-clean-ui="true"][data-assistant-phase="conversation"] .assistant__voice-dock { left:auto; right:max(24px,env(safe-area-inset-right)); bottom:24px; display:flex; flex-direction:row; align-items:center; gap:12px; width:min(680px,calc(100vw - 48px)); }
       [data-assistant-clean-ui="true"][data-assistant-phase="conversation"] .assistant__voice-info { position:absolute; bottom:calc(100% + 8px); right:0; max-width:calc(100vw - 40px); font-size:12px; text-align:right; padding:3px 8px; border-radius:8px; background:var(--surface,#fffcf8); }
