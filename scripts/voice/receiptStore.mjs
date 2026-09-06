@@ -205,7 +205,8 @@ export class DevCoveerReceiptStore {
         return;
       }
       const manifest = JSON.parse(row.payload);
-      if (row.state !== 'accepted' || manifest.codec || !Number.isInteger(manifest.partCount) || part.index >= manifest.partCount ||
+      if (row.state !== 'accepted' || 'mimeType' in manifest || 'digest' in manifest || 'byteLength' in manifest ||
+        this.#db.prepare('SELECT 1 FROM media WHERE operation_id=?').get(row.id) || !Number.isInteger(manifest.partCount) || part.index >= manifest.partCount ||
         part.sampleRate !== manifest.sampleRate || !Number.isSafeInteger(manifest.frames) || part.firstFrame + part.frameCount > manifest.frames)
         fail('invalid_manifest', 400);
       const total = this.#db.prepare('SELECT coalesce(SUM(length(audio)),0) AS size FROM audio_parts WHERE operation_id=?').get(row.id).size;
@@ -231,7 +232,10 @@ export class DevCoveerReceiptStore {
         return;
       }
       const manifest = JSON.parse(row.payload);
-      if (row.state !== 'accepted' || typeof manifest.codec !== 'string' || !manifest.codec || manifest.partCount !== 1 ||
+      if (row.state !== 'accepted' || manifest.partCount !== 1 || manifest.mimeType !== part.mimeType ||
+        manifest.digest !== part.digest || manifest.byteLength !== bytes.length ||
+        !Number.isSafeInteger(manifest.frames) || manifest.frames < 1 || manifest.frames * 2 + 44 > this.#limits.audioBytes ||
+        !Number.isInteger(manifest.sampleRate) || manifest.sampleRate < 8000 || manifest.sampleRate > 96000 ||
         this.#db.prepare('SELECT 1 FROM audio_parts WHERE operation_id=? LIMIT 1').get(row.id)) fail('invalid_manifest', 400);
       this.#db.prepare('INSERT INTO media VALUES(?,?,?,?)').run(row.id, part.mimeType, part.digest, bytes);
     });

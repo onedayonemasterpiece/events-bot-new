@@ -126,7 +126,7 @@ test('PCM blobs survive reopen, exact retries are immutable after completion, ma
 test('compressed media owner scoping, byte+digest+MIME immutability, late upload rejection and PCM separation', async t => {
   const f = fixture(t), id = randomUUID(), bytes = new Uint8Array([1, 2, 3]);
   const media = {mimeType: 'audio/webm;codecs=opus', digest: sha(bytes), bytes};
-  await f.store.admit(owner, id, 'asr', {codec: 'webm-opus', partCount: 1});
+  await f.store.admit(owner, id, 'asr', {frames: 16000, sampleRate: 16000, partCount: 1, mimeType: media.mimeType, digest: media.digest, byteLength: bytes.length});
   assert.equal(await f.store.media(owner, id), null);
   await f.store.putMedia(owner, id, media); await f.store.putMedia(owner, id, media);
   await assert.rejects(f.store.putMedia(other, id, media), code('operation_not_found'));
@@ -138,8 +138,28 @@ test('compressed media owner scoping, byte+digest+MIME immutability, late upload
   await assert.rejects(f.store.putAudio(owner, id, pcm()), code('invalid_manifest'));
   const claim = await f.store.claim(owner, id); await f.store.checkpoint(owner, id, claim.claim_id, 'completed', {});
   const reopened = f.reopen(); await reopened.putMedia(owner, id, media); assert.deepEqual(await reopened.media(owner, id), media);
-  const late = randomUUID(); await reopened.admit(owner, late, 'asr', {codec: 'webm-opus', partCount: 1}); await reopened.claim(owner, late);
+  const late = randomUUID(); await reopened.admit(owner, late, 'asr', {frames: 16000, sampleRate: 16000, partCount: 1, mimeType: media.mimeType, digest: media.digest, byteLength: bytes.length}); await reopened.claim(owner, late);
   await assert.rejects(reopened.putMedia(owner, late, media), code('invalid_manifest'));
+});
+
+test('compressed uploads must match admitted MIME, digest and length before any bytes are saved', async t => {
+  const f = fixture(t), bytes = new Uint8Array([1, 2, 3]);
+  const media = {mimeType: 'audio/webm;codecs=opus', digest: sha(bytes), bytes};
+  const manifest = {frames: 16000, sampleRate: 16000, partCount: 1, mimeType: media.mimeType, digest: media.digest, byteLength: bytes.length};
+  for (const mismatch of [{mimeType: 'audio/ogg'}, {digest: 'a'.repeat(64)}, {byteLength: 4}, {partCount: 2}, {frames: RECEIPT_LIMITS.audioBytes}]) {
+    const id = randomUUID(); await f.store.admit(owner, id, 'asr', {...manifest, ...mismatch});
+    await assert.rejects(f.store.putMedia(owner, id, media), code('invalid_manifest'));
+    assert.equal(await f.store.media(owner, id), null);
+    assert.deepEqual(await f.store.audio(owner, id), []);
+  }
+  const pcmId = randomUUID(); await f.store.admit(owner, pcmId, 'asr', {frames: 2, sampleRate: 16000, partCount: 1});
+  await f.store.putAudio(owner, pcmId, pcm());
+  await assert.rejects(f.store.putMedia(owner, pcmId, media), code('invalid_manifest'));
+  const compressedId = randomUUID(); await f.store.admit(owner, compressedId, 'asr', manifest);
+  await assert.rejects(f.store.putAudio(owner, compressedId, pcm()), code('invalid_manifest'));
+  assert.deepEqual(await f.store.audio(owner, compressedId), []);
+  await f.store.putMedia(owner, compressedId, media);
+  await assert.rejects(f.store.putAudio(owner, compressedId, pcm()), code('invalid_manifest'));
 });
 
 test('write failures rollback atomically without losing prior dispatch and release transaction locks', async t => {
