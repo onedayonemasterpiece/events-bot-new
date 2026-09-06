@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-03-devcoveer-mcp-runtime-502.md`
+  - Scope: DevCoveer secure tunnel, stdio bridge execution channel, native Codex app-server lifecycle, tunnel-client upgrade activation, semantic readiness, and host disk headroom.
+  - Must not regress: green `/healthz` and `/readyz` are insufficient when runtime calls fail; closure requires successful local and external `find_projects`, `list_tasks`, and native Codex `list_models`, plus one bounded read-only `start_task`/`read_task`. Tunnel-client upgrades must be reflected by the running service, and disk-full evidence must be checked before blaming model/provider catalogs.
 - `INC-2026-09-01-yandex-storage-cdn-media-outage.md`
   - Scope: Yandex bucket capacity, immutable secret-candidate retention,
     event-media materialization, VK/TG media gates and public CDN TLS recovery.
@@ -436,3 +439,7 @@
    - follow-up actions.
 4. Инцидент не считается дисциплинированно закрытым, пока fix не в проде, не достижим из `origin/main`, не покрыт regression evidence и не заведены follow-up actions.
 5. Для source-import / Smart Update quality incidents regression evidence обязано включать replay сырых offending source artifacts через production import path + Smart Update на prod snapshot/shadow DB. Prompt diff, unit tests или ручной SQL-аудит без такого replay не являются достаточным closure.
+
+- `INC-2026-09-05-vk-storage-admission.md`
+  - Scope: Fly /data storage admission and VK auto-import carrier selection.
+  - Must not regress: a storage-blocked batch must not consume pending carriers; exact affected carriers require evidence-backed catch-up.

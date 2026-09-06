@@ -799,7 +799,7 @@ def build_social_workspace_tools(
                  ),
                  handler=read, scope_selector=read_scope, **common),
         ToolSpec("social_asset_stage", "Stage social asset",
-                 "Ingest one authenticated ChatGPT file into a verified opaque social asset.",
+                 "Stage one authenticated ChatGPT file or rematerialize one principal-bound provider-read image into a verified opaque social asset.",
                  asset_stage_schema,
                  SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA, handler=asset_stage,
                  scope_selector=asset_scope, file_params=("file",),

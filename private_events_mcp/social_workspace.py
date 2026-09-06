@@ -1809,85 +1809,59 @@ def validate_action_status_response(payload: Mapping[str, Any]) -> SocialActionS
 @dataclass(frozen=True, slots=True)
 class AssetStageRequest:
     platform: SocialPlatform
-    file: ChatGPTFile
     role: MediaRole
+    file: ChatGPTFile | None = None
+    source_asset_ref: str | None = None
 
 
 def validate_asset_stage_request(payload: Mapping[str, Any]) -> AssetStageRequest:
     data = _object(payload, "request")
-    _only_fields(data, {"platform", "file", "role"}, "request")
-    file_data = _object(data.get("file"), "file")
-    _only_fields(
-        file_data,
-        {"download_url", "file_id", "mime_type", "file_name"},
-        "file",
-    )
-    download_url = file_data.get("download_url")
-    if (
-        not isinstance(download_url, str)
-        or download_url != download_url.strip()
-        or not 1 <= len(download_url) <= 4096
-        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in download_url)
-    ):
-        raise SocialWorkspaceValidationError("file download_url is invalid")
-    parsed_url = urlsplit(download_url)
-    if (
-        parsed_url.scheme != "https"
-        or not parsed_url.netloc
-        or parsed_url.username is not None
-        or parsed_url.password is not None
-        or parsed_url.fragment
-    ):
-        raise SocialWorkspaceValidationError("file download_url is invalid")
-    file_id = file_data.get("file_id")
-    if (
-        not isinstance(file_id, str)
-        or not 1 <= len(file_id) <= 256
-        or file_id != file_id.strip()
-        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in file_id)
-    ):
-        raise SocialWorkspaceValidationError("file file_id is invalid")
+    _only_fields(data, {"platform", "file", "source_asset_ref", "role"}, "request")
+    has_file = data.get("file") is not None
+    has_source = data.get("source_asset_ref") is not None
+    if has_file == has_source:
+        raise SocialWorkspaceValidationError("exactly one asset source is required")
     role = _enum(data.get("role"), MediaRole, "role")
     platform = _enum(data.get("platform"), SocialPlatform, "platform")
+    if role not in {MediaRole.IMAGE, MediaRole.DOCUMENT}:
+        raise SocialWorkspaceValidationError("only image or document asset staging is enabled")
+    if role is MediaRole.DOCUMENT and platform is not SocialPlatform.TELEGRAM:
+        raise SocialWorkspaceValidationError("document asset staging is supported only for Telegram")
+    if has_source:
+        if role is not MediaRole.IMAGE:
+            raise SocialWorkspaceValidationError("provider-read promotion supports images only")
+        return AssetStageRequest(platform=platform, role=role,
+            source_asset_ref=validate_opaque_ref(data.get("source_asset_ref"), "asset"))
+    file_data = _object(data.get("file"), "file")
+    _only_fields(file_data, {"download_url", "file_id", "mime_type", "file_name"}, "file")
+    download_url = file_data.get("download_url")
+    if (not isinstance(download_url, str) or download_url != download_url.strip()
+        or not 1 <= len(download_url) <= 4096
+        or any(ord(c) < 0x20 or ord(c) == 0x7F for c in download_url)):
+        raise SocialWorkspaceValidationError("file download_url is invalid")
+    parsed_url = urlsplit(download_url)
+    if (parsed_url.scheme != "https" or not parsed_url.netloc
+        or parsed_url.username is not None or parsed_url.password is not None or parsed_url.fragment):
+        raise SocialWorkspaceValidationError("file download_url is invalid")
+    file_id = file_data.get("file_id")
+    if (not isinstance(file_id, str) or not 1 <= len(file_id) <= 256
+        or file_id != file_id.strip()
+        or any(ord(c) < 0x20 or ord(c) == 0x7F for c in file_id)):
+        raise SocialWorkspaceValidationError("file file_id is invalid")
     mime_type = _optional_text(file_data.get("mime_type"), "mime_type", maximum=100)
-    if mime_type is not None and not re.fullmatch(
-        r"(?:image|video|audio|application|text)/[A-Za-z0-9.+-]{1,64}", mime_type
-    ):
+    if mime_type is not None and not re.fullmatch(r"(?:image|video|audio|application|text)/[A-Za-z0-9.+-]{1,64}", mime_type):
         raise SocialWorkspaceValidationError("file mime_type is invalid")
     raw_file_name = file_data.get("file_name")
     if role is MediaRole.DOCUMENT:
-        # The document-policy boundary, not this transport parser, owns NFKC,
-        # basename, control/bidi stripping and extension enforcement. Preserve
-        # the bounded untrusted hint so that sanitizer is actually exercised.
-        if raw_file_name is not None and (
-            not isinstance(raw_file_name, str) or len(raw_file_name) > 255
-        ):
+        if raw_file_name is not None and (not isinstance(raw_file_name, str) or len(raw_file_name) > 255):
             raise SocialWorkspaceValidationError("file file_name is invalid")
         file_name = raw_file_name
     else:
         file_name = _optional_text(raw_file_name, "file_name", maximum=255)
-        if file_name is not None and any(
-            character in file_name for character in ("/", "\\", "\x00")
-        ):
+        if file_name is not None and any(c in file_name for c in ("/", "\\", "\x00")):
             raise SocialWorkspaceValidationError("file file_name is invalid")
-    if role not in {MediaRole.IMAGE, MediaRole.DOCUMENT}:
-        raise SocialWorkspaceValidationError(
-            "only image or document asset staging is enabled"
-        )
-    if role is MediaRole.DOCUMENT and platform is not SocialPlatform.TELEGRAM:
-        raise SocialWorkspaceValidationError(
-            "document asset staging is supported only for Telegram"
-        )
-    return AssetStageRequest(
-        platform=platform,
-        file=ChatGPTFile(
-            download_url=download_url,
-            file_id=file_id,
-            mime_type=mime_type,
-            file_name=file_name,
-        ),
-        role=role,
-    )
+    return AssetStageRequest(platform=platform, role=role, file=ChatGPTFile(
+        download_url=download_url, file_id=file_id, mime_type=mime_type, file_name=file_name))
 
 
 def validate_asset_status_request(payload: Mapping[str, Any]) -> str:
@@ -3193,15 +3167,20 @@ SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA: Mapping[str, Any] = {
     },
     "type": "object",
     "additionalProperties": False,
-    "required": ["platform", "file", "role"],
+    "required": ["platform", "role"],
     "properties": {
         "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
         "file": {"$ref": "#/$defs/OpenAIFile"},
+        "source_asset_ref": {"type": "string", "pattern": r"^ast_[A-Za-z0-9_-]{16,160}$"},
         "role": {
             "type": "string",
             "enum": [MediaRole.IMAGE.value, MediaRole.DOCUMENT.value],
         },
     },
+    "oneOf": [
+        {"required": ["file"], "not": {"required": ["source_asset_ref"]}},
+        {"required": ["source_asset_ref"], "not": {"required": ["file"]}},
+    ],
     "allOf": [
         {
             "if": {

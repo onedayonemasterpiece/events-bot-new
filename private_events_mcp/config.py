@@ -210,7 +210,7 @@ class PrivateEventsMCPConfig:
     social_targets_json: str = ""
     social_ticket_ttl_seconds: int = 300
     social_provider_timeout_seconds: int = 12
-    social_publish_attempts_per_day: int = 10
+    social_publish_attempts_per_day: int = 1000
     media_root: str = "/data/private-events-mcp-media"
     media_allowed_hosts: tuple[str, ...] = ()
     max_asset_bytes: int = 30 * 1024 * 1024
@@ -365,9 +365,9 @@ class PrivateEventsMCPConfig:
             ),
             social_publish_attempts_per_day=_int(
                 "PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY",
-                10,
-                low=1,
-                high=100,
+                1000,
+                low=1000,
+                high=10000,
             ),
             media_root=(
                 os.getenv("PRIVATE_EVENTS_MCP_MEDIA_ROOT")

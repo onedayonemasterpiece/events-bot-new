@@ -195,7 +195,7 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_content_stories` | bounded Telegram/VK story page with opaque media refs and no mark-read/viewer identities |
 | `social_content_editorial_sample` | purpose-bound editorial sample, at most 25 items/page and 100 cumulatively |
 | `social_content_analytics` | bounded aggregate post/story statistics or audience counts where the credential is entitled |
-| `social_asset_stage` | ingest one ChatGPT `fileParams` image or eligible Telegram document into immutable short-lived server storage |
+| `social_asset_stage` | ingest one ChatGPT `fileParams` image/eligible Telegram document, or rematerialize one fresh principal-bound provider-read image `ast_*` into immutable short-lived server storage for the selected VK/Telegram provider |
 | `social_asset_status` | return only verified MIME/size/digest/dimensions or sanitized document name/classification, expiry and lifecycle state for an opaque asset ref |
 | `social_asset_preview` | render one principal-bound story image as a bounded metadata-free MCP JPEG thumbnail |
 | `social_action_prepare` | freeze exact typed action/content/target/media digest; return the reserved operation, `commit_required`, explicit next action and `operation_state=not_started` without a provider call |
@@ -231,6 +231,8 @@ bulk indexer:
 
 `social_asset_stage` is the only media ingress. Its public input is exactly
 `{platform, file, role}` and its tool descriptor declares
+Provider-read images use the same tool without a new control plane: pass exactly one `source_asset_ref` instead of `file`. The server accepts only a fresh `ast_*` bound to the same OAuth client, subject, resource and policy, materializes it through the source provider adapter, recomputes and validates bytes/digest/MIME/dimensions, stores it under a fresh principal-owned opaque storage reference, and stages it for the selected destination provider. Raw URLs, native provider IDs and filesystem paths are not accepted.
+
 `_meta["openai/fileParams"]=["file"]`. ChatGPT supplies one selected file per
 call as a closed `file` object with required `download_url` and `file_id` plus
 optional `mime_type` and `file_name`. Those values are untrusted transport
@@ -1361,3 +1363,5 @@ OAuth/social DB may remain on the volume. The media root contains only
 short-lived immutable files and may be drained by the bounded expiry cleanup
 after the feature is off; do not manually reuse its refs or copy it into the
 event database.
+
+Scheduled-queue edit/delete is direct only for an exact principal-bound scheduled/postponed item; published/live content still requires external approval.

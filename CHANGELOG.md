@@ -9,6 +9,14 @@
   canonical event DB; keeps Codex read-only; and suppresses legacy immediate
   page/provider projections for this queue-owned entry point. Multi-event and
   festival-program packets fail closed before canonical event/job mutation.
+### Fixed
+- Repair album release-gate fixture to implement asset reverification without weakening production media checks (INC-2026-09-05 release unblock).
+- VK auto import checks volume headroom before claiming a batch, preserving pending carriers instead of mass-terminalizing them when storage admission is blocked (INC-2026-09-05).
+
+- Changed: KenigEvents prelaunch date moved from 5 to 20 September 2026 across the root page, SEO metadata and subscription confirmations; release checks updated.
+
+### Fixed
+- Private eventsBot MCP owned social schedules no longer hit the former 10-attempt product ceiling: the retained daily attempt guard is emergency-scale, and local pre-provider reference/digest failures remain uncharged. Provider-read, principal-bound image `ast_*` references can now be safely rematerialized through the existing `social_asset_stage` tool for VK or Telegram after byte/digest/MIME/dimension/expiry reverification; raw URLs, paths, native IDs, expired refs, and foreign-principal refs remain rejected. Explicit edit/delete of an exact principal-bound scheduled/postponed queue item is directly authorized through the authenticated ChatGPT resource, while already-published content still requires external approval.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK
