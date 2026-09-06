@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Added / Hero Talk**: bounded read-only canonical event token resolver with existing event revisions, Kaliningrad eligibility deadlines and exact expiring route-evidence binding; missing route/media proof remains unresolved.
 
 - Added pure shared-placement Hero pack compilation with exact Unicode, locked tokens, semantic-input binding, media/dependency gates and deterministic hashes; restored owner-assigned Hero contracts without UI restoration or activation (#643).
 - **Fixed / VK event jobs**: recheck canonical lifecycle and silent state before automatic VK sync, skipping stale jobs for hidden/cancelled/postponed events without provider calls; explicit lower-level repair remains unchanged.
