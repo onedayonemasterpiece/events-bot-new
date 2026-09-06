@@ -356,6 +356,38 @@ content. Integration must inject current tenant policy and attach it to the
 accepted-operation read path. Tests:
 `tests/test_private_events_mcp_event_publication_receipts.py`.
 
+### Accepted partner event portfolio assignment (#643)
+
+`private_events_mcp.partner_accepted_event.assign_accepted_event(partner_store,
+request, result)` is a synchronous internal post-executor service, not a tool
+accepting caller-chosen IDs. It requires the original durable request and actual
+executor result: `status=accepted`, exactly one positive integer `event_ids`
+entry, matching single `events[].event_id`, and explicit `created` or
+`merged_or_replay` provenance. The canonical Event row must actually exist.
+
+One existing SQLite `BEGIN IMMEDIATE` transaction calls
+`PartnerAccessStore.resolve_durable` with exact subject/client/resource, current
+credential epoch/expiry/status and `partner:events:propose` / `event_create`.
+It rejects any existing portfolio ownership from another tenant or organization.
+First assignment requires `created`; a `merged_or_replay` result is idempotently
+accepted only if this exact principal already owns the event. An unassigned
+preexisting merge or another principal's same-organization membership is **not**
+a new ownership grant; it requires owner assignment/reconciliation.
+
+The service uses `INSERT OR IGNORE` on existing `mcp_partner_event` with current
+principal/tenant/organization and returns `{event_id, principal_id, tenant_id,
+organization_id, assigned}`. Replays preserve the original row; races serialize
+with policy changes/ownership checks. It creates no Event, ledger, OAuth identity,
+Telegram identity or provider publication. Integration invokes it after canonical
+executor success and before reporting the operation accepted. Errors must
+propagate to runtime `outcome_unknown`: parser/Smart Update may already have
+written canonical data, so assignment denial must not be mislabeled as a safe
+pre-mutation failure or retried with a new idempotency key.
+
+Regression tests: `tests/test_private_events_mcp_partner_accepted_event.py`
+(real SQLite, missing/invalid/multiple IDs, foreign ownership, merge provenance,
+revocation/rotation/expiry/scopes, restart and concurrent assignment).
+
 ## ChatGPT social workspace
 
 When the universal workspace is enabled, ChatGPT can discover only the tools
