@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Changed
+- Free page uses its existing medallion as the only floating identity: a single native-sticky SVG smoothly shrinks16%, without a duplicate title island or fading between two badges.
 - Mobile Weekend top context is now a compact «СБ · ВС» navigator with active-day tracking and jumps to the original day sections; the full H1/meta scroll away and numeric dates are not repeated.
 - Combine the mobile event action (buy/calendar/phone) and navigation into one adaptive two-tier bottom dock, preserving the existing action visibility, links and occupied-space owner.
 - Remove the top title/section island from mobile event detail pages, preserving the in-page heading, bottom navigation, event actions and desktop behavior.

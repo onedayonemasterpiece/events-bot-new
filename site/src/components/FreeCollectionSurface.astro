@@ -65,12 +65,6 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
       </span>
     </section>
 
-    <div class="free-collection__sticky-identity" data-free-collection-sticky-identity aria-hidden="true">
-      <span class="free-collection__medallion free-collection__medallion--compact" data-free-collection-medallion="compact">
-        <img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" width="512" height="512" />
-      </span>
-    </div>
-
     <section id="free-collection-results" class="free-collection__results" aria-labelledby="free-collection-results-title" data-free-collection-event-group="events">
       <div class="free-collection__results-head">
         <h2 id="free-collection-results-title">События</h2>
@@ -106,62 +100,31 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
   </div>
 </main>
 
-<script>
-  const root = document.querySelector('[data-free-collection-surface]');
-  const hero = root?.querySelector('[data-free-collection-hero]');
-  const stickyIdentity = root?.querySelector('[data-free-collection-sticky-identity]');
-  if (hero instanceof HTMLElement && stickyIdentity instanceof HTMLElement) {
-    const sync = () => {
-      const top = window.matchMedia('(max-width: 759px)').matches ? 64 : 57;
-      stickyIdentity.toggleAttribute('data-compact-visible', hero.getBoundingClientRect().bottom <= top + 16);
-    };
-    sync();
-    document.addEventListener('scroll', sync, { passive:true });
-    window.addEventListener('resize', sync, { passive:true });
-  }
-</script>
-
 <style>
   .free-collection { padding:0 0 4rem; }
-  .free-collection__shell { display:grid; gap:1rem; }
-  .free-collection__hero {
-    display:grid;
-    grid-template-columns:minmax(0,1fr) auto;
-    align-items:center;
-    gap:var(--ke-space-6);
-    padding-block:var(--ke-space-6);
-  }
-  .free-collection__copy { min-width:0; }
+  /* One grid-spanning native sticky node: no hero/compact copy handoff. */
+  .free-collection__shell { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:var(--ke-space-6); row-gap:1rem; }
+  .free-collection__shell > :global([data-product-breadcrumbs]),
+  .free-collection__shell > :global([data-product-parent-link]) { grid-area:1 / 1 / 2 / -1; }
+  .free-collection__hero { display:contents; }
+  .free-collection__copy { grid-area:2 / 1 / 3 / 2; min-width:0; }
   .free-collection__copy h1 { margin:0 0 var(--ke-space-4); font:var(--ke-type-h1); letter-spacing:var(--ke-type-h1-letter); }
   .free-collection__copy .lead { max-width:58ch; }
   .free-collection__medallion { display:grid; place-items:center; flex:none; }
   .free-collection__medallion img { width:100%; height:100%; object-fit:contain; }
   .free-collection__medallion--hero {
-    justify-self:end;
-    width:var(--ke-free-medallion-sticky-size);
-    height:var(--ke-free-medallion-sticky-size);
-    filter:drop-shadow(0 22px 30px var(--ke-color-free-medallion-shadow));
-  }
-  .free-collection__sticky-identity {
-    position:sticky;
-    z-index:var(--ke-free-sticky-layer);
-    top:var(--ke-free-sticky-top);
-    height:0;
-    display:flex;
-    justify-content:flex-end;
-    padding-right:clamp(8px,1.6vw,18px);
-    pointer-events:none;
-  }
-  .free-collection__medallion--compact {
-    width:var(--ke-free-medallion-sticky-size);
-    height:var(--ke-free-medallion-sticky-size);
-    opacity:0;
-    transform:translateY(-10px) scale(.82);
+    justify-self:end;align-self:start;grid-area:2 / 2 / 4 / 3;
+    position:sticky;top:var(--fi-free-top,88px);z-index:62;
+    width:var(--ke-free-medallion-sticky-size);height:var(--ke-free-medallion-sticky-size);
+    transform-origin:right top;overflow-anchor:none;pointer-events:none;
     filter:drop-shadow(0 10px 17px var(--ke-color-free-medallion-shadow-strong));
-    transition:opacity var(--ke-free-motion-opacity),transform var(--ke-free-motion-transform);
   }
-  .free-collection__sticky-identity[data-compact-visible] .free-collection__medallion--compact { opacity:1; transform:none; }
+  @keyframes free-medallion-settle { from {transform:scale(1);} to {transform:scale(.84);} }
+  @supports(animation-timeline:scroll(root block)) {
+    :global(body[data-fi-free]) .free-collection__medallion--hero {animation:free-medallion-settle 1s cubic-bezier(.42,0,.58,1) both;animation-timeline:scroll(root block);animation-range:var(--fi-free-start,0px) var(--fi-free-end,112px);}
+  }
   .free-collection__results {
+    grid-area:3 / 1 / 4 / -1;
     scroll-margin-top:142px;
     padding-block:var(--ke-space-4);
   }
@@ -172,10 +135,7 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
   @media(max-width:759px) {
     .free-collection { padding-bottom:calc(5rem + env(safe-area-inset-bottom)); }
     .free-collection__shell { width:min(100% - 24px,1120px); }
-    .free-collection__hero {
-      gap:var(--ke-space-3);
-      padding-block:var(--ke-space-4);
-    }
+    .free-collection__shell {column-gap:var(--ke-space-3);}
     .free-collection__copy h1 { font:var(--ke-type-h1-compact); letter-spacing:var(--ke-type-h1-compact-letter); max-width:100%; overflow-wrap:normal; word-break:normal; hyphens:none; }
     .free-collection__copy .lead { font-size:.95rem; }
     .free-collection__copy .collection-criteria,.free-collection__copy .muted-note { font-size:.76rem; line-height:1.35; }
@@ -184,15 +144,12 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
     .free-collection__medallion--hero {
       width:calc(2 * var(--ke-free-medallion-sticky-size-compact));
       height:calc(2 * var(--ke-free-medallion-sticky-size-compact));
-      align-self:start;
-      margin-top:0;
+      top:var(--fi-free-top,20px);
     }
-    .free-collection__sticky-identity { top:var(--ke-free-sticky-top-compact); z-index:var(--ke-free-sticky-layer-compact); padding-right:6px; }
-    .free-collection__medallion--compact { width:var(--ke-free-medallion-sticky-size-compact); height:var(--ke-free-medallion-sticky-size-compact); }
     .free-collection__results { padding-block:var(--ke-space-4); }
     .free-collection__results-head { align-items:start; flex-direction:column; gap:.25rem; }
   }
   @media(prefers-reduced-motion:reduce) {
-    .free-collection__medallion--compact { transition:none; }
+    :global(body[data-fi-free]) .free-collection__medallion--hero {animation:none;}
   }
 </style>

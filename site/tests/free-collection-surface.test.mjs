@@ -13,12 +13,12 @@ test('Free collection retains its medallion identity while using one ordinary li
   ]);
   assert.match(route, /collection\.slug === 'besplatnye-sobytiya'[\s\S]*<FreeCollectionSurface/u);
   assert.match(surface, /data-free-collection-medallion="large"/u);
-  assert.match(surface, /data-free-collection-medallion="compact"/u);
-  assert.match(surface, /\.free-collection__medallion--hero \{[^}]*justify-self:end/u);
-  assert.match(surface, /\.free-collection__sticky-identity \{[\s\S]*?position:sticky;[\s\S]*?top:var\(--ke-free-sticky-top\)/u);
-  assert.match(surface, /@media\(max-width:759px\)[\s\S]*?\.free-collection__sticky-identity \{ top:var\(--ke-free-sticky-top-compact\)/u);
-  assert.doesNotMatch(surface, /free-collection__shelf|backdrop-filter/u);
-  assert.match(surface, /data-compact-visible/u);
+  assert.equal((surface.match(/data-free-collection-medallion=/gu)||[]).length,1);
+  assert.match(surface, /\.free-collection__medallion--hero \{[\s\S]*?position:sticky/u);
+  assert.match(surface, /grid-area:2 \/ 2 \/ 4 \/ 3/u);
+  assert.match(surface, /transform-origin:right top/u);
+  assert.match(surface, /to \{transform:scale\(\.84\)/u);
+  assert.doesNotMatch(surface, /free-collection__sticky-identity|medallion--compact|data-compact-visible|backdrop-filter/u);
   assert.match(surface, /<h1 id="free-collection-title">Бесплатные события<\/h1>/u);
   assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*?events=\{initialEvents\}[\s\S]*?rowSize=\{3\}[\s\S]*?mobileFlowMedia[\s\S]*?discoveryFeed[\s\S]*?runtimeManaged[\s\S]*?runtimeVisibleOnly[\s\S]*?runtimeSourcePolicy="all-direct"/u);
   assert.match(surface, /data-free-collection-grid/gu);

@@ -1527,3 +1527,29 @@ One-city/empty weekends use the same day context without inventing city choices.
 Desktop stays unchanged. `mobile-weekend-days.playwright.mjs` checks current and
 future routes at320/384/430, day navigation, lower-priority title flow, city
 alignment, reduced motion and responsive teardown.
+
+### Free: the medallion is the floating identity — 2026-09-06
+
+Owner correction: Free must not use the generic content-title/section island.
+The existing `free-listing-medallion.svg` is the identity on mobile **and** desktop.
+`FreeCollectionSurface` now renders one real medallion across the header/results
+grid; its native sticky range spans the list rather than the short hero. The H1
+and description remain in ordinary flow. The former hidden compact duplicate
+and binary fade-in handler are removed, not layered behind the new controller.
+
+`freeMedallionIsland.mjs`, selected by the existing responsive shell, measures
+only the arrival range. Over the last112px before reaching its top boundary,
+the medallion smoothly scales from1 to0.84 with a fixed right edge; its opacity,
+SVG bytes and DOM node never change. Native sticky owns vertical positioning.
+Mobile retains its100px initial identity (84px docked); desktop retains58px
+(48.72px docked), below the measured global menu. Native scroll-timeline has a
+transform-only rAF fallback; reduced-motion uses settled states without tweening.
+No title card, city filter or new sticky floor is introduced. Existing cards,
+Free eligibility/count/loading and bottom navigation are unchanged.
+
+Focused B8 review: `/preview-islands-20260906-archetypes-free-b8/podborki/besplatnye-sobytiya/`.
+B7 links for the other archetypes remain unchanged. Evidence is retained under
+`artifacts/codex/free-medallion-island-20260906/`: real rendered320/384/430/1440,
+intermediate scales/opacity/right edge/native sticky, wheel reversal, responsive
+node identity and reduced-motion. This is an anonymous historical preview, not
+current-event validation, native phone acceptance or Penpot/production promotion.

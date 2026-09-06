@@ -5,7 +5,7 @@
   "registry_version": "1.2.0",
   "registry_sha256": "9e710f81afb2e5668964339f66d0af33aadc98cf363c56a874629f0f3bdaf8fe",
   "source_root": "site/src",
-  "import_inventory_sha256": "6aa32809f364a825b9cf12ee72de507804123d1e2001a7c5a1c1315ab1aaedb4",
+  "import_inventory_sha256": "5382576589d92a7a1103ac160b1e28d03f84c609b2dfcad1c17cf201577f7d53",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -283,6 +283,7 @@
       "site/src/lib/focus-personalization.ts",
       "site/src/lib/focus-pwa-install-controller.ts",
       "site/src/lib/freeCollection.mjs",
+      "site/src/lib/freeMedallionIsland.mjs",
       "site/src/lib/homeFeed.mjs",
       "site/src/lib/homeHeroTalk.ts",
       "site/src/lib/ics.ts",
@@ -398,8 +399,8 @@
   "summary": {
     "product_family_count": 107,
     "family_count": 109,
-    "source_file_count": 333,
-    "import_edge_count": 830,
+    "source_file_count": 334,
+    "import_edge_count": 831,
     "direct_consumer_edges": 273,
     "protocol_consumer_edges": 33,
     "runtime_factory_edges": 1,

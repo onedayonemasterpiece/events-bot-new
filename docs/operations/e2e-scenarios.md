@@ -159,3 +159,7 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 ### Mobile Weekend day context
 
 `CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-weekend-days.playwright.mjs` checks mobile current/future Weekend day-only context (СБ/ВС), normal-flow H1, city alignment, actual day jumps/active state, reduced motion and desktop restoration at320/384/430.
+
+### Free medallion as the single floating identity
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/free-medallion-island.playwright.mjs` checks320/384/430/1440: one real SVG/DOM node, no title island, intermediate smooth scale100%→84%, constant opacity/right edge, native sticky Y, reverse wheel, responsive restoration and reduced-motion. This replaces the old two-medallion/binary-fade acceptance in the cross-surface Unusual harness. Anonymous browser evidence only.

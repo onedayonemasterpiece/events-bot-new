@@ -1,3 +1,4 @@
+import { initFreeMedallionIsland } from './freeMedallionIsland.mjs';
 import { citySurface } from './islandSurface.mjs';
 import { initContentFloatingIslands } from './contentFloatingIslands.mjs';
 import { initMobileFloatingIslands, initMobileWeekendWithoutCities } from './mobileFloatingIslands.mjs';
@@ -15,6 +16,7 @@ export function initShellFloatingIslands(doc=document,win=window){
  const media=win.matchMedia('(min-width:760px)');
  const mount=()=>{
   band.__islands?.destroy();delete doc.body.dataset.fiMotion;
+  if(doc.querySelector('[data-free-collection-surface]'))return initFreeMedallionIsland(doc,win);
   const surface=citySurface(doc,!media.matches),rail=doc.querySelector('[data-mobile-listing-rails]');
   // Mobile event details already own their title/content and action surfaces.
   // Do not move the real H1 into a floating title/section island on this route.

@@ -80,8 +80,8 @@ test('R01-R07 keep the cross-surface product contracts in canonical implementati
 
   assert.match(rail, /fit:\s*'cover',[\s\S]*ratio:\s*5\s*\/\s*4,[\s\S]*width:\s*140,[\s\S]*single_safe_visual_landscape_5x4/u);
   assert.match(free, /data-free-collection-medallion="large"/u);
-  assert.match(free, /data-free-collection-medallion="compact"/u);
-  assert.match(free, /data-free-collection-sticky-identity/u);
+  assert.match(free, /data-free-collection-medallion="large"/u);
+  assert.doesNotMatch(free, /data-free-collection-sticky-identity/u);
   assert.doesNotMatch(free, /data-free-collection-shelf/u);
   assert.match(free, /data-free-collection-grid/u);
   assert.doesNotMatch(free, /data-free-collection-event-group="exhibitions"|Бесплатные выставки/u);
