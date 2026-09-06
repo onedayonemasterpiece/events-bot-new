@@ -443,8 +443,8 @@ receipt can promote the denied operation. This is domain crash/isolation accepta
 
 `PRIVATE_EVENTS_MCP_OWNER_PROMO_ENABLED=1` requires owner event-create capability
 and adds only `promo_capabilities`, `promo_campaigns_list`, `promo_campaign_get`,
-`promo_campaign_create_prepare`, `promo_campaign_create_commit` and
-`promo_operation_get` to the existing owner resource. Explicit new
+`promo_campaign_create_prepare`, `promo_campaign_create_commit`,
+`promo_activity_add_prepare`, `promo_activity_add_commit` and `promo_operation_get` to the existing owner resource. Explicit new
 `promo:write` / `promo:read` OAuth consent is required; previous tokens are not
 expanded. Partner and Codex resources receive none of these tools.
 
@@ -491,8 +491,26 @@ a partial prefix is never passed off as a full CAS hash. Legacy campaign caps
 are explicitly publication units, not qualified Hero browser visibility.
 Delivery statistics remain unavailable rather than fabricated zeroes.
 
+Activity addition is its own frozen `promo_activity_add` operation on the same
+ledger. `promo_campaign_get` supplies the complete current campaign revision;
+prepare/commit recheck it under current owner authorization. The existing
+`add_partner_activity_to_campaign` service appends exactly one activity in the
+same transaction as its operation receipt, without changing campaign status,
+window, caps, targets or prior activities. A paused campaign stays paused;
+replaying after an activity is disabled does not re-enable it. Activity operations
+leave Event ID/revision fields NULL rather than mislabeling a campaign revision
+as an Event revision. Cross-kind commit calls fail closed. A 256-activity snapshot
+cannot append an unhashable 257th activity through this path.
+
+For VK reposts, public `profile_key` and `slot_policy` must both be NULL: the
+existing service actually uses `diverse_shuffle`, not video slot placement.
+Video requests select a real existing video profile and slot policy. Capabilities
+and preparations expose the effective policy. Unsupported VK first-slot intent
+is rejected, never silently accepted and ignored. This does not change legacy
+Telegram callers or introduce new slot/business rules.
+
 This slice supports only the existing `video_general` / `vk_repost` surfaces and
-existing video-profile/slot registries. Full eligibility/activity-add,
+existing video-profile/slot registries. Full eligibility/execution reports,
 partner promo policy/review, full publication readback and Hero's typed browser
 accounting remain separate missing integration work. Do not enable this flag as
 an R1b acceptance shortcut or treat fixture content as approved public material.

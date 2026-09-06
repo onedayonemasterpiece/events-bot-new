@@ -42,7 +42,7 @@ async def setup(config, tmp_path):
              'manual','','{}','accepted',event_id,json.dumps({'status':'accepted','event_ids':[event_id]})))
         await conn.commit()
     request = dict(accepted_event_operation_ref=accepted_ref, event_id=event_id, event_revision='0'*64,
-        surface='vk_repost', profile_key=None, slot_policy='first_slot', count=2,
+        surface='vk_repost', profile_key=None, slot_policy=None, count=2,
         ends_at=day, is_editorial=True, sponsorship_disclosure=None, title_override='Private fixture campaign')
     app = web.Application()
     server = attach_private_events_mcp(app,cfg,event_database=db)
@@ -100,12 +100,30 @@ async def test_oauth_prepare_commit_replay_without_telegram_creator(config,tmp_p
         async with db.get_session() as session:
             campaign=(await session.execute(select(PromoCampaign))).scalar_one()
             assert campaign.status=='paused'
+        paused=await call('promo_campaign_get',{'campaign_id':committed['campaign_id']})
+        activity_prepared=await call('promo_activity_add_prepare',{'request':{
+            'campaign_id':committed['campaign_id'],'campaign_revision':paused['campaign_revision'],
+            'surface':'video_general','profile_key':'default','slot_policy':'first_slot','count':1},
+            'idempotency_key':'promo-activity-fixture'})
+        assert await counts(db)==after
+        activity_result=await call('promo_activity_add_commit',{
+            'preparation_ref':activity_prepared['preparation_ref'],'action_digest':activity_prepared['action_digest']})
+        assert activity_result['campaign_status_at_commit']=='paused'
+        current=await call('promo_campaign_get',{'campaign_id':committed['campaign_id']})
+        assert current['campaign']['status']=='paused'
+        assert current['activities'][:2]==paused['activities']
+        after=await counts(db)
+        assert after[:3]==(1,1,3) and after[3]==before[3]
+        assert await call('promo_activity_add_commit',{
+            'preparation_ref':activity_prepared['preparation_ref'],'action_digest':activity_prepared['action_digest']})==activity_result
+        assert await counts(db)==after
         await client.close()
         restarted_app=web.Application()
         attach_private_events_mcp(restarted_app,cfg,event_database=db)
         client=TestClient(TestServer(restarted_app)); await client.start_server()
         token=await login(client,cfg,'promo:read')
         assert await call('promo_operation_get',{'operation_ref':prepared['operation_ref']})==committed
+        assert await call('promo_operation_get',{'operation_ref':activity_prepared['operation_ref']})==activity_result
         current=await call('promo_campaign_get',{'campaign_id':committed['campaign_id']})
         assert current['campaign']['status']=='paused'
         assert len(current['campaign_revision'])==64
@@ -137,7 +155,7 @@ async def test_schema_and_flag_fail_closed(config,tmp_path):
     cfg,db,app,server,request = await setup(config,tmp_path)
     ctx=owner(cfg,scopes=frozenset({'promo:write'}))
     try:
-        for patch in ({'count':True},{'surface':'hero_talk'},{'creator_user_id':123},
+        for patch in ({'count':True},{'surface':'hero_talk'},{'creator_user_id':123},{'slot_policy':'first_slot'},
                       {'event_id':'1'},{'title_override':'x'*201}):
             with pytest.raises(ToolExecutionError) as exc:
                 await server.owner_promo.prepare({'request':{**request,**patch},'idempotency_key':'promo-fixture-key'},ctx)

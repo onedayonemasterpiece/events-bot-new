@@ -25,7 +25,7 @@ class CampaignRequest(StrictInput):
     event_revision: Digest
     surface: Literal['video_general', 'vk_repost']
     profile_key: Literal['popular_review', 'default', 'konb'] | None
-    slot_policy: Literal['guaranteed_any_position', 'first_two_slots', 'first_slot']
+    slot_policy: Literal['guaranteed_any_position', 'first_two_slots', 'first_slot'] | None
     count: Annotated[int, Field(ge=1, le=10000)]
     ends_at: Annotated[str, Field(pattern=r'^\d{4}-\d{2}-\d{2}$')]
     is_editorial: bool
@@ -35,6 +35,21 @@ class CampaignRequest(StrictInput):
 
 class PrepareInput(StrictInput):
     request: CampaignRequest
+    idempotency_key: Annotated[str, Field(min_length=8, max_length=160,
+                                        pattern=r'^[A-Za-z0-9._~:@/-]+$')]
+
+
+class ActivityRequest(StrictInput):
+    campaign_id: Annotated[int, Field(ge=1, le=2**63-1)]
+    campaign_revision: Digest
+    surface: Literal['video_general', 'vk_repost']
+    profile_key: Literal['popular_review', 'default', 'konb'] | None
+    slot_policy: Literal['guaranteed_any_position', 'first_two_slots', 'first_slot'] | None
+    count: Annotated[int, Field(ge=1, le=10000)]
+
+
+class ActivityPrepareInput(StrictInput):
+    request: ActivityRequest
     idempotency_key: Annotated[str, Field(min_length=8, max_length=160,
                                         pattern=r'^[A-Za-z0-9._~:@/-]+$')]
 
@@ -68,6 +83,12 @@ def _parse(model, args):
         return model.model_validate(args)
     except ValidationError:
         raise ToolExecutionError('PROMO_INVALID_ARGUMENTS') from None
+
+
+def _profile(request):
+    if ((request.surface == 'video_general' and (request.profile_key is None or request.slot_policy is None))
+            or (request.surface == 'vk_repost' and (request.profile_key is not None or request.slot_policy is not None))):
+        raise ToolExecutionError('PROMO_INVALID_ARGUMENTS')
 
 
 class OwnerPromoTools:
@@ -105,12 +126,23 @@ class OwnerPromoTools:
 
     async def prepare(self, args, context):
         parsed = _parse(PrepareInput, args)
-        if ((parsed.request.surface == 'video_general' and parsed.request.profile_key is None)
-                or (parsed.request.surface == 'vk_repost' and parsed.request.profile_key is not None)):
-            raise ToolExecutionError('PROMO_INVALID_ARGUMENTS')
+        _profile(parsed.request)
         store, actor = self._store(context, 'promo:write')
         return await self._run(store.prepare(parsed.request.model_dump(), actor=actor,
                                              idempotency_key=parsed.idempotency_key))
+
+    async def prepare_activity(self, args, context):
+        parsed = _parse(ActivityPrepareInput, args)
+        _profile(parsed.request)
+        store, actor = self._store(context, 'promo:write')
+        return await self._run(store.prepare_activity(parsed.request.model_dump(), actor=actor,
+                                                      idempotency_key=parsed.idempotency_key))
+
+    async def commit_activity(self, args, context):
+        parsed = _parse(CommitInput, args)
+        store, actor = self._store(context, 'promo:write')
+        return await self._run(store.commit_activity(parsed.preparation_ref,
+                                                     action_digest=parsed.action_digest, actor=actor))
 
     async def capabilities(self, args, context):
         parsed = _parse(CapabilitiesInput, args)
@@ -140,6 +172,10 @@ class OwnerPromoTools:
 
     def tools(self):
         specs = (
+            ('promo_activity_add_prepare', ActivityPrepareInput, 'promo:write', self.prepare_activity, True,
+             'Prepare one activity in an existing campaign; keep its status, window, caps and other activities'),
+            ('promo_activity_add_commit', CommitInput, 'promo:write', self.commit_activity, True,
+             'Add the exact prepared activity without resuming a campaign; enabled campaigns may execute later'),
             ('promo_campaigns_list', CampaignsInput, 'promo:read', self.campaigns_list, False,
              'Read bounded current shared campaigns with keyset pagination; no delivery success implied'),
             ('promo_campaign_get', CampaignInput, 'promo:read', self.campaign_get, False,

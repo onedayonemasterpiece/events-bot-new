@@ -405,7 +405,7 @@ scenarios:
     expect: [no_parallel_promo_model]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_private_events_mcp_promo_operations.py", "tests/test_private_events_mcp_promo_tools.py", "tests/test_promo_oauth_creator.py"]
+    partial_test_files: ["tests/test_private_events_mcp_promo_operations.py", "tests/test_private_events_mcp_promo_tools.py", "tests/test_promo_oauth_creator.py", "tests/test_private_events_mcp_promo_activity_operations.py", "tests/test_private_events_mcp_promo_reads.py"]
   - id: PRM-003
     layer: integration
     title: Reschedule never silently extends campaign period budget or goal

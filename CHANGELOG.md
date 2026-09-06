@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Added owner promo activity prepare/commit with complete campaign CAS and atomic existing-service append; preserves paused campaigns and disabled activity replay, and rejects unsupported VK slot intent instead of silently ignoring it (#643).
+
 - Added bounded current owner promo campaign inventory/detail readback, complete-snapshot CAS revisions and explicit legacy cap units; historical operation acceptance never substitutes for current paused state (#643).
 
 - Added default-OFF owner promo prepare/commit/status over existing atomic campaign services and the canonical operation ledger; explicit OAuth scopes and accepted Event binding, no fabricated Telegram creator or publication receipt (#643).
