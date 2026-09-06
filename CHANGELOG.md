@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Changed: conversational inheritance is model-led per relevant condition, informed by the actual predecessor question; a topic change can keep the discussed dates without retaining the old genre. No automatic full-question/undated reset.
+
 - Fixed: open-ended conversational periods are labelled “с …”/“до …”, not as a single day.
 
 - Fixed: interpretation source references select literal input fragments instead of copying prompt examples; voice verification separates direct event properties from parent-festival/incidental context.

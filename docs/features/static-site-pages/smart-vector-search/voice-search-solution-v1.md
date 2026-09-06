@@ -916,9 +916,13 @@ admit an exact result even when model verdict says exact. Broad index tags are
 not adequate proof of a requested genre/format.
 
 
-Standalone new-topic replacement without a date may select from_today instead
-of inheriting an old window; this is explicit in the durable plan and visible as
-«с …» in its title (an open end must not look like a one-day query). Explicitly
-requested periods are never silently widened. Calendar acceptance therefore
-checks stated dates and the selected dateMode, not an assumed hard inheritance
-for every untimed follow-up.
+Model-led inheritance (user clarification): the LLM decides whether the current
+message continues/refines the dialogue or starts an independent search. No rule
+“full question/new topic → reset” or “missing date → inherit/reset”. Patch may
+replace all topical groups while keeping only the relevant period or city; it
+is not limited to short elliptical phrases. The interpreter receives the
+owner-checked predecessor's actual question/title/result count/clarification,
+not only the lossy normalized goal. Material ambiguity can request clarification.
+Server enforces provenance/calendar/safety, not semantic keyword routing.
+From_today is valid only when the model decides a genuinely new undated search;
+visible open-bound labels use «с …»/«до …». Existing frozen outcomes stay unchanged.

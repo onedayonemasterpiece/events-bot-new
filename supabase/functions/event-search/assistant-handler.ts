@@ -179,11 +179,14 @@ export async function handleAssistant(request:Request,deps:AssistantDependencies
         const input=payload as ConfirmedInput;
         const base=previous?.outcome.result.intent||parent?.outcome.result.intent||initialState().activeIntent;
         const basePlan=previous?.outcome.result.queryPlan||parent?.outcome.result.queryPlan||null;
+        // Owner-checked durable predecessor, not a client-supplied history blob.
+        const predecessor=previous?.outcome.result||parent?.outcome.result;
+        const conversationContext=predecessor?{question:String(predecessor.question||'').slice(0,8192),title:predecessor.title,resultCount:parent?itemsOf(parent).length:null,clarification:predecessor.clarification||null}:null;
         const parentItems=itemsOf(parent);
         if(input.visibleIds.some(v=>!parentItems.some(item=>String(item.event_id??item.id)===v)))reject('untrusted_visible_ids',409);
         const question=previous?`${previous.outcome.result.question}\n${input.text}`:input.text;
         if(question.length>65536)reject('draft_capacity',413);
-        await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?structuredInterpretationSchema(input,basePlan):INTERPRETATION_SCHEMA,
+        await deps.generate({kind:'interpret',prompt:deps.structuredPlanEnabled?structuredInterpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title})),basePlan,conversationContext):interpreterPrompt(input,base,parentItems.map(item=>({id:item.event_id,title:item.title}))),schema:deps.structuredPlanEnabled?structuredInterpretationSchema(input,basePlan):INTERPRETATION_SCHEMA,
           dispatched:dispatch,completed:complete,accounted,validate:value=>({...(deps.structuredPlanEnabled?structuredInterpretation(value,input,base,basePlan):interpretation(value,base)),question,parentId:input.parentId,
             mode:previous?.outcome.result.mode||input.mode,anchor:input.anchor,visibleIds:input.visibleIds})});
       } else {

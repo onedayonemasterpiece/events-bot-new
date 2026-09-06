@@ -31,3 +31,11 @@ test('provider quote enum covers literal input chunks; examples cannot leak into
 test('open date bounds are visible as from/until, not a misleading single-day title',()=>{
  const r=structuredInterpretation({...value,queryPlan:{...value.queryPlan,dateMode:'from_today'}},input,base);assert.match(r.title,/с 6 сентября/);assert.equal(r.intent.dateTo,null);
 });
+
+test('model may replace topical groups yet carry the previous period as a conversational continuation',()=>{
+ const q='Подбери экскурсии и лекции краеведческого характера.';
+ const parentPlan={contextMode:'replace',dateMode:'next_week',scope:'constrained',groups:[{dimension:'topic',alternatives:['научпоп'],source:'current',sourceQuote:'научпоп'}]};
+ const groups=[{dimension:'format',alternatives:['экскурсия','лекция'],source:'current',sourceQuote:q},{dimension:'topic',alternatives:['краеведение'],source:'current',sourceQuote:q}];
+ const r=structuredInterpretation({...value,queryPlan:{contextMode:'patch',dateMode:'inherit',scope:'constrained',groups}},{...input,text:q},base,parentPlan);
+ assert.equal(r.intent.dateFrom,'2026-09-07');assert.equal(r.intent.dateTo,'2026-09-13');assert.doesNotMatch(r.intent.goal,/научпоп/);assert.deepEqual(r.queryPlan.groups,groups);
+});
