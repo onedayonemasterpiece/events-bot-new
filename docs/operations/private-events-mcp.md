@@ -199,6 +199,47 @@ The application integration must wire the current policy callback and repeat
 bounded recovery passes for queues larger than the batch limit. Dedicated SQLite
 regressions: `tests/test_private_events_mcp_event_create_recovery.py`.
 
+### Event-scoped private image inputs (#643)
+
+`private_events_mcp.event_assets.EventAssetService` reuses the existing
+`SecureMediaAssetStore` through `AssetIngestor`; it does not call social
+`stage_asset`, provider upload, or create a public event. The host injects a
+stable secret `binding_key`, the durable secure store, and mandatory async
+`authorize(context, action)` for `stage`, `read`, and `use`. Authorization is
+checked before and after I/O. The host callback must enforce current principal,
+resource, grant/epoch, scopes/actions and suspension/revocation policy.
+
+- `await stage(ChatGPTFile(...), context)` returns an opaque `ing_...` asset ref,
+  exact `sha256:` content digest, measured MIME/bytes/dimensions, role and expiry.
+- `await read(asset_ref, context)` reopens/verifies the stored image and returns
+  only that safe metadata, never a download URL, path or owner-binding material.
+- `await reverify(asset_ref, context, expected_digest=...)` returns an **internal**
+  `VerifiedAsset` for the intake adapter. It must not be serialized to MCP.
+  The adapter can use the same store's `open_verified(storage_ref, owner_binding)`
+  to obtain freshly hashed bytes for existing event intake media handling.
+
+Bindings are HMAC-separated for event images and include exact
+client/subject/resource. Another principal, resource or social asset binding
+cannot borrow the ref. Only JPEG/PNG/WebP images are supported; ingestion uses
+existing `event_image` validation and canonical stored role `image`. Reads/use
+recheck expiry, role, owner, byte limits and content integrity. Errors fail closed
+without exposing storage or upstream exception details.
+
+References survive process restart only while the same secure-store directory,
+manifest, owner-key material and service binding key are retained. Default
+service retention is one hour; configurable retention is bounded to 24 hours
+and must not exceed the injected store's TTL. Read/reverify never extends expiry.
+Owner review must finish before expiry or request a newly staged image and a new
+prepared/approved digest; refs are **not indefinitely durable review attachments**.
+Existing secure-store cleanup still applies, including uploads whose access was
+revoked during ingestion. This module adds no cleanup scheduler, MCP tool wiring,
+review transition or EventCreateRequest field: those are application integration
+steps, with renewed authorization and exact digest verification before mutation.
+
+Regression evidence: `tests/test_private_events_mcp_event_assets.py` plus the
+existing secure-store suite use actual local manifests/files and deterministic
+HTTP transport, with no live provider calls.
+
 ## ChatGPT social workspace
 
 When the universal workspace is enabled, ChatGPT can discover only the tools
