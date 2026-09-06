@@ -170,7 +170,7 @@ async def test_partner_and_extra_keys_rejected(prepared):
 ])
 async def test_existing_profile_registry(prepared,surface,profile,valid):
     db,request,auth=prepared
-    request.update(surface=surface,profile_key=profile)
+    request.update(surface=surface,profile_key=profile,slot_policy=None if surface=='vk_repost' else 'first_slot')
     if not valid:
         with pytest.raises(PromoOperationError): await prep(prepared)
     else:
@@ -289,3 +289,22 @@ async def test_capabilities_revoked_wrong_target_and_foreign_actor(prepared):
         await store.capabilities(SOURCE,999,actor=ACTOR)
     with pytest.raises(PromoOperationError):
         await store.capabilities(SOURCE,request['event_id'],actor=replace(ACTOR,audience='foreign'))
+
+
+@pytest.mark.asyncio
+async def test_vk_no_silent_slot_policy_override(prepared):
+    db,request,auth=prepared
+    store=PromoOperationStore(db,auth,clock=lambda:NOW)
+    vk={**request,'surface':'vk_repost','profile_key':None}
+    with pytest.raises(PromoOperationError):
+        await store.prepare(vk,actor=ACTOR,idempotency_key='vk-logical')
+    vk['slot_policy']=None
+    p=await store.prepare(vk,actor=ACTOR,idempotency_key='vk-logical')
+    assert p['effective_selection_policy']=='diverse_shuffle'
+    await store.commit(p['preparation_ref'],action_digest=p['action_digest'],actor=ACTOR)
+    async with db.get_session() as session:
+        policy=(await session.execute(text("SELECT selection_policy FROM promo_activity WHERE surface='vk_repost'"))).scalar()
+        assert policy=='diverse_shuffle'
+    capabilities=await store.capabilities(SOURCE,request['event_id'],actor=ACTOR)
+    assert capabilities['slot_policy_by_surface']['vk_repost']==[]
+    assert capabilities['vk_selection_policy']=='diverse_shuffle'

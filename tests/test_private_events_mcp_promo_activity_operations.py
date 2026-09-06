@@ -49,6 +49,7 @@ async def test_atomic_add_preserves_paused_campaign_and_replay_never_enables(fix
     before=await snapshot(db)
     p=await store.prepare_activity(request,actor=ACTOR,idempotency_key='activity-key')
     assert p['planned_campaign_status']=='unchanged' and p['planned_activity_enabled'] is True
+    assert p['effective_selection_policy']=='first_slot'
     assert await snapshot(db)==before
     result1,result2=await asyncio.gather(*[store.commit_activity(p['preparation_ref'],action_digest=p['action_digest'],actor=ACTOR) for _ in range(2)])
     assert result1==result2 and result1['campaign_status_at_commit']=='paused'
@@ -159,3 +160,18 @@ async def test_strict_existing_registry_validation(fixture,changes):
     db,store,request,_=fixture
     with pytest.raises(PromoOperationError):
         await store.prepare_activity({**request,**changes},actor=ACTOR,idempotency_key='activity-key')
+
+
+@pytest.mark.asyncio
+async def test_activity_vk_requires_no_slot_and_exposes_actual_policy(fixture):
+    db,store,request,_=fixture
+    vk={**request,'surface':'vk_repost','profile_key':None}
+    with pytest.raises(PromoOperationError):
+        await store.prepare_activity(vk,actor=ACTOR,idempotency_key='vk-activity')
+    vk['slot_policy']=None
+    p=await store.prepare_activity(vk,actor=ACTOR,idempotency_key='vk-activity')
+    assert p['effective_selection_policy']=='diverse_shuffle'
+    receipt=await store.commit_activity(p['preparation_ref'],action_digest=p['action_digest'],actor=ACTOR)
+    async with db.get_session() as session:
+        row=(await session.execute(text('SELECT * FROM promo_activity WHERE id=:id'),{'id':receipt['activity_id']})).mappings().one()
+        assert row['slot'] is None and row['selection_policy']=='diverse_shuffle'
