@@ -23087,8 +23087,6 @@ async def _enqueue_static_site_after_vk_publication(
 
 
 async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) -> None:
-    if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
-        raise VKPermissionError(None, "permission error")
     async with db.get_session() as session:
         ev = await session.get(Event, event_id)
     logging.info(
@@ -23099,6 +23097,13 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     )
     if not ev:
         return False
+    # Recheck current canonical state: queued jobs can outlive cancellation or
+    # hiding. Match the TG publisher; explicit lower-level repair stays separate.
+    if getattr(ev, "lifecycle_status", "active") != "active" or getattr(ev, "silent", False):
+        logging.info("job_sync_vk_source_post: skip hidden event_id=%s", event_id)
+        return False
+    if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
+        raise VKPermissionError(None, "permission error")
     if _event_has_ended_before_today(ev):
         logging.info(
             "job_sync_vk_source_post: skip past event_id=%s date=%s end_date=%s",

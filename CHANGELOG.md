@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Fixed / VK event jobs**: recheck canonical lifecycle and silent state before automatic VK sync, skipping stale jobs for hidden/cancelled/postponed events without provider calls; explicit lower-level repair remains unchanged.
 
 - Made existing partner promo campaign/target/default activities atomic and exposed a caller-owned transaction option for shared campaign/activity services, without changing authorization or activating campaigns through MCP (#643).
 
