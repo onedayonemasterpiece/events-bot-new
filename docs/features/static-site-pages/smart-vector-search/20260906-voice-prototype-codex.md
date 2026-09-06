@@ -122,3 +122,108 @@ python scripts/ops/voice_pwa_device_probe.py \
 В #587 и при необходимости #621 сохранить: exact code/tree и test SHA, terminal CI/native browser/Postgres receipts, реальные ASR fixture identities/usage, состояние canonical corpus/profile/sink, скриншоты desktop/mobile preview без приватных данных, фактическую HTTPS ссылку, результат Android или точный blocker, rollback identity. Diagnostic bundle содержит только неприватные версии, opaque operation/section IDs, интервалы, error codes и audio format/bytes; JWT/cookie/raw speech/query/profile/device serial отсутствуют.
 
 Acceptance — рабочий адрес и воспроизведённый полный путь, а не только 78 unit tests или модельный mock. При реальном external blocker исправь и проверь всё независимое, сохрани это в GitHub и назови конкретный незавершённый gate. Не объявляй production GO и не заканчивай новым общим планом вместо исполняемой интеграции.
+
+
+## Read-only integration discovery — 2026-09-06
+
+Исходные исправления `b54c4a622daaf58956f8d9be5268a58d03a2bef2` и локальный
+handoff `b92b55d6b94cf56055c22f286af2239a2b295fbf` сохранены обычным fast-forward
+push в эту же ветку PR #587, после fresh fetch от `d1e845cde`. GitHub HEAD и
+`git ls-remote` совпали; force-push/production merge не выполнялись.
+
+### Реально прочитанное окружение, не предположения
+
+- Supabase Management API доступен через существующий
+  `~/.supabase/access-token`. Проектный `PERSONALIZATION_SUPABASE_ACCESS_TOKEN`
+  из `.env` вернул `401 Unauthorized`; действующий CLI credential дал HTTP200.
+  Секреты не менялись, их значения в evidence не выводились.
+- Текущая shared Edge Function `event-search`: **ACTIVE, version 79**, timestamp
+  обновления `1786301691654` (2026-08-09 UTC). Список server secrets содержит
+  59 имён и **не содержит ни одного `EVENT_SEARCH_ASSISTANT_*`**.
+- Branch inventory вернул `[]`; отдельный existing Supabase preview branch
+  не обнаружен. Migration history: 52 записи, voice migration отсутствует.
+  Настоящий `/database/query/read-only` (HTTP201) подтвердил:
+  `to_regclass(public.event_search_assistant_operations)=null`,
+  `to_regclass(public.event_search_assistant_audio_parts)=null`,
+  `event_search_assistant_admit_v1` отсутствует.
+- Реальный shared model registry содержит `gemini-3.1-flash-lite` и
+  `gemini-3.5-flash-lite` (для каждой 15 RPM / 250000 TPM / 500 RPD на момент
+  чтения). Это capacity configuration, **не policy-разрешение KenigEvents**
+  и не доказательство текущего свободного бюджета; reserve/provider не запускались.
+- Живой donor my-data-hub: deployed `12c330a9`, `control_plane_ready=true`,
+  `master_state=CHECKPOINT_FAILED`. Sanitized running-container config
+  подтверждает voice model/allowlist `gemini-3.1-flash-lite` и configured v2
+  intake. Это другой owner-device flow с IdeaHub publisher. Его токен,
+  разрешение и private словарь нельзя переносить на website Search.
+- Телефонный путь проверен не только через local PATH: canonical
+  record-idea-hub `docs/ADB_HANDOFF.md` описывает ADB на компьютере владельца,
+  а `docs/operations/private-events-mcp.md` §Connect OpenCode on Windows —
+  Windows OpenCode с loopback OAuth, **не серверный ADB bridge**. На этом
+  сервере `opencode-devcoveer.service` — local `127.0.0.1:4097`, OpenCode
+  1.18.15, MCP config содержит только my-data-hub; remote-phone MCP/SSH alias
+  не обнаружен. Стандартные user/SDK/opt пути не содержат adb, USB видит только
+  HID Tablet/root hubs. Это не утверждение, что телефон владельца отключён
+  от его Windows: его актуальный bridge/device selector здесь неизвестен.
+
+### Где preview, а где изменение production runtime
+
+Этот handoff §4 явно предписывает «Разверни новый код **существующей Edge
+Function** и fixed relay paths ... Canary с выключенным голосовым gate ...
+Включай gate лишь для перечисленных preview пользователей/origins». Исходная
+постановка `20260906-voice-prototype-chatgpt.md` §9 допускает «применить только
+разрешённые staging migrations/config», §8 требует существующий preview-путь.
+Это реальный описанный guarded deployment, а не требование нового backend.
+
+Но физически замена `event-search` v79 даже при assistant OFF меняет **общий
+действующий production endpoint**, а additive migration затрагивает его общую
+personalization DB. В текущем обнаруженном окружении нет самостоятельной
+staging DB/branch. Поэтому запрет production/root promotion нельзя обходить,
+называя backend write «только preview». Трактовку допуска такого guarded shared
+runtime rollout должен согласовать основной исполнитель с владельцем задачи;
+эта read-only lane его **не выполняла** и не вводит выдуманный обязательный
+новый сервис/branch. Изолированная статическая публикация immutable noindex
+prefix сама по себе не меняет root/current, но не даст live ASR без backend.
+
+### Минимальный следующий шаг и оставшиеся границы
+
+1. Зафиксировать реальный **KenigEvents** policy/model binding:
+   `EVENT_SEARCH_ASSISTANT_POLICY_REF`, разрешённый model/allowlist, ordinary
+   preview users и origins. Не заполнять POLICY_REF заглушкой и не брать
+   разрешение от owner-only donor. Public env содержит только UI flag/публичные
+   existing Search bindings.
+2. Согласовать конкретный permitted runtime target/границу: описанный выше
+   guarded shared endpoint + additive DB rollout либо уже существующий
+   разрешённый target, если владелец его укажет. Не создавать cloud branch или
+   второй сервис ради обхода. Затем штатные Deno/schema/relay canary checks,
+   assistant OFF → ограниченная allowlist, и только после этого paid live cases.
+3. В **существующем Windows/OpenCode**, где реально подключён телефон, получить
+   разрешённый device selector/bridge и выполнить только preflight:
+   `python scripts/ops/voice_pwa_device_probe.py --serial <authorized-device>
+   --preview-url https://kenigevents.ru/<real-preview-prefix>/`.
+   До фактического опубликованного prefix команда остаётся шаблоном. Не
+   выполнять uninstall/pm clear/logout/очистку аудио/очередей, не открывать
+   ADB/DevTools в Интернет. Donor ADB handoff команды reinstall/purge не являются
+   разрешением для этой задачи.
+4. После этих bindings: existing builder/prefix, настоящий microphone → ASR →
+   explicit confirmation → обычные Search cards → refinement/history/action,
+   sink readout и physical PWA. Исторические unit/synthetic результаты не
+   переносятся в эту live матрицу.
+
+**Статусы:** исходники/локальные проверки — Done; интеграция исходников в PR —
+Done; live ASR/Auth/cards/refinement/sink/public prototype — Partial/Blocked
+на перечисленных bindings; physical phone — Blocked на реальном bridge/selector.
+В этой итерации provider calls, cloud/DB writes, phone mutations, full catalog
+или Kaggle build **не выполнялись**.
+
+Push `b92b55d6b` создал run **34018201563** для постороннего
+`.github/workflows/region-talk-research-remediation-export-20260802.yml`:
+`failure`, `jobs=[]`. Это **не CI PASS** и не провал voice runtime теста.
+У собственного нового top-of-Unreleased insertion был конфликт с актуальным
+main; запись voice перенесена ниже в той же Unreleased без изменения текста
+или чужих записей. Сторонний invalid workflow этой lane не исправляется.
+Свежий terminal CI по итоговому SHA следует проверить отдельно.
+
+Sanitized local evidence: `artifacts/codex/voice-integration-discovery/`
+(`management-access.json`, `runtime-metadata.json`, `schema-readonly.json`,
+`shared-model-registry.json`, `donor-runtime-config.json`, PR/readback/Actions).
+В Git сохраняется этот сводный readout, не credentials, raw речи или аудио.

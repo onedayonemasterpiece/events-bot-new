@@ -2,15 +2,6 @@
 
 ## [Unreleased]
 
-- Fixed: conversational Search audio recovery now serializes retries, updates the
-  durable frame receipt and preserves interrupted/partial capture truth; first
-  signed-out state now explains the shared sign-in requirement. Added
-  full-Chromium microphone/IndexedDB recovery tests and corrected the native
-  permission descriptor. Bounded result membership is disclosed rather than
-  claimed as the full catalogue; ASR uses versioned public regional vocabulary
-  hints without forced replacement or private donor terminology. Preview-only,
-  not evidence of deployed ASR, phone acceptance or production promotion.
-
 - Fixed: `social_item_resolve` now publishes an operation-specific ChatGPT
   input schema that requires one canonical link and its read-access class and
   no longer advertises unrelated target-kind/search/feed fields. Legacy
@@ -4861,6 +4852,15 @@
 - **Admin / Delete Event**: Event deletion no longer attempts to delete source VK wall posts; only bot-managed VK posts (`event.vk_source_hash` present) are deleted.
 - **VK Auto Queue / Event Parse**: Added a conservative prefilter for obvious long historical/admin non-event VK posts before full `event_parse`; ambiguous or event-like posts still go through the normal LLM parse unchanged, reducing wasted TPM on repeated non-events.
 - **General Stats / Festivals Queue**: `/general_stats` now shows current festival queue snapshot (`total/pending/running/done/error`), active backlog (`pending+running`), and active breakdown by source (`vk/tg/url`) in addition to daily inflow.
+
+- Fixed: conversational Search audio recovery now serializes retries, updates the
+  durable frame receipt and preserves interrupted/partial capture truth; first
+  signed-out state now explains the shared sign-in requirement. Added
+  full-Chromium microphone/IndexedDB recovery tests and corrected the native
+  permission descriptor. Bounded result membership is disclosed rather than
+  claimed as the full catalogue; ASR uses versioned public regional vocabulary
+  hints without forced replacement or private donor terminology. Preview-only,
+  not evidence of deployed ASR, phone acceptance or production promotion.
 
 ## [1.12.0] - 2026-03-04
 ### Highlights

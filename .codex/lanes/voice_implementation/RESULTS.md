@@ -100,3 +100,16 @@ Chrome1200 succeeded. No fake success or microphone API replacement was used.
 - Publish exact-commit HTTPS noindex preview through existing builder/bucket,
   then actual authorized OpenCode/ADB PWA tests preserving session/audio/queues.
   No connected phone/policy environment was supplied to this lane.
+
+
+## Follow-up integration/read-only discovery
+
+Original source+handoff commits were fast-forward pushed to the existing PR587
+branch and GitHub/ls-remote read back `b92b55d6b` exactly. Follow-up canonical
+runtime/policy/phone evidence and minimal next steps are in
+`docs/features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md`
+under **Read-only integration discovery**. No new provider/live pass is claimed.
+Current shared event-search v79 exists, assistant schema/secrets do not;
+existing CLI management credential works, stale project env PAT does not.
+No cloud/DB writes or device actions occurred. Static prefix publication and
+shared production Edge/DB mutation are explicitly distinguished.
