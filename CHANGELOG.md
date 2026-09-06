@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Docs: TO-BE single conversational planner chooses internal/web knowledge needs and blocking/optional clarification independently; result-grounded refinement suggestions remain optional within the existing clean answer. No runtime web activation.
+
 - Changed: conversational inheritance is model-led per relevant condition, informed by the actual predecessor question; a topic change can keep the discussed dates without retaining the old genre. No automatic full-question/undated reset.
 
 - Fixed: open-ended conversational periods are labelled “с …”/“до …”, not as a single day.
