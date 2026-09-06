@@ -7,6 +7,7 @@ import MobileBottomNav, { type MobileSection } from '../components/MobileBottomN
 import MobileToastRegion from '../components/MobileToastRegion.astro';
 import PwaTelemetry from '../components/PwaTelemetry.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
+import SharedSearchTopicLocator from '../components/SharedSearchTopicLocator.astro';
 import StaticSiteAuthRuntime from '../components/auth/StaticSiteAuthRuntime.astro';
 import PersonalizationRuntime from '../components/personalization/PersonalizationRuntime.astro';
 import StandardOnboardingPlacementContext from '../components/onboarding/StandardOnboardingPlacementContext.astro';
@@ -2499,6 +2500,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           <AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" />
         </a>
         <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={headerBadge} />
+        <SharedSearchTopicLocator />
         <nav class="site-nav" aria-label="Основная навигация">
           {visibleHeaderNavigation.map((item) => (
             <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined} data-unusual-nav-link={item.key === 'unusual' ? '' : undefined}>

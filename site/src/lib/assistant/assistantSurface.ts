@@ -1,4 +1,4 @@
-export type AssistantSurfaceState={viewedSectionId:string|null;refinementBaseId:string|null;pendingDraftId:string|null;capture:string};
+export type AssistantSurfaceState={viewedSectionId:string|null;viewedTitle?:string|null;refinementBaseId:string|null;pendingDraftId:string|null;capture:string};
 export type AssistantSurfaceAdapter={version:'1.0.0';element:HTMLElement;getState:()=>AssistantSurfaceState;
   showComposer:()=>void;showSection:(id:string)=>void;beforeOverlayOpen:()=>Promise<void>;diagnostic:()=>Record<string,unknown>};
 /** FI-16/FI-17 integration boundary. This adapter owns NO sticky positioning,

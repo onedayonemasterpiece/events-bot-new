@@ -1,0 +1,20 @@
+<!-- Shared header owns this non-heading locator; Search retains semantic H2s. -->
+<span class="shared-search-topic-locator" data-search-topic-locator hidden></span>
+<style>
+  .shared-search-topic-locator {
+    position:absolute; box-sizing:border-box; max-width:calc(100% - 24px);
+    min-height:44px; max-height:64px; padding:10px 12px; overflow:hidden;
+    border:1px solid rgba(255,255,255,.88); border-radius:18px;
+    background:var(--ke-color-background-header,#fffcf6); color:var(--ke-color-copy,#292521);
+    box-shadow:0 3px 7px rgba(66,44,29,.10),0 10px 24px rgba(66,44,29,.12);
+    font-family:inherit; font-weight:700; font-size:14px; line-height:20px; overflow-wrap:anywhere;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  }
+  .shared-search-topic-locator[hidden] {display:none!important;}
+  @media(min-width:760px){.shared-search-topic-locator{padding:6px 12px;max-height:56px;}}
+</style>
+<script>
+  import {bindSharedTopicLocator} from '../lib/assistant/sharedTopicLocator';
+  const locator=document.querySelector<HTMLElement>('[data-search-topic-locator]');
+  if(locator)bindSharedTopicLocator(locator);
+</script>
