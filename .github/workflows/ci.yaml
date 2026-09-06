@@ -109,6 +109,8 @@ jobs:
           node-version: '22.12.0'
           cache: npm
           cache-dependency-path: site/package-lock.json
+      - name: Run offline voice dialogue and audio contracts
+        run: node --experimental-strip-types --test tests/assistant-*.test.mjs
       - name: Install pinned site dependencies
         run: npm ci --no-audit --no-fund
       - name: Validate design-system production surface contract
