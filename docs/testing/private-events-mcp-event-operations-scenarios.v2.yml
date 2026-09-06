@@ -525,14 +525,16 @@ scenarios:
     layer: integration
     title: "Cancel/reschedule/price/identity change → старый dependency больше не получает permit"
     expect: [full_contract_verified]
-    implementation_status: missing
+    implementation_status: partial
     acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_event_resolver.py"]
   - id: HT-AF-04
     layer: integration
     title: "Kaliningrad day/start/deadline boundaries без LLM"
     expect: [full_contract_verified]
-    implementation_status: missing
+    implementation_status: partial
     acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_event_resolver.py"]
   - id: HT-AF-05
     layer: integration
     title: "Pause/OFF/owner edit vs late job → no stale activation"
@@ -552,7 +554,7 @@ scenarios:
     expect: [full_contract_verified]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_hero_talk_compiler.py"]
+    partial_test_files: ["tests/test_hero_talk_compiler.py", "tests/test_hero_talk_store.py", "tests/test_private_events_mcp_hero_drafts.py"]
   - id: HT-AF-08
     layer: integration
     title: "Exact photo/meme role, права, entity/crop match, missing-media fallback"
