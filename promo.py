@@ -857,7 +857,7 @@ PARTNER_PROMO_SLOT_POLICIES: dict[str, str] = {
 @dataclass(frozen=True)
 class PartnerPromoSpec:
     event_id: int
-    creator_user_id: int
+    creator_user_id: int | None
     organization_name: str | None
     surface: str
     profile_key: str | None
@@ -903,7 +903,9 @@ async def create_partner_event_promo_campaign(
 ) -> PromoCreateResult:
     """Create an event-targeted partner promo campaign from a confirmed FSM spec.
 
-    The caller (FSM step 6) is responsible for authorization. This function
+    The caller (FSM or validated OAuth host) is responsible for authorization.
+    A None creator preserves SQL NULL, never invents a Telegram User, and grants
+    no privileges; OAuth attribution belongs to the caller operation ledger. This function
     only validates business rules: event must exist, be future and active,
     ``ends_at`` is clamped to the event end date, count is positive.
     Campaign, target and activities commit atomically. An explicit caller-owned
@@ -955,7 +957,8 @@ async def create_partner_event_promo_campaign(
             "not_eligible",
             "Событие не подходит под промо: либо прошло, либо закрыто, либо silent.",
         )
-    partner = await session.get(User, int(spec.creator_user_id))
+    partner = (await session.get(User, int(spec.creator_user_id))
+               if spec.creator_user_id is not None else None)
     partner_username = partner.username if partner is not None else None
     is_superadmin = bool(partner.is_superadmin) if partner is not None else False
     event_title = str(event.title or "")
@@ -988,7 +991,7 @@ async def create_partner_event_promo_campaign(
         total_exposure_goal=int(spec.count),
         priority=normalize_promo_priority(spec.priority),
         sponsorship_disclosure=sponsorship,
-        created_by=int(spec.creator_user_id),
+        created_by=int(spec.creator_user_id) if spec.creator_user_id is not None else None,
     )
 
     session.add(campaign)
