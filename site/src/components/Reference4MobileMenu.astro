@@ -24,7 +24,7 @@ const collectionNavKeys = new Set(getCollectionNavigationEntries(resolveGastrono
     <span class="brand-tag__endorsement">Полюбить<br />Калининград</span>
     <AnnouncementsWordmark class="brand-tag__wordmark" />
     <span class="mobile-discovery-menu__top-band-label" aria-hidden="true">Меню</span>
-    {badge && <span class="site-header__badge" data-header-badge={badge.key} hidden={!badge.text} aria-hidden="true"><span data-header-badge-count>{badge.text}</span></span>}
+    {badge && <span class="site-header__badge" data-header-badge={badge.key} hidden={!badge.text} aria-hidden="true"><span data-header-badge-count>{badge.text.match(/\d+/u)?.[0] || ''}</span></span>}
   </summary>
   <div class="mobile-discovery-menu__panel" aria-label="Меню и действия афиши">
     <div class="reference4-menu" aria-label="Глобальная навигация">

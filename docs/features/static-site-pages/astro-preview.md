@@ -1553,3 +1553,50 @@ B7 links for the other archetypes remain unchanged. Evidence is retained under
 intermediate scales/opacity/right edge/native sticky, wheel reversal, responsive
 node identity and reduced-motion. This is an anonymous historical preview, not
 current-event validation, native phone acceptance or Penpot/production promotion.
+
+### Weekend first paint must be static — 2026-09-06
+
+Owner screenshot in Telegram 1436 exposed the **pre-enhancement** HTML, not an
+API-generated listing: the city dialog lacked `hidden`, the old tutorial/title
+rail remained visible, dates/nav were two overlapping surfaces, and completed
+poster images remained opacity 0 until the rail script marked them loaded. The
+shared island initializer also waited behind unrelated Auth/transport imports.
+The external SVG-use wordmark could arrive after the colored brand background.
+
+B9 corrects the initial document, rather than covering it with a spinner:
+- `MobileListingCityPicker` builds the complete horizontal Weekend city row in
+  HTML; the disclosure is closed in HTML. Enhancement reuses these same nodes.
+- `weekend-first-paint.css` supplies the final heading, row, shelf and 110px lower
+  composition before JS, including when scripts are delayed or disabled. The
+  original date/nav nodes are composed by CSS before the existing runtime moves
+  them into its shared dock; their geometry does not change on initialization.
+- Posters already have real `src` values. Weekend no longer hides decoded
+  posters behind a JS-only skeleton/opacity switch. Native image fetching still
+  takes time; reserved 112px rows do not depend on its completion.
+- The canonical 1.4 KB wordmark path is inlined at build time without altering its
+  geometry; the existing mobile leather texture is preloaded. The initial badge
+  displays its numeric count, matching its subsequent personalized update.
+- `ShellIslandRuntime` is a separate lightweight module entry. Initial city
+  geometry does not wait for `document.fonts.ready`; a later font measurement
+  can update it. Auth, transport, stored filters and personalization are not
+  disabled or replaced.
+
+The site remains Astro static HTML. Client JS still enhances scrolling, city
+filtering, calendar interactions, saved state and existing actions; optional
+existing weather/personalization/Auth requests are not a prerequisite for the
+initial title, cards or lower composition. No on-open event-generation/API
+pipeline was added. The prepared Weekend editorial remains static and its real
+linked detail pages are included in B9. Other published review links remain valid.
+
+First-paint acceptance now explicitly holds real script downloads, inspects
+initial HTML/CSS and poster visibility, releases those same scripts, and compares
+H1/city/first-card/date/nav geometry and node identity. It also runs with JS off,
+then checks native city gestures, day navigation and the existing date calendar.
+Anonymous Chromium 320/384/430; source and public evidence:
+`artifacts/codex/weekend-first-paint-20260906/`. No native-phone or production
+promotion claim. Separately, Free has no redundant «← Афиша» breadcrumb; its
+original medallion and ordinary heading remain, with existing global navigation.
+Desktop retains header clearance without a breadcrumb row, so the heading does
+not collide with the brand and the medallion still has a smooth approach range.
+The day-navigation test waits for the actual selected day and settled anchor,
+not an assumed one-second native smooth-scroll duration.

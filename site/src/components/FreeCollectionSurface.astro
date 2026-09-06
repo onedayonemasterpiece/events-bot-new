@@ -1,10 +1,9 @@
 ---
 import AdaptiveEventCardGrid from './AdaptiveEventCardGrid.astro';
-import Breadcrumbs from './Breadcrumbs.astro';
 import './design-system/foundations.css';
 import './design-system/product-contour-foundations.css';
 import type { PreviewEvent } from '../lib/types';
-import { siteHomeHref, withBase } from '../lib/events';
+import { withBase } from '../lib/events';
 import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
 import { toPersonalFeedCandidate } from '../lib/personalization/catalog';
 import { planRelatedCardRows } from '../lib/relatedCardLayout.mjs';
@@ -47,14 +46,6 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
   data-free-collection-surface
 >
   <div class="page-shell free-collection__shell">
-    <Breadcrumbs
-      headerClearance
-      parents={[
-        { label:'Афиша', href:siteHomeHref() },
-      ]}
-      current={title}
-    />
-
     <section class="free-collection__hero" aria-labelledby="free-collection-title" data-free-collection-hero>
       <div class="free-collection__copy">
         <h1 id="free-collection-title">Бесплатные события</h1>
@@ -103,9 +94,8 @@ const freeCatalogJson = JSON.stringify(freeCatalog).replace(/</gu, '\\u003c');
 <style>
   .free-collection { padding:0 0 4rem; }
   /* One grid-spanning native sticky node: no hero/compact copy handoff. */
-  .free-collection__shell { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:var(--ke-space-6); row-gap:1rem; }
-  .free-collection__shell > :global([data-product-breadcrumbs]),
-  .free-collection__shell > :global([data-product-parent-link]) { grid-area:1 / 1 / 2 / -1; }
+  .free-collection__shell { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:var(--ke-space-6); row-gap:1rem; padding-top:12px; }
+  @media(min-width:760px) { .free-collection__shell { padding-top:72px; } }
   .free-collection__hero { display:contents; }
   .free-collection__copy { grid-area:2 / 1 / 3 / 2; min-width:0; }
   .free-collection__copy h1 { margin:0 0 var(--ke-space-4); font:var(--ke-type-h1); letter-spacing:var(--ke-type-h1-letter); }

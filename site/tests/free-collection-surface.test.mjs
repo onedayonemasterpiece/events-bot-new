@@ -39,7 +39,7 @@ test('Free collection retains its medallion identity while using one ordinary li
   assert.doesNotMatch(surface, /ke-type-display-collection|Готовая подборка|Как собрана:|Это не личный сохранённый поиск/u);
   assert.match(surface, /font:var\(--ke-type-h1\)/u);
   assert.doesNotMatch(surface, /data-free-collection-event-group="exhibitions"|Бесплатные выставки|regularEvents|exhibitionEvents/u);
-  assert.match(surface, /parents=\{\[\s*\{ label:'Афиша', href:siteHomeHref\(\) \},\s*\]\}/u);
+  assert.doesNotMatch(surface, /<Breadcrumbs|data-product-parent-link/u, 'Free has no redundant back-to-Afisha breadcrumb');
   assert.doesNotMatch(surface, /label:'Поиск'|\/poisk\//u, 'Free is a first-class collection, not a saved Search result');
   assert.match(route, /mobileSection=\{collection\.slug === 'besplatnye-sobytiya' \? 'home' : 'search'\}/u);
 });

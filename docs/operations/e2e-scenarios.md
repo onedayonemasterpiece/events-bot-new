@@ -163,3 +163,7 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 ### Free medallion as the single floating identity
 
 `CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/free-medallion-island.playwright.mjs` checks320/384/430/1440: one real SVG/DOM node, no title island, intermediate smooth scale100%→84%, constant opacity/right edge, native sticky Y, reverse wheel, responsive restoration and reduced-motion. This replaces the old two-medallion/binary-fade acceptance in the cross-surface Unusual harness. Anonymous browser evidence only.
+
+### Weekend first-paint / static HTML regression
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/weekend-first-paint.playwright.mjs` holds real script downloads, verifies closed disclosures, actual poster visibility, inline wordmark and110px composed lower surface, then releases the same scripts and compares H1/city/first-card/date/nav rectangles within1px and original nodes at320/384/430. Additional JS-disabled runs and Free-without-breadcrumb check. Run together with native city/day/date-dock interaction tests; waiting only for `data-fi-motion=ready` is no longer sufficient loading acceptance.

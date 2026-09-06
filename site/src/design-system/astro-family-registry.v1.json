@@ -521,7 +521,7 @@
           ]
         },
         {
-          "path": "site/src/layouts/EventLayout.astro",
+          "path": "site/src/components/ShellIslandRuntime.astro",
           "symbols": [
             "initShellFloatingIslands"
           ]
@@ -700,7 +700,8 @@
       "version": 2,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
-        "site/src/components/listings/MobileListingRailSurface.astro"
+        "site/src/components/listings/MobileListingRailSurface.astro",
+        "site/src/styles/weekend-first-paint.css"
       ],
       "variants": [
         "today",

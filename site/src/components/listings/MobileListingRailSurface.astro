@@ -5,6 +5,8 @@ import WeatherDateContext from '../WeatherDateContext.astro';
 import SemanticIcon from '../design-system/SemanticIcon.astro';
 import MobileListingRailRow from './MobileListingRailRow.astro';
 import MobileDateAccessory from './MobileDateAccessory.astro';
+import MobileListingCityPicker from './MobileListingCityPicker.astro';
+import '../../styles/weekend-first-paint.css';
 import './mobile-listing-foundation-bindings.css';
 
 interface WeatherContext { date: string; dateLabel: string; routeKind: WeatherRouteKind; }
@@ -63,16 +65,11 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
   <div class="sticky-date mobile-listing-sticky-title" data-mobile-listing-sticky-title aria-hidden="true">
     <strong>{title}</strong><span>{meta}</span>
   </div>
+  {current === 'weekend' && cities.length > 1 && <div class="fi-mobile-city-origin" data-fi-ssr-origin><MobileListingCityPicker cities={cities} total={total} prepared /></div>}
   <div class="feed-head">
     <div class="feed-head__copy"><strong>{feedTitle}</strong><span>{feedMeta}</span></div>
     {cities.length > 1 ? (
-      <div class="city-picker" data-mobile-v23-city-picker data-listing-controls>
-        <span data-mobile-v23-city-label hidden>Вся область</span><button type="button" data-island-city-toggle aria-expanded="false">Выбрать город</button>
-        <div class="city-picker__panel" data-island-city-panel><div data-listing-city-filter role="group" aria-label="Города">
-          <button type="button" data-mobile-v23-city="all" aria-pressed="true"><span>Вся область</span><b>{total}</b></button>
-          {cities.map((city) => <button type="button" data-mobile-v23-city={city.name} aria-pressed="false"><span>{city.name}</span><b>{city.count}</b></button>)}
-        </div><button type="button" data-island-city-close hidden>Закрыть</button></div>
-      </div>
+      current !== 'weekend' && <MobileListingCityPicker cities={cities} total={total} />
     ) : <span class="city-pill">Вся область</span>}
   </div>
   <div class="mobile-v23-sections">

@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "9e710f81afb2e5668964339f66d0af33aadc98cf363c56a874629f0f3bdaf8fe",
+  "registry_sha256": "e2af8e1706e5247d3b35feb8ebdbe6965bf2c76b16fb1df1843694fccd4721e1",
   "source_root": "site/src",
-  "import_inventory_sha256": "5382576589d92a7a1103ac160b1e28d03f84c609b2dfcad1c17cf201577f7d53",
+  "import_inventory_sha256": "14a650b5c673ee0b45e57f4c6b855c5d7c59c72002f2665f0108e2ee1a08b68f",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -192,6 +192,7 @@
       "site/src/components/listings/ListingWeekendTimeNav.astro",
       "site/src/components/listings/mobile-listing-foundation-bindings.css",
       "site/src/components/listings/MobileDateAccessory.astro",
+      "site/src/components/listings/MobileListingCityPicker.astro",
       "site/src/components/listings/MobileListingRailRow.astro",
       "site/src/components/listings/MobileListingRailSurface.astro",
       "site/src/components/listings/PopularBehaviorRows.astro",
@@ -220,6 +221,7 @@
       "site/src/components/Reference4MobileMenu.astro",
       "site/src/components/SearchCollectionLinks.astro",
       "site/src/components/ServiceShareAction.astro",
+      "site/src/components/ShellIslandRuntime.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/transport/DepartureBoardTimetable.astro",
@@ -392,16 +394,17 @@
       "site/src/styles/prelaunch-consent.css",
       "site/src/styles/prelaunch-page.css",
       "site/src/styles/prelaunch-polish.css",
-      "site/src/styles/prelaunch-static.css"
+      "site/src/styles/prelaunch-static.css",
+      "site/src/styles/weekend-first-paint.css"
     ],
     "policy": "Exclude only proven service-only closure; retain shared, explicit runtime and unresolved sources."
   },
   "summary": {
     "product_family_count": 107,
     "family_count": 109,
-    "source_file_count": 334,
-    "import_edge_count": 831,
-    "direct_consumer_edges": 273,
+    "source_file_count": 337,
+    "import_edge_count": 833,
+    "direct_consumer_edges": 274,
     "protocol_consumer_edges": 33,
     "runtime_factory_edges": 1,
     "runtime_consumer_edges": 8,
@@ -409,7 +412,7 @@
     "unique_direct_consumers": 119,
     "unique_protocol_consumers": 33,
     "unique_runtime_factories": 1,
-    "unique_runtime_consumers": 7,
+    "unique_runtime_consumers": 8,
     "unique_production_routes": 27
   },
   "families": {
@@ -1244,15 +1247,15 @@
       "runtime_factories": [],
       "runtime_clients": [
         {
-          "path": "site/src/layouts/EventLayout.astro",
+          "path": "site/src/components/ShellIslandRuntime.astro",
           "symbols": [
-            "shellOccupiedSpace"
+            "initShellFloatingIslands"
           ]
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
           "symbols": [
-            "initShellFloatingIslands"
+            "shellOccupiedSpace"
           ]
         },
         {
@@ -1523,7 +1526,8 @@
       "version": 2,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
-        "site/src/components/listings/MobileListingRailSurface.astro"
+        "site/src/components/listings/MobileListingRailSurface.astro",
+        "site/src/styles/weekend-first-paint.css"
       ],
       "direct_component_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
@@ -1531,11 +1535,13 @@
       ],
       "direct_style_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro",
         "site/src/components/listings/WeekendListingSurface.astro"
       ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro",
         "site/src/components/listings/WeekendListingSurface.astro"
       ],
       "runtime_factories": [],

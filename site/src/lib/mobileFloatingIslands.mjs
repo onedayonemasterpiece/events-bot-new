@@ -11,7 +11,8 @@ export function initMobileFloatingIslands(doc=document,win=window){
  const contextParent=context.parentNode,sectionParent=section.parentNode,contextNext=context.nextSibling,sectionNext=section.nextSibling;
  const originalContextStyle=context.getAttribute('style')||'',originalControlsStyle=controls.getAttribute('style')||'',originalNavStyle=nav.getAttribute('style')||'';
  const controlParent=controls.parentNode,controlNext=controls.nextSibling;
- const marker=doc.createElement('div');marker.className='fi-mobile-city-origin';controls.before(marker);marker.append(controls);
+ const prepared=controls.hasAttribute('data-fi-ssr-city');
+ const marker=prepared?controls.parentElement:doc.createElement('div');if(!prepared){marker.className='fi-mobile-city-origin';controls.before(marker);marker.append(controls);}
  const shortRail=marker.closest('.ke-listing-discovery-rail'),feed=marker.closest('.feed-head');if(shortRail)shortRail.before(marker);else if(feed)feed.before(marker);
  const title=visibleHeading(doc),titleParent=title.parentNode,titleNext=title.nextSibling,titleStyle=title.getAttribute('style')||'';
  const titleMarker=doc.createElement('div');titleMarker.className='fi-mobile-title-origin';title.before(titleMarker);
@@ -26,11 +27,11 @@ export function initMobileFloatingIslands(doc=document,win=window){
  let weekendContext=null,weekendNav=null;
  if(weekend){titleMarker.before(title);weekendContext=createWeekendDays(doc,win,on);weekendNav=weekendContext.nav;context.append(weekendNav);}
  band.querySelector('[data-floating-controls-slot]').hidden=true;band.querySelector('[data-floating-utility-slot]').hidden=true;
- const skin=doc.createElement('div');skin.className='fi-city-skin';skin.setAttribute('aria-hidden','true');controls.prepend(skin);
- const row=doc.createElement('div');row.className='fi-city-visible';row.setAttribute('role','group');row.setAttribute('aria-label','Города');controls.append(row);
+ const skin=controls.querySelector('.fi-city-skin')||doc.createElement('div');skin.className='fi-city-skin';skin.setAttribute('aria-hidden','true');controls.prepend(skin);
+ const row=controls.querySelector('.fi-city-visible')||doc.createElement('div');row.className='fi-city-visible';row.setAttribute('role','group');row.setAttribute('aria-label','Города');controls.append(row);
  const items=cityEntries(field).map(entry=>{
-  const {label,input}=entry,button=doc.createElement('button');button.type='button';button.className='fi-city-item';button.dataset.fiCityValue=input.value;
-  const name=doc.createElement('span'),count=doc.createElement('small');name.textContent=singleDay&&input.value==='all'?'Все':entry.name;button.setAttribute('aria-label',entry.name);button.append(name,count);row.append(button);
+  const {label,input}=entry,button=[...row.querySelectorAll('[data-fi-city-value]')].find(n=>n.dataset.fiCityValue===input.value)||doc.createElement('button');button.type='button';button.className='fi-city-item';button.dataset.fiCityValue=input.value;
+  const name=button.querySelector('span')||doc.createElement('span'),count=button.querySelector('small')||doc.createElement('small');name.textContent=singleDay&&input.value==='all'?'Все':entry.name;button.setAttribute('aria-label',entry.name);button.append(name,count);row.append(button);
   on(button,'click',()=>{input.checked=!input.checked;input.dispatchEvent(new Event('change',{bubbles:true}));});return{...entry,button,count};
  });
  row.append(toggle);toggle.hidden=true;toggle.setAttribute('aria-haspopup','dialog');panel.hidden=true;closeButton.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Остальные города');
@@ -162,8 +163,9 @@ export function initMobileFloatingIslands(doc=document,win=window){
  band.__islands={get geometry(){return geometry},destroy(){dead=true;personalObserver.disconnect();cancelMotion();abort.abort();win.cancelAnimationFrame(frame);close(false);
  titleParent.insertBefore(title,titleNext);title.style.cssText=titleStyle;flow.forEach(n=>delete n.dataset.fiMobileFlow);titleSkin.remove();weekendNav?.remove();
  contextParent.insertBefore(context,contextNext);sectionParent.insertBefore(section,sectionNext);context.style.cssText=originalContextStyle;section.style.cssText='';if(pageButton)pageButton.hidden=false;
- row.remove();skin.remove();controls.prepend(toggle);toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);marker.remove();titleMarker.remove();panel.hidden=false;delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete doc.body.dataset.fiWeekend;delete band.__islands;}};
- doc.fonts.ready.then(()=>new Promise(r=>win.requestAnimationFrame(()=>win.requestAnimationFrame(r)))).then(()=>{if(dead)return;sync();ready=true;measure();render();doc.body.dataset.fiMotion='ready';});return band.__islands;
+ if(!prepared){row.remove();skin.remove();}else{row.style.cssText='';row.inert=false;items.forEach(i=>i.button.inert=false);marker.style.cssText='';toggle.hidden=true;}controls.prepend(toggle);toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);if(!prepared)marker.remove();titleMarker.remove();panel.hidden=prepared;delete doc.body.dataset.fiMobile;delete doc.body.dataset.fiSingleDay;delete doc.body.dataset.fiWeekend;delete band.__islands;}};
+ sync();ready=true;measure();render();doc.body.dataset.fiMotion='ready';
+ doc.fonts.ready.then(()=>{if(!dead)schedule(true);});return band.__islands;
 }
 
 /** Shared day labels use route dates, never the browser's current weekend. */
