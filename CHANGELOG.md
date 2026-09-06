@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added the Hero-talk promo activity service foundation in the existing campaign
+  model: explicit upper/lower placements, current campaign/activity gates and
+  dynamic program targets, with unsupported publication/browser cap mixing
+  rejected. Existing `/promo` activity controls and labels remain shared. This
+  does not activate Hero delivery or new MCP grants. Updated legacy promo test
+  expectations to preserve the already-shipped default TG button activity.
+
 - Added default-off partner access foundation: independent public OAuth clients
   with S256 PKCE and browser-only partner login, canonical principal/tenant/
   organization/portfolio policy, owner credential lifecycle and per-request

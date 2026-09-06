@@ -50,6 +50,9 @@ PROMO_POLICY_FIRST_TWO_SLOTS = "first_two_slots"
 PROMO_POLICY_WEIGHTED_POPULARITY = "weighted_popularity"
 PROMO_DAILY_TZ = "Europe/Kaliningrad"
 PROMO_SURFACE_VIDEO_GENERAL = "video_general"
+PROMO_SURFACE_HERO_TALK = "hero_talk"
+PROMO_HERO_PLACEMENTS = frozenset({"home_hero", "page_end"})
+PROMO_HERO_POLICY = "qualified_visibility"
 PROMO_SURFACE_DAILY_RECOMMEND_TODAY = "daily_recommend_today"
 PROMO_SURFACE_VK_PUBLICATION = "vk_publication"
 PROMO_SURFACE_TG_EVENT_PUBLISH = "tg_event_publish"
@@ -1036,7 +1039,87 @@ class PartnerActivitySpec:
     surface: str
     profile_key: str | None
     slot_policy: str
-    count: int
+    count: int | None
+    config: dict | None = None
+
+
+def validate_hero_activity_config(value: Any) -> dict[str, Any]:
+    """Validate placement/content binding, never a second campaign lifecycle."""
+    if not isinstance(value, dict) or set(value) - {"placements", "content_ref", "session_cap"}:
+        raise ValueError("HERO_CONFIG_INVALID")
+    placements = value.get("placements")
+    if (not isinstance(placements, dict) or not placements
+            or set(placements) - PROMO_HERO_PLACEMENTS
+            or any(type(enabled) is not bool for enabled in placements.values())):
+        raise ValueError("HERO_PLACEMENTS_INVALID")
+    content_ref = value.get("content_ref")
+    if not isinstance(content_ref, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", content_ref):
+        raise ValueError("HERO_CONTENT_REF_INVALID")
+    cap = value.get("session_cap", 1)
+    if type(cap) is not int or not 1 <= cap <= 3:
+        raise ValueError("HERO_SESSION_CAP_INVALID")
+    return {"placements": {key: placements.get(key, False) for key in sorted(PROMO_HERO_PLACEMENTS)},
+            "content_ref": content_ref, "session_cap": cap,
+            "accounting_unit": "qualified_browser_visibility"}
+
+
+async def hero_activity_eligibility(
+    db: Database, *, activity_id: int, placement: str,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    """Fresh campaign gates for preview/control; no exposure, seed or writes.
+
+    A eligible result is NOT a browser permit: content validity, consent/cap and
+    current actor policy must still pass at the caller's mutation/delivery boundary.
+    """
+    now_utc = now_utc or datetime.now(timezone.utc)
+    if now_utc.tzinfo is None:
+        raise ValueError("Timezone-aware now_utc required")
+    result = {"activity_id": activity_id, "placement": placement, "eligible": False,
+              "data_as_of": now_utc.isoformat(), "accounting_unit": "qualified_browser_visibility"}
+    if placement not in PROMO_HERO_PLACEMENTS:
+        return dict(result, reason="placement_unknown")
+    async with db.get_session() as session:
+        activity = await session.get(PromoActivity, activity_id)
+        if activity is None or activity.surface != PROMO_SURFACE_HERO_TALK:
+            return dict(result, reason="activity_not_found")
+        campaign = await session.get(PromoCampaign, activity.campaign_id)
+        result.update(campaign_id=activity.campaign_id, activity_enabled=activity.enabled,
+                      content_ref=(activity.config_json or {}).get("content_ref"))
+        if campaign is None:
+            return dict(result, reason="campaign_not_found")
+        result.update(campaign_status=campaign.status, priority=campaign.priority)
+        if campaign.status != "active":
+            return dict(result, reason="campaign_" + campaign.status)
+        def utc(dt):
+            return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+        if utc(campaign.starts_at) > now_utc:
+            return dict(result, reason="campaign_not_started")
+        if campaign.ends_at is not None and utc(campaign.ends_at) < now_utc:
+            return dict(result, reason="campaign_expired")
+        if not activity.enabled:
+            return dict(result, reason="activity_off")
+        try:
+            raw_config = dict(activity.config_json or {})
+            raw_config.pop("accounting_unit", None)
+            config = validate_hero_activity_config(raw_config)
+        except ValueError:
+            return dict(result, reason="activity_config_invalid")
+        if not config["placements"][placement]:
+            return dict(result, reason="placement_off")
+        if (campaign.total_exposure_goal is not None or campaign.daily_exposure_cap is not None
+                or activity.target_exposure_goal is not None or activity.daily_cap is not None
+                or activity.selection_policy != PROMO_HERO_POLICY):
+            return dict(result, reason="publication_cap_policy_unsupported")
+        targets = list((await session.execute(select(PromoTarget).where(
+            PromoTarget.campaign_id == campaign.id))).scalars())
+    ids = set()
+    today = now_utc.astimezone(ZoneInfo(PROMO_DAILY_TZ)).date()
+    for target in targets:
+        for event in await _events_for_target(db, target=target, campaign=campaign, today=today, now_utc=now_utc):
+            ids.add(int(event.id))
+    return dict(result, eligible=bool(ids), reason="eligible" if ids else "target_no_eligible_events",
+                event_ids=sorted(ids), placements=config["placements"], session_cap=config["session_cap"])
 
 
 async def add_partner_activity_to_campaign(
@@ -1054,9 +1137,9 @@ async def add_partner_activity_to_campaign(
     """
 
     now_utc = now_utc or datetime.now(timezone.utc)
-    if spec.count <= 0:
+    if spec.surface != PROMO_SURFACE_HERO_TALK and (spec.count is None or spec.count <= 0):
         return PromoCreateResult(None, "invalid", "Количество показов должно быть положительным.")
-    if spec.surface not in {PROMO_SURFACE_VIDEO_GENERAL, PROMO_SURFACE_VK_REPOST}:
+    if spec.surface not in {PROMO_SURFACE_VIDEO_GENERAL, PROMO_SURFACE_VK_REPOST, PROMO_SURFACE_HERO_TALK}:
         return PromoCreateResult(None, "invalid", f"Неизвестная поверхность: {spec.surface!r}.")
     if spec.surface == PROMO_SURFACE_VIDEO_GENERAL and spec.slot_policy not in {
         PROMO_POLICY_GUARANTEED_ANY_POSITION,
@@ -1064,6 +1147,15 @@ async def add_partner_activity_to_campaign(
         PROMO_POLICY_FIRST_SLOT,
     }:
         return PromoCreateResult(None, "invalid", f"Неизвестная политика слота: {spec.slot_policy!r}.")
+
+    hero_config = None
+    if spec.surface == PROMO_SURFACE_HERO_TALK:
+        try:
+            hero_config = validate_hero_activity_config(spec.config)
+        except ValueError as exc:
+            return PromoCreateResult(None, "invalid", str(exc))
+        if spec.count is not None or spec.slot_policy != PROMO_HERO_POLICY or spec.profile_key is not None:
+            return PromoCreateResult(None, "invalid", "hero_talk requires qualified_visibility; publication count/profile/slot are unsupported.")
 
     async with db.get_session() as session:
         campaign = await session.get(PromoCampaign, int(spec.campaign_id))
@@ -1076,7 +1168,15 @@ async def add_partner_activity_to_campaign(
                 "Кампания в архиве — нельзя добавить активность. Восстановите её сначала.",
             )
 
-        if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
+        if spec.surface == PROMO_SURFACE_HERO_TALK:
+            if campaign.total_exposure_goal is not None or campaign.daily_exposure_cap is not None:
+                return PromoCreateResult(None, "invalid", "HERO_CAMPAIGN_PUBLICATION_CAP_UNSUPPORTED: browser visibility cannot consume publication units.")
+            activity = PromoActivity(
+                campaign_id=int(campaign.id), surface=PROMO_SURFACE_HERO_TALK,
+                selection_policy=PROMO_HERO_POLICY, config_json=hero_config,
+                max_per_publish=1, enabled=True,
+            )
+        elif spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
             activity = PromoActivity(
                 campaign_id=int(campaign.id),
                 surface=PROMO_SURFACE_VIDEO_GENERAL,
@@ -1109,7 +1209,7 @@ async def add_partner_activity_to_campaign(
         "created",
         f"Добавил активность к #{campaign.id}: {spec.surface}"
         + (f"/{spec.profile_key}" if spec.profile_key else "")
-        + f" · {spec.count} показ(ов).",
+        + (" · квалифицированная видимость." if spec.surface == PROMO_SURFACE_HERO_TALK else f" · {spec.count} показ(ов)."),
     )
 
 

@@ -1302,6 +1302,7 @@ from models import PromoActivity, PromoExposure
 
 
 _SURFACE_LABELS: dict[str, str] = {
+    "hero_talk": "Hero-talk",
     "video_general": "🎬 Видеоанонс",
     "video_slot": "🎬 Видеоанонс (слот)",
     "daily_highlight": "📅 Ежедневная подборка",
@@ -1342,6 +1343,12 @@ def _humanize_activity(activity: PromoActivity) -> str:
     surface = _SURFACE_LABELS.get(activity.surface, activity.surface or "—")
     bits: list[str] = [surface]
     cfg = activity.config_json if isinstance(activity.config_json, dict) else {}
+    if activity.surface == "hero_talk":
+        labels = {"home_hero": "верх страницы", "page_end": "конец страницы"}
+        for placement, label in labels.items():
+            bits.append(f"{label}: {'вкл' if cfg.get('placements', {}).get(placement) else 'выкл'}")
+        bits.append("единица: квалифицированная видимость")
+        return " · ".join(bits)
     if activity.surface == PROMO_SURFACE_VK_PUBLICATION:
         # VK-публикация: слотовая политика не применима; показываем целевой паблик.
         group = str(cfg.get("target_group") or activity.profile_key or "").strip()

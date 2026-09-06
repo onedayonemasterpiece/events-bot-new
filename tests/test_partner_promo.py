@@ -31,6 +31,18 @@ from promo import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _freeze_promo_menu_clock(monkeypatch):
+    # Visibility must be evaluated at the same date as these May/June fixtures.
+    # Do not weaken the production filter that hides expired active campaigns.
+    class FixtureDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 5, 18, 8, tzinfo=timezone.utc)
+            return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+    monkeypatch.setattr("handlers.partner_promo_cmd.datetime", FixtureDatetime)
+
+
 def _event(title: str, day: str, *, creator_id: int = 100, end_date: str | None = None) -> Event:
     return Event(
         title=title,
@@ -158,7 +170,7 @@ async def test_create_partner_event_promo_basic_flow(tmp_path) -> None:
 
         activity = (
             await session.execute(
-                select(PromoActivity).where(PromoActivity.campaign_id == campaign.id)
+                select(PromoActivity).where(PromoActivity.campaign_id == campaign.id, PromoActivity.surface == PROMO_SURFACE_VIDEO_GENERAL)
             )
         ).scalar_one()
         assert activity.surface == PROMO_SURFACE_VIDEO_GENERAL
@@ -233,7 +245,7 @@ async def test_create_partner_promo_first_slot_sets_slot_1(tmp_path) -> None:
     async with db.get_session() as session:
         activity = (
             await session.execute(
-                select(PromoActivity).where(PromoActivity.campaign_id == result.campaign.id)
+                select(PromoActivity).where(PromoActivity.campaign_id == result.campaign.id, PromoActivity.surface == PROMO_SURFACE_VIDEO_GENERAL)
             )
         ).scalar_one()
         assert activity.slot == 1
@@ -390,7 +402,8 @@ async def test_add_partner_activity_appends_to_existing_campaign(tmp_path) -> No
                 )
             ).scalars().all()
         )
-    assert len(activities) == 2
+    assert len(activities) == 3
+    assert sum(a.surface == "tg_button_highlight" for a in activities) == 1
     surfaces = [(a.surface, a.profile_key, a.selection_policy, a.target_exposure_goal) for a in activities]
     assert (PROMO_SURFACE_VIDEO_GENERAL, "popular_review", PROMO_POLICY_FIRST_TWO_SLOTS, 3) in surfaces
     assert (PROMO_SURFACE_VIDEO_GENERAL, "default", PROMO_POLICY_FIRST_SLOT, 1) in surfaces

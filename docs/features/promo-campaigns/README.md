@@ -31,7 +31,8 @@ rule, and the VK-repost activity type) lives in a dedicated canonical spec:
   `video_general`, `daily_highlight`, `telegraph_month`, `telegraph_weekend`,
   `daily_recommend_today`, `vk_publication`, `vk_festival_carousel`,
   `tg_event_publish`, `tg_repost`, `tg_button_highlight`,
-  `vk_channel_publish`, `vk_repost`, `vk_story`, and `afishaengagement`.
+  `vk_channel_publish`, `vk_repost`, `vk_story`, `afishaengagement`, and
+  `hero_talk` (service foundation, not yet activated delivery).
   Social activity parameters live in
   `promo_activity.config_json` (`target_group`, `source_group`, `target_chat`,
   `source_chat`, `window_hours`, `active_start_hour`, `active_end_hour`, dedup
@@ -89,6 +90,43 @@ programme filter/classifier that separates lectures/talks/education events from
 concerts. Until a structured programme field exists, this filter must still be
 dynamic and auditable; it must not be approximated by a frozen list of the event
 ids known at campaign creation time.
+
+## Hero-talk activity (#643)
+
+`promo.py` remains the sole campaign/target/activity/exposure owner. Hero-talk
+adds one activity family with `home_hero` and `page_end` placements; it does not
+own a second campaign lifecycle, budget or partner access policy. An owner
+editorial note need not invent a campaign. OAuth actors must use the existing
+principal/tenant/organization/portfolio boundary, never a synthetic Telegram user.
+
+`PartnerActivitySpec(surface="hero_talk", profile_key=None,
+slot_policy="qualified_visibility", count=None, config=...)` appends to the
+existing campaign through `add_partner_activity_to_campaign`. Config contains
+`content_ref`, explicit boolean `placements`, and `session_cap` (1–3, default 1).
+Unspecified placements are OFF. Unknown config fields (including lifecycle and
+budget fields) are rejected. No other activity, target, priority, owner, period
+or campaign status changes; adding to a paused campaign does not resume it.
+
+`hero_activity_eligibility` is side-effect-free current-state readback for
+preview/control. It checks campaign status/window, activity OFF, placement OFF,
+then uses the existing dynamic target resolver. Newly accepted program events
+appear without frozen ID lists. It does not seed campaigns, generate content,
+record exposures or grant a browser permit. Content validity, current access
+policy, consent and common browser session cap remain required caller gates.
+
+Publication units cannot be interpreted as browser impressions. Until an
+explicit typed cross-surface accounting policy is implemented, campaigns with
+`total_exposure_goal` or `daily_exposure_cap` reject Hero addition with
+`HERO_CAMPAIGN_PUBLICATION_CAP_UNSUPPORTED`; eligibility also fails closed if
+publication caps are added later. Existing publication counts are not changed.
+The existing `/promo` card identifies browser units/placements and its activity
+toggle disables only Hero; campaign pause remains common to all activities.
+
+This is a service slice, **not** browser delivery or full #643 acceptance.
+No capability activation, public content approval, partner mutation grant,
+analytics receipt or production deployment is implied by these local APIs.
+`tests/test_promo_hero_activity.py` covers service portions of MCP-HT-01/02 and
+HT-AF-06/18; end-to-end IDs remain release gates, not claimed PASS.
 
 ## Operator Commands
 

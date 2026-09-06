@@ -32,6 +32,18 @@ from promo import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _freeze_promo_menu_clock(monkeypatch):
+    # Visibility must be evaluated at the same date as these May/June fixtures.
+    # Do not weaken the production filter that hides expired active campaigns.
+    class FixtureDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 5, 18, 8, tzinfo=timezone.utc)
+            return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+    monkeypatch.setattr("handlers.partner_promo_cmd.datetime", FixtureDatetime)
+
+
 def _event(title: str, day: str, creator_id: int = 100) -> Event:
     return Event(
         title=title,
