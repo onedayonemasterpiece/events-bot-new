@@ -285,7 +285,8 @@ async def test_campaign_stats_text_when_no_exposures(tmp_path) -> None:
 
     campaign = await _seed_campaign(db, event_title="Stats", creator=100)
     text = await _campaign_stats_text(db, campaign)
-    assert "Публичных показов пока нет" in text
+    assert "— показов пока нет" in text
+    assert "всего показов: 0" in text
 
 
 @pytest.mark.asyncio
