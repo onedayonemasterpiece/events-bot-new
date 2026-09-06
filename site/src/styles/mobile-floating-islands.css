@@ -148,3 +148,8 @@ body[data-fi-mobile][data-fi-single-day] .ke-mobile-listing-rails .page-head > p
 body[data-fi-mobile][data-fi-single-day] .ke-mobile-listing-rails .feed-head {display:none;}
 body[data-fi-mobile][data-fi-single-day] .fi-mobile-city-origin {margin:8px 0;}
 body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle] {font-size:12px;font-weight:650;}
+
+/* A one-day dock has no duplicate title: one content-sized city picker, with
+   all original choices in its popover. The expanded flow row is unchanged. */
+body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle] {display:block;height:44px;min-height:44px;padding:0 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;}
+body[data-fi-mobile][data-fi-single-day] [data-listing-controls][data-fi-docked="true"] [data-island-city-toggle].has-selected::after {display:none;}

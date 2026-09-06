@@ -15,7 +15,7 @@ test('single-day cleanup is scoped and does not add a sticky date or invent a ci
  const css=readFileSync(new URL('../src/styles/mobile-floating-islands.css',import.meta.url),'utf8');
  assert.match(mobile,/singleDay=\['today','tomorrow','date'\]/);
  assert.match(mobile,/arrived=!singleDay/);
- assert.match(mobile,/docked&&!singleDay\?0:fitCityItems/);
+ assert.match(mobile,/docked\?0:fitCityItems/);
  assert.match(shell,/!media.matches&&!surface/);
  assert.match(css,/\[data-fi-single-day\].*?page-head h1 \{[^}]*animation:none/);
 });

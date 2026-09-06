@@ -126,7 +126,7 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 
 ### One-day mobile content density
 
-`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/single-day-density.playwright.mjs` checks Today/Tomorrow/Date at320/384/430px: first card within230px, three full rows at720px/four at844px, flow-only H1, real city filtering and counts, single-city/no-filter behavior, unchanged bottom dock, reduced motion and retained Weekend context. Anonymous L1 only. [Canonical scope](../features/static-site-pages/astro-preview.md#one-day-mobile-entry-cleanup--2026-09-06).
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/single-day-density.playwright.mjs` checks Today/Tomorrow/Date at320/384/430px: first card within230px, three full rows at720px/four at844px, flow-only H1, a44px content-sized “Все города” picker beside the brand (actual selected-city caption, full original popover), real city filtering and counts, single-city/no-filter behavior, unchanged bottom dock, reduced motion and retained Weekend context. Anonymous L1 only. [Canonical scope](../features/static-site-pages/astro-preview.md#one-day-mobile-entry-cleanup--2026-09-06).
 
 ### Mobile date dock B
 

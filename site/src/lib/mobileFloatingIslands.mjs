@@ -31,9 +31,11 @@ export function initMobileFloatingIslands(doc=document,win=window){
  });
  row.append(toggle);toggle.hidden=true;toggle.setAttribute('aria-haspopup','dialog');panel.hidden=true;closeButton.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Остальные города');
  let geometry=null,ready=false,dead=false,frame=0,measureNeeded=true,opened=false,visibleCount=items.length,activeHeading=null,lastScope='',sectionRanges=[],widths=[],moreWidths=[],docked=null,motions=[],settleTimer=0;
+ let selectionLabel='';
+ function compactLabel(){const selected=items.filter(i=>i.input.checked&&i.input.value!=='all');return selected.length?selected.map(i=>i.name).join(', '):'Все города';}
  const nativeTimeline=win.CSS?.supports('animation-timeline','scroll(root block)');
  const reduced=()=>win.matchMedia('(prefers-reduced-motion: reduce)').matches;
- function sync(){for(const item of items){item.button.setAttribute('aria-pressed',String(item.input.checked));const count=item.countText();if(item.count.textContent!==count)item.count.textContent=count;}}
+ function sync(){const label=compactLabel();if(singleDay&&selectionLabel&&selectionLabel!==label)schedule(true);selectionLabel=label;for(const item of items){item.button.setAttribute('aria-pressed',String(item.input.checked));const count=item.countText();if(item.count.textContent!==count)item.count.textContent=count;}}
  function ranges(){sectionRanges=readSectionRanges(doc,win);}
  function cancelMotion(){win.clearTimeout(settleTimer);settleTimer=0;motions.forEach(a=>a.cancel());motions=[];controls.removeAttribute('data-fi-moving');}
  function measure(){
@@ -43,7 +45,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
   title.style.cssText=titleStyle+';animation:none;transform:none;';
   const brand=doc.querySelector('[data-mobile-discovery-menu] > summary').getBoundingClientRect(),tr=titleMarker.getBoundingClientRect(),font=parseFloat(win.getComputedStyle(title).fontSize);
   const narrow=win.innerWidth<360,inset=12,gap=narrow?8:10,pad=narrow?8:12;
-  const left=brand.right+(narrow?8:12),cityWidth=narrow?44:54,contextWidth=win.innerWidth-left-inset-cityWidth-gap,titleTop=singleDay?14:8;
+  const left=brand.right+(narrow?8:12),cityWidth=narrow?44:54,contextWidth=win.innerWidth-left-inset-cityWidth-gap,titleTop=singleDay?20:8;
   // Reserve enough space for every full section title once per viewport, not
   // on scroll; changing sections never makes the sticky stack jump.
   const probe=doc.createElement('div');probe.style.cssText=`position:fixed;visibility:hidden;width:${contextWidth-2*pad}px;font:600 12px/17px Inter,ui-sans-serif,system-ui,sans-serif;`;doc.body.append(probe);
@@ -56,11 +58,13 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const originWidth=Math.min(fullWidth,win.innerWidth-24);
   // Accepted mobile reference: the city surface becomes the ellipsis island
   // beside the title, in the SAME top row; all original choices remain in its
-  // picker. The full-width pre-dock row retains maximal whole-item fit.
-  const targetWidth=singleDay?Math.min(originWidth,win.innerWidth-left-inset):cityWidth;
+  // picker. One-day pages instead use a named, content-sized picker without
+  // a duplicate title. The pre-dock row retains maximal whole-item fit.
+  const labelProbe=doc.createElement('span');labelProbe.textContent=compactLabel();labelProbe.style.cssText='position:fixed;visibility:hidden;white-space:nowrap;font:650 12px/1 Inter,ui-sans-serif,system-ui,sans-serif;';doc.body.append(labelProbe);
+  const targetWidth=singleDay?Math.min(Math.max(112,Math.ceil(labelProbe.getBoundingClientRect().width)+32),win.innerWidth-left-inset):cityWidth;labelProbe.remove();
   marker.style.height=`${contextHeight}px`;
   const cr=controls.getBoundingClientRect(),mr=marker.getBoundingClientRect();
-  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
+  geometry={origin:{x:(win.innerWidth-originWidth)/2,y:cr.y+win.scrollY,width:originWidth,height:56},context:{x:left,y:titleTop,width:contextWidth,height:contextHeight},title:{originY:tr.y+win.scrollY,end:titleEnd,top:titleTop,x:left+pad-tr.x,scale:Math.min(1,18/font,(contextWidth-2*pad)/title.getBoundingClientRect().width)},city:{x:singleDay?left:win.innerWidth-inset-targetWidth,y:targetY,width:targetWidth,height:singleDay?44:contextHeight},fullWidth,markerX:mr.x,threshold:Math.max(1,Math.min(48,cr.y+win.scrollY-brand.bottom-12-80)),approachTop:Math.max(brand.bottom,titleTop+contextHeight)+12};
   titleMarker.style.position='';marker.style.position='';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${geometry.approachTop}px`);
   title.style.cssText=titleStyle;
   if(!nativeTimeline){title.style.animation='none';titleSkin.style.animation='none';}
@@ -70,9 +74,9 @@ export function initMobileFloatingIslands(doc=document,win=window){
   ranges();docked=null;setDocked(win.scrollY>=geometry.threshold,false);measureNeeded=false;
  }
  function fit(width){
-  const count=docked&&!singleDay?0:fitCityItems(width,widths,moreWidths);visibleCount=count;
+  const count=docked?0:fitCityItems(width,widths,moreWidths);visibleCount=count;
   items.forEach((item,i)=>{item.button.hidden=i>=count;item.button.inert=i>=count;item.label.hidden=opened&&i<count;});
-  const n=items.length-count;toggle.hidden=n===0;toggle.textContent=docked&&!singleDay?'…':`+${n}`;toggle.setAttribute('aria-label',docked?`Выбрать город. Сейчас: ${items.filter(i=>i.input.checked).map(i=>i.label.querySelector('span').textContent).join(', ')}`:`Ещё ${n} города`);toggle.classList.toggle('has-selected',items.slice(count).some(i=>i.input.checked&&i.input.value!=='all'));
+  const n=items.length-count;toggle.hidden=n===0;toggle.textContent=docked?(singleDay?compactLabel():'…'):`+${n}`;toggle.setAttribute('aria-label',docked?`Выбрать город. Сейчас: ${items.filter(i=>i.input.checked).map(i=>i.label.querySelector('span').textContent).join(', ')}`:`Ещё ${n} города`);toggle.classList.toggle('has-selected',items.slice(count).some(i=>i.input.checked&&i.input.value!=='all'));
   controls.dataset.fiVisibleCount=String(count);controls.dataset.fiOverflowCount=String(n);
  }
  function setDocked(next,animate=true){
@@ -80,7 +84,7 @@ export function initMobileFloatingIslands(doc=document,win=window){
   // Preserve the live text nodes. Read the current mask/X before cancellation,
   // including on reversal, rather than cloning/cross-fading an outgoing row.
   const before=controls.getBoundingClientRect(),skinWidth=skin.getBoundingClientRect().width,skinHeight=skin.getBoundingClientRect().height;
-  const beforeClip=win.getComputedStyle(row).clipPath;
+  const beforeClip=win.getComputedStyle(row).clipPath,beforeToggleWidth=toggle.getBoundingClientRect().width;
   const beforeToggleX=toggle.hidden?skinWidth-54:toggle.getBoundingClientRect().x-before.x,beforeToggleY=toggle.hidden?7:toggle.getBoundingClientRect().y-before.y;
   const shown=items.map(i=>!i.button.hidden);
   cancelMotion();docked=next;close(false);
@@ -90,19 +94,19 @@ export function initMobileFloatingIslands(doc=document,win=window){
   const count=visibleCount,hasMore=count<items.length;
   const textEdge=hasMore?8+widths.slice(0,count).reduce((a,b)=>a+b,0)+6*Math.max(0,count-1):geometry.fullWidth;
   const clip=`inset(0px ${Math.max(0,geometry.fullWidth-textEdge)}px 0px 0px)`;
-  row.style.clipPath=clip;const toggleX=next&&!singleDay?(target.width-44)/2:target.width-54,toggleY=(target.height-40)/2;toggle.style.transform=`translate(${toggleX}px,${toggleY}px)`;
+  row.style.clipPath=clip;toggle.style.width=next&&singleDay?`${target.width}px`:'44px';const toggleX=next?(singleDay?0:(target.width-44)/2):target.width-54,toggleY=(target.height-(next&&singleDay?44:40))/2;toggle.style.transform=`translate(${toggleX}px,${toggleY}px)`;
   controls.dataset.fiDocked=String(next);
   if(!animate||reduced())return;
   // Keep outgoing choices in the same row while the edge crops them away.
   // They cannot receive focus/clicks once moved to the overflow picker.
   items.forEach((item,i)=>{item.button.hidden=!(shown[i]||i<count);});
-  const movingOverflow=Math.max(items.length-count,items.length-fitCityItems(before.width,widths,moreWidths));toggle.hidden=movingOverflow===0;toggle.textContent=next&&!singleDay?'…':`+${movingOverflow}`;
+  const movingOverflow=Math.max(items.length-count,items.length-fitCityItems(before.width,widths,moreWidths));toggle.hidden=movingOverflow===0;toggle.textContent=next?(singleDay?compactLabel():'…'):`+${movingOverflow}`;
   const timing={duration:540,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
   controls.dataset.fiMoving='true';
   const move=controls.animate([{transform:`translate3d(${before.x-geometry.markerX}px,0,0)`},{transform:`translate3d(${x}px,0,0)`}],timing);
   motions=[move,skin.animate([{transform:`scale(${skinWidth/target.width},${skinHeight/target.height})`},{transform:'scale(1,1)'}],timing),
    row.animate([{clipPath:beforeClip==='none'?'inset(0px 0px 0px 0px)':beforeClip},{clipPath:clip}],timing),
-   toggle.animate([{transform:`translate(${beforeToggleX}px,${beforeToggleY}px)`},{transform:`translate(${toggleX}px,${toggleY}px)`}],timing)];
+   toggle.animate([{transform:`translate(${beforeToggleX}px,${beforeToggleY}px)`,clipPath:`inset(0px ${next&&singleDay?Math.max(0,target.width-beforeToggleWidth):0}px 0px 0px)`},{transform:`translate(${toggleX}px,${toggleY}px)`,clipPath:'inset(0px 0px 0px 0px)'}],timing)];
   move.onfinish=()=>{cancelMotion();fit(target.width);
    if(next){
     // Preserve natural time easing instead of seeking to the end on a fling.
