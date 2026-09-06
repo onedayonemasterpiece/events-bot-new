@@ -236,3 +236,17 @@ recording/search kernel was introduced. Physical report artifact:
 - Immediate user impact recovered; no permanent prevention claim yet. Await
   user card/search/refinement confirmation. Do not replace the kernel or create
   a second recording database merely to bypass this diagnosed upgrade lock.
+
+
+## Permanent prevention integration (2026-09-06)
+
+Worker `03a640eaf96b8cd4c963f790c53998f5935e91d7` is integrated as
+`ceb07e97d`: versionless open, v2-compatible typed negative compressed-key range,
+legacy v3 compressed store preserved, same owner/PCM/controller/CAS. 20 unit and
+19 sequential native browser cases passed in the worker; native CDP frozen-v2
+read/write completed in 11 ms without a versionchange or resume of the old tab.
+A prior concurrent run exhausted host disk; sequential rerun passed, and that
+infrastructure failure is not represented as a product pass. Physical restart
+containment reported earlier remains distinct from prevention acceptance. No user
+app/session/audio/queue was cleared. Publication/readback follows in voice preview
+delivery evidence; incident stays open pending physical-device prevention review.

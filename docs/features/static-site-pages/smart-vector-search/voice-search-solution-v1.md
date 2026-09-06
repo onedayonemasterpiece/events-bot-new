@@ -541,3 +541,21 @@ The physical incident evidence and release acceptance remain in the canonical
 incident record linked above; this storage-only change does not claim new UI or
 end-to-end search acceptance.
 
+
+
+Integrated endpoint settings: 180 ms sound evidence followed by 1500 ms observed
+low-energy PCM. This is conservative energy endpointing, not recognition of the
+end of a thought. No samples are discarded, including quiet words/negations and
+the compressed container tail. Startup silence never auto-submits; noise or very
+quiet/short speech can need manual Stop. Hidden-page/device/storage interruption
+still fails closed as partial audio. Native Chromium synthetic tone→silence
+proved one completion, full persisted PCM and decodable Opus; physical mobile
+silence timing remains a user acceptance gap.
+
+The existing interpretation call optionally generates `responseSummary`: one
+short intent-grounded acknowledgement, not a fabricated review of unseen cards.
+The server adds the actual returned-card count / bounded-window no-results state;
+clarification and verified factual answers retain precedence. No extra model call
+or billable replay. Legacy receipts without the optional field remain readable.
+`title` is prompted as the minimal what/where/when set (prefer <=80 characters);
+it is not obtained by truncating the raw question.

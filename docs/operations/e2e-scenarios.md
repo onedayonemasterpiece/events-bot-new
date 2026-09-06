@@ -180,3 +180,19 @@ L1 fixtures, not physical Android freeze evidence.
 `voice-startup-store.test.mjs`, `voice-diagnostics.test.mjs` and `search-auth-startup.test.mjs` are unit guards.
 Canonical acceptance boundaries and preview-only incident evidence:
 [`INC-2026-09-06-voice-preview-startup`](../reports/incidents/INC-2026-09-06-voice-preview-startup.md).
+
+
+Voice conversational presentation (preview, 2026-09-06):
+`site/tests/voice-chat.integration.mjs` uses native Chromium/IndexedDB and explicit
+gated ASR/Search/Auth fixtures to verify immediate ASR bubble, answer/card skeleton
+before interpretation, in-place response, appended follow-up and terminal error.
+It is not live-provider evidence. `voice-silence.integration.mjs` exercises real
+Worklet/MediaRecorder synthetic sound→silence and full PCM/Opus persistence;
+`assistant-silence*.test.mjs` covers startup silence, conservative thresholds,
+manual fallback and interruption races. `shared-topic-locator.playwright.mjs`
+checks the real built shell with explicit topic-state fixtures (320–1440 px).
+`voice-versionless-store.integration.mjs` and
+`voice-versionless-freeze.integration.mjs` protect v2/v3 byte compatibility,
+unchanged durable controller/CAS and actual frozen-old-tab startup without an
+upgrade. See the canonical voice solution and startup incident for live/phone
+acceptance boundaries and publication receipts.

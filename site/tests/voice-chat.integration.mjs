@@ -20,11 +20,11 @@ test.before(async()=>{
  `,resolveDir:root,loader:'ts'},bundle:true,write:false,format:'esm',plugins:[{name:'explicit-fixtures',setup(b){b.onResolve({filter:/^(\.\.\/staticSiteAuth|\.\/assistantClient\.ts)$/},a=>({path:a.path,namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:a.path.includes('staticSiteAuth')?'export const getStaticSiteAuth=()=>window.auth;':'export class AssistantClient{constructor(){return window.api;}}',loader:'js'}));}}]})).outputFiles[0].text;
  const worklet=await readFile(root+'public/voice/pcm-capture-worklet.js');
  server=createServer((req,res)=>{res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/html');res.end(req.url==='/bundle.js'?bundle:req.url==='/worklet.js'?worklet:html);});await new Promise(r=>server.listen(0,'127.0.0.1',r));origin=`http://127.0.0.1:${server.address().port}`;
- browser=await chromium.launch({args:['--use-fake-device-for-media-stream']});
+ browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?undefined:'chromium',executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined,args:['--use-fake-device-for-media-stream']});
 });
 test.after(async()=>{await browser?.close();await new Promise(r=>server?.close(r));});
 test('ASR immediately becomes bubble + lines/cards skeleton before interpretation; next turn appends; failed turn stops shimmer',async()=>{
- const context=await browser.newContext({permissions:['microphone'],viewport:{width:390,height:844}});const p=await context.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));
+ const context=await browser.newContext({permissions:['microphone'],viewport:{width:390,height:844}});const p=await context.newPage();const errors=[];p.on('console',m=>{if(m.type()==='error')console.log(m.text());});p.on('pageerror',e=>errors.push(e.message));
  try{
  await p.goto(origin);await p.waitForFunction(()=>document.querySelector('[data-assistant]').dataset.assistantStartup==='ready');
  await p.locator('[data-assistant-launcher]').click();await p.waitForFunction(()=>document.querySelector('[data-assistant-dock]').dataset.captureState==='recording');await p.waitForTimeout(350);await p.locator('[data-assistant-launcher]').click();

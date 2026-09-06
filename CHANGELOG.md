@@ -8,6 +8,11 @@
   question as a chat bubble and shared answer/card skeletons. Replies replace their
   own pending state, follow-ups append, and failed/superseded turns stop shimmering.
   Optional typed input and recovery remain available without a recording modal.
+  Conservative silence endpointing auto-stops complete utterances without trimming
+  PCM or compressed tails; manual Stop remains the quiet/noisy-browser fallback.
+  The existing header shows the current section's compact model title, without
+  another sticky tier. The existing interpretation call adds an optional grounded
+  acknowledgement, paired with the actual returned-card count.
 
 - Fixed: VoiceStore no longer requests a schema upgrade when opening existing
   recording databases. v2 retains its schema and stores typed compressed chunks

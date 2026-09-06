@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
 const base=process.env.CHECK_BASE,out=process.env.CHECK_OUTPUT;
 if(!base||!out)throw Error('CHECK_BASE and CHECK_OUTPUT are required');
-mkdirSync(out,{recursive:true});const browser=await chromium.launch(),checks=[];
+mkdirSync(out,{recursive:true});const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined}),checks=[];
 for(const width of [320,390,430,1440]) {
   const page=await browser.newPage({viewport:{width,height:900}});
   await page.goto(`${base}/poisk/`);await page.evaluate(()=>document.fonts.ready);
