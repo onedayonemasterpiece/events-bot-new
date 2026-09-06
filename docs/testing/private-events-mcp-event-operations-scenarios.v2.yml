@@ -511,14 +511,16 @@ scenarios:
     layer: integration
     title: "Cold/warm compile: same plan/hash, warm0 model sends/новых content writes"
     expect: [full_contract_verified]
-    implementation_status: missing
+    implementation_status: partial
     acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_talk_compiler.py"]
   - id: HT-AF-02
     layer: integration
     title: "Invalid model output/facts/links/truncation/quota → bounded retry/defer, valid fallback"
     expect: [full_contract_verified]
-    implementation_status: missing
+    implementation_status: partial
     acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_talk_compiler.py"]
   - id: HT-AF-03
     layer: integration
     title: "Cancel/reschedule/price/identity change → старый dependency больше не получает permit"
@@ -548,15 +550,16 @@ scenarios:
     layer: integration
     title: "Verbatim exact text/order/identities через edit/render/rollback, stale literal не переписывается"
     expect: [full_contract_verified]
-    implementation_status: missing
+    implementation_status: partial
     acceptance_status: not_run
+    partial_test_files: ["tests/test_hero_talk_compiler.py"]
   - id: HT-AF-08
     layer: integration
     title: "Exact photo/meme role, права, entity/crop match, missing-media fallback"
     expect: [full_contract_verified]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_private_events_mcp_event_create_media.py"]
+    partial_test_files: ["tests/test_private_events_mcp_event_create_media.py", "tests/test_hero_talk_compiler.py"]
   - id: HT-AF-09
     layer: integration
     title: "Stale index, publish crash, missing pack, live readback и обновление без full rebuild"
@@ -606,7 +609,7 @@ scenarios:
     expect: [full_contract_verified]
     implementation_status: partial
     acceptance_status: not_run
-    partial_test_files: ["tests/test_private_events_mcp_event_assets.py", "tests/test_private_events_mcp_event_asset_tools.py"]
+    partial_test_files: ["tests/test_private_events_mcp_event_assets.py", "tests/test_private_events_mcp_event_asset_tools.py", "tests/test_hero_talk_compiler.py"]
   - id: HT-AF-17
     layer: integration
     title: "Analytics denied/down/delayed/test → корректные coverage/denominators, site работает"

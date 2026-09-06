@@ -224,6 +224,12 @@ features:
       - handlers/admin_assist_cmd.py
       - main.py
       - main_part2.py
+  hero_talk:
+    status: partial
+    docs: docs/features/hero-talk/README.md
+    entrypoints:
+      - hero_talk/compiler.py
+      - promo.py
   promo_campaigns:
     status: mvp
     docs: docs/features/promo-campaigns/README.md

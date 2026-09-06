@@ -216,3 +216,55 @@ async def test_real_smart_update_partner_receipt_recovers_lost_completion(config
         assert await recover_private_event_creates(app)==0
     finally:
         await client.close(); await db.close()
+
+
+@pytest.mark.asyncio
+async def test_real_http_foreign_same_source_cannot_accept_or_mutate_event(config,tmp_path,monkeypatch):
+    """Same public source is not portfolio authority at the actual parser boundary."""
+    from datetime import date,timedelta
+    import main
+    import smart_event_update as smart_update_module
+    cfg,db,app,server,client,partners,_=await setup(config,tmp_path,automatic=True)
+    future=(date.today()+timedelta(days=30)).isoformat()
+    async def parse(text,*unused,**kwargs):
+        return [{'title':'Изолированная лекция о городе','short_description':'Встреча о городской истории.',
+                 'date':future,'time':'19:00','location_name':'Музейный зал','location_address':'ул. Тестовая, 1',
+                 'city':'Калининград','event_type':'лекция'}]
+    async def topics(event): return ['LECTURES']
+    monkeypatch.setattr(main,'parse_event_via_llm',parse)
+    monkeypatch.setattr(main,'classify_event_topics',topics)
+    monkeypatch.setattr(smart_update_module,'SMART_UPDATE_LLM_DISABLED',True)
+    request={**args(),'source_url':'https://example.test/isolated-shared-source',
+             'raw_text':f'Изолированная лекция о городе {future} в 19:00 в музейном зале, Калининград.'}
+    async def create_as(principal):
+        _,tokens=await login(client,cfg,principal); token=tokens['access_token']
+        _,body=await rpc(client,cfg.partner_mcp_path,token,'event_create_prepare',request); prep=content(body)
+        _,body=await rpc(client,cfg.partner_mcp_path,token,'event_create_commit',
+            {**request,**{key:prep[key] for key in ('preparation_ref','action_digest','policy_revision')}})
+        operation=content(body)
+        await server.event_create_runtime.wait_for_operation(operation['operation_ref'],timeout=30)
+        _,body=await rpc(client,cfg.partner_mcp_path,token,'event_operation_get',{'operation_ref':operation['operation_ref']})
+        return content(body)
+    async def state():
+        async with db.raw_conn() as conn:
+            return tuple([await (await conn.execute(sql)).fetchall() for sql in (
+                'SELECT * FROM event ORDER BY id',
+                'SELECT * FROM event_source ORDER BY id',
+                'SELECT * FROM joboutbox ORDER BY id',
+                'SELECT * FROM mcp_partner_event ORDER BY principal_id,event_id',
+            )])
+    try:
+        accepted=await create_as(partners[0])
+        assert accepted['status']=='accepted'
+        original=await state()
+        denied=await create_as(partners[1])
+        assert denied['status']!='accepted' and denied['event_id'] is None
+        assert 'candidate_receipts' not in (denied.get('result') or {})
+        assert await state()==original
+        async with db.raw_conn() as conn:
+            receipt=await (await conn.execute('SELECT domain_receipt_json FROM event_change_log WHERE operation_ref=?',
+                                             (denied['operation_ref'],))).fetchone()
+        assert receipt[0] is None
+        assert await recover_private_event_creates(app)==0
+    finally:
+        await client.close(); await db.close()

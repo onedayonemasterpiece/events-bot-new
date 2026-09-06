@@ -434,8 +434,10 @@ linear-terminal regressions, and
 OAuth integration in `tests/test_private_events_mcp_partner_event_operations.py`
 uses the actual parser facade/Smart Update with isolated semantic-provider
 fixtures, loses the completion write after domain commit, and verifies recovery
-of one Event without a Telegram creator, parser replay or duplicated jobs. This
-is domain crash acceptance, not live content/upload/publication acceptance.
+of one Event without a Telegram creator, parser replay or duplicated jobs. A
+second real HTTP partner using the same source cannot mutate or accept that
+foreign Event: canonical Event/source/jobs/portfolio remain unchanged, and no
+receipt can promote the denied operation. This is domain crash/isolation acceptance, not live content/upload/publication acceptance.
 
 ## ChatGPT social workspace
 
