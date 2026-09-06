@@ -250,3 +250,12 @@ infrastructure failure is not represented as a product pass. Physical restart
 containment reported earlier remains distinct from prevention acceptance. No user
 app/session/audio/queue was cleared. Publication/readback follows in voice preview
 delivery evidence; incident stays open pending physical-device prevention review.
+
+
+Prevention delivery is now publicly verified at
+https://kenigevents.ru/preview-voice-clean2-20260906/poisk/ (frontend
+`52bdf4db4450e3a0ad300fb9727428874a6559ad`; exact seven-file SHA-256 readback).
+Actual authorized synthetic-input capture → ASR → conversation passed through
+DevCoveer; this does not close physical-device frozen-tab prevention acceptance.
+Current scenario evidence and remaining gaps are canonical in
+`docs/features/static-site-pages/smart-vector-search/voice-search-solution-v1.md`.

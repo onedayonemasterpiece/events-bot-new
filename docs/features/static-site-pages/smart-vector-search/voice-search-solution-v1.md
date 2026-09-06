@@ -674,3 +674,27 @@ supplementary check; stable recovered-history topic switching remains unverified
 The latest GitHub head had no check runs at inspection; do not call this CI PASS.
 Existing catalog price/date quality and aggregate analytics remain separate gaps.
 Anonymous three-run access stays TO-BE, not enabled.
+
+
+Published review delivery (2026-09-06):
+- Preview: https://kenigevents.ru/preview-voice-clean2-20260906/poisk/
+- Frontend source: `52bdf4db4450e3a0ad300fb9727428874a6559ad`.
+- DevCoveer health readback: `fb28280d7cec103d87313b4e9d7cf78045ec3449`,
+  `opus-or-aac`, `raw_media_supabase=false`; no backend restart for CSS fix.
+- Seven public files match local SHA-256; rendered landing/Auth/History hit target
+  checks 3/3 (320,390,1440), shared topic adapter-fixture checks 4/4
+  (320,390,430,1440). These supplement, not replace, the actual ASR run above.
+- Telegram delivered and read back: https://t.me/c/4337049383/1456 .
+- Only focused preview build (two pages); no full catalog build, Kaggle, root or
+  production promotion. New prefix is immutable; earlier preview stays intact.
+
+User-requested disk audit: specifically attributable cleanup was 1,531,043,840
+bytes from seven completed, verified-integrated worktrees plus obsolete isolated
+synthetic-TTS packages. Branch refs/history and unique evidence were retained.
+Initial current footprints (not proven growth over these hours): Events root
+4.272 GB + linked copies 9.285 GB; Wonderful root 1.546 GB + linked copies
+1.621 GB + external copies about 0.995 GB; Record Idea Hub about 1.7 MB. Events
+had 1,265 local branch names, but names are not full checkouts. Active work,
+shared dependencies, production SQLite snapshots, recordings, queues and Auth
+were preserved. Exact source-equivalence and retained-artifact hash receipts:
+`artifacts/codex/voice-chat-20260906/disk-cleanup/receipt.json`.
