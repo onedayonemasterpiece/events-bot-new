@@ -124,6 +124,10 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
 
+### Mobile date dock B
+
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/date-dock.playwright.mjs` checks the actual rendered date rail and calendar with Chromium touch input at320/384/430px, future month arrows/swipe, empty-date disabling, navigation to the real23April2027 specimen, stationary lower nav and desktop breakpoint restoration. L1 anonymous preview evidence only; no phone/PWA or current-data claim. Canonical contract: [Date composition B](../features/static-site-pages/astro-preview.md#date-composition-b--2026-09-06).
+
 ### Floating-island archetype review
 
 `CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/island-archetypes.playwright.mjs` runs the seven specimens defined in `site/scripts/write-island-archetype-index.mjs`: anonymous Chromium384/1440, top/mid/settled geometry, city disclosure and real original mobile filtering. This is L1 preview evidence, not live Telegram E2E or Android/iOS acceptance. Canonical scope: [Astro preview](../features/static-site-pages/astro-preview.md#floating-island-archetypes--2026-09-06-owner-review).

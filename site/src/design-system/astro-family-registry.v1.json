@@ -843,9 +843,11 @@
     },
     {
       "id": "MobileDateAccessory",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/styles/mobile-date-dock.css"
+      ],
       "variants": [
         "today",
         "tomorrow",
@@ -858,7 +860,20 @@
       ],
       "nested_families": [],
       "runtime_factories": [],
-      "runtime_clients": [],
+      "runtime_clients": [
+        {
+          "path": "site/src/lib/mobileDateDock.mjs",
+          "symbols": [
+            "initMobileDateDock"
+          ]
+        },
+        {
+          "path": "site/src/components/listings/MobileDateAccessory.astro",
+          "symbols": [
+            "initMobileDateDock"
+          ]
+        }
+      ],
       "consumer_signals": [],
       "explicit_override_exceptions": [
         {

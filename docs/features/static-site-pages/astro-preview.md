@@ -1326,3 +1326,45 @@ This is a source-saved review preview, not DS/Penpot certification, current-even
 validation, authenticated API acceptance, native Android/iOS or production release.
 The owner will inspect the phone. Full catalog/emulator/native-system runs are not
 part of this bounded CSS/DOM archetype review; no Auth/PWA/provider changes made.
+
+
+### Date composition B — 2026-09-06
+
+Owner chose B after the three Telegram composition boards. MobileDateAccessory v2
+owns one lower skin around the **original** horizontal date rail, calendar and
+existing global nav; no cloned navigation, second shell or extra sticky tier.
+`mobileDateDock.mjs` reparents/restores these nodes at the720px breakpoint.
+The shared EventLayout lower occupied-space owner receives dock geometry; the dock
+does not create another global offset writer. Existing tag, top islands, filters,
+icons and event cards are unchanged.
+
+- Closed: native horizontal day scrolling remains independent of calendar opening.
+  The calendar button stays visible beside the scrolling rail.
+- Open: the same skin expands upward over340ms with ease, while global navigation
+  remains anchored at the bottom. Reduced motion skips animation. Escape/close
+  returns focus; this is a non-modal calendar, not a trapping overlay over the nav.
+- Full conventional months have Monday-first grids. Arrows and horizontal touch
+  swipes navigate every month through the real event-start horizon, including
+  entirely empty months; no42-day/month-count cap is imposed.
+- Individual empty/past dates have no anchor and are visually/semantically disabled.
+  The strip retains combined weekend links; the full calendar uses single-day
+  availability instead. Thus an empty Saturday is disabled even when Sunday in
+  its weekend has events. Exhibitions retain the existing separate inventory rule.
+
+Preview `preview-islands-20260906-archetypes-date-b1` contains eight selected real
+routes plus index: Today, Tomorrow,23July,29January2027,23April2027, current Weekend,
+19December weekend, and Popular as a lower-nav regression specimen. This historical
+snapshot reaches23April2027 (calendar end30April); February/March are empty but
+navigable. Other date routes are deliberately not built and the existing preview
+route guard explains that boundary. This is not a current catalog/full-site release.
+
+Validation: anonymous L0 event-date/archetype contracts; L1
+`CHECK_BASE=<prefix> CHECK_OUTPUT=<directory> node site/tests/date-dock.playwright.mjs`
+at320/384/430px: native touch scrolling, touch month swipe, arrows across empty
+months to April, real future event navigation, disabled Saturday, stable nav,
+Escape and desktop/mobile restoration. The existing archetype runner covers
+Popular/Today/Weekend top islands and original city filtering. Source family,
+surface and icon gates apply. Evidence lives under
+`artifacts/codex/date-dock-b-20260906/`. Public verification uses the immutable
+prefix; browser touch emulation is not native phone/PWA acceptance. No video,
+Kaggle, full build, production/root promotion or voice changes.

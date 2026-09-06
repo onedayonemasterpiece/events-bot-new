@@ -2595,7 +2595,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const nav=document.querySelector('.mobile-bottom-nav');
           const navOffset=nav && visible(nav)?Math.ceil(Math.max(0,innerHeight-nav.getBoundingClientRect().top)):0;
           document.body.style.setProperty('--ke-lower-nav-offset',`${navOffset}px`);
-          const occupied=[...document.querySelectorAll('.mobile-bottom-nav,.mobile-sticky-cta')]
+          const occupied=[...document.querySelectorAll('.mobile-bottom-nav,.mobile-sticky-cta,[data-date-dock-surface]')]
             .filter(visible).map(node=>Math.max(0,innerHeight-node.getBoundingClientRect().top));
           const offset=Math.ceil(Math.max(keyboardOffset,...occupied,0));
           for(const [key,value] of [['--ke-lower-surface-offset',offset],['--ke-lower-keyboard-offset',Math.ceil(keyboardOffset)],['--ke-lower-visible-height',Math.floor(viewport?.height || innerHeight)]]) {
@@ -2613,7 +2613,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             ['period-time','[data-floating-utility-slot] > [data-island-utility]'],
             ['weekend-days','body[data-floating-context="visible"] .ke-weekend-heads'],
             ['city-disclosure','[data-island-city-open] [data-island-city-panel]'],
-            ['date','[data-mobile-date-accessory]'], ['event-cta','.mobile-sticky-cta'],
+            ['date','[data-mobile-date-accessory]'], ['date-dock','[data-date-dock-surface]'], ['event-cta','.mobile-sticky-cta'],
             ['notification','[data-mobile-toast-region]'],
           ];
           occupiedSnapshot=shellOccupiedSpace({x:viewport?.offsetLeft || 0,y:viewport?.offsetTop || 0,width:viewport?.width || innerWidth,height:viewport?.height || innerHeight},
@@ -2628,6 +2628,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         window.addEventListener('resize',scheduleLowerStack,{passive:true});
         window.addEventListener('scroll',scheduleLowerStack,{passive:true});
         window.addEventListener('pageshow',scheduleLowerStack);
+        window.addEventListener('kenigevents:date-dock-change',scheduleLowerStack);
         window.visualViewport?.addEventListener('resize',scheduleLowerStack,{passive:true});
         window.visualViewport?.addEventListener('scroll',scheduleLowerStack,{passive:true});
         document.addEventListener('toggle',scheduleLowerStack,true);
