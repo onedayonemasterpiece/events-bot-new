@@ -1,12 +1,14 @@
 ---
 import type { HomeHeroTalkScene } from '../lib/homeHeroTalk';
 import Button from './design-system/Button.astro';
-import { eventHref } from '../lib/events';
+import { genericHeroTalkMessage } from '../lib/heroTalkPlacement.ts';
+import { eventHref, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 interface Props { scenes: HomeHeroTalkScene[]; }
 const { scenes } = Astro.props;
 const visibleScenes = scenes.slice(0, 4);
+const generic = genericHeroTalkMessage('home_intro');
 const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
 ---
 
@@ -100,6 +102,19 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   </section>
 )}
 
+{visibleScenes.length === 0 && (
+  <section class="home-hero-talk home-hero-talk--generic" data-home-hero-talk data-scene-count="0"
+    data-ds-family="HomeHeroTalk" data-ds-version="2" data-ds-variant="service-fallback" data-ds-state="generic"
+    aria-labelledby="home-hero-talk-title">
+    <div class="home-hero-talk__scene">
+      <div class="home-hero-talk__generic-copy">
+        <h1 id="home-hero-talk-title">{generic.fragments.map(fragment => fragment.text).join(' ')}</h1>
+        <p>{generic.description}</p>
+        <Button variant="quiet" href={withBase(generic.action.path)}>{generic.action.label}</Button>
+      </div>
+    </div>
+  </section>
+)}
 <style>
   .home-hero-talk {
     position:relative;
@@ -212,6 +227,10 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     .home-hero-talk__fragment::after { display:none!important; }
     .home-hero-talk__tile { transition:none!important;opacity:var(--tile-opacity,0)!important; }
   }
+  .home-hero-talk.home-hero-talk--generic { height:auto; min-height:0; padding-block:var(--ke-space-6); }
+  .home-hero-talk__generic-copy { max-width:40rem; }
+  .home-hero-talk__generic-copy h1 { margin:0 0 var(--ke-space-3); font:var(--ke-type-h2); letter-spacing:var(--ke-type-h2-letter); }
+  .home-hero-talk__generic-copy p { margin:0 0 var(--ke-space-4); font:var(--ke-type-body); }
 </style>
 
 <script>

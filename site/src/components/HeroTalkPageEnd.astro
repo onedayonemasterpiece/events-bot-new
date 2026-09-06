@@ -1,0 +1,32 @@
+---
+import Button from './design-system/Button.astro';
+import { withBase } from '../lib/events';
+import { HERO_TALK_PLACEMENT_VERSION, resolveHeroTalkPlacement, type HeroTalkMessage, type HeroTalkPlacementContext } from '../lib/heroTalkPlacement.ts';
+interface Props { context: HeroTalkPlacementContext & { placement: 'page_end' }; nextStep?: HeroTalkMessage; }
+const { context, nextStep } = Astro.props;
+const message = resolveHeroTalkPlacement(context, nextStep);
+const titleId = `hero-talk-page-end-${context.route}`;
+---
+{message && (
+  <section class="hero-talk-page-end" data-hero-talk-page-end data-hero-talk-placement="page_end"
+    data-hero-talk-message-id={message.id} data-hero-talk-context-version={HERO_TALK_PLACEMENT_VERSION}
+    data-hero-talk-route={context.route} data-ds-family="HeroTalkPageEnd" data-ds-version="1"
+    data-ds-variant="compact-service" data-ds-state="service-continuation" aria-labelledby={titleId}>
+    <div class="hero-talk-page-end__copy">
+      <h2 id={titleId}>{message.fragments.map(fragment => <span>{fragment.text} </span>)}</h2>
+      <p>{message.description}</p>
+    </div>
+    <Button href={withBase(message.action.path)} variant="primary">{message.action.label}</Button>
+  </section>
+)}
+<style>
+  .hero-talk-page-end { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--ke-space-4); padding-block:var(--ke-space-6); margin-top:var(--ke-space-6); border-top:1px solid var(--ke-color-line); color:var(--ke-color-text-primary); scroll-margin-block-end:calc(var(--ke-lower-surface-offset, 96px) + var(--ke-space-4)); }
+  .hero-talk-page-end[hidden] { display:none; }
+  .hero-talk-page-end__copy { min-width:0; flex:1 1 16rem; }
+  .hero-talk-page-end h2 { margin:0 0 var(--ke-space-2); font:var(--ke-type-h3); }
+  .hero-talk-page-end p { margin:0; color:var(--ke-color-text-secondary); font:var(--ke-type-body); }
+</style>
+<script>
+  import { bindHeroTalkPageEnd } from '../lib/heroTalkPlacement.ts';
+  document.querySelectorAll<HTMLElement>('[data-hero-talk-page-end][data-hero-talk-route="home"]').forEach(bindHeroTalkPageEnd);
+</script>

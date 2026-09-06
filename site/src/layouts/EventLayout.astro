@@ -17,6 +17,7 @@ import { BASE_PATH, getCurrentDate, getOngoingExhibitionEvents, IS_PRODUCTION, I
 import { projectExhibitionsPersonal, exhibitionsUnreadBadge } from '../lib/exhibitionsPersonal';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 import { focusGroupPageFamily, focusGroupPageLabel } from '../lib/focus-group-surface';
+import { shellCompositionForRoute } from '../lib/shellComposition.ts';
 import type { PreviewEvent } from '../lib/types';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'festivals' | 'popular' | 'unusual' | 'clubs';
@@ -64,10 +65,11 @@ const routePath = canonicalBasePath
   && (requestedRoutePath === canonicalBasePath || requestedRoutePath.startsWith(`${canonicalBasePath}/`))
   ? (requestedRoutePath.slice(canonicalBasePath.length) || '/')
   : requestedRoutePath;
+const shellComposition = shellCompositionForRoute(routePath);
 const focusPageFamily = focusGroupPageFamily(routePath);
 const focusPageLabel = focusPageFamily ? focusGroupPageLabel(focusPageFamily) : '';
 const hasFloatingIslandsPopular = headerCurrent === 'popular' && routePath === '/populyarnoe';
-const hasFloatingPageContext = Boolean(focusPageFamily) || hasFloatingIslandsPopular;
+const hasFloatingPageContext = shellComposition.topParticipants && (Boolean(focusPageFamily) || hasFloatingIslandsPopular);
 const derivedMobileSection: MobileSection = heroChrome === 'immersive'
   ? null
   : /\/(?:poisk|podborki)(?:\/|$)/u.test(`${routePath}/`)
@@ -80,7 +82,7 @@ const derivedMobileSection: MobileSection = heroChrome === 'immersive'
 const mobileSection = explicitMobileSection === undefined ? derivedMobileSection : explicitMobileSection;
 const resolvedMobileTopMode: MobileTopMode = mobileTopMode || (heroChrome === 'immersive' ? 'immersive' : mobileSection === 'dates' ? 'contextual' : 'standard');
 const resolvedMobileBottomMode: MobileBottomMode = mobileBottomMode || (resolvedMobileTopMode === 'immersive' ? 'cta' : mobileSection === null ? 'none' : 'nav');
-const bodyClass = ['mobile-shell-reference4', resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : null].filter(Boolean).join(' ');
+const bodyClass = [shellComposition.topParticipants ? 'mobile-shell-reference4' : null, resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : null].filter(Boolean).join(' ');
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
@@ -2618,9 +2620,18 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         .event-hero--photo-cover .event-hero__image,
         .event-hero--poster-stage .event-hero__image { transform: none !important; }
       }
+      body[data-shell-composition="home-lower-only"] .site-header {
+        position:relative; height:auto; min-height:0; background:transparent; border:0; box-shadow:none;
+      }
+      body[data-shell-composition="home-lower-only"] .site-header__inner {
+        height:auto; min-height:0; padding-block-end:var(--ke-space-3);
+      }
+      body[data-shell-composition="home-lower-only"] .site-header__brand-tag { display:block; }
+      body[data-primary-island="true"] :is(main a, main button, main input, main textarea, main [tabindex]) { scroll-margin-block-end:calc(max(var(--ke-lower-surface-offset, 0px), var(--mobile-bottom-stack-h, 84px)) + var(--ke-space-4)); }
+      body[data-lower-surface-state="keyboard"] .mobile-bottom-nav { visibility:hidden; pointer-events:none; }
     </style>
   </head>
-  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="2" data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingIslandsPopular ? 'popular' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="3" data-shell-composition={shellComposition.id} data-shell-composition-version={shellComposition.version} data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingIslandsPopular ? 'popular' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
@@ -2643,8 +2654,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             {hasFloatingIslandsPopular && <div class="site-header__controls-slot" data-floating-controls-slot hidden></div>}
           </div>
         )}
-        <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={sharedHeaderBadge} />
-        <nav class="site-nav" aria-label="Разделы афиши">
+        {shellComposition.topParticipants && <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={sharedHeaderBadge} />}
+        {shellComposition.topParticipants && <nav class="site-nav" aria-label="Разделы афиши">
           {visibleHeaderNavigation.map((item) => (
             <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined} data-unusual-nav-link={item.key === 'unusual' ? '' : undefined}>
               {item.label}
@@ -2656,7 +2667,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               )}
             </a>
           ))}
-        </nav>
+        </nav>}
       </div>
     </header>
     <MobileToastRegion />
@@ -2683,6 +2694,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {resolvedMobileBottomMode !== 'none' && <MobileBottomNav current={mobileSection} />}
 
     <script>
+      import { lowerNavigationState } from '../lib/shellComposition.ts';
       import { shellOccupiedSpace } from '../lib/shellOccupiedSpace.mjs';
       import { freeCollectionCountMessage } from '../lib/freeCollection.mjs';
       import { packRelatedCardRows, planRelatedCardRows, relatedCardMediaFrameBinding, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
@@ -2693,6 +2705,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       // FI-P1: one existing shell writer composes the Popular context row.
       // H1/H2 stay in their original sections; the row only receives locators
       // and the already-owned rail controls while the reading title is past it.
+      if (document.body.dataset.shellComposition !== 'home-lower-only') {
       const pageContext = document.querySelector<HTMLElement>('[data-floating-page-context]');
       const topBand = document.querySelector<HTMLElement>('[data-floating-top-band]');
       const sectionContext = document.querySelector<HTMLButtonElement>('[data-floating-section-context]');
@@ -2788,6 +2801,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         target.addEventListener('blur',()=>{if(previous===null)target.removeAttribute('tabindex');else target.setAttribute('tabindex',previous);},{once:true});
       });
       updateContext();
+      }
       // AR-17: the existing shell owns the measured lower stack. Surface
       // runtimes keep their queue/modality/actions; they consume one offset.
       {
@@ -2805,7 +2819,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const viewport=window.visualViewport;
           const keyboardOffset=Math.max(0,innerHeight-(viewport?.height || innerHeight)-(viewport?.offsetTop || 0));
           const modalOpen=[...document.querySelectorAll('dialog[open],[aria-modal="true"],details[data-mobile-discovery-menu][open]')].some(visible);
-          const nextState=modalOpen?'modal':'ready';
+          const editableFocus=Boolean(document.activeElement?.matches('input,textarea,select,[contenteditable="true"]'));
+          const nextState=lowerNavigationState(modalOpen,keyboardOffset,editableFocus);
           if(document.body.dataset.lowerSurfaceState!==nextState)document.body.dataset.lowerSurfaceState=nextState;
           const nav=document.querySelector('.mobile-bottom-nav');
           const navOffset=nav && visible(nav)?Math.ceil(Math.max(0,innerHeight-nav.getBoundingClientRect().top)):0;
@@ -2818,13 +2833,15 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             if(document.body.style.getPropertyValue(String(key))!==cssValue)document.body.style.setProperty(String(key),cssValue);
           }
           const selectors = [
-            ['brand','.site-header__brand-tag'], ['mobile-brand','.mobile-discovery-menu__summary'],
-            ['context','[data-floating-page-context]'], ['navigation','.mobile-bottom-nav'],
-            // The menu summary is already the mobile-brand participant above;
-            // do not bind it again as a desktop menu rectangle.
-            ['section-context','[data-floating-section-context]'],
-            ['eligible-controls','[data-floating-controls-slot] > [data-islands-eligible-controls]'],
-            ['date','[data-mobile-date-accessory]'], ['event-cta','.mobile-sticky-cta'],
+            ...(document.body.dataset.shellComposition === 'home-lower-only' ? [] : [
+              ['brand','.site-header__brand-tag'], ['mobile-brand','.mobile-discovery-menu__summary'],
+              ['context','[data-floating-page-context]'],
+              // The menu summary already owns the mobile-brand rectangle.
+              ['section-context','[data-floating-section-context]'],
+              ['eligible-controls','[data-floating-controls-slot] > [data-islands-eligible-controls]'],
+              ['date','[data-mobile-date-accessory]'],
+            ]),
+            ['navigation','.mobile-bottom-nav'], ['event-cta','.mobile-sticky-cta'],
             ['notification','[data-mobile-toast-region]'],
           ];
           occupiedSnapshot=shellOccupiedSpace({x:viewport?.offsetLeft || 0,y:viewport?.offsetTop || 0,width:viewport?.width || innerWidth,height:viewport?.height || innerHeight},
@@ -2839,6 +2856,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         window.addEventListener('resize',scheduleLowerStack,{passive:true});
         window.addEventListener('scroll',scheduleLowerStack,{passive:true});
         window.addEventListener('pageshow',scheduleLowerStack);
+        document.addEventListener('focusin',scheduleLowerStack);
+        document.addEventListener('focusout',scheduleLowerStack);
         window.visualViewport?.addEventListener('resize',scheduleLowerStack,{passive:true});
         window.visualViewport?.addEventListener('scroll',scheduleLowerStack,{passive:true});
         document.addEventListener('toggle',scheduleLowerStack,true);
@@ -5105,7 +5124,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function contextForCard(card) {
-          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot]');
+          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot], [data-search-result-host], [data-home-feed-grid]');
           const summary = feed ? servedListByFeed.get(feed) : null;
           return {
             servedListId: summary?.served_list_id || null,
@@ -5379,6 +5398,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           }
           syncListingPersonalFilter();
           renderFeedbackReport();
+          window.KenigEventsHomeCardHost?.sync('feedback');
         }
 
         window.applyFeedbackState = applyFeedbackState;
@@ -5386,9 +5406,28 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           applyFeedbackState({ skipDiscoveryHydration:false });
         }, { once:true });
 
+        // Search/Home contribute candidates and served-list identity to the same
+        // action/profile owner. This port owns no card rendering or ranking.
+        const searchCardStores = new WeakMap();
+        window.KenigEventsSearchCardHost = {
+          hiddenIds: () => Array.from(hiddenSet(activeProfile())),
+          register: (grid, candidates, context) => {
+            if (!grid.matches('[data-home-feed-grid]')) grid.dataset.searchResultHost = 'true';
+            searchCardStores.set(grid, {
+              manifest: { feature_schema_version: FEATURE_SCHEMA_VERSION, taxonomy_version: TAXONOMY_VERSION, related_static: candidates },
+              ranked: candidates.map((candidate, rank) => ({ candidate, event_id: candidateId(candidate), rank })),
+            });
+            servedListByFeed.set(grid, { served_list_id: context.servedListId,
+              served_list_hash: context.servedListHash, algorithm_id: context.algorithmId,
+              section_id: context.sectionId, surface: grid.matches('[data-home-feed-grid]') ? 'home_feed' : 'search_results' });
+          },
+          sync: () => applyFeedbackState({ skipDiscoveryHydration: true }),
+        };
+
         async function controllerForCard(card) {
-          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot]');
+          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot], [data-search-result-host], [data-home-feed-grid]');
           if (!feed) return { feed: null, store: null };
+          if (feed.matches('[data-search-result-host], [data-home-feed-grid]')) return { feed, store: searchCardStores.get(feed) || null };
           if (feed.matches('[data-personal-feed-slot]')) {
             const section = feed.closest('[data-personal-feed-section]');
             return { feed, store: section ? personalFeedStores.get(section) || null : null };

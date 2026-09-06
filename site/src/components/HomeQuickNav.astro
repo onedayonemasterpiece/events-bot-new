@@ -1,61 +1,25 @@
 ---
 import { withBase } from '../lib/events';
+import { getCollectionNavigationEntries } from '../lib/staticCollections';
+import Button from './design-system/Button.astro';
 
+const availableCollections = new Set(getCollectionNavigationEntries().map(entry => entry.key));
 const items = [
-  { label: 'Сегодня', href: '/segodnya/', note: 'События на день' },
-  { label: 'Завтра', href: '/zavtra/', note: 'Планы заранее' },
-  { label: 'Выходные', href: '/vyhodnye/', note: 'Суббота и воскресенье' },
-  { label: 'Бесплатно', href: '/podborki/besplatnye-sobytiya/', note: 'С честными условиями' },
-  { label: 'Выставки', href: '/vystavki/', note: 'Идущие и новые' },
-  { label: 'Необычное', href: '/neobychnoe/', note: 'Новый маршрут выбора' },
+  { label: 'Сегодня', href: '/segodnya/' },
+  { label: 'Завтра', href: '/zavtra/' },
+  { label: 'Выходные', href: '/vyhodnye/' },
+  ...(availableCollections.has('free') ? [{ label: 'Бесплатно', href: '/podborki/besplatnye-sobytiya/' }] : []),
+  { label: 'Выставки', href: '/vystavki/' },
+  ...(availableCollections.has('unusual') ? [{ label: 'Необычное', href: '/neobychnoe/' }] : []),
 ];
 ---
-
-<nav
-  class="home-quick-nav"
-  data-ds-family="HomeQuickNav"
-  data-ds-version="1"
-  data-ds-variant="six-route-grid"
-  data-ds-state="populated"
-  data-home-quick-nav
-  aria-label="Быстрый выбор событий"
->
+<nav class="home-quick-nav" data-ds-family="HomeQuickNav" data-ds-version="2"
+  data-ds-variant="inline-routes" data-ds-state="populated" data-home-quick-nav aria-label="Быстрый выбор событий">
   {items.map((item, index) => (
-    <a href={withBase(item.href)} data-home-quick-nav-item={index + 1}>
-      <strong>{item.label}</strong>
-      <span>{item.note}</span>
-    </a>
+    <span data-home-quick-nav-item={index + 1}><Button variant="quiet" size="compact" href={withBase(item.href)}>{item.label}</Button></span>
   ))}
 </nav>
-
 <style>
-  .home-quick-nav {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: .7rem;
-    margin: 1rem 0;
-  }
-  .home-quick-nav a {
-    min-width: 0;
-    min-height: var(--ke-size-home-nav-item);
-    display: grid;
-    align-content: center;
-    gap: .15rem;
-    padding: .85rem .9rem;
-    border: 1px solid var(--ke-color-border-brand-soft);
-    border-radius: 20px;
-    background: var(--ke-color-home-card-surface);
-    color: var(--text);
-    text-decoration: none;
-    transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
-  }
-  .home-quick-nav a:hover { transform: translateY(-2px); border-color: var(--ke-color-border-brand-hover); background: var(--ke-color-home-card-hover-surface); }
-  .home-quick-nav a:focus-visible { outline: 3px solid var(--ke-color-focus-ring-brand-subtle); outline-offset: 2px; }
-  .home-quick-nav strong { font-size: 1.02rem; line-height: 1.08; }
-  .home-quick-nav span { color: var(--muted); font-size: .75rem; font-weight: 680; line-height: 1.2; }
-  @media (max-width: 1020px) { .home-quick-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  @media (max-width: 560px) {
-    .home-quick-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
-    .home-quick-nav a { min-height: var(--ke-size-home-nav-item-compact); padding: .72rem; }
-  }
+  .home-quick-nav { display:flex; flex-wrap:wrap; gap:var(--ke-space-2); margin-block:var(--ke-space-4); }
+  .home-quick-nav > span { min-width:0; }
 </style>
