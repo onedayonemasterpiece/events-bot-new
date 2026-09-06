@@ -61,6 +61,7 @@ class PrivateEventsMCPServer:
         social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
         asset_ingestor: AssetIngestor | None = None,
         event_create_runtime: EventCreateRuntime | None = None,
+        canonical_database=None,
     ) -> None:
         self.config = config
         self.oauth = PrivateOAuthServer(config)
@@ -80,6 +81,14 @@ class PrivateEventsMCPServer:
         self.target_policy = TargetAliasPolicy.from_json(config.social_targets_json)
         read_tools = build_tools(self.repository)
         self.event_create_runtime = event_create_runtime
+        hero_tools = ()
+        self.hero_drafts = None
+        if config.enabled and config.hero_drafts_enabled:
+            if canonical_database is None:
+                raise ValueError("Hero drafts require the canonical Database instance")
+            from .hero_drafts import HeroDraftOperations
+            self.hero_drafts = HeroDraftOperations(canonical_database, config_getter=lambda: self.config)
+            hero_tools = self.hero_drafts.tools()
         self.event_assets = None
         self.partner_event_operations = None
         event_asset_tools = ()
@@ -278,7 +287,7 @@ class PrivateEventsMCPServer:
                 capability_policy={name: name in expected for name in ("telegram", "vk")},
             )
         self.protocol = MCPProtocol(
-            (*read_tools, *event_create_tools, *event_asset_tools, *publication_tools, *partner_review_tools, *partner_admin_tools, *social_tools, *workspace_tools),
+            (*read_tools, *hero_tools, *event_create_tools, *event_asset_tools, *publication_tools, *partner_review_tools, *partner_admin_tools, *social_tools, *workspace_tools),
             cache_ttl_seconds=config.cache_ttl_seconds,
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),

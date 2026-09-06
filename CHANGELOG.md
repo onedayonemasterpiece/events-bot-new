@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added canonical Hero draft/version storage with current same-transaction authorization, idempotent CAS and preserved campaign origin; corrected media receipts to distinguish encoded-byte SHA from geometry-bound pixel SHA. Added default-OFF owner-only Hero verbatim draft prepare/commit/read tools with explicit scopes; no generation/publication/activation enabled (#643).
+
 - Added pure shared-placement Hero pack compilation with exact Unicode, locked tokens, semantic-input binding, media/dependency gates and deterministic hashes; restored owner-assigned Hero contracts without UI restoration or activation (#643).
 - **Fixed / VK event jobs**: recheck canonical lifecycle and silent state before automatic VK sync, skipping stale jobs for hidden/cancelled/postponed events without provider calls; explicit lower-level repair remains unchanged.
 

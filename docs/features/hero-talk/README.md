@@ -9,8 +9,10 @@
 > acceptance or approval of public content.
 >
 > Source now has existing-promo Hero activity gates and a pure locked-token
-> compiler (`hero_talk/compiler.py`). Durable content operations, actual model
-> writer/reviewer, immutable storage publication, live control permits, browser
+> compiler (`hero_talk/compiler.py`) plus canonical draft/version storage
+> (`hero_talk/store.py`) and default-OFF owner verbatim draft MCP tools.
+> Other content operations, actual model writer/reviewer,
+> immutable storage publication, live control permits, browser
 > analytics and full native/rendered acceptance are not delivered by this slice.
 > MCP source/recovery and R0-only production evidence remain in the existing
 > [MCP operational contract](../../operations/private-events-mcp.md).
@@ -42,8 +44,9 @@ rendered overflow inspection. Same inputs produce identical content SHA and gzip
 bytes, with no model calls or writes. Output contains no actor/private brief.
 
 Media comes from trusted managed-media receipts, not arbitrary URL downloading:
-role, public/rights/geometry acceptance and identical content/geometry SHA are
-required. Event/festival roles additionally bind a canonical dependency; an
+role, public/rights/geometry acceptance, the exact encoded-object SHA and matching
+current/geometry **pixel** SHA are required. Encoded-byte SHA and decoded-pixel SHA
+are different identities; the trusted public-object receipt must bind both. Event/festival roles additionally bind a canonical dependency; an
 editorial image does not impersonate an event photo. Unknown/private/unsigned
 media cannot enter a public pack; an explicitly optional image may fall back to
 text. Public CDN readback and durable media materialization remain upstream gates.
@@ -58,6 +61,63 @@ IDs remain in the existing
 [MCP v2 registry](../../testing/private-events-mcp-event-operations-scenarios.v2.yml)
 with partial/missing/not-run statuses. No full feature/live gate is inferred from
 compiler fixtures.
+
+## Implemented draft storage boundary (#643)
+
+`hero_talk_program` and `hero_talk_change_log` are additive canonical SQLite
+content/history tables from the assigned domain design. They do not own promo
+budgets, partner rights or campaign lifecycle. Initialization performs no seed,
+backfill, generation, activation or publication. Browser telemetry remains in the
+existing personalization pipeline, never one SQLite row per impression.
+
+`HeroProgramStore.prepare_draft` persists a ten-minute frozen preparation and a
+program identity if needed, but advances neither desired nor active revision.
+`commit_draft` accepts only that exact actor-bound ref/digest and applies the
+stored payload with current revision CAS. `put_draft` is an internal convenience
+that executes those same two phases. Both require a host-injected current authorization
+callback on the exact SQLite connection under `BEGIN IMMEDIATE`. The host owns
+actual OAuth/current campaign policy; the storage helper does not manufacture
+an identity or infer a grant from an ID. Actor/client/resource metadata and
+hashed idempotency keys remain private history, not compiled output. A same-key
+same-request replay rechecks current authorization and returns the original
+operation; changed payload conflicts. Desired revisions use optimistic CAS;
+concurrent edits have one winner. Version history, origin and campaign/activity
+binding cannot silently change. Saving a new draft never changes active revision
+or resumes a paused program/campaign.
+
+This helper stores bounded drafts, not semantic acceptance or ready packs.
+Current campaign existence/rights, compiler/reviewer acceptance, durable media,
+public readback and live permits remain required application gates. There are no
+automatic workers enabled by these tables. Tests:
+`tests/test_hero_talk_store.py` cover restart, preparation expiry, replay/revocation,
+concurrent CAS, rollback, preserved history and immutable origin binding.
+
+### Default-OFF owner draft tools
+
+`PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED=1` adds `hero_talk_prepare`,
+`hero_talk_commit`, `hero_talk_get` (one exact program) and
+`hero_talk_operation_get` to the existing owner ChatGPT/OpenCode resource.
+Prepare currently supports **only** `action=upsert_draft`, `origin=editorial_program`,
+`author_mode=verbatim`. It is a bounded private draft operation, not a publication
+or semantic-acceptance promise. Other actions, campaign mutation, generation,
+asset staging, rendered preview and analytics are not advertised by this slice.
+
+Exact owner subject/client/resource/current expiry and explicit `hero:write` or
+`hero:read` are required again inside each DB transaction. `events:write`, social
+publish scopes, partner actors and Codex do not inherit these rights. Existing
+OAuth default grants remain unchanged; Hero scopes require explicit consent.
+Strict nested Pydantic schemas reject unknown authority/HTML-code fields and
+coercions without echoing rejected private input values. Literal text is neither
+trimmed nor rewritten. Commit receives only the durable preparation ref/digest;
+changing client payload cannot change the frozen draft. Operation readback marks
+expired preparations blocked and obsolete bases superseded without applying them.
+No provider/LLM, Event,
+PromoCampaign, JobOutbox, active revision or public asset is written by these tools.
+
+Real local OAuth PKCE → MCP prepare → commit → restart → exact Unicode readback
+is covered by `tests/test_private_events_mcp_hero_drafts.py`. This is private draft
+acceptance, not live owner/publication/native acceptance. Production flag remains
+OFF and staged release gates are unchanged.
 
 ## 1. Определение
 

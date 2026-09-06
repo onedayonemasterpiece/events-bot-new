@@ -334,3 +334,15 @@ def test_partner_event_create_flag_requires_existing_capabilities(monkeypatch):
     monkeypatch.setenv('PRIVATE_EVENTS_MCP_PARTNER_ENABLED','1')
     monkeypatch.setenv('PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED','1')
     assert PrivateEventsMCPConfig.from_env().partner_event_create_enabled
+
+
+def test_hero_draft_flag_default_off_strict_and_inert_when_mcp_disabled(monkeypatch):
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID','codex-public-client')
+    monkeypatch.delenv('PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED',raising=False)
+    assert not PrivateEventsMCPConfig.from_env().hero_drafts_enabled
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED','not-a-boolean')
+    with pytest.raises(ValueError,match='HERO_DRAFTS_ENABLED'):
+        PrivateEventsMCPConfig.from_env()
+    monkeypatch.setenv('PRIVATE_EVENTS_MCP_ENABLED','0')
+    assert not PrivateEventsMCPConfig.from_env().hero_drafts_enabled

@@ -196,6 +196,7 @@ class PrivateEventsMCPConfig:
     repository_slug: str
     repository_sha_file: str
     event_create_enabled: bool = False
+    hero_drafts_enabled: bool = False
     event_assets_enabled: bool = False
     partner_enabled: bool = False
     partner_event_create_enabled: bool = False
@@ -300,6 +301,9 @@ class PrivateEventsMCPConfig:
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
             ).strip(),
+            hero_drafts_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED", mcp_enabled=enabled,
+            ),
             partner_event_create_enabled=_strict_feature_bool(
                 "PRIVATE_EVENTS_MCP_PARTNER_EVENT_CREATE_ENABLED", mcp_enabled=enabled,
             ),

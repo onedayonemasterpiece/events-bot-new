@@ -229,6 +229,7 @@ features:
     docs: docs/features/hero-talk/README.md
     entrypoints:
       - hero_talk/compiler.py
+      - hero_talk/store.py
       - promo.py
   promo_campaigns:
     status: mvp

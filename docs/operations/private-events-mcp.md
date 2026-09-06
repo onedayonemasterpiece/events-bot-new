@@ -1747,3 +1747,16 @@ portfolio/receipt isolation, policy-revision conflict and suspension before the
 executor. The basic wiring cases use a deterministic executor; the crash-recovery case uses
 actual Smart Update with isolated semantic-provider fixtures. Neither constitutes
 production content approval, provider-publication receipts or live upload acceptance.
+
+
+### Hero private draft capability (#643, default OFF)
+
+The existing owner resource gains four narrowly scoped Hero draft tools only
+when `PRIVATE_EVENTS_MCP_HERO_DRAFTS_ENABLED=1`: `hero_talk_prepare`,
+`hero_talk_commit`, `hero_talk_get`, `hero_talk_operation_get`. Explicit
+`hero:read`/`hero:write` and exact current owner policy are required; Codex and
+partner projections are unchanged. Only private verbatim editorial draft upsert
+is implemented, with durable preparation/digest/expiry and same-transaction CAS.
+No generated copy, media publication, public activation or campaign operation is
+implied. Canonical content/storage/acceptance details remain in
+[Hero-talk](../features/hero-talk/README.md#default-off-owner-draft-tools).

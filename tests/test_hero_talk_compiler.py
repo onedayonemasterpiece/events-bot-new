@@ -97,7 +97,7 @@ def with_media(program,packet):
     program['chains'][0]['nodes'][0].update(media_ref='fixture-image')
     packet['media']['fixture-image']={'dependency_ref':'route:weekend','role':'editorial_image',
         'public_verified':True,'rights_verified':True,'geometry_verified':True,
-        'sha256':'a'*64,'geometry_sha256':'a'*64,'src':'https://cdn.example.test/aa.webp','alt':'Fixture editorial illustration'}
+        'sha256':'a'*64,'pixel_sha256':'b'*64,'geometry_pixel_sha256':'b'*64,'src':'https://cdn.example.test/aa.webp','alt':'Fixture editorial illustration'}
 
 
 def test_editorial_media_needs_no_fake_event_and_exact_sha_geometry():
@@ -105,7 +105,8 @@ def test_editorial_media_needs_no_fake_event_and_exact_sha_geometry():
     result=compile_fixture(program,packet,public_media_hosts=frozenset({'cdn.example.test'})).public()
     media=result['chains'][0]['nodes'][0]['media']
     assert media['role']=='editorial_image' and 'canonical_ref' not in media
-    packet['media']['fixture-image']['geometry_sha256']='b'*64
+    assert media['sha256']=='a'*64 and media['pixel_sha256']=='b'*64
+    packet['media']['fixture-image']['geometry_pixel_sha256']='c'*64
     with pytest.raises(HeroCompileError,match='media_not_ready'):
         compile_fixture(program,packet,public_media_hosts=frozenset({'cdn.example.test'}))
     program['chains'][0]['nodes'][0]['media_policy']='optional_text_fallback'

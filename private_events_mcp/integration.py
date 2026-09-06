@@ -158,6 +158,7 @@ def attach_private_events_mcp(
         social_workspace_adapters=social_workspace_adapters,
         asset_ingestor=asset_ingestor,
         event_create_runtime=event_create_runtime,
+        canonical_database=event_database,
     )
     if event_create_runtime is not None:
         async def current_create_policy(request: EventCreateRequest) -> bool:

@@ -234,7 +234,8 @@ def compile_program(program: dict, packet: dict, versions: dict, *,
                 valid=(role in MEDIA_ROLES and media.get('public_verified') is True
                        and media.get('rights_verified') is True and media.get('geometry_verified') is True
                        and isinstance(media.get('sha256'),str) and _SHA.fullmatch(media['sha256'])
-                       and media.get('geometry_sha256')==media['sha256'])
+                       and isinstance(media.get('pixel_sha256'),str) and _SHA.fullmatch(media['pixel_sha256'])
+                       and media.get('geometry_pixel_sha256')==media['pixel_sha256'])
                 if valid:
                     src=_href(media.get('src')); parsed=urlsplit(src)
                     valid=parsed.hostname in public_media_hosts and not parsed.query and not parsed.fragment
@@ -243,7 +244,8 @@ def compile_program(program: dict, packet: dict, versions: dict, *,
                         _fail('media_not_ready')
                 else:
                     item['media']={'asset_ref':_id(node['media_ref']), 'role':role,'src':src,
-                                   'sha256':media['sha256'],'alt':_text(media.get('alt'),300)}
+                                   'sha256':media['sha256'],'pixel_sha256':media['pixel_sha256'],
+                                   'alt':_text(media.get('alt'),300)}
                     if role in {'event_photo','festival_image'}:
                         item['media']['canonical_ref']=_id(media.get('canonical_ref'))
                         if item['media']['canonical_ref'] not in used:
