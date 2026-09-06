@@ -1,4 +1,4 @@
-import {planVerifierSchema,planVerifierPrompt,classifyPlanPayload,type SemanticPlan} from './assistant-plan-verification.ts';
+import {planVerifierSchema, planVerifierBatchSize,planVerifierPrompt,classifyPlanPayload,type SemanticPlan} from './assistant-plan-verification.ts';
 // KenigEvents authorized vector search Edge Function.
 // Runtime: Supabase Edge Functions / Deno.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.108.2";
@@ -1838,7 +1838,7 @@ async function verifyAssistantWindow(supabaseUrl: string, candidates: Candidate[
       voiceIntent: intent, semanticPlan, deadline, gemma_overflow_allowed: false,
       quota_backend: sharedGoogleQuotaBackend(supabaseUrl), counters,
     });
-  }, { budgetMs: envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_TOTAL_BUDGET_MS", 45000, 1000, 90000) });
+  }, { batchSize: planVerifierBatchSize(semanticPlan), budgetMs: envInt("EVENT_SEARCH_ASSISTANT_VERIFIER_TOTAL_BUDGET_MS", 45000, 1000, 90000) });
   return {...result, verification: {...result.verification, candidate_fact_count: digests.size, semantic_groups:semanticPlan?.groups||null},
     policy: result.verification.policy, attempts: result.verification.attempts,
     model: result.verification.attempts.at(-1)?.model || null};

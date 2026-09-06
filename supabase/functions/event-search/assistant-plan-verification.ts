@@ -4,6 +4,11 @@ export type SemanticPlan={scope:'all_events'|'constrained';groups:{dimension:str
 export function planFacts(value:unknown):{index:number;text:string}[]{
  return String(value||'').split('\n').map(s=>s.trim()).filter(Boolean).map((text,index)=>({index,text}));
 }
+/** Cap repeated candidate×group schema complexity, not retrieval membership.
+ * 40 group verdicts is an observed working envelope, not a provider SLA. */
+export function planVerifierBatchSize(plan?:SemanticPlan):number {
+ return Math.min(20,Math.floor(40/Math.max(1,plan?.groups.length||1)));
+}
 export function planVerifierSchema(candidates:Card[],plan:SemanticPlan){
  const groupKeys=plan.groups.map((_,i)=>`g${i}`);
  const verdict={type:'object',additionalProperties:false,required:['relation','verdict','fact_index'],properties:{relation:{type:'string',enum:['direct','context_only','unknown']},verdict:{type:'string',enum:['exact','possible','rejected']},fact_index:{type:'integer',minimum:-1,maximum:100}}};

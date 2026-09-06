@@ -340,3 +340,9 @@ test('blocking is not rejected by an unexecutable query plan and cannot carry it
 test('nonblocking null plan still fails closed before retrieval',async()=>{
  const h=harness();adaptiveProvider(h,adaptive(),null);const r=await h.control(uid(),'interpret',input());assert.equal(r.body.error,'invalid_query_plan');assert.deepEqual(h.calls,['interpret']);
 });
+test('combined clarification exceeding grounded-input capacity is rejected before another paid call',async()=>{
+ const h=harness();adaptiveProvider(h,adaptive({clarification:'blocking',question:'Уточните тему?'}),null);const i=uid(),s=uid();
+ await h.control(i,'interpret',input({text:'я'.repeat(8100)}));await h.control(s,'search',{interpretationId:i});
+ const next=await h.control(uid(),'interpret',input({text:'а'.repeat(100),mode:'expand_selection',parentId:s}));
+ assert.equal(next.body.state,'failed');assert.equal(next.body.error,'draft_capacity');assert.deepEqual(h.calls,['interpret']);
+});

@@ -21,3 +21,16 @@ test('schema requires every candidate and every independent group; prompt does n
 test('parent festival context cannot admit a subevent as a direct festival',()=>{
  const r=classifyPlanPayload({classifications:{1:{g0:{...v('exact'),relation:'context_only'},g1:v('exact')}}},rows.slice(0,1),plan,facts);assert.equal(r.status,'ok');assert.equal(r.exact.length,0);assert.deepEqual(r.rejected_ids,[1]);
 });
+
+test('schema complexity cap preserves every group and the complete candidate window',async()=>{
+ const {planVerifierBatchSize}=await import('./assistant-plan-verification.ts');
+ const {verifyVoiceWindow}=await import('./assistant-verification.ts');
+ assert.deepEqual([0,1,2,3,4].map(n=>planVerifierBatchSize({groups:Array(n).fill({dimension:'topic',alternatives:['тема']})})),[20,20,20,13,10]);
+ const candidates=Array.from({length:59},(_,i)=>({event_id:i+1}));
+ for(const n of [3,4]){
+  const batches=[];const r=await verifyVoiceWindow(candidates,async batch=>{batches.push(batch.length);return{used:true,status:'ok',exact:batch,possible:[],rejected_ids:[]};},{batchSize:planVerifierBatchSize({groups:Array(n).fill({})})});
+  assert.deepEqual(batches,n===3?[13,13,13,13,7]:[10,10,10,10,10,9]);assert.equal(r.verification.checked_count,59);assert.equal(r.exact.length,59);
+ }
+ let calls=0;const failed=await verifyVoiceWindow(candidates,async batch=>++calls===2?{used:false,status:'provider_failed'}:{used:true,status:'ok',exact:batch,possible:[],rejected_ids:[]},{batchSize:13});
+ assert.equal(failed.verification.status,'unavailable');assert.equal(failed.verification.checked_count,13);assert.equal(failed.verification.unchecked_ids.length,46);assert.deepEqual(failed.exact,[]);
+});

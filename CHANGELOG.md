@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fixed: conversational verifier sizes batches by candidate×condition schema complexity without dropping candidates/conditions; shared deadlines and fail-closed full-window verification remain unchanged.
+- Changed: adaptive assumptions default to empty and exclude technical catalog commentary or silent broadening of requested genres.
+
 - Fixed: blocking clarification does not require an executable query plan; unresolved conditions cannot be inherited as verified search constraints. Oversized combined planning input fails before paid dispatch.
 
 - Changed: one conversational interpreter now plans blocking/optional clarification and important assumptions; optional questions preserve verified cards and appear inline without another shell or footer. Grounding execution remains disabled.

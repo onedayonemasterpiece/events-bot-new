@@ -257,3 +257,7 @@ actual candidates; stable/stale status without duplicated question; unavailable
 web cannot masquerade as successful grounding. These are injected dependency
 checks, not live model/phone evidence; protected live acceptance remains in the
 voice-search relevance incident.
+
+Verifier schema-budget regression: 59 candidates / three groups are checked in
+13/13/13/13/7 batches; four groups in 10/10/10/10/10/9. Failure after an earlier
+successful batch still returns unavailable, never a truncated “complete” list.

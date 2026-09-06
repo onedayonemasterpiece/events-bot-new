@@ -1047,3 +1047,13 @@ Flash-Lite не подтверждено специализированной д
 [GoogleSearch API](https://ai.google.dev/api/generate-content#GoogleSearch),
 [grounding billing](https://ai.google.dev/gemini-api/docs/google-search),
 [provider terms](https://ai.google.dev/gemini-api/terms).
+
+
+Verifier schema-complexity guard: batches are bounded by at most 40 repeated
+candidate×group verdicts (20/20/13/10 candidates for 1–4 semantic groups). This
+is an empirically safe envelope, not a documented provider limit. It does not
+truncate the retrieval window or remove conditions: all candidates and groups
+still run under the same global deadline and per-call shared limiter. If any
+batch fails, no unchecked/partial exact list is presented as complete. Grounding
+HTTP400 remains diagnosed in the incident; provider only supplied generic
+INVALID_ARGUMENT, so complexity attribution requires controlled smaller-batch evidence.
