@@ -465,3 +465,29 @@ release does **not** remove the storage dependency from microphone startup and
 must not be represented as repaired capture on the user's phone. Current facts,
 causal native queue test and device acceptance gap belong to
 [`INC-2026-09-06-voice-preview-startup`](../../../reports/incidents/INC-2026-09-06-voice-preview-startup.md).
+
+
+### Conversational preview UX amendment (2026-09-06)
+
+User review supersedes the mandatory manual transcript-confirmation step for a
+fresh complete recording: silence endpoint or manual stop → durable audio seal →
+ASR → immediate full user-message bubble and shared `ke-skeleton` answer lines /
+card placeholders → existing durable controller intake → interpretation/search →
+short response and the same standard event cards. No invented streaming transcript
+before ASR; no mandatory composer opening or extra “find” click. The composer is
+optional text input; audio/recovery remains a secondary surface. Interrupted or
+partial recordings never auto-submit. ASR intake is ordered while the microphone
+can capture the next utterance; typed text is not overwritten by automatic ASR.
+
+Each turn retains its user bubble and replaces only its own pending response.
+Later turns append, failures replace shimmer with an actionable state, superseded
+requests identify the following combined response instead of shimmering forever.
+A submitted question reveals its start once; answer arrival does not scroll away
+from the user's reading position. Existing history/refinement/receipt/CAS and
+shared card actions remain the owners. The full raw question is not a sticky
+heading: the existing header owns a non-heading locator containing the model's
+compact `result.title`, selected by the answer section at the shared header edge.
+No second sticky tier or cloned H2. Semantic heading remains in document flow.
+
+Validation and published SHA/link are recorded after integration below; this
+amendment alone is not evidence of a phone or live-ASR pass.

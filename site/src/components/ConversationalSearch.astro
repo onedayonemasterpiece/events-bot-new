@@ -10,7 +10,7 @@ const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLE
     <div class="assistant__voice-info">
       <span data-assistant-timer hidden aria-hidden="true">0:00</span>
       <span data-assistant-live role="status" aria-live="polite">Голосовой поиск</span>
-      <button type="button" data-assistant-details aria-controls="voice-composer" aria-expanded="false">Запрос и записи</button>
+      <button type="button" data-assistant-details aria-controls="voice-composer" aria-expanded="false">Написать сообщение</button>
     </div>
     <button type="button" class="assistant__launcher" data-assistant-launcher aria-label="Начать запись голосом" aria-pressed="false" title="Начать запись голосом">
       <span class="assistant__mic-halo" aria-hidden="true"></span>
@@ -35,7 +35,7 @@ const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLE
         <textarea class="ke-field__control" rows="2" data-assistant-text placeholder="Например: завтра вечером на побережье, не концерт" disabled></textarea>
       </label>
       <div class="assistant__controls">
-        <button class="cta-button" type="submit" data-assistant-submit disabled>Найти события</button>
+        <button class="cta-button" type="submit" data-assistant-submit disabled>Отправить</button>
         <button class="secondary-button" type="button" data-assistant-new disabled>Новый поиск</button>
         <button class="secondary-button" type="button" data-assistant-resume hidden>Проверить обработку</button>
       </div>
@@ -45,7 +45,7 @@ const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLE
   </section>
   <details data-assistant-history hidden><summary>Предыдущие подборки</summary><button type="button" class="secondary-button" data-assistant-history-load disabled>Показать предыдущие</button><div data-assistant-history-list></div></details>
   <button type="button" class="secondary-button" data-assistant-latest hidden>Новый ответ ↓</button>
-  <div data-assistant-answers aria-label="Ответы поиска"></div>
+  <div data-assistant-answers aria-label="Переписка с поиском"></div>
   {catalog && <p class="muted-note">Каталожный образец, без входа и обращений к модели. Состояния: запись, сохранение, частичная запись, ожидание, ответ, уточнение, восстановление.</p>}
 </div>}
 <script>
@@ -89,4 +89,29 @@ const enabled = catalog || (import.meta.env.PUBLIC_EVENT_SEARCH_ASSISTANT_ENABLE
   [data-assistant-section] h2 { margin: 0; font-size: var(--ke-font-size-500); overflow-wrap: anywhere; }
   [data-assistant-question] { white-space: pre-wrap; overflow-wrap: anywhere; }
   [data-assistant-recording-list] audio { max-width: 100%; }
+</style>
+<style is:global>
+  .assistant__turn { display:grid; gap:24px; padding-block:20px; scroll-margin-top:130px; min-width:0; }
+  .assistant__user-message { justify-self:end; width:fit-content; max-width:min(80%,680px); padding:14px 20px; border-radius:22px 22px 6px 22px; background:#f0e3d6; color:#30241b; }
+  .assistant__speaker { display:block; color:#855138; font-size:12px; font-weight:650; margin-bottom:5px; }
+  .assistant__user-message p { margin:0; line-height:1.55; }
+  .assistant__response { display:grid; gap:16px; min-width:0; }
+  .assistant__response > p { max-width:75ch; margin:0; line-height:1.6; }
+  .assistant__turn-status { color:#796959; font-size:14px; }
+  .assistant__skeleton { display:grid; gap:24px; }
+  .assistant__skeleton-lines { display:grid; gap:10px; max-width:650px; }
+  .assistant__skeleton-lines .ke-skeleton { display:block; height:13px; }
+  .assistant__skeleton-lines .ke-skeleton:last-child { width:58%; }
+  .assistant__skeleton-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; }
+  .assistant__skeleton-card { display:grid; gap:12px; min-width:0; }
+  .assistant__skeleton-card > span { display:block; height:14px; width:88%; }
+  .assistant__skeleton-card > span:last-child { width:58%; }
+  .assistant__skeleton-poster { aspect-ratio:1.4; border-radius:18px; }
+  [data-capture-state="saved"] .assistant__mic-halo { border-color:#a0442530; }
+  @media(max-width:600px) {
+    .assistant__turn { gap:20px; }
+    .assistant__user-message { max-width:92%; padding:12px 16px; }
+    .assistant__skeleton-cards { grid-template-columns:1fr; gap:24px; }
+    .assistant__skeleton-card:last-child { display:none; }
+  }
 </style>

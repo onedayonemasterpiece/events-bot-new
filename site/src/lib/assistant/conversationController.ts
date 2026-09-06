@@ -7,7 +7,7 @@ export interface ConversationStorage {
   saveAnswer(owner:string,id:string,payload:Record<string,unknown>):Promise<void>;
   command(owner:string,id:string):Promise<Command|null>;
 }
-export type ConversationEvents = {change:(state:State)=>void;answer:(result:any,visible:boolean)=>void;status:(message:string)=>void;error:(error:unknown)=>void};
+export type ConversationEvents = {superseded?:(searchId:string)=>void;change:(state:State)=>void;answer:(result:any,visible:boolean)=>void;status:(message:string,searchId?:string)=>void;error:(error:unknown,searchId?:string)=>void};
 /** Durable ordered host for the portable kernel. Capture never waits on this
  * queue. State transitions and network processing have independent serial lanes.
  */
@@ -50,7 +50,7 @@ export class ConversationController {
       const intakeError=await intake;
       if(intakeError){this.events.status('Ввод сохранён; проверяю подтверждение приёма.');}
       await this.process(command);
-    }).catch(error=>this.events.error(error));
+    }).catch(error=>this.events.error(error,command.searchId));
     return command;
   }
   private terminal(receipt:RemoteReceipt):any {
@@ -60,10 +60,10 @@ export class ConversationController {
   }
   private async process(command:Command):Promise<void>{
     const row=this.state.receipts.find(r=>r.id===command.id);
-    if(!row||row.epoch!==this.state.epoch)return; // Explicit new task, not deletion.
+    if(!row||row.epoch!==this.state.epoch){this.events.superseded?.(command.searchId);return;} // Explicit new task, not deletion.
     if(row.status==='accepted'){
       if(row.sequence!==this.state.processedThrough+1)throw new Error('voice_predecessor_pending');
-      this.events.status('Понимаю подтверждённый запрос.');
+      this.events.status('Понимаю запрос…',command.searchId);
       const interpreted=this.terminal(await this.api.execute(this.owner,command.id,'interpret',command.payload));
       await this.update(state=>{
         if(state.epoch!==command.input.epoch)return{state,value:null};
@@ -72,9 +72,9 @@ export class ConversationController {
         return{state:interpretInput(state,command.id,interpreted.intent,state.revision),value:null};
       });
     }
-    if(this.state.epoch!==command.input.epoch||this.state.draft?.status!=='ready'||this.state.processedThrough!==command.input.sequence)return;
+    if(this.state.epoch!==command.input.epoch||this.state.draft?.status!=='ready'||this.state.processedThrough!==command.input.sequence){this.events.superseded?.(command.searchId);return;}
     const ticket=retrievalTicket(this.state);
-    this.events.status('Подбираю события в текущем каталоге.');
+    this.events.status('Подбираю события…',command.searchId);
     const result=this.terminal(await this.api.execute(this.owner,command.searchId,'search',{interpretationId:command.id}));
     if(!Array.isArray(result.items)||result.items.length>60||result.id!==command.searchId||typeof result.title!=='string'||typeof result.answer!=='string'||typeof result.catalog_revision!=='string')throw new Error('voice_result_invalid');
     await this.store.saveAnswer(this.owner,result.id,result);
@@ -96,7 +96,7 @@ export class ConversationController {
         if(receipt.epoch!==this.state.epoch)continue;
         const command=await this.store.command(this.owner,receipt.id);
         if(!command)throw new Error('voice_local_receipt_missing');
-        if(receipt.status==='accepted'||receipt.sequence===this.state.processedThrough)await this.process(command);
+        if(receipt.status==='accepted'||receipt.sequence===this.state.processedThrough)try{await this.process(command);}catch(error){this.events.error(error,command.searchId);throw error;}
       }
     });
     this.pipeline=queued.catch(error=>this.events.error(error));return this.pipeline as Promise<void>;

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Changed: conversational voice preview sends fresh complete ASR into the existing
+  durable Search flow without mandatory confirmation, immediately showing the full
+  question as a chat bubble and shared answer/card skeletons. Replies replace their
+  own pending state, follow-ups append, and failed/superseded turns stop shimmering.
+  Optional typed input and recovery remain available without a recording modal.
+
 - Added: preview-only voice startup diagnostics in the existing request/details
   panel: bounded metadata trace, manual copy/download, and an explicit disposable
   storage probe that never reads or deletes user recordings. Pending IndexedDB

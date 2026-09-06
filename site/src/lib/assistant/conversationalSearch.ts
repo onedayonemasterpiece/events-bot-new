@@ -1,3 +1,4 @@
+import { createConversationTurn, settleConversationTurn, type ConversationTurn } from './conversationTurn.ts';
 import { mountVoiceDiagnostics } from './voiceDiagnostics.ts';
 import { getStaticSiteAuth } from '../staticSiteAuth';
 import { MicrophoneCapture, type CaptureStatus } from './microphoneCapture.ts';
@@ -38,12 +39,13 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   let controllerReady=false;let controller:ConversationController|null=null;let capture:MicrophoneCapture|null=null;let recordingId:string|null=null;
   let pendingCommit=false;let receiptRetry=false;
   let recordingOwner='';let selectedBase:string|null=null;let mode:Mode='new_search';let viewed:string|null=null;let latest:string|null=null;
-  let cursor:string|undefined;let state=initialState();let transition=Promise.resolve();let accepting=false;
+  let cursor:string|undefined;let state=initialState();let transition=Promise.resolve();let voicePipeline=Promise.resolve();let accepting=false;
   let measurement=new AssistantMeasurement();const rendered=new Map<string,{element:HTMLElement;result:any;count:number;ids:string[]}>();
   const objectUrls=new Set<string>();
+  const pendingTurns=new Map<string,ConversationTurn>();
   const auth=getStaticSiteAuth({supabaseUrl:search.dataset.supabaseUrl||'',relayUrl:search.dataset.supabaseRelayUrl||'',publishableKey:search.dataset.supabaseKey||'',provider:search.dataset.yandexProvider});
   const api=new AssistantClient(auth,search.dataset.supabaseUrl||'',search.dataset.supabaseKey||'',()=>owner,()=>!captureOnly,root.dataset.assistantHost==='devcoveer');
-  const showError=(error:unknown)=>{processing.textContent=errorText(error);if(!capture||!['requesting','recording'].includes(capture.status))presentation?.message(processing.textContent);resume.hidden=!state.draft;};
+  const showError=(error:unknown,searchId?:string)=>{const turn=searchId?pendingTurns.get(searchId):undefined;if(turn){settleConversationTurn(turn,'error',errorText(error));turn.body.append(button('Проверить обработку',()=>controller?.resume()));}processing.textContent=errorText(error);if(!capture||!['requesting','recording'].includes(capture.status))presentation?.message(processing.textContent);resume.hidden=!state.draft;};
   const showComposer=()=>presentation?presentation.open():get('composer').scrollIntoView({block:'start'});
   const stopForOverlay=async()=>{if(capture&&['requesting','recording','stopping'].includes(capture.status))await capture.stop('interrupted');};
   root.dataset.assistantStartup='opening_storage';delete root.dataset.assistantStartupError;
@@ -74,11 +76,22 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     get('auth').textContent='Открываю вход через Яндекс…';
     void auth.signIn().then(ok=>{if(!ok)get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';}).catch(()=>{get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';});
   });
-  const notify=()=>window.dispatchEvent(new CustomEvent('kenigevents:search-context-changed',{detail:{viewedSectionId:viewed,refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}}));
-  const visibility=new IntersectionObserver(entries=>{
-    const visible=entries.filter(entry=>entry.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];
-    if(visible){viewed=(visible.target as HTMLElement).dataset.assistantSection||null;notify();}
-  },{threshold:0.05});
+  const notify=()=>window.dispatchEvent(new CustomEvent('kenigevents:search-context-changed',{detail:{viewedSectionId:viewed,viewedTitle:viewed?rendered.get(viewed)?.result.title||'':'',refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}}));
+  let scrollFrame=0;
+  const updateViewed=()=>{
+    scrollFrame=0;
+    const edge=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ke-assistant-locator-edge'))||110;
+    let next:string|null=null;
+    for(const section of answers.querySelectorAll<HTMLElement>('[data-assistant-section]')){
+      const rect=section.getBoundingClientRect();
+      if(rect.top<=edge+8&&rect.bottom>edge){next=section.dataset.assistantSection||null;break;}
+    }
+    if(next!==viewed){viewed=next;notify();}
+  };
+  const scheduleViewed=()=>{if(!scrollFrame)scrollFrame=requestAnimationFrame(updateViewed);};
+  window.addEventListener('scroll',scheduleViewed,{passive:true});window.addEventListener('resize',scheduleViewed);
+  window.addEventListener('kenigevents:search-locator-geometry',scheduleViewed);
+  const visibility=new ResizeObserver(scheduleViewed);
   // Test/preview exposure uses real viewport visibility and a 1s dwell; it never
   // invents a product conversion. The production analytics sink stays separate.
   const dwell=new Map<Element,ReturnType<typeof setTimeout>>();
@@ -125,25 +138,26 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   function renderAnswer(result:any,scroll=false){
     if(!Array.isArray(result.items)||typeof result.id!=='string')return;
     if(rendered.has(result.id)){if(scroll)rendered.get(result.id)?.element.scrollIntoView({block:'start'});return;}
-    const section=node('section');section.id=`assistant-answer-${result.id}`;section.dataset.assistantSection=result.id;
-    const heading=node('h2',result.title);heading.tabIndex=-1;section.append(heading);
-    const question=node('details');const summary=node('summary','Исходный запрос');const raw=node('p',result.question||'');raw.dataset.assistantQuestion='';question.append(summary,raw);section.append(question);
-    if(result.parentId)section.append(node('p',`Уточнение предыдущей подборки`));
-    if(result.membership_complete!==true&&!result.clarification&&result.explanationKind==='none')section.append(node('p','Это ограниченное поисковое окно, не весь каталог. «Уточнить» работает с этой подборкой; для расширения выберите «Изменить условия и искать заново».'));
-    section.append(node('p',result.answer||''));
-    const grid=node('div');grid.className='cards-grid cards-grid--immersive';grid.dataset.assistantCards='';section.append(grid);
+    const turn=pendingTurns.get(result.id)||createConversationTurn(result.question||'');
+    settleConversationTurn(turn,'ready');pendingTurns.delete(result.id);
+    const section=turn.section,body=turn.body;section.id=`assistant-answer-${result.id}`;section.dataset.assistantSection=result.id;
+    const heading=node('h2',result.title);heading.tabIndex=-1;body.append(heading);
+    if(result.parentId)body.append(node('p',`Уточнение предыдущей подборки`));
+    if(result.membership_complete!==true&&!result.clarification&&result.explanationKind==='none')body.append(node('p','Это ограниченное поисковое окно, не весь каталог. «Уточнить» работает с этой подборкой; для расширения выберите «Изменить условия и искать заново».'));
+    body.append(node('p',result.answer||''));
+    const grid=node('div');grid.className='cards-grid cards-grid--immersive';grid.dataset.assistantCards='';body.append(grid);
     const entry={element:section,result,count:0,ids:[] as string[]};rendered.set(result.id,entry);
-    const more=button('Показать ещё',()=>appendCards(entry));more.dataset.assistantMore='';section.append(more);
+    const more=button('Показать ещё',()=>appendCards(entry));more.dataset.assistantMore='';body.append(more);
     const controls=node('div');controls.className='assistant__controls';
     controls.append(button(result.clarification?'Ответить на уточнение':'Уточнить эту подборку',()=>chooseBase(result,result.clarification?'expand_selection':'refine_selection')),
       button('Изменить условия и искать заново',()=>chooseBase(result,'expand_selection')),button('Спросить о событии',()=>chooseBase(result,'explain_selection')));
-    section.append(controls);answers.append(section);appendCards(entry);visibility.observe(section);
+    body.append(controls);if(!section.isConnected)answers.append(section);appendCards(entry);visibility.observe(section);scheduleViewed();
     latest=result.id;get('latest').hidden=false;get('history')?.removeAttribute('hidden');
     if(scroll)section.scrollIntoView({block:'start'});
   }
   let transcriptRevision=0;
   text.addEventListener('input',()=>{transcriptRevision++;});
-  async function transcribeRecording(own:string,id:string,revision=transcriptRevision){
+  async function transcribeRecording(own:string,id:string,revision=transcriptRevision,autoSend=false,anchor=new Date().toISOString()){
     if(captureOnly||owner!==own)return;
     processing.textContent='Распознаю речь…';presentation?.message(processing.textContent);
     try{
@@ -151,6 +165,10 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       if(result.state!=='completed')throw new Error(result.error||`voice_${result.state}`);
       await store.setTranscript(own,id,result.result.text);
       if(owner!==own)return;
+      if(autoSend&&result.result.text?.trim()){
+        // Show the actual ASR text + anticipated answer BEFORE durable intake/network.
+        await sendQuestion(result.result.text,anchor);await loadRecordings();return;
+      }
       if(revision===transcriptRevision){text.value=text.value?`${text.value}\n${result.result.text}`:result.result.text;transcriptRevision++;}
       else {processing.textContent='Текст уже изменён. Поздняя расшифровка доступна в «Аудио и восстановление» и не заменяет ваш запрос.';await loadRecordings();return;}
       get('composer').hidden=false;
@@ -193,7 +211,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     if(capture?.unsavedParts().length){showComposer();processing.textContent='Не всё аудио сохранено. Сначала сохраните оставшуюся запись.';presentation?.message(processing.textContent);return;}
     if(capture&&['requesting','recording','stopping'].includes(capture.status)){processing.textContent='Запись уже начата. Нажмите «Остановить запись».';return;}
     const revision=++transcriptRevision;
-    const own=owner,id=crypto.randomUUID();recordingId=id;recordingOwner=own;
+    const own=owner,id=crypto.randomUUID(),anchor=new Date().toISOString();recordingId=id;recordingOwner=own;
     const created=store.create(own,id); // AudioContext starts in this user gesture.
     let finished=false;
     const finalize=async(receipt:any)=>{
@@ -204,7 +222,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
           receiptRetry=false;await loadRecordings();pendingCommit=false;
           if(receipt.frames===0&&receipt.reason==='capture_failed'){presentation?.setCapture('error',captureStatus.textContent||'Не удалось включить микрофон.');return;}
           presentation?.setCapture(receipt.complete?'saved':receipt.reason==='cancelled'?'idle':'partial',receipt.complete?(captureOnly?'Запись сохранена на устройстве. Распознавание в этом превью пока отключено.':'Запись сохранена. Распознаю речь…'):receipt.reason==='cancelled'?'Микрофон выключен.':'Запись прервана. Сохранённая часть доступна в записях.');
-          if(receipt.complete&&receipt.reason==='user'&&!captureOnly)void transcribeRecording(own,id,revision);
+          if(receipt.complete&&['user','silence'].includes(receipt.reason)&&!captureOnly){voicePipeline=voicePipeline.then(()=>transcribeRecording(own,id,revision,true,anchor)).catch(showError);}
         }
       }catch(error){if(owner===own){receiptRetry=true;get('save-retry').hidden=false;presentation?.setCapture('error','Не удалось завершить сохранение. Аудио не удалено; повторите сохранение.');processing.textContent='Не удалось завершить сохранение. Повторите локальное сохранение, не закрывая вкладку.';showComposer();}}
       finally{pendingCommit=false;}
@@ -213,10 +231,10 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
       onStatus:(status:CaptureStatus,reason)=>{
         if(owner!==own)return;
         stop.hidden=!['requesting','recording','stopping'].includes(status);stop.disabled=status==='stopping';record.disabled=!stop.hidden;record.hidden=!stop.hidden;
-        const labels:Record<string,string>={requesting:'Ожидаю разрешение микрофона. Можно отменить.',recording:'Идёт запись. Остановить — кнопка «Остановить запись» или Escape.',stopping:'Сохраняю конец записи.',saved:captureOnly?'Запись сохранена в этом браузере. Её можно прослушать ниже.':'Запись завершена.',partial:'Запись прервана; сохранённая часть доступна ниже.',error:reason==='microphone_denied'?'Доступ к микрофону запрещён. Разрешите его в настройках сайта.':reason==='microphone_not_found'?'Микрофон не найден. Подключите его и повторите.':reason==='microphone_unavailable'?'В этом браузере запись недоступна. Нужны HTTPS и поддержка микрофона.':'Не удалось включить микрофон. Проверьте устройство и разрешения браузера.',idle:'Микрофон выключен.'};
+        const labels:Record<string,string>={requesting:'Ожидаю разрешение микрофона. Можно отменить.',recording:'Слушаю. После паузы отправлю запрос. Можно остановить кнопкой или Escape.',stopping:'Сохраняю конец записи.',saved:captureOnly?'Запись сохранена в этом браузере. Её можно прослушать ниже.':'Запись завершена.',partial:'Запись прервана; сохранённая часть доступна ниже.',error:reason==='microphone_denied'?'Доступ к микрофону запрещён. Разрешите его в настройках сайта.':reason==='microphone_not_found'?'Микрофон не найден. Подключите его и повторите.':reason==='microphone_unavailable'?'В этом браузере запись недоступна. Нужны HTTPS и поддержка микрофона.':'Не удалось включить микрофон. Проверьте устройство и разрешения браузера.',idle:'Микрофон выключен.'};
         captureStatus.textContent=labels[status]||status;get('save-retry').hidden=reason!=='storage_failed';
         const visual=status==='saved'||status==='partial'?'stopping':status;
-        const brief=status==='recording'?'Записываю · нажмите круг, чтобы остановить':status==='requesting'?'Разрешите микрофон · круг отменит запрос':visual==='stopping'?'Сохраняю запись на устройстве…':captureStatus.textContent;
+        const brief=status==='recording'?'Слушаю · после паузы отправлю':status==='requesting'?'Разрешите микрофон · круг отменит запрос':visual==='stopping'?'Сохраняю запись на устройстве…':captureStatus.textContent;
         presentation?.setCapture(visual,brief);notify();
       },onStopped:receipt=>{void finalize(receipt);}});
     void capture.start().catch(()=>{void finalize({complete:false,reason:'capture_failed',frames:0,savedFrames:0,sampleRate:0,partCount:0});});void created.catch(showError);
@@ -236,9 +254,27 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   });
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&capture&&['requesting','recording'].includes(capture.status)){event.preventDefault();void capture.stop().catch(showError);}});
   window.addEventListener('beforeunload',event=>{if(pendingCommit||receiptRetry||capture?.unsavedParts().length||capture&&['requesting','recording','stopping'].includes(capture.status)){event.preventDefault();event.returnValue='';}});
+  async function sendQuestion(raw:string,anchor=new Date().toISOString()){
+    if(captureOnly||!raw.trim())return;
+    // No mandatory confirmation surface: the question and skeleton are visible
+    // immediately, before waiting for the controller's durable checkpoint.
+    void presentation?.close();
+    const turn=createConversationTurn(raw);answers.append(turn.section);
+    turn.section.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+    presentation?.message('Ищу события · можно дополнить голосом');
+    const active=controller,own=owner,currentMode=mode,parent=selectedBase,ids=visibleIds(parent);
+    if(!controllerReady||!active){settleConversationTurn(turn,'error','Поиск ещё подключается. Запрос сохранён в записи; повторите после подключения.');return;}
+    try{
+      const command=await active.submit(raw,currentMode,parent,ids,anchor);
+      if(owner!==own||controller!==active)return;
+      pendingTurns.set(command.searchId,turn);
+      if(text.value===raw){text.value='';transcriptRevision++;}
+    }catch(error){if(owner===own){settleConversationTurn(turn,'error',errorText(error));showError(error);}}
+  }
   get<HTMLFormElement>('form').addEventListener('submit',event=>{
-    event.preventDefault();if(captureOnly||!controllerReady||!controller||!text.value.trim()||accepting)return;accepting=true;transcriptRevision++;const raw=text.value;const active=controller;
-    transition=transition.then(async()=>{try{await active.submit(raw,mode,selectedBase,visibleIds(selectedBase));if(controller===active&&text.value===raw){text.value='';transcriptRevision++;await presentation?.close();}}catch(error){showError(error);}finally{accepting=false;}});
+    event.preventDefault();if(captureOnly||!controllerReady||!controller||!text.value.trim()||accepting)return;
+    accepting=true;transcriptRevision++;const raw=text.value;
+    transition=transition.then(()=>sendQuestion(raw)).finally(()=>{accepting=false;});
   });
   get('new').addEventListener('click',()=>{if(!controllerReady)return;transcriptRevision++;void controller?.newTask().then(()=>{selectedBase=null;mode='new_search';baseLabel.textContent='Новый поиск';notify();}).catch(showError);});
   resume.addEventListener('click',()=>{if(controllerReady)void controller?.resume();});
@@ -270,7 +306,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   });
   window.addEventListener('storage',event=>{if(event.key==='ke_personalization_profile')syncOverlay();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden){for(const timer of dwell.values())clearTimeout(timer);dwell.clear();}});
-  announceAssistantSurface({version:'1.0.0',element:get('composer'),getState:()=>({viewedSectionId:viewed,refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}),
+  announceAssistantSurface({version:'1.0.0',element:get('composer'),getState:()=>({viewedSectionId:viewed,viewedTitle:viewed?rendered.get(viewed)?.result.title||'':'',refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}),
     showComposer,showSection:id=>rendered.get(id)?.element.scrollIntoView({block:'start'}),
     beforeOverlayOpen:stopForOverlay,
     diagnostic:()=>({contract:'kenigevents.voice-diagnostic.v1',startup:root.dataset.assistantStartup,controllerReady,capture:capture?.status||'idle',pending:!!state.draft,acceptedThrough:state.acceptedThrough,processedThrough:state.processedThrough,readout:measurement.readout()})});
@@ -280,7 +316,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     if(authSeen&&next===owner&&authStatus===snapshot.status)return;authSeen=true;authStatus=snapshot.status;owner=next;transcriptRevision++;const epoch=++generation;
     if(capture&&['requesting','recording'].includes(capture.status))void capture.stop('interrupted');
     selectedBase=null;mode='new_search';viewed=null;latest=null;cursor=undefined;state=initialState();controllerReady=false;controller=null;text.value='';
-    for(const url of objectUrls)URL.revokeObjectURL(url);objectUrls.clear();for(const timer of dwell.values())clearTimeout(timer);dwell.clear();exposure.disconnect();visibility.disconnect();rendered.clear();answers.replaceChildren();historyList.replaceChildren();recordings.replaceChildren();measurement=new AssistantMeasurement();lastAction.clear();
+    for(const url of objectUrls)URL.revokeObjectURL(url);objectUrls.clear();for(const timer of dwell.values())clearTimeout(timer);dwell.clear();exposure.disconnect();visibility.disconnect();rendered.clear();pendingTurns.clear();answers.replaceChildren();historyList.replaceChildren();recordings.replaceChildren();measurement=new AssistantMeasurement();lastAction.clear();
     for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=true;
     record.disabled=false;record.hidden=!owner;captureStatus.hidden=!owner;
     const login=get('login');if(login)login.hidden=Boolean(owner);
@@ -290,7 +326,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     if(!owner){root.dataset.assistantStartup=snapshot.status==='checking'?'checking_auth':snapshot.status==='error'?'auth_error':'signed_out';presentation?.setCapture('idle','Голосовой поиск · нужен вход');return;}
     presentation?.setCapture('idle',captureOnly?'Микрофон · пока без распознавания':'Голосовой поиск');
     if(captureOnly){root.dataset.assistantStartup='ready';processing.textContent='';void loadRecordings().catch(showError);return;}
-    const active=new ConversationController(owner,store,api,{change:value=>{if(epoch!==generation)return;state=value;resume.hidden=!state.draft;notify();},answer:(result,visible)=>{if(epoch===generation&&visible){renderAnswer(result);selectedBase=result.id;mode=result.clarification?'expand_selection':'refine_selection';baseLabel.textContent=`База: ${result.title}`;notify();}},status:message=>{if(epoch===generation)processing.textContent=message;},error:error=>{if(epoch===generation)showError(error);}});
+    const active=new ConversationController(owner,store,api,{change:value=>{if(epoch!==generation)return;state=value;resume.hidden=!state.draft;notify();},superseded:searchId=>{if(epoch!==generation)return;const turn=pendingTurns.get(searchId);if(turn){settleConversationTurn(turn,'superseded','Дополнение принято. Общий ответ появится под следующим сообщением.');pendingTurns.delete(searchId);}},answer:(result,visible)=>{if(epoch!==generation)return;if(visible){renderAnswer(result);selectedBase=result.id;mode=result.clarification?'expand_selection':'refine_selection';baseLabel.textContent=`База: ${result.title}`;presentation?.message('Ответ готов · можно дополнить голосом');notify();}else{const turn=pendingTurns.get(result.id);if(turn){settleConversationTurn(turn,'superseded','Учтено в следующем запросе. Предыдущий ответ сохранён в истории.');pendingTurns.delete(result.id);}}},status:(message,searchId)=>{if(epoch===generation){processing.textContent=message;const turn=searchId?pendingTurns.get(searchId):undefined;if(turn){turn.status.textContent=message;}}},error:(error,searchId)=>{if(epoch===generation)showError(error,searchId);}});
     controller=active;root.dataset.assistantStartup='restoring_conversation';
     void active.initialize().then(async()=>{
       if(epoch!==generation)return;controllerReady=true;root.dataset.assistantStartup='ready';
