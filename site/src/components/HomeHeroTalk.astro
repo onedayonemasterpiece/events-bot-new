@@ -58,7 +58,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
                         data-fragment-index={fragmentIndex}
                         style={`--fragment-delay:${100 + fragmentIndex * 185}ms`}
                         href={eventHref(scene.event)}
-                        aria-label={`${fragment.text.split(/(\s+)/u).map((word, wordIndex, words) => /^\s+$/u.test(word) ? word : <span class="home-hero-talk__word" style={`--word-delay:${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)}ms`}>{word}</span>)} Открыть событие «${scene.event.title}»`}
+                        aria-label={`${fragment.text} Открыть событие «${scene.event.title}»`}
                         tabindex={sceneIndex === 0 ? '0' : '-1'}
                       >{fragment.text.split(/(\s+)/u).map((word, wordIndex, words) => /^\s+$/u.test(word) ? word : <span class="home-hero-talk__word" style={`--word-delay:${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)}ms`}>{word}</span>)}</a>
                     ) : (
