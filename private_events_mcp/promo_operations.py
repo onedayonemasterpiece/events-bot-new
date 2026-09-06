@@ -1,7 +1,7 @@
 """Owner OAuth promo preparation and atomic commit on the canonical ledger.
 
-Authorization is mandatory on the exact locked session, including historical
-replay. Host callbacks are local/read-only and must not commit or call providers.
+Authorization is mandatory on the exact transaction session, including historical
+replay. Capabilities use a read snapshot; operation mutations use BEGIN IMMEDIATE. Host callbacks are local/read-only and must not commit or call providers.
 Preparation does not create a campaign. Commit creates an ACTIVE campaign through
 the existing service; its ordinary scheduler may execute it later.
 """
@@ -114,7 +114,7 @@ class PromoOperationStore:
         if not session.in_transaction():
             fail('PROMO_TRANSACTION_LOST')
 
-    async def _binding(self,session,actor,request):
+    async def _accepted_target(self,session,actor,request):
         result=await session.execute(text('SELECT * FROM event_change_log WHERE operation_ref=:ref'),
                                      {'ref':request['accepted_event_operation_ref']})
         op=result.mappings().first()
@@ -135,8 +135,37 @@ class PromoOperationStore:
         event=result.mappings().first()
         if event is None or event['identity_status']!='canonical' or event['merged_into_event_id'] is not None:
             fail('PROMO_EVENT_BINDING_DENIED')
+        return event
+
+    async def _binding(self,session,actor,request):
+        event=await self._accepted_target(session,actor,request)
         if revision(event)!=request['event_revision']:
             fail('PROMO_EVENT_REVISION_CONFLICT')
+
+    async def capabilities(self,accepted_event_operation_ref,event_id,*,actor):
+        """Read current exact accepted target tokens, not an inventory or eligibility permit."""
+        actor.validate()
+        if (not isinstance(accepted_event_operation_ref,str)
+                or REF.fullmatch(accepted_event_operation_ref) is None
+                or type(event_id) is not int or not 1<=event_id<=2**63-1):
+            fail('PROMO_INVALID_REQUEST')
+        request={'accepted_event_operation_ref':accepted_event_operation_ref,'event_id':event_id}
+        async with self.database.get_session() as session:
+            try:
+                await session.execute(text('BEGIN'))
+                await self._authorize(session,actor,'capabilities',request)
+                event=await self._accepted_target(session,actor,request)
+                response={**request,'event_revision':revision(event),
+                    'lifecycle_status':event['lifecycle_status'],'silent':bool(event['silent']),
+                    'supported_surfaces':['video_general','vk_repost'],
+                    'video_profiles':dict(PARTNER_PROMO_VIDEO_PROFILES),
+                    'slot_policies':dict(PARTNER_PROMO_SLOT_POLICIES),
+                    'business_validation':'commit_recheck_required'}
+                await session.rollback()  # Read snapshot only; no operation reservation.
+                return response
+            except BaseException:
+                await session.rollback()
+                raise
 
     def _stored(self,row,actor):
         if (row is None or row['operation_kind']!=KIND
