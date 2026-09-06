@@ -389,3 +389,68 @@ page/composer screenshots inspected. An initial harness-only login failure was
 fixed by removing the fixture's unintended disabled attribute from login.
 The shared-shell selector review also caught and corrected an accidental H1
 selector grouping before publication. No new live ASR/Auth/phone claim.
+
+### Published correction and real donor-reuse verification
+
+Published UI source: `68452a2a6be5700bf46b09b4905d4e29a2f26048`.
+[Direct Search preview](https://kenigevents.ru/preview-voice-floating-20260906/poisk/),
+[Telegram delivery/readback 1441](https://t.me/c/4337049383/1441).
+Seven public files match local SHA256 exactly. Public anonymous Chromium
+1440/1280/390px: 3/3 PASS, zero assistant network calls/errors; keyboard
+close/reopen/reload, guest feedback, H1 non-floating, mic/nav separation checked.
+Final local build has the same 3/3 PASS. Production/root untouched.
+
+**Wonderful Lections is a working donor, not an unimplemented concept.** Its
+`src/runtime/transcription.mjs` → `gemini-gateway.mjs` →
+`scripts/gemini-gateway-worker.py` uses pinned `vibepublish/google_ai/` public
+`GoogleAIClient.generate_content_async`, server-only credentials and shared
+quota. No donor owner bearer or IdeaHub publishing is needed for an ASR probe.
+The active model is `gemini-3.1-flash-lite`. The verified synthetic fixture is
+`mixed-notes.wav`, 8.51573696s mono PCM16 22050Hz, SHA256
+`2e03de2625a7dcb2e32040cc5518505a42902c1d4690c6b8ad17fe6783ad619b`;
+provenance: Wonderful Lections `docs/product/review-reliability-and-speaker-notes.md`
+Observed validation (source `f8ee3d982b49d70ecb6041bb1aa22cbf5047fc2e`).
+No private owner speech was read or sent. Prior ASR output is not an independent
+quality oracle.
+
+Two **real model calls**, no mocks/fallback or automatic provider retry:
+
+1. Existing pinned WL GoogleAI client, credentials from **events-bot-new** env,
+   consumer `kenigevents.voice.asr.probe.v1`, account `kenigevents`: Russian
+   transcript returned; usage 243 input +32 output =275 tokens.
+2. **Existing KenigEvents `assistantGenerator`**, its vocabulary/schema and
+   strict project/model atomic limiter on the existing personalization/Search
+   DB: dispatched → completed at 2885ms → accounted at 2944ms; valid
+   `{text, uncertain:[]}`; 431 input +48 output =479 tokens. Explicit diagnostic
+   key lane `GOOGLE_API_KEY6` (active registered key), not an assertion that the
+   published Edge uses that non-default pool. Request UID
+   `60741a72-f3eb-4644-825b-4150dc163f1b`. Raw transcript remains in ignored artifacts.
+
+**Configuration correction:** a first local TS diagnostic mistakenly paired the
+new strict quota adapter with the donor's legacy quota project. It stopped before
+provider dispatch with `42703` (missing `quota_scope` column). This was a probe
+configuration error, not proof that the ASR implementation or credentials were
+broken. Actual runtime pairs must stay distinct:
+- WL gateway: `SUPABASE_URL` + `SUPABASE_KEY` (legacy shared quota schema).
+- Existing Search adapter: `PERSONALIZATION_SUPABASE_URL` +
+  `PERSONALIZATION_SUPABASE_SECRET_KEY` (project/model atomic quota schema).
+Never mix a URL from one pair with a key from the other or weaken strict quota to
+make the wrong DB work. Both registries contain the tested Lite model. The earlier
+blanket “ASR not available” assessment is narrowed: **provider availability is now
+verified**, while public route/schema/user bindings are still not enabled.
+
+Remaining: actual browser speech → deployed `/event-search/assistant/*` → durable
+Search receipts → current retrieval/ordinary cards → explanation/refinement/
+history/actions. That requires the already-prepared additive migration and the
+existing shared Edge update; no isolated staging branch exists. Parent asked for
+an explicit decision on this protected-preview shared runtime update, as required
+by source specification §9; no production DB/Edge writes were made while waiting.
+Phone and real user's desktop microphone/login acceptance remain unverified.
+
+Artifacts in the same ignored correction directory: `live-asr/` contains scoped
+probe scripts, metadata/usage/checkpoint receipts and private provider output;
+`public-readback.json`, `public-browser.log`, screenshots and Telegram receipt.
+No raw audio/transcript, credential or session is committed. Latest code push had
+only unrelated invalid workflow run `34020265628` (`jobs=[]`); this is **not** a
+CI pass or a voice test failure. The current PR's own changelog insertion was moved
+next to its existing voice entry to avoid a conflict with parallel main entries.

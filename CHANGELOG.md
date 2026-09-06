@@ -2,13 +2,6 @@
 
 ## [Unreleased]
 
-- Fixed: voice Search preview now has a responsive floating microphone and an
-  on-demand composer instead of an inline recorder dashboard. Guest/login and
-  microphone initialization failures give visible feedback; recovery is secondary.
-  Completed user-stopped audio enters ASR directly only when the assistant runtime
-  is enabled, with stale-transcript guards. Capture-only preview keeps all
-  assistant network calls disabled; this is not live ASR acceptance.
-
 - Fixed: `social_item_resolve` now publishes an operation-specific ChatGPT
   input schema that requires one canonical link and its read-access class and
   no longer advertises unrelated target-kind/search/feed fields. Legacy
@@ -4871,6 +4864,13 @@
   Added explicit local-only desktop capture preview with shared Auth and zero
   assistant network calls, plus the existing canonical focused-route filter
   backport for a Search-only preview (no new builder or production enablement).
+
+- Fixed: voice Search preview now has a responsive floating microphone and an
+  on-demand composer instead of an inline recorder dashboard. Guest/login and
+  microphone initialization failures give visible feedback; recovery is secondary.
+  Completed user-stopped audio enters ASR directly only when the assistant runtime
+  is enabled, with stale-transcript guards. Capture-only preview keeps all
+  assistant network calls disabled; this is not live ASR acceptance.
 
 ## [1.12.0] - 2026-03-04
 ### Highlights

@@ -157,3 +157,7 @@ constructor failure. Current receipt is in the existing voice integration handof
 `site/tests/voice-flow.integration.mjs` is a separate synthetic orchestration
 fixture: user Stop starts ASR once, late transcript preserves edited text,
 interrupted capture is not auto-sent. It does not replace `voice.real_quality`.
+Real provider availability (not `voice.real_quality` acceptance) was additionally
+checked with the documented synthetic Wonderful Lections WAV through its pinned
+GoogleAI client and the actual KenigEvents assistantGenerator/strict limiter.
+Exact usage/checkpoints and preview 1441 receipt: existing voice integration handoff.
