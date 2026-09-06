@@ -1,0 +1,52 @@
+name: Events MCP source checkpoint
+
+# Source-only development artifact. No secrets, provider calls, merge or deploy.
+# Temporary bootstrap for an offline ChatGPT implementation checkout.
+on:
+  push:
+    branches: [feature/events-mcp-owner-create-r1]
+    paths: [.github/workflows/events-mcp-source-checkpoint.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  source-checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 100
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Export pinned source trees and integration inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/events-mcp-source
+          git fetch --no-tags --depth=100 origin main feature/events-mcp-queue-observability-r0
+          main_sha=$(git rev-parse origin/main)
+          r0_sha=$(git rev-parse origin/feature/events-mcp-queue-observability-r0)
+          base_sha=$(git merge-base HEAD "$main_sha")
+          printf 'head=%s\nmain=%s\nr0=%s\nmerge_base=%s\n' "$(git rev-parse HEAD)" "$main_sha" "$r0_sha" "$base_sha" > artifacts/events-mcp-source/refs.txt
+          for pair in "head:HEAD" "main:$main_sha" "r0:$r0_sha" "base:$base_sha"; do
+            name=${pair%%:*}
+            ref=${pair#*:}
+            git archive --format=tar.gz "$ref" -- '*.py' '*.md' '*.yml' '*.yaml' '*.json' '*.toml' '*.txt' '*.ini' '*.html' '*.sql' '*.j2' '*.sh' '.env.example' '.gitattributes' '.gitignore' > "artifacts/events-mcp-source/$name.tar.gz"
+          done
+          git diff --binary "$base_sha" HEAD > artifacts/events-mcp-source/r1-from-base.patch
+          git diff --binary "$base_sha" "$main_sha" > artifacts/events-mcp-source/main-from-base.patch
+          sha256sum artifacts/events-mcp-source/*.tar.gz > artifacts/events-mcp-source/SHA256SUMS
+      - name: Export installable Python test dependencies
+        run: |
+          python -m pip download --only-binary=:all: -r requirements.txt -d artifacts/events-mcp-source/wheels
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: events-mcp-source-${{ github.sha }}
+          path: artifacts/events-mcp-source/
+          retention-days: 7
+          if-no-files-found: error
