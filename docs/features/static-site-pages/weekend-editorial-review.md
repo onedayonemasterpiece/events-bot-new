@@ -33,7 +33,7 @@ No popularity or attendance statistic is inferred from these descriptions.
 The two Saturday choices are alternatives, not a feasible sequential itinerary.
 
 The real `/vyhodnye/` page renders the block only in preview mode, for the exact
-B7/B9 review builds and matching weekend, with all referenced IDs present. The footer is
+B7/B9/B10 review builds and matching weekend, with all referenced IDs present. The footer is
 hidden at widths above720px; no production/footer fallback is invented.
 All three `/sobytiya/<slug>/` targets are part of the focused review artifact.
 Review entry is a **direct Weekend URL**, not a design-system catalog:

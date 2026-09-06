@@ -167,3 +167,7 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 ### Weekend first-paint / static HTML regression
 
 `CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/weekend-first-paint.playwright.mjs` holds real script downloads, verifies closed disclosures, actual poster visibility, inline wordmark and110px composed lower surface, then releases the same scripts and compares H1/city/first-card/date/nav rectangles within1px and original nodes at320/384/430. Additional JS-disabled runs and Free-without-breadcrumb check. Run together with native city/day/date-dock interaction tests; waiting only for `data-fi-motion=ready` is no longer sufficient loading acceptance.
+
+### Lower-island shadow parity
+
+`CHECK_BEFORE=<previous preview> CHECK_BASE=<candidate> CHECK_OUTPUT=<artifacts> node site/tests/lower-island-shadow.playwright.mjs` compares actual standalone/date/Weekend/Buy surfaces, lower geometry and unchanged upper shadow at mobile widths plus desktop. Nested dock navigation must not gain a second shadow. Pair with Weekend delayed/no-JS first paint and existing event-dock action-state checks; this is rendered CSS acceptance, not physical-phone or purchase acceptance.

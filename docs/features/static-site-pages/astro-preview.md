@@ -1600,3 +1600,17 @@ Desktop retains header clearance without a breadcrumb row, so the heading does
 not collide with the brand and the medallion still has a smooth approach range.
 The day-navigation test waits for the actual selected day and settled anchor,
 not an assumed one-second native smooth-scroll duration.
+
+### Lower-island reference shadow — 2026-09-06
+
+B10 increases only the lower island elevation, following the approved reference:
+stronger near/contact shadow and a soft broad warm ambient shadow, not a darker
+fill. `--ke-island-lower-shadow` in `floating-islands.css` is the shared owner for
+the standalone nav, date/calendar dock, event Buy/nav dock and pre-JS Weekend
+composition. Inner nav tiers still have no independent shadow. Upper islands,
+brand, sizes, positions, motion, card layouts and icon assets are unchanged.
+The B9 static first-paint corrections, Free breadcrumb removal and Weekend
+editorial remain in this focused preview. Acceptance compares B9/B10 rendered
+geometry and upper shadows, single/composed lower shadows, calendar and CTA
+states, and initial Weekend before script enhancement. Evidence:
+`artifacts/codex/lower-island-shadow-20260906/`. No root/full-catalog promotion.

@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Changed
+- Strengthen the shared lower-island contact and ambient shadow across single navigation, date/calendar and event Buy docks, including Weekend static first paint; preserve geometry and upper-island styling.
 - Weekend initial HTML now contains its native city row, closed picker and final lower composition; posters and the canonical wordmark no longer wait for client scripts to become visible. Separate lightweight island startup from unrelated Auth imports and add delayed-JS/no-JS first-paint checks.
 - Remove the redundant back-to-Afisha breadcrumb from Free without changing its medallion or global navigation.
 - Free page uses its existing medallion as the only floating identity: a single native-sticky SVG smoothly shrinks16%, without a duplicate title island or fading between two badges.
