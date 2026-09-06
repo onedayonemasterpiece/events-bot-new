@@ -234,3 +234,54 @@ validation; interpreter calendar grounding supplies actual Saturday/Sunday dates
 and asks it to display the resolved interval. Focused47 tests pass. No retries,
 shared limiter bypass, speculative relevance thresholds or production changes.
 Second live verification is required before declaring this correction delivered.
+
+### Delivered protected-preview acceptance (2026-09-06, second live run)
+
+- Frontend (unchanged): `882e88f3d5e146334769276ba62d2696e8821b0f`.
+- Active DevCoveer backend: `adb6e99c84b99b767692049ed4e0ec4dfb3bb91d`.
+  Public `/kenig-audio/healthz` reads back that exact SHA; raw media stays on
+  DevCoveer. Only private assistant runtime verifier flag enabled; no Supabase
+  ordinary Search/production config change and no root/full build promotion.
+- Backend generated revision:
+  `sha256:9bcf3e1247bc3cc5c4c82cf8375906be56a0595a56bb0d5651f6d7b0f3b3a2b5`.
+- Actual browser route:
+  https://kenigevents.ru/preview-voice-relevance-20260906/poisk/ .
+
+| Actual live scenario | Evidence / outcome |
+| --- | --- |
+| Native browser capture of provenance-checked synthetic WAV, silence auto-stop, real ASR | Exact transcript «Я бы хотел сходить на джаз на выходных.»; no confirmation/second mic click |
+| Immediate transcript + answer/card skeleton | Both observed at 16806.8 ms browser clock; first cards at 32900.7 ms (~16.1 s after bubble) |
+| New search without city | September12–13, localityIds empty; complete58/58 checked in20+20+18 batches; exact7422 and8580;1possible,55rejected |
+| Explicit contextual follow-up «Только в Калининграде» | New second section, inherited September12–13; complete48/48 checked in20+20+8 batches; exact7422,4possible,43rejected |
+| Prior observed false positives | Rap8680 and exhibition7410 rejected in both requests, not displayed |
+| Durable completed searches | `8cd986ee-35ba-4c2e-8e56-127fbfef9787`, `1a4110ac-c1ce-4017-abe1-75e044b8bd8d` |
+| Shared topic/mobile-desktop | Current second topic observed at390 and1440; desktop shared menu compacts; zero page errors |
+| Auth fixture isolation | Ordinary scoped QA user; protected owner probe PASS, ephemeral fixture cleanup PASS; no product OTP email delivery claimed |
+
+Focused47 tests and strict whole-index/import-graph typecheck pass (local Deno/
+remote SDK declaration shim, not an SDK type guarantee). Generated revision and
+Git whitespace checks pass. Initial lookup of nonexistent local `.bin/tsc` was
+corrected to installed `/usr/local/bin/tsc`; no package reinstall. The first
+health request immediately after restart was502; subsequent public readiness
+readback and full live browser run passed, no lingering outage claimed.
+
+Evidence directory: `artifacts/codex/voice-recall-20260906/`:
+`schema-live-browser-final-receipt.json`, `schema-live-390-{landing,recording,asr-skeleton,results}.png`,
+`schema-live-1440-results.png`, `second-integration-tests.log`,
+`second-typecheck.log`, `runtime-activation-schema.json`,
+`public-readback-clean2.json`, `public-layout.log`, `public-topic.log`.
+Rendered screenshots inspected after visible image decoding, not build-only.
+Worker patch equivalence verified before removing its completed3.24MB worktree;
+all unique worker logs archived in parent artifacts, Git branch refs retained.
+
+**Acceptance boundary:** this reproducer's precision/unsupported-city issue is
+fixed in the protected preview; incident remains open for independent audit and
+catalog freshness, not a claim of global retrieval completeness. No physical
+phone/PWA or mailbox OTP run in this acceptance. Old frozen answers were not
+rewritten or auto-replayed. Long mobile topic title visibly clips a third line;
+recorded UI follow-up, not claimed visually perfect. Previously reported old
+history restoration is also not closed by this new-conversation test.
+
+Telegram delivery verified by exact text/topic readback:
+https://t.me/c/4337049383/1458 (topic1030). It explicitly asks for a **new** query,
+not recalculation of old history, and separates the open freshness/phone/UI gaps.
