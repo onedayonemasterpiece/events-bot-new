@@ -229,18 +229,39 @@ class PartnerAccessStore:
             return [self.get(row[0], conn=conn).public() for row in rows]
 
     def resolve(self, identity: AccessIdentity, *, scope: str | None = None, action: str | None = None, event_id: int | None = None, conn=None) -> PartnerGrant:
-        match = _SUBJECT.fullmatch(identity.subject)
-        if identity.audience != self.resource or match is None:
+        if scope and scope not in identity.scopes:
+            raise _error('SCOPE_DENIED')
+        return self._resolve_actor(identity.subject, identity.client_id, identity.audience,
+                                   scope=scope, action=action, event_id=event_id, conn=conn)
+
+    def resolve_durable(self, *, actor_subject: str, actor_client_id: str, actor_audience: str,
+                        scope: str, action: str, event_id: int | None = None, conn=None) -> PartnerGrant:
+        """Current policy for an already authorized stored intent, not a new login.
+
+        The ledger owns immutable actor provenance. This internal boundary never
+        creates an OAuth identity, borrows a token scope or authenticates a caller.
+        Rotation/suspension invalidates the stored subject's credential epoch.
+        """
+        if scope not in PARTNER_SCOPES or action not in PARTNER_ACTIONS:
+            raise _error('ACCESS_DENIED')
+        return self._resolve_actor(actor_subject, actor_client_id, actor_audience,
+                                   scope=scope, action=action, event_id=event_id, conn=conn)
+
+    def _resolve_actor(self, subject, client_id, audience, *, scope, action, event_id, conn):
+        match = _SUBJECT.fullmatch(subject) if isinstance(subject, str) else None
+        if audience != self.resource or match is None:
             raise _error('ACCESS_DENIED')
         grant = self.get(match[1], conn=conn)
-        if grant.status != 'active' or grant.expires_at <= int(time.time()) or int(match[2]) != grant.credential_epoch or identity.client_id != grant.client_id:
+        if grant.status != 'active' or grant.expires_at <= int(time.time()) or int(match[2]) != grant.credential_epoch or client_id != grant.client_id:
             raise _error('ACCESS_REVOKED')
-        if scope and (scope not in identity.scopes or scope not in grant.scopes):
+        if scope and scope not in grant.scopes:
             raise _error('SCOPE_DENIED')
         if action and action not in grant.actions:
             raise _error('ACTION_DENIED')
-        if event_id is not None and not self.owns(grant, event_id, conn=conn):
-            raise _error('NOT_FOUND', 'Object not found')
+        if event_id is not None:
+            event_id = _integer(event_id, 1, 2**63-1, 'event_id')
+            if not self.owns(grant, event_id, conn=conn):
+                raise _error('NOT_FOUND', 'Object not found')
         return grant
 
     def authenticate(self, client_id: str, secret: str) -> PartnerGrant:

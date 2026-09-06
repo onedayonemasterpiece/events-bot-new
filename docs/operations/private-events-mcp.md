@@ -1623,3 +1623,9 @@ and current flag/owner checks, returns current safe canonical public URLs plus
 bounded queue states, and never turns a queued job or static build into a verified
 publication. This read is uncached; Codex does not receive the tool. Partner
 exposure will use its separate current portfolio policy, not owner authority.
+
+`PartnerAccessStore.resolve_durable` is the internal policy boundary for already
+authorized, immutable operation-ledger actors. It checks current principal state,
+credential epoch/expiry, client/resource, explicit scope/action and optional
+portfolio ID without creating a token. It is not a login or an MCP tool; live
+`resolve(identity)` still additionally enforces the caller token's scopes.
