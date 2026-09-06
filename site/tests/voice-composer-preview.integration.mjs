@@ -20,7 +20,7 @@ for(const width of [1440,1280,390])test(`anonymous floating composer ${width}px`
  assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);assert.equal(Math.round(rect.width),Math.round(rect.height));
  if(output){mkdirSync(output,{recursive:true});await p.screenshot({path:`${output}/${width}-page.png`});}
  await launcher.click();await p.waitForFunction(()=>document.querySelector('[data-assistant-auth]')?.textContent?.includes('Войдите'));
- assert.equal(await dialog.isVisible(),true);assert.equal(await p.locator('[data-assistant-login]').isVisible(),true);assert.match(await p.locator('[data-assistant-preview-limit]').textContent(),/пока не подключены/);
+ assert.equal(await dialog.isVisible(),true);assert.equal(await p.locator('[data-assistant-login]').isVisible(),true);if(await p.locator('[data-assistant]').getAttribute('data-assistant-capture-only')==='true')assert.match(await p.locator('[data-assistant-preview-limit]').textContent(),/пока не подключены/);else{assert.equal(await p.locator('[data-assistant]').getAttribute('data-assistant-host'),'devcoveer');assert.equal(await p.locator('[data-assistant-preview-limit]').count(),0);}
  const modal=await dialog.boundingBox();assert.ok(modal.x>=0&&modal.x+modal.width<=width);assert.equal(await p.locator('dialog[data-assistant-composer]').count(),0);
  if(output)await p.screenshot({path:`${output}/${width}-composer.png`});
  await p.locator('[data-assistant-close]').click();assert.equal(await dialog.isVisible(),false);

@@ -599,3 +599,64 @@ text→catalog→refinement/history. Physical Safari/AAC microphone remains sepa
 from MIME mocks or FFmpeg AAC-container validation. Device/PWA lifecycle cannot
 be certified from desktop viewport tests. Evidence/results appended after actual
 runs; `artifacts/codex/voice-devcoveer-20260906/` remains ignored/private.
+
+### DevCoveer live delivery receipt
+
+Published site and initial host source: **923915eb7cc4a275c5e7cdee36fe378db9e1fceb**,
+PR #587. https://kenigevents.ru/preview-voice-devcoveer-20260906/poisk/ . Existing
+publisher completed normally; seven route/worklet/manifest bytes match. Public
+anonymous Chromium1440/1280/390 checks **3/3 PASS**; rendered screenshots inspected.
+CI **34024473953 completed/success**, including static browser release gate.
+
+Devcoveer `kenigevents-voice-preview.service` runs userdev, loopback14320, private
+exact-source bundle/state. The first unit launch had203/EXEC because `/usr/bin/node`
+is absent; corrected to the verified donor `/usr/local/bin/node`. Health source
+readback and401 no-token gate then passed. Shared ingress durably adopted via
+vpn-server commits e35f850, a09b6c6, **1a571971232c4e09454b53ce264c1efd9296fcbe**.
+Six HTTPS origins unchanged; scoped nginxHUP, queue-preserving controlbot only,
+network container identities/VPN bytes unchanged, Xray/Reality regression passed.
+
+Real checks (no mock provider or fake JWT):
+- Existing `session_fixture`: canonical fixed focus E2E persona, admin-generated
+  credential without mail, actual Supabase verify/getUser and protected owner RLS
+  probe. Ephemeral session cleaned/revoked by fixture; no user session borrowed.
+  Preview allowlist is two fixed ordinary identities: this QA persona and the
+  unique Yandex identity signed in today matching the user's reported test;
+  no automatic grant to other Yandex accounts or future users.
+- Known donor **synthetic**8.516s source:375588B PCM→35262B Opus and44292B AAC.
+  Each format admitted, decoded and transcribed through real deployed handler
+  and shared model/limiter. AAC traversed public HTTPS ingress. No media blob
+  uploaded to Supabase. Native browser recording used Opus, not fabricated AAC.
+- Public Chromium with native microphone API fed the known synthetic speech:
+  circle→record9s→stop→binary Opus31623B→real ASR→editable transcript;
+  explicit test-user correction/confirmation→11 ordinary cards→textual
+  refinement produced second answer. This is synthetic-microphone acceptance,
+  not the user's physical microphone or Yandex OAuth acceptance.
+- Initial combined harness then failed because it attempted to click a button
+  inside **closed native history details**. Product history was not broken.
+  Separate corrected real-UI run clicked the summary: fresh session→history3
+  entries→fresh11 cards→standard favorite→existing saved-event RPC→independent
+  owner DB readback true. Preview readout committed_favorites=1; reset test like
+  through sameUI afterwards. Global analytics sink/aggregate denominator is NOT
+  certified by that local readout (unique_seen was0); no production analytics GO.
+
+Known remaining limits: physical Android/PWA and Safari microphone/revocation/
+network-change/lock tests; low-volume/negative/local-place independent ASR gold
+corpus; automatic/global analytics sink acceptance. A real catalog discrepancy
+was observed: event8524 has typed `is_free/admission_type=free` but stale displayed
+`price_label/status_label=200 ₽`. The typed search filter passes it; this receipt
+is **not** certification of free-price semantic correctness. It was not “fixed”
+by overwriting core event facts or parsing free-text labels. Ongoing events with
+older start dates overlap the requested September window via typed end dates;
+ordinary display may still emphasize their old start date.
+
+Evidence: `live-api-receipt.json`, `live-aac-receipt.json`,
+`live-browser-receipt.json` (records the history harness failure honestly),
+`live-history-receipt.json`, `public-layout.log`, `publish.log`,
+`public-readback.json` in the private ignored voice-devcoveer artifact directory.
+Compression:90 assistant unit cases;11 SQLite +3 HTTP/media cases;13 integrated
+native/orchestration cases, plus the worker's7 existing native capture regressions.
+No physical Safari claim: AAC native selection fallback uses mocks; AAC encoded
+media decode+actual provider acceptance are separately real checks.
+
+Direct voice link sent/read back in Telegram topic1030: https://t.me/c/4337049383/1445 . Parallel islands review is a separate PR #639 and source cd90e408d; its date-recommendation draft is explicitly historical, not the live voice catalog.

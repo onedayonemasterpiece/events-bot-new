@@ -1007,3 +1007,21 @@ policies:
   no_mail_fault_matrix_product_otp_issue_count: 0
   no_mail_fault_matrix_external_mail_send_count: 0
   no_mail_fault_matrix_duplicate_dispatch_count: 0
+
+  voice.compressed_devcoveer:
+    title: Compact native audio, durable local receipts and bounded DevCoveer HTTP host
+    status: implemented_local_native_and_http
+    layers: [L0, L1]
+    platforms: [browser]
+    trigger_tags: [voice, microphone, compressed_audio, recovery, devcoveer]
+    cost: low
+    auth_mode: injected_snapshot_not_live_auth
+    side_effects: private_test_sqlite_and_browser_indexeddb_only
+    target: local_source_exact_sha
+    commands:
+      - node --experimental-strip-types --test site/tests/assistant-compression.test.mjs site/tests/voice-receipt-store.test.mjs site/tests/voice-devcoveer-host.test.mjs
+      - node --experimental-strip-types --test site/tests/voice-compression.integration.mjs
+    evidence: native_opus_and_real_container_decode_not_physical_safari_or_live_provider
+    blocking:
+      pull_request: direct_voice_transport_or_host_change
+      release: true_for_voice_host_changes

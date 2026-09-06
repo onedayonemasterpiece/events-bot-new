@@ -20,7 +20,7 @@ test('exact routes, CORS, denied auth and bounded upload',async()=>{
  const tooBig=await fetch(base+'control',{method:'POST',headers,body:' '.repeat(65537)});assert.equal(tooBig.status,413);
 });
 test('real Opus binary admission, durable receipt, same-ID no provider replay',async()=>{
- const bytes=execFileSync('/home/dev/.local/bin/ffmpeg',['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2:sample_rate=48000','-ac','1','-c:a','libopus','-b:a','32k','-f','webm','pipe:1']);
+ const bytes=execFileSync((process.env.VOICE_FFMPEG||'ffmpeg'),['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2:sample_rate=48000','-ac','1','-c:a','libopus','-b:a','32k','-f','webm','pipe:1']);
  const payload={frames:96000,sampleRate:48000,partCount:1,mimeType:'audio/webm;codecs=opus',digest:createHash('sha256').update(bytes).digest('hex'),byteLength:bytes.length};const id=randomUUID();
  const control=run=>fetch(base+'control',{method:'POST',headers,body:JSON.stringify({id,kind:'asr',payload,run})});
  assert.equal((await control(false)).status,202);
@@ -31,8 +31,8 @@ test('real Opus binary admission, durable receipt, same-ID no provider replay',a
  assert.equal((await store.media(owner,id)).bytes.length,bytes.length);assert.ok(bytes.length<96000*2/5);
 });
 test('AAC real container decoded; bogus input and mismatched duration rejected',async()=>{
- const bytes=execFileSync('/home/dev/.local/bin/ffmpeg',['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2:sample_rate=48000','-ac','1','-c:a','aac','-b:a','32k','-movflags','frag_keyframe+empty_moov','-f','mp4','pipe:1']);
- const r=await validateMedia(bytes,'audio/mp4',{frames:96000,sampleRate:48000},{ffmpeg:'/home/dev/.local/bin/ffmpeg',ffprobe:'/home/dev/.local/bin/ffprobe'});assert.equal(r.codec,'aac');
- await assert.rejects(()=>validateMedia(bytes,'audio/mp4',{frames:960000,sampleRate:48000},{ffmpeg:'/home/dev/.local/bin/ffmpeg',ffprobe:'/home/dev/.local/bin/ffprobe'}),/duration_mismatch/);
- await assert.rejects(()=>validateMedia(Buffer.from('not audio'),'audio/webm',{frames:1,sampleRate:48000},{ffprobe:'/home/dev/.local/bin/ffprobe'}),/invalid_audio/);
+ const bytes=execFileSync((process.env.VOICE_FFMPEG||'ffmpeg'),['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2:sample_rate=48000','-ac','1','-c:a','aac','-b:a','32k','-movflags','frag_keyframe+empty_moov','-f','mp4','pipe:1']);
+ const r=await validateMedia(bytes,'audio/mp4',{frames:96000,sampleRate:48000},{ffmpeg:(process.env.VOICE_FFMPEG||'ffmpeg'),ffprobe:(process.env.VOICE_FFPROBE||'ffprobe')});assert.equal(r.codec,'aac');
+ await assert.rejects(()=>validateMedia(bytes,'audio/mp4',{frames:960000,sampleRate:48000},{ffmpeg:(process.env.VOICE_FFMPEG||'ffmpeg'),ffprobe:(process.env.VOICE_FFPROBE||'ffprobe')}),/duration_mismatch/);
+ await assert.rejects(()=>validateMedia(Buffer.from('not audio'),'audio/webm',{frames:1,sampleRate:48000},{ffprobe:(process.env.VOICE_FFPROBE||'ffprobe')}),/invalid_audio/);
 });
