@@ -1336,7 +1336,7 @@ existing global nav; no cloned navigation, second shell or extra sticky tier.
 `mobileDateDock.mjs` reparents/restores these nodes at the720px breakpoint.
 The shared EventLayout lower occupied-space owner receives dock geometry; the dock
 does not create another global offset writer. Existing tag, top islands, filters,
-icons and event cards are unchanged.
+icon assets and event cards are unchanged.
 
 - Closed: native horizontal day scrolling remains independent of calendar opening.
   The calendar button stays visible beside the scrolling rail.
@@ -1368,3 +1368,16 @@ surface and icon gates apply. Evidence lives under
 `artifacts/codex/date-dock-b-20260906/`. Public verification uses the immutable
 prefix; browser touch emulation is not native phone/PWA acceptance. No video,
 Kaggle, full build, production/root promotion or voice changes.
+
+
+The owner-approved compact successor `preview-islands-20260906-archetypes-date-b2`
+keeps the same selected routes and calendar behavior. Only the two-tier date dock
+uses text-only lower navigation (44px); its horizontal date row is also44px,
+with weekday/number/month inline. The shared skin occupies90px including borders,
+down from146px, without scroll-triggered icon/text swapping. Single-tier nav on
+Popular and other non-date pages retains both icons and labels. The calendar's
+month cells remain44px and its lower navigation stays anchored during expansion.
+The existing browser scenario additionally asserts90px geometry, four labels,
+no visible icons in the date dock, and four retained icons on Popular.
+Evidence: `artifacts/codex/date-dock-compact-20260906/`; the same preview-only and
+historical-data limitations apply.

@@ -14,6 +14,7 @@ public festival/club counts and native Penpot acceptance remain open.
 ## [Unreleased]
 
 ### Changed
+- Compact the two-tier mobile date dock to90px: inline dates and a labels-only lower row; standalone mobile navigation retains its icons and labels.
 - Mobile dates use the approved B single lower dock with the existing navigation: native horizontal day scrolling, an expanding full-month calendar with arrows/touch swipes through the event horizon, and disabled individual days without events.
 - Extend accepted mobile12 floating-island kinetics to date/weekend city owners and city-free content archetypes; preserve original filters, full section headings and actions. Add a seven-page focused review index and browser checks, without a full site build or root publication.
 
