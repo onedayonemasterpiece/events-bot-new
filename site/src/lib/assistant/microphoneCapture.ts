@@ -1,8 +1,9 @@
 import type { AudioPart, WireBudget } from './audioSegments.ts';
 import { StreamingPcm16 } from './streamingAudio.ts';
 import { CompressedCapture, type CompressedPart, type CompressedReceipt } from './compressedCapture.ts';
+import { SilenceEndpointDetector } from './silenceEndpoint.ts';
 
-export type CaptureReason = 'user' | 'background' | 'device_lost' | 'interrupted' |
+export type CaptureReason = 'user' | 'silence' | 'background' | 'device_lost' | 'interrupted' |
   'storage_backpressure' | 'storage_failed' | 'capture_failed' | 'cancelled' | 'flush_timeout';
 export type CaptureStatus = 'idle' | 'requesting' | 'recording' | 'stopping' | 'saved' | 'partial' | 'error';
 export type CaptureReceipt = { reason: CaptureReason; sampleRate: number; frames: number;
@@ -17,6 +18,8 @@ export type CaptureOptions = {
   onStatus: (state: CaptureStatus, reason?: string) => void;
   onStopped?: (receipt: CaptureReceipt) => void;
   maxPendingBytes?: number;
+  /** Default on. Observation only: never trims PCM or compressed bytes. */
+  silenceDetection?: boolean;
 };
 
 /** Actual browser capture. No provider, network, auth client or speech recognition
@@ -41,6 +44,8 @@ export class MicrophoneCapture {
   private stopping: Promise<CaptureReceipt> | null = null;
   private lastReceipt: CaptureReceipt | null = null;
   private retrying: Promise<number> | null = null;
+  private silenceDetector = new SilenceEndpointDetector();
+  private requestedStopReason: CaptureReason | null = null;
   private visibility = () => { if (document.hidden) void this.stop('background'); };
   private pagehide = () => { void this.stop('background'); };
   private options: CaptureOptions;
@@ -58,6 +63,7 @@ export class MicrophoneCapture {
     const generation = ++this.generation;
     this.setStatus('requesting');
     this.lastReceipt = null; this.stopping = null;
+    this.requestedStopReason = null; this.silenceDetector.reset();
     this.savedFrames = 0; this.parts = 0; this.pendingBytes = 0; this.storageFailed = false; this.captureFailed = false;
     this.tail = Promise.resolve();
     this.node = null; this.segmenter = null; this.stream = null; this.compressedCapture = null;
@@ -87,6 +93,13 @@ export class MicrophoneCapture {
         try {
           if (data.sampleRate !== activeContext.sampleRate) throw new Error('mixed_sample_rates');
           for (const part of this.segmenter!.push(data.pcm, data.firstFrame)) this.persist(part);
+          // Analyze only after every received byte entered the original PCM
+          // path. Endpointing cannot drop the current block or either tail.
+          if (this.status === 'recording' && this.options.silenceDetection !== false) {
+            if (document.hidden) void this.stop('background');
+            else if (activeContext.state === 'running' && this.silenceDetector.push(data.pcm, data.sampleRate)) void this.stop('silence');
+            else if (activeContext.state !== 'running') this.silenceDetector.reset();
+          }
         } catch { this.captureFailed = true; void this.stop('capture_failed'); }
       };
       node.onprocessorerror = () => { if (generation !== this.generation) return; this.captureFailed = true; void this.stop('capture_failed'); };
@@ -151,7 +164,13 @@ export class MicrophoneCapture {
   unsavedParts(): readonly AudioPart[] { return this.failedParts; }
   stop(reason: CaptureReason = 'user'): Promise<CaptureReceipt> {
     if (this.lastReceipt) return Promise.resolve(this.lastReceipt);
-    if (this.stopping) return this.stopping;
+    if (reason === 'silence' && document.hidden) reason = 'background';
+    if (this.stopping) {
+      // A lifecycle/device interruption racing the automatic flush is not a
+      // completed utterance. Manual user stop retains its existing semantics.
+      if (this.requestedStopReason === 'silence' && ['background', 'device_lost', 'interrupted', 'cancelled'].includes(reason)) this.requestedStopReason = reason;
+      return this.stopping;
+    }
     if (!this.node || !this.segmenter) {
       ++this.generation;
       const compressed = this.compressedCapture; this.compressedCapture = null;
@@ -162,6 +181,7 @@ export class MicrophoneCapture {
       this.lastReceipt = receipt; this.setStatus('idle'); this.options.onStopped?.(receipt); return Promise.resolve(receipt);
     }
     if (this.status === 'requesting') reason = 'cancelled';
+    this.requestedStopReason = reason;
     this.setStatus('stopping', reason);
     // Set the promise before its body so persist() cannot recursively start stop.
     this.stopping = Promise.resolve().then(async () => {
@@ -184,13 +204,16 @@ export class MicrophoneCapture {
       window.removeEventListener('pagehide', this.pagehide);
       this.node!.disconnect(); this.node!.port.close(); this.node = null;
       if (this.context && this.context.state !== 'closed') await this.context.close().catch(() => undefined);
+      const finalReason = this.requestedStopReason === 'silence' && document.hidden
+        ? 'background' : this.requestedStopReason ?? reason;
+      const acceptedEnd = finalReason === 'user' || finalReason === 'silence';
       const receipt: CaptureReceipt = {
         ...(compressed ? { compressed } : {}),
-        reason: this.storageFailed ? 'storage_failed' : this.captureFailed ? 'capture_failed' : !acknowledged ? 'flush_timeout' : reason,
+        reason: this.storageFailed ? 'storage_failed' : this.captureFailed ? 'capture_failed' : !acknowledged ? 'flush_timeout' : finalReason,
         sampleRate: this.segmenter!.sampleRate, frames: this.segmenter!.frames,
         savedFrames: this.savedFrames, partCount: this.parts,
-        captureComplete: acknowledged && !this.captureFailed && reason === 'user' && this.segmenter!.frames > 0,
-        complete: acknowledged && !this.captureFailed && !this.storageFailed && reason === 'user' && this.segmenter!.frames > 0,
+        captureComplete: acknowledged && !this.captureFailed && acceptedEnd && this.segmenter!.frames > 0,
+        complete: acknowledged && !this.captureFailed && !this.storageFailed && acceptedEnd && this.segmenter!.frames > 0,
       };
       this.lastReceipt = receipt;
       this.setStatus(receipt.complete ? 'saved' : 'partial', receipt.reason);
