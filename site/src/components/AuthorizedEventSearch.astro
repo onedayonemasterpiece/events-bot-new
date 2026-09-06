@@ -271,6 +271,7 @@ const HeadingTag = headingLevel;
     function renderAuthState(session, options = {}) {
       const { preserveError = false, checking = false } = options;
       const signedIn = Boolean(session?.user);
+      const wasSignedIn = root.classList.contains('is-authorized');
       if (login) {
         login.hidden = signedIn || checking;
         login.disabled = checking;
@@ -286,6 +287,8 @@ const HeadingTag = headingLevel;
       root.classList.toggle('is-authorized', signedIn);
       root.classList.toggle('is-auth-checking', checking);
       if (signedIn) {
+        // Auth readiness must not depend on the separate optional quota RPC.
+        if (!wasSignedIn && !loading && !preserveError) setStatus('Поиск подключён. Опишите, что хочется найти.');
         const params = new URLSearchParams(window.location.search);
         const initialQuery = params.get('q');
         if (initialQuery && input && !input.value) input.value = initialQuery.slice(0, 160);

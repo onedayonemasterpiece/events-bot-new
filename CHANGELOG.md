@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed: voice preview startup now bounds stalled IndexedDB open, exposes a
+  concrete startup stage and offers non-destructive manual reconnect instead
+  of an endless “search connecting” microphone. Late connections/upgrades are
+  released; reconnect never auto-starts recording. Conversation controls wait
+  for the current owner's restore, and ordinary Search no longer displays a
+  stale guest prompt when signed in but the optional quota request fails.
+
 - Fixed: `social_item_resolve` now publishes an operation-specific ChatGPT
   input schema that requires one canonical link and its read-access class and
   no longer advertises unrelated target-kind/search/feed fields. Legacy

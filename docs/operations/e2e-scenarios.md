@@ -169,3 +169,10 @@ recordings, delayed/failed terminal receipt and same-audio retry/reload.
 abrupt page closure. Auth snapshots/device audio remain injected; no phone claim.
 
 Voice DevCoveer preview: `site/tests/voice-devcoveer-host.test.mjs` (HTTP/media fixtures; real Opus/AAC decode, not live ASR), `voice-receipt-store.test.mjs` (real SQLite durability), `voice-compression.integration.mjs` (native synthetic microphone+IndexedDB). Canonical live receipt and limitations: `docs/features/static-site-pages/smart-vector-search/20260906-voice-prototype-codex.md`.
+
+Voice preview startup recovery: `site/tests/voice-startup.integration.mjs`
+(native Chromium/IndexedDB, explicit Auth fixture) covers stalled open/manual
+retry, a real old-v2 blocking tab, owner-bound restore and checking→signed-in.
+`voice-startup-store.test.mjs` and `search-auth-startup.test.mjs` are unit guards.
+Canonical acceptance boundaries and preview-only incident evidence:
+[`INC-2026-09-06-voice-preview-startup`](../reports/incidents/INC-2026-09-06-voice-preview-startup.md).

@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-06-voice-preview-startup.md`
+  - Scope: preview-only voice mount/IndexedDB upgrade, Auth/controller readiness
+    and ordinary Search signed-in status; no production outage claim.
+  - Must not regress: bounded storage failure with explicit safe retry, no
+    automatic mic on retry/Auth recovery, no data clearing or orphan late DB
+    connections, no submit before current-owner conversation restore.
+
 - `INC-2026-08-25-chatgpt-frozen-mcp-actions.md`
   - Scope: ChatGPT workspace-approved MCP action snapshots, action-definition
     refresh/publication, real new-chat invocation after a schema change, and

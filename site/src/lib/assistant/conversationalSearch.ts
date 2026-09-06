@@ -32,8 +32,8 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   const record=get<HTMLButtonElement>('record'),stop=get<HTMLButtonElement>('stop'),submit=get<HTMLButtonElement>('submit');
   const text=get<HTMLTextAreaElement>('text'),processing=get('processing'),captureStatus=get('capture'),baseLabel=get('base');
   const answers=get('answers'),historyList=get('history-list'),recordings=get('recording-list'),resume=get<HTMLButtonElement>('resume');
-  const host=window as Host;let owner='';let authSeen=false;let generation=0;let store:VoiceStore;
-  let controller:ConversationController|null=null;let capture:MicrophoneCapture|null=null;let recordingId:string|null=null;
+  const host=window as Host;let owner='';let authSeen=false;let authStatus='';let generation=0;let store:VoiceStore;
+  let controllerReady=false;let controller:ConversationController|null=null;let capture:MicrophoneCapture|null=null;let recordingId:string|null=null;
   let pendingCommit=false;let receiptRetry=false;
   let recordingOwner='';let selectedBase:string|null=null;let mode:Mode='new_search';let viewed:string|null=null;let latest:string|null=null;
   let cursor:string|undefined;let state=initialState();let transition=Promise.resolve();let accepting=false;
@@ -44,11 +44,34 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   const showError=(error:unknown)=>{processing.textContent=errorText(error);if(!capture||!['requesting','recording'].includes(capture.status))presentation?.message(processing.textContent);resume.hidden=!state.draft;};
   const showComposer=()=>presentation?presentation.open():get('composer').scrollIntoView({block:'start'});
   const stopForOverlay=async()=>{if(capture&&['requesting','recording','stopping'].includes(capture.status))await capture.stop('interrupted');};
+  root.dataset.assistantStartup='opening_storage';delete root.dataset.assistantStartupError;
+  const openingCopy='Открываю локальные записи… Микрофон пока выключен.';
+  record.dataset.recordLabel ||= record.textContent || 'Начать запись';
+  record.textContent=record.dataset.recordLabel;record.onclick=null;record.disabled=true;
+  get('auth').textContent=openingCopy;
+  presentation?.setCapture('idle',openingCopy);
+  presentation?.bind(()=>presentation.message(openingCopy),async()=>{});
+  try{store=await VoiceStore.open();}catch(error){
+    const code=error instanceof Error?error.message:'voice_storage_unavailable';
+    root.dataset.assistantStartup='storage_error';
+    root.dataset.assistantStartupError=['voice_storage_open_timeout','voice_storage_upgrade_blocked'].includes(code)?code:'voice_storage_unavailable';
+    const copy=code==='voice_storage_upgrade_blocked'
+      ?'Локальные записи открыты в другой вкладке. Закройте другую вкладку этого сайта и повторите подключение. Записи не удалены.'
+      :code==='voice_storage_open_timeout'
+        ?'Локальное хранилище не ответило. Нажмите микрофон, чтобы повторить подключение. Записи не удалены; обычный поиск доступен.'
+        :'Не удалось открыть локальные записи. Нажмите микрофон, чтобы повторить подключение. Запись не начата; данные не удалены.';
+    processing.textContent=copy;get('auth').textContent=copy;root.dataset.assistantBound='false';
+    const retry=()=>{void mountConversationalSearch(root,presentation).catch(()=>presentation?.fail());};
+    record.textContent='Повторить подключение';record.disabled=false;record.hidden=false;record.onclick=retry;
+    presentation?.setCapture('error',copy);presentation?.bind(retry,async()=>{});
+    presentation?.launcher.setAttribute('aria-label','Повторить подключение голосового поиска');
+    return;
+  }
+  root.dataset.assistantStartup='checking_auth';processing.textContent='';
   get('login')?.addEventListener('click',()=>{
     get('auth').textContent='Открываю вход через Яндекс…';
     void auth.signIn().then(ok=>{if(!ok)get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';}).catch(()=>{get('auth').textContent='Не удалось открыть вход через Яндекс. Попробуйте ещё раз.';});
   });
-  try{store=await VoiceStore.open();}catch{processing.textContent='Не удалось открыть локальное хранилище. Голос отключён, чтобы не потерять запись; обычный поиск доступен.';presentation?.message(processing.textContent);presentation?.bind(()=>presentation.message(processing.textContent||''),async()=>{});record.disabled=true;return;}
   const notify=()=>window.dispatchEvent(new CustomEvent('kenigevents:search-context-changed',{detail:{viewedSectionId:viewed,refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}}));
   const visibility=new IntersectionObserver(entries=>{
     const visible=entries.filter(entry=>entry.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];
@@ -160,6 +183,7 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
     }
   }
   record.addEventListener('click',()=>{
+    if(!owner&&authStatus==='checking'){presentation?.message(get('auth').textContent||'Проверяю сохранённый вход…');return;}
     if(!owner){showComposer();get('auth').textContent='Войдите, чтобы начать голосовой поиск. Микрофон не включится автоматически после входа.';get<HTMLButtonElement>('login')?.focus();return;}
     if(pendingCommit){presentation?.message('Сохраняю запись. Дождитесь завершения.');return;}
     if(receiptRetry){showComposer();presentation?.message('Не удалось завершить сохранение. Повторите локальное сохранение, не закрывая вкладку.');return;}
@@ -211,11 +235,11 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&capture&&['requesting','recording'].includes(capture.status)){event.preventDefault();void capture.stop().catch(showError);}});
   window.addEventListener('beforeunload',event=>{if(pendingCommit||receiptRetry||capture?.unsavedParts().length||capture&&['requesting','recording','stopping'].includes(capture.status)){event.preventDefault();event.returnValue='';}});
   get<HTMLFormElement>('form').addEventListener('submit',event=>{
-    event.preventDefault();if(captureOnly||!controller||!text.value.trim()||accepting)return;accepting=true;transcriptRevision++;const raw=text.value;const active=controller;
+    event.preventDefault();if(captureOnly||!controllerReady||!controller||!text.value.trim()||accepting)return;accepting=true;transcriptRevision++;const raw=text.value;const active=controller;
     transition=transition.then(async()=>{try{await active.submit(raw,mode,selectedBase,visibleIds(selectedBase));if(controller===active&&text.value===raw){text.value='';transcriptRevision++;await presentation?.close();}}catch(error){showError(error);}finally{accepting=false;}});
   });
-  get('new').addEventListener('click',()=>{transcriptRevision++;void controller?.newTask().then(()=>{selectedBase=null;mode='new_search';baseLabel.textContent='Новый поиск';notify();}).catch(showError);});
-  resume.addEventListener('click',()=>{void controller?.resume();});
+  get('new').addEventListener('click',()=>{if(!controllerReady)return;transcriptRevision++;void controller?.newTask().then(()=>{selectedBase=null;mode='new_search';baseLabel.textContent='Новый поиск';notify();}).catch(showError);});
+  resume.addEventListener('click',()=>{if(controllerReady)void controller?.resume();});
   get('latest').addEventListener('click',()=>{if(latest)rendered.get(latest)?.element.scrollIntoView({block:'start'});});
   get('history-load').addEventListener('click',async()=>{
     const own=owner;if(captureOnly||!own)return;
@@ -247,34 +271,36 @@ export async function mountConversationalSearch(root:HTMLElement,presentation?:R
   announceAssistantSurface({version:'1.0.0',element:get('composer'),getState:()=>({viewedSectionId:viewed,refinementBaseId:selectedBase,pendingDraftId:state.draft?.id||null,capture:capture?.status||'idle'}),
     showComposer,showSection:id=>rendered.get(id)?.element.scrollIntoView({block:'start'}),
     beforeOverlayOpen:stopForOverlay,
-    diagnostic:()=>({contract:'kenigevents.voice-diagnostic.v1',capture:capture?.status||'idle',pending:!!state.draft,acceptedThrough:state.acceptedThrough,processedThrough:state.processedThrough,readout:measurement.readout()})});
+    diagnostic:()=>({contract:'kenigevents.voice-diagnostic.v1',startup:root.dataset.assistantStartup,controllerReady,capture:capture?.status||'idle',pending:!!state.draft,acceptedThrough:state.acceptedThrough,processedThrough:state.processedThrough,readout:measurement.readout()})});
   auth.subscribe(snapshot=>{
     if(snapshot.status==='checking'||snapshot.status==='error')get('auth').textContent=snapshot.message;
     const next=snapshot.status==='signed_in'&&snapshot.user&&!snapshot.user.is_anonymous?snapshot.user.id:'';
-    if(authSeen&&next===owner)return;authSeen=true;owner=next;transcriptRevision++;const epoch=++generation;
+    if(authSeen&&next===owner&&authStatus===snapshot.status)return;authSeen=true;authStatus=snapshot.status;owner=next;transcriptRevision++;const epoch=++generation;
     if(capture&&['requesting','recording'].includes(capture.status))void capture.stop('interrupted');
-    selectedBase=null;mode='new_search';viewed=null;latest=null;cursor=undefined;state=initialState();controller=null;text.value='';
+    selectedBase=null;mode='new_search';viewed=null;latest=null;cursor=undefined;state=initialState();controllerReady=false;controller=null;text.value='';
     for(const url of objectUrls)URL.revokeObjectURL(url);objectUrls.clear();for(const timer of dwell.values())clearTimeout(timer);dwell.clear();exposure.disconnect();visibility.disconnect();rendered.clear();answers.replaceChildren();historyList.replaceChildren();recordings.replaceChildren();measurement=new AssistantMeasurement();lastAction.clear();
-    for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=!owner||captureOnly;
+    for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=true;
     record.disabled=false;record.hidden=!owner;captureStatus.hidden=!owner;
     const login=get('login');if(login)login.hidden=Boolean(owner);
     const history=get('history');if(history)history.hidden=captureOnly||!owner;
     const recovery=get('recordings');if(recovery)recovery.hidden=true;
     get('auth').textContent=(snapshot.status==='checking'||snapshot.status==='error')?snapshot.message:owner?'':'Войдите, чтобы начать голосовой поиск. Микрофон не включится автоматически после входа.';resume.hidden=true;
-    if(!owner){presentation?.setCapture('idle','Голосовой поиск · нужен вход');return;}
+    if(!owner){root.dataset.assistantStartup=snapshot.status==='checking'?'checking_auth':snapshot.status==='error'?'auth_error':'signed_out';presentation?.setCapture('idle','Голосовой поиск · нужен вход');return;}
     presentation?.setCapture('idle',captureOnly?'Микрофон · пока без распознавания':'Голосовой поиск');
-    if(captureOnly){processing.textContent='';void loadRecordings().catch(showError);return;}
+    if(captureOnly){root.dataset.assistantStartup='ready';processing.textContent='';void loadRecordings().catch(showError);return;}
     const active=new ConversationController(owner,store,api,{change:value=>{if(epoch!==generation)return;state=value;resume.hidden=!state.draft;notify();},answer:(result,visible)=>{if(epoch===generation&&visible){renderAnswer(result);selectedBase=result.id;mode=result.clarification?'expand_selection':'refine_selection';baseLabel.textContent=`База: ${result.title}`;notify();}},status:message=>{if(epoch===generation)processing.textContent=message;},error:error=>{if(epoch===generation)showError(error);}});
-    controller=active;
+    controller=active;root.dataset.assistantStartup='restoring_conversation';
     void active.initialize().then(async()=>{
-      if(epoch!==generation)return;const saved=await store.page<StoredAnswer>('answers',owner,undefined,10);
+      if(epoch!==generation)return;controllerReady=true;root.dataset.assistantStartup='ready';
+      for(const name of ['submit','new','text','history-load'])(get(name) as HTMLButtonElement).disabled=false;
+      const saved=await store.page<StoredAnswer>('answers',owner,undefined,10);
       if(epoch!==generation)return;
       for(const row of saved.reverse()){
         try{const fresh=await api.status(owner,row.id);if(epoch!==generation)return;if(fresh.state==='completed')renderAnswer(fresh.result);}
         catch{if(epoch!==generation)return;processing.textContent='История сохранена на устройстве, но актуальность событий пока не проверена. Карточки не показаны как текущие.';}
       }
       await loadRecordings();if(state.draft)processing.textContent='Найден сохранённый незавершённый запрос. Обработка возобновится только по кнопке.';
-    }).catch(showError);
+    }).catch(error=>{if(epoch===generation){if(!controllerReady)root.dataset.assistantStartup='restore_error';showError(error);}});
   });
   presentation?.bind(()=>{
     if(capture&&['requesting','recording'].includes(capture.status)){void capture.stop().catch(showError);return;}

@@ -56,6 +56,43 @@ Search Edge runtime**, не второй TypeScript/Python service из ранн
   CDP `setPermission` использует Web PermissionDescriptor `microphone`, не
   enum `audioCapture` из другого метода.
 
+### Preview startup recovery — 2026-09-06
+
+`VoiceStore.open()` имеет watchdog 8 секунд активного browser runtime: зависший
+IndexedDB не оставляет микрофон с бесконечным «Поиск подключается».
+`data-assistant-startup` отражает `opening_storage`, `storage_error`,
+`checking_auth`, `signed_out`, `auth_error`, `restoring_conversation`, `ready`
+или `restore_error`; `data-assistant-startup-error` содержит только allowlisted
+storage code, без account/session/audio. После готовности adapter diagnostic
+дополнительно отдаёт startup и `controllerReady`.
+
+При timeout/unavailable/upgrade-blocked интерфейс явно сохраняет микрофон
+выключенным и предлагает **повторить подключение** тем же кругом или кнопкой
+записи. Retry — только открытие существующей БД, не запись и не отправка.
+Для записи после успешного retry требуется **ещё одно явное нажатие**: нельзя
+переносить microphone user gesture через длинный async bootstrap.
+
+IndexedDB open невозможно отменить как fetch: поздний success закрывает свою
+лишнюю connection, поздний upgrade после терминальной ошибки abort-ится.
+Blocked upgrade предлагает закрыть другую вкладку, не очистить сайт. Ни retry,
+ни timeout не меняют schema version 3, не удаляют audio/answers/conversations,
+Auth sessions, personalization или queues. Поведение основано на
+[IndexedDB connection/upgrade contract](https://www.w3.org/TR/IndexedDB-3/).
+
+Auth и durable conversation readiness не смешиваются: запись после готовности
+хранилища не ждёт загрузки старых ответов, а submit/new/resume не меняют kernel
+до owner-matched restore. Поздний restore другой identity не включает controls.
+Обычный Search заменяет guest status при подтверждённом signed_in синхронно;
+успех необязательного quota RPC для этого не нужен, повторный auth snapshot не
+стирает уже показанный Search outcome.
+
+Regression/evidence owner:
+[`INC-2026-09-06-voice-preview-startup`](../../../reports/incidents/INC-2026-09-06-voice-preview-startup.md).
+Задержанный IDB success воспроизводит симптом на настоящем published preview с
+QA session fixture, но **не доказывает причину задержки на физическом Telegram
+Android**. Browser-local replacement bundles доказывают локальный fix, не факт
+публикации. Physical-phone readback остаётся отдельным gate.
+
 ## 1. Продукт и границы
 
 Голос и текст — два входа одного разговорного поиска. Ответ образует самостоятельный раздел: название выборки, исходный вопрос, полезное краткое или раскрываемое пояснение, обычные карточки событий. Завершённый раздел сохраняется при следующем ответе. Вопрос об адресе или транспорте может получить полноценное пояснение без карточек. Во время обработки можно дополнить запрос.

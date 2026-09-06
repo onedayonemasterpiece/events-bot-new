@@ -22,10 +22,18 @@ const digest = async (bytes: Uint8Array) => Array.from(new Uint8Array(await cryp
 export class VoiceStore {
   private db: IDBDatabase;
   constructor(db: IDBDatabase) { this.db = db; }
-  static open(): Promise<VoiceStore> {
+  static open({ timeoutMs = 8000 }: { timeoutMs?: number } = {}): Promise<VoiceStore> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('kenigevents-voice-v1', 3);
+      let settled = false;
+      const fail = (code: string) => { if (!settled) { settled = true; clearTimeout(timer); reject(new Error(code)); } };
+      const timer = setTimeout(() => fail('voice_storage_open_timeout'), timeoutMs);
+      let request: IDBOpenDBRequest;
+      try { request = indexedDB.open('kenigevents-voice-v1', 3); }
+      catch { fail('voice_storage_unavailable'); return; }
       request.onupgradeneeded = () => {
+        // Open requests cannot be cancelled. A timed-out/blocked attempt must
+        // not later retain a connection or run an orphan upgrade after retry.
+        if (settled) { request.transaction?.abort(); return; }
         const db = request.result;
         for (const name of ['recordings', 'answers', 'commands']) {
           if (db.objectStoreNames.contains(name)) continue;
@@ -36,9 +44,11 @@ export class VoiceStore {
         if (!db.objectStoreNames.contains('compressedParts')) db.createObjectStore('compressedParts', { keyPath: ['owner', 'recordingId', 'index'] });
         if (!db.objectStoreNames.contains('conversations')) db.createObjectStore('conversations', { keyPath: 'owner' });
       };
-      request.onblocked = () => reject(new Error('voice_storage_upgrade_blocked'));
-      request.onerror = () => reject(new Error('voice_storage_unavailable'));
+      request.onblocked = () => fail('voice_storage_upgrade_blocked');
+      request.onerror = () => fail('voice_storage_unavailable');
       request.onsuccess = () => {
+        if (settled) { request.result.close(); return; }
+        settled = true; clearTimeout(timer);
         request.result.onversionchange = () => request.result.close();
         resolve(new VoiceStore(request.result));
       };
