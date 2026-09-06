@@ -1857,10 +1857,11 @@ class EventsEvidenceRepository:
             }
             for hit in await self._search_runtime_failures("", limit=10)
         ]
-        try:
-            quick_check = await self.db.quick_check()
-        except (ReadOnlySQLiteError, DatabaseUnavailableError, QueryBudgetExceeded) as exc:
-            quick_check = f"unavailable:{type(exc).__name__}"
+        # Integrity checking scans the whole database (SQLite quick_check is O(N)).
+        # It cannot share the interactive snapshot's small end-to-end budget;
+        # report absence of evidence rather than timing out all useful queue reads.
+        # Explicit operator/release checks still use ReadOnlySQLite.quick_check().
+        quick_check = "not_run:interactive_budget"
         try:
             database_bytes = os.path.getsize(self.config.database_path)
         except OSError:
