@@ -1,6 +1,6 @@
 # INC-2026-09-13 Guide VK monitoring uses flooded user token
 
-Status: open
+Status: monitoring
 Severity: sev2
 Service: Guide Excursions Monitoring / VK source ingestion on Kaggle
 Opened: 2026-09-13
@@ -105,8 +105,9 @@ The production health check currently reports `guide_excursions_full=ok` despite
 
 ## Immediate Mitigation
 
-- Deployed `origin/main` SHA `c5cbcf382dfc67fd33ed893abea1911d189c532a`: Guide public reads default to `VK_SERVICE_TOKEN`; error 9 opens a per-credential circuit and no longer receives five in-call retries; JobOutbox flood retries use the provider cooldown plus deterministic jitter.
+- Deployed runtime SHA `789bb37bfa69126892b0946986c687692edd358e`, reachable from `origin/main`: Guide public reads default to `VK_SERVICE_TOKEN`; error 9 opens a per-credential circuit and no longer receives five in-call retries; JobOutbox flood retries use the provider cooldown plus deterministic jitter.
 - First production deployment showed the intended provider containment: after boot, one user-token `wall.get` received error 9 at 08:01:19 UTC and opened the circuit; the next 118 observed transport checks were rejected locally, with no additional error-9 provider response. Follow-up also suppresses those per-call INFO lines, propagates flood state through photo upload, and stops fivefold retries for explicit group-auth rejection.
+- After the follow-up deployment, one `photos.getWallUploadServer` provider request received error 9 at 08:13:43 UTC. Later `vk_sync` jobs were deferred locally to staggered times after the one-hour circuit deadline; no `failed after 5 attempts` sequence appeared after that boot.
 
 ## Corrective Actions
 
@@ -124,11 +125,12 @@ The production health check currently reports `guide_excursions_full=ok` despite
 
 ## Release And Closure Evidence
 
-- deployed SHA: —
-- deploy path: —
-- regression checks: analysis-only probes completed; closure checks pending
-- post-deploy verification: —
+- deployed runtime SHA: `789bb37bfa69126892b0946986c687692edd358e` (merged to `origin/main` in PR #648)
+- deploy path: `scripts/deploy_fly_main.sh --remote-only`; Fly image `deployment-01M2CX1ZTV30BR9GY5D150YMWZ`, machine `48e419df93e078`
+- regression checks: targeted local suite `98 passed`; PR #647 and #648 CI passed; direct service-token read smoke passed for a group and a personal profile
+- post-deploy verification: `/healthz` reports `ok=true`, `ready=true`, DB `ok`; one provider error 9 opened the circuit, subsequent publication jobs were deferred locally, and no five-attempt VK call sequence or `database is locked` line was observed after the final boot in the checked window
+- closure pending: the next normal Guide scheduled scan must produce six non-error VK source reports; historical catch-up remains explicitly excluded
 
 ## Prevention
 
-Pending corrective implementation and regression coverage.
+Regression coverage now enforces service-token routing for Guide public reads, one-attempt handling for error 9 and explicit actor/auth rejection, actor-circuit deferral, and typed flood propagation through photo upload. The incident remains in monitoring until the next normal Guide scan validates all six production VK sources.
