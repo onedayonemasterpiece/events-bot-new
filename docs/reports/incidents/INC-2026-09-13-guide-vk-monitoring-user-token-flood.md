@@ -6,7 +6,7 @@ Service: Guide Excursions Monitoring / VK source ingestion on Kaggle
 Opened: 2026-09-13
 Closed: —
 Owners: events-bot operations
-Related incidents: `INC-2026-04-21-guide-gemma4-partial-monitoring`, `INC-2026-04-23-guide-digest-extraction-loss`
+Related incidents: `INC-2026-04-21-guide-gemma4-partial-monitoring`, `INC-2026-04-23-guide-digest-extraction-loss`, `INC-2026-04-14-daily-delay-vk-auto-queue-lock-storm`, `INC-2026-07-03-current-import-vector-vk-publication`
 Related docs: `docs/features/guide-excursions-monitoring/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -47,6 +47,28 @@ The primary Fly VK crawler already reads public VK walls with `VK_SERVICE_TOKEN`
 - Mixed-platform guide runs are marked `partial`; total loss of all VK sources does not have a dedicated lane-level failure/alert.
 - The server-side `guide_source.last_scan_at` is advanced when error reports are imported, so a recent scan timestamp alone does not prove that any VK posts were fetched.
 - Main event monitoring and Guide monitoring have separate token-routing implementations, making the service-token policy incomplete despite `VK_READ_VIA_SERVICE=true` on Fly.
+
+## Related Smart Update / Core Event Ingestion Analysis
+
+The Smart Update module itself does not issue VK HTTP requests. Its VK source evidence enters through upstream boundaries:
+
+1. `vk_intake.py` discovers posts with `main.vk_wall_since()` -> `main.vk_api("wall.get")`; production routes this to the service token.
+2. `vk_auto_queue.fetch_vk_post_text_and_photos()` re-reads the exact post with `main.vk_api("wall.getById")`; production routes this to the service token.
+3. Video evidence refresh deliberately passes `_force_user_actor=True` to `video.get`. In the inspected runtime window this path completed 249 times with no refresh failures, so it is not currently the lost-post boundary and must not be switched blindly without checking returned file metadata.
+4. Smart Update then consumes the captured source envelope and performs no further VK read. Downstream `vk_sync` publication is separate from canonical event persistence.
+
+Production evidence shows the service-read boundary is healthy, but core event filling is still unstable for other reasons:
+
+- recent 48-hour evidence contains 100 inserted VK `event_source` rows and 59 events with VK source URLs, proving the core lane is not in a total read outage;
+- recent `vk_auto_import` runs repeatedly fail before processing with `OperationalError: database is locked`;
+- the available runtime logs contain 393 `database is locked` lines, including repeated failures in the VK crawl continuation claim and Telegram on-demand dispatcher;
+- current storage contains 3,668 pending VK source packets, including 823 marked `ORPHANED_LEASE`, plus 1,530 `failed_technical`;
+- recent Smart Update terminal failures are dominated by identity/grounding decisions (`distinct_not_grounded`, blocking merge conflicts, location/region review failures), not VK API read errors;
+- 180 `vk_sync` jobs are in error and many retry indefinitely. Current samples include `Flood control` on `wall.edit`/`wall.post` and `vk_sync_missing_media_for_telegram_event`. This is downstream publication debt, but the retry storm consumes API/DB capacity and can destabilize ingestion; causality for the SQLite lock holder still requires transaction-boundary instrumentation.
+
+A separate source-level anomaly remains: 120 of 121 primary VK crawl cursors were checked within 12 hours, while `radostidetam` has not advanced since 2026-08-30. A direct service-token `wall.get` succeeds, and the crawler suppresses the per-source exception traceback in its broad `except`, so the cause is not observable from current logs.
+
+The production health check currently reports `guide_excursions_full=ok` despite full Guide runs importing zero VK posts from six provider-error sources. Scheduler liveness is therefore not sufficient evidence of ingestion health.
 
 ## Automation Contract
 
