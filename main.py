@@ -640,6 +640,7 @@ async def _vk_throttle() -> None:
 VK_SERVICE_READ_METHODS = {
     "utils.resolveScreenName",
     "groups.getById",
+    "users.get",
     "wall.get",
     "wall.getById",
     "photos.getById",
@@ -782,6 +783,8 @@ def format_metrics() -> str:
         lines.append(
             f"vk_fallback_group_to_user_total{{method=\"{method}\"}} {count}"
         )
+    for actor, count in vk_flood_control_total.items():
+        lines.append(f"vk_flood_control_total{{actor=\"{actor}\"}} {count}")
     lines.append(f"vk_crawl_groups_total {vk_crawl_groups_total}")
     lines.append(f"vk_crawl_posts_scanned_total {vk_crawl_posts_scanned_total}")
     lines.append(f"vk_crawl_matched_total {vk_crawl_matched_total}")
@@ -820,6 +823,48 @@ async def metrics_handler(request: web.Request) -> web.Response:
 # circuit breaker for group-token permission errors
 VK_CB_TTL = 12 * 3600
 vk_group_blocked: dict[str, float] = {}
+try:
+    VK_FLOOD_COOLDOWN_SECONDS = max(
+        60, int(os.getenv("VK_FLOOD_COOLDOWN_SECONDS", "3600"))
+    )
+except ValueError:
+    VK_FLOOD_COOLDOWN_SECONDS = 3600
+try:
+    VK_FLOOD_OUTBOX_JITTER_SECONDS = max(
+        0, int(os.getenv("VK_FLOOD_OUTBOX_JITTER_SECONDS", "900"))
+    )
+except ValueError:
+    VK_FLOOD_OUTBOX_JITTER_SECONDS = 900
+vk_actor_flood_blocked: dict[str, float] = {}
+vk_flood_control_total: dict[str, int] = defaultdict(int)
+
+
+def _vk_actor_flood_key(token: str) -> str:
+    """Return a non-secret process-local identity for a VK credential."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+
+
+def _vk_actor_flood_remaining(token: str, *, now: float | None = None) -> float:
+    current = _time.time() if now is None else now
+    key = _vk_actor_flood_key(token)
+    blocked_until = vk_actor_flood_blocked.get(key, 0.0)
+    if blocked_until <= current:
+        vk_actor_flood_blocked.pop(key, None)
+        return 0.0
+    return blocked_until - current
+
+
+def _vk_mark_actor_flood(kind: str, token: str) -> float:
+    blocked_until = _time.time() + VK_FLOOD_COOLDOWN_SECONDS
+    vk_actor_flood_blocked[_vk_actor_flood_key(token)] = blocked_until
+    vk_flood_control_total[kind] += 1
+    logging.warning(
+        "vk.actor=%s flood_circuit=blocked cooldown_sec=%s until=%s",
+        kind,
+        VK_FLOOD_COOLDOWN_SECONDS,
+        datetime.fromtimestamp(blocked_until, timezone.utc).isoformat(),
+    )
+    return blocked_until
 ICS_CONTENT_TYPE = "text/calendar; charset=utf-8"
 ICS_CONTENT_DISP_TEMPLATE = 'inline; filename="{name}"'
 ICS_CALNAME = "kenigevents"
@@ -3595,6 +3640,21 @@ async def vk_api(method: str, **params: Any) -> Any:
     if not token:
         raise VKAPIError(None, "VK token not set", method=method)
     redacted_token = redact_token(token)
+    flood_remaining = _vk_actor_flood_remaining(token)
+    if flood_remaining > 0:
+        retry_after = max(1, math.ceil(flood_remaining))
+        logging.info(
+            "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
+            kind,
+            method,
+            retry_after,
+        )
+        raise VKFloodControlError(
+            method=method,
+            actor=kind,
+            token=redacted_token,
+            retry_after_seconds=retry_after,
+        )
     call_params = params.copy()
     call_params["access_token"] = token
     call_params["v"] = VK_API_VERSION
@@ -3631,6 +3691,15 @@ async def vk_api(method: str, **params: Any) -> Any:
             kind,
             logged_token,
         )
+        if err.get("error_code") == 9:
+            blocked_until = _vk_mark_actor_flood(kind or "unknown", token)
+            raise VKFloodControlError(
+                message=(logged_message if private_mcp_log_boundary else err.get("error_msg", "")),
+                method=method,
+                actor=kind,
+                token=logged_token,
+                retry_after_seconds=max(1, int(blocked_until - _time.time())),
+            )
         raise VKAPIError(
             err.get("error_code"),
             logged_message if private_mcp_log_boundary else err.get("error_msg", ""),
@@ -3802,6 +3871,22 @@ class VKPermissionError(VKAPIError):
     """Raised when VK posting is blocked and no fallback token is available."""
 
 
+class VKFloodControlError(VKAPIError):
+    """VK error 9 with the remaining actor-level circuit cooldown."""
+
+    def __init__(
+        self,
+        message: str = "Flood control",
+        *,
+        method: str | None = None,
+        actor: str | None = None,
+        token: str | None = None,
+        retry_after_seconds: int = 1,
+    ) -> None:
+        self.retry_after_seconds = max(1, int(retry_after_seconds))
+        super().__init__(9, message, method=method, actor=actor, token=token)
+
+
 async def _vk_api(
     method: str,
     params: dict,
@@ -3866,7 +3951,19 @@ async def _vk_api(
     last_token: str | None = None
     session = get_vk_session()
     fallback_next = False
+    flood_retry_delays: list[int] = []
     for idx, (kind, token) in enumerate(tokens):
+        flood_remaining = _vk_actor_flood_remaining(token)
+        if flood_remaining > 0:
+            retry_after = max(1, math.ceil(flood_remaining))
+            flood_retry_delays.append(retry_after)
+            logging.info(
+                "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
+                kind,
+                method,
+                retry_after,
+            )
+            continue
         call_params = orig_params.copy()
         call_params["access_token"] = token
         call_params["v"] = "5.131"
@@ -3919,6 +4016,17 @@ async def _vk_api(
                 msg = "" if msg is None else str(msg)
             msg_l = msg.lower()
             code = err.get("error_code")
+            if code == 9:
+                blocked_until = _vk_mark_actor_flood(kind, token)
+                flood_retry_delays.append(max(1, int(blocked_until - _time.time())))
+                last_err = err
+                last_actor = kind
+                last_token = redacted_token
+                if idx < len(tokens) - 1:
+                    fallback_next = True
+                # Retrying the rejected actor inside this call only extends
+                # the provider flood window.
+                break
             if code == 14:
                 _vk_captcha_needed = True
                 _vk_captcha_sid = err.get("captcha_sid")
@@ -4009,6 +4117,14 @@ async def _vk_api(
             if fallback_next and idx < len(tokens) - 1:
                 continue
             code = err.get("error_code")
+            if code == 9:
+                raise VKFloodControlError(
+                    message=err.get("error_msg", "Flood control"),
+                    method=method,
+                    actor=kind,
+                    token=redacted_token,
+                    retry_after_seconds=min(flood_retry_delays or [VK_FLOOD_COOLDOWN_SECONDS]),
+                )
             raise VKAPIError(
                 code,
                 err.get("error_msg", ""),
@@ -4019,6 +4135,20 @@ async def _vk_api(
                 token=redacted_token,
             )
         break
+    if last_err and last_err.get("error_code") == 9:
+        raise VKFloodControlError(
+            message=last_err.get("error_msg", "Flood control"),
+            method=method,
+            actor=last_actor,
+            token=last_token,
+            retry_after_seconds=min(flood_retry_delays or [VK_FLOOD_COOLDOWN_SECONDS]),
+        )
+    if flood_retry_delays:
+        raise VKFloodControlError(
+            message="Flood control cooldown active",
+            method=method,
+            retry_after_seconds=min(flood_retry_delays),
+        )
     if last_err:
         raise VKAPIError(
             last_err.get("error_code"),
@@ -19764,6 +19894,7 @@ async def _run_due_jobs_once_locked(
         static_failure = None
         static_deferred = False
         vector_deferred_at = None
+        vk_flood_retry_at: datetime | None = None
         if not handler:
             status = JobStatus.done
             err = None
@@ -19893,7 +20024,23 @@ async def _run_due_jobs_once_locked(
                 took_ms = (_time.perf_counter() - start) * 1000
                 pause = False
                 if isinstance(exc, VKAPIError):
-                    if exc.code == 14:
+                    if isinstance(exc, VKFloodControlError):
+                        retry_seconds = max(1, int(exc.retry_after_seconds))
+                        jitter = (
+                            int(job.id) % (VK_FLOOD_OUTBOX_JITTER_SECONDS + 1)
+                            if VK_FLOOD_OUTBOX_JITTER_SECONDS
+                            else 0
+                        )
+                        vk_flood_retry_at = datetime.now(timezone.utc) + timedelta(
+                            seconds=retry_seconds + jitter
+                        )
+                        err = (
+                            f"vk_flood_wait:{int(vk_flood_retry_at.timestamp())}:"
+                            f"{exc.actor or 'unknown'}:{exc.method or 'unknown'}"
+                        )
+                        status = JobStatus.error
+                        retry = True
+                    elif exc.code == 14:
                         err = f"captcha_wait:{int(datetime.now(timezone.utc).timestamp())}"
                         status = JobStatus.paused
                         pause = True
@@ -19948,7 +20095,15 @@ async def _run_due_jobs_once_locked(
                     task=obj.task.value,
                     exc=(err.splitlines()[0] if err.splitlines() else "error"),
                 )
-                logging.exception("job %s failed", job.id)
+                if isinstance(exc, VKFloodControlError):
+                    logging.info(
+                        "job %s deferred by VK flood circuit task=%s retry_at=%s",
+                        job.id,
+                        obj.task.value,
+                        vk_flood_retry_at.isoformat() if vk_flood_retry_at else None,
+                    )
+                else:
+                    logging.exception("job %s failed", job.id)
                 link = None
         logging.info(
             "RUN done key=%s status=%s duration_ms=%.0f",
@@ -20014,10 +20169,17 @@ async def _run_due_jobs_once_locked(
                     if retry:
                         if obj.task != JobTask.static_site_build:
                             obj.attempts += 1
-                        delay = BACKOFF_SCHEDULE[
-                            min(obj.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
-                        ]
-                        obj.next_run_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                        if vk_flood_retry_at is not None:
+                            obj.next_run_at = vk_flood_retry_at
+                            # The circuit log/metric is the single incident
+                            # signal; one notification per queued publication
+                            # would create another avoidable storm.
+                            send = False
+                        else:
+                            delay = BACKOFF_SCHEDULE[
+                                min(obj.attempts - 1, len(BACKOFF_SCHEDULE) - 1)
+                            ]
+                            obj.next_run_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
                     else:
                         obj.next_run_at = datetime.now(timezone.utc) + timedelta(days=3650)
                 session.add(obj)

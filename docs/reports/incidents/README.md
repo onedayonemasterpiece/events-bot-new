@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-13-guide-vk-monitoring-user-token-flood.md`
+  - Scope: Guide Excursions Kaggle VK source reads, encrypted token routing, service-token preference, VK error-9 pacing, and missed-window catch-up.
+  - Must not regress: public Guide VK reads must not default to a publishing/user token while a service token is available; closure requires all six VK sources to scan successfully plus a compensating catch-up from the last successful VK run.
 - `INC-2026-09-03-devcoveer-mcp-runtime-502.md`
   - Scope: DevCoveer secure tunnel, stdio bridge execution channel, native Codex app-server lifecycle, tunnel-client upgrade activation, semantic readiness, and host disk headroom.
   - Must not regress: green `/healthz` and `/readyz` are insufficient when runtime calls fail; closure requires successful local and external `find_projects`, `list_tasks`, and native Codex `list_models`, plus one bounded read-only `start_task`/`read_task`. Tunnel-client upgrades must be reflected by the running service, and disk-full evidence must be checked before blaming model/provider catalogs.

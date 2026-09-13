@@ -9,6 +9,12 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
+- Stop VK error-9 amplification: the shared transport now performs one provider
+  attempt, opens a per-credential one-hour circuit, and staggers JobOutbox
+  retries instead of issuing five immediate calls and hourly synchronized
+  storms. Guide Excursions public reads and personal-source `users.get` now use
+  `VK_SERVICE_TOKEN` by default, isolated from publication credentials
+  (INC-2026-09-13).
 - Decode JSON-shaped queue error text before recursive secret/personal-ID
   redaction, and reject fractional queue IDs instead of truncating them (R0).
 - Prevent full SQLite integrity scans from exhausting owner MCP snapshot latency:

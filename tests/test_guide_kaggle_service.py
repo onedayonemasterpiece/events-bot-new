@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -94,6 +95,36 @@ def test_guide_flat_bundle_bootstrap_copies_all_python_sources() -> None:
 
     assert 'sorted(flat_repo_root.glob("*.py"))' in source
     assert "shutil.copy2(flat_repo_root / name" not in source
+
+
+def test_guide_vk_public_reads_default_to_service_token(monkeypatch) -> None:
+    for key in (
+        "TELEGRAM_AUTH_BUNDLE_S22",
+        "TELEGRAM_AUTH_BUNDLE_E2E",
+        "GUIDE_MONITORING_AUTH_BUNDLE_ENV",
+        "GUIDE_MONITORING_VK_TOKEN",
+        "GUIDE_MONITORING_VK_TOKEN_ENV",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("TG_API_ID", "1")
+    monkeypatch.setenv("TG_API_HASH", "hash")
+    monkeypatch.setenv("TG_SESSION", "session")
+    monkeypatch.setenv("GOOGLE_API_KEY2", "google")
+    monkeypatch.setenv("VK_SERVICE_TOKEN", "service-vk")
+    monkeypatch.setenv("VK_ACCESS_TOKEN5", "publishing-vk")
+
+    payload = json.loads(kaggle_service._build_secrets_payload())
+
+    assert payload["GUIDE_MONITORING_VK_TOKEN"] == "service-vk"
+    assert payload["GUIDE_MONITORING_VK_TOKEN_ENV"] == "VK_SERVICE_TOKEN"
+
+    source = Path(
+        "kaggle/GuideExcursionsMonitor/guide_excursions_monitor.py"
+    ).read_text(encoding="utf-8")
+    assert 'or "VK_SERVICE_TOKEN"' in source
+    assert 'or "VK_ACCESS_TOKEN5"' not in source
+    assert "GUIDE_MONITORING_VK_MIN_INTERVAL_MS" in source
+    assert "_VK_FLOOD_BLOCKED_UNTIL" in source
 
 
 @pytest.mark.asyncio

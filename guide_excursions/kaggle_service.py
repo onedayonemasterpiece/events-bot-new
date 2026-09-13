@@ -347,7 +347,12 @@ def _build_secrets_payload() -> str:
             payload["TG_SESSION"] = str(bundle.get("session") or "").strip()
     else:
         payload["TG_SESSION"] = _require_env_any("TG_SESSION", "TELEGRAM_SESSION")
-    vk_token_env = (os.getenv("GUIDE_MONITORING_VK_TOKEN_ENV") or "VK_ACCESS_TOKEN5").strip() or "VK_ACCESS_TOKEN5"
+    # Guide monitoring performs public, read-only VK calls. Keep it off the
+    # user/community publication credentials and their independent flood
+    # budget unless an operator explicitly overrides the source env.
+    vk_token_env = (
+        os.getenv("GUIDE_MONITORING_VK_TOKEN_ENV") or "VK_SERVICE_TOKEN"
+    ).strip() or "VK_SERVICE_TOKEN"
     vk_token = (os.getenv("GUIDE_MONITORING_VK_TOKEN") or os.getenv(vk_token_env) or "").strip()
     if vk_token:
         payload["GUIDE_MONITORING_VK_TOKEN"] = vk_token
@@ -367,6 +372,8 @@ def _build_secrets_payload() -> str:
         "GUIDE_MONITORING_GOOGLE_KEY_ENV",
         "GUIDE_MONITORING_VK_API_VERSION",
         "GUIDE_MONITORING_VK_TIMEOUT_SEC",
+        "GUIDE_MONITORING_VK_MIN_INTERVAL_MS",
+        "GUIDE_MONITORING_VK_FLOOD_COOLDOWN_SECONDS",
         "GOOGLE_API_LOCALNAME2",
         "GOOGLE_API_LOCALNAME",
         "GOOGLE_AI_ALLOW_RESERVE_FALLBACK",

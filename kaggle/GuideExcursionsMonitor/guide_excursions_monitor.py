@@ -219,6 +219,10 @@ GUIDE_OCR_MAX_IMAGE_BYTES = 6 * 1024 * 1024
 GUIDE_OCR_TEXT_LIMIT = 1200
 VK_API_VERSION = "5.199"
 VK_TIMEOUT_SECONDS = 20
+VK_MIN_INTERVAL_SECONDS = 0.35
+VK_FLOOD_COOLDOWN_SECONDS = 3600
+_VK_LAST_CALL_MONOTONIC = 0.0
+_VK_FLOOD_BLOCKED_UNTIL = 0.0
 _GEMMA_CLIENTS: dict[str, Any] = {}
 _SUPABASE_CLIENT: Any | None = None
 _LLM_GATEWAY_LOGGED = False
@@ -280,7 +284,8 @@ def refresh_runtime_settings() -> None:
     global LLM_TIMEOUT_RETRY_ATTEMPTS, LLM_PROVIDER_5XX_RETRY_ATTEMPTS
     global ANNOUNCE_MULTI_FULL_TIMEOUT_SECONDS
     global GUIDE_OCR_ENABLED, GUIDE_OCR_IMAGE_LIMIT_PER_POST, GUIDE_OCR_MAX_IMAGE_BYTES, GUIDE_OCR_TEXT_LIMIT
-    global VK_API_VERSION, VK_TIMEOUT_SECONDS
+    global VK_API_VERSION, VK_TIMEOUT_SECONDS, VK_MIN_INTERVAL_SECONDS
+    global VK_FLOOD_COOLDOWN_SECONDS, _VK_LAST_CALL_MONOTONIC, _VK_FLOOD_BLOCKED_UNTIL
     global _GEMMA_CLIENTS, _SUPABASE_CLIENT, _LLM_GATEWAY_LOGGED
     MODEL = (os.getenv("GUIDE_MONITORING_MODEL") or DEFAULT_GUIDE_MONITORING_MODEL).strip()
     SCREEN_MODEL = (os.getenv("GUIDE_MONITORING_SCREEN_MODEL") or DEFAULT_GUIDE_MONITORING_SCREEN_MODEL).strip()
@@ -349,6 +354,37 @@ def refresh_runtime_settings() -> None:
         )
     except Exception:
         VK_TIMEOUT_SECONDS = 20
+    try:
+        VK_MIN_INTERVAL_SECONDS = max(
+            0.05,
+            min(
+                float(
+                    (os.getenv("GUIDE_MONITORING_VK_MIN_INTERVAL_MS") or "350").strip()
+                    or 350
+                )
+                / 1000.0,
+                5.0,
+            ),
+        )
+    except Exception:
+        VK_MIN_INTERVAL_SECONDS = 0.35
+    try:
+        VK_FLOOD_COOLDOWN_SECONDS = max(
+            60,
+            min(
+                int(
+                    float(
+                        (os.getenv("GUIDE_MONITORING_VK_FLOOD_COOLDOWN_SECONDS") or "3600").strip()
+                        or 3600
+                    )
+                ),
+                86400,
+            ),
+        )
+    except Exception:
+        VK_FLOOD_COOLDOWN_SECONDS = 3600
+    _VK_LAST_CALL_MONOTONIC = 0.0
+    _VK_FLOOD_BLOCKED_UNTIL = 0.0
     _GEMMA_CLIENTS = {}
     _SUPABASE_CLIENT = None
     _LLM_GATEWAY_LOGGED = False
@@ -768,14 +804,26 @@ def _vk_token() -> str:
     token = (os.getenv("GUIDE_MONITORING_VK_TOKEN") or "").strip()
     if token:
         return token
-    token_env = (os.getenv("GUIDE_MONITORING_VK_TOKEN_ENV") or "VK_ACCESS_TOKEN5").strip() or "VK_ACCESS_TOKEN5"
+    token_env = (
+        os.getenv("GUIDE_MONITORING_VK_TOKEN_ENV") or "VK_SERVICE_TOKEN"
+    ).strip() or "VK_SERVICE_TOKEN"
     return (os.getenv(token_env) or "").strip()
 
 
 def _vk_api_call(method: str, params: dict[str, Any]) -> Any:
+    global _VK_LAST_CALL_MONOTONIC, _VK_FLOOD_BLOCKED_UNTIL
     token = _vk_token()
     if not token:
         raise RuntimeError("GUIDE_MONITORING_VK_TOKEN is missing in Kaggle runtime")
+    now = time.monotonic()
+    if now < _VK_FLOOD_BLOCKED_UNTIL:
+        retry_after = max(1, int(_VK_FLOOD_BLOCKED_UNTIL - now))
+        raise RuntimeError(
+            f"VK API {method} flood circuit active; retry_after_seconds={retry_after}"
+        )
+    wait = (_VK_LAST_CALL_MONOTONIC + VK_MIN_INTERVAL_SECONDS) - now
+    if wait > 0:
+        time.sleep(wait)
     payload = {key: value for key, value in params.items() if value is not None}
     payload["access_token"] = token
     payload["v"] = VK_API_VERSION
@@ -783,10 +831,15 @@ def _vk_api_call(method: str, params: dict[str, Any]) -> Any:
     request = urllib.request.Request(url, headers={"User-Agent": "events-bot-guide-monitor/1.0"})
     with urllib.request.urlopen(request, timeout=VK_TIMEOUT_SECONDS) as response:
         raw = response.read().decode("utf-8")
+    _VK_LAST_CALL_MONOTONIC = time.monotonic()
     data = json.loads(raw)
     if isinstance(data, dict) and data.get("error"):
         error = data["error"]
         if isinstance(error, dict):
+            if error.get("error_code") == 9:
+                _VK_FLOOD_BLOCKED_UNTIL = (
+                    time.monotonic() + VK_FLOOD_COOLDOWN_SECONDS
+                )
             raise RuntimeError(f"VK API {method} error {error.get('error_code')}: {error.get('error_msg')}")
         raise RuntimeError(f"VK API {method} error: {error}")
     return data.get("response") if isinstance(data, dict) else data
