@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-13-dataset-loop-chatgpt-oauth-discovery.md`
+  - Scope: Dataset Loop MCP protected-resource discovery, KenigEvents Identity resource/scopes, dual OAuth+PCT auth, exact systemd release configuration, and ChatGPT custom connector OAuth/tool scan.
+  - Must not regress: closure requires public metadata/challenge checks, authenticated initialize/tool listing, Dataset fix reachability from `origin/main`, and a real ChatGPT UI OAuth connection confirmation.
 - `INC-2026-09-13-guide-vk-monitoring-user-token-flood.md`
   - Scope: Guide Excursions Kaggle VK source reads, encrypted token routing, service-token preference, VK error-9 pacing, and missed-window catch-up.
   - Must not regress: public Guide VK reads must not default to a publishing/user token while a service token is available; closure requires all six VK sources to scan successfully plus a compensating catch-up from the last successful VK run.

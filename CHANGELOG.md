@@ -9,6 +9,10 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
+- Restored ChatGPT OAuth discovery for Dataset Loop MCP by enabling dual
+  OAuth/PCT authentication, publishing protected-resource metadata and bearer
+  challenges, and registering the Dataset resource/scopes in KenigEvents
+  Identity (`INC-2026-09-13-dataset-loop-chatgpt-oauth-discovery`).
 - Stop VK error-9 amplification: the shared transport now performs one provider
   attempt, opens a per-credential one-hour circuit, and staggers JobOutbox
   retries instead of issuing five immediate calls and hourly synchronized
