@@ -3643,7 +3643,7 @@ async def vk_api(method: str, **params: Any) -> Any:
     flood_remaining = _vk_actor_flood_remaining(token)
     if flood_remaining > 0:
         retry_after = max(1, math.ceil(flood_remaining))
-        logging.info(
+        logging.debug(
             "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
             kind,
             method,
@@ -3957,7 +3957,7 @@ async def _vk_api(
         if flood_remaining > 0:
             retry_after = max(1, math.ceil(flood_remaining))
             flood_retry_delays.append(retry_after)
-            logging.info(
+            logging.debug(
                 "vk.actor=skip actor=%s reason=flood_circuit method=%s retry_after_sec=%s",
                 kind,
                 method,
@@ -4103,6 +4103,22 @@ async def _vk_api(
                 last_actor = kind
                 last_token = redacted_token
                 fallback_next = True
+                break
+            if (
+                code in VK_FALLBACK_CODES
+                or "method is unavailable with group auth" in msg_l
+                or "access to adding post denied" in msg_l
+                or "access denied" in msg_l
+            ):
+                # Actor/permission failures do not become valid by repeating
+                # the same credential five times. Explicit-actor callers own
+                # any fallback to their next candidate.
+                logging.info(
+                    "vk no-retry actor auth error actor=%s method=%s code=%s",
+                    kind,
+                    method,
+                    code,
+                )
                 break
             if attempt == len(BACKOFF_DELAYS):
                 logging.warning(
@@ -4296,6 +4312,8 @@ async def upload_vk_photo(
                         mem_info("VK upload after")
                     return f"photo{info['owner_id']}_{info['id']}"
             except VKAPIError as e:
+                if isinstance(e, VKFloodControlError):
+                    raise
                 logging.warning(
                     "vk.upload error actor=%s token=%s code=%s msg=%s",
                     e.actor,
@@ -4319,6 +4337,8 @@ async def upload_vk_photo(
                 raise
         return None
     except VKAPIError as e:
+        if isinstance(e, VKFloodControlError):
+            raise
         if e.code == 14:
             logging.error("VK photo upload blocked by captcha: %s", e)
             raise
@@ -4477,6 +4497,8 @@ async def upload_vk_photo_bytes(
                     info = save["response"][0]
                     return f"photo{info['owner_id']}_{info['id']}"
             except VKAPIError as e:
+                if isinstance(e, VKFloodControlError):
+                    raise
                 logging.warning(
                     "vk.upload.bytes error actor=%s token=%s code=%s msg=%s",
                     e.actor,
@@ -4500,6 +4522,8 @@ async def upload_vk_photo_bytes(
                 raise
         return None
     except VKAPIError as e:
+        if isinstance(e, VKFloodControlError):
+            raise
         if e.code == 14:
             logging.error("VK byte photo upload blocked by captcha: %s", e)
             raise

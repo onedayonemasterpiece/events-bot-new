@@ -105,7 +105,8 @@ The production health check currently reports `guide_excursions_full=ok` despite
 
 ## Immediate Mitigation
 
-- Implementation prepared: Guide public reads default to `VK_SERVICE_TOKEN`; error 9 opens a per-credential circuit and no longer receives five in-call retries; JobOutbox flood retries use the provider cooldown plus deterministic jitter. Deployment evidence remains pending.
+- Deployed `origin/main` SHA `c5cbcf382dfc67fd33ed893abea1911d189c532a`: Guide public reads default to `VK_SERVICE_TOKEN`; error 9 opens a per-credential circuit and no longer receives five in-call retries; JobOutbox flood retries use the provider cooldown plus deterministic jitter.
+- First production deployment showed the intended provider containment: after boot, one user-token `wall.get` received error 9 at 08:01:19 UTC and opened the circuit; the next 118 observed transport checks were rejected locally, with no additional error-9 provider response. Follow-up also suppresses those per-call INFO lines, propagates flood state through photo upload, and stops fivefold retries for explicit group-auth rejection.
 
 ## Corrective Actions
 

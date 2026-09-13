@@ -183,6 +183,39 @@ async def test_vk_actor_error_9_opens_token_circuit_without_inner_retries(monkey
 
 
 @pytest.mark.asyncio
+async def test_vk_explicit_actor_auth_error_is_not_retried(monkeypatch):
+    monkeypatch.setattr(main, "_vk_captcha_needed", False)
+    monkeypatch.setattr(main, "BACKOFF_DELAYS", [0, 0, 0, 0, 0])
+    main.vk_actor_flood_blocked.clear()
+    attempts = 0
+
+    async def fake_http_call(name, method, url, timeout, data, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        return DummyResp(
+            {
+                "error": {
+                    "error_code": 27,
+                    "error_msg": "Group authorization failed: method is unavailable with group auth.",
+                }
+            }
+        )
+
+    monkeypatch.setattr(main, "http_call", fake_http_call)
+
+    with pytest.raises(main.VKAPIError) as exc:
+        await main._vk_api(
+            "wall.get",
+            {"owner_id": "-1"},
+            token="group-token",
+            token_kind="group",
+        )
+
+    assert exc.value.code == 27
+    assert attempts == 1
+
+
+@pytest.mark.asyncio
 async def test_public_users_get_uses_service_actor(monkeypatch):
     monkeypatch.setattr(main, "VK_READ_VIA_SERVICE", True)
     monkeypatch.setattr(main, "VK_SERVICE_TOKEN", "service-token")

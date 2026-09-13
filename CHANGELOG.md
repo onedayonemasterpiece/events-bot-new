@@ -14,7 +14,8 @@
   retries instead of issuing five immediate calls and hourly synchronized
   storms. Guide Excursions public reads and personal-source `users.get` now use
   `VK_SERVICE_TOKEN` by default, isolated from publication credentials
-  (INC-2026-09-13).
+  (INC-2026-09-13). Explicit actor/auth failures also stop after one attempt,
+  and photo-upload flood state now reaches JobOutbox instead of being swallowed.
 - Decode JSON-shaped queue error text before recursive secret/personal-ID
   redaction, and reject fractional queue IDs instead of truncating them (R0).
 - Prevent full SQLite integrity scans from exhausting owner MCP snapshot latency:
