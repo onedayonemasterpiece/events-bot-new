@@ -31,6 +31,7 @@ ChatGPT could not create the Dataset Loop custom MCP connector with OAuth. The p
 - 2026-09-13 UTC — deployed Dataset Loop SHA `5eed4961d8952920e3328b2f19498bfbaf597717` with `oidc_and_pct` and canonical issuer/audience/JWKS settings.
 - 2026-09-13 UTC — cancelled stale queued run `2db244f7-2076-5c26-8f28-bdfc86808aa6` after it prevented an attempted legacy rollback from loading the newer run schema.
 - 2026-09-13 UTC — public discovery, challenge, health, authenticated initialize, and authenticated tool-list probes passed; awaiting real ChatGPT UI reconnection confirmation.
+- 2026-09-13 19:04 UTC — ChatGPT reached the owner login successfully, but the submitted Dataset PCT was rejected because this form requires the separate OAuth operator-login token. Added the correct token to the owner's local connection file and proved the complete login/code redirect in a fresh browser session without exposing credentials.
 
 ## Root Cause
 
@@ -43,6 +44,7 @@ ChatGPT could not create the Dataset Loop custom MCP connector with OAuth. The p
 - Deployment configuration lagged behind the OAuth-capable application code.
 - The legacy systemd runtime override obscured the exact release/configuration relationship.
 - Connector discovery was not included in the prior live acceptance gate.
+- The local handoff file exposed only the Dataset bearer PCT and did not identify the distinct credential required by the OAuth owner-login form.
 
 ## Automation Contract
 
@@ -90,6 +92,7 @@ ChatGPT could not create the Dataset Loop custom MCP connector with OAuth. The p
 ## Follow-up Actions
 
 - [ ] Product owner: retry connector creation in ChatGPT and confirm OAuth login plus tool scan.
+- [x] Incident owner: place the distinct `oauth_login_token` in the local `DATASET_LOOP_CONNECTION.txt` handoff file with mode `0600`.
 - [ ] Dataset maintainers: land the deployed Dataset fix in `origin/main`; it currently remains on the pushed hotfix/media-discovery line.
 - [ ] Dataset maintainers: add the public discovery/challenge and authenticated tool-list probes to the recurring live acceptance gate.
 - [ ] Product owner: rotate the previously exposed owner PCT after OAuth connection is confirmed.
