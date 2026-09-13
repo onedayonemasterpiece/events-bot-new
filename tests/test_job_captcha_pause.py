@@ -1,8 +1,59 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlmodel import select
 
 import main
 from main import Database, Event, JobOutbox, JobTask, JobStatus
+
+
+@pytest.mark.asyncio
+async def test_vk_flood_defers_outbox_without_immediate_retry(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    ev = Event(
+        title="future",
+        description="d",
+        date="2099-01-04",
+        time="12:00",
+        location_name="loc",
+        source_text="src",
+    )
+    async with db.get_session() as session:
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        session.add(JobOutbox(event_id=ev.id, task=JobTask.vk_sync))
+        await session.commit()
+
+    calls = 0
+
+    async def flooded_vk_job(event_id, db_obj, bot_obj):
+        nonlocal calls
+        calls += 1
+        raise main.VKFloodControlError(
+            method="wall.post",
+            actor="user",
+            retry_after_seconds=3600,
+        )
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "vk_sync", flooded_vk_job)
+    monkeypatch.setattr(main, "VK_FLOOD_OUTBOX_JITTER_SECONDS", 0)
+    before = datetime.now(timezone.utc)
+
+    assert await main._run_due_jobs_once(db, None) == 1
+    assert await main._run_due_jobs_once(db, None) == 0
+
+    async with db.get_session() as session:
+        job = (await session.execute(select(JobOutbox))).scalar_one()
+    assert calls == 1
+    assert job.status == JobStatus.error
+    assert job.attempts == 1
+    assert job.last_error.startswith("vk_flood_wait:")
+    next_run_at = job.next_run_at
+    if next_run_at.tzinfo is None:
+        next_run_at = next_run_at.replace(tzinfo=timezone.utc)
+    assert next_run_at >= before + timedelta(seconds=3590)
 
 
 @pytest.mark.asyncio

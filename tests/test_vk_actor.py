@@ -148,6 +148,65 @@ async def test_vk_actor_no_retry_edit_time_expired(monkeypatch):
     assert attempts == 1
 
 
+@pytest.mark.asyncio
+async def test_vk_actor_error_9_opens_token_circuit_without_inner_retries(monkeypatch):
+    monkeypatch.setattr(main, "_vk_captcha_needed", False)
+    monkeypatch.setattr(main, "VK_ACTOR_MODE", "group")
+    monkeypatch.setattr(main, "VK_TOKEN", "group-token")
+    monkeypatch.setattr(main, "BACKOFF_DELAYS", [0, 0, 0, 0, 0])
+    monkeypatch.setattr(main, "VK_FLOOD_COOLDOWN_SECONDS", 3600)
+    main.vk_actor_flood_blocked.clear()
+    main.vk_flood_control_total = defaultdict(int)
+    monkeypatch.setattr(main._time, "time", lambda: 1000.0)
+
+    attempts = 0
+
+    async def fake_http_call(name, method, url, timeout, data, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        return DummyResp(
+            {"error": {"error_code": 9, "error_msg": "Flood control"}}
+        )
+
+    monkeypatch.setattr(main, "http_call", fake_http_call)
+
+    with pytest.raises(main.VKFloodControlError) as first:
+        await main._vk_api("wall.post", {}, db=None, bot=None)
+    assert first.value.retry_after_seconds == 3600
+    assert attempts == 1
+
+    with pytest.raises(main.VKFloodControlError) as second:
+        await main._vk_api("photos.getWallUploadServer", {}, db=None, bot=None)
+    assert second.value.retry_after_seconds == 3600
+    assert attempts == 1
+    assert main.vk_flood_control_total["group"] == 1
+
+
+@pytest.mark.asyncio
+async def test_public_users_get_uses_service_actor(monkeypatch):
+    monkeypatch.setattr(main, "VK_READ_VIA_SERVICE", True)
+    monkeypatch.setattr(main, "VK_SERVICE_TOKEN", "service-token")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+    main.vk_actor_flood_blocked.clear()
+
+    calls: list[str] = []
+
+    async def fake_http_call(name, method, url, timeout, params, **kwargs):
+        calls.append(params["access_token"])
+        return DummyResp({"response": [{"id": 1}]})
+
+    async def no_throttle():
+        return None
+
+    monkeypatch.setattr(main, "http_call", fake_http_call)
+    monkeypatch.setattr(main, "_vk_throttle", no_throttle)
+
+    response = await main.vk_api("users.get", user_ids=1)
+
+    assert response == [{"id": 1}]
+    assert calls == ["service-token"]
+
+
 def test_choose_vk_actor(monkeypatch):
     monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "2")
@@ -293,7 +352,7 @@ async def test_post_to_vk_uses_postponed_publish_date(monkeypatch):
     captured_wall_post = {}
     calls = []
 
-    async def fake_reserve(owner_id, actors, db, bot, *, now=None):
+    async def fake_reserve(owner_id, actors, db, bot, *, now=None, **kwargs):
         assert owner_id == -2
         assert [actor.label for actor in actors] == ["group:afisha", "user"]
         return expected
@@ -351,7 +410,7 @@ async def test_post_to_vk_retries_postponed_id_resolution_with_user_actor(monkey
     wall_get_calls = 0
     sleep_calls = []
 
-    async def fake_reserve(owner_id, actors, db, bot, *, now=None):
+    async def fake_reserve(owner_id, actors, db, bot, *, now=None, **kwargs):
         return expected
 
     async def fake_sleep(delay):
@@ -386,7 +445,9 @@ async def test_post_to_vk_retries_postponed_id_resolution_with_user_actor(monkey
 
     assert url == "https://vk.com/wall-2_125"
     assert wall_get_calls == 2
-    assert sleep_calls == [0.8]
+    # The first pass probes both postponed and all; no inter-pass delay is
+    # needed when the compatibility collection already exposes the mapping.
+    assert sleep_calls == []
 
 
 @pytest.mark.asyncio

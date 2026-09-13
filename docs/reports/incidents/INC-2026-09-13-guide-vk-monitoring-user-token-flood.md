@@ -17,7 +17,7 @@ The primary Fly VK crawler already reads public VK walls with `VK_SERVICE_TOKEN`
 
 - Six enabled VK guide sources were not ingested by full guide-monitoring runs from 2026-09-08 through 2026-09-12.
 - The last run with any successful VK source was `ops_run.id=8343`, started 2026-09-07 11:21:30 UTC.
-- Direct service-token comparison found 29 public wall items across the six sources published after that last successful run; these are potential missed inputs and require a compensating catch-up after remediation.
+- Direct service-token comparison found 29 public wall items across the six sources published after that last successful run. The operator explicitly excluded historical catch-up from this remediation; only new scheduled scans are in scope.
 - Telegram guide sources and the separate 121-source Fly VK event crawler are different lanes and are not proven broken by this incident.
 
 ## Detection
@@ -93,30 +93,32 @@ The production health check currently reports `guide_excursions_full=ok` despite
 - Kaggle production-equivalent Guide run reports all six VK sources non-error and scans posts without exposing credentials.
 - Error-9 handling is paced/bounded and covered by a deterministic test; it must not create a retry storm.
 - Production `ops_run.details_json` contains six VK source reports with no error-9 failures.
-- Compare VK source cursors and imported `guide_monitor_post` rows before/after catch-up.
+- Verify the next scheduled run from its normal lookback without expanding it into a historical catch-up.
 
 ### Required evidence
 
 - Deployed SHA reachable from `origin/main`.
 - Redacted Fly env-presence/readback showing `VK_SERVICE_TOKEN` is present and Guide credential routing selects it.
-- Kaggle result/run ID and production `ops_run` ID for the successful catch-up.
-- Pre/post evidence for all six VK sources and the missed-window posts.
+- Kaggle result/run ID and production `ops_run` ID for a successful normal scheduled scan.
+- Post-deploy evidence for all six VK sources; historical missed-window replay is explicitly out of scope.
 - Local investigation artifacts: `artifacts/codex/vk-service-token-analysis-2026-09-13/` (not committed).
 
 ## Immediate Mitigation
 
-- None applied during analysis. No secret, code, deployment, scheduler, or production data was changed.
+- Implementation prepared: Guide public reads default to `VK_SERVICE_TOKEN`; error 9 opens a per-credential circuit and no longer receives five in-call retries; JobOutbox flood retries use the provider cooldown plus deterministic jitter. Deployment evidence remains pending.
 
 ## Corrective Actions
 
-- Pending. The likely minimal path is to route Guide public reads to `VK_SERVICE_TOKEN`; configuration-only routing is already technically possible through `GUIDE_MONITORING_VK_TOKEN_ENV`, but durable defaults, local `VK_SERVICE_KEY` compatibility, pacing, tests, and documentation must be decided together.
+- Route Guide public reads to `VK_SERVICE_TOKEN` by default.
+- Route main-app public `users.get` through the service-read allowlist.
+- Treat VK error 9 as actor-level backpressure: one provider attempt, per-credential circuit, and staggered durable retry.
 
 ## Follow-up Actions
 
-- [ ] Route Guide VK public reads through the service credential without exposing it in config artifacts.
-- [ ] Add bounded pacing/retry for VK error 9 in the Kaggle Guide client.
+- [x] Route Guide VK public reads through the service credential without exposing it in config artifacts.
+- [x] Stop repeated provider attempts after VK error 9 and defer publication jobs behind an actor-level circuit.
 - [ ] Add a lane-level diagnostic when every enabled VK source scans zero posts due to provider errors.
-- [ ] Run a compensating full catch-up covering at least 2026-09-07 onward and verify imported posts/occurrences.
+- [ ] Verify the next normal scheduled Guide scan; do not run a historical catch-up per operator direction.
 - [ ] Separately investigate the primary crawler's stale `radostidetam` cursor; the service token currently reads that wall successfully, so it is not explained by this token-routing incident.
 
 ## Release And Closure Evidence
