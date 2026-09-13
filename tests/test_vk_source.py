@@ -699,6 +699,37 @@ async def test_sync_vk_source_post_captcha_pauses_before_text_only_post(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_propagates_flood_circuit(monkeypatch):
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    event = main.Event(
+        title="Title",
+        description="",
+        date="2099-01-01",
+        time="00:00",
+        location_name="Place",
+        photo_urls=["http://img1"],
+    )
+
+    async def fake_upload(*_args, **_kwargs):
+        raise main.VKFloodControlError(
+            method="photos.getWallUploadServer",
+            actor="user",
+            retry_after_seconds=3600,
+        )
+
+    async def fake_post(*_args, **_kwargs):
+        raise AssertionError("wall.post must not run behind the upload circuit")
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    with pytest.raises(main.VKFloodControlError):
+        await main.sync_vk_source_post(event, "Text", None, None)
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_blocks_text_only_telegram_event(monkeypatch):
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
