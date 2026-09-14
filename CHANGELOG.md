@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed: the DevCoveer voice-preview runtime now bundles its pinned Supabase
+  dependency instead of importing it through an absolute path in an ephemeral
+  build worktree.
+
 - Fixed: voice verification respects Gemini's 10-second minimum server deadline before quota dispatch; three/four-condition windows get a bounded 60-second default without truncation or retries.
 
 - Fixed: conversational verifier sizes batches by candidate×condition schema complexity without dropping candidates/conditions; shared deadlines and fail-closed full-window verification remain unchanged.

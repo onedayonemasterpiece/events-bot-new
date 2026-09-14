@@ -586,6 +586,10 @@ through existing DataClient, while normal Search/Auth retain their transport.
 Control is selected-once plus same-ID status reconciliation, no provider retry.
 
 Build: `node scripts/voice/build-runtime.mjs <private-release>/runtime.mjs`.
+The resulting release is self-contained: package dependencies, including the
+pinned Supabase client, are bundled and the artifact must not retain absolute
+imports into a build worktree. This keeps an installed preview runnable after
+the source worktree or its `node_modules` is removed.
 Use a clean exact-source release under user systemd, private environment outside
 Git. `GET /kenig-audio/healthz` proves host/source only, never full acceptance.
 The shared edge route belongs to canonical vpn-server renderer opt-in

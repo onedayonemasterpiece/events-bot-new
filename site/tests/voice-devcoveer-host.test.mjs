@@ -1,7 +1,10 @@
 // HTTP/storage/media validation fixtures. Provider/Auth stubs here are NOT live ASR.
-import test from 'node:test';import assert from 'node:assert/strict';import{mkdtempSync,rmSync}from'node:fs';import{join,resolve}from'node:path';import{execFileSync}from'node:child_process';import{randomUUID,createHash}from'node:crypto';import{pathToFileURL}from'node:url';import{DevCoveerReceiptStore}from'../../scripts/voice/receiptStore.mjs';
+import test from 'node:test';import assert from'node:assert/strict';import{mkdtempSync,readFileSync,rmSync}from'node:fs';import{join,resolve}from'node:path';import{execFileSync}from'node:child_process';import{randomUUID,createHash}from'node:crypto';import{pathToFileURL}from'node:url';import{DevCoveerReceiptStore}from'../../scripts/voice/receiptStore.mjs';
 const root=resolve(import.meta.dirname,'../..'),tmp=mkdtempSync(join(root,'artifacts/voice-host-test-'));
 execFileSync('node',['scripts/voice/build-runtime.mjs',tmp+'/runtime.mjs'],{cwd:root});
+const runtimeSource=readFileSync(tmp+'/runtime.mjs','utf8');
+assert.doesNotMatch(runtimeSource,/^import .*node_modules/mu,'deployed runtime must not import dependencies from a build worktree');
+assert.doesNotMatch(runtimeSource,/\/home\/[^/]+\//u,'deployed runtime must not embed a build-host home path');
 const{createVoiceServer,validateMedia}=await import(pathToFileURL(tmp+'/runtime.mjs'));
 const owner=randomUUID();const origin='https://kenigevents.ru';let sends=0;
 const {AssistantError}=await import('../../supabase/functions/event-search/assistant-intent.ts');
