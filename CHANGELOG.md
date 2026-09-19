@@ -9,7 +9,7 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
-- Telegram Monitoring: prefer Gemini Flash Lite with Gemma fallback, bound quota
+- Telegram Monitoring: preserve Gemma primary and the existing Gemini fallback, bound quota
   waits and eliminate nested provider retries; recognize Kaggle cancellation
   aliases and release the exact cancelled run's session lease during recovery
   (`INC-2026-09-19-tg-monitoring-runtime-starvation`).

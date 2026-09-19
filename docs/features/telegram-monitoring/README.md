@@ -51,8 +51,9 @@ Positive children сохраняются, а исчерпанная inline verif
 
 ### Ограничение повторов при сбоях провайдера (2026-09-19)
 
-По умолчанию text/vision используют `gemini-3.5-flash-lite`, резерв —
-`models/gemma-4-31b-it`. Модели по-прежнему переопределяются переменными
+По умолчанию text/vision используют `models/gemma-4-31b-it`, резерв —
+`gemini-3.5-flash-lite`. Gemini не становится основной моделью первичного
+разбора: его ресурс приоритетен для Smart Update. Модели переопределяются переменными
 `TG_MONITORING_TEXT_MODEL`, `TG_MONITORING_VISION_MODEL` и соответствующими
 `*_FALLBACK`. Общий Google AI client делает один физический запрос за попытку
 ноутбука (`max_provider_attempts=1`), без вложенного умножения повторов.
@@ -192,9 +193,9 @@ Recovery освобождает только lease соответствующе�
       - `@username` в контексте «запись/бронь/напиши» → `ticket_link=https://t.me/username`;
       - если в Kaggle‑payload пришли `messages[].links` (кнопки/hidden URL entities типа “More info”, “билеты”, “здесь”) и `ticket_link` пустой, сервер может best-effort выбрать один «сильный» registration/ticket URL.
     - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста. Short contentful titles returned by the LLM (`Идиот`, `Гараж`, `№ 13`) are valid and must not be overwritten only because they are short; umbrella/service lines such as `завтра в театре`, `афиша`, `анонс`, `в продаже репертуар` are skipped by this fallback.
-- Primary text/vision в Kaggle — `gemini-3.5-flash-lite`; при исчерпании bounded
+- Primary text/vision в Kaggle — `models/gemma-4-31b-it`; при исчерпании bounded
   transport/quota попыток тот же carrier в том же claim переходит на
-  independently-limited `models/gemma-4-31b-it`. 4o здесь не участвует.
+  independently-limited `gemini-3.5-flash-lite`. 4o здесь не участвует.
 - Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
 - Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`. Если `GOOGLE_API_KEY3` ещё не зарегистрирован в Supabase quota registry, gateway не должен молча брать общий key pool: он переходит на process-local limiter и всё равно вызывает provider через выбранный `GOOGLE_API_KEY3`.
@@ -204,9 +205,9 @@ Recovery освобождает только lease соответствующе�
   Monitor ждёт указанный `retry_after` и продолжает тот же carrier внутри
   текущего запуска (до двух попыток и не более 15 секунд на одно ожидание
   по умолчанию). Это не durable/background retry. После exhaustion primary
-  model тот же carrier использует explicit `models/gemma-4-31b-it` fallback;
+  model тот же carrier использует explicit `gemini-3.5-flash-lite` fallback;
   лишь exhaustion обеих моделей становится видимой технической ошибкой.
-- Дефолтные Kaggle text/vision модели для этого surface: `gemini-3.5-flash-lite`.
+- Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
 - Evidence completeness не ограничивается скрытым числом media на source:
   `TG_MONITORING_MEDIA_MAX_PER_SOURCE=0` по умолчанию. Видео-only carrier и
   видео в album получают bounded video/thumbnail evidence до финального

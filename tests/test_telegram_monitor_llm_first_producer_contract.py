@@ -25,12 +25,12 @@ from source_parse_contract import (
 PRODUCER = Path("kaggle/TelegramMonitor/telegram_monitor.py")
 
 
-def test_telegram_monitor_prefers_healthy_fast_model_and_bounds_retries() -> None:
+def test_telegram_monitor_preserves_gemma_primary_and_bounds_retries() -> None:
     source = PRODUCER.read_text(encoding="utf-8")
 
-    assert "DEFAULT_TG_MONITORING_TEXT_MODEL = 'gemini-3.5-flash-lite'" in source
-    assert "DEFAULT_TG_MONITORING_VISION_MODEL = 'gemini-3.5-flash-lite'" in source
-    assert "DEFAULT_TG_MONITORING_FALLBACK_MODEL = 'models/gemma-4-31b-it'" in source
+    assert "DEFAULT_TG_MONITORING_TEXT_MODEL = 'models/gemma-4-31b-it'" in source
+    assert "DEFAULT_TG_MONITORING_VISION_MODEL = 'models/gemma-4-31b-it'" in source
+    assert "DEFAULT_TG_MONITORING_FALLBACK_MODEL = 'gemini-3.5-flash-lite'" in source
     assert "TG_MONITORING_LLM_QUOTA_WAIT_MAX_ATTEMPTS', '2'" in source
     assert "TG_MONITORING_LLM_QUOTA_WAIT_MAX_SECONDS', '15'" in source
     assert "TG_MONITORING_LLM_TRANSIENT_RECOVERY_ATTEMPTS', '1'" in source

@@ -158,7 +158,9 @@ same growing backlog.
 
 ## Corrective Actions
 
-- Prefer the observed-healthier Gemini model and retain Gemma as fallback.
+- Preserve Gemma primary with the existing Gemini fallback. The initial
+  Gemini-primary change was not authorized and is being reverted at the
+  operator's direction; reserve Gemini primarily for Smart Update.
 - Stop nested retry multiplication: one physical provider send per model in the
   shared client, one short quota wait, then the explicit fallback.
 - Recognize all Kaggle cancellation terminal aliases and immediately reconcile
@@ -213,6 +215,16 @@ same growing backlog.
   acceptance remain unverified; the incident stays open.
 
 ## Prevention
+
+### Operator correction: model policy and end-to-end acceptance
+
+The 146-second no-import canary was Gemini-primary and is not acceptance for
+Gemma-primary throughput or production delivery. Restore only the model-order
+change, retaining bounded retries and exact cancelled-lease reconciliation.
+Do not change Smart Update model settings. Acceptance requires a fresh bounded
+Gemma-primary source run through the real Smart Update import, persisted event
+rows and verified Telegram/VK publication URLs. Never rearm the contained old
+VK queue to obtain publication evidence. Incident remains open.
 
 Closure requires a fresh bounded canary and a normal production import within
 the existing runtime budget. Increasing the timeout is explicitly not a fix.
