@@ -270,7 +270,13 @@ RECOVERY_TERMINAL_GRACE_MINUTES = max(
     5,
     min(int((os.getenv("TG_MONITORING_RECOVERY_TERMINAL_GRACE_MINUTES") or "360") or 360), 24 * 60),
 )
-RECOVERY_TERMINAL_STATES = {"error", "failed", "cancelled"}
+RECOVERY_TERMINAL_STATES = {
+    "error",
+    "failed",
+    "cancelled",
+    "canceled",
+    "cancel_acknowledged",
+}
 _RECOVERY_TERMINAL_META_KEYS = (
     "terminal_state",
     "terminal_state_failure",
@@ -1208,7 +1214,13 @@ async def _poll_kaggle_kernel(
             done["_elapsed_seconds"] = time.monotonic() - started
             await _notify("complete", done)
             return "complete", last_status, time.monotonic() - started
-        if state in ("ERROR", "FAILED", "CANCELLED"):
+        if state in (
+            "ERROR",
+            "FAILED",
+            "CANCELED",
+            "CANCELLED",
+            "CANCEL_ACKNOWLEDGED",
+        ):
             failed = dict(last_status or {})
             failed["_poll_timeout_minutes"] = timeout_minutes
             failed["_elapsed_seconds"] = time.monotonic() - started
@@ -3662,6 +3674,23 @@ async def resume_telegram_monitor_jobs(
             state = str(status.get("status") or "").lower()
             if state in RECOVERY_TERMINAL_STATES:
                 failure = _extract_kaggle_failure_message(status)
+                try:
+                    await reconcile_kaggle_run_failure_from_host(
+                        db,
+                        run_id=f"tg_monitor:{run_id}",
+                        message=(
+                            f"Telegram monitoring recovery observed terminal Kaggle state "
+                            f"{state}: {failure}"
+                        ).strip(),
+                    )
+                except Exception:
+                    logger.exception(
+                        "tg_monitor_recovery: terminal lease reconciliation failed "
+                        "kernel=%s run_id=%s state=%s",
+                        kernel_ref,
+                        run_id,
+                        state,
+                    )
                 first_seen_at, notified = await _remember_tg_monitor_terminal_state(
                     job,
                     kernel_ref,

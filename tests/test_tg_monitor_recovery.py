@@ -121,3 +121,48 @@ async def test_recovery_skips_same_pid_job_while_run_lock_is_held(monkeypatch) -
         recovered = await tg_service.resume_telegram_monitor_jobs(object(), bot=None, chat_id=123)
 
     assert recovered == 0
+
+
+@pytest.mark.asyncio
+async def test_recovery_releases_exact_lease_as_soon_as_cancel_is_terminal(monkeypatch) -> None:
+    reconciled: list[tuple[object, str, str]] = []
+
+    class DummyKaggleClient:
+        def get_kernel_status(self, kernel_ref: str) -> dict:
+            assert kernel_ref == "zigomaro/telegram-monitor-bot"
+            return {"status": "CANCEL_ACKNOWLEDGED"}
+
+    async def fake_list_jobs(job_type: str | None = None):
+        assert job_type == "tg_monitoring"
+        return [
+            {
+                "kernel_ref": "zigomaro/telegram-monitor-bot",
+                "meta": {"run_id": "run-cancelled", "pid": 999999},
+            }
+        ]
+
+    async def fake_reconcile(db, *, run_id: str, message: str):
+        reconciled.append((db, run_id, message))
+        return {"released_resource_count": 1}
+
+    async def fake_remember(*_args, **_kwargs):
+        return "2026-09-19T06:00:00+00:00", True
+
+    monkeypatch.setattr(tg_service, "KaggleClient", DummyKaggleClient)
+    monkeypatch.setattr(tg_service, "list_jobs", fake_list_jobs)
+    monkeypatch.setattr(
+        tg_service,
+        "reconcile_kaggle_run_failure_from_host",
+        fake_reconcile,
+    )
+    monkeypatch.setattr(tg_service, "_remember_tg_monitor_terminal_state", fake_remember)
+    monkeypatch.setattr(tg_service, "_tg_monitor_terminal_grace_expired", lambda _value: False)
+
+    db = object()
+    recovered = await tg_service.resume_telegram_monitor_jobs(db, bot=None, chat_id=123)
+
+    assert recovered == 0
+    assert len(reconciled) == 1
+    assert reconciled[0][0] is db
+    assert reconciled[0][1] == "tg_monitor:run-cancelled"
+    assert "cancel_acknowledged" in reconciled[0][2]

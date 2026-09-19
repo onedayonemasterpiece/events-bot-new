@@ -249,9 +249,9 @@ else:
 TG_API_ID = os.getenv('TG_API_ID', '')
 TG_API_HASH = os.getenv('TG_API_HASH', '')
 
-DEFAULT_TG_MONITORING_TEXT_MODEL = 'models/gemma-4-31b-it'
-DEFAULT_TG_MONITORING_VISION_MODEL = 'models/gemma-4-31b-it'
-DEFAULT_TG_MONITORING_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
+DEFAULT_TG_MONITORING_TEXT_MODEL = 'gemini-3.5-flash-lite'
+DEFAULT_TG_MONITORING_VISION_MODEL = 'gemini-3.5-flash-lite'
+DEFAULT_TG_MONITORING_FALLBACK_MODEL = 'models/gemma-4-31b-it'
 DEFAULT_TG_MONITORING_VIDEO_MODEL = 'gemini-3.1-flash-lite'
 GOOGLE_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_KEY_ENV') or 'GOOGLE_API_KEY3').strip() or 'GOOGLE_API_KEY3'
 GOOGLE_FALLBACK_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV') or GOOGLE_KEY_ENV).strip() or GOOGLE_KEY_ENV
@@ -295,15 +295,15 @@ LLM_CALL_TIMEOUT_SECONDS = float(
 )
 LLM_QUOTA_WAIT_MAX_ATTEMPTS = max(
     1,
-    min(12, int(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_ATTEMPTS', '8'))),
+    min(12, int(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_ATTEMPTS', '2'))),
 )
 LLM_QUOTA_WAIT_MAX_SECONDS = max(
     1.0,
-    min(90.0, float(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_SECONDS', '65'))),
+    min(90.0, float(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_SECONDS', '15'))),
 )
 LLM_TRANSIENT_RECOVERY_ATTEMPTS = max(
     1,
-    min(4, int(os.getenv('TG_MONITORING_LLM_TRANSIENT_RECOVERY_ATTEMPTS', '2'))),
+    min(4, int(os.getenv('TG_MONITORING_LLM_TRANSIENT_RECOVERY_ATTEMPTS', '1'))),
 )
 LLM_MAX_OUTPUT_TOKENS = max(
     1024,
@@ -2050,6 +2050,11 @@ async def _call_model(
                     max_output_tokens=output_token_budget,
                     candidate_key_ids=candidate_key_ids,
                     allow_model_fallback=False,
+                    # The shared client already owns provider retries. Keep
+                    # this serial monitor to one physical send per model so a
+                    # degraded primary cannot multiply into hours of waits
+                    # before the explicit fallback is tried.
+                    max_provider_attempts=1,
                 )
                 return text
             except RateLimitError as exc:

@@ -25,6 +25,17 @@ from source_parse_contract import (
 PRODUCER = Path("kaggle/TelegramMonitor/telegram_monitor.py")
 
 
+def test_telegram_monitor_prefers_healthy_fast_model_and_bounds_retries() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+
+    assert "DEFAULT_TG_MONITORING_TEXT_MODEL = 'gemini-3.5-flash-lite'" in source
+    assert "DEFAULT_TG_MONITORING_VISION_MODEL = 'gemini-3.5-flash-lite'" in source
+    assert "DEFAULT_TG_MONITORING_FALLBACK_MODEL = 'models/gemma-4-31b-it'" in source
+    assert "TG_MONITORING_LLM_QUOTA_WAIT_MAX_ATTEMPTS', '2'" in source
+    assert "TG_MONITORING_LLM_QUOTA_WAIT_MAX_SECONDS', '15'" in source
+    assert "TG_MONITORING_LLM_TRANSIENT_RECOVERY_ATTEMPTS', '1'" in source
+
+
 def _safe_json(text: str):
     if not text:
         return None
@@ -293,10 +304,13 @@ def test_telegram_quota_rejection_waits_inline_before_same_carrier_retry() -> No
             self.blocked_reason = blocked_reason
             self.retry_after_ms = retry_after_ms
 
+    provider_attempt_caps: list[int | None] = []
+
     class _Client:
         calls = 0
 
         async def generate_content_async(self, **kwargs):
+            provider_attempt_caps.append(kwargs.get("max_provider_attempts"))
             self.calls += 1
             if self.calls == 1:
                 raise _RateLimitError(blocked_reason="tpm", retry_after_ms=1)
@@ -326,6 +340,7 @@ def test_telegram_quota_rejection_waits_inline_before_same_carrier_retry() -> No
 
     assert result == '{"ok":true}'
     assert client.calls == 2
+    assert provider_attempt_caps == [1, 1]
     assert len(waits) == 1
     assert waits[0] >= 0.001
 

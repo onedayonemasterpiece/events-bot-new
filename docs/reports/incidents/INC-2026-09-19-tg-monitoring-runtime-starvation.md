@@ -1,0 +1,187 @@
+# INC-2026-09-19 Telegram Monitoring runtime starvation
+
+Status: open
+Severity: sev1
+Service: Telegram Monitoring / Smart Update source ingestion
+Opened: 2026-09-19
+Closed: —
+Owners: events-bot operations
+Related incidents: `INC-2026-06-12-tg-monitoring-deploy-crash-no-watchdog`, `INC-2026-09-13-guide-vk-monitoring-user-token-flood`
+Related docs: `docs/features/telegram-monitoring/README.md`, `docs/operations/cron.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
+
+## Summary
+
+Telegram Monitoring stopped delivering source candidates to Smart Update after
+the 2026-09-07 local-day import. The scheduled Kaggle kernel still starts and
+emits heartbeats, but the configured Gemma primary began returning repeated
+503/high-demand responses and timeouts. Retries inside the shared provider
+client were multiplied by a second retry loop in the serial notebook before it
+tried the healthier Gemini fallback. The scan therefore no longer finishes all
+57 sources within Kaggle's execution window. Because source cursors advance
+only after the final result bundle is imported, each failed run replays the
+same growing backlog.
+
+## User / Business Impact
+
+- From 2026-09-08 through 2026-09-18 Europe/Kaliningrad, production recorded
+  zero Telegram Smart Update attempts and zero Telegram `event_source` imports.
+- New canonical events fell from 307 in 2026-09-01..07 to 133 in
+  2026-09-12..18, a decline of 174 events (56.7%).
+- Mutually exclusive Smart Update `CREATED` outcomes explain the decline:
+  Telegram fell 132 to 0 and accounts for 75.9% of the total loss; VK fell
+  139 to 99 and accounts for 23.0%; parser sources fell 36 to 34 and account
+  for 1.1%.
+- Later sources in the fixed alphabetical scan order are starved entirely;
+  failed runs repeatedly spend their lifetime rescanning the early sources.
+
+## Detection
+
+- The operator reported a fall in the number of new events after VK managed
+  announcement recovery work began.
+- The canonical `event.added_at` series localized the step change to 8
+  September, while `smart_update_attempt` localized it to `source_type=telegram`.
+- `ops_run(kind='tg_monitoring')` shows daily timeout/error runs with zero
+  processed messages after the last successful recovery import on 7 September.
+- `kaggle_run_ledger` proves the kernels continued heartbeating in `scan`; this
+  is runtime starvation, not a scheduler-start or Telegram-auth outage.
+
+## Timeline
+
+- 2026-09-06 21:41 UTC: scheduled run exceeded the host wait window but the
+  kernel completed at 03:19 UTC; recovery import on 7 September delivered 103
+  messages and four created events.
+- 2026-09-07 21:40 UTC: first unrecovered run started. It reached source 56 of
+  57 after about 11 hours, then stopped at the provider execution limit without
+  writing the final report.
+- 2026-09-08 local day: Telegram Smart Update attempts and Telegram
+  `event_source` imports dropped to zero.
+- 2026-09-08 through 2026-09-18: daily scheduled/catch-up runs either timed out
+  after about 286 minutes or failed early; no final source result was imported.
+- 2026-09-18 21:40 UTC: current run started. At the 2026-09-19 diagnostic
+  snapshot it was still `RUNNING`, had completed only 16 of 57 sources after
+  about 8.5 hours, and had accumulated 106 messages before source 17.
+- 2026-09-19 06:37 UTC: operator cancelled the stalled run. Kaggle became
+  terminal, but its exact `telegram_session:s22` lease remained active until
+  the three-hour TTL because recovery did not recognize `CANCEL_ACKNOWLEDGED`
+  or reconcile terminal leases before its result grace window.
+- 2026-09-19 06:49 UTC: a no-import canary started for `agropark39` and
+  `ambermuseum`, limited to two messages per source. The first source alone
+  required about 7m44s of processing; the complete canary required 13m20s,
+  scanned four messages and extracted seven events without importing them.
+  Its de-duplicated log contains six primary-to-fallback transitions, four
+  quota waits and two outer transient recoveries.
+
+## Root Cause
+
+1. The Kaggle producer scans all enabled Telegram sources serially and writes
+   `telegram_results.json` only after the complete 57-source loop.
+2. The server imports results and advances durable source cursors only after
+   that final bundle exists; there is no per-source or bounded-shard durable
+   checkpoint.
+3. Per-message LLM latency crossed the fixed runtime budget. The cancelled
+   kernel log contains, after removing duplicated transport lines, 559 Gemma
+   call errors versus 250 successes, including explicit 503/high-demand and
+   timeout failures. Gemini fallback recorded 29 call errors versus 184
+   successes. The notebook then added 77 outer transient recoveries and 171
+   inline quota waits totalling about 69 minutes on top of provider-client
+   retries. A baseline processed 87 messages across all 57 sources in about
+   3h48m; the degraded run reached only source 17 after about 8.6 hours.
+4. Each failed all-or-nothing run leaves cursors unchanged, so the backlog is
+   replayed and grows. This converts a transient throughput slowdown into a
+   persistent ingestion outage.
+
+## Contributing Factors
+
+- Host timeout is computed from source count, not observed message count or
+  remaining work, and is capped below the provider runtime.
+- Health treats live heartbeats as progress even when projected completion is
+  beyond the provider deadline.
+- Fixed source ordering repeatedly favors early sources and starves later ones.
+- The status ledger exposes source progress but not provider failures; the
+  retained Kaggle output had to be downloaded to attribute the slowdown.
+- Terminal cancellation aliases differed between the session guard and
+  Telegram recovery, leaving a verified-dead run's resource lease active.
+- No alert fired on zero Telegram imports or zero Telegram Smart Update
+  attempts for more than one daily window.
+
+## Automation Contract
+
+### Treat as regression guard when
+
+- Changing Telegram Monitoring scan order, cursor persistence, Kaggle result
+  format, source sharding, provider deadlines/retries, recovery import, or
+  critical scheduler timeout/watchdog behavior.
+
+### Affected surfaces
+
+- `kaggle/TelegramMonitor/telegram_monitor.py::main` and `scan_source`
+- `source_parsing/telegram/service.py` launch, poll, result download/import,
+  recovery, and cursor advancement
+- `telegram_source.last_scanned_message_id`
+- `ops_run(kind='tg_monitoring')`, `kaggle_run_ledger`, `kaggle_run_event`
+- Smart Update source type `telegram` and downstream publication fanout
+
+### Mandatory checks before closure
+
+- Replay the captured production backlog through the production import boundary
+  on a snapshot/shadow DB; unit tests alone are insufficient.
+- Enforce per-message/provider deadlines with typed retry evidence; do not add
+  keyword-based semantic shortcuts.
+- Verify a normal production run imports fresh Telegram candidates and produces
+  Telegram Smart Update attempts again.
+- Keep stale catch-up announcements from entering VK/Telegram public fanout;
+  ingestion recovery and public announcement freshness need separate evidence.
+
+### Required evidence
+
+- Deployed SHA reachable from `origin/main` and Fly image produced through
+  `scripts/deploy_fly_main.sh`.
+- Production `ops_run` plus `kaggle_run_ledger`/event evidence for a bounded
+  successful run.
+- Production DB evidence for fresh Telegram `event_source` rows and accepted
+  Smart Update results.
+- Public/ledger evidence that only fresh eligible announcements fan out.
+- Retained diagnostic artifact:
+  `/home/dev/artifacts/events-bot-new/20260919T050649Z-vk-publishing-runtime-logs/`.
+
+## Immediate Mitigation
+
+- No second Telegram Monitor was launched while the current kernel owned the
+  shared S22 Telegram session.
+- No stale Telegram backlog was replayed into public announcement fanout.
+- The cancelled run's exact stale lease was released through the existing host
+  failure reconciler only after Kaggle terminality was rechecked.
+- A two-source canary uses the production notebook with import replaced by a
+  local capture, so it cannot create events or enqueue public announcements.
+  Baseline result: four messages scanned, seven events extracted, import=false
+  in 13m20s.
+
+## Corrective Actions
+
+- Prefer the observed-healthier Gemini model and retain Gemma as fallback.
+- Stop nested retry multiplication: one physical provider send per model in the
+  shared client, one short quota wait, then the explicit fallback.
+- Recognize all Kaggle cancellation terminal aliases and immediately reconcile
+  only the exact run's resource lease; retain the existing result grace window.
+- Keep the existing one/two-source and per-source message limit as the release
+  canary rather than adding a second orchestration system.
+
+## Follow-up Actions
+
+- [ ] Consider bounded, restart-safe source shards only if the retry/model fix
+  does not restore the normal sub-two-hour run.
+- [ ] Add a zero-Telegram-import alert after the incident is stable.
+- [ ] Plan a freshness-filtered catch-up that cannot publicly announce stale events.
+- [ ] Verify the first fresh post-fix Telegram import and Smart Update acceptance.
+
+## Release And Closure Evidence
+
+- deployed SHA: no corrective code deployed yet
+- deploy path: —
+- regression checks: read-only production funnel and status-ledger diagnosis
+- post-deploy verification: pending
+
+## Prevention
+
+Closure requires a fresh bounded canary and a normal production import within
+the existing runtime budget. Increasing the timeout is explicitly not a fix.

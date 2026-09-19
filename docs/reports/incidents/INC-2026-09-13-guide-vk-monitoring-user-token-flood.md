@@ -108,6 +108,16 @@ The production health check currently reports `guide_excursions_full=ok` despite
 - Deployed runtime SHA `789bb37bfa69126892b0946986c687692edd358e`, reachable from `origin/main`: Guide public reads default to `VK_SERVICE_TOKEN`; error 9 opens a per-credential circuit and no longer receives five in-call retries; JobOutbox flood retries use the provider cooldown plus deterministic jitter.
 - First production deployment showed the intended provider containment: after boot, one user-token `wall.get` received error 9 at 08:01:19 UTC and opened the circuit; the next 118 observed transport checks were rejected locally, with no additional error-9 provider response. Follow-up also suppresses those per-call INFO lines, propagates flood state through photo upload, and stops fivefold retries for explicit group-auth rejection.
 - After the follow-up deployment, one `photos.getWallUploadServer` provider request received error 9 at 08:13:43 UTC. Later `vk_sync` jobs were deferred locally to staggered times after the one-hour circuit deadline; no `failed after 5 attempts` sequence appeared after that boot.
+- On 2026-09-19 the 155 accumulated managed-event `vk_sync` flood rows were
+  atomically contained as terminal `done` with marker
+  `contained_no_replay_pre_token_rotation_20260919`; a full row backup and
+  checksum were retained before mutation. This prevents the old announcement
+  cohort from bursting after credential recovery.
+- Production `VK_USER_TOKEN` was rotated to a newly supplied user actor that
+  passed permission and read-only upload-server probes. Fly machine version
+  2071 became healthy; post-restart DB verification showed 155 contained rows,
+  zero flood errors, and no pending/running VK jobs. The first genuinely fresh
+  Smart Update canary is still pending.
 
 ## Corrective Actions
 
@@ -122,6 +132,9 @@ The production health check currently reports `guide_excursions_full=ok` despite
 - [ ] Add a lane-level diagnostic when every enabled VK source scans zero posts due to provider errors.
 - [ ] Verify the next normal scheduled Guide scan; do not run a historical catch-up per operator direction.
 - [ ] Separately investigate the primary crawler's stale `radostidetam` cursor; the service token currently reads that wall successfully, so it is not explained by this token-routing incident.
+- [ ] Verify the first genuinely fresh managed `klgdevents` publication after
+  token rotation by provider readback and the managed-publication ledger; do
+  not rearm the contained cohort.
 
 ## Release And Closure Evidence
 
@@ -129,6 +142,10 @@ The production health check currently reports `guide_excursions_full=ok` despite
 - deploy path: `scripts/deploy_fly_main.sh --remote-only`; Fly image `deployment-01M2CX1ZTV30BR9GY5D150YMWZ`, machine `48e419df93e078`
 - regression checks: targeted local suite `98 passed`; PR #647 and #648 CI passed; direct service-token read smoke passed for a group and a personal profile
 - post-deploy verification: `/healthz` reports `ok=true`, `ready=true`, DB `ok`; one provider error 9 opened the circuit, subsequent publication jobs were deferred locally, and no five-attempt VK call sequence or `database is locked` line was observed after the final boot in the checked window
+- 2026-09-19 runtime-only recovery: Fly machine version 2071, active
+  `VK_USER_TOKEN` fingerprint matched the working local candidate, `/healthz`
+  remained ready, `PRAGMA quick_check=ok`, and the contained-row backup checksum
+  is `0984435a6308dd525b9af99678e68998610d2a106abf85551e2a93c82c11888f`.
 - closure pending: the next normal Guide scheduled scan must produce six non-error VK source reports; historical catch-up remains explicitly excluded
 
 ## Prevention

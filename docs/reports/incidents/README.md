@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-19-tg-monitoring-runtime-starvation.md`
+  - Scope: Telegram Monitoring provider routing/retry bounds, Kaggle cancellation
+    lease reconciliation, recovery import and Smart Update Telegram ingress.
+  - Must not regress: provider retries must not multiply across layers; a
+    terminal cancelled run must release only its own session lease; closure
+    requires fresh production Telegram imports without stale public fanout.
 - `INC-2026-09-13-dataset-loop-chatgpt-oauth-discovery.md`
   - Scope: Dataset Loop MCP protected-resource discovery, KenigEvents Identity resource/scopes, dual OAuth+PCT auth, exact systemd release configuration, and ChatGPT custom connector OAuth/tool scan.
   - Must not regress: closure requires public metadata/challenge checks, authenticated initialize/tool listing, Dataset fix reachability from `origin/main`, and a real ChatGPT UI OAuth connection confirmation.

@@ -316,6 +316,31 @@ async def test_poll_kaggle_kernel_retries_status_http_500(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("remote_state", ["CANCELED", "CANCELLED", "CANCEL_ACKNOWLEDGED"])
+async def test_poll_kaggle_kernel_treats_cancel_states_as_terminal(
+    monkeypatch, remote_state
+):
+    class FakeClient:
+        def get_kernel_status(self, _kernel_ref):
+            return {"status": remote_state}
+
+    monkeypatch.setattr(
+        "source_parsing.telegram.service.POLL_INTERVAL_SECONDS",
+        0,
+    )
+
+    status, status_data, _duration = await _poll_kaggle_kernel(
+        FakeClient(),
+        "zigomaro/telegram-monitor-bot",
+        run_id="run-cancelled",
+        timeout_minutes=1,
+    )
+
+    assert status == "failed"
+    assert status_data == {"status": remote_state}
+
+
+@pytest.mark.asyncio
 async def test_poll_kaggle_kernel_completes_from_output_when_status_api_keeps_500(
     tmp_path, monkeypatch
 ):
