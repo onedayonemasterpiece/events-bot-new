@@ -34,6 +34,12 @@ need the factual post text, caption, media, id, date, or adjacent messages.
 
 ## Workflow
 
+On `/home/dev`, first use the shared `devserver-telegram-e2e` skill and
+`telegram-e2e-run -- <project command>`. The sole credential is
+`/home/dev/.env:TELEGRAM_E2E`; the launcher maps it into the legacy names below.
+Do not copy credentials to the project or substitute S22/VibePublish. The
+following direct dotenv instructions apply outside this shared devserver.
+
 1. Load local `.env` only into the current process/shell if needed:
    `set -a; source .env; set +a`.
 2. Prefer the helper script for exact post reads:

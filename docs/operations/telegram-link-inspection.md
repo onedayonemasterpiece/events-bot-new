@@ -15,6 +15,13 @@ post text/caption/media checks should use the Telegram API through Telethon.
 
 ## Session source
 
+On the shared `/home/dev` devserver, use `telegram-e2e-run -- <command>`.
+Its canonical credential is `TELEGRAM_E2E` in `/home/dev/.env`; the launcher
+supplies the aliases below without copying secrets into this repository.
+It also serializes local E2E use across projects. Validate offline with
+`telegram-e2e-run --check`. Do not declare the session missing merely because
+the project `.env` lacks a legacy alias.
+
 Use only local E2E/human session variables:
 
 - `TELEGRAM_AUTH_BUNDLE_E2E` preferred;
@@ -30,8 +37,7 @@ tokens, or `.env` contents.
 For exact reads:
 
 ```bash
-set -a; source .env; set +a
-python3 scripts/read_telegram_message.py https://t.me/kldevents/625
+telegram-e2e-run -- python3 scripts/read_telegram_message.py https://t.me/kldevents/625
 ```
 
 Multiple links are supported:

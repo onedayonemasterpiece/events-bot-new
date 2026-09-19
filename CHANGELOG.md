@@ -9,6 +9,8 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
+- Devserver Telegram E2E instructions use the shared `telegram-e2e-run` loader
+  and canonical `/home/dev/.env:TELEGRAM_E2E`, with process-only legacy aliases.
 - Telegram Monitoring: preserve Gemma primary and the existing Gemini fallback, bound quota
   waits and eliminate nested provider retries; recognize Kaggle cancellation
   aliases and release the exact cancelled run's session lease during recovery
