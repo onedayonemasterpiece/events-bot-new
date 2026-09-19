@@ -5468,6 +5468,7 @@ def _build_candidate(
             "tg_ticket_link_from_post_author": bool(ticket_link_from_post_author),
             "tg_time_is_default": bool(time_is_default),
             "tg_time_explicitly_unknown": bool(explicit_unknown_start_time),
+            "source_event_count": message_event_count,
         }
     )
 
@@ -5493,8 +5494,14 @@ def _build_candidate(
         ),
     )
 
+    source_decision = _source_parse_decision(message)
     return EventCandidate(
         source_type="telegram",
+        source_disposition=_source_parse_disposition(source_decision),
+        source_evidence_complete=(
+            _decision_value(source_decision, "evidence_complete")
+            if source_decision is not None else None
+        ),
         source_url=source_link or None,
         source_text=event_source_text,
         title=str(title).strip() if title else None,
@@ -7176,6 +7183,12 @@ async def process_telegram_results(
                     if result.reason:
                         key = f"{key}:{result.reason}"
                     skip_breakdown[key] += 1
+                elif result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
+                    # Identity uncertainty is a supported durable outcome, not
+                    # an unknown enum. Keep the carrier visibly partial without
+                    # rearming old source/publication queues or losing its cause.
+                    message_terminal_error_reason = result.reason or "identity_retry_scheduled"
+                    skip_breakdown[f"retry_scheduled:{message_terminal_error_reason}"] += 1
                 elif result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL:
                     message_terminal_error_reason = (
                         result.reason or "smart_update_unresolved"

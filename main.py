@@ -25789,7 +25789,11 @@ async def job_event_media_review(
     from event_media import review_next_event_media_pair
 
     projection_changed = await review_next_event_media_pair(int(event_id), db, bot)
-    if (rehydrated or cdn_updated) and not projection_changed:
+    # The pair worker can return early after approving a seed/classifying its
+    # role. That branch does not run its trailing fanout. Always refresh the
+    # dependencies here after progress: optional second-image review tomorrow
+    # must not block an announcement whose approved CDN seed exists now.
+    if rehydrated or cdn_updated or projection_changed:
         async with db.get_session() as session:
             fresh = await session.get(Event, int(event_id))
         if fresh is not None:

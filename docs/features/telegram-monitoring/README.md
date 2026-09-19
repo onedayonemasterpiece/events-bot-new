@@ -2,6 +2,14 @@
 
 ## P0 typed LLM-first producer/consumer contract
 
+The server candidate adapter preserves the validated `source_disposition` and
+`source_evidence_complete` receipt in Smart Update. It also passes the producer
+child count as a routing hint: several activities under a shared date heading
+must go through the existing LLM occurrence-scope stage. An invalid/mismatched
+receipt cannot gain a positive verdict. Supported durable identity retries are
+reported as `retry_scheduled:<reason>` and keep the carrier partial; they are
+not an unknown enum and do not rearm historical publication queues.
+
 Канонический producer сохраняет для каждого message/album один
 `source_parse_decision` (`source-parse-v1`) с closed disposition, всеми event
 children, lifecycle actions и `evidence_manifest`. No-keyword/no-date/historical

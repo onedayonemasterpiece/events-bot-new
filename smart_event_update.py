@@ -6511,6 +6511,13 @@ def _candidate_needs_llm_occurrence_scope_review(candidate: "EventCandidate") ->
     corpus = "\n".join([str(candidate.source_text or ""), str(candidate.raw_excerpt or "")]).strip()
     if not corpus:
         return False
+    # The producer already knows the carrier has several children. Route to
+    # the existing semantic scope review even when they share a date or a
+    # common "19 and 20 September" heading. This is not a semantic verdict.
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    count = metrics.get("source_event_count")
+    if isinstance(count, int) and not isinstance(count, bool) and count > 1:
+        return True
     pairs = _extract_day_month_pairs(corpus)
     if len(pairs) < 2:
         return False
@@ -6810,7 +6817,12 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         "Смысловое решение принадлежит тебе; даты и векторы — только подсказки.\n"
         "Выбери только блок target и общие строки, которые явно относятся ко всем пунктам "
         "(например общая цена/ужин/адрес). Не включай названия, программу, артистов или "
-        "описания соседних дат. Целевой блок должен одновременно поддерживать дату и "
+        "описания соседних событий, в том числе в тот же день на той же площадке. "
+        "Общая программа на два дня с несколькими мастер-классами и экскурсией — "
+        "это несколько children, не single_event для каждого child. Общие даты "
+        "относятся к каждому явно перечисленному пункту программы; сохрани их "
+        "дословно вместе с описанием только target. "
+        "Целевой блок должен одновременно поддерживать дату и "
         "локацию/город target; если дата в источнике связана с другим городом/площадкой, верни uncertain. "
         "Верни selected_excerpts как короткие ДОСЛОВНЫЕ непрерывные "
         "фрагменты source_text. Если принадлежность строк неясна — uncertain. Если источник "
@@ -11290,6 +11302,13 @@ _DAY_MONTH_WORD_RE = (
     if _MONTH_WORD_PATTERN
     else None
 )
+_DAY_LIST_MONTH_WORD_RE = (
+    re.compile(
+        rf"\b(\d{{1,2}}(?:\s*(?:,\s*(?:и\s+)?|и\s+)\d{{1,2}})+)\s+({_MONTH_WORD_PATTERN})\b",
+        re.IGNORECASE,
+    )
+    if _MONTH_WORD_PATTERN else None
+)
 
 DATE_PROVENANCE_MISSING = "missing"
 DATE_PROVENANCE_UNGROUNDED = "ungrounded"
@@ -11342,6 +11361,17 @@ def _extract_day_month_pairs(text: str | None) -> set[tuple[int, int]]:
             if not month or not (1 <= day <= 31):
                 continue
             pairs.add((day, int(month)))
+    if _DAY_LIST_MONTH_WORD_RE is not None:
+        # Explicit coordinated dates share the written month. Do not expand
+        # ranges or infer missing dates from unrelated numbers in prose.
+        for m in _DAY_LIST_MONTH_WORD_RE.finditer(normalized):
+            month = MONTHS_RU.get(m.group(2))
+            if month:
+                pairs.update(
+                    (int(day), int(month))
+                    for day in re.findall(r"\d{1,2}", m.group(1))
+                    if 1 <= int(day) <= 31
+                )
     return pairs
 
 
@@ -13438,6 +13468,9 @@ async def _llm_dedup_adjudicator(
         "легитимных сеанса из одного анонса → create.\n"
         "- Утренник + вечерний показ одного спектакля в один день (например 11:00 и 19:00) — "
         "это два показа → два события → create.\n"
+        "- Повтор одной программы в явно перечисленные дни («19 и 20 сентября», "
+        "«на оба дня подготовили программу») — отдельные occurrences на каждый день, "
+        "а не перенос даты уже созданной карточки. Общий source_url/постер этого не меняет.\n"
         "- Два РАЗНЫХ спектакля/концерта/мероприятия на одной площадке в один день "
         "(разные названия/программа/состав) → create.\n"
         "- Если у `candidate.allow_parallel=true` или у кандидата `allow_parallel=true` "
@@ -13461,8 +13494,11 @@ async def _llm_dedup_adjudicator(
         "`confidence` (0..1); `reason_code` (один код из закрытого списка схемы); "
         "`reason` (1 короткая фраза по-русски, без выдумок); `relation` "
         "(same_event|distinct_event|distinct_occurrence|unknown); "
-        "`source_grounded_evidence` (до 4 коротких точных цитат/фактов из переданных "
-        "source_text/poster полей); `blocking_conflicts` (до 4 конкретных различий). "
+        "`source_grounded_evidence` (до 4 коротких ДОСЛОВНЫХ непрерывных цитат из переданных "
+        "source_text/raw_excerpt/poster полей, без пояснений, префиксов и пересказа); "
+        "`blocking_conflicts` (до 4 конкретных различий, здесь допустимо объяснение). "
+        "Например, цитируй «19 и 20 сентября» целиком, не превращай её в отсутствующую "
+        "в источнике строку «19 сентября». "
         "Для create разрешение отдельной карточки возможно только с relation="
         "distinct_event или distinct_occurrence, непустыми evidence и blocking_conflicts. "
         "Если таких доказательств нет, верни relation=unknown и no_candidate_match.\n\n"
@@ -13516,6 +13552,8 @@ def _dedup_adjudicator_final_result(
     candidate: EventCandidate,
     events: Sequence[Event],
     decision: dict[str, Any] | None,
+    *,
+    posters_map: dict[int, list[EventPoster]] | None = None,
 ) -> IdentityFinalResult:
     """Close the existing adjudicator into one fail-closed typed result."""
 
@@ -13544,6 +13582,19 @@ def _dedup_adjudicator_final_result(
         getattr(candidate, "occurrence_scope_text", None),
         getattr(candidate, "title", None),
     ]
+    # Validate against the same OCR evidence supplied to the adjudicator.
+    # Omitting it turns an exact poster citation into a false durable retry.
+    grounding_corpus.extend(
+        value
+        for poster in (candidate.posters or [])[:3]
+        for value in (poster.ocr_text, poster.ocr_title)
+    )
+    grounding_corpus.extend(
+        value
+        for event in events
+        for poster in (posters_map or {}).get(event.id or 0, [])[:2]
+        for value in (poster.ocr_text, poster.ocr_title)
+    )
     grounding_corpus.extend(
         value
         for event in events
@@ -18483,7 +18534,7 @@ async def _smart_event_update_impl(
             _clip_title(clean_title),
         )
 
-    clean_source_text = raw_source_text or ""
+    clean_source_text = candidate.occurrence_scope_text or raw_source_text or ""
     clean_raw_excerpt = raw_excerpt
     clean_source_text = _normalize_bullet_markers(clean_source_text) or clean_source_text
     clean_raw_excerpt = _normalize_bullet_markers(clean_raw_excerpt) or clean_raw_excerpt
@@ -19805,6 +19856,7 @@ async def _smart_event_update_impl(
                     candidate,
                     blocked,
                     decision,
+                    posters_map=wide_posters,
                 )
                 final_owner_id = identity_final_result.owner_event_id or (
                     int(identity_gate_match.id)
