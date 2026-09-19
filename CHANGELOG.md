@@ -9,6 +9,10 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
+- Telegram Monitoring: prefer Gemini Flash Lite with Gemma fallback, bound quota
+  waits and eliminate nested provider retries; recognize Kaggle cancellation
+  aliases and release the exact cancelled run's session lease during recovery
+  (`INC-2026-09-19-tg-monitoring-runtime-starvation`).
 - Restored ChatGPT OAuth discovery for Dataset Loop MCP by enabling dual
   OAuth/PCT authentication, publishing protected-resource metadata and bearer
   challenges, and registering the Dataset resource/scopes in KenigEvents

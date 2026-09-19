@@ -49,6 +49,26 @@ Positive children сохраняются, а исчерпанная inline verif
 
 ## Что делает
 
+### Ограничение повторов при сбоях провайдера (2026-09-19)
+
+По умолчанию text/vision используют `gemini-3.5-flash-lite`, резерв —
+`models/gemma-4-31b-it`. Модели по-прежнему переопределяются переменными
+`TG_MONITORING_TEXT_MODEL`, `TG_MONITORING_VISION_MODEL` и соответствующими
+`*_FALLBACK`. Общий Google AI client делает один физический запрос за попытку
+ноутбука (`max_provider_attempts=1`), без вложенного умножения повторов.
+По умолчанию quota-loop ограничен двумя попытками и ожиданием не более 15 секунд,
+transient recovery — одной попыткой на модель (без дополнительного повтора). Ошибки остаются видимыми:
+исчерпание повторов не превращается в успешное «событий нет».
+
+`CANCEL_ACKNOWLEDGED`, `CANCELED` и `CANCELLED` считаются terminal failure.
+Recovery освобождает только lease соответствующего run_id сразу после проверки
+статуса, сохраняя прежнее grace-window для recovery registry. Увеличение общего
+таймаута не является исправлением деградации. Проверка релиза — canary на двух
+источниках без импорта/публикации, затем контроль нормального свежего импорта.
+См. [инцидент](../../reports/incidents/INC-2026-09-19-tg-monitoring-runtime-starvation.md).
+
+### Основной поток
+
 - По расписанию запускает Kaggle‑kernel `TelegramMonitor`.
 - Kaggle читает сообщения источников, делает OCR и извлекает события; афиши по умолчанию грузятся в managed storage:
   - **Yandex Object Storage** (`https://storage.yandexcloud.net/<bucket>/<path>`), если в runtime есть `YC_SA_BOT_STORAGE[_KEY]`;
@@ -172,9 +192,9 @@ Positive children сохраняются, а исчерпанная inline verif
       - `@username` в контексте «запись/бронь/напиши» → `ticket_link=https://t.me/username`;
       - если в Kaggle‑payload пришли `messages[].links` (кнопки/hidden URL entities типа “More info”, “билеты”, “здесь”) и `ticket_link` пустой, сервер может best-effort выбрать один «сильный» registration/ticket URL.
     - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста. Short contentful titles returned by the LLM (`Идиот`, `Гараж`, `№ 13`) are valid and must not be overwritten only because they are short; umbrella/service lines such as `завтра в театре`, `афиша`, `анонс`, `в продаже репертуар` are skipped by this fallback.
-- Primary text/vision в Kaggle остаётся Gemma 4; при исчерпании bounded
+- Primary text/vision в Kaggle — `gemini-3.5-flash-lite`; при исчерпании bounded
   transport/quota попыток тот же carrier в том же claim переходит на
-  independently-limited stable `gemini-3.5-flash-lite`. 4o здесь не участвует.
+  independently-limited `models/gemma-4-31b-it`. 4o здесь не участвует.
 - Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
 - Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`. Если `GOOGLE_API_KEY3` ещё не зарегистрирован в Supabase quota registry, gateway не должен молча брать общий key pool: он переходит на process-local limiter и всё равно вызывает provider через выбранный `GOOGLE_API_KEY3`.
@@ -182,11 +202,11 @@ Positive children сохраняются, а исчерпанная inline verif
 - Provider calls ограничены таймаутом: `TG_MONITORING_LLM_TIMEOUT_SECONDS` (default `45`) выставляет `GOOGLE_AI_PROVIDER_TIMEOUT_SEC`, чтобы retryable Gemma 4 `500/504` или зависшие calls fail-open на уровне поста/стадии, а не съедали весь Kaggle window.
 - Отказ shared limiter по минутным `rpm`/`tpm` происходит **до** provider send.
   Monitor ждёт указанный `retry_after` и продолжает тот же carrier внутри
-  текущего запуска (до восьми попыток и не более 65 секунд на одно ожидание
+  текущего запуска (до двух попыток и не более 15 секунд на одно ожидание
   по умолчанию). Это не durable/background retry. После exhaustion primary
-  model тот же carrier использует explicit `gemini-3.5-flash-lite` fallback;
+  model тот же carrier использует explicit `models/gemma-4-31b-it` fallback;
   лишь exhaustion обеих моделей становится видимой технической ошибкой.
-- Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
+- Дефолтные Kaggle text/vision модели для этого surface: `gemini-3.5-flash-lite`.
 - Evidence completeness не ограничивается скрытым числом media на source:
   `TG_MONITORING_MEDIA_MAX_PER_SOURCE=0` по умолчанию. Видео-only carrier и
   видео в album получают bounded video/thumbnail evidence до финального

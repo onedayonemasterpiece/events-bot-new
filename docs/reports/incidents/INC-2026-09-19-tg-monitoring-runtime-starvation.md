@@ -176,10 +176,41 @@ same growing backlog.
 
 ## Release And Closure Evidence
 
-- deployed SHA: no corrective code deployed yet
-- deploy path: —
-- regression checks: read-only production funnel and status-ledger diagnosis
-- post-deploy verification: pending
+- deployed SHA: `953218e576ddc789a27f3318b8e2e202492b3e3a`, reachable from
+  `origin/main`; Fly machine version 2072, image
+  `deployment-01M2W7QK37JYG58ARAAGJNTHC2`.
+- deploy path: `scripts/deploy_fly_main.sh --remote-only`, clean `main`.
+- regression checks: 126 targeted service/recovery/producer/notebook tests
+  passed; Python compilation, notebook JSON and provider-path audit passed
+  (`unapproved=0`, `allowlisted_debt=0`).
+- post-deploy health: ready, DB healthy, machine health check passing; paid
+  volume size unchanged. Static-site tree unchanged.
+- Operator cancelled the old-notebook watchdog catch-up
+  `catchup-tg-monitoring-99ee3b7b37ad4e4599546e2da7765699`; Kaggle terminality
+  was verified and the existing exact-run reconciler released one session
+  lease. The corrected canary holds the existing cross-process monitor lock.
+- post-fix canary: `canary-provider-fix-20260919-after-cancel`, same two sources
+  and two-message limit, no import/publication; passed the runtime check.
+  Kernel log duration fell from 799.8s to 146.0s (5.48x faster). All four
+  source/message IDs match the baseline. The log contains 13 unique successful
+  provider requests, zero provider errors, zero quota waits and zero fallbacks.
+  Notebook scan ran 07:21:16–07:22:54 UTC; exact session lease released at
+  07:22:56 UTC. Captured stats: two sources, four messages, eight candidate
+  events; nothing imported or published.
+- Quality comparison is not a blanket semantic approval: all six dated
+  Agropark occurrences retain the same titles/dates/times. The undated
+  oil-tasting poster changed from no-event to one undated candidate, and the
+  ongoing museum exhibition now has its explicit 20 September end date with
+  no invented start date. These require consumer-side checks before treating
+  all eight candidates as publishable events. Canary output is retained and
+  was not replayed into production.
+- Evidence directory: retained artifact subdirectory
+  `tg-canary-postfix-20260919T0721Z/`; local and Fly SHA256 values match:
+  results `7c9831ac5e4b3a59621156dc1d9ae6621a0c5af6ce2a477a30d739772d5e5229`,
+  kernel log `0cfc60e5479b0322b972955dd4628d85381fad707bbccc11136b9d94c69f6434`,
+  status events `bba24f4da56c193dac825dd0d3b943bd0873327ffad1c7de275cce7bc9a207ed`.
+- A normal all-source run completing within two hours and fresh Smart Update
+  acceptance remain unverified; the incident stays open.
 
 ## Prevention
 
