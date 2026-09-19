@@ -252,6 +252,10 @@ same growing backlog.
   The conflict SELECT was triggering autoflush before duplicate adjudication.
   The hotfix suppresses that autoflush; the existing unique constraint and
   canonical-survivor policy remain unchanged.
+- The first production retry proved a second write path remained: pair review
+  reapplied both raw fingerprints before reconciling pending posters. Pair
+  review now routes both distinct fingerprints (and the exact-pair survivor)
+  through the same conflict-safe assignment helper.
 
 ### Operator correction: model policy and end-to-end acceptance
 

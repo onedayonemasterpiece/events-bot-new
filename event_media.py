@@ -2278,8 +2278,12 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                 if left_fp.raw_sha256 == right_fp.raw_sha256:
                     survivor = _choose_survivor(left, right)
                     loser = right if survivor.id == left.id else left
-                    _apply_fingerprints(left, left_fp)
-                    _apply_fingerprints(right, right_fp)
+                    survivor_fp = left_fp if survivor.id == left.id else right_fp
+                    _apply_pixel_fingerprints(left, left_fp)
+                    _apply_pixel_fingerprints(right, right_fp)
+                    await assign_event_poster_raw_sha256(
+                        survivor, survivor_fp.raw_sha256, session=session
+                    )
                     # The partial unique index keeps the byte identity on the
                     # canonical row. The loser still retains pixel/perceptual
                     # evidence and the pair row records raw equality.
@@ -2287,8 +2291,14 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                     session.add(survivor)
                     session.add(loser)
                 else:
-                    _apply_fingerprints(left, left_fp)
-                    _apply_fingerprints(right, right_fp)
+                    _apply_pixel_fingerprints(left, left_fp)
+                    _apply_pixel_fingerprints(right, right_fp)
+                    await assign_event_poster_raw_sha256(
+                        left, left_fp.raw_sha256, session=session
+                    )
+                    await assign_event_poster_raw_sha256(
+                        right, right_fp.raw_sha256, session=session
+                    )
                     session.add(left)
                     session.add(right)
 
