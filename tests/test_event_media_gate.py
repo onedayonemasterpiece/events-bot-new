@@ -1270,6 +1270,81 @@ async def test_final_distinct_pair_promotes_and_enqueues_geometry_accumulation(
 
 
 @pytest.mark.asyncio
+async def test_pair_review_does_not_reclaim_third_rows_raw_sha(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "pair-third-raw-owner.sqlite"))
+    await db.init()
+    payloads = {
+        "https://static.example/a.png": _pattern_png_bytes(invert=False),
+        "https://static.example/b.png": _pattern_png_bytes(invert=True),
+    }
+
+    async def fake_download(poster: EventPoster) -> DownloadedPoster:
+        url = str(poster.supabase_url)
+        return DownloadedPoster(payloads[url], "image/png", url)
+
+    async def distinct_reviewer(**_kwargs):
+        return (
+            {
+                "decision": "distinct",
+                "duplicate_kind": "none",
+                "confidence": 0.99,
+                "semantic_conflict": False,
+                "canonical_side": "either",
+                "reason_code": "different_photos",
+            },
+            1,
+        )
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_call_reviewer", distinct_reviewer)
+    first_fp = compute_image_fingerprints(payloads["https://static.example/a.png"])
+    assert first_fp is not None
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        await _apply_posters(
+            session,
+            event_id,
+            [
+                PosterCandidate(
+                    supabase_url="https://static.example/a.png", sha256="a" * 64
+                ),
+                PosterCandidate(
+                    supabase_url="https://static.example/b.png", sha256="b" * 64
+                ),
+            ],
+        )
+        session.add(
+            EventPoster(
+                event_id=event_id,
+                poster_hash="historical-raw-owner",
+                supabase_url="https://static.example/historical.webp",
+                raw_sha256=first_fp.raw_sha256,
+                review_status=DUPLICATE,
+            )
+        )
+        await session.commit()
+
+    await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(EventPoster)
+                .where(EventPoster.event_id == event_id)
+                .order_by(EventPoster.id)
+            )
+        ).scalars().all()
+
+    await db.engine.dispose()
+    assert rows[0].raw_sha256 is None
+    assert rows[2].raw_sha256 == first_fp.raw_sha256
+
+
+@pytest.mark.asyncio
 async def test_semantic_conflict_rejects_candidate_without_manual_queue(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

@@ -11,7 +11,9 @@
 ### Fixed
 - Event-media raw-SHA conflict probes suppress SQLAlchemy autoflush until the
   per-event duplicate check completes, preventing one duplicate poster from
-  repeatedly blocking the production outbox.
+  repeatedly blocking the production outbox. Pair-review fingerprint writes
+  now use the same conflict-safe assignment path instead of reclaiming a
+  third poster's per-event raw SHA.
 - Telegram → Smart Update: preserve the validated source verdict and child count;
   scope same-day programme children before generating copy, ground explicit
   shared-month date lists, and report durable identity retries accurately.
