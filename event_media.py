@@ -302,9 +302,13 @@ async def assign_event_poster_raw_sha256(
         )
         if poster_id is not None:
             conflict_stmt = conflict_stmt.where(EventPoster.id != int(poster_id))
-        conflicting_poster_id = (
-            await session.execute(conflict_stmt.limit(1))
-        ).scalar_one_or_none()
+        # The candidate may already have other fingerprint fields staged in
+        # this session.  The conflict probe must not autoflush its raw SHA
+        # before we have checked the unique per-event key.
+        with session.no_autoflush:
+            conflicting_poster_id = (
+                await session.execute(conflict_stmt.limit(1))
+            ).scalar_one_or_none()
 
     if conflicting_poster_id is None:
         candidate.raw_sha256 = normalized

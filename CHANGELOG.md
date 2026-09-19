@@ -9,6 +9,9 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Fixed
+- Event-media raw-SHA conflict probes suppress SQLAlchemy autoflush until the
+  per-event duplicate check completes, preventing one duplicate poster from
+  repeatedly blocking the production outbox.
 - Telegram → Smart Update: preserve the validated source verdict and child count;
   scope same-day programme children before generating copy, ground explicit
   shared-month date lists, and report durable identity retries accurately.
