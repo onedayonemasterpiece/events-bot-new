@@ -154,6 +154,11 @@ unrelated candidate → `rejected`; failure/uncertain → fail-closed quarantine
 После изменения projection обычный event fanout перестраивает Telegraph,
 Telegram, managed VK и static site.
 
+The `event_media_review` job also refreshes that fanout after early-return
+worker progress (seed/role/geometry paths). A ready approved CDN image must
+remove an obsolete publication dependency on optional later-image review;
+unapproved images remain excluded and their durable review stays scheduled.
+
 ### LLM-first semantic media role
 
 Dedup review и смысловая роль изображения — два разных решения. После

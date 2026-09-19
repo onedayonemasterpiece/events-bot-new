@@ -2,6 +2,13 @@
 
 ## P0 automatic identity and source-decision contract
 
+For multi-child Telegram carriers the existing LLM scope review runs even when
+the children share one date or a coordinated heading such as `19 и 20 сентября`.
+Only the LLM-selected, verbatim-grounded child scope goes to downstream text
+generation; full source text remains provenance. The date grounding helper
+recognizes explicit comma/conjunction day lists sharing a month without
+expanding ranges or treating unrelated numeric prose as dates.
+
 После `INC-2026-08-10-smart-update-identity-terminal-loss` Smart Update —
 child-resolution boundary, а не второй eventness classifier. Для кандидата с
 `source_disposition=EVENTS_FOUND|MIXED` regex/date/title/venue/promo/recap

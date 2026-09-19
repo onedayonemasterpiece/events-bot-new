@@ -216,6 +216,31 @@ same growing backlog.
 
 ## Prevention
 
+### Real Gemma-primary import and public readback, 19 September
+
+- Runtime restored to Gemma primary at `4a5ea7daed79e797aae70ff450aadc744d686628`
+  (Fly image `deployment-01M2W96TZFSK2MSATE9DYTDJ3M`); no Smart Update model change.
+- Real run `fresh-gemma-e2e-20260919-post2249`, ops 8996, processed the current
+  announcement `https://t.me/agropark39/2249`: 6 extracted children, 3 creates
+  (9158–9160), 1 merge (9152), 1 rejected and 1 durable identity retry. It took
+  1004.693 seconds including Smart Update; the producer alone took 230.53 seconds.
+- Event 9158 actually published in Telegram at 07:52:13 UTC:
+  `https://t.me/kldevents/4205`, verified with the shared human E2E session.
+- VK API readback verified the same new event live at 08:03 UTC:
+  `https://vk.com/wall-231920894_11060`, `post_type=post`, photo present.
+  Its postponed id was 11057; a stored postponed link alone is not acceptance.
+- This is not full closure. Live inspection found sibling description bleed,
+  a lost producer disposition in the TG candidate adapter, and a scope router
+  missing same-day/shared-date programmes. The 19-and-20 date list also exposed
+  an incomplete deterministic date-grounding helper. Fixes remain LLM-first;
+  date normalization does not decide eventness/identity.
+- Approved CDN media existed for 9152, but an early media-worker return left
+  its old Telegraph dependency waiting on next-day optional pair review.
+- 128 targeted tests pass for the bounded handoff/scope/date/media fixes.
+  Production replay/deploy evidence will be appended after verification.
+- Evidence retained at
+  `/home/dev/artifacts/events-bot-new/20260919T075901Z-tg-publication-end-to-end-repair/`.
+
 ### Operator correction: model policy and end-to-end acceptance
 
 The 146-second no-import canary was Gemini-primary and is not acceptance for

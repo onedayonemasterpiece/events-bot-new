@@ -6511,6 +6511,13 @@ def _candidate_needs_llm_occurrence_scope_review(candidate: "EventCandidate") ->
     corpus = "\n".join([str(candidate.source_text or ""), str(candidate.raw_excerpt or "")]).strip()
     if not corpus:
         return False
+    # The producer already knows the carrier has several children. Route to
+    # the existing semantic scope review even when they share a date or a
+    # common "19 and 20 September" heading. This is not a semantic verdict.
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    count = metrics.get("source_event_count")
+    if isinstance(count, int) and not isinstance(count, bool) and count > 1:
+        return True
     pairs = _extract_day_month_pairs(corpus)
     if len(pairs) < 2:
         return False
@@ -6810,7 +6817,12 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         "Смысловое решение принадлежит тебе; даты и векторы — только подсказки.\n"
         "Выбери только блок target и общие строки, которые явно относятся ко всем пунктам "
         "(например общая цена/ужин/адрес). Не включай названия, программу, артистов или "
-        "описания соседних дат. Целевой блок должен одновременно поддерживать дату и "
+        "описания соседних событий, в том числе в тот же день на той же площадке. "
+        "Общая программа на два дня с несколькими мастер-классами и экскурсией — "
+        "это несколько children, не single_event для каждого child. Общие даты "
+        "относятся к каждому явно перечисленному пункту программы; сохрани их "
+        "дословно вместе с описанием только target. "
+        "Целевой блок должен одновременно поддерживать дату и "
         "локацию/город target; если дата в источнике связана с другим городом/площадкой, верни uncertain. "
         "Верни selected_excerpts как короткие ДОСЛОВНЫЕ непрерывные "
         "фрагменты source_text. Если принадлежность строк неясна — uncertain. Если источник "
@@ -11290,6 +11302,13 @@ _DAY_MONTH_WORD_RE = (
     if _MONTH_WORD_PATTERN
     else None
 )
+_DAY_LIST_MONTH_WORD_RE = (
+    re.compile(
+        rf"\b(\d{{1,2}}(?:\s*(?:,\s*(?:и\s+)?|и\s+)\d{{1,2}})+)\s+({_MONTH_WORD_PATTERN})\b",
+        re.IGNORECASE,
+    )
+    if _MONTH_WORD_PATTERN else None
+)
 
 DATE_PROVENANCE_MISSING = "missing"
 DATE_PROVENANCE_UNGROUNDED = "ungrounded"
@@ -11342,6 +11361,17 @@ def _extract_day_month_pairs(text: str | None) -> set[tuple[int, int]]:
             if not month or not (1 <= day <= 31):
                 continue
             pairs.add((day, int(month)))
+    if _DAY_LIST_MONTH_WORD_RE is not None:
+        # Explicit coordinated dates share the written month. Do not expand
+        # ranges or infer missing dates from unrelated numbers in prose.
+        for m in _DAY_LIST_MONTH_WORD_RE.finditer(normalized):
+            month = MONTHS_RU.get(m.group(2))
+            if month:
+                pairs.update(
+                    (int(day), int(month))
+                    for day in re.findall(r"\d{1,2}", m.group(1))
+                    if 1 <= int(day) <= 31
+                )
     return pairs
 
 
@@ -18483,7 +18513,7 @@ async def _smart_event_update_impl(
             _clip_title(clean_title),
         )
 
-    clean_source_text = raw_source_text or ""
+    clean_source_text = candidate.occurrence_scope_text or raw_source_text or ""
     clean_raw_excerpt = raw_excerpt
     clean_source_text = _normalize_bullet_markers(clean_source_text) or clean_source_text
     clean_raw_excerpt = _normalize_bullet_markers(clean_raw_excerpt) or clean_raw_excerpt
