@@ -247,6 +247,11 @@ same growing backlog.
   instructions and validates supplied OCR, preserving fail-closed negatives.
 - Evidence retained at
   `/home/dev/artifacts/events-bot-new/20260919T075901Z-tg-publication-end-to-end-repair/`.
+- During post-deploy catch-up, outbox job 76790 exposed an independent media
+  blocker: 302 retries of a duplicate-poster `raw_sha256` unique violation.
+  The conflict SELECT was triggering autoflush before duplicate adjudication.
+  The hotfix suppresses that autoflush; the existing unique constraint and
+  canonical-survivor policy remain unchanged.
 
 ### Operator correction: model policy and end-to-end acceptance
 

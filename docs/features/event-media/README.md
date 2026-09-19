@@ -378,3 +378,7 @@ confirmed duplicate group, job completion and live static/Telegraph/TG/VK checks
 The tram-photo rule is preserved: two distinct event photos are not collapsed
 by a hash threshold. Publisher exact-URL uniqueness remains a last safety net,
 not an independent visual policy.
+Raw-byte identity assignment performs its per-event uniqueness probe inside a
+`no_autoflush` block. A poster with other staged fingerprint changes therefore
+cannot flush a conflicting `raw_sha256` before the canonical survivor is found;
+the duplicate keeps `NULL` and pair review retains the evidence.
