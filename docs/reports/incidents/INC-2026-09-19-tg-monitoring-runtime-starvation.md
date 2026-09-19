@@ -238,6 +238,13 @@ same growing backlog.
   its old Telegraph dependency waiting on next-day optional pair review.
 - 128 targeted tests pass for the bounded handoff/scope/date/media fixes.
   Production replay/deploy evidence will be appended after verification.
+- Isolated real-provider replay created all three 19 September occurrences.
+  The 20 September String Art occurrence exposed a further false retry:
+  `FINAL_RETRY/distinct_not_grounded` despite the LLM's explicit
+  `distinct_occurrence/session_split_keep` decision. The prompt allowed
+  paraphrased facts while validation required literal quotes; supplied OCR was
+  also absent from that validator's corpus. The correction tightens quotation
+  instructions and validates supplied OCR, preserving fail-closed negatives.
 - Evidence retained at
   `/home/dev/artifacts/events-bot-new/20260919T075901Z-tg-publication-end-to-end-repair/`.
 

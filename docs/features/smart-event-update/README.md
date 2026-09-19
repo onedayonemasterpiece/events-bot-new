@@ -8,6 +8,10 @@ Only the LLM-selected, verbatim-grounded child scope goes to downstream text
 generation; full source text remains provenance. The date grounding helper
 recognizes explicit comma/conjunction day lists sharing a month without
 expanding ranges or treating unrelated numeric prose as dates.
+The final identity adjudicator requests literal evidence quotes (not paraphrased
+facts) and grounds them against the same candidate/existing-poster OCR supplied
+to the model. Explicit repeated days may be distinct occurrences; uncertainty
+still schedules a retry and does not authorize creation.
 
 После `INC-2026-08-10-smart-update-identity-terminal-loss` Smart Update —
 child-resolution boundary, а не второй eventness classifier. Для кандидата с

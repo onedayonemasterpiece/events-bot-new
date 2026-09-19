@@ -14,6 +14,8 @@
   shared-month date lists, and report durable identity retries accurately.
   Media-review progress now refreshes publication dependencies even on an early
   worker return, so a ready CDN image is not held behind optional enrichment.
+  Final identity review requires verbatim citations and validates supplied OCR
+  too, avoiding false retries for explicitly repeated daily occurrences.
 - Devserver Telegram E2E instructions use the shared `telegram-e2e-run` loader
   and canonical `/home/dev/.env:TELEGRAM_E2E`, with process-only legacy aliases.
 - Telegram Monitoring: preserve Gemma primary and the existing Gemini fallback, bound quota

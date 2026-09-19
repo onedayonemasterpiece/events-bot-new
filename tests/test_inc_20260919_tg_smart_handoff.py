@@ -84,3 +84,38 @@ async def test_media_worker_early_success_refreshes_publication_dependencies(tmp
         schedule.assert_awaited_once()
     finally:
         await db.close()
+
+
+@pytest.mark.parametrize('origin', ['candidate', 'existing'])
+def test_identity_grounding_accepts_exact_supplied_poster_quote(origin):
+    child = candidate(3)
+    child.source_text = child.raw_excerpt = 'Повтор программы'
+    child.posters = []
+    poster = SimpleNamespace(ocr_text='СЕНТЯБРЯ 19 и 20', ocr_title='Афиша')
+    existing = SimpleNamespace(id=1, title=child.title, source_text='', description='')
+    posters_map = {}
+    if origin == 'candidate':
+        child.posters = [poster]
+    else:
+        posters_map[1] = [poster]
+    decision = dict(action='create', match_event_id=None, confidence=0.99,
+                    reason_code='session_split_keep', relation='distinct_occurrence',
+                    source_grounded_evidence=['СЕНТЯБРЯ 19 и 20'],
+                    blocking_conflicts=['19 сентября против 20 сентября'])
+    result = su._dedup_adjudicator_final_result(child, [existing], decision, posters_map=posters_map)
+    assert result.action.value == 'FINAL_DISTINCT'
+    decision['source_grounded_evidence'] = ['21 сентября другая программа']
+    assert su._dedup_adjudicator_final_result(child, [existing], decision, posters_map=posters_map).action.value == 'FINAL_RETRY'
+
+
+@pytest.mark.asyncio
+async def test_identity_prompt_requires_quotes_not_paraphrased_facts(monkeypatch):
+    child = candidate(3)
+    existing = Event(id=1, title=child.title, description='', source_text='', date='2026-09-19', time='13:00', location_name=child.location_name)
+    async def ask(prompt, *_args, **_kwargs):
+        assert 'ДОСЛОВНЫХ непрерывных цитат' in prompt
+        assert 'не перенос даты' in prompt or 'не перенос' in prompt
+        return None
+    monkeypatch.setattr(su, 'SMART_UPDATE_LLM_DISABLED', False)
+    monkeypatch.setattr(su, '_ask_gemma_json', ask)
+    await su._llm_dedup_adjudicator(child, [existing])
