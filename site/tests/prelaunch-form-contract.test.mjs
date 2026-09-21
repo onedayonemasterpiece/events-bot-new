@@ -24,17 +24,17 @@ test('prelaunch client keeps a permanent backend-confirmed first/repeat state', 
   assert.doesNotMatch(runtime, /email\.value\s*=\s*['"]{2}/u);
 });
 
-test('public prelaunch copy consistently announces the 20 September launch', () => {
+test('public prelaunch copy consistently announces the 1 November launch', () => {
   const page = source('site/src/components/PrelaunchPage.astro');
   const layout = source('site/src/layouts/PrelaunchLayout.astro');
   const runtime = source('site/src/scripts/prelaunchForm.ts');
 
-  assert.match(page, /data-launch-date="2026-09-20"/u);
-  assert.match(page, /<time datetime="2026-09-20">20 сентября<\/time>/u);
-  assert.match(layout, /запуск 20 сентября/u);
-  assert.match(layout, /Запуск 20 сентября 2026 года/u);
-  assert.match(runtime, /20 сентября пришлём ссылку на сервис/u);
-  assert.doesNotMatch(`${page}\n${layout}\n${runtime}`, /1 сентября|5 сентября|2026-09-01|2026-09-05/u);
+  assert.match(page, /data-launch-date="2026-11-01"/u);
+  assert.match(page, /<time datetime="2026-11-01">1 ноября<\/time>/u);
+  assert.match(layout, /запуск 1 ноября/u);
+  assert.match(layout, /Запуск 1 ноября 2026 года/u);
+  assert.match(runtime, /1 ноября пришлём ссылку на сервис/u);
+  assert.doesNotMatch(`${page}\n${layout}\n${runtime}`, /1 сентября|5 сентября|20 сентября|2026-09-01|2026-09-05|2026-09-20/u);
 });
 
 test('prelaunch RPC is replay-safe in the resilient transport catalog', () => {

@@ -35,8 +35,8 @@ git diff --exit-code "$PROD_VISUAL_SHA" -- \
   site/src/styles/prelaunch-polish.css \
   site/src/styles/prelaunch-static.css \
   site/scripts/prepare-prelaunch-artwork.mjs
-test "$(sha256sum site/src/components/PrelaunchPage.astro | cut -d' ' -f1)" = 'f25619fb1861d9ada39f55496b0eb146074763763e1b4ef30f5594178810c9fb'
-test "$(sha256sum site/src/layouts/PrelaunchLayout.astro | cut -d' ' -f1)" = '8c12596cdca614cdfa8c893299520cc1cac14f1ff6cfb31137e19ffcd7ca52be'
+test "$(sha256sum site/src/components/PrelaunchPage.astro | cut -d' ' -f1)" = '2d52c14a1e8051e2ba31b60e4e22859c3f2094b95d7ddb22279638bf065a5f99'
+test "$(sha256sum site/src/layouts/PrelaunchLayout.astro | cut -d' ' -f1)" = '743aa6f440359b78db5493c08ec87eab3ea7a23f2472def1b8094ac4526f1faa'
 
 npm --prefix site run test:prelaunch-form
 
@@ -53,11 +53,11 @@ restore_pages
 trap - EXIT
 
 grep -q 'data-prelaunch-page' site/dist/index.html
-grep -q '<title>Полюбить Калининград Анонсы — запуск 20 сентября</title>' site/dist/index.html
+grep -q '<title>Полюбить Калининград Анонсы — запуск 1 ноября</title>' site/dist/index.html
 grep -q '<link rel="canonical" href="https://kenigevents.ru/">' site/dist/index.html
-grep -q 'content="Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 20 сентября 2026 года."' site/dist/index.html
-grep -q '<time datetime="2026-09-20">20 сентября</time>' site/dist/index.html
-if grep -Eq '1 сентября|5 сентября|2026-09-05' site/dist/index.html; then echo 'Production root contains stale launch date' >&2; exit 1; fi
+grep -q 'content="Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 1 ноября 2026 года."' site/dist/index.html
+grep -q '<time datetime="2026-11-01">1 ноября</time>' site/dist/index.html
+if grep -Eq '1 сентября|5 сентября|20 сентября|2026-09-05|2026-09-20' site/dist/index.html; then echo 'Production root contains stale launch date' >&2; exit 1; fi
 grep -q 'content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"' site/dist/index.html
 if grep -q 'noindex' site/dist/index.html; then echo 'Production root contains noindex' >&2; exit 1; fi
 test "$(sha256sum site/dist/assets/prelaunch/prelaunch-scene-desktop.webp | cut -d' ' -f1)" = '3e975fcd07d025f33c948b32758164905d3abc4b1bc91da5e84819604b712061'

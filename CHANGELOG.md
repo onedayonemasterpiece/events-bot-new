@@ -8,6 +8,11 @@
   Existing detail fetch and the Codex seven-tool projection remain unchanged;
   no write capability, provider effect or schema migration is introduced (R0).
 
+### Changed
+- KenigEvents prelaunch date moved from 20 September to 1 November 2026 across
+  the root page, SEO metadata, structured data and subscription confirmations;
+  release checks were updated to reject the previous date.
+
 ### Fixed
 - Event-media raw-SHA conflict probes suppress SQLAlchemy autoflush until the
   per-event duplicate check completes, preventing one duplicate poster from

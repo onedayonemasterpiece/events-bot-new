@@ -79,7 +79,7 @@ async function openScenario(name, behavior) {
           body: JSON.stringify({
             accepted: false,
             status: 'daily_capacity_reached',
-            launch_date: '2026-09-01',
+            launch_date: '2026-11-01',
             consent_version: 'prelaunch-updates-2026-v1',
           }),
         });
@@ -92,7 +92,7 @@ async function openScenario(name, behavior) {
           body: JSON.stringify({
             accepted: false,
             status: 'rejected',
-            launch_date: '2026-09-01',
+            launch_date: '2026-11-01',
             consent_version: 'prelaunch-updates-2026-v1',
           }),
         });
@@ -120,7 +120,7 @@ async function openScenario(name, behavior) {
         body: JSON.stringify({
           accepted: true,
           status: behavior.responseStatus || 'registered',
-          launch_date: '2026-09-01',
+          launch_date: '2026-11-01',
           consent_version: 'prelaunch-updates-2026-v1',
         }),
       });
