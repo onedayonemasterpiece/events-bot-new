@@ -12,6 +12,12 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Changed
+- Reconciled the shared Google AI limiter with the owner's AI Studio readback
+  across six distinct project scopes: raised Gemma 4 26B/31B base rows to
+  30 RPM / 16K TPM / 14.4K RPD, Gemini Embedding 2 to 100 RPM, and Antigravity
+  to 60 RPM / 100K TPM / 100 RPD; registered finite caps for Gemini 3.5
+  Transcribe and both Gemini 3.8 TTS models. Zero-capacity and Unlimited
+  Live API entries remain unrepresented by the positive-integer registry.
 - KenigEvents prelaunch date moved from 20 September to 1 November 2026 across
   the root page, SEO metadata, structured data and subscription confirmations;
   release checks were updated to reject the previous date.
