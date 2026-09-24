@@ -465,8 +465,9 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
     assert posted["vals"] == ["ph1"]
 
 
+@pytest.mark.parametrize("first_failure", ["invalid_json", "empty_photo"])
 @pytest.mark.asyncio
-async def test_upload_vk_photo_retries_upload_server_request(monkeypatch):
+async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_failure):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
     monkeypatch.setattr(
         main,
@@ -474,7 +475,13 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch):
         lambda owner_id, intent: [main.VkActor("user", "user-token", "user:test")],
     )
     monkeypatch.setattr(main, "detect_image_type", lambda data: "png")
-    monkeypatch.setattr(main, "ensure_jpeg", lambda data, name: (data, name))
+    conversion_qualities = []
+
+    def fake_ensure_jpeg(data, name, *, quality=75, subsampling=None):
+        conversion_qualities.append((quality, subsampling))
+        return data, name
+
+    monkeypatch.setattr(main, "ensure_jpeg", fake_ensure_jpeg)
 
     async def fake_sleep(_delay):
         return None
@@ -511,7 +518,9 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch):
 
         async def json(self):
             if self.attempt == 1:
-                raise ValueError("unexpected mimetype text/html")
+                if first_failure == "invalid_json":
+                    raise ValueError("unexpected mimetype text/html")
+                return {"photo": "", "server": 7, "hash": "hash-json"}
             return {"photo": "photo-json", "server": 7, "hash": "hash-json"}
 
     upload_urls: list[str] = []
@@ -546,6 +555,7 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch):
     assert result == "photo-1_42"
     assert upload_urls == ["https://upload/1", "https://upload/2"]
     assert save_params["photo"] == "photo-json"
+    assert conversion_qualities == [(95, 0)]
 
 
 @pytest.mark.asyncio

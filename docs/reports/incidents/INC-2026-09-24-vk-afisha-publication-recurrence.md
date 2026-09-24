@@ -37,6 +37,9 @@ Managed event announcements in VK Afisha stopped after 2026-09-23 04:00 UTC. The
 - 2026-09-23 11:14 UTC: earliest code-9 `photos.getWallUploadServer` entry in the retained 48-hour runtime mirror. The same provider error recurred roughly hourly through 2026-09-24 07:19 UTC, each time opening a 3600-second user-actor circuit.
 - 2026-09-24 06:27–07:30 UTC: 92 `vk_sync` jobs ended with current `vk_flood_wait`; many old jobs had dozens of attempts, and new event jobs were also affected.
 - 2026-09-21 14:29 through 2026-09-24 08:30 UTC: 126 social-metrics runs planned 8,852 target observations and recorded 6,503 imported errors. By 24 September the VK subset repeatedly produced 75–79 errors per run while the ledger still recorded each run as `done`.
+- 2026-09-24 13:10–13:11 UTC: token-routing hotfix deployed from merged `main` SHA `6df3aa0484bf306bd16dd9f5059792677bb5887d`; Fly image `deployment-01M39RD6WGEJJWXSYSAC3V4Q4K`. `VK_USER_TOKEN` rotated from local `VK_USER_TOKEN4`; remote/local SHA-256 prefixes matched (`8fcbb5e487d8`), health remained ready.
+- 2026-09-24 13:21 UTC: a guarded manual run of eligible control `vk_sync` job `87256` (event `9278`, 26 September, exact matching image) passed `photos.getWallUploadServer` but the upload server returned HTTP 200 with an empty `photo`. The code retried `photos.saveWallPhoto` five times with an empty `photo`, received code 100, and failed closed before `wall.post`.
+- Local, non-wall VK upload probes with that same new token: the control WebP (802×930, 47,808 bytes) converted by the existing JPEG default produced 75,899 bytes and empty `photo`; quality 95 with default subsampling produced 171,346 bytes and empty `photo`; quality 75 with subsampling 0 produced 86,403 bytes and empty `photo`; quality 95 with subsampling 0 produced 184,591 bytes and a nonempty `photo`. A different known-published JPEG also uploaded successfully. This establishes an image-encoding-specific rejection, not another token code 9. The exact provider acceptance rule is unknown.
 
 ## Root Cause
 
@@ -44,6 +47,7 @@ Managed event announcements in VK Afisha stopped after 2026-09-23 04:00 UTC. The
 2. **Confirmed retry amplification:** `social_metrics_batch.py::_load_terminal_buckets()` excludes errors, so failed targets return in the next 30-minute run. The prior token rotation left this reader routing unchanged. Once the publishing actor is restricted, the remote reader keeps exercising it while Fly's `vk_sync` also retries after each one-hour circuit. Thus replacing the token alone restores the same failure-producing workload and cannot be a durable fix.
 3. **Confirmed publication blocker:** VK rejects the same user actor on `photos.getWallUploadServer` with code 9. `vk_sync` fails closed rather than publishing an image-bearing event as text.
 4. **Text-only symptom audit:** the inspected multi-event source has images, but both explicitly advertise 26 September. Its later October children correctly have no matching media. Other text-only posts need per-event review before being classified as a loss.
+5. **Separate confirmed media transport defect after token recovery:** the URL-based WebP→JPEG path used Pillow defaults that VK silently rejected for an otherwise valid, date-matching 26 September image (`photo=""` despite HTTP 200). The uploader did not validate this response and made five doomed `photos.saveWallPhoto` calls. It then correctly prevented a text-only `wall.post`. A higher-quality 4:4:4 JPEG of the exact same source was accepted in a controlled upload probe.
 
 The **initial provider decision** that restricted the rotated token cannot be attributed to one exact request: the remote collector discarded the VK provider code and the production runtime mirror covers only the later window. The shared-credential and retry design is directly verified; its contribution to the onset is strongly supported by the timeline and workload, but the exact VK threshold and first rejected method remain unknown. The observed code 9 is not evidence of captcha or bucket exhaustion.
 
@@ -85,7 +89,8 @@ The **initial provider decision** that restricted the rotated token cannot be at
 ## Corrective Actions
 
 - Implemented locally: separation of social-metrics and poll-popularity read traffic from the publishing actor, typed VK provider errors, stop-on-code-9, and cross-run cooldown.
-- Pending safe publishing-actor recovery after removal of the repeated read load.
+- Publishing actor recovered: merged hotfix deployed; rotated token fingerprint and photo-upload-server access verified. Full image-bearing post proof is pending the separate encoding hotfix.
+- Implemented locally: VK-specific JPEG quality/subsampling profile and empty-upload-response guard; second release pending.
 - Pending audit of other recent text-only posts for genuinely missing, event-matching media.
 - Pending delivery-health alert and post-rotation fresh-publication gate.
 
@@ -93,17 +98,17 @@ The **initial provider decision** that restricted the rotated token cannot be at
 
 - [x] Route the half-hourly Kaggle social-metrics VK reads to the service token; add a typed provider code-9 result and stop the VK lane after the first flood response. Pending production verification.
 - [ ] Audit the remaining lower-volume publisher-token readers (`poll_to_forward_popularity`, promo and dynamic-cover paths) and enforce one per-credential budget across Fly and remote consumers.
-- [ ] Restore actor capability safely, then reconcile eligible missed `vk_sync` rows and verify public photo-bearing readback.
+- [ ] Finish the second photo-encoding hotfix, then reconcile eligible missed `vk_sync` rows and verify public photo-bearing readback.
 - [ ] Audit other recent text-only posts and repair only those with exact, date-consistent source media.
 - [ ] Alert on prolonged absence of fresh managed VK posts plus increasing `vk_flood_wait`, even when `/healthz` is ready.
 
 ## Release And Closure Evidence
 
-- deployed SHA at investigation time: not established by image metadata; local checkout `887d755468699230c536a62a49da432125f80f63` is not claimed as deployed.
-- Fly machine: `48e419df93e078`, version `2076`, image `deployment-01M2WE2R4474VRMEQJ0X7TJPJ6`.
+- Deployed first hotfix SHA: `6df3aa0484bf306bd16dd9f5059792677bb5887d`, merged via PR #655; Fly machine `48e419df93e078`, version `2078` after secret rotation, image `deployment-01M39RD6WGEJJWXSYSAC3V4Q4K`.
 - Regression checks: read-only production log, SQLite and authenticated VK API inspection completed. Local focused release suite: 104 passed (`test_social_metrics_kaggle`, `test_vk_actor`, `test_job_captcha_pause`, `test_social_metrics_batch`, `test_poll_to_forward`, `test_poll_to_forward_popularity`). This also fixes a pre-existing poll test that fetched a cursor after its database context closed. Initial PR CI passed the VK-related Python job and static browser gate; its unrelated Smart Update gate found two date-sensitive fixture failures (20 September was past on 24 September). Both failures reproduced locally; the fixture dates were advanced to a fixed future year and all five selected cases passed locally before rerun.
 - Redacted evidence: `/home/dev/artifacts/events-bot-new/20260924T072844Z-vk-publishing-incident-20260924/evidence.md` (retained while the incident is open).
-- Post-deploy verification: pending.
+- Post-first-deploy verification: `/healthz` HTTP 200/ready; remote image SHA exact, service token present, new publishing token fingerprint matched. Control job exposed the separate media encoding defect; no new wall post yet.
+- Second hotfix local regression: 91 focused VK/source/Kaggle/captcha tests passed; `main.py` compiles; exact problematic image's 95-quality, 4:4:4 diagnostic upload produced a nonempty VK `photo` field. Public wall readback remains pending deployment.
 
 ## Prevention
 
