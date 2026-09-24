@@ -23,6 +23,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- For linked child events, approved media now waits for the
+  LLM vision identity decision before entering the public gallery. The vision
+  result lists dates visibly advertised by the image; an image that advertises
+  only another child date is rejected and the gallery/fanout is refreshed.
 - VK short-link creation skips non-web ticket links such as `tel:` instead of
   making repeated invalid `utils.getShortLink` calls with the publishing token.
 - VK Afisha source posts now show the full trusted event date span. A catch-up

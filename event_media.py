@@ -8,7 +8,7 @@ import os
 import re
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Sequence
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -42,7 +42,7 @@ UNAVAILABLE = "unavailable"
 PUBLIC_EVENT_POSTER_STATUSES = (APPROVED,)
 PAIR_POLICY_VERSION = "event-media-pair-v1"
 PAIR_PROMPT_VERSION = "event-media-vision-v1"
-MEDIA_ROLE_PROMPT_VERSION = "event-media-role-v1"
+MEDIA_ROLE_PROMPT_VERSION = "event-media-role-v2-visible-event-dates"
 IMAGE_GEOMETRY_PROMPT_VERSION = "event-image-geometry-v1"
 IMAGE_GEOMETRY_MAX_FACE_BOXES = 25
 MEDIA_ROLES = {
@@ -92,6 +92,11 @@ _MEDIA_ROLE_SCHEMA: dict[str, Any] = {
             "enum": ["ocr_text", "visual_only", "unknown"],
         },
         "primary_purpose": {"type": "string"},
+        "visible_event_dates": {
+            "type": "array",
+            "items": {"type": "string"},
+            "maxItems": 12,
+        },
         "confidence": {"type": "number"},
         "reason_code": {"type": "string"},
         "poster_contract": {
@@ -130,6 +135,7 @@ _MEDIA_ROLE_SCHEMA: dict[str, Any] = {
         "media_role",
         "image_text_mode",
         "primary_purpose",
+        "visible_event_dates",
         "confidence",
         "reason_code",
         "poster_contract",
@@ -358,6 +364,7 @@ def _poster_visual_identity_snapshot(poster: Any) -> tuple[str, str, str, str, s
 
 
 async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoster]:
+    event = await session.get(Event, int(event_id))
     rows = (
         await session.execute(
             select(EventPoster)
@@ -368,7 +375,18 @@ async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoste
             .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
         )
     ).scalars().all()
-    return [row for row in rows if resolve_poster_display_url(row)]
+    linked = bool(getattr(event, "linked_event_ids", None))
+    return [
+        row for row in rows
+        if resolve_poster_display_url(row)
+        and not (
+            linked
+            and (
+                row.media_semantic_status != "classified"
+                or row.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION
+            )
+        )
+    ]
 
 
 async def get_event_gallery_urls(
@@ -1269,10 +1287,22 @@ def _validated_media_role(value: dict[str, Any] | None) -> dict[str, Any] | None
         except Exception:
             return None
     evidence = [str(item)[:240] for item in list(value.get("evidence") or [])[:6]]
+    raw_dates = value.get("visible_event_dates")
+    if not isinstance(raw_dates, list) or len(raw_dates) > 12:
+        return None
+    visible_dates: list[str] = []
+    for raw_date in raw_dates:
+        try:
+            normalized = date.fromisoformat(str(raw_date).strip()).isoformat()
+        except (TypeError, ValueError):
+            return None
+        if normalized not in visible_dates:
+            visible_dates.append(normalized)
     return {
         "media_role": role,
         "image_text_mode": text_mode,
         "primary_purpose": str(value.get("primary_purpose") or "")[:160],
+        "visible_event_dates": visible_dates,
         "confidence": confidence,
         "reason_code": str(value.get("reason_code") or "unspecified")[:120],
         "poster_contract": required_contract,
@@ -1280,6 +1310,32 @@ def _validated_media_role(value: dict[str, Any] | None) -> dict[str, Any] | None
         "safe_crop": bool(value.get("safe_crop", False)),
         "evidence": evidence,
     }
+
+
+def _media_role_visible_date_conflicts(event: Event, decision: dict[str, Any]) -> bool:
+    """Fail closed when the vision model reads only other event dates."""
+
+    visible = decision.get("visible_event_dates") or []
+    if not visible:
+        return False
+    raw = str(getattr(event, "date", "") or "").strip()
+    try:
+        start = date.fromisoformat(raw.split("..", 1)[0])
+        end_raw = (
+            raw.split("..", 1)[1]
+            if ".." in raw
+            else (
+                str(getattr(event, "end_date", "") or "")
+                if not getattr(event, "end_date_is_inferred", False)
+                else ""
+            )
+        )
+        end = date.fromisoformat(end_raw) if end_raw else start
+    except ValueError:
+        return True
+    if end < start:
+        return True
+    return not any(start <= date.fromisoformat(item) <= end for item in visible)
 
 
 def image_geometry_model() -> str:
@@ -1691,7 +1747,12 @@ def _media_role_prompt(event: Event, poster: EventPoster) -> str:
         "события. Фотография события/артиста/места — event_photo. При недостатке контекста выбери unknown_document "
         "для текстового документа или unknown_visual для нетекстового визуала. Не делай вывод по порядку, имени "
         "файла, OCR-факту или соотношению сторон. focal_point описывает главный визуальный объект в 0..1; safe_crop "
-        "разрешай только если умеренный crop не разрушит лица, текст или event identity. Верни только JSON по schema.\n"
+        "разрешай только если умеренный crop не разрушит лица, текст или event identity. "
+        "В visible_event_dates перечисли все ЯВНО НАПИСАННЫЕ на изображении даты рекламируемых событий "
+        "в формате YYYY-MM-DD; если год не написан, используй год event.date только для нормализации. "
+        "Если на афише написана только другая дата или другое название, event_identity_grounded=false, "
+        "даже когда картинка взята из того же исходного поста. Если дат на изображении нет, верни пустой список. "
+        "Верни только JSON по schema.\n"
         + json.dumps(evidence, ensure_ascii=False, sort_keys=True)
     )
 
@@ -1783,6 +1844,7 @@ async def _next_media_role_retry_at(
 
 
 async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) -> bool:
+    projection_changed = False
     async with db.get_session() as session:
         event = await session.get(Event, int(event_id))
         poster = await session.get(EventPoster, int(poster_id))
@@ -1923,8 +1985,23 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
             poster.focal_x = focal.get("x") if focal else None
             poster.focal_y = focal.get("y") if focal else None
             poster.safe_crop = bool(decision.get("safe_crop", False))
+            if _media_role_visible_date_conflicts(event, decision):
+                poster.review_status = REJECTED
+                poster.review_reason = "media_role_visible_date_conflict"
+                poster.reviewed_at = now
+                poster.media_semantic_reason_code = "visible_event_date_conflict"
+                logger.warning(
+                    "event_media.visible_date_conflict event_id=%s poster_id=%s event_date=%s visible_dates=%s",
+                    event_id,
+                    poster_id,
+                    getattr(event, "date", None),
+                    decision["visible_event_dates"],
+                )
         poster.updated_at = datetime.now(timezone.utc)
         session.add(poster)
+        if decision is not None:
+            await session.flush()
+            projection_changed = await sync_event_gallery_projection(session, int(event_id))
         context_hash = _context_hash(event)
         remaining = (
             await session.execute(
@@ -1951,6 +2028,20 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
                 force_followup=True,
             )
         await session.commit()
+    if projection_changed:
+        try:
+            from main import schedule_event_update_tasks
+
+            async with db.get_session() as session:
+                fresh = await session.get(Event, int(event_id))
+            if fresh is not None:
+                await schedule_event_update_tasks(db, fresh)
+        except Exception:
+            logger.warning(
+                "event_media: failed to schedule semantic projection rebuild event_id=%s",
+                event_id,
+                exc_info=True,
+            )
     return decision is not None
 
 

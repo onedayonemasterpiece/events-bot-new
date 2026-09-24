@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -29,6 +30,7 @@ def _role_decision(*, role: str, confidence: float = 0.97, contract: bool = True
         "media_role": role,
         "image_text_mode": "ocr_text",
         "primary_purpose": "identifies the event",
+        "visible_event_dates": [],
         "confidence": confidence,
         "reason_code": "event_identity_matches",
         "poster_contract": {
@@ -93,6 +95,141 @@ def test_utility_document_is_never_promoted_by_deterministic_validation() -> Non
     assert accepted is not None
     assert accepted["media_role"] == "attendee_information"
     assert accepted["poster_contract"]["primary_event_promotion"] is False
+
+
+def test_media_role_visible_dates_reject_other_child_but_accept_matching_date() -> None:
+    event = Event(
+        title="День с викингами",
+        description="desc",
+        source_text="26.09.26 и 03.10.26",
+        date="2026-10-03",
+        time="13:00",
+        location_name="Кауп",
+    )
+    wrong = _role_decision(role="event_identity_poster")
+    wrong["visible_event_dates"] = ["2026-09-26"]
+    matching = _role_decision(role="event_identity_poster")
+    matching["visible_event_dates"] = ["2026-09-26", "2026-10-03"]
+
+    assert event_media._media_role_visible_date_conflicts(
+        event, event_media._validated_media_role(wrong)
+    )
+    assert not event_media._media_role_visible_date_conflicts(
+        event, event_media._validated_media_role(matching)
+    )
+    event.end_date = "2026-12-13"
+    event.end_date_is_inferred = True
+    assert event_media._media_role_visible_date_conflicts(
+        event, event_media._validated_media_role(wrong)
+    )
+    assert "visible_event_dates" in event_media._MEDIA_ROLE_SCHEMA["required"]
+
+
+@pytest.mark.asyncio
+async def test_linked_child_seed_waits_for_current_vision_identity(tmp_path) -> None:
+    db = Database(str(tmp_path / "linked-child-media.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="День с викингами",
+            description="desc",
+            source_text="26.09.26 и 03.10.26",
+            date="2026-10-03",
+            time="13:00",
+            location_name="Кауп",
+            linked_event_ids=[9234],
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="linked-child-poster",
+            supabase_url="https://static.kenigevents.ru/other-date.webp",
+            review_status="approved",
+            review_reason="first_event_media_seed",
+            media_semantic_status="pending",
+        )
+        session.add(poster)
+        await session.flush()
+        assert await event_media.get_event_gallery_rows(session, int(event.id)) == []
+        poster.media_semantic_status = "classified"
+        poster.media_semantic_prompt_version = event_media.MEDIA_ROLE_PROMPT_VERSION
+        session.add(poster)
+        await session.flush()
+        assert [row.id for row in await event_media.get_event_gallery_rows(session, int(event.id))] == [poster.id]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_vision_date_conflict_rejects_linked_child_poster(tmp_path, monkeypatch) -> None:
+    db = Database(str(tmp_path / "wrong-child-poster.sqlite"))
+    await db.init()
+    url = "https://static.kenigevents.ru/26-september.webp"
+    async with db.get_session() as session:
+        event = Event(
+            title="День с викингами",
+            description="desc",
+            source_text="26.09.26 и 03.10.26",
+            date="2026-10-03",
+            time="13:00",
+            location_name="Кауп",
+            linked_event_ids=[9234],
+            photo_urls=[url],
+            photo_count=1,
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="wrong-child-poster",
+            supabase_url=url,
+            review_status="approved",
+            review_reason="first_event_media_seed",
+            media_semantic_status="pending",
+        )
+        session.add(poster)
+        await session.commit()
+        ids = int(event.id), int(poster.id)
+
+    async def fake_download(_poster):
+        return event_media.DownloadedPoster(
+            data=_jpeg_bytes(64, 48), mime_type="image/jpeg", source_url=url
+        )
+
+    async def fake_budget(*_args):
+        return True
+
+    class FakeGoogleAIClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def generate_content_async(self, **_kwargs):
+            decision = _role_decision(role="event_identity_poster")
+            decision["visible_event_dates"] = ["2026-09-26"]
+            return json.dumps(decision), None
+
+    import google_ai
+    import main
+
+    async def no_schedule(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_budget)
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+    monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
+    monkeypatch.setattr(main, "get_supabase_client", lambda: object())
+    monkeypatch.setattr(main, "schedule_event_update_tasks", no_schedule)
+
+    assert await event_media._classify_event_poster_role(*ids, db)
+    async with db.get_session() as session:
+        event = await session.get(Event, ids[0])
+        poster = await session.get(EventPoster, ids[1])
+        assert poster.review_status == "rejected"
+        assert poster.review_reason == "media_role_visible_date_conflict"
+        assert event.photo_urls == []
+        assert event.photo_count == 0
+    await db.close()
 
 
 def test_image_geometry_validation_normalizes_compact_yxyx() -> None:
