@@ -174,6 +174,10 @@
 
 ## Operational Checks
 
+- Keep read-only social-metrics and public wall lookups on `VK_SERVICE_TOKEN`;
+  `VK_USER_TOKEN` is the scarce actor for `photos.getWallUploadServer` and
+  managed publication. Rotating the user token without separating readers
+  repeats `INC-2026-09-24-vk-afisha-publication-recurrence`.
 - `vk_source.owner_type` distinguishes community walls (`group`, negative owner id) from personal pages (`user`, positive owner id). Operator-seeded personal sources such as `ivsguide` and `natakkaz` must keep `owner_type='user'` so crawl/review/repost URLs use `wall<user_id>_<post_id>` instead of `wall-<group_id>_<post_id>`.
 - Перед production-проверкой убедиться, что заданы `VK_USER_TOKEN` или `VK_ACCESS_TOKEN4`, `VK_EVENTS_GROUP_ID` и целевой `/vkgroup` для daily.
 - После VK captcha / замены `VK_USER_TOKEN` проверять не только наличие секрета,

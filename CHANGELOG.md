@@ -23,6 +23,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK Afisha recurrence (`INC-2026-09-24`): route half-hourly Kaggle metrics
+  reads and public popularity lookups to the service credential, stop the
+  remote VK lane on provider code 9, and persist a one-hour reader cooldown so
+  token rotation does not immediately restore the same publisher-token load.
 - Event-media raw-SHA conflict probes suppress SQLAlchemy autoflush until the
   per-event duplicate check completes, preventing one duplicate poster from
   repeatedly blocking the production outbox. Pair-review fingerprint writes

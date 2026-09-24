@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-24-vk-afisha-publication-recurrence.md`
+  - Scope: shared publisher token used by the half-hourly Kaggle social-metrics reader, VK Afisha managed event publication and cross-run flood retry.
+  - Must not regress: read-only metrics use a service token and stop on typed VK flood; recovery requires a genuinely new photo-bearing managed VK post and backlog reconciliation; text-only children are repaired only when an exact date-consistent image exists.
+
 - `INC-2026-09-19-tg-monitoring-runtime-starvation.md`
   - Scope: Telegram Monitoring provider routing/retry bounds, Kaggle cancellation
     lease reconciliation, recovery import and Smart Update Telegram ingress.

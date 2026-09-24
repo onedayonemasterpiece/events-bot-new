@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
 import social_metrics_batch as smb
 import social_metrics_kaggle as smk
-from kaggle.SocialMetricsCollector import social_metrics_collector as collector
 from db import Database
 from models import Event
+
+_collector_path = Path(__file__).resolve().parents[1] / "kaggle" / "SocialMetricsCollector" / "social_metrics_collector.py"
+_collector_spec = importlib.util.spec_from_file_location("social_metrics_collector", _collector_path)
+assert _collector_spec and _collector_spec.loader
+collector = importlib.util.module_from_spec(_collector_spec)
+_collector_spec.loader.exec_module(collector)
 
 NOW = datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc)
 
@@ -231,6 +238,61 @@ def test_kaggle_secret_payload_never_borrows_other_telegram_sessions(monkeypatch
         smk._secret_payload(True, False)
 
 
+def test_vk_metrics_reader_uses_service_token_and_fails_closed(monkeypatch):
+    monkeypatch.setenv("VK_USER_TOKEN", "publishing-secret")
+    monkeypatch.setenv("VK_ACCESS_TOKEN4", "legacy-publishing-secret")
+    monkeypatch.setenv("VK_SERVICE_TOKEN", "service-reader")
+    assert smk._secret_payload(False, True)["VK_TOKEN"] == "service-reader"
+    monkeypatch.delenv("VK_SERVICE_TOKEN")
+    monkeypatch.delenv("VK_SERVICE_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="service-read token"):
+        smk._secret_payload(False, True)
+
+
+@pytest.mark.asyncio
+async def test_vk_flood_stops_all_remaining_remote_reads(monkeypatch):
+    calls = []
+
+    def rejected(method, token, **params):
+        calls.append((method, token))
+        raise collector.VKProviderError(9)
+
+    monkeypatch.setattr(collector, "_vk_request", rejected)
+    targets = [
+        {"target_id": f"vk:{group}:1", "publisher_id": group, "post_id": 1}
+        for group in ("10", "20")
+    ]
+    state = {"active": False}
+    observations = await collector._collect_vk(targets, {"VK_TOKEN": "reader"}, lambda *_: None, state)
+    assert calls == [("wall.getById", "reader")]
+    assert state["active"] is True
+    assert [row["error_code"] for row in observations] == ["VK_API_9", "VK_API_9"]
+
+    candidates = [
+        {"candidate_id": f"vkresolve:klgdevents:{i}", "publisher_id": "20", "stored_post_id": i}
+        for i in (1, 2)
+    ]
+    resolutions = await collector._resolve_vk(candidates, {"VK_TOKEN": "reader"}, 100, state)
+    assert len(calls) == 1
+    assert [row["status"] for row in resolutions] == ["error", "error"]
+
+
+@pytest.mark.asyncio
+async def test_vk_flood_cooldown_survives_next_collector_slot(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    until = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """INSERT INTO kaggle_run_ledger(run_id,kind,status,created_at,progress_json,token_hash)
+               VALUES(?,?,?,?,?,?)""",
+            ("social-metrics:previous", "social_metrics_collector", "done", datetime.now(timezone.utc).isoformat(), json.dumps({"vk_flood_until": until}), "test-hash"),
+        )
+        await conn.commit()
+    assert await smk._vk_reader_cooldown(db) == datetime.fromisoformat(until)
+    await db.close()
+
+
 @pytest.mark.asyncio
 async def test_kaggle_vk_resolution_is_revalidated_and_imported_with_metrics(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -329,7 +391,7 @@ async def test_failed_launch_cleans_created_datasets_and_marks_ledger_terminal(t
 
     monkeypatch.setenv("ENABLE_SOCIAL_METRICS_KAGGLE", "1")
     monkeypatch.setenv("KAGGLE_USERNAME", "user")
-    monkeypatch.setenv("VK_TOKEN", "test")
+    monkeypatch.setenv("VK_SERVICE_TOKEN", "test")
     monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
     monkeypatch.setattr(smk, "build_social_metrics_manifest", fake_manifest)
     monkeypatch.setattr(smk.asyncio, "to_thread", fake_to_thread)
