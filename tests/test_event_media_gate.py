@@ -73,6 +73,70 @@ def _event() -> Event:
 
 
 @pytest.mark.asyncio
+async def test_rejected_semantic_object_cannot_reenter_gallery_with_new_row(tmp_path) -> None:
+    db = Database(str(tmp_path / "rejected-reingest.sqlite"))
+    await db.init()
+    url = "https://static.kenigevents.ru/p/image/v2/ee/same.webp"
+    path = "p/image/v2/ee/same.webp"
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        session.add(EventPoster(
+            event_id=event.id,
+            poster_hash="source-old",
+            supabase_url=url,
+            supabase_path=path,
+            review_status="rejected",
+            review_reason="media_role_visible_date_conflict",
+        ))
+        session.add(EventPoster(
+            event_id=event.id,
+            poster_hash="source-new",
+            supabase_url=url,
+            supabase_path=path,
+            review_status="approved",
+        ))
+        await session.flush()
+        assert await get_event_gallery_urls(session, event.id, legacy_fallback=False) == []
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_smart_update_does_not_reopen_rejected_exact_object(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "0")
+    db = Database(str(tmp_path / "rejected-reimport.sqlite"))
+    await db.init()
+    digest = "e" * 64
+    path = f"p/image/v2/ee/{digest}.webp"
+    url = f"https://static.kenigevents.ru/{path}"
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        session.add(EventPoster(
+            event_id=event.id,
+            poster_hash="old-source",
+            supabase_url=url,
+            supabase_path=path,
+            raw_sha256=digest,
+            review_status="rejected",
+            review_reason="media_role_visible_date_conflict",
+        ))
+        await session.flush()
+        added, *_ = await _apply_posters(session, event.id, [PosterCandidate(
+            sha256="new-source",
+            supabase_url=url,
+            supabase_path=path,
+        )])
+        rows = (await session.execute(select(EventPoster).where(EventPoster.event_id == event.id))).scalars().all()
+        assert added == 0
+        assert len(rows) == 1
+        assert rows[0].review_status == "rejected"
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_pair_review_insert_is_idempotent_on_unique_input_hash(tmp_path) -> None:
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

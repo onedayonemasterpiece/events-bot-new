@@ -39,6 +39,11 @@ PENDING_REVIEW = "pending_review"
 DUPLICATE = "duplicate"
 REJECTED = "rejected"
 UNAVAILABLE = "unavailable"
+SEMANTIC_REJECTION_REASONS = frozenset({
+    "media_role_visible_date_conflict",
+    "automated_semantic_conflict",
+    "incident_visible_date_and_title_conflict",
+})
 PUBLIC_EVENT_POSTER_STATUSES = (APPROVED,)
 PAIR_POLICY_VERSION = "event-media-pair-v1"
 PAIR_PROMPT_VERSION = "event-media-vision-v1"
@@ -375,10 +380,25 @@ async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoste
             .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
         )
     ).scalars().all()
+    # A fresh source scan may create another row for the exact same hosted
+    # object after the original was rejected for a semantic mismatch.  The
+    # rejection belongs to the immutable image, not just that database row.
+    rejected = (
+        await session.execute(
+            select(EventPoster).where(
+                EventPoster.event_id == int(event_id),
+                EventPoster.review_status == REJECTED,
+                EventPoster.review_reason.in_(SEMANTIC_REJECTION_REASONS),
+            )
+        )
+    ).scalars().all()
+    rejected_paths = {str(row.supabase_path or "").strip() for row in rejected}
+    rejected_paths.discard("")
     linked = bool(getattr(event, "linked_event_ids", None))
     return [
         row for row in rows
         if resolve_poster_display_url(row)
+        and str(row.supabase_path or "").strip() not in rejected_paths
         and not (
             linked
             and (

@@ -1735,6 +1735,18 @@ async def test_sync_vk_source_post_clears_explicitly_rejected_media(
         session.add(poster)
         await session.commit()
     assert not await main._event_media_ledger_intentionally_empty(event, db)
+    event.linked_event_ids = [9234]
+    async with db.get_session() as session:
+        session.add(event)
+        session.add(main.EventPoster(
+            event_id=event.id,
+            poster_hash="new-unclassified-candidate",
+            supabase_url="https://static.kenigevents.ru/new.webp",
+            review_status="approved",
+            media_semantic_status="pending",
+        ))
+        await session.commit()
+    assert await main._event_media_ledger_intentionally_empty(event, db)
     await db.close()
 
 

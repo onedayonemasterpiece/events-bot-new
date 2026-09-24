@@ -7326,6 +7326,11 @@ async def _event_media_ledger_intentionally_empty(
                 )
             )
         ).scalars().all()
+        if bool(getattr(event, "linked_event_ids", None)) and statuses:
+            from event_media import get_event_gallery_rows
+
+            if not await get_event_gallery_rows(session, int(event_id)):
+                return True
     return bool(statuses) and all(
         status in {"rejected", "duplicate", "unavailable"} for status in statuses
     )

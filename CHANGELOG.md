@@ -23,6 +23,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- A semantic rejection of an exact hosted event image now survives a source
+  reimport with a new candidate hash. Reincarnated rows stay out of the public
+  gallery, and VK clears stale attachments while a linked child has no
+  classified eligible image.
 - VK edits now explicitly clear old photo attachments when the canonical
   media ledger contains only rejected/duplicate/unavailable images. A stale
   Telegraph page cannot reintroduce that rejected media during fallback.
