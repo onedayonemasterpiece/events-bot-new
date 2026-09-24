@@ -23,6 +23,9 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK edits now explicitly clear old photo attachments when the canonical
+  media ledger contains only rejected/duplicate/unavailable images. A stale
+  Telegraph page cannot reintroduce that rejected media during fallback.
 - For linked child events, approved media now waits for the
   LLM vision identity decision before entering the public gallery. The vision
   result lists dates visibly advertised by the image; an image that advertises

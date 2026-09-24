@@ -1669,6 +1669,76 @@ async def test_sync_vk_source_post_preserves_existing_photos_on_partial_reupload
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_clears_explicitly_rejected_media(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "rejected-media.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    event = main.Event(
+        title="День с викингами",
+        description="desc",
+        source_text="3 октября",
+        date="2026-10-03",
+        time="13:00",
+        location_name="Кауп",
+        photo_urls=[],
+        source_vk_post_url="https://vk.com/wall-231920894_11193",
+        telegraph_url="https://telegra.ph/old-gallery",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.flush()
+        session.add(
+            main.EventPoster(
+                event_id=event.id,
+                poster_hash="wrong-date",
+                supabase_url="https://static.kenigevents.ru/wrong.webp",
+                review_status="rejected",
+            )
+        )
+        await session.commit()
+
+    async def fake_vk_api(method, **kwargs):
+        assert method == "wall.getById"
+        return {"response": {"items": [{"text": main.build_vk_source_message(event, "old"), "attachments": [{"type": "photo"}]}]}}
+
+    async def fake_short_link(*args, **kwargs):
+        return None
+
+    async def fail_telegraph(*args, **kwargs):
+        raise AssertionError("rejected media must not return through Telegraph")
+
+    edited = {}
+
+    async def fake_edit(url, message, db=None, bot=None, attachments=None, **kwargs):
+        edited["attachments"] = attachments
+        return True
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "ensure_vk_short_ticket_link", fake_short_link)
+    monkeypatch.setattr(main, "extract_telegraph_image_urls", fail_telegraph)
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+
+    await main.sync_vk_source_post(event, "new", db, None)
+
+    assert edited["attachments"] == []
+    async with db.get_session() as session:
+        poster = (
+            await session.execute(
+                main.select(main.EventPoster).where(main.EventPoster.event_id == event.id)
+            )
+        ).scalar_one()
+        poster.review_status = "approved"
+        session.add(poster)
+        await session.commit()
+    assert not await main._event_media_ledger_intentionally_empty(event, db)
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_creates_when_existing_vk_url_is_external(
     monkeypatch,
 ):
