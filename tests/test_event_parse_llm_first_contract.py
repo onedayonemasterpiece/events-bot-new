@@ -167,12 +167,12 @@ async def test_v5_lifecycle_plus_new_event_automatically_invokes_verifier(monkey
                 item["reason"] for item in kwargs["verification_request"]["contradiction_facts"]
             }
             assert VerificationReason.LIFECYCLE_MIXED_CONTENT_CONFLICT.value in reasons
-            return _decision([{"title": "Новый концерт", "date": "2026-09-20"}])
+            return _decision([{"title": "Новый концерт", "date": "2099-09-20"}])
         return primary
 
     monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
     result = await main.parse_event_via_llm(
-        "Старый концерт отменён. Приглашаем на концерт 20.09 в 19:00, билеты доступны."
+        "Старый концерт отменён. Приглашаем на концерт 20.09.2099 в 19:00, билеты доступны."
     )
     assert len(calls) == 2
     assert result[0]["title"] == "Новый концерт"

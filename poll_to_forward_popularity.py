@@ -120,7 +120,7 @@ def _kldevents_baseline_min_sample() -> int:
 
 
 def _vk_token() -> str:
-    for name in ("VK_USER_TOKEN", "VK_ACCESS_TOKEN4", "VK_SERVICE_TOKEN", "VK_TOKEN"):
+    for name in ("VK_SERVICE_TOKEN", "VK_SERVICE_KEY"):
         token = (os.getenv(name) or "").strip()
         if token:
             return token

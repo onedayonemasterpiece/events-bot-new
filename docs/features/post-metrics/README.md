@@ -91,6 +91,12 @@
 - `SOCIAL_METRICS_BATCH_INTERVAL_MINUTES=30`;
 - `SOCIAL_METRICS_KAGGLE_TIMEOUT_SECONDS=1800`;
 - `SOCIAL_METRICS_VK_OFFICIAL_GROUP_ID=231828790`;
+- VK `wall.get` / `wall.getById` reads in the Kaggle collector use only
+  `VK_SERVICE_TOKEN` (or `VK_SERVICE_KEY`). The collector fails closed when the
+  service credential is absent; it never borrows `VK_USER_TOKEN` or
+  `VK_ACCESS_TOKEN4`, which are reserved for publication. A VK API code 9 stops
+  further VK requests in the run, records a bounded `VK_API_9` observation and
+  defers the next collector run for one hour using the durable run ledger.
 - `SOCIAL_METRICS_VK_RESOLVE_COOLDOWN_HOURS=6`,
   `SOCIAL_METRICS_VK_RESOLVE_MAX_CANDIDATES=500`,
   `SOCIAL_METRICS_VK_WALL_SCAN_LIMIT=1000`;

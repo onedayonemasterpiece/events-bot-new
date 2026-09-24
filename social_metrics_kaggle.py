@@ -9,7 +9,7 @@ import shutil
 import tempfile
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -55,9 +55,11 @@ def _secret_payload(has_tg: bool, has_vk: bool) -> dict[str, str]:
             "TG_API_HASH": api_hash,
         })
     if has_vk:
-        token = _first_env("VK_USER_TOKEN", "VK_ACCESS_TOKEN4", "VK_SERVICE_TOKEN", "VK_TOKEN")
+        # Public wall metrics must never consume the actor reserved for photos
+        # and managed publication.  A missing service credential is an error.
+        token = _first_env("VK_SERVICE_TOKEN", "VK_SERVICE_KEY")
         if not token:
-            raise RuntimeError("VK token is missing")
+            raise RuntimeError("VK service-read token is missing")
         payload["VK_TOKEN"] = token
     return payload
 
@@ -77,6 +79,30 @@ async def _active_social_run(db: Database) -> str | None:
         )
         row = await cur.fetchone()
     return str(row[0]) if row else None
+
+
+async def _vk_reader_cooldown(db: Database) -> datetime | None:
+    """Keep a remote VK flood response from being retried next half-hour."""
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT json_extract(progress_json, '$.vk_flood_until')
+            FROM kaggle_run_ledger
+            WHERE kind='social_metrics_collector'
+              AND json_extract(progress_json, '$.vk_flood_until') IS NOT NULL
+            ORDER BY created_at DESC LIMIT 1
+            """
+        )
+        row = await cur.fetchone()
+    if not row or not row[0]:
+        return None
+    try:
+        until = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    return until if until > datetime.now(timezone.utc) else None
 
 
 def _launch_sync(
@@ -194,6 +220,10 @@ async def run_social_metrics_kaggle_batch(db: Database) -> dict[str, Any]:
     active = await _active_social_run(db)
     if active:
         return {"enabled": True, "skipped": "active_run", "run_id": active}
+    cooldown_until = await _vk_reader_cooldown(db)
+    if cooldown_until:
+        logging.warning("social_metrics_vk_reader_cooldown until=%s", cooldown_until.isoformat())
+        return {"enabled": True, "skipped": "vk_flood_cooldown", "retry_at": cooldown_until.isoformat()}
 
     slot = int(time.time()) // max(300, int(_first_env("SOCIAL_METRICS_BATCH_INTERVAL_MINUTES") or "30") * 60)
     run_id = f"social-metrics:{slot}"
@@ -242,10 +272,15 @@ async def run_social_metrics_kaggle_batch(db: Database) -> dict[str, Any]:
         )
         failure_phase = "import_failed"
         imported = await import_social_metrics_result(db, manifest=manifest, result=result)
+        vk_flood = bool((result.get("diagnostics") or {}).get("vk_flood_control"))
+        progress = {"targets": len(targets), "imported": imported}
+        if vk_flood:
+            progress["vk_flood_until"] = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+            logging.error("social_metrics_vk_lane_flood run_id=%s cooldown_until=%s", run_id, progress["vk_flood_until"])
         async with db.raw_conn() as conn:
             await conn.execute(
-                "UPDATE kaggle_run_ledger SET phase='imported', progress_json=?, updated_at=? WHERE run_id=?",
-                (json.dumps({"targets": len(targets), "imported": imported}, ensure_ascii=False), datetime.now(timezone.utc).isoformat(), run_id),
+                "UPDATE kaggle_run_ledger SET phase=?, progress_json=?, updated_at=? WHERE run_id=?",
+                ("imported_vk_flood" if vk_flood else "imported", json.dumps(progress, ensure_ascii=False), datetime.now(timezone.utc).isoformat(), run_id),
             )
             await conn.commit()
         return {

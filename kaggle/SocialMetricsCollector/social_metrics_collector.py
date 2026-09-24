@@ -20,6 +20,12 @@ from typing import Any
 INPUT_ROOT = Path("/kaggle/input")
 OUTPUT = Path("/kaggle/working/social_metrics_results.json")
 
+
+class VKProviderError(RuntimeError):
+    def __init__(self, code: int | None):
+        self.code = code
+        super().__init__(f"VK API {code if code is not None else 'unknown'}")
+
 MONTHS_RU_GEN = {
     1: "января", 2: "февраля", 3: "марта", 4: "апреля", 5: "мая", 6: "июня",
     7: "июля", 8: "августа", 9: "сентября", 10: "октября", 11: "ноября", 12: "декабря",
@@ -150,7 +156,7 @@ def _is_public_vk_item(item: dict[str, Any] | None, *, observed_ts: int) -> bool
     )
 
 
-async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str], wall_limit: int) -> list[dict[str, Any]]:
+async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str], wall_limit: int, flood_state: dict[str, bool] | None = None) -> list[dict[str, Any]]:
     if not candidates:
         return []
     token = secrets.get("VK_TOKEN", "")
@@ -162,6 +168,9 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
     out: list[dict[str, Any]] = []
     for group, rows in sorted(by_group.items()):
         observed_ts = int(time.time())
+        if flood_state and flood_state.get("active"):
+            out.extend(_resolution_row(row, observed_ts=observed_ts, status="error", method="direct_error") for row in rows)
+            continue
         direct: dict[int, dict[str, Any]] = {}
         direct_failed: set[str] = set()
         for start in range(0, len(rows), 100):
@@ -177,6 +186,13 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
                 )
                 items = response if isinstance(response, list) else response.get("items", [])
                 direct.update({int(item.get("id") or 0): item for item in items if isinstance(item, dict)})
+            except VKProviderError as exc:
+                direct_failed.update(str(row["candidate_id"]) for row in chunk)
+                if exc.code == 9:
+                    if flood_state is not None:
+                        flood_state["active"] = True
+                    direct_failed.update(str(row["candidate_id"]) for row in rows[start + len(chunk):])
+                    break
             except Exception:
                 direct_failed.update(str(row["candidate_id"]) for row in chunk)
 
@@ -203,7 +219,7 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
 
         wall_items: list[dict[str, Any]] = []
         wall_error = False
-        if unresolved:
+        if unresolved and not (flood_state and flood_state.get("active")):
             try:
                 for offset in range(0, max(100, min(1000, int(wall_limit))), 100):
                     if offset:
@@ -217,8 +233,14 @@ async def _resolve_vk(candidates: list[dict[str, Any]], secrets: dict[str, str],
                     wall_items.extend(chunk)
                     if len(chunk) < 100:
                         break
+            except VKProviderError as exc:
+                if exc.code == 9 and flood_state is not None:
+                    flood_state["active"] = True
+                wall_error = True
             except Exception:
                 wall_error = True
+        elif unresolved:
+            wall_error = True
         for candidate in unresolved:
             if wall_error:
                 out.append(_resolution_row(candidate, observed_ts=observed_ts, status="error", method="wall_scan_error"))
@@ -257,11 +279,12 @@ def _vk_request(method: str, token: str, **params: Any) -> dict[str, Any]:
     with urllib.request.urlopen(request, timeout=30) as response:
         data = json.load(response)
     if data.get("error"):
-        raise RuntimeError(f"VK API {data['error'].get('error_code')}: {data['error'].get('error_msg')}")
+        raw_code = data["error"].get("error_code")
+        raise VKProviderError(raw_code if isinstance(raw_code, int) else None)
     return data.get("response") or {}
 
 
-async def _collect_vk(targets: list[dict[str, Any]], secrets: dict[str, str], progress) -> list[dict[str, Any]]:
+async def _collect_vk(targets: list[dict[str, Any]], secrets: dict[str, str], progress, flood_state: dict[str, bool] | None = None) -> list[dict[str, Any]]:
     token = secrets.get("VK_TOKEN", "")
     if targets and not token:
         raise RuntimeError("VK token is missing")
@@ -272,10 +295,14 @@ async def _collect_vk(targets: list[dict[str, Any]], secrets: dict[str, str], pr
     requests_done = 0
     for group, rows in sorted(by_group.items()):
         for start in range(0, len(rows), 100):
-            if requests_done:
+            if requests_done and not (flood_state and flood_state.get("active")):
                 await asyncio.sleep(max(0.35, float(secrets.get("VK_BATCH_PAUSE_SECONDS", "0.35"))))
             chunk = rows[start : start + 100]
             observed_ts = int(time.time())
+            if flood_state and flood_state.get("active"):
+                out.extend({"target_id": row["target_id"], "observed_ts": observed_ts, "status": "error", "error_code": "VK_API_9"} for row in chunk)
+                progress(len(out), requests_done, "vk:flood")
+                continue
             try:
                 response = await asyncio.to_thread(
                     _vk_request,
@@ -298,7 +325,9 @@ async def _collect_vk(targets: list[dict[str, Any]], secrets: dict[str, str], pr
                             "reactions": None,
                         })
             except Exception as exc:
-                code = type(exc).__name__
+                code = f"VK_API_{exc.code}" if isinstance(exc, VKProviderError) and exc.code is not None else type(exc).__name__
+                if isinstance(exc, VKProviderError) and exc.code == 9 and flood_state is not None:
+                    flood_state["active"] = True
                 out.extend({"target_id": row["target_id"], "observed_ts": observed_ts, "status": "error", "error_code": code} for row in chunk)
             requests_done += 1
             progress(len(out), requests_done, "vk")
@@ -414,13 +443,15 @@ async def main() -> None:
 
         vk = [row for row in targets if row.get("platform") == "vk"]
         tg = [row for row in targets if row.get("platform") == "telegram"]
-        observations = await _collect_vk(vk, secrets, progress)
+        vk_flood_state: dict[str, bool] = {"active": False}
+        observations = await _collect_vk(vk, secrets, progress, vk_flood_state)
         tg_observations = await _collect_tg(tg, secrets, lambda done, req, label: progress(len(observations) + done, req, label))
         observations.extend(tg_observations)
         resolutions = await _resolve_vk(
             candidates,
             secrets,
             int(manifest.get("vk_wall_scan_limit") or 1000),
+            vk_flood_state,
         )
         result = {
             "schema_version": 2, "run_id": manifest["run_id"],
@@ -429,6 +460,7 @@ async def main() -> None:
             "diagnostics": {
                 "targets": len(targets), "observations": len(observations),
                 "resolve_candidates": len(candidates), "resolutions": len(resolutions),
+                "vk_flood_control": vk_flood_state["active"],
             },
         }
         OUTPUT.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")

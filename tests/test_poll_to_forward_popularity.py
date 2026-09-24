@@ -15,6 +15,15 @@ TARGET_DATE = date(2026, 6, 14)
 NOW = datetime(2026, 6, 13, 10, 0, tzinfo=timezone.utc)
 
 
+def test_vk_popularity_uses_only_service_reader_token(monkeypatch):
+    monkeypatch.setenv("VK_USER_TOKEN", "publishing-secret")
+    monkeypatch.setenv("VK_SERVICE_TOKEN", "service-reader")
+    assert pfp._vk_token() == "service-reader"
+    monkeypatch.delenv("VK_SERVICE_TOKEN")
+    monkeypatch.delenv("VK_SERVICE_KEY", raising=False)
+    assert pfp._vk_token() == ""
+
+
 def _event_model(event_id: int, *, title: str, post_id: int, stored_vk_id: int | None = None) -> Event:
     return Event(
         id=event_id,

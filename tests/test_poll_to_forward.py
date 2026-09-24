@@ -1543,7 +1543,8 @@ async def test_debug_resolve_replies_and_forwards_llm_choice(tmp_path, monkeypat
         cur = await conn.execute(
             "SELECT status, winner_option_id, chosen_event_id, kldevents_message_id, forwarded_message_id FROM poll_repost_run"
         )
-    assert await cur.fetchone() == (pf.STATUS_FORWARDED, "music", 101, 501, 301)
+        row = await cur.fetchone()
+    assert row == (pf.STATUS_FORWARDED, "music", 101, 501, 301)
     await db.close()
 
 
