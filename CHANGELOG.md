@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- Register `gemini-3.8-flash` in the shared Google AI quota ledger with the
+  owner-requested 20 RPD per-project cap and existing Flash RPM/TPM safety
+  ceilings; these are local operating limits, not verified Google quotas.
 - Owner MCP queue readback in the existing `operations_snapshot`: bounded
   payload-free JobOutbox pages, event/status filters and stable numeric cursor.
   Existing detail fetch and the Codex seven-tool projection remain unchanged;
