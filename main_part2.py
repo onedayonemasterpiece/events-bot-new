@@ -7310,6 +7310,27 @@ async def _event_has_unmaterialized_poster_candidate(
     return candidate is not None
 
 
+async def _event_media_ledger_intentionally_empty(
+    event: Event, db: Database | None
+) -> bool:
+    """Distinguish rejected canonical media from a transient empty cache."""
+
+    event_id = getattr(event, "id", None)
+    if not db or not event_id or list(getattr(event, "photo_urls", None) or []):
+        return False
+    async with db.get_session() as session:
+        statuses = (
+            await session.execute(
+                select(EventPoster.review_status).where(
+                    EventPoster.event_id == int(event_id)
+                )
+            )
+        ).scalars().all()
+    return bool(statuses) and all(
+        status in {"rejected", "duplicate", "unavailable"} for status in statuses
+    )
+
+
 async def sync_vk_source_post(
     event: Event,
     text: str,
@@ -7391,8 +7412,9 @@ async def sync_vk_source_post(
 
     attachments: list[str] | None = None
     photo_urls_source: list[str] = list(event.photo_urls or [])
+    intentional_empty_media = await _event_media_ledger_intentionally_empty(event, db)
     photo_urls_for_publish: list[str] = []
-    if VK_PHOTOS_ENABLED and not photo_urls_source:
+    if VK_PHOTOS_ENABLED and not photo_urls_source and not intentional_empty_media:
         # Fallback: when the event has no cached photo_urls but a Telegraph
         # source page exists, use the images from that page so the VK post
         # is not left bare. Only do this when the existing VK post has no
@@ -7541,6 +7563,10 @@ async def sync_vk_source_post(
             calendar_line_value = calendar_source_url
 
     if existing_vk_post_url:
+        if intentional_empty_media:
+            # An explicit rejection must remove the old provider attachment.
+            # Leaving attachments=None tells wall.edit to preserve it.
+            attachments = []
         await ensure_vk_short_ticket_link(
             event, db, bot=bot, vk_api_fn=_vk_api
         )
