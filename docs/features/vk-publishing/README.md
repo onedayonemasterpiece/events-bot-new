@@ -201,3 +201,7 @@
 - Runtime-параметры VK-channel promo: `VK_AFISHA_CHANNEL_PEER_ID` or
   `VK_AFISHA_CHANNEL_PEER_IDS` (comma-separated) must be set explicitly; no
   fallback from `klgdevents` wall/group id is allowed.
+
+## Rejected media reimports
+
+For linked child events, a pending or unclassified replacement image is not a public gallery image. If the gallery is empty, `vk_sync` clears a prior attachment instead of preserving it or using the Telegraph fallback. A semantic rejection for an immutable hosted image continues to block the same object if a source reimport creates another poster row.

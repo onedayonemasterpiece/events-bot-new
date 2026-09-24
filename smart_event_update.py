@@ -22883,6 +22883,7 @@ async def _apply_posters(
         DUPLICATE,
         PENDING_REVIEW,
         REJECTED,
+        SEMANTIC_REJECTION_REASONS,
         UNAVAILABLE,
         ensure_event_media_reviews,
         _enqueue_geometry_followup_if_needed,
@@ -22943,6 +22944,26 @@ async def _apply_posters(
                 soft_rejected += 1
 
     for poster in posters:
+        # A semantic rejection of an immutable hosted object must survive a
+        # later source scan with a different source/candidate hash.
+        candidate_exact_keys = {
+            key for key in _poster_identity_keys(poster, include_weak_url=False)
+            if key[0] in {"raw_sha256", "supabase_path"}
+        }
+        if candidate_exact_keys and any(
+            row.review_status == REJECTED
+            and row.review_reason in SEMANTIC_REJECTION_REASONS
+            and candidate_exact_keys.intersection(
+                key for key in _poster_identity_keys(row, include_weak_url=False)
+                if key[0] in {"raw_sha256", "supabase_path"}
+            )
+            for row in existing_rows
+        ):
+            logger.info(
+                "smart_update: ignored semantically rejected exact poster event_id=%s",
+                event_id,
+            )
+            continue
         poster_supabase_url = getattr(poster, "supabase_url", None)
         poster_catbox_url = getattr(poster, "catbox_url", None)
         poster_supabase_path = getattr(poster, "supabase_path", None)
