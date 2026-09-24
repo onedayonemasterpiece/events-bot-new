@@ -23,6 +23,11 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK short-link creation skips non-web ticket links such as `tel:` instead of
+  making repeated invalid `utils.getShortLink` calls with the publishing token.
+- VK Afisha source posts now show the full trusted event date span. A catch-up
+  post for an ongoing debate tournament exposed the previous start-day-only
+  header; live-post identity repair still recognizes that older header.
 - VK photo upload follow-up (`INC-2026-09-24`): use the VK-proven 95-quality,
   4:4:4 JPEG conversion for WebP/AVIF and reject an upload-server response with
   an empty `photo` before calling `photos.saveWallPhoto`; retry with a fresh URL.

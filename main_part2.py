@@ -4204,6 +4204,18 @@ async def _find_unique_live_managed_vk_item_for_event(
     if not expected_title or not expected_date:
         return None
 
+    # Older managed posts used only the first day of a span. Keep their exact
+    # header eligible for identity repair after changing the span formatter.
+    legacy_dates = {expected_date}
+    if ".." in str(getattr(event, "date", "") or "") or (
+        getattr(event, "end_date", None)
+        and not getattr(event, "end_date_is_inferred", False)
+    ):
+        start = parse_iso_date(str(event.date).split("..", 1)[0].strip())
+        if start:
+            time_part = "" if getattr(event, "time_is_default", False) else str(event.time or "").strip()
+            legacy_dates.add(f"\U0001f4c5 {format_day_pretty(start)}{(' ' + time_part) if time_part else ''}")
+
     actors = _vk_wall_get_actors(owner_id)
     for actor in actors:
         token = actor.token if actor.kind == "group" else VK_USER_TOKEN
@@ -4257,7 +4269,7 @@ async def _find_unique_live_managed_vk_item_for_event(
         for item in items:
             lines = [line.strip() for line in str(item.get("text") or "").splitlines()]
             nonempty = [line for line in lines if line]
-            if nonempty and nonempty[0] == expected_title and expected_date in nonempty:
+            if nonempty and nonempty[0] == expected_title and legacy_dates.intersection(nonempty):
                 try:
                     if int(item.get("id") or 0) > 0:
                         matches.append(item)
@@ -7032,10 +7044,21 @@ def build_vk_source_header(event: Event, festival: Festival | None = None) -> li
 
     lines.append(VK_BLANK_LINE)
 
-    date_part = event.date.split("..", 1)[0]
+    date_raw = str(event.date or "").strip()
+    date_part = date_raw.split("..", 1)[0].strip()
     d = parse_iso_date(date_part)
     if d:
         day = format_day_pretty(d)
+        end_raw = (
+            date_raw.split("..", 1)[1].strip()
+            if ".." in date_raw
+            else str(getattr(event, "end_date", "") or "").strip()
+        )
+        end = parse_iso_date(end_raw.split("..", 1)[-1]) if end_raw else None
+        if end and end > d and (
+            ".." in date_raw or not getattr(event, "end_date_is_inferred", False)
+        ):
+            day += f" — {format_day_pretty(end)}"
     else:
         logging.error("Invalid event date: %s", event.date)
         day = event.date

@@ -372,6 +372,35 @@ def test_build_vk_source_header_keeps_confirmed_time():
     assert any(line == "📅 28 июня 19:00" for line in lines)
 
 
+def test_build_vk_source_header_shows_explicit_span():
+    event = main.Event(
+        title="Турнир по дебатам",
+        description="desc",
+        source_text="с 21 сентября по 13 декабря 2026 года",
+        date="2026-09-21..2026-12-13",
+        end_date="2026-12-13",
+        time="",
+        location_name="Калининград",
+    )
+
+    assert "📅 21 сентября — 13 декабря" in main.build_vk_source_header(event)
+
+
+def test_build_vk_source_header_ignores_inferred_end_date():
+    event = main.Event(
+        title="Концерт",
+        description="desc",
+        source_text="src",
+        date="2026-09-28",
+        end_date="2026-12-13",
+        end_date_is_inferred=True,
+        time="",
+        location_name="Калининград",
+    )
+
+    assert "📅 28 сентября" in main.build_vk_source_header(event)
+
+
 def test_build_vk_source_header_does_not_repeat_city_as_venue():
     event = main.Event(
         title="Выставка ретроавтомобилей",
@@ -417,7 +446,7 @@ async def test_sync_vk_source_post_updates_short_link(monkeypatch):
 
     captured: dict[str, str] = {}
 
-    async def fake_edit(post_url, message, db=None, bot=None, attachments=None):
+    async def fake_edit(post_url, message, db=None, bot=None, attachments=None, **kwargs):
         captured["post_url"] = post_url
         captured["message"] = message
         return True

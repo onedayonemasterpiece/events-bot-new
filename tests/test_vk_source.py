@@ -4,7 +4,49 @@ import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
+from types import SimpleNamespace
 import main
+
+
+@pytest.mark.asyncio
+async def test_live_vk_id_recovery_accepts_legacy_start_only_span_header(monkeypatch):
+    event = main.Event(
+        id=9231,
+        title="Турнир по дебатам",
+        description="desc",
+        source_text="с 21 сентября по 13 декабря 2026 года",
+        date="2026-09-21..2026-12-13",
+        end_date="2026-12-13",
+        time="",
+        location_name="Калининград",
+    )
+    monkeypatch.setattr(
+        main,
+        "_vk_wall_get_actors",
+        lambda owner_id: [SimpleNamespace(kind="user", token="user", label="user")],
+    )
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user")
+
+    async def fake_api(method, params, *args, **kwargs):
+        assert method == "wall.get"
+        return {
+            "response": {
+                "items": [
+                    {
+                        "id": 11200,
+                        "text": "Турнир по дебатам\n\n📅 21 сентября\n\nАнонс",
+                    }
+                ]
+            }
+        }
+
+    monkeypatch.setattr(main, "_vk_api", fake_api)
+
+    result = await main._find_unique_live_managed_vk_item_for_event(
+        event, owner_id=-231920894, db=None, bot=None
+    )
+
+    assert result["id"] == 11200
 
 
 @pytest.mark.asyncio

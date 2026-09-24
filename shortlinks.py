@@ -103,6 +103,9 @@ async def _ensure_vk_short_link(
 
     parsed = urlparse(link)
     host = parsed.netloc.lower()
+    if parsed.scheme.lower() not in {"http", "https"} or not host:
+        _log_short_link_fallback(event, link, f"{link_kind}_unsupported_url")
+        return None
     if host == "vk.cc":
         key = parsed.path.strip("/")
         if not key:
