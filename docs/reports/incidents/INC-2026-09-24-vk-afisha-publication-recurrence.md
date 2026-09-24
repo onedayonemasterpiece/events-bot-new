@@ -1,6 +1,6 @@
 # INC-2026-09-24 VK Afisha publication recurrence
 
-Status: open
+Status: mitigated
 Severity: sev1
 Service: managed event publication to `vk.com/klgdevents`
 Opened: 2026-09-24
@@ -39,6 +39,7 @@ Managed event announcements in VK Afisha stopped after 2026-09-23 04:00 UTC. The
 - 2026-09-21 14:29 through 2026-09-24 08:30 UTC: 126 social-metrics runs planned 8,852 target observations and recorded 6,503 imported errors. By 24 September the VK subset repeatedly produced 75–79 errors per run while the ledger still recorded each run as `done`.
 - 2026-09-24 13:10–13:11 UTC: token-routing hotfix deployed from merged `main` SHA `6df3aa0484bf306bd16dd9f5059792677bb5887d`; Fly image `deployment-01M39RD6WGEJJWXSYSAC3V4Q4K`. `VK_USER_TOKEN` rotated from local `VK_USER_TOKEN4`; remote/local SHA-256 prefixes matched (`8fcbb5e487d8`), health remained ready.
 - 2026-09-24 13:21 UTC: a guarded manual run of eligible control `vk_sync` job `87256` (event `9278`, 26 September, exact matching image) passed `photos.getWallUploadServer` but the upload server returned HTTP 200 with an empty `photo`. The code retried `photos.saveWallPhoto` five times with an empty `photo`, received code 100, and failed closed before `wall.post`.
+- 2026-09-24 13:10–15:29 UTC: the token-routing, photo-encoding, source-date, media-identity, rejected-attachment and exact-object reimport hotfixes were merged through CI and deployed from exact `origin/main`. New photo-bearing posts appeared on the public wall; a targeted replay of event 9229's `vk_sync` finished `done` without restoring its rejected photo.
 - Local, non-wall VK upload probes with that same new token: the control WebP (802×930, 47,808 bytes) converted by the existing JPEG default produced 75,899 bytes and empty `photo`; quality 95 with default subsampling produced 171,346 bytes and empty `photo`; quality 75 with subsampling 0 produced 86,403 bytes and empty `photo`; quality 95 with subsampling 0 produced 184,591 bytes and a nonempty `photo`. A different known-published JPEG also uploaded successfully. This establishes an image-encoding-specific rejection, not another token code 9. The exact provider acceptance rule is unknown.
 
 ## Root Cause
@@ -48,7 +49,7 @@ Managed event announcements in VK Afisha stopped after 2026-09-23 04:00 UTC. The
 3. **Confirmed publication blocker:** VK rejects the same user actor on `photos.getWallUploadServer` with code 9. `vk_sync` fails closed rather than publishing an image-bearing event as text.
 4. **Text-only symptom audit:** the inspected multi-event source has images, but both explicitly advertise 26 September. Its later October children correctly have no matching media. Other text-only posts need per-event review before being classified as a loss.
 5. **Separate confirmed media transport defect after token recovery:** the URL-based WebP→JPEG path used Pillow defaults that VK silently rejected for an otherwise valid, date-matching 26 September image (`photo=""` despite HTTP 200). The uploader did not validate this response and made five doomed `photos.saveWallPhoto` calls. It then correctly prevented a text-only `wall.post`. A higher-quality 4:4:4 JPEG of the exact same source was accepted in a controlled upload probe.
-6. **Catch-up date-span defect:** event 9231's source explicitly says 21 September–13 December 2026. Its stored start date was 7 September and was corrected to the source-backed range. The VK header formatter then dropped the end of every explicit range; two incorrect postponed posts (11204, 11219) were removed before public release. A formatter fix and corrected replacement are in progress.
+6. **Catch-up date-span defect:** event 9231's source explicitly says 21 September–13 December 2026. Its stored start date was 7 September and was corrected to the source-backed range. The VK header formatter then dropped the end of every explicit range; two incorrect postponed posts (11204, 11219) were removed before public release. The formatter fix deployed, and replacement postponed post 11258 has the full range and one photo.
 7. **Unnecessary publisher-token calls during catch-up:** event 9208's `tel:` ticket link triggered five provider-rejected `utils.getShortLink` calls (code 100) because the short-link helper accepted every nonempty scheme. The helper now rejects non-web URLs before calling VK. This is a load reduction, not the proven initial cause of code 9.
 8. **Separate systemic media-identity failure:** linked child event 9229 is on 3 October, but its first poster was auto-approved as `first_event_media_seed` before vision role classification. The later VLM response explicitly described a different show and 26 September, yet marked `event_identity_grounded=true`; the gallery kept the image and managed VK post 11193 displayed it. A second 26 September image was correctly rejected. The new guard holds approved media for linked children until the LLM decision and rejects images whose visibly advertised event dates all conflict with that child date. This is distinct from the VK code-9 cause.
 9. **Rejected-media edit defect:** after rejecting event 9229's wrong poster and clearing its canonical gallery, a manual `wall.edit(attachments="")` removed the image from post 11193. The next `vk_sync` passed `attachments=None`, preserving/restoring the old VK photo even though the ledger had only rejected candidates. A further hotfix makes this explicit-rejection case pass an empty attachment list and disables stale Telegraph image fallback. Transient empty media with approved/pending candidates still preserves existing attachments.
@@ -93,11 +94,12 @@ The **initial provider decision** that restricted the rotated token cannot be at
 
 ## Corrective Actions
 
-- Implemented locally: separation of social-metrics and poll-popularity read traffic from the publishing actor, typed VK provider errors, stop-on-code-9, and cross-run cooldown.
+- Deployed: separation of social-metrics and poll-popularity read traffic from the publishing actor, typed VK provider errors, stop-on-code-9, and cross-run cooldown.
 - Publishing actor recovered: merged hotfix deployed; rotated token fingerprint and photo-upload-server access verified. Event 9278 reached the public wall as post 11200 with its exact date-matching photo; the DB URL was reconciled after VK changed the postponed id.
 - Second release deployed: VK-specific JPEG quality/subsampling profile and empty-upload-response guard.
-- Corrected event 9231's source-backed date span and removed two malformed postponed posts; a formatter fix is being released before rearming this event.
-- Pending audit of other recent text-only posts for genuinely missing, event-matching media.
+- Corrected event 9231's source-backed date span, removed two malformed postponed posts, and verified replacement postponed post 11258 with the full date range and a matching photo. Its Telegram and Telegraph material was corrected.
+- Deployed linked-child media classification and exact-object rejection guards; rejected event 9229's wrong 26 September images, cleared its public VK post 11193, removed duplicate 11187, and replayed `vk_sync` on the final image without reattachment.
+- Recent public wall readback at 15:35 UTC showed eight consecutive photo-bearing event posts through 15:14 UTC and a later text-only ballet post whose event rows have no canonical photo. Whether that source has usable, date-matching media remains unverified; the wider text-only audit remains open.
 - Pending delivery-health alert and post-rotation fresh-publication gate.
 
 ## Follow-up Actions
@@ -105,7 +107,7 @@ The **initial provider decision** that restricted the rotated token cannot be at
 - [x] Route the half-hourly Kaggle social-metrics VK reads to the service token; add a typed provider code-9 result and stop the VK lane after the first flood response. Deployed and credential separation verified.
 - [ ] Audit the remaining lower-volume publisher-token readers (`poll_to_forward_popularity`, promo and dynamic-cover paths) and enforce one per-credential budget across Fly and remote consumers.
 - [x] Finish the second photo-encoding hotfix and verify public photo-bearing readback for event 9278.
-- [ ] Finish eligible catch-up reconciliation, including corrected event 9231 span header.
+- [x] Reconcile the incident's eligible backlog and corrected event 9231 span header. All eight initially blocked new events 9266–9273 have managed VK URLs. No current `vk_flood_wait` rows remain. The 92 `expired` errors were last updated no later than 12 September, before this incident, and are excluded from this catch-up.
 - [ ] Audit other recent text-only posts and repair only those with exact, date-consistent source media.
 - [ ] Alert on prolonged absence of fresh managed VK posts plus increasing `vk_flood_wait`, even when `/healthz` is ready.
 
@@ -117,7 +119,13 @@ The **initial provider decision** that restricted the rotated token cannot be at
 - Post-first-deploy verification: `/healthz` HTTP 200/ready; remote image SHA exact, service token present, new publishing token fingerprint matched. Control job exposed the separate media encoding defect; no new wall post yet.
 - Second hotfix SHA `0fed2c96e675c5600e08653bd7818f6644fe6381`, image `deployment-01M39SZR5061C9J7RNQ0Y1C194`; 91 focused tests passed. Exact problematic image's 95-quality, 4:4:4 diagnostic upload produced a nonempty VK `photo` field. Public post `https://vk.com/wall-231920894_11200` had one matching photo; `JobOutbox` 87256 is done and the DB URL was reconciled.
 - At 13:41 UTC, `vk_sync` done increased from 4512 to 4531 while `vk_flood_wait` decreased from 91 to 76. Continue monitoring as the staggered queue drains.
+- Third hotfix SHA `ad8fa55cf2d1a4b2660fb02214ae9fced3a74ed4`, image `deployment-01M39VNPS8FZ6TFZVM8XWB1TVD`, fixed explicit date-range headers and invalid `tel:` short-link calls. Postponed post `11258` was read back with one photo and `📅 21 сентября — 13 декабря`, scheduled for 2026-09-24 21:44 UTC; the two malformed postponed posts were deleted.
+- Media classification hotfix SHA `5ed3a02704eed922d3f803c43e922bcfe08c9211`, image `deployment-01M39Y3SCH0FY73MTFQ1ZGQP1T`, held linked-child media until vision classification and rejected images whose visible dates conflict with that child. Event 9229's wrong poster was removed from its canonical gallery, VK, Telegram and Telegraph.
+- Rejected-attachment hotfix SHA `14e530f942c616c537a93a612ff812076a63aa2c`, image `deployment-01M39Z4BB5ANCPVBBZ7PZMDTY3`, makes an empty rejected gallery explicitly clear existing VK attachments. Later production reconciliation recreated the same hosted images under new source hashes; one was auto-approved before classification. This additional reimport path was captured and fixed next.
+- Exact-object reimport hotfix SHA `63901215976d7727d68a7a21e0a180f1062ceefd`, image `deployment-01M3A07R6RZJ4CGEMW1PY8KCRD`, deployed with all PR checks green and 124 focused local tests passed. At deployment, event 9229 still had two new approved/pending rows for the rejected exact images, proving the production guard was exercised. Targeted `vk_sync` job 85604 completed `done`; authenticated `wall.getById` showed post 11193 still had zero photos. The two reincarnated rows were then marked rejected with `media_role_visible_date_conflict`; canonical `photo_urls=[]`.
+- At 15:30 UTC, `vk_sync` had `done=4606`, `error=93`, `paused=199`; current `vk_flood_wait=0` versus 92 at incident start. The 93 errors grouped as 92 `expired` and one `stale`. `/healthz` was HTTP 200 and `ready=true`, and the running image's embedded SHA matched exact merged `origin/main`. Public `wall.get(filter=owner)` showed multiple fresh photo-bearing event announcements, including posts 11271, 11270, 11267, 11262, 11261, 11260, 11259 and 11256.
+- Production readback confirmed all eight new event rows 9266–9273, originally deferred by code 9, now have managed VK URLs. `expired` outbox rows were last updated between September 2025 and 12 September 2026, predating the observed incident onset; they are historical issues and were not blindly replayed.
 
 ## Prevention
 
-Open until a photo-bearing new managed event is visible after recovery, missed eligible events are reconciled, and any genuine text-only media loss is separated from correctly unillustrated children.
+The production publication blocker is mitigated and the system causes identified in this record have deployed regression guards. Keep the incident open for the remaining text-only source audit, lower-volume publisher-token consumers, and a delivery-health alert that detects a public-wall gap even when `/healthz` is ready. Historical `expired`/`stale` rows belong to separate pre-existing backlog work; do not replay them without event date, source-media and duplicate checks.
