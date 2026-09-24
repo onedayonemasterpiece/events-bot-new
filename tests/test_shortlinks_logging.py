@@ -33,7 +33,7 @@ async def test_ensure_vk_short_ticket_link_logs_reuse(caplog: pytest.LogCaptureF
     result = await ensure_vk_short_ticket_link(event, db=None)
 
     assert result == ("https://vk.cc/reused", "reused")
-    assert "vk_shortlink_reused" in caplog.text
+    assert "vk_shortlink_ticket_reused" in caplog.text
     assert "url=https://example.com" in caplog.text
     assert "short_url=https://vk.cc/reused" in caplog.text
 
@@ -52,7 +52,7 @@ async def test_ensure_vk_short_ticket_link_logs_saved(caplog: pytest.LogCaptureF
     result = await ensure_vk_short_ticket_link(event, db=None, vk_api_fn=fake_vk_api)
 
     assert result == ("https://vk.cc/abcd", "abcd")
-    assert "vk_shortlink_saved" in caplog.text
+    assert "vk_shortlink_ticket_saved" in caplog.text
     assert "url=https://example.com" in caplog.text
     assert "short_url=https://vk.cc/abcd" in caplog.text
 
@@ -67,4 +67,16 @@ async def test_ensure_vk_short_ticket_link_logs_fallback(caplog: pytest.LogCaptu
 
     assert result is None
     assert "vk_shortlink_fallback" in caplog.text
-    assert "reason=empty_ticket_link" in caplog.text
+    assert "reason=ticket_empty_link" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_ensure_vk_short_ticket_link_skips_phone_url() -> None:
+    event = _make_event(ticket_link="tel:+79673569479")
+
+    async def fail_vk_api(*args: object, **kwargs: object) -> None:
+        raise AssertionError("VK must not receive a tel: short-link request")
+
+    result = await ensure_vk_short_ticket_link(event, db=None, vk_api_fn=fail_vk_api)
+
+    assert result is None
