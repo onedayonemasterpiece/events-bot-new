@@ -163,7 +163,7 @@ unapproved images remain excluded and their durable review stays scheduled.
 
 Dedup review и смысловая роль изображения — два разных решения. После
 материализации каждого distinct approved asset один небольшой VLM-запрос
-`event-media-role-v1` классифицирует его в закрытый enum:
+`event-media-role-v2-visible-event-dates` классифицирует его в закрытый enum:
 
 - `event_identity_poster`;
 - `event_photo`;
@@ -187,6 +187,14 @@ guard booleans. OCR/keyword/соотношение сторон сами по с
 ставят один durable delayed retry: RPD переносится на следующий UTC-day, а
 краткие provider/transport ограничения получают bounded delay. Inline retry
 burst, emergency overflow и model fallback запрещены; renderer роль не угадывает.
+
+Для связанных дочерних событий одобренная картинка не попадает в публичную
+gallery, пока vision-классификатор не подтвердит её роль
+по актуальной версии. VLM перечисляет явно видимые на афише даты в ISO-формате;
+если все они относятся к другим дням, картинка получает `rejected` независимо
+от заявленного model confidence. Проверка допускает афишу с несколькими
+датами, когда одна совпадает с дочерним событием; вычисленный `end_date` не
+расширяет допустимую дату. После решения projection и fanout обновляются.
 
 Static event-detail использует эту роль только для крупного poster companion.
 `attendee_information` (например карточка услуг кемпинга),
