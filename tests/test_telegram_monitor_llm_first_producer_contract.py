@@ -783,7 +783,7 @@ def test_telegram_producer_verifies_only_explicit_contradictions() -> None:
             "IMPOSSIBLE_SCHEMA_VALUE",
         ),
         (
-            "Старый концерт отменён. Приглашаем на концерт 20.09 в 19:00, билеты доступны.",
+            "Старый концерт отменён. Приглашаем на концерт 20.09.2099 в 19:00, билеты доступны.",
             [],
             _provider_payload(
                 "LIFECYCLE_ONLY",
@@ -803,7 +803,7 @@ def test_v2_v3_v5_v6_telegram_uses_shared_production_collector(
             primary,
             _provider_payload(
                 "EVENTS_FOUND",
-                events=[{"title": "Исправленное событие", "date": "2026-09-20"}],
+                events=[{"title": "Исправленное событие", "date": "2099-09-20"}],
             ),
         ]
     )

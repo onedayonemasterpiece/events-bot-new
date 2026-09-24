@@ -101,7 +101,7 @@ The **initial provider decision** that restricted the rotated token cannot be at
 
 - deployed SHA at investigation time: not established by image metadata; local checkout `887d755468699230c536a62a49da432125f80f63` is not claimed as deployed.
 - Fly machine: `48e419df93e078`, version `2076`, image `deployment-01M2WE2R4474VRMEQJ0X7TJPJ6`.
-- Regression checks: read-only production log, SQLite and authenticated VK API inspection completed. Local focused release suite: 104 passed (`test_social_metrics_kaggle`, `test_vk_actor`, `test_job_captcha_pause`, `test_social_metrics_batch`, `test_poll_to_forward`, `test_poll_to_forward_popularity`). This also fixes a pre-existing poll test that fetched a cursor after its database context closed.
+- Regression checks: read-only production log, SQLite and authenticated VK API inspection completed. Local focused release suite: 104 passed (`test_social_metrics_kaggle`, `test_vk_actor`, `test_job_captcha_pause`, `test_social_metrics_batch`, `test_poll_to_forward`, `test_poll_to_forward_popularity`). This also fixes a pre-existing poll test that fetched a cursor after its database context closed. Initial PR CI passed the VK-related Python job and static browser gate; its unrelated Smart Update gate found two date-sensitive fixture failures (20 September was past on 24 September). Both failures reproduced locally; the fixture dates were advanced to a fixed future year and all five selected cases passed locally before rerun.
 - Redacted evidence: `/home/dev/artifacts/events-bot-new/20260924T072844Z-vk-publishing-incident-20260924/evidence.md` (retained while the incident is open).
 - Post-deploy verification: pending.
 
