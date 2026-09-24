@@ -2272,7 +2272,9 @@ def detect_image_type(data: bytes) -> str | None:
     return None
 
 
-def ensure_jpeg(data: bytes, name: str) -> tuple[bytes, str]:
+def ensure_jpeg(
+    data: bytes, name: str, *, quality: int = 75, subsampling: int | None = None
+) -> tuple[bytes, str]:
     """Convert WEBP or AVIF images to JPEG."""
     kind = detect_image_type(data)
     if kind in {"webp", "avif"}:
@@ -2293,7 +2295,10 @@ def ensure_jpeg(data: bytes, name: str) -> tuple[bytes, str]:
                 raise ValueError(f"image too large to convert: {width}x{height} > {max_pixels} px")
             rgb = im.convert("RGB")
             bio_out = BytesIO()
-            rgb.save(bio_out, format="JPEG")
+            jpeg_options = {"quality": quality}
+            if subsampling is not None:
+                jpeg_options["subsampling"] = subsampling
+            rgb.save(bio_out, format="JPEG", **jpeg_options)
             data = bio_out.getvalue()
         name = re.sub(r"\.[^.]+$", "", name) + ".jpg"
     return data, name
@@ -4248,7 +4253,9 @@ async def upload_vk_photo(
 
                 img_bytes = await asyncio.wait_for(_download(), HTTP_TIMEOUT)
                 try:
-                    img_bytes, _ = ensure_jpeg(img_bytes, "image.jpg")
+                    img_bytes, _ = ensure_jpeg(
+                        img_bytes, "image.jpg", quality=95, subsampling=0
+                    )
                 except Exception as exc:
                     logging.warning("vk.upload convert_failed url=%s error=%s", url, exc)
                     return None
@@ -4293,6 +4300,21 @@ async def upload_vk_photo(
                             await asyncio.sleep(min(2.0, 0.25 * upload_attempt))
                             continue
                         raise
+                    if not isinstance(upload_result, dict) or not all(
+                        upload_result.get(key) for key in ("photo", "server", "hash")
+                    ):
+                        logging.warning(
+                            "vk.upload empty_upload_response owner_id=%s actor=%s attempt=%s jpeg_bytes=%s result_keys=%s",
+                            owner_id,
+                            actor.label,
+                            upload_attempt,
+                            len(img_bytes),
+                            sorted(upload_result) if isinstance(upload_result, dict) else type(upload_result).__name__,
+                        )
+                        if upload_attempt < 3:
+                            await asyncio.sleep(min(2.0, 0.25 * upload_attempt))
+                            continue
+                        return None
                     save = await _vk_api(
                         "photos.saveWallPhoto",
                         {
@@ -4383,7 +4405,9 @@ async def upload_vk_photo_bytes(
             return None
 
         try:
-            image_bytes, filename = ensure_jpeg(image_bytes, filename or "image.jpg")
+            image_bytes, filename = ensure_jpeg(
+                image_bytes, filename or "image.jpg", quality=95, subsampling=0
+            )
         except Exception as exc:
             logging.warning("vk.upload.bytes convert_failed filename=%s error=%s", filename, exc)
             return None

@@ -23,6 +23,9 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK photo upload follow-up (`INC-2026-09-24`): use the VK-proven 95-quality,
+  4:4:4 JPEG conversion for WebP/AVIF and reject an upload-server response with
+  an empty `photo` before calling `photos.saveWallPhoto`; retry with a fresh URL.
 - VK Afisha recurrence (`INC-2026-09-24`): route half-hourly Kaggle metrics
   reads and public popularity lookups to the service credential, stop the
   remote VK lane on provider code 9, and persist a one-hour reader cooldown so
