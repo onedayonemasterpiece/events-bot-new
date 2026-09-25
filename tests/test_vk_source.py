@@ -1867,6 +1867,93 @@ async def test_sync_vk_source_post_clears_explicitly_rejected_media(
 
 
 @pytest.mark.asyncio
+async def test_vk_preflight_discards_only_explicitly_rejected_image(tmp_path):
+    db = main.Database(str(tmp_path / "vk-gallery-preflight.sqlite"))
+    await db.init()
+    wrong_url = "https://static.kenigevents.ru/unrelated-news.webp"
+    legacy_url = "https://static.kenigevents.ru/legacy-image.webp"
+    pending_url = "https://static.kenigevents.ru/linked-pending.webp"
+    async with db.get_session() as session:
+        event = main.Event(
+            title="Янтарный конёк",
+            description="desc",
+            source_text="6 November",
+            date="2026-11-06",
+            time="12:00",
+            location_name="Арена",
+            photo_urls=[wrong_url],
+            photo_count=1,
+        )
+        legacy = main.Event(
+            title="Legacy event",
+            description="desc",
+            source_text="7 November",
+            date="2026-11-07",
+            time="12:00",
+            location_name="Арена",
+            photo_urls=[legacy_url],
+            photo_count=1,
+        )
+        pending_linked = main.Event(
+            title="Linked event",
+            description="desc",
+            source_text="8 November",
+            date="2026-11-08",
+            time="12:00",
+            location_name="Арена",
+            photo_urls=[pending_url],
+            photo_count=1,
+            linked_event_ids=[9999],
+        )
+        session.add_all([event, legacy, pending_linked])
+        await session.flush()
+        session.add(
+            main.EventPoster(
+                event_id=int(event.id),
+                poster_hash="unrelated-news",
+                supabase_url=wrong_url,
+                review_status="approved",
+                media_semantic_status="classified",
+                media_semantic_evidence_json={
+                    "media_role": "event_photo",
+                    "image_text_mode": "ocr_text",
+                    "poster_contract": {
+                        "primary_event_promotion": False,
+                        "event_identity_grounded": False,
+                    },
+                },
+            )
+        )
+        session.add(
+            main.EventPoster(
+                event_id=int(pending_linked.id),
+                poster_hash="linked-pending",
+                supabase_url=pending_url,
+                review_status="approved",
+                media_semantic_status="pending",
+            )
+        )
+        await session.commit()
+        event_id, legacy_id, pending_id = int(event.id), int(legacy.id), int(pending_linked.id)
+
+    await main._filter_vk_event_gallery_against_ledger(db, event)
+    await main._filter_vk_event_gallery_against_ledger(db, legacy)
+    await main._filter_vk_event_gallery_against_ledger(db, pending_linked)
+
+    assert event.photo_urls == [] and event.photo_count == 0
+    assert legacy.photo_urls == [legacy_url] and legacy.photo_count == 1
+    assert pending_linked.photo_urls == [pending_url] and pending_linked.photo_count == 1
+    async with db.get_session() as session:
+        persisted = await session.get(main.Event, event_id)
+        preserved = await session.get(main.Event, legacy_id)
+        pending = await session.get(main.Event, pending_id)
+        assert persisted.photo_urls == [] and persisted.photo_count == 0
+        assert preserved.photo_urls == [legacy_url]
+        assert pending.photo_urls == [pending_url]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_creates_when_existing_vk_url_is_external(
     monkeypatch,
 ):

@@ -198,6 +198,15 @@ The **initial provider decision** that restricted the rotated token cannot be at
   `event_identity_grounded=false`, yet a legacy seed left it approved as
   `event_photo`. The gallery now excludes this contradictory classification
   and future role review rejects it explicitly.
+- VK publication previously read `Event.photo_urls` directly. Because that
+  field is a cache, a source reimport could briefly restore a rejected URL
+  before the media-review projection refreshed it. The publication job now
+  filters URLs with explicit semantic rejection evidence before hashing or
+  uploading. A read-only production audit found 41 linked future events with
+  cached images awaiting current semantic classification, so the preflight
+  deliberately retains those pending images and legacy pre-ledger images.
+  This closes the observed path for the rejected news card to enter a VK post
+  without causing a broad removal of existing photos.
 
 - [x] Route the half-hourly Kaggle social-metrics VK reads to the service token; add a typed provider code-9 result and stop the VK lane after the first flood response. Deployed and credential separation verified.
 - [ ] Audit the remaining lower-volume publisher-token readers (`poll_to_forward_popularity`, promo and dynamic-cover paths) and enforce one per-credential budget across Fly and remote consumers.

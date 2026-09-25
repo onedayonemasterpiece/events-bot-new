@@ -26,7 +26,9 @@
 - Event media that the semantic reviewer describes as a text card without
   promotion of, or identity evidence for, the event is excluded from the
   approved gallery and rejected during review. This prevents an unrelated
-  source news image from reappearing in a future VK announcement.
+  source news image from reappearing in a future VK announcement. The VK job
+  now removes images explicitly rejected by the poster ledger from its cached
+  photo list before computing the publication hash and uploading attachments.
 - VK Afisha fresh-event delivery (`INC-2026-09-24`): an active future
   `vk_sync` error no longer expires permanently while waiting for its retry.
   If VK's upload server silently returns an empty `photo`, the uploader tries
