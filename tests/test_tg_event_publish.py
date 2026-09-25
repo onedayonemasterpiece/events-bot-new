@@ -1977,7 +1977,8 @@ async def test_periodic_live_id_reconcile_scans_with_service_actor_and_unique_he
 
     recovered = []
 
-    async def fake_recover(_db, event, *, bot):
+    async def fake_recover(_db, event, *, bot, candidate_item):
+        assert candidate_item["id"] == 200
         recovered.append(int(event.id))
         return True
 
@@ -1985,6 +1986,44 @@ async def test_periodic_live_id_reconcile_scans_with_service_actor_and_unique_he
     monkeypatch.setattr(main, "_recover_managed_vk_live_url", fake_recover)
     assert await main._reconcile_recent_managed_vk_live_urls(db, bot=None) == 1
     assert recovered == [unique_id]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_periodic_live_id_recovery_uses_only_service_token(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_SERVICE_TOKEN", "service-test-token")
+    event = _event(
+        id=None, date="2099-06-20",
+        source_vk_post_url="https://vk.com/wall-231920894_100",
+    )
+    async with db.get_session() as session:
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    async def fake_vk_api(method, params, _db, _bot, **kwargs):
+        assert method == "wall.getById"
+        assert params == {"posts": "-231920894_100"}
+        assert kwargs["token"] == "service-test-token"
+        assert kwargs["token_kind"] == "service"
+        return {"response": []}
+
+    async def unexpected(*_args, **_kwargs):
+        raise AssertionError("periodic recovery must not probe with the user actor")
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "_managed_vk_post_state", unexpected)
+    monkeypatch.setattr(main, "_find_unique_live_managed_vk_item_for_event", unexpected)
+    assert await main._recover_managed_vk_live_url(
+        db, event, bot=None, candidate_item={"id": 200}
+    )
+    async with db.get_session() as session:
+        stored = await session.get(main.Event, event_id)
+    assert stored.source_vk_post_url == "https://vk.com/wall-231920894_200"
     await db.close()
 
 
