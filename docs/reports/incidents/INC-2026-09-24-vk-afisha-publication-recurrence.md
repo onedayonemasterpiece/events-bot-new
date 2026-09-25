@@ -175,12 +175,19 @@ The **initial provider decision** that restricted the rotated token cannot be at
   and failed for 9302, so fallback variants must be resized directly from the
   original source bytes. The provider's exact acceptance rule remains unknown.
 - Corrective code retains due `vk_sync` errors for active future events and
-  tries at most two smaller JPEG variants from the original source bytes on
+  tries at most three smaller JPEG variants from the original source bytes on
   an empty upload response. It changes bytes only after provider rejection;
   a failed final attempt still
   blocks text-only publication. Product acceptance requires replay of both
   exact events and authenticated VK readback with matching photos, followed
   by a fresh-event delivery audit.
+- Post-release replay created postponed VK posts 11395 (9302) and 11396
+  (9305); authenticated `wall.get(filter=postponed)` showed one photo on each.
+  A separate near-term replay, event 8922, succeeded only on its 800-pixel
+  fallback and created post 11397. Event 8943 still failed with empty `photo`
+  at original, 800-pixel and 600-pixel sizes. A bounded upload-server-only
+  probe accepted its 400-pixel JPEG while PNG remained rejected. This release
+  adds the 400-pixel candidate and holds 8943's retry until it is deployed.
 
 - [x] Route the half-hourly Kaggle social-metrics VK reads to the service token; add a typed provider code-9 result and stop the VK lane after the first flood response. Deployed and credential separation verified.
 - [ ] Audit the remaining lower-volume publisher-token readers (`poll_to_forward_popularity`, promo and dynamic-cover paths) and enforce one per-credential budget across Fly and remote consumers.
