@@ -368,6 +368,21 @@ def _poster_visual_identity_snapshot(poster: Any) -> tuple[str, str, str, str, s
     )
 
 
+def _unbound_text_photo_conflict(decision: Any) -> bool:
+    """A text card about another subject cannot represent this event's photo."""
+
+    if not isinstance(decision, dict):
+        return False
+    contract = decision.get("poster_contract")
+    return bool(
+        decision.get("media_role") == "event_photo"
+        and decision.get("image_text_mode") == "ocr_text"
+        and isinstance(contract, dict)
+        and contract.get("primary_event_promotion") is False
+        and contract.get("event_identity_grounded") is False
+    )
+
+
 async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoster]:
     event = await session.get(Event, int(event_id))
     rows = (
@@ -399,6 +414,7 @@ async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoste
         row for row in rows
         if resolve_poster_display_url(row)
         and str(row.supabase_path or "").strip() not in rejected_paths
+        and not _unbound_text_photo_conflict(row.media_semantic_evidence_json)
         and not (
             linked
             and (
@@ -2010,7 +2026,16 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
             poster.focal_x = focal.get("x") if focal else None
             poster.focal_y = focal.get("y") if focal else None
             poster.safe_crop = bool(decision.get("safe_crop", False))
-            if _media_role_visible_date_conflicts(event, decision):
+            if _unbound_text_photo_conflict(decision):
+                poster.review_status = REJECTED
+                poster.review_reason = "automated_semantic_conflict"
+                poster.reviewed_at = now
+                logger.warning(
+                    "event_media.unbound_text_photo_conflict event_id=%s poster_id=%s",
+                    event_id,
+                    poster_id,
+                )
+            elif _media_role_visible_date_conflicts(event, decision):
                 poster.review_status = REJECTED
                 poster.review_reason = "media_role_visible_date_conflict"
                 poster.reviewed_at = now

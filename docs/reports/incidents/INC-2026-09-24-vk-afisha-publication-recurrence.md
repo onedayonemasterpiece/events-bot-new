@@ -188,6 +188,16 @@ The **initial provider decision** that restricted the rotated token cannot be at
   at original, 800-pixel and 600-pixel sizes. A bounded upload-server-only
   probe accepted its 400-pixel JPEG while PNG remained rejected. This release
   adds the 400-pixel candidate and holds 8943's retry until it is deployed.
+- The 400-pixel release recovered event 8943 as postponed post 11399 with one
+  photo. Five further legacy expired events with visually checked relevant
+  media (8938, 8944, 8936, 8937, 8935) were requeued and gained photo-bearing
+  postponed posts 11400–11405 (excluding 11402, the live id of event 9302).
+  Event 8923 was held: its only approved image is a news card about an
+  unrelated skating tournament. The stored structured vision result itself
+  says both `primary_event_promotion=false` and
+  `event_identity_grounded=false`, yet a legacy seed left it approved as
+  `event_photo`. The gallery now excludes this contradictory classification
+  and future role review rejects it explicitly.
 
 - [x] Route the half-hourly Kaggle social-metrics VK reads to the service token; add a typed provider code-9 result and stop the VK lane after the first flood response. Deployed and credential separation verified.
 - [ ] Audit the remaining lower-volume publisher-token readers (`poll_to_forward_popularity`, promo and dynamic-cover paths) and enforce one per-credential budget across Fly and remote consumers.

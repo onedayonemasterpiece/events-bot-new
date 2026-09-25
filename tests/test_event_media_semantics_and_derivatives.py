@@ -163,6 +163,56 @@ async def test_linked_child_seed_waits_for_current_vision_identity(tmp_path) -> 
 
 
 @pytest.mark.asyncio
+async def test_unbound_text_photo_is_excluded_from_gallery(tmp_path) -> None:
+    db = Database(str(tmp_path / "unbound-text-photo.sqlite"))
+    await db.init()
+    wrong_url = "https://static.kenigevents.ru/unrelated-news.webp"
+    scene_url = "https://static.kenigevents.ru/event-scene.webp"
+    wrong_decision = _role_decision(role="event_photo", contract=False)
+    scene_decision = _role_decision(role="event_photo", contract=False)
+    scene_decision["image_text_mode"] = "visual_only"
+    async with db.get_session() as session:
+        event = Event(
+            title="Янтарный конёк",
+            description="Regional skating competition",
+            source_text="6 November",
+            date="2026-11-06",
+            time="12:00",
+            location_name="Ледовая арена",
+            photo_urls=[wrong_url, scene_url],
+            photo_count=2,
+        )
+        session.add(event)
+        await session.flush()
+        session.add_all(
+            [
+                EventPoster(
+                    event_id=int(event.id),
+                    poster_hash="unrelated-news",
+                    supabase_url=wrong_url,
+                    review_status="approved",
+                    media_semantic_status="classified",
+                    media_semantic_evidence_json=wrong_decision,
+                ),
+                EventPoster(
+                    event_id=int(event.id),
+                    poster_hash="event-scene",
+                    supabase_url=scene_url,
+                    review_status="approved",
+                    media_semantic_status="classified",
+                    media_semantic_evidence_json=scene_decision,
+                ),
+            ]
+        )
+        await session.flush()
+        assert [row.supabase_url for row in await event_media.get_event_gallery_rows(session, int(event.id))] == [scene_url]
+        assert await event_media.sync_event_gallery_projection(session, int(event.id))
+        assert event.photo_urls == [scene_url]
+        assert event.photo_count == 1
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_vision_date_conflict_rejects_linked_child_poster(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "wrong-child-poster.sqlite"))
     await db.init()
@@ -229,6 +279,75 @@ async def test_vision_date_conflict_rejects_linked_child_poster(tmp_path, monkey
         poster = await session.get(EventPoster, ids[1])
         assert poster.review_status == "rejected"
         assert poster.review_reason == "media_role_visible_date_conflict"
+        assert event.photo_urls == []
+        assert event.photo_count == 0
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_role_review_rejects_unbound_news_card(tmp_path, monkeypatch) -> None:
+    db = Database(str(tmp_path / "unbound-news-role.sqlite"))
+    await db.init()
+    url = "https://static.kenigevents.ru/unrelated-skating-news.webp"
+    async with db.get_session() as session:
+        event = Event(
+            title="Янтарный конёк",
+            description="Regional competition",
+            source_text="6 November",
+            date="2026-11-06",
+            time="12:00",
+            location_name="Ледовая арена",
+            photo_urls=[url],
+            photo_count=1,
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="unbound-news",
+            supabase_url=url,
+            review_status="approved",
+            review_reason="first_event_media_seed",
+            media_semantic_status="pending",
+        )
+        session.add(poster)
+        await session.commit()
+        ids = int(event.id), int(poster.id)
+
+    async def fake_download(_poster):
+        return event_media.DownloadedPoster(
+            data=_jpeg_bytes(64, 48), mime_type="image/jpeg", source_url=url
+        )
+
+    async def fake_budget(*_args):
+        return True
+
+    class FakeGoogleAIClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def generate_content_async(self, **_kwargs):
+            return json.dumps(_role_decision(role="event_photo", contract=False)), None
+
+    import google_ai
+    import main
+
+    async def no_schedule(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_budget)
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+    monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
+    monkeypatch.setattr(main, "get_supabase_client", lambda: object())
+    monkeypatch.setattr(main, "schedule_event_update_tasks", no_schedule)
+
+    assert await event_media._classify_event_poster_role(*ids, db)
+    async with db.get_session() as session:
+        event = await session.get(Event, ids[0])
+        poster = await session.get(EventPoster, ids[1])
+        assert poster.review_status == "rejected"
+        assert poster.review_reason == "automated_semantic_conflict"
         assert event.photo_urls == []
         assert event.photo_count == 0
     await db.close()
