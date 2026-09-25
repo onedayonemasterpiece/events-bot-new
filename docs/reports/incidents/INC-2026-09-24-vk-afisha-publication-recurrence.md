@@ -149,6 +149,39 @@ The **initial provider decision** that restricted the rotated token cannot be at
   publish exact media or retain a source-specific blocked reason. Alerting on
   prolonged absence of fresh managed VK posts remains open.
 
+### Fresh-delivery correction, 2026-09-25
+
+- A product-impact audit separated the six future legacy-media jobs from
+  fresh publication delivery. Of 46 active future events added after
+  24 September 15:26 UTC, 43 had managed Afisha VK URLs. The three exceptions
+  were one future event still waiting for v2 image classification (9293) and
+  **two fresh events with source-matched canonical photos whose VK jobs had
+  expired**: 9302, «Конкур» on 3 October, and 9305, «Пивной вечер с Понарт»
+  on 30 September. Both source posters were visually inspected against the
+  exact event/date. This is an actual missed-announcement defect, unlike the
+  five distinct future announcements represented by the six legacy-media jobs.
+- At 04:46–04:47 UTC, both fresh jobs reached VK
+  `photos.getWallUploadServer`, but the HTTP-200 upload-server response had
+  `photo=""` on all three retries of the identical JPEG. The fail-closed guard
+  prevented text-only posts. The worker then let the **error** rows expire
+  after the one-hour job TTL; its active-event catch-up covered pending rows
+  only. The jobs were stranded despite future event dates and later canonical
+  photos. Thus the product failure is a combination of image-specific upload
+  rejection and retryable-error expiration, not another VK code-9 restriction.
+- Controlled upload-server probes (no `photos.saveWallPhoto` or `wall.post`)
+  showed a 1600-pixel 95-quality 4:4:4 JPEG accepted for event 9302 and an
+  800-pixel variant accepted for event 9305. Smaller 85-quality variants were
+  still rejected. Re-encoding the already converted JPEG changed the payload
+  and failed for 9302, so fallback variants must be resized directly from the
+  original source bytes. The provider's exact acceptance rule remains unknown.
+- Corrective code retains due `vk_sync` errors for active future events and
+  tries at most two smaller JPEG variants from the original source bytes on
+  an empty upload response. It changes bytes only after provider rejection;
+  a failed final attempt still
+  blocks text-only publication. Product acceptance requires replay of both
+  exact events and authenticated VK readback with matching photos, followed
+  by a fresh-event delivery audit.
+
 - [x] Route the half-hourly Kaggle social-metrics VK reads to the service token; add a typed provider code-9 result and stop the VK lane after the first flood response. Deployed and credential separation verified.
 - [ ] Audit the remaining lower-volume publisher-token readers (`poll_to_forward_popularity`, promo and dynamic-cover paths) and enforce one per-credential budget across Fly and remote consumers.
 - [x] Finish the second photo-encoding hotfix and verify public photo-bearing readback for event 9278.

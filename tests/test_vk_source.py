@@ -1,10 +1,12 @@
 import pytest
+from io import BytesIO
 from pathlib import Path
 import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from PIL import Image
 import main
 
 
@@ -507,7 +509,7 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
     assert posted["vals"] == ["ph1"]
 
 
-@pytest.mark.parametrize("first_failure", ["invalid_json", "empty_photo"])
+@pytest.mark.parametrize("first_failure", ["invalid_json", "empty_photo", "two_empty_photos"])
 @pytest.mark.asyncio
 async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_failure):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
@@ -518,12 +520,18 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_
     )
     monkeypatch.setattr(main, "detect_image_type", lambda data: "png")
     conversion_qualities = []
+    fallback_inputs = []
 
     def fake_ensure_jpeg(data, name, *, quality=75, subsampling=None):
         conversion_qualities.append((quality, subsampling))
-        return data, name
+        return b"converted-image", name
 
     monkeypatch.setattr(main, "ensure_jpeg", fake_ensure_jpeg)
+    def fake_fallback(data):
+        fallback_inputs.append(data)
+        return [b"smaller-image", b"smallest-image"]
+
+    monkeypatch.setattr(main, "_vk_upload_jpeg_fallback_variants", fake_fallback)
 
     async def fake_sleep(_delay):
         return None
@@ -559,13 +567,16 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_
             return False
 
         async def json(self):
-            if self.attempt == 1:
+            if self.attempt == 1 or (
+                self.attempt == 2 and first_failure == "two_empty_photos"
+            ):
                 if first_failure == "invalid_json":
                     raise ValueError("unexpected mimetype text/html")
                 return {"photo": "", "server": 7, "hash": "hash-json"}
             return {"photo": "photo-json", "server": 7, "hash": "hash-json"}
 
     upload_urls: list[str] = []
+    uploaded_payloads: list[bytes] = []
 
     class FakeSession:
         def get(self, _url):
@@ -573,6 +584,7 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_
 
         def post(self, upload_url, data=None):
             upload_urls.append(upload_url)
+            uploaded_payloads.append(data._fields[0][2])
             return FakeUploadResponse(len(upload_urls))
 
     monkeypatch.setattr(main, "get_http_session", lambda: FakeSession())
@@ -595,9 +607,88 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_
     result = await main.upload_vk_photo("1", "https://storage.example/photo.webp")
 
     assert result == "photo-1_42"
-    assert upload_urls == ["https://upload/1", "https://upload/2"]
+    expected_payloads = [
+        b"converted-image",
+        b"converted-image" if first_failure == "invalid_json" else b"smaller-image",
+    ]
+    if first_failure == "two_empty_photos":
+        expected_payloads.append(b"smallest-image")
+    assert upload_urls == [f"https://upload/{index}" for index in range(1, len(expected_payloads) + 1)]
+    assert uploaded_payloads == expected_payloads
+    assert fallback_inputs == ([] if first_failure == "invalid_json" else [b"image-bytes"])
     assert save_params["photo"] == "photo-json"
     assert conversion_qualities == [(95, 0)]
+
+
+def test_vk_upload_fallback_variants_reduce_large_poster_without_invalid_jpeg():
+    source = Image.new("RGB", (2048, 2560), (80, 120, 160))
+    output = BytesIO()
+    source.save(output, format="JPEG", quality=95, subsampling=0)
+
+    variants = main._vk_upload_jpeg_fallback_variants(output.getvalue())
+
+    assert [Image.open(BytesIO(data)).size for data in variants] == [
+        (1280, 1600),
+        (640, 800),
+    ]
+    for data in variants:
+        main.validate_jpeg_markers(data)
+
+
+@pytest.mark.asyncio
+async def test_upload_vk_photo_bytes_uses_source_image_for_fallback(monkeypatch):
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+    monkeypatch.setattr(
+        main,
+        "choose_vk_actor",
+        lambda _owner_id, _intent: [main.VkActor("user", "user-token", "user:test")],
+    )
+    monkeypatch.setattr(main, "ensure_jpeg", lambda _data, _name, **_kwargs: (b"converted", "image.jpg"))
+    monkeypatch.setattr(main, "detect_image_type", lambda _data: "png")
+    fallback_inputs = []
+
+    def fallback(data):
+        fallback_inputs.append(data)
+        return [b"resized"]
+
+    monkeypatch.setattr(main, "_vk_upload_jpeg_fallback_variants", fallback)
+
+    class UploadResponse:
+        def __init__(self, attempt):
+            self.attempt = attempt
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, _type, _value, _traceback):
+            return False
+
+        async def json(self):
+            return {"photo": "" if self.attempt == 1 else "saved", "server": 7, "hash": "hash"}
+
+    payloads = []
+
+    class Session:
+        def post(self, _url, data=None):
+            payloads.append(data._fields[0][2])
+            return UploadResponse(len(payloads))
+
+    monkeypatch.setattr(main, "get_http_session", lambda: Session())
+
+    async def fake_api(method, _params=None, *args, **kwargs):
+        if method == "photos.getWallUploadServer":
+            return {"response": {"upload_url": "https://upload.example"}}
+        if method == "photos.saveWallPhoto":
+            return {"response": [{"owner_id": -1, "id": 42}]}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(main, "_vk_api", fake_api)
+
+    result = await main.upload_vk_photo_bytes("1", b"raw-image")
+
+    assert result == "photo-1_42"
+    assert fallback_inputs == [b"raw-image"]
+    assert payloads == [b"converted", b"resized"]
 
 
 @pytest.mark.asyncio
