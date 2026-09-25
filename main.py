@@ -23330,6 +23330,63 @@ async def _enqueue_static_site_after_vk_publication(
     )
 
 
+async def _filter_vk_event_gallery_against_ledger(db: Database, event: Event) -> None:
+    """Drop explicitly rejected images before VK hashes or uploads media."""
+
+    event_id = int(getattr(event, "id", 0) or 0)
+    if event_id <= 0:
+        return
+    from event_media import (
+        SEMANTIC_REJECTION_REASONS,
+        _unbound_text_photo_conflict,
+        resolve_poster_display_url,
+    )
+
+    async with db.get_session() as session:
+        posters = list(
+            (
+                await session.execute(
+                    select(EventPoster).where(EventPoster.event_id == event_id)
+                )
+            ).scalars().all()
+        )
+        rejected_paths = {
+            str(poster.supabase_path or "").strip()
+            for poster in posters
+            if poster.review_status == "rejected"
+            and poster.review_reason in SEMANTIC_REJECTION_REASONS
+            and str(poster.supabase_path or "").strip()
+        }
+        blocked_urls = {
+            url
+            for poster in posters
+            if (
+                (poster.review_status == "rejected" and poster.review_reason in SEMANTIC_REJECTION_REASONS)
+                or _unbound_text_photo_conflict(poster.media_semantic_evidence_json)
+                or str(poster.supabase_path or "").strip() in rejected_paths
+            )
+            if (url := resolve_poster_display_url(poster))
+        }
+        stored = await session.get(Event, event_id)
+        if stored is None:
+            return
+        cached_urls = [str(url or "").strip() for url in list(stored.photo_urls or []) if str(url or "").strip()]
+        safe_urls = [url for url in cached_urls if url not in blocked_urls]
+        if safe_urls != cached_urls:
+            stored.photo_urls = safe_urls
+            stored.photo_count = len(safe_urls)
+            session.add(stored)
+            await session.commit()
+            logging.warning(
+                "vk.gallery_explicit_rejections_filtered event_id=%s cached=%s safe=%s",
+                event_id,
+                len(cached_urls),
+                len(safe_urls),
+            )
+        event.photo_urls = safe_urls
+        event.photo_count = len(safe_urls)
+
+
 async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) -> None:
     if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
         raise VKPermissionError(None, "permission error")
@@ -23366,6 +23423,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         )
         return False
     ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
+    await _filter_vk_event_gallery_against_ledger(db, ev)
     # A postponed VK item may receive a different id at the exact moment it is
     # published.  Recover the unique live projection before hash/idempotency
     # checks so a stale stored id cannot create a duplicate wall post.
