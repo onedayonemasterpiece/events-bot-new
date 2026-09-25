@@ -16047,28 +16047,46 @@ async def _recover_managed_vk_live_url(
     ev: Event,
     *,
     bot: Bot | None,
+    candidate_item: dict | None = None,
 ) -> bool:
     """Persist a changed live id after a postponed managed VK post publishes."""
 
     if not _event_has_managed_vk_post(ev):
         return False
-    exists, _ = await _managed_vk_post_state(ev)
-    if exists:
-        return False
     current_url = str(getattr(ev, "source_vk_post_url", "") or "").strip()
     ids = _vk_owner_and_post_id(current_url)
     if not ids:
         return False
-    item = await _find_unique_live_managed_vk_item_for_event(
-        ev,
-        owner_id=int(ids[0]),
-        db=db,
-        bot=bot,
-    )
+    if candidate_item is None:
+        exists, _ = await _managed_vk_post_state(ev)
+        if exists:
+            return False
+        item = await _find_unique_live_managed_vk_item_for_event(
+            ev,
+            owner_id=int(ids[0]),
+            db=db,
+            bot=bot,
+        )
+    else:
+        # The periodic scan already found one exact public title/date match.
+        # Check the old id with the service credential too; do not run the
+        # postponed/user-actor probe for every item in the public wall batch.
+        old_response = await _vk_api(
+            "wall.getById",
+            {"posts": f"{ids[0]}_{ids[1]}"},
+            db,
+            bot,
+            token=VK_SERVICE_TOKEN,
+            token_kind="service",
+            skip_captcha=True,
+        )
+        if _vk_wall_get_by_id_items(old_response):
+            return False
+        item = candidate_item
     if not item:
         return False
     live_id = int(item.get("id") or 0)
-    if live_id <= 0:
+    if live_id <= int(ids[1]):
         return False
     live_url = f"https://vk.com/wall{int(ids[0])}_{live_id}"
     if live_url == current_url:
@@ -16081,7 +16099,11 @@ async def _recover_managed_vk_live_url(
         from models import EventSource
 
         stored = await session.get(Event, event_id)
-        if stored is None or not _event_has_managed_vk_post(stored):
+        if (
+            stored is None
+            or not _event_has_managed_vk_post(stored)
+            or str(stored.source_vk_post_url or "").strip() != current_url
+        ):
             return False
         stored.source_vk_post_url = live_url
         session.add(stored)
@@ -16183,15 +16205,22 @@ async def _reconcile_recent_managed_vk_live_urls(
             candidates = by_header.get((lines[0], date_line), [])
             if len(candidates) == 1:
                 matched_items.setdefault(int(candidates[0].id), []).append(item)
+    events_by_id = {int(ev.id): ev for ev in events}
     recovered = 0
-    for ev in events:
-        matches = matched_items.get(int(ev.id), [])
+    for event_id, matches in sorted(
+        matched_items.items(),
+        key=lambda pair: int(pair[1][0].get("id") or 0),
+        reverse=True,
+    ):
         if len(matches) != 1:
             continue
+        ev = events_by_id[event_id]
         old_ids = _vk_owner_and_post_id(str(ev.source_vk_post_url or ""))
         if not old_ids or int(matches[0].get("id") or 0) == int(old_ids[1]):
             continue
-        if await _recover_managed_vk_live_url(db, ev, bot=bot):
+        if await _recover_managed_vk_live_url(
+            db, ev, bot=bot, candidate_item=matches[0]
+        ):
             recovered += 1
         if recovered >= 10:
             break

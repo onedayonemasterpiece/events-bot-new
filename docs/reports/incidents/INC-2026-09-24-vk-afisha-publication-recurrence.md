@@ -113,9 +113,10 @@ The **initial provider decision** that restricted the rotated token cannot be at
   triggered another `vk_sync` job.
 - The outbox worker now scans the newest 100 public Afisha posts every five
   minutes using `VK_SERVICE_TOKEN`. It selects only a unique exact title/date
-  match for an active future event with a managed URL, then invokes the
-  existing fail-closed live-ID recovery. Routine scanning does not use the
-  publishing credential. If the old post still exists, the match is
+  match for an active future event with a managed URL, newest first. A second
+  service-token call confirms the old public ID has vanished before updating
+  the stored event and source URLs. Routine scanning and confirmation use no
+  publishing credential. If the old public post still exists, the match is
   ambiguous, or the provider is unavailable, the URL is left untouched.
 - Regression check: a public post with a changed ID and unique title/date
   recovers the event and `EventSource` URL automatically; duplicate headers
