@@ -509,7 +509,16 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
     assert posted["vals"] == ["ph1"]
 
 
-@pytest.mark.parametrize("first_failure", ["invalid_json", "empty_photo", "two_empty_photos"])
+@pytest.mark.parametrize(
+    "first_failure",
+    [
+        "invalid_json",
+        "empty_photo",
+        "two_empty_photos",
+        "three_empty_photos",
+        "four_empty_photos",
+    ],
+)
 @pytest.mark.asyncio
 async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_failure):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
@@ -529,7 +538,7 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_
     monkeypatch.setattr(main, "ensure_jpeg", fake_ensure_jpeg)
     def fake_fallback(data):
         fallback_inputs.append(data)
-        return [b"smaller-image", b"smallest-image"]
+        return [b"smaller-image", b"smallest-image", b"400px-image"]
 
     monkeypatch.setattr(main, "_vk_upload_jpeg_fallback_variants", fake_fallback)
 
@@ -568,7 +577,9 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_
 
         async def json(self):
             if self.attempt == 1 or (
-                self.attempt == 2 and first_failure == "two_empty_photos"
+                self.attempt == 2 and first_failure in {"two_empty_photos", "three_empty_photos", "four_empty_photos"}
+            ) or (self.attempt == 3 and first_failure in {"three_empty_photos", "four_empty_photos"}) or (
+                self.attempt == 4 and first_failure == "four_empty_photos"
             ):
                 if first_failure == "invalid_json":
                     raise ValueError("unexpected mimetype text/html")
@@ -606,17 +617,21 @@ async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_
 
     result = await main.upload_vk_photo("1", "https://storage.example/photo.webp")
 
-    assert result == "photo-1_42"
+    assert result == (None if first_failure == "four_empty_photos" else "photo-1_42")
     expected_payloads = [
         b"converted-image",
         b"converted-image" if first_failure == "invalid_json" else b"smaller-image",
     ]
-    if first_failure == "two_empty_photos":
+    if first_failure in {"two_empty_photos", "three_empty_photos", "four_empty_photos"}:
         expected_payloads.append(b"smallest-image")
+    if first_failure in {"three_empty_photos", "four_empty_photos"}:
+        expected_payloads.append(b"400px-image")
     assert upload_urls == [f"https://upload/{index}" for index in range(1, len(expected_payloads) + 1)]
     assert uploaded_payloads == expected_payloads
     assert fallback_inputs == ([] if first_failure == "invalid_json" else [b"image-bytes"])
-    assert save_params["photo"] == "photo-json"
+    assert save_params == ({} if first_failure == "four_empty_photos" else {
+        "group_id": "1", "photo": "photo-json", "server": 7, "hash": "hash-json"
+    })
     assert conversion_qualities == [(95, 0)]
 
 
@@ -630,9 +645,19 @@ def test_vk_upload_fallback_variants_reduce_large_poster_without_invalid_jpeg():
     assert [Image.open(BytesIO(data)).size for data in variants] == [
         (1280, 1600),
         (640, 800),
+        (320, 400),
     ]
     for data in variants:
         main.validate_jpeg_markers(data)
+
+    narrow = Image.new("RGB", (922, 1152), (80, 120, 160))
+    narrow_source = BytesIO()
+    narrow.save(narrow_source, format="WEBP")
+    narrow_variants = main._vk_upload_jpeg_fallback_variants(narrow_source.getvalue())
+    assert [Image.open(BytesIO(data)).size for data in narrow_variants] == [
+        (640, 800),
+        (320, 400),
+    ]
 
 
 @pytest.mark.asyncio

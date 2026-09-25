@@ -2313,7 +2313,7 @@ def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
         width, height = source.size
         if width * height > 20_000_000:
             raise ValueError("VK upload source exceeds 20 MP")
-        for max_side in (1600, 800, 600):
+        for max_side in (1600, 800, 400):
             if max(width, height) <= max_side:
                 continue
             image = ImageOps.exif_transpose(source).convert("RGB")
@@ -2323,7 +2323,7 @@ def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
             variant = output.getvalue()
             validate_jpeg_markers(variant)
             variants.append(variant)
-            if len(variants) == 2:
+            if len(variants) == 3:
                 break
     return variants
 
@@ -4288,7 +4288,7 @@ async def upload_vk_photo(
                     validate_jpeg_markers(img_bytes)
                 upload_bytes = img_bytes
                 fallback_variants: list[bytes] | None = None
-                for upload_attempt in range(1, 4):
+                for upload_attempt in range(1, 5):
                     data = await _vk_api(
                         "photos.getWallUploadServer",
                         {"group_id": group_id.lstrip("-")},
@@ -4344,7 +4344,7 @@ async def upload_vk_photo(
                             except Exception as exc:
                                 logging.warning("vk.upload fallback_prepare_failed owner_id=%s error=%s", owner_id, exc)
                                 fallback_variants = []
-                        if upload_attempt < 3 and fallback_variants:
+                        if upload_attempt < 4 and fallback_variants:
                             upload_bytes = fallback_variants.pop(0)
                             logging.info(
                                 "vk.upload fallback_variant owner_id=%s attempt=%s jpeg_bytes=%s",
@@ -4468,7 +4468,7 @@ async def upload_vk_photo_bytes(
             try:
                 upload_bytes = image_bytes
                 fallback_variants: list[bytes] | None = None
-                for upload_attempt in range(1, 4):
+                for upload_attempt in range(1, 5):
                     data = await _vk_api(
                         "photos.getWallUploadServer",
                         {"group_id": group_id.lstrip("-")},
@@ -4536,7 +4536,7 @@ async def upload_vk_photo_bytes(
                             except Exception as exc:
                                 logging.warning("vk.upload.bytes fallback_prepare_failed owner_id=%s error=%s", owner_id, exc)
                                 fallback_variants = []
-                        if upload_attempt < 3 and fallback_variants:
+                        if upload_attempt < 4 and fallback_variants:
                             upload_bytes = fallback_variants.pop(0)
                             logging.info(
                                 "vk.upload.bytes fallback_variant owner_id=%s attempt=%s jpeg_bytes=%s",
