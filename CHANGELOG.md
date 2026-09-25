@@ -23,6 +23,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK Afisha postponed posts now reconcile their changed public wall IDs every
+  five minutes after publication. One service-token wall read selects recent
+  exact title/date matches; the existing fail-closed recovery updates the
+  stored event and source URLs without requiring a later event edit.
 - Event media that the semantic reviewer describes as a text card without
   promotion of, or identity evidence for, the event is excluded from the
   approved gallery and rejected during review. This prevents an unrelated

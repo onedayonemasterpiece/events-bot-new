@@ -1934,6 +1934,61 @@ async def test_recover_managed_vk_live_url_persists_unique_title_date_match(
 
 
 @pytest.mark.asyncio
+async def test_periodic_live_id_reconcile_scans_with_service_actor_and_unique_header(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_SERVICE_TOKEN", "service-test-token")
+    future_date = "2099-06-20"
+    unique = _event(
+        id=None, date=future_date,
+        source_vk_post_url="https://vk.com/wall-231920894_100",
+    )
+    unique.lifecycle_status = "active"
+    unique.silent = False
+    duplicates = [
+        _event(
+            id=None, title="Повтор", date=future_date,
+            source_vk_post_url=f"https://vk.com/wall-231920894_{post_id}",
+        )
+        for post_id in (101, 102)
+    ]
+    for event in duplicates:
+        event.lifecycle_status = "active"
+        event.silent = False
+    async with db.get_session() as session:
+        session.add(unique)
+        session.add_all(duplicates)
+        await session.commit()
+        await session.refresh(unique)
+        unique_id = int(unique.id)
+
+    async def fake_vk_api(method, params, _db, _bot, **kwargs):
+        assert method == "wall.get"
+        assert params["filter"] == "owner"
+        assert kwargs["token"] == "service-test-token"
+        assert kwargs["token_kind"] == "service"
+        return {"response": {"items": [
+            {"id": 200, "text": "Камерный концерт\n\n📅 20 июня 19:00"},
+            {"id": 201, "text": "Повтор\n\n📅 20 июня 19:00"},
+        ]}}
+
+    recovered = []
+
+    async def fake_recover(_db, event, *, bot):
+        recovered.append(int(event.id))
+        return True
+
+    monkeypatch.setattr(main, "_vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "_recover_managed_vk_live_url", fake_recover)
+    assert await main._reconcile_recent_managed_vk_live_urls(db, bot=None) == 1
+    assert recovered == [unique_id]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_live_managed_vk_item_recovery_fails_closed_when_ambiguous(monkeypatch):
     monkeypatch.setattr(
         main,

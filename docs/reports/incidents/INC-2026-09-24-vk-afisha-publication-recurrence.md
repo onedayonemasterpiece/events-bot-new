@@ -104,6 +104,25 @@ The **initial provider decision** that restricted the rotated token cannot be at
 
 ## Follow-up Actions
 
+### Postponed-to-live URL continuity, 2026-09-25
+
+- A scheduled image-bearing announcement for event 8944 became public at
+  20:54 UTC as `wall-231920894_11409`, with one photo. VK replaced its
+  postponed ID 11401; the completed `vk_sync` job left the stored event URL
+  pointing at 11401. Previously, URL recovery ran only if the event later
+  triggered another `vk_sync` job.
+- The outbox worker now scans the newest 100 public Afisha posts every five
+  minutes using `VK_SERVICE_TOKEN`. It selects only a unique exact title/date
+  match for an active future event with a managed URL, then invokes the
+  existing fail-closed live-ID recovery. Routine scanning does not use the
+  publishing credential. If the old post still exists, the match is
+  ambiguous, or the provider is unavailable, the URL is left untouched.
+- Regression check: a public post with a changed ID and unique title/date
+  recovers the event and `EventSource` URL automatically; duplicate headers
+  cause no rewrite; one service-token scan does not turn into a per-event
+  publisher-token poll. Verify this against the 8944 production transition
+  after release, along with `/healthz` and absence of renewed VK code 9.
+
 ### Stability review, 2026-09-25
 
 - Production remained ready on the 24 September release image. The retained
