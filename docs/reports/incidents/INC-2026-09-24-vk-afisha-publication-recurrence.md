@@ -133,6 +133,16 @@ The **initial provider decision** that restricted the rotated token cannot be at
   remain in force. A manual dynamic-cover metadata read now selects the
   service credential; the user credential remains for the required cover
   upload and publication methods.
+- PR #664 merged with all applicable CI checks green; 121 focused local tests
+  passed. The fix was deployed from clean exact `origin/main` SHA
+  `dee74ccf6320e9273c8844afb4e524a20b25bf98` via
+  `scripts/deploy_fly_main.sh --remote-only` as image
+  `deployment-01M3CZDCS721V3N74MGAYXAWBG`. Production SSH readback matched
+  the embedded SHA, `/healthz` remained ready with no issues, and the retained
+  runtime log scan still had zero VK code-9 entries after the prior recovery.
+  All six media reviews remained due for 26 September 00:05 UTC with matching
+  blocked VK jobs. Release evidence is retained at
+  `/home/dev/artifacts/events-bot-new/20260925T184705Z-vk-stability-followup-20260925/evidence.md`.
 - Follow-up gate: after the 26 September allowance resets, verify that the
   six blocked events enter review before historical rows, their eligible
   images pass the vision date/identity guard, and resulting VK jobs either
