@@ -2304,6 +2304,30 @@ def ensure_jpeg(
     return data, name
 
 
+def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
+    """Smaller 4:4:4 JPEGs for VK upload servers that silently reject a photo."""
+    from PIL import Image, ImageOps
+
+    variants: list[bytes] = []
+    with Image.open(BytesIO(data)) as source:
+        width, height = source.size
+        if width * height > 20_000_000:
+            raise ValueError("VK upload source exceeds 20 MP")
+        for max_side in (1600, 800, 600):
+            if max(width, height) <= max_side:
+                continue
+            image = ImageOps.exif_transpose(source).convert("RGB")
+            image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=95, subsampling=0)
+            variant = output.getvalue()
+            validate_jpeg_markers(variant)
+            variants.append(variant)
+            if len(variants) == 2:
+                break
+    return variants
+
+
 def validate_jpeg_markers(data: bytes) -> None:
     """Ensure JPEG payload contains SOS and EOI markers."""
     if b"\xff\xda" not in data or not data.endswith(b"\xff\xd9"):
@@ -4252,6 +4276,7 @@ async def upload_vk_photo(
                                 return data
 
                 img_bytes = await asyncio.wait_for(_download(), HTTP_TIMEOUT)
+                source_image_bytes = img_bytes
                 try:
                     img_bytes, _ = ensure_jpeg(
                         img_bytes, "image.jpg", quality=95, subsampling=0
@@ -4261,6 +4286,8 @@ async def upload_vk_photo(
                     return None
                 if detect_image_type(img_bytes) == "jpeg":
                     validate_jpeg_markers(img_bytes)
+                upload_bytes = img_bytes
+                fallback_variants: list[bytes] | None = None
                 for upload_attempt in range(1, 4):
                     data = await _vk_api(
                         "photos.getWallUploadServer",
@@ -4275,7 +4302,7 @@ async def upload_vk_photo(
                     form = FormData()
                     form.add_field(
                         "photo",
-                        img_bytes,
+                        upload_bytes,
                         filename="image.jpg",
                         content_type="image/jpeg",
                     )
@@ -4308,10 +4335,23 @@ async def upload_vk_photo(
                             owner_id,
                             actor.label,
                             upload_attempt,
-                            len(img_bytes),
+                            len(upload_bytes),
                             sorted(upload_result) if isinstance(upload_result, dict) else type(upload_result).__name__,
                         )
-                        if upload_attempt < 3:
+                        if fallback_variants is None:
+                            try:
+                                fallback_variants = _vk_upload_jpeg_fallback_variants(source_image_bytes)
+                            except Exception as exc:
+                                logging.warning("vk.upload fallback_prepare_failed owner_id=%s error=%s", owner_id, exc)
+                                fallback_variants = []
+                        if upload_attempt < 3 and fallback_variants:
+                            upload_bytes = fallback_variants.pop(0)
+                            logging.info(
+                                "vk.upload fallback_variant owner_id=%s attempt=%s jpeg_bytes=%s",
+                                owner_id,
+                                upload_attempt + 1,
+                                len(upload_bytes),
+                            )
                             await asyncio.sleep(min(2.0, 0.25 * upload_attempt))
                             continue
                         return None
@@ -4404,6 +4444,7 @@ async def upload_vk_photo_bytes(
             )
             return None
 
+        source_image_bytes = image_bytes
         try:
             image_bytes, filename = ensure_jpeg(
                 image_bytes, filename or "image.jpg", quality=95, subsampling=0
@@ -4425,6 +4466,8 @@ async def upload_vk_photo_bytes(
             )
             actor_token = actor.token if actor.kind == "group" else VK_USER_TOKEN
             try:
+                upload_bytes = image_bytes
+                fallback_variants: list[bytes] | None = None
                 for upload_attempt in range(1, 4):
                     data = await _vk_api(
                         "photos.getWallUploadServer",
@@ -4439,7 +4482,7 @@ async def upload_vk_photo_bytes(
                     form = FormData()
                     form.add_field(
                         "photo",
-                        image_bytes,
+                        upload_bytes,
                         filename=filename or "image.jpg",
                         content_type="image/jpeg",
                     )
@@ -4487,7 +4530,20 @@ async def upload_vk_photo_bytes(
                             upload_attempt,
                             sorted(upload_result.keys()) if isinstance(upload_result, dict) else type(upload_result).__name__,
                         )
-                        if upload_attempt < 3:
+                        if fallback_variants is None:
+                            try:
+                                fallback_variants = _vk_upload_jpeg_fallback_variants(source_image_bytes)
+                            except Exception as exc:
+                                logging.warning("vk.upload.bytes fallback_prepare_failed owner_id=%s error=%s", owner_id, exc)
+                                fallback_variants = []
+                        if upload_attempt < 3 and fallback_variants:
+                            upload_bytes = fallback_variants.pop(0)
+                            logging.info(
+                                "vk.upload.bytes fallback_variant owner_id=%s attempt=%s jpeg_bytes=%s",
+                                owner_id,
+                                upload_attempt + 1,
+                                len(upload_bytes),
+                            )
                             await asyncio.sleep(upload_attempt)
                             continue
                         return None
@@ -19639,9 +19695,12 @@ async def _run_due_jobs_once_locked(
                     logging.info("STATIC_SITE_PENDING_CATCHUP job_id=%s age=%s", obj.id, int(age))
                     age = 0
                 if (
-                    obj.status == JobStatus.pending
-                    and obj.event_id is not None
+                    obj.event_id is not None
                     and obj.task in EVENT_PIPELINE_INDEPENDENT_TASKS
+                    and (
+                        obj.status == JobStatus.pending
+                        or (obj.task == JobTask.vk_sync and obj.status == JobStatus.error)
+                    )
                 ):
                     ev = await session.get(Event, int(obj.event_id))
                     ev_date = (getattr(ev, "date", None) or "").strip() if ev else ""
@@ -19649,10 +19708,10 @@ async def _run_due_jobs_once_locked(
                     ev_silent = bool(getattr(ev, "silent", False)) if ev else True
                     today = now.astimezone(LOCAL_TZ).date().isoformat()
                     if ev and ev_status == "active" and not ev_silent and (not ev_date or ev_date >= today):
-                        # Catch-up after a worker outage/restart: a valid active
-                        # future event should still be publishable even when the
-                        # pending row waited longer than JOB_TTL because the
-                        # whole worker was blocked.
+                        # Catch up valid future work after a worker stall. VK
+                        # transient errors also need this protection: the first
+                        # retry can otherwise expire while media is becoming
+                        # available and permanently lose the announcement.
                         obj.updated_at = now
                         session.add(obj)
                         await session.commit()

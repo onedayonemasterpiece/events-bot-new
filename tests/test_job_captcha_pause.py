@@ -112,6 +112,58 @@ async def test_media_review_budget_prioritizes_blocked_vk_and_future_events(
 
 
 @pytest.mark.asyncio
+async def test_future_vk_error_catches_up_after_worker_delay(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "vk-error-catchup.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(main.LOCAL_TZ).date()
+    async with db.get_session() as session:
+        for name, day_offset in (("future", 7), ("past", -7)):
+            event = Event(
+                title=name,
+                description="d",
+                date=(today + timedelta(days=day_offset)).isoformat(),
+                time="12:00",
+                location_name="loc",
+                source_text="src",
+            )
+            session.add(event)
+            await session.flush()
+            session.add(
+                JobOutbox(
+                    event_id=int(event.id),
+                    task=JobTask.vk_sync,
+                    status=JobStatus.error,
+                    last_error="vk_sync_missing_media_for_telegram_event",
+                    updated_at=now - timedelta(hours=2),
+                    next_run_at=now - timedelta(hours=1),
+                )
+            )
+        await session.commit()
+
+    called = []
+
+    async def record(event_id, _db, _bot):
+        called.append(int(event_id))
+        return False
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "vk_sync", record)
+    assert await main._run_due_jobs_once(db, None) == 1
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(JobOutbox, Event)
+                .join(Event, Event.id == JobOutbox.event_id)
+                .where(JobOutbox.task == JobTask.vk_sync)
+            )
+        ).all()
+    await db.engine.dispose()
+    assert len(called) == 1
+    assert next(job.status for job, event in rows if event.title == "future") == JobStatus.done
+    assert next(job.last_error for job, event in rows if event.title == "past") == "expired"
+
+
+@pytest.mark.asyncio
 async def test_vk_jobs_paused_and_resumed(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

@@ -23,6 +23,11 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK Afisha fresh-event delivery (`INC-2026-09-24`): an active future
+  `vk_sync` error no longer expires permanently while waiting for its retry.
+  If VK's upload server silently returns an empty `photo`, the uploader tries
+  bounded smaller 4:4:4 JPEG variants instead of resending the same rejected
+  bytes three times. Exact-media fail-closed publication remains in force.
 - VK Afisha stability follow-up (`INC-2026-09-24`): media reviews that block
   an active future event's VK publication now run before ordinary review work;
   VK publication runs before ordinary media enrichment, and remaining reviews
