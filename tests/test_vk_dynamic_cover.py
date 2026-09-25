@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -140,12 +140,13 @@ async def test_upload_owner_cover_uses_vk_owner_cover_flow(tmp_path: Path, monke
 @pytest.mark.asyncio
 async def test_fetch_current_owner_cover_url_uses_largest_vk_cover(monkeypatch):
     monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+    monkeypatch.setattr(main, "VK_SERVICE_TOKEN", "service-token")
 
     async def fake_vk_api(method, params, db=None, bot=None, token=None, token_kind="group", **_kwargs):
         assert method == "groups.getById"
         assert params == {"group_id": "231920894", "fields": "cover"}
-        assert token == "user-token"
-        assert token_kind == "user"
+        assert token == "service-token"
+        assert token_kind == "service"
         return {
             "response": {
                 "groups": [
@@ -256,13 +257,14 @@ async def test_apply_dynamic_cover_records_history_without_publish(tmp_path: Pat
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
     monkeypatch.setenv("VK_DYNAMIC_COVER_GROUP_ID", "231920894")
+    today = datetime.now(timezone.utc).date()
 
     async with db.get_session() as session:
         session.add(
             Festival(
                 name="Кантата",
-                start_date="2026-06-01",
-                end_date="2026-06-30",
+                start_date=(today - timedelta(days=1)).isoformat(),
+                end_date=(today + timedelta(days=30)).isoformat(),
                 city="Калининград",
             )
         )

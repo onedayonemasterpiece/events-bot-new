@@ -543,7 +543,7 @@ async def fetch_current_owner_cover_url(
 ) -> str | None:
     import main as main_mod
 
-    token = str(getattr(main_mod, "VK_USER_TOKEN", "") or os.getenv("VK_ACCESS_TOKEN4") or "").strip()
+    token = str(getattr(main_mod, "VK_SERVICE_TOKEN", "") or "").strip()
     vk_api_call = getattr(main_mod, "_vk_api")
     gid = str(group_id).strip().lstrip("-")
     if not gid:
@@ -554,7 +554,7 @@ async def fetch_current_owner_cover_url(
         db,
         bot,
         token=token or None,
-        token_kind="user" if token else "group",
+        token_kind="service" if token else "group",
     )
     groups = _extract_vk_groups(raw)
     for group in groups:

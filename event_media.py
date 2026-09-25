@@ -1779,20 +1779,25 @@ def _media_role_prompt(event: Event, poster: EventPoster) -> str:
 
 def _media_role_candidate_condition(context_hash: str, *, now: datetime | None = None):
     eligible_at = now or datetime.now(timezone.utc)
-    return or_(
-        EventPoster.media_semantic_status.is_(None),
-        EventPoster.media_semantic_status == "stale",
-        and_(
-            EventPoster.media_semantic_status == "pending",
-            or_(
-                EventPoster.media_semantic_classified_at.is_(None),
-                EventPoster.media_semantic_classified_at <= eligible_at,
-            ),
+    return and_(
+        # A daily-budget or provider retry is authoritative even when a legacy
+        # prompt version differs. Otherwise the old-version OR branch selects
+        # the same pending poster again before its scheduled retry.
+        or_(
+            EventPoster.media_semantic_status.is_(None),
+            EventPoster.media_semantic_status != "pending",
+            EventPoster.media_semantic_classified_at.is_(None),
+            EventPoster.media_semantic_classified_at <= eligible_at,
         ),
-        EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
-        EventPoster.media_semantic_prompt_version.is_(None),
-        EventPoster.media_semantic_context_hash != context_hash,
-        EventPoster.media_semantic_context_hash.is_(None),
+        or_(
+            EventPoster.media_semantic_status.is_(None),
+            EventPoster.media_semantic_status == "stale",
+            EventPoster.media_semantic_status == "pending",
+            EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
+            EventPoster.media_semantic_prompt_version.is_(None),
+            EventPoster.media_semantic_context_hash != context_hash,
+            EventPoster.media_semantic_context_hash.is_(None),
+        ),
     )
 
 

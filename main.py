@@ -19485,8 +19485,8 @@ async def _run_due_jobs_once_locked(
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
     priority = {
-        JobTask.event_media_review: -2,
-        JobTask.vk_sync: -1,
+        JobTask.event_media_review: -1,
+        JobTask.vk_sync: -2,
         JobTask.telegraph_build: 0,
         JobTask.tg_event_publish: 0,
         JobTask.tg_premium_emoji_edit: 0,
@@ -19529,8 +19529,54 @@ async def _run_due_jobs_once_locked(
             }
     fresh_cutoff = now - _tg_event_publish_fresh_queue_horizon()
 
+    media_review_event: dict[int, tuple[str, str, bool]] = {}
+    media_review_ids = sorted(
+        {int(j.event_id) for j in jobs if j.task == JobTask.event_media_review and j.event_id is not None}
+    )
+    blocked_media_event_ids: set[int] = set()
+    if media_review_ids:
+        async with db.get_session() as session:
+            event_rows = (
+                await session.execute(
+                    select(Event.id, Event.date, Event.lifecycle_status, Event.silent).where(
+                        Event.id.in_(media_review_ids)
+                    )
+                )
+            ).all()
+            media_review_event = {
+                int(event_id): (str(event_date or ""), str(lifecycle or "active"), bool(silent))
+                for event_id, event_date, lifecycle, silent in event_rows
+            }
+            blocked_media_event_ids = {
+                int(event_id)
+                for event_id in (
+                    await session.execute(
+                        select(JobOutbox.event_id).where(
+                            JobOutbox.event_id.in_(media_review_ids),
+                            JobOutbox.task == JobTask.vk_sync,
+                            JobOutbox.status == JobStatus.error,
+                            JobOutbox.last_error.like("vk_sync_missing_materialized_media%"),
+                        )
+                    )
+                ).scalars()
+            }
+    media_today = now.astimezone(LOCAL_TZ).date().isoformat()
+
     def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
         task_priority = priority.get(j.task, 99)
+        if j.task == JobTask.event_media_review and j.event_id is not None:
+            event_id = int(j.event_id)
+            event_date, lifecycle, silent = media_review_event.get(event_id, ("", "", True))
+            eligible = lifecycle == "active" and not silent and event_date >= media_today
+            # A missing-media VK announcement must get the next available
+            # semantic-review allowance. Ordinary future reviews follow event
+            # date; old events cannot exhaust the daily model budget first.
+            date_rank = int(event_date.replace("-", "")) if len(event_date) == 10 and event_date.replace("-", "").isdigit() else 99999999
+            if eligible and event_id in blocked_media_event_ids:
+                return (-3, 0, date_rank, j.id)
+            if eligible:
+                return (task_priority, 0, date_rank, j.id)
+            return (task_priority, 1, j.id, 0)
         if j.task == JobTask.tg_event_publish and j.event_id is not None:
             event_id = int(j.event_id)
             added_at = tg_event_added_at.get(event_id)

@@ -104,6 +104,41 @@ The **initial provider decision** that restricted the rotated token cannot be at
 
 ## Follow-up Actions
 
+### Stability review, 2026-09-25
+
+- Production remained ready on the 24 September release image. The retained
+  runtime log window since 24 September 15:26 UTC had zero VK code-9 errors,
+  zero actor flood blocks and zero `vk_flood_wait` entries. Recent half-hourly
+  social-metrics imports completed with zero VK error snapshots, and an
+  authenticated wall readback found new photo-bearing event posts through
+  25 September 18:44 UTC. This supports recovery of the publishing actor;
+  it does not prove future provider availability.
+- A separate media-review scheduling defect threatened six future linked
+  events (8794, 8915, 8930, 8932, 8934 and 9293). Each had an approved legacy
+  or pending image, no eligible classified gallery image, and a repeating
+  `vk_sync_missing_materialized_media` error. The fail-closed guard prevented
+  an inaccurate text-only or wrong-image announcement. Their next media
+  review was queued for 26 September 00:05 UTC.
+- The semantic-role allowance was exhausted at 150/150 on both 24 and 25
+  September. Of 130 role classifications completed on 25 September, 120 were
+  for already past events, five for events within seven days and five for later
+  events. The outbox sorted media reviews by job id ahead of VK publication,
+  regardless of event date or blocked delivery. A second condition selected
+  legacy prompt-version rows before their scheduled daily-budget retry.
+- Corrective code reserves first place for due media reviews with a matching
+  blocked VK job on an active future event, then processes due VK jobs, then
+  ordinary media reviews ordered by future event date before past events.
+  It also respects the pending role retry time across prompt versions. The
+  existing 150-call daily allowance and the source-bound vision identity gate
+  remain in force. A manual dynamic-cover metadata read now selects the
+  service credential; the user credential remains for the required cover
+  upload and publication methods.
+- Follow-up gate: after the 26 September allowance resets, verify that the
+  six blocked events enter review before historical rows, their eligible
+  images pass the vision date/identity guard, and resulting VK jobs either
+  publish exact media or retain a source-specific blocked reason. Alerting on
+  prolonged absence of fresh managed VK posts remains open.
+
 - [x] Route the half-hourly Kaggle social-metrics VK reads to the service token; add a typed provider code-9 result and stop the VK lane after the first flood response. Deployed and credential separation verified.
 - [ ] Audit the remaining lower-volume publisher-token readers (`poll_to_forward_popularity`, promo and dynamic-cover paths) and enforce one per-credential budget across Fly and remote consumers.
 - [x] Finish the second photo-encoding hotfix and verify public photo-bearing readback for event 9278.
