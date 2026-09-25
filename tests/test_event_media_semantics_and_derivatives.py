@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 from PIL import Image
+from sqlmodel import select
 
 import event_media
 from db import Database
@@ -920,6 +922,57 @@ async def test_pending_semantic_role_does_not_starve_geometry(
     await db.engine.dispose()
     assert changed is True
     assert calls == [("semantic", ids[1]), ("geometry", ids[1])]
+
+
+@pytest.mark.asyncio
+async def test_legacy_semantic_role_respects_future_budget_retry(tmp_path) -> None:
+    db = Database(str(tmp_path / "legacy-semantic-retry.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Future review",
+            description="Описание",
+            date="2099-01-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="f" * 64,
+            review_status="approved",
+            media_semantic_status="pending",
+            media_semantic_prompt_version="event-media-role-v1",
+            media_semantic_classified_at=now + timedelta(hours=4),
+        )
+        session.add(poster)
+        await session.commit()
+        context_hash = event_media._context_hash(event)
+        poster_id = int(poster.id)
+        early = (
+            await session.execute(
+                select(EventPoster.id).where(
+                    EventPoster.id == poster_id,
+                    event_media._media_role_candidate_condition(context_hash, now=now),
+                )
+            )
+        ).scalar_one_or_none()
+        due = (
+            await session.execute(
+                select(EventPoster.id).where(
+                    EventPoster.id == poster_id,
+                    event_media._media_role_candidate_condition(
+                        context_hash, now=now + timedelta(hours=5)
+                    ),
+                )
+            )
+        ).scalar_one_or_none()
+    await db.engine.dispose()
+    assert early is None
+    assert due == poster_id
 
 
 @pytest.mark.asyncio

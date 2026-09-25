@@ -57,6 +57,61 @@ async def test_vk_flood_defers_outbox_without_immediate_retry(tmp_path, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_media_review_budget_prioritizes_blocked_vk_and_future_events(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "media-priority.sqlite"))
+    await db.init()
+    today = datetime.now(main.LOCAL_TZ).date()
+    specs = [
+        ("past", -2),
+        ("later", 30),
+        ("near", 2),
+        ("blocked", 3),
+        ("publish", 4),
+    ]
+    ids = {}
+    async with db.get_session() as session:
+        for name, offset in specs:
+            event = Event(
+                title=name,
+                description="d",
+                date=(today + timedelta(days=offset)).isoformat(),
+                time="12:00",
+                location_name="loc",
+                source_text="src",
+            )
+            session.add(event)
+            await session.flush()
+            ids[name] = int(event.id)
+            if name != "publish":
+                session.add(JobOutbox(event_id=event.id, task=JobTask.event_media_review))
+        session.add(JobOutbox(event_id=ids["publish"], task=JobTask.vk_sync))
+        session.add(
+            JobOutbox(
+                event_id=ids["blocked"],
+                task=JobTask.vk_sync,
+                status=JobStatus.error,
+                last_error="vk_sync_missing_materialized_media",
+                next_run_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+        )
+        await session.commit()
+
+    order = []
+
+    async def record(event_id, _db, _bot):
+        order.append(int(event_id))
+        return False
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "event_media_review", record)
+    monkeypatch.setitem(main.JOB_HANDLERS, "vk_sync", record)
+    assert await main._run_due_jobs_once(db, None) == 5
+    await db.engine.dispose()
+    assert order == [ids[name] for name in ("blocked", "publish", "near", "later", "past")]
+
+
+@pytest.mark.asyncio
 async def test_vk_jobs_paused_and_resumed(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

@@ -23,6 +23,12 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK Afisha stability follow-up (`INC-2026-09-24`): media reviews that block
+  an active future event's VK publication now run before ordinary review work;
+  VK publication runs before ordinary media enrichment, and remaining reviews
+  favor upcoming events over past ones. A legacy role prompt no longer bypasses
+  a scheduled daily-budget retry. The manual dynamic-cover read uses the VK
+  service credential rather than the publishing user credential.
 - A semantic rejection of an exact hosted event image now survives a source
   reimport with a new candidate hash. Reincarnated rows stay out of the public
   gallery, and VK clears stale attachments while a linked child has no
