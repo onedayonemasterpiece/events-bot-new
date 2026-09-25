@@ -23,6 +23,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- Event media that the semantic reviewer describes as a text card without
+  promotion of, or identity evidence for, the event is excluded from the
+  approved gallery and rejected during review. This prevents an unrelated
+  source news image from reappearing in a future VK announcement.
 - VK Afisha fresh-event delivery (`INC-2026-09-24`): an active future
   `vk_sync` error no longer expires permanently while waiting for its retry.
   If VK's upload server silently returns an empty `photo`, the uploader tries
