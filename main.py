@@ -16118,6 +16118,86 @@ async def _recover_managed_vk_live_url(
     return True
 
 
+async def _reconcile_recent_managed_vk_live_urls(
+    db: Database,
+    *,
+    bot: Bot | None,
+) -> int:
+    """Find newly public Afisha posts with stale postponed URLs in one wall read.
+
+    The broad scan uses the service credential. Only an exact, unique
+    title/date match reaches the existing fail-closed per-event recovery.
+    This keeps routine wall polling off the publishing user credential.
+    """
+
+    target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
+    if not VK_SERVICE_TOKEN or not target_group_id:
+        return 0
+    owner_id = -int(target_group_id)
+    data = await _vk_api(
+        "wall.get",
+        {"owner_id": owner_id, "filter": "owner", "count": 100},
+        db,
+        bot,
+        token=VK_SERVICE_TOKEN,
+        token_kind="service",
+        skip_captcha=True,
+    )
+    live_items = _vk_postponed_items(data)
+    if not live_items:
+        return 0
+    today = datetime.now(LOCAL_TZ).date().isoformat()
+    async with db.get_session() as session:
+        events = list(
+            (
+                await session.execute(
+                    select(Event).where(
+                        Event.lifecycle_status == "active",
+                        Event.silent == False,  # noqa: E712
+                        Event.date >= today,
+                        Event.source_vk_post_url.like(
+                            f"https://vk.com/wall{owner_id}_%"
+                        ),
+                    )
+                )
+            ).scalars()
+        )
+    by_header: dict[tuple[str, str], list[Event]] = {}
+    for ev in events:
+        expected_date = next(
+            (
+                str(line).strip()
+                for line in build_vk_source_header(ev, None)
+                if str(line).startswith("\U0001f4c5 ")
+            ),
+            "",
+        )
+        if expected_date:
+            by_header.setdefault((str(ev.title or "").strip(), expected_date), []).append(ev)
+    matched_items: dict[int, list[dict]] = {}
+    for item in live_items:
+        lines = [line.strip() for line in str(item.get("text") or "").splitlines() if line.strip()]
+        if not lines:
+            continue
+        for date_line in lines[1:]:
+            candidates = by_header.get((lines[0], date_line), [])
+            if len(candidates) == 1:
+                matched_items.setdefault(int(candidates[0].id), []).append(item)
+    recovered = 0
+    for ev in events:
+        matches = matched_items.get(int(ev.id), [])
+        if len(matches) != 1:
+            continue
+        old_ids = _vk_owner_and_post_id(str(ev.source_vk_post_url or ""))
+        if not old_ids or int(matches[0].get("id") or 0) == int(old_ids[1]):
+            continue
+        if await _recover_managed_vk_live_url(db, ev, bot=bot):
+            recovered += 1
+        if recovered >= 10:
+            break
+    return recovered
+
+
 def _event_vk_publish_end_date(ev: Event) -> date | None:
     end_raw = (getattr(ev, "end_date", None) or "").strip()
     if end_raw:
@@ -20485,6 +20565,7 @@ async def _watch_nav_jobs(db: Database, bot: Bot) -> None:
 
 async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
     last_log = 0.0
+    last_vk_live_reconcile = 0.0
     while True:
         try:
             async def notifier(
@@ -20518,6 +20599,15 @@ async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
                 fest_map if fest_map else None,
             )
             await _watch_nav_jobs(db, bot)
+            if _time.monotonic() - last_vk_live_reconcile >= 300.0:
+                # VK assigns a new public id when a postponed post goes live.
+                # Reconcile from one service-token wall read, independently of
+                # future edits to the event or manual job requeues.
+                last_vk_live_reconcile = _time.monotonic()
+                try:
+                    await _reconcile_recent_managed_vk_live_urls(db, bot=bot)
+                except Exception:
+                    logging.exception("vk.live-id periodic reconciliation failed")
             _mark_job_outbox_worker_cycle_ok()
         except Exception as exc:  # pragma: no cover - log unexpected errors
             _mark_job_outbox_worker_cycle_error(exc)
