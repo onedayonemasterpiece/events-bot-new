@@ -27,6 +27,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- Missing event media no longer drives hourly VK publication and CDN-review
+  retries. The publication remains fail-closed; known missing-media jobs check
+  at most once on the next UTC day, past events stop retrying, and routine
+  absence does not send an operator notification or stack trace.
 - VK auto import storage incident (`INC-2026-09-26`): the critical watchdog
   now checks disk headroom before catch-up and persists a 15-minute hold after
   other terminal failures, preventing repeated operator notices every minute.

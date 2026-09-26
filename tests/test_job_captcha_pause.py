@@ -8,6 +8,89 @@ from main import Database, Event, JobOutbox, JobTask, JobStatus
 
 
 @pytest.mark.asyncio
+async def test_past_event_update_does_not_enqueue_missing_media_review(tmp_path, monkeypatch):
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
+    db = Database(str(tmp_path / "past-media-update.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Past event", description="d", source_text="src",
+            date="2025-01-01", time="12:00", location_name="loc",
+            photo_urls=[],
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+    await main.schedule_event_update_tasks(db, event)
+    async with db.get_session() as session:
+        review_jobs = (
+            await session.execute(
+                select(JobOutbox).where(JobOutbox.task == JobTask.event_media_review)
+            )
+        ).scalars().all()
+    await db.engine.dispose()
+    assert review_jobs == []
+
+
+@pytest.mark.asyncio
+async def test_missing_media_does_not_start_hourly_retry_or_notify(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "missing-media.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(main.LOCAL_TZ).date()
+    async with db.get_session() as session:
+        for name, offset in (("future", 7), ("past", -7)):
+            event = Event(
+                title=name, description="d", source_text="src",
+                date=(today + timedelta(days=offset)).isoformat(),
+                time="12:00", location_name="loc",
+            )
+            session.add(event)
+            await session.flush()
+            session.add_all([
+                JobOutbox(event_id=int(event.id), task=JobTask.vk_sync),
+                JobOutbox(event_id=int(event.id), task=JobTask.event_media_review),
+            ])
+        await session.commit()
+
+    async def missing_vk(_event_id, _db, _bot):
+        raise RuntimeError("vk_sync_missing_materialized_media")
+
+    async def missing_review(event_id, _db, _bot):
+        raise RuntimeError(
+            f"event_media_cdn_materialization_pending:event_id={event_id}:failed=1"
+        )
+
+    notices = []
+    async def notify(*args):
+        notices.append(args)
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "vk_sync", missing_vk)
+    monkeypatch.setitem(main.JOB_HANDLERS, "event_media_review", missing_review)
+    assert await main._run_due_jobs_once(db, None, notify) == 4
+    assert await main._run_due_jobs_once(db, None, notify) == 0
+    assert notices == []
+
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(JobOutbox, Event).join(Event, Event.id == JobOutbox.event_id)
+            )
+        ).all()
+    await db.engine.dispose()
+    expected_future = main._next_missing_event_media_check(now)
+    for job, event in rows:
+        assert job.status == JobStatus.error
+        assert job.attempts == 1
+        next_run = job.next_run_at.replace(tzinfo=timezone.utc) if job.next_run_at.tzinfo is None else job.next_run_at
+        if event.title == "future":
+            assert next_run == expected_future
+        else:
+            assert next_run >= now + timedelta(days=3650) - timedelta(minutes=1)
+
+
+@pytest.mark.asyncio
 async def test_vk_flood_defers_outbox_without_immediate_retry(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

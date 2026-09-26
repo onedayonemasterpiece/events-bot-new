@@ -256,6 +256,39 @@ The **initial provider decision** that restricted the rotated token cannot be at
   outcomes and Afisha wall readback. A missing or wrong image must remain
   blocked for source-specific repair.
 
+### Missing-media retry storm, 2026-09-26
+
+- Operator clarification: an event without a suitable image must remain
+  unpublished. Missing media alone is not a reason to repeat a publication
+  attempt every hour or notify on every attempt.
+- Read-only production audit at 15:38 UTC found eight future VK jobs with
+  `vk_sync_missing_materialized_media` and 253 CDN review jobs with
+  `event_media_cdn_materialization_pending`. Of those review jobs, 217 belong
+  to past events; their attempt counters summed to 46,330 and one reached 694.
+  The 36 future review jobs had another 3,643 attempts. This is a scheduler
+  retry storm even where Telegram operator messages are absent.
+- Root cause: the generic JobOutbox exception path treated a missing or
+  unreachable source image as a transient failure, eventually retrying every
+  hour. The event-update scheduler also kept enqueuing media reviews for fully
+  past events. This is mechanical retry policy, not an event-meaning decision.
+- Immediate containment: in one conditional SQLite transaction, deferred the
+  36 future CDN and eight future VK missing-media errors to September 27
+  00:05 UTC; parked the 217 past CDN review errors for ten years. No event
+  content, source evidence or public post was changed. Exact prior job rows
+  and applied counts are retained at
+  `/home/dev/artifacts/events-bot-new/20260926T140708Z-vk-auto-storage-20260926/`.
+- Durable policy: recognized missing-media errors get one next-day retry
+  after the media-role allowance resets; jobs for past, inactive or silent
+  events are parked. They remain visible in JobOutbox without routine operator
+  notifications or exception tracebacks. An event update can still requeue a
+  job when media evidence changes. Fully past events no longer enqueue new
+  automatic media reviews. All other error classes keep their existing retry
+  policy.
+- Regression checks: one known missing-media attempt on a future event is
+  deferred to the next UTC day and sends no notification; a past event is
+  parked; an immediate second worker cycle runs neither job. Verify unrelated
+  VK provider errors retain their own backoff and fail-closed publication.
+
 ## Release And Closure Evidence
 
 - Deployed first hotfix SHA: `6df3aa0484bf306bd16dd9f5059792677bb5887d`, merged via PR #655; Fly machine `48e419df93e078`, version `2078` after secret rotation, image `deployment-01M39RD6WGEJJWXSYSAC3V4Q4K`.
