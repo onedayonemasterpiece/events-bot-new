@@ -1141,6 +1141,40 @@ async def _claim_feature_budget(session: Any, stage: str, limit: int) -> bool:
     return bool(int(changed or 0))
 
 
+async def _claim_semantic_role_budget(session: Any, event: Event, limit: int) -> bool:
+    """Keep part of the existing daily allowance for blocked future VK posts.
+
+    Ordinary review backlog can consume the day shortly after midnight, before
+    a future event's source image or retry is ready. One shared counter keeps
+    the total provider-call limit unchanged for both classes.
+    """
+
+    reserved = max(1, limit // 5) if limit > 0 else 0
+    now_day = datetime.now(timezone.utc).date().isoformat()
+    eligible = (
+        str(getattr(event, "date", "") or "") >= now_day
+        and str(getattr(event, "lifecycle_status", "active") or "active") == "active"
+        and not bool(getattr(event, "silent", False))
+    )
+    blocked = False
+    if eligible:
+        blocked = (
+            await session.execute(
+                select(JobOutbox.id)
+                .where(
+                    JobOutbox.event_id == int(event.id),
+                    JobOutbox.task == JobTask.vk_sync,
+                    JobOutbox.status == JobStatus.error,
+                    JobOutbox.last_error.like("vk_sync_missing_materialized_media%"),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none() is not None
+    return await _claim_feature_budget(
+        session, "semantic_role", limit if blocked else max(0, limit - reserved)
+    )
+
+
 def _parse_json_object(raw: str) -> dict[str, Any] | None:
     text_value = str(raw or "").strip()
     if text_value.startswith("```"):
@@ -1901,10 +1935,8 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
         role_visual_identity = _poster_visual_identity_snapshot(poster)
         media = await _download_poster(poster)
         model = (os.getenv("EVENT_MEDIA_ROLE_MODEL") or "gemini-3.1-flash-lite").strip()
-        if not await _claim_feature_budget(
-            session,
-            "semantic_role",
-            _env_int("EVENT_MEDIA_ROLE_DAILY_CALLS", 150, lo=0, hi=5000),
+        if not await _claim_semantic_role_budget(
+            session, event, _env_int("EVENT_MEDIA_ROLE_DAILY_CALLS", 150, lo=0, hi=5000)
         ):
             retry_at = _next_utc_day()
             poster.media_semantic_status = "pending"
