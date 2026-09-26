@@ -1007,16 +1007,15 @@ def run(cmd: list[str], cwd: Path = ROOT, env: dict[str, str] | None = None) -> 
 def preview_export_env(args: argparse.Namespace) -> dict[str, str]:
     """Keep real Review Preview aligned with the public build wrappers.
 
-    The exporter runs before Astro and therefore cannot inherit the wrappers'
-    default-on confirmed-club flags.  Missing flags must not silently replace
-    the reviewed projection with an empty catalogue; an explicit ``0`` remains
-    the rollback and is preserved.
+    The exporter runs before Astro and therefore cannot rely on wrapper defaults.
+    A real Review Preview always carries the approved-club projection; inherited
+    host values must not silently turn the reviewed catalogue into an empty one.
     """
 
     env = os.environ.copy()
     if args.profile == 'preview' and args.preview_data_mode == 'real':
-        env.setdefault('ENABLE_INTEREST_CLUB_STATIC_PROJECTION', '1')
-        env.setdefault('PUBLIC_INTEREST_CLUBS_ENABLED', '1')
+        env['ENABLE_INTEREST_CLUB_STATIC_PROJECTION'] = '1'
+        env['PUBLIC_INTEREST_CLUBS_ENABLED'] = '1'
     return env
 
 

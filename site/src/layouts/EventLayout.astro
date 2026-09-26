@@ -2494,6 +2494,27 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       body[data-shell-composition="home-navigation-only"] .site-header__inner {
         height:auto; min-height:0; padding-block-end:var(--ke-space-3);
       }
+      @media (min-width:760px) {
+        body[data-shell-composition="home-navigation-only"] .site-header__brand-tag {
+          position:fixed;
+          top:0;
+          z-index:61;
+        }
+        body[data-shell-composition="event-navigation-only"] .site-header {
+          position:absolute;
+          inset:0 0 auto;
+          height:0;
+          min-height:0;
+          background:transparent;
+          border:0;
+          box-shadow:none;
+        }
+        body[data-shell-composition="event-navigation-only"] .site-header__inner {
+          height:auto;
+          min-height:0;
+          padding-block-end:var(--ke-space-3);
+        }
+      }
       @media (max-width:759px) {
         body[data-shell-composition="home-navigation-only"] .site-header__brand-tag { display:none; }
       }
@@ -2503,7 +2524,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       body[data-lower-surface-state="keyboard"] .mobile-bottom-nav { visibility:hidden; pointer-events:none; }
     </style>
   </head>
-  <body data-exhibitions-theme={headerCurrent === 'exhibitions' ? 'graphite' : undefined} class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="4" data-shell-composition={shellComposition.id} data-shell-composition-version={shellComposition.version} data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingPageContext ? 'site' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body data-exhibitions-theme={headerCurrent === 'exhibitions' ? 'graphite' : undefined} class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="5" data-shell-composition={shellComposition.id} data-shell-composition-version={shellComposition.version} data-desktop-section-context={shellComposition.desktopSectionContext} data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingPageContext ? 'site' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
@@ -3965,6 +3986,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         const PERSONAL_FEED_CHUNK_SIZE = 6;
+        const PERSONAL_FEED_DESKTOP_INITIAL_SIZE = 12;
         const PERSONAL_FEED_RENDER_LIMIT = 18;
         const EVENT_DETAIL_CONTINUATION_LIMIT = 6;
         const personalFeedStores = new WeakMap();
@@ -4007,7 +4029,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const slot = section.querySelector('[data-personal-feed-slot]');
           const loadMore = section.querySelector('[data-personal-feed-load-more]');
           if (!store || !slot || !personalFeedSectionCanHydrate(section)) return 0;
-          const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
+          const chunkSize = store.rendered === 0
+            && section.dataset.listingContext === 'for-me'
+            && personalFeedUsesDesktopRows()
+            ? PERSONAL_FEED_DESKTOP_INITIAL_SIZE
+            : PERSONAL_FEED_CHUNK_SIZE;
+          const end = Math.min(store.items.length, store.rendered + chunkSize);
           const chunk = store.items.slice(store.rendered, end);
           let appended = 0;
           let nextRendered = end;

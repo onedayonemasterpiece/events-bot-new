@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "9e6fee4a7a9fc8755d8c0a6450436e8c67f1399b0143b7b2ed3145fddacabbc9",
+  "registry_sha256": "ba4fe5003e841f941fc3cb4a46e97d4fd0f21fe86e5b78c3b67f9b7890e2c37e",
   "source_root": "site/src",
   "import_inventory_sha256": "c5b388da9f6cb8cf4cc2f49fbb2a061e9eb3a70ea0adf0d186b14d835a44cfbb",
   "product_scope": {
@@ -1175,7 +1175,7 @@
       ]
     },
     "EventLayout": {
-      "version": 4,
+      "version": 5,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro",
@@ -3707,7 +3707,7 @@
       ]
     },
     "HomeHeroTalk": {
-      "version": 4,
+      "version": 5,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
@@ -3794,7 +3794,7 @@
       "production_route_sources": []
     },
     "PersonalFeedSlot": {
-      "version": 3,
+      "version": 4,
       "astro_root": "site/src/components/PersonalFeedSlot.astro",
       "style_owners": [
         "site/src/components/PersonalFeedSlot.astro"

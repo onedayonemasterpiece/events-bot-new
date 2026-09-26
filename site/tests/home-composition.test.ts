@@ -10,20 +10,24 @@ import type { PreviewEvent } from '../src/lib/types';
 const source=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
 const home:HeroTalkPlacementContext={route:'home',placement:'page_end',readyCapabilities:['search']};
 
-test('home alone selects lower-only participants before mount; other archetypes unchanged',()=>{
- for(const path of ['/',''])assert.deepEqual(shellCompositionForRoute(path),{version:'shell-composition-v1',id:'home-navigation-only',topParticipants:false,globalNavigation:true,brandInFlow:false,lowerNavigation:'afisha'});
- for(const path of ['/poisk','/segodnya','/podborki/besplatnye-sobytiya','/vyhodnye','/sobytiya/event','/populyarnoe']) {
-  const policy=shellCompositionForRoute(path);assert.equal(policy.id,'contextual');assert.equal(policy.topParticipants,true);assert.equal(policy.brandInFlow,false);
+test('route shell policy selects only participants that belong to that archetype',()=>{
+ for(const path of ['/',''])assert.deepEqual(shellCompositionForRoute(path),{version:'shell-composition-v2',id:'home-navigation-only',topParticipants:false,globalNavigation:true,brandInFlow:false,lowerNavigation:'afisha',desktopSectionContext:'section'});
+ const event=shellCompositionForRoute('/sobytiya/event');assert.equal(event.id,'event-navigation-only');assert.equal(event.topParticipants,false);assert.equal(event.globalNavigation,true);
+ const today=shellCompositionForRoute('/segodnya');assert.equal(today.id,'contextual');assert.equal(today.topParticipants,true);assert.equal(today.desktopSectionContext,'none');
+ for(const path of ['/poisk','/zavtra','/date-2026-09-27','/podborki/besplatnye-sobytiya','/vyhodnye','/populyarnoe']) {
+  const policy=shellCompositionForRoute(path);assert.equal(policy.id,'contextual');assert.equal(policy.topParticipants,true);assert.equal(policy.brandInFlow,false);assert.equal(policy.desktopSectionContext,'section');
  }
 });
-test('home does not even query titles or register upper floating listeners',()=>{
+test('desktop shell CSS keeps Home tag pinned and event detail navigation-only without restoring a header bar',()=>{
  const layout=source('../src/layouts/EventLayout.astro');
- const start=layout.indexOf("if (document.body.dataset.shellComposition !== 'home-navigation-only')");
- const end=layout.indexOf('// AR-17',start);
- const unexpected=()=>{throw Error('upper runtime executed on lower-only home');};
- const state={document:{body:{dataset:{shellComposition:'home-navigation-only'}},querySelector:unexpected,addEventListener:unexpected},window:{addEventListener:unexpected},matchMedia:unexpected};
- vm.runInNewContext(stripTypeScriptTypes(layout.slice(start,end)),state);
- assert.ok(start>=0&&end>start);assert.match(layout.slice(start,end),/window\.addEventListener\('scroll',scheduleContext/);
+ assert.match(layout,/data-desktop-section-context=\{shellComposition\.desktopSectionContext\}/u);
+ assert.match(layout,/data-shell-composition="home-navigation-only"\] \.site-header__brand-tag \{[\s\S]{0,160}position:fixed;[\s\S]{0,160}top:0;/u);
+ assert.match(layout,/data-shell-composition="event-navigation-only"\] \.site-header \{[\s\S]{0,220}height:0;[\s\S]{0,120}background:transparent;/u);
+});
+test('home removes upper floating participants before mount while retaining global navigation',()=>{
+ const layout=source('../src/layouts/EventLayout.astro');
+ assert.match(layout,/const hasFloatingPageContext = shellComposition\.topParticipants && userIslandRoute\(routePath\)/u);
+ assert.match(layout,/\{hasFloatingPageContext && \(\s*<div class="site-header__top-band"/u);
  assert.match(layout, /shellComposition\.globalNavigation && <Reference4MobileMenu/);
  assert.match(layout, /shellComposition\.globalNavigation && <nav class="site-nav"/);
 });
@@ -47,13 +51,13 @@ test('empty/stale Hero deck has useful generic scene while current photo/text mo
  }
  const current={...old,id:2,start_date:'2026-09-07',title:'Текущее событие'};
  const deck=buildHomeHeroTalkDeck([current],'2026-09-06','fixture');assert.equal(deck.length,1);assert.equal(deck[0].mode,'text-only');assert.equal(deck[0].event.id,2);
- const hero=source('../src/components/HomeHeroTalk.astro');assert.match(hero,/visibleScenes.length === 0/);assert.match(hero,/data-ds-variant="service-fallback"/);assert.match(hero,/data-home-hero-mosaic/);
+ const hero=source('../src/components/HomeHeroTalk.astro');assert.match(hero,/visibleScenes.length === 0/);assert.match(hero,/data-ds-version="5"/);assert.match(hero,/data-ds-variant="service-fallback"/);assert.match(hero,/data-home-hero-mosaic/);assert.match(hero,/column-gap:2px;row-gap:2px/);assert.match(hero,/vertical-align:-\.10em/);
 });
 test('home assembly has five ordered owners, no conversation widget or local card fork',()=>{
  const page=source('../src/pages/index.astro');let prior=-1;
  for(const tag of ['HomeHeroTalk','HomeSearchEntry','HomeQuickNav','HomeColdStartFeed','HeroTalkPageEnd']){const index=page.indexOf(`<${tag} `);const actual=index>=0?index:page.indexOf(`<${tag} />`);assert.ok(actual>prior,tag);prior=actual;}
  assert.doesNotMatch(page,/<ConversationalSearch|<EventCard|position:\s*(sticky|fixed)/);
- const nav=source('../src/components/HomeQuickNav.astro');assert.match(nav,/getCollectionNavigationEntries/);assert.match(nav,/withBase\(item.href\)/);assert.match(nav,/<Button variant="quiet" size="compact"/);assert.doesNotMatch(nav,/sticky|note:|position:fixed/);
+ const nav=source('../src/components/HomeQuickNav.astro');assert.match(nav,/getCollectionNavigationEntries/);assert.match(nav,/withBase\(item.href\)/);assert.match(nav,/<Button variant="secondary" size="default"/);assert.doesNotMatch(nav,/sticky|note:|position:fixed/);
  const end=source('../src/components/HeroTalkPageEnd.astro');assert.match(end,/withBase\(message.action.path\)/);assert.doesNotMatch(end,/StandardOnboarding|fixed|sticky|<EventCard/);
 });
 

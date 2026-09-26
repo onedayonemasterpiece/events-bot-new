@@ -207,9 +207,11 @@ The [desktop review checklist](../desktop-review-20260926.md) owns this iteratio
 ### September 26 mobile extension
 
 The same candidate now incorporates mobile voice `voice-20260926-100814-a927be2f`.
-MobileListingRailSurface v3, PersonalFeedSlot v3 and ForMeRouteComposition v2
-replace their previous versions across consumers. HomeHeroTalk v4 is still the
-unapproved desktop/mobile iteration. See `/lab/design-system/#mobile-review-20260926`
+MobileListingRailSurface v3 and ForMeRouteComposition v2 remain current.
+The desktop follow-up promotes PersonalFeedSlot v4, HomeHeroTalk v5 and
+EventLayout v5 as the R5 review candidates: geometry-bound Hero framing,
+navigation-only event detail, route-aware Today context and a 12-card initial
+desktop For Me hydration. See /lab/design-system/#mobile-review-20260926
 for predecessor/current rendered pages and the [review checklist](../desktop-review-20260926.md)
 for checks and unresolved collection data qualification. No Penpot parity or
 native-device acceptance is implied by L1 browser screenshots.

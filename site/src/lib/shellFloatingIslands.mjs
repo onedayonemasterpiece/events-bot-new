@@ -4,7 +4,7 @@ import { initContentFloatingIslands } from './contentFloatingIslands.mjs';
 import { initMobileFloatingIslands, initMobileWeekendWithoutCities } from './mobileFloatingIslands.mjs';
 import { initDesktopFloatingIslands } from './desktopFloatingIslands.mjs';
 /** Isolated Popular review: one geometry owner; measured once, transform-only title. */
-export const FLOATING_ISLANDS_VERSION='4.0.0-desktop-review';
+export const FLOATING_ISLANDS_VERSION='4.1.0-r5';
 export const userIslandRoute=path=>!/^\/(?:lab|__preview|admin|api)(?:\/|$)/u.test(path);
 export const clamp=n=>Math.max(0,Math.min(1,n));
 export const smooth=n=>{const t=clamp(n);return t*t*(3-2*t)};

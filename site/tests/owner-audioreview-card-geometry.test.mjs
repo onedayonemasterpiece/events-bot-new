@@ -288,11 +288,14 @@ test('AR-02: current editorial fragments stay source-bound and occurrence famili
 });
 
 test('AR-02: unsafe/stale/text assets stay text-only; eligible photos retain the mosaic variant', async()=>{
-  const {buildHomeHeroTalkDeck,isHomeHeroAssetEligible}=await import('../src/lib/homeHeroTalk.ts');
+  const {buildHomeHeroTalkDeck,isHomeHeroAssetEligible,homeHeroCropFocus}=await import('../src/lib/homeHeroTalk.ts');
   const photo={src:'/photo.jpg',image_kind:'photo',image_text_mode:'visual_only',safe_crop:true,recommended_hero_fit:'cover',
-    width:2000,height:1000,focal_point:{x:.5,y:.5},current_pixel_sha256:'a'.repeat(64),geometry_pixel_sha256:'a'.repeat(64),face_boxes:[]};
+    width:2000,height:1000,focal_point:{x:.5,y:.5},current_pixel_sha256:'a'.repeat(64),geometry_pixel_sha256:'a'.repeat(64),face_boxes:[],
+    geometry_status:'classified',geometry_coordinate_space:'normalized_0_1',geometry_model:'gemma-4-31b-it',geometry_prompt_version:'event-image-geometry-v1',
+    valuable_region:{x:.2,y:.1,w:.4,h:.6,confidence:1}};
   assert.equal(isHomeHeroAssetEligible(photo),true);
-  for(const override of [{image_text_mode:'ocr_text'},{geometry_pixel_sha256:'b'.repeat(64)},{safe_crop:false}]) {
+  assert.deepEqual(homeHeroCropFocus(photo),{x:.4,y:.4});
+  for(const override of [{image_text_mode:'ocr_text'},{geometry_pixel_sha256:'b'.repeat(64)},{safe_crop:false},{geometry_model:'stale-model'},{geometry_prompt_version:'stale-prompt'}]) {
     const bad={...photo,...override};assert.equal(isHomeHeroAssetEligible(bad),false);
     assert.ok(buildHomeHeroTalkDeck([heroEvent(1,{image_assets:[bad]})],'2026-09-04','review',4,[]).every(s=>s.mode==='text-only'));
   }

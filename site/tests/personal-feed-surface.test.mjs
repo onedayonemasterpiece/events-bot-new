@@ -30,6 +30,7 @@ async function readBuilt(relativePath) {
 test('personal feed keeps listing hydration hidden and exposes a bounded canonical event-detail continuation', async () => {
   const source = await read('src/components/PersonalFeedSlot.astro');
   assert.match(source, /'ke-personal-feed-slot'/u, 'mobile rail selector matches the generic personal-feed section');
+  assert.match(source, /data-ds-version="4"/u);
   assert.match(source, /data-personal-feed-section/u);
   assert.match(source, /data-personal-feed-src/u);
   assert.match(source, /data-personal-feed-related-src/u);
@@ -38,7 +39,7 @@ test('personal feed keeps listing hydration hidden and exposes a bounded canonic
   assert.match(source, /data-personal-feed-status/u);
   assert.match(source, /!isEventDetail && <button[^>]*data-personal-feed-load-more/u);
   assert.match(source, /data-personal-feed-mode=\{isEventDetail \? 'pending' : undefined\}/u);
-  assert.match(source, /hidden=\{!isEventDetail\}/u);
+  assert.match(source, /hidden=\{!isEventDetail && !isForMe\}/u);
   assert.match(source, /Шесть разных событий без бесконечной ленты/u);
   assert.match(source, /data-personal-feed-all-events[^>]*href=\{siteHomeHref\(\)\}>Все анонсы/u);
   assert.match(source, /data-personal-feed-mode="pending"/u);
@@ -63,6 +64,9 @@ test('personal feed uses canonical adaptive packing while runtime keeps contiguo
     read('src/layouts/EventLayout.astro'),
   ]);
 
+  assert.match(layout, /const PERSONAL_FEED_CHUNK_SIZE = 6/u);
+  assert.match(layout, /const PERSONAL_FEED_DESKTOP_INITIAL_SIZE = 12/u);
+  assert.match(layout, /store\.rendered === 0[\s\S]*section\.dataset\.listingContext === 'for-me'[\s\S]*personalFeedUsesDesktopRows\(\)[\s\S]*PERSONAL_FEED_DESKTOP_INITIAL_SIZE[\s\S]*PERSONAL_FEED_CHUNK_SIZE/u);
   assert.match(layout, /function personalFeedUsesDesktopRows\(\)/u);
   assert.match(layout, /window\.KenigEventsPackRelatedCardRows\(store\.items\.slice\(store\.rendered, Math\.min\(store\.items\.length, end \+ 3\)\), \{\s*limit: chunk\.length,\s*rowSize: 3,/u, 'every desktop context packs a bounded three-card-row chunk with alternates');
   assert.doesNotMatch(layout, /eventDetail && typeof window\.KenigEventsPackRelatedCardRows/u, 'desktop packing is not event-detail-only');
@@ -220,7 +224,7 @@ test('desktop keeps a separate finite broad-discovery section after the similar-
   const broadSectionIndex = page.indexOf('<PersonalFeedSlot context="event-detail"');
   assert.ok(desktopPageIndex >= 0 && mainEndIndex > desktopPageIndex && broadSectionIndex > mainEndIndex, 'Ещё события remains a separate sibling after the desktop detail/similar surface');
   assert.match(slot, /<section[\s\S]*personal-feed-section--event-detail/u);
-  assert.match(slot, /const heading = isEventDetail \? 'Ещё события'/u);
+  assert.match(slot, /const heading = isForMe \? 'Ваша лента' : isEventDetail \? 'Ещё события'/u);
   assert.match(slot, /Шесть разных событий без бесконечной ленты/u);
   assert.match(slot, /isEventDetail && <a[^>]*data-personal-feed-all-events/u);
   assert.match(slot, /!isEventDetail && <button[^>]*data-personal-feed-load-more/u, 'event detail has no load-more control');
@@ -241,7 +245,7 @@ test('broad continuation uses the canonical card variant and discovery controlle
   assert.match(layout, /const ranked = toArray\(store\?\.ranked \|\| store\?\.items\)/u, 'candidate and rank lookup share the controller store contract');
   assert.match(layout, /if \(ranked\?\.candidate\) return ranked\.candidate/u, 'broad cards retain candidate tags for profile actions');
   assert.match(layout, /servedListByFeed\.set\(slot, createServedListSummary/u, 'broad cards receive served-list context');
-  assert.match(layout, /card\?\.closest\('\[data-discovery-feed\], \[data-personal-feed-slot\]'\)/u, 'both card surfaces use the same controller lookup');
+  assert.match(layout, /card\?\.closest\('\[data-discovery-feed\], \[data-personal-feed-slot\], \[data-search-result-host\], \[data-home-feed-grid\]'\)/u, 'all canonical card surfaces use the same controller lookup');
   assert.match(layout, /const \{ store \} = await controllerForCard\(card\)/u);
   assert.equal((layout.match(/document\.addEventListener\('click', async \(event\) => \{\s*const button = event\.target\.closest\('\[data-feedback-action\]'\)/gu) || []).length, 1, 'feedback retains one delegated handler');
   assert.doesNotMatch(layout, /function eventCardHtml/u, 'controller parity does not reintroduce duplicate card markup');

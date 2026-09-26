@@ -84,3 +84,30 @@ commit `26868cfc4fabd0b91c8606cee2f98f9dee0bcb42` is pushed. Mobile L1 run passe
 before publication. No r3 URL was sent to Telegram; combined public verification
 and the two collection data repairs remain unfinished. Resume from this commit,
 not from the interrupted local dist tree.
+
+## Desktop follow-up — voice-20260926-113704-91ad3a3c
+
+Canonical owner review targets the R4 public snapshot and keeps the same immutable
+2026-09-26 SQLite evidence. The R5 source candidate changes only the shared seams
+that own the observed regressions:
+
+- HomeHeroTalk v5 consumes only current, pixel-bound gemma-4-31b-it /
+  event-image-geometry-v1 geometry, prefers equally good assets with a more
+  informative valuable_region, uses its center as crop focus, and keeps face
+  boxes as the independent wide-crop guard. Mosaic gaps are 2px on both axes and
+  the text cursor is lowered to the baseline.
+- EventLayout v5 + shell-composition-v2 make event-detail desktop
+  navigation-only without a reserved header bar; Home keeps its zero-height
+  shell while its red brand tag is viewport-pinned.
+- Today alone suppresses the redundant desktop section/time context so the city
+  island receives that width. Tomorrow and exact-date routes retain section
+  context.
+- PersonalFeedSlot v4 keeps the canonical card renderer but lets the first
+  desktop for-me hydration render up to 12 cards; later chunks, mobile and
+  event-detail continuation remain bounded at six.
+- Real Review Preview now force-carries both approved interest-club gates instead
+  of inheriting a host-level disabled value. The exporter and SQLite projection
+  remain canonical; checked-in club JSON is not used as a fixture.
+
+Verification and immutable public R5 evidence are recorded only after the focused
+tests, full build, local browser review and public-CDN rerun succeed.

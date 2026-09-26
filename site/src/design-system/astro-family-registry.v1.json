@@ -484,7 +484,7 @@
     },
     {
       "id": "EventLayout",
-      "version": 4,
+      "version": 5,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro",
@@ -2328,7 +2328,7 @@
     },
     {
       "id": "HomeHeroTalk",
-      "version": 4,
+      "version": 5,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
@@ -2417,7 +2417,7 @@
     },
     {
       "id": "PersonalFeedSlot",
-      "version": 3,
+      "version": 4,
       "astro_root": "site/src/components/PersonalFeedSlot.astro",
       "style_owners": [
         "site/src/components/PersonalFeedSlot.astro"

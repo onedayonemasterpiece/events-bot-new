@@ -16,6 +16,7 @@ export function fitCityItems(width,widths,moreWidths,gap=6,padding=16){
 }
 export function initDesktopFloatingIslands(doc=document,win=window){
  const band=doc.querySelector('[data-floating-top-band]');if(!band||band.__islands)return;
+ const sectionContextEnabled=doc.body.dataset.desktopSectionContext!=='none';
  const context=band.querySelector('[data-floating-page-context]'),section=band.querySelector('[data-floating-section-context]'),scope=band.querySelector('[data-floating-section-title]');
  const surface=citySurface(doc,false);if(!surface)return;
  const {controls,panel,field,toggle,closeButton}=surface,nav=doc.querySelector('.site-nav');
@@ -28,7 +29,7 @@ export function initDesktopFloatingIslands(doc=document,win=window){
  const shortRail=marker.closest('.ke-listing-discovery-rail'),feed=marker.closest('.feed-head');if(shortRail)shortRail.before(marker);else if(feed)feed.before(marker);
  const layer=doc.createElement('div');layer.className='fi-desktop-layer';layer.setAttribute('aria-label','Навигация по странице');doc.body.append(layer);
  doc.body.dataset.fiDesktop='';
- context.append(section);context.hidden=false;section.hidden=false;context.style.opacity='0';context.setAttribute('aria-hidden','true');
+ context.append(section);context.hidden=!sectionContextEnabled;section.hidden=!sectionContextEnabled;context.style.opacity='0';context.setAttribute('aria-hidden','true');
  const pageButton=context.querySelector('button:not(.site-header__section-context)');if(pageButton)pageButton.hidden=true;
  layer.append(context);
  band.querySelector('[data-floating-controls-slot]').hidden=true;band.querySelector('[data-floating-utility-slot]').hidden=true;
@@ -48,7 +49,7 @@ export function initDesktopFloatingIslands(doc=document,win=window){
  let geometry=null,ready=false,dead=false,frame=0,measureNeeded=true,opened=false,visibleCount=items.length,activeHeading=null,lastScope='',sectionRanges=[],widths=[],moreWidths=[],docked=null,motions=[];
  const reduced=()=>win.matchMedia('(prefers-reduced-motion: reduce)').matches;
  function sync(){for(const item of items){item.button.setAttribute('aria-pressed',String(item.input.checked));const count=item.countText();if(item.count.textContent!==count)item.count.textContent=count;}}
- function ranges(){sectionRanges=doc.querySelector('[data-date-listing="weekend"]')?[]:readSectionRanges(doc,win);}
+ function ranges(){sectionRanges=sectionContextEnabled&&!doc.querySelector('[data-date-listing="weekend"]')?readSectionRanges(doc,win):[];}
  function cancelMotion(){motions.forEach(a=>a.cancel());motions=[];controls.removeAttribute('data-fi-moving');}
  function measure(){
   close(false);more.open=false;cancelMotion();
@@ -61,7 +62,7 @@ export function initDesktopFloatingIslands(doc=document,win=window){
   const timed=sectionRanges.some(r=>/^\d{1,2}:\d{2}$/u.test(r.heading.textContent.trim()));
   let headingWidth=0;for(const r of sectionRanges){if(timed&&!/^\d{1,2}:\d{2}$/u.test(r.heading.textContent.trim()))continue;probe.textContent=r.heading?.textContent.trim()||'';headingWidth=Math.max(headingWidth,probe.getBoundingClientRect().width);}probe.remove();
   const brand=doc.querySelector('.site-header__brand-tag').getBoundingClientRect(),left=brand.right+12,right=parseFloat(win.getComputedStyle(nav).right),space=win.innerWidth-right-left;
-  const contextWidth=headingWidth===0?0:Math.min(Math.ceil(headingWidth)+44,Math.max(240,win.innerWidth*.28));
+  const contextWidth=!sectionContextEnabled||headingWidth===0?0:Math.min(Math.ceil(headingWidth)+44,Math.max(240,win.innerWidth*.28));
   widths=items.map(i=>i.button.getBoundingClientRect().width);
   toggle.hidden=false;for(let n=1;n<=items.length;n++){toggle.textContent=`+${n}`;moreWidths[n]=toggle.getBoundingClientRect().width;}toggle.hidden=true;
   const fullWidth=widths.reduce((a,b)=>a+b,0)+6*(items.length-1)+16;
@@ -79,7 +80,7 @@ export function initDesktopFloatingIslands(doc=document,win=window){
   for(let i=0;i<navLinks.length;i++)if(!visible.has(i))navPanel.append(navLinks[i]);more.hidden=visible.size===navLinks.length;
   nav.style.maxWidth=`${Math.max(140,space)}px`;const nr=nav.getBoundingClientRect();
   const targetY=secondRow?Math.max(brand.bottom,nr.bottom)+12:20,targetX=secondRow?brand.left:left;
-  const cityX=targetX+contextWidth+12,cityEnd=secondRow?win.innerWidth-brand.left:nr.left-12;
+  const cityX=targetX+(contextWidth>0?contextWidth+12:0),cityEnd=secondRow?win.innerWidth-brand.left:nr.left-12;
   const cr=controls.getBoundingClientRect(),mr=marker.getBoundingClientRect();
   geometry={origin:{x:cr.x,y:cr.y+win.scrollY,width:cr.width,height:56},context:{x:targetX,y:targetY,width:contextWidth,height:56},city:{x:cityX,y:targetY,width:Math.min(fullWidth,Math.max(minCity,cityEnd-cityX)),height:56},secondRow,fullWidth,markerX:mr.x,threshold:Math.max(24,cr.y+win.scrollY-targetY-140)};
   marker.style.position='';marker.style.setProperty('--fi-city-top',`${targetY}px`);
@@ -133,10 +134,16 @@ export function initDesktopFloatingIslands(doc=document,win=window){
   if(opened)placePanel();
   const line=y+g.context.y+70;let active=sectionRanges[0];for(const r of sectionRanges){if(r.top<=line)active=r;}
   activeHeading=active?.heading;const text=activeHeading?.textContent.trim()||'';
-  if(text!==lastScope){scope.textContent=text;lastScope=text;}
-  const first=sectionRanges[0],alpha=first?ease((y+g.context.y+135-first.top)/110):0;
-  context.style.opacity=String(reduced()?(alpha===1?1:0):alpha);context.setAttribute('aria-hidden',String(alpha===0));context.style.pointerEvents=alpha>.95?'auto':'none';section.tabIndex=alpha>.95?0:-1;
-  section.setAttribute('aria-label',`К разделу: ${text}`);doc.body.dataset.floatingContext=docked?'docked':'morphing';
+  if(sectionContextEnabled){
+   context.hidden=false;section.hidden=false;
+   if(text!==lastScope){scope.textContent=text;lastScope=text;}
+   const first=sectionRanges[0],alpha=first?ease((y+g.context.y+135-first.top)/110):0;
+   context.style.opacity=String(reduced()?(alpha===1?1:0):alpha);context.setAttribute('aria-hidden',String(alpha===0));context.style.pointerEvents=alpha>.95?'auto':'none';section.tabIndex=alpha>.95?0:-1;
+   section.setAttribute('aria-label',`К разделу: ${text}`);
+  }else{
+   activeHeading=null;lastScope='';context.hidden=true;section.hidden=true;context.style.opacity='0';context.style.pointerEvents='none';section.tabIndex=-1;
+  }
+  doc.body.dataset.floatingContext=docked?'docked':'morphing';
  }
  function schedule(measureAgain=false){if(measureAgain)measureNeeded=true;if(!frame&&!dead)frame=win.requestAnimationFrame(render);}
  on(toggle,'click',open);on(closeButton,'click',()=>close());on(section,'click',()=>activeHeading&&win.scrollTo({top:activeHeading.getBoundingClientRect().top+win.scrollY-geometry.context.y-76,behavior:reduced()?'instant':'smooth'}));

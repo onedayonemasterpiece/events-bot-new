@@ -615,7 +615,7 @@ def test_real_review_preview_export_defaults_confirmed_clubs_on(
     assert env["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
 
 
-def test_real_review_preview_export_preserves_explicit_club_rollback(
+def test_real_review_preview_export_overrides_inherited_disabled_club_gates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from scripts import run_static_site_builder_kaggle as runner
@@ -626,8 +626,8 @@ def test_real_review_preview_export_preserves_explicit_club_rollback(
 
     env = runner.preview_export_env(args)
 
-    assert env["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "0"
-    assert env["PUBLIC_INTEREST_CLUBS_ENABLED"] == "0"
+    assert env["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "1"
+    assert env["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
 
 
 def test_kaggle_runner_and_builder_forward_related_corpus_revision(

@@ -7,11 +7,11 @@
   "source_root": "site/src",
   "source_inventory_sha256": "4d1d3a025499b045dbc91ba6ca94821abd5b323e88fd64b8569a938a8aa801bb",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "add5f20c19ce1e2437ada99a18a1cf1077caa7fa00e9fa35e6d24eeeb398baf2",
+  "astro_family_graph_sha256": "b6446475273b75e9f3894a8aaf44bd22b608b8c6912bfd6dbc2b6640e6b444de",
   "summary": {
     "token_count": 2573,
     "definition_count": 2890,
-    "consumer_count": 3772,
+    "consumer_count": 3773,
     "alias_edge_count": 906,
     "family_count": 112
   },
@@ -67179,7 +67179,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4587,
+          "line": 4614,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67207,7 +67207,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4586,
+          "line": 4613,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67943,7 +67943,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2506,
+          "line": 2527,
           "scope": "style=",
           "kind": "css",
           "value": "url('${withBase('/assets/ui/desktop-head-leather-r5.webp')",
@@ -67969,7 +67969,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5959,
+          "line": 5986,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68818,7 +68818,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4585,
+          "line": 4612,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68827,7 +68827,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4622,
+          "line": 4649,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68836,7 +68836,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4675,
+          "line": 4702,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -69682,7 +69682,7 @@
       "definitions": [
         {
           "path": "site/src/lib/desktopFloatingIslands.mjs",
-          "line": 85,
+          "line": 86,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -70150,7 +70150,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 59,
+          "line": 60,
           "scope": "--- > class=\"home-hero-talk__sr-only\">О чём говорит афиша</h1> <div class=\"home-hero-talk__stage\" data-home-hero-stage> > visibleScenes.map((scene, sceneIndex) => > > <div class=\"home-hero-talk__message\"> <h2 data-home-hero-copy> > scene.fragments.map((fragment, fragmentIndex) => ( <> > style=",
           "kind": "css",
           "value": "${100 + fragmentIndex * 185",
@@ -70159,7 +70159,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 69,
+          "line": 70,
           "scope": "--- > class=\"home-hero-talk__sr-only\">О чём говорит афиша</h1> <div class=\"home-hero-talk__stage\" data-home-hero-stage> > visibleScenes.map((scene, sceneIndex) => > > <div class=\"home-hero-talk__message\"> <h2 data-home-hero-copy> > scene.fragments.map((fragment, fragmentIndex) => ( <> > style=",
           "kind": "css",
           "value": "${100 + fragmentIndex * 185",
@@ -70324,7 +70324,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5915,
+          "line": 5942,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -70350,7 +70350,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5913,
+          "line": 5940,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -70376,7 +70376,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5912,
+          "line": 5939,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -74654,25 +74654,25 @@
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 129,
+          "line": 130,
           "has_fallback": false
         },
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 163,
+          "line": 164,
           "has_fallback": false
         },
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 168,
+          "line": 169,
           "has_fallback": false
         },
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 205,
+          "line": 206,
           "has_fallback": false
         },
         {
@@ -77437,25 +77437,13 @@
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 129,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-surface-warm",
-          "path": "site/src/components/HomeHeroTalk.astro",
           "line": 130,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 171,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-surface-warm",
-          "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 171,
+          "line": 131,
           "has_fallback": false
         },
         {
@@ -77473,13 +77461,25 @@
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 172,
+          "line": 173,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 172,
+          "line": 173,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-surface-warm",
+          "path": "site/src/components/HomeHeroTalk.astro",
+          "line": 173,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-surface-warm",
+          "path": "site/src/components/HomeHeroTalk.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -82775,25 +82775,25 @@
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 129,
+          "line": 130,
           "has_fallback": false
         },
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 163,
+          "line": 164,
           "has_fallback": false
         },
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 168,
+          "line": 169,
           "has_fallback": false
         },
         {
           "token": "--ke-color-action-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 205,
+          "line": 206,
           "has_fallback": false
         },
         {
@@ -101182,25 +101182,13 @@
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 129,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-surface-warm",
-          "path": "site/src/components/HomeHeroTalk.astro",
           "line": 130,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 171,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-surface-warm",
-          "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 171,
+          "line": 131,
           "has_fallback": false
         },
         {
@@ -101218,13 +101206,25 @@
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 172,
+          "line": 173,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 172,
+          "line": 173,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-surface-warm",
+          "path": "site/src/components/HomeHeroTalk.astro",
+          "line": 173,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-surface-warm",
+          "path": "site/src/components/HomeHeroTalk.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -102208,7 +102208,7 @@
         {
           "token": "--ke-color-text-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 125,
+          "line": 126,
           "has_fallback": false
         },
         {
@@ -118368,25 +118368,13 @@
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 129,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-surface-warm",
-          "path": "site/src/components/HomeHeroTalk.astro",
           "line": 130,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 171,
-          "has_fallback": false
-        },
-        {
-          "token": "--ke-color-surface-warm",
-          "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 171,
+          "line": 131,
           "has_fallback": false
         },
         {
@@ -118404,13 +118392,25 @@
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 172,
+          "line": 173,
           "has_fallback": false
         },
         {
           "token": "--ke-color-surface-warm",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 172,
+          "line": 173,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-surface-warm",
+          "path": "site/src/components/HomeHeroTalk.astro",
+          "line": 173,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-surface-warm",
+          "path": "site/src/components/HomeHeroTalk.astro",
+          "line": 173,
           "has_fallback": false
         },
         {
@@ -120644,7 +120644,7 @@
         {
           "token": "--ke-color-text-primary",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 125,
+          "line": 126,
           "has_fallback": false
         },
         {
@@ -141667,19 +141667,19 @@
         {
           "token": "--ke-type-display-home",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 158,
+          "line": 159,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -142708,19 +142708,19 @@
         {
           "token": "--ke-type-display-home",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 158,
+          "line": 159,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -143632,7 +143632,7 @@
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -143914,7 +143914,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -150022,7 +150022,7 @@
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -151982,7 +151982,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2618,
+          "line": 2639,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -152058,7 +152058,7 @@
         {
           "token": "--ke-lower-surface-offset",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2502,
+          "line": 2523,
           "has_fallback": true
         },
         {
@@ -171125,7 +171125,7 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -171174,6 +171174,12 @@
           "token": "--ke-space-3",
           "path": "site/src/layouts/EventLayout.astro",
           "line": 2495,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2515,
           "has_fallback": false
         },
         {
@@ -172401,7 +172407,7 @@
         {
           "token": "--ke-space-4",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -172593,7 +172599,7 @@
         {
           "token": "--ke-space-4",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2502,
+          "line": 2523,
           "has_fallback": false
         },
         {
@@ -172976,7 +172982,7 @@
         {
           "token": "--ke-space-6",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 234,
+          "line": 235,
           "has_fallback": false
         },
         {
@@ -175845,7 +175851,7 @@
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -175933,7 +175939,7 @@
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -176093,7 +176099,7 @@
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -176227,7 +176233,7 @@
         {
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 237,
+          "line": 238,
           "has_fallback": false
         },
         {
@@ -176545,7 +176551,7 @@
         {
           "token": "--ke-type-display-home",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 158,
+          "line": 159,
           "has_fallback": false
         }
       ],
@@ -176571,7 +176577,7 @@
         {
           "token": "--ke-type-display-home-letter",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 159,
+          "line": 160,
           "has_fallback": false
         }
       ],
@@ -176613,7 +176619,7 @@
         {
           "token": "--ke-type-display-home",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 158,
+          "line": 159,
           "has_fallback": false
         }
       ],
@@ -176655,7 +176661,7 @@
         {
           "token": "--ke-type-display-home",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 158,
+          "line": 159,
           "has_fallback": false
         }
       ],
@@ -176681,7 +176687,7 @@
         {
           "token": "--ke-type-display-home-size-compact",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 217,
+          "line": 218,
           "has_fallback": false
         }
       ],
@@ -176723,7 +176729,7 @@
         {
           "token": "--ke-type-display-home",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 158,
+          "line": 159,
           "has_fallback": false
         }
       ],
@@ -179661,7 +179667,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -179741,7 +179747,7 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -179837,7 +179843,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -179949,7 +179955,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -180081,7 +180087,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 236,
+          "line": 237,
           "has_fallback": false
         },
         {
@@ -182508,7 +182514,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4671,
+          "line": 4698,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183247,7 +183253,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4584,
+          "line": 4611,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183256,7 +183262,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4621,
+          "line": 4648,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183265,7 +183271,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4694,
+          "line": 4721,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183414,7 +183420,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4583,
+          "line": 4610,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183423,7 +183429,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4622,
+          "line": 4649,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183432,7 +183438,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4674,
+          "line": 4701,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183659,7 +183665,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2502,
+          "line": 2523,
           "has_fallback": true
         },
         {
@@ -183810,7 +183816,7 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2502,
+          "line": 2523,
           "has_fallback": true
         },
         {
@@ -183884,7 +183890,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 176,
+          "line": 177,
           "scope": ".home-hero-talk__media",
           "kind": "css",
           "value": "16",
@@ -183893,7 +183899,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 211,
+          "line": 212,
           "scope": "@media (min-width:1536px) > .home-hero-talk__media",
           "kind": "css",
           "value": "18",
@@ -183902,7 +183908,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 212,
+          "line": 213,
           "scope": "@media (min-width:1792px) > .home-hero-talk__media",
           "kind": "css",
           "value": "20",
@@ -183911,7 +183917,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 229,
+          "line": 230,
           "scope": "@media (max-width:759px) > .home-hero-talk__media",
           "kind": "css",
           "value": "8",
@@ -183920,7 +183926,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 293,
+          "line": 294,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183929,7 +183935,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 293,
+          "line": 294,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183943,19 +183949,19 @@
         {
           "token": "--mosaic-columns",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 178,
+          "line": 179,
           "has_fallback": false
         },
         {
           "token": "--mosaic-columns",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 178,
+          "line": 179,
           "has_fallback": false
         },
         {
           "token": "--mosaic-columns",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 183,
+          "line": 184,
           "has_fallback": false
         }
       ],
@@ -183967,7 +183973,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 302,
+          "line": 303,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183981,7 +183987,7 @@
         {
           "token": "--mosaic-image",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 194,
+          "line": 195,
           "has_fallback": false
         }
       ],
@@ -183993,7 +183999,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 302,
+          "line": 303,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -184007,7 +184013,7 @@
         {
           "token": "--mosaic-render-height",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 193,
+          "line": 194,
           "has_fallback": false
         }
       ],
@@ -184019,7 +184025,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 302,
+          "line": 303,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -184033,7 +184039,7 @@
         {
           "token": "--mosaic-render-width",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 193,
+          "line": 194,
           "has_fallback": false
         }
       ],
@@ -184045,7 +184051,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 229,
+          "line": 230,
           "scope": "@media (max-width:759px) > .home-hero-talk__media",
           "kind": "css",
           "value": "8",
@@ -184054,7 +184060,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 293,
+          "line": 294,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -184068,7 +184074,7 @@
         {
           "token": "--mosaic-rows",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 184,
+          "line": 185,
           "has_fallback": true
         }
       ],
@@ -184918,7 +184924,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5877,
+          "line": 5904,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",
@@ -187964,7 +187970,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 310,
+          "line": 311,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -187978,7 +187984,7 @@
         {
           "token": "--tile-image-left",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 192,
+          "line": 193,
           "has_fallback": false
         }
       ],
@@ -187990,7 +187996,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 310,
+          "line": 311,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -188004,7 +188010,7 @@
         {
           "token": "--tile-image-top",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 192,
+          "line": 193,
           "has_fallback": false
         }
       ],
@@ -188016,7 +188022,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 319,
+          "line": 320,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -188025,7 +188031,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 323,
+          "line": 324,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -188039,7 +188045,7 @@
         {
           "token": "--tile-in-delay",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 189,
+          "line": 190,
           "has_fallback": true
         }
       ],
@@ -188051,7 +188057,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 319,
+          "line": 320,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -188065,7 +188071,7 @@
         {
           "token": "--tile-in-duration",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 188,
+          "line": 189,
           "has_fallback": true
         }
       ],
@@ -188077,7 +188083,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 319,
+          "line": 320,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -188091,13 +188097,13 @@
         {
           "token": "--tile-opacity",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 197,
+          "line": 198,
           "has_fallback": false
         },
         {
           "token": "--tile-opacity",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 225,
+          "line": 226,
           "has_fallback": true
         }
       ],
@@ -188567,7 +188573,7 @@
       "definitions": [
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 63,
+          "line": 64,
           "scope": "--- > class=\"home-hero-talk__sr-only\">О чём говорит афиша</h1> <div class=\"home-hero-talk__stage\" data-home-hero-stage> > visibleScenes.map((scene, sceneIndex) => > > <div class=\"home-hero-talk__message\"> <h2 data-home-hero-copy> > scene.fragments.map((fragment, fragmentIndex) => ( <> > > > fragment.text.split(/(\\s+)/u).map((word, wordIndex, words) => /^\\s+$/u.test(word) ? word : <span class=\"home-hero-talk__word\" style=",
           "kind": "css",
           "value": "${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)",
@@ -188576,7 +188582,7 @@
         },
         {
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 70,
+          "line": 71,
           "scope": "--- > class=\"home-hero-talk__sr-only\">О чём говорит афиша</h1> <div class=\"home-hero-talk__stage\" data-home-hero-stage> > visibleScenes.map((scene, sceneIndex) => > > <div class=\"home-hero-talk__message\"> <h2 data-home-hero-copy> > scene.fragments.map((fragment, fragmentIndex) => ( <> > > > fragment.text.split(/(\\s+)/u).map((word, wordIndex, words) => /^\\s+$/u.test(word) ? word : <span class=\"home-hero-talk__word\" style=",
           "kind": "css",
           "value": "${160 + 190 * (scene.fragments.slice(0,fragmentIndex).reduce((n,f)=>n+f.text.split(/\\s+/u).filter(Boolean).length,0)+words.slice(0,wordIndex).filter(w=>w.trim()).length)",
@@ -188590,7 +188596,7 @@
         {
           "token": "--word-delay",
           "path": "site/src/components/HomeHeroTalk.astro",
-          "line": 201,
+          "line": 202,
           "has_fallback": false
         }
       ],
