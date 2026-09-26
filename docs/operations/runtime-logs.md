@@ -23,7 +23,7 @@ Production file mirror **включён постоянно** и пишет root 
 - volume free-space floor: `RUNTIME_LOG_MIN_FREE_MB=256`;
 - level: `RUNTIME_LOG_LEVEL=INFO`.
 - `/healthz` disk telemetry: warning below `768 MiB` (before the `512 MiB` VK admission floor), critical/HTTP 503 below `256 MiB` (`RUNTIME_DISK_WARN_FREE_MB`, `RUNTIME_DISK_CRITICAL_FREE_MB`).
-- Fly volume capacity: `/data` was extended to `4 GiB` during `INC-2026-09-26-vk-auto-storage-notice-storm` before the operator explicitly prohibited expansion. This was unauthorized and is recorded for correction. `fly.toml` retains the `3 GiB` automatic extension cap, preventing further growth. Capacity growth is not the remediation; retention, DB/media cleanup, snapshots, and early warnings remain required.
+- Fly volume capacity: `/data` is back at `3 GiB` after the controlled new-volume migration in `INC-2026-09-26-vk-auto-storage-notice-storm`. The old `4 GiB` volume, extended before the operator prohibited expansion, was destroyed after integrity checks. `fly.toml` retains the `3 GiB` automatic extension cap. Packet compaction, reviewed retention and early warning control disk pressure.
 
 При обычном потоке это даёт до двух суток evidence. При log storm размер, а не время, является приоритетным guard: старейшие rotated files удаляются, active file ротируется, а при достижении free-space floor file mirror временно пропускает записи. Console/stdout/Fly logs при этом продолжают работать. Неизвестные файлы и SQLite handler никогда не удаляет.
 
