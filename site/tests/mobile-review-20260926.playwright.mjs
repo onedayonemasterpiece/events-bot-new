@@ -57,7 +57,8 @@ try{
  // Compare genuine no-JS server layout with the enhanced page at the same width.
  const geometry=[];
  for(const js of [false,true]){
-  const p=await browser.newPage({viewport:{width:390,height:844},javaScriptEnabled:js});await p.goto(base+'/zavtra/',{waitUntil:'domcontentloaded'});
+  const p=await browser.newPage({viewport:{width:390,height:844},javaScriptEnabled:js});await p.goto(base+'/zavtra/',{waitUntil:'load',timeout:90000});
+  await p.waitForTimeout(50);
   if(js)await p.waitForFunction(()=>document.body.dataset.fiMotion==='ready');
   geometry.push({title:await rect(p,'[data-mobile-listing-rails] h1'),city:await rect(p,'[data-mobile-listing-rails] [data-listing-controls]')});await p.close();
  }
