@@ -80,7 +80,8 @@ const description = 'Афиша Калининграда без шума: пол
 )}
 
 <style>
-  .home-page { padding: 0 0 calc(max(var(--ke-lower-surface-offset, 0px), var(--mobile-bottom-stack-h, 84px)) + var(--ke-space-6)); }
+  .home-page { padding:0; }
+  @media(max-width:759px) { .home-page { padding-bottom:calc(max(var(--ke-lower-surface-offset, 0px), var(--mobile-bottom-stack-h, 84px)) + var(--ke-space-6)); }
   .home-page__shell { width: min(1240px, calc(100% - 2rem)); }
   @media (max-width: 620px) {
     .home-page__shell { width: min(100% - 1rem, 46rem); padding-inline: 0; }

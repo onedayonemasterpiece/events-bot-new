@@ -9,10 +9,10 @@ const { context, nextStep, scenes } = Astro.props;
 const message = resolveHeroTalkPlacement(context, nextStep);
 const titleId = `hero-talk-page-end-${context.route}`;
 ---
-{scenes ? <section data-hero-talk-page-end data-hero-talk-placement="page_end" data-ds-family="HeroTalkPageEnd" data-ds-version="2" data-ds-variant="animated-scenes" data-ds-state="service-continuation"><HomeHeroTalk scenes={scenes} placement="page_end" /></section> : message && (
+{scenes ? <section class="hero-talk-page-end--animated" data-hero-talk-page-end data-hero-talk-placement="page_end" data-ds-family="HeroTalkPageEnd" data-ds-version="3" data-ds-variant="animated-scenes" data-ds-state="service-continuation"><HomeHeroTalk scenes={scenes} placement="page_end" /></section> : message && (
   <section class="hero-talk-page-end" data-hero-talk-page-end data-hero-talk-placement="page_end"
     data-hero-talk-message-id={message.id} data-hero-talk-context-version={HERO_TALK_PLACEMENT_VERSION}
-    data-hero-talk-route={context.route} data-ds-family="HeroTalkPageEnd" data-ds-version="2"
+    data-hero-talk-route={context.route} data-ds-family="HeroTalkPageEnd" data-ds-version="3"
     data-ds-variant="compact-service" data-ds-state="service-continuation" aria-labelledby={titleId}>
     <div class="hero-talk-page-end__copy">
       <h2 id={titleId}>{message.fragments.map(fragment => <span>{fragment.text} </span>)}</h2>
@@ -22,6 +22,7 @@ const titleId = `hero-talk-page-end-${context.route}`;
   </section>
 )}
 <style>
+  @media(min-width:760px) { .hero-talk-page-end--animated { margin-block:var(--ke-hero-page-end-gap) 0; } }
   .hero-talk-page-end { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--ke-space-4); padding-block:var(--ke-space-6); margin-top:var(--ke-space-6); border-top:1px solid var(--ke-color-line); color:var(--ke-color-text-primary); scroll-margin-block-end:calc(var(--ke-lower-surface-offset, 96px) + var(--ke-space-4)); }
   .hero-talk-page-end[hidden] { display:none; }
   .hero-talk-page-end__copy { min-width:0; flex:1 1 16rem; }

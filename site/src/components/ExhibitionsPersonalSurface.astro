@@ -20,7 +20,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   id="main"
   class="ex-page"
   data-ds-family="ExhibitionsPersonalSurface"
-  data-ds-version="2"
+  data-ds-version="3"
   data-ds-variant="ranked-personal-catalog"
   data-ds-state={newItems.length + priorityItems.length + tailItems.length > 0 ? 'personal all-topics populated' : 'personal all-topics empty'}
   data-ke-foundation-consumer="exhibitions-personal-surface"
@@ -472,9 +472,9 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
   @keyframes ex-backdrop-out { from { background:var(--ke-color-exhibitions-gallery-backdrop); backdrop-filter:blur(5px); } to { background:transparent; backdrop-filter:blur(0); } }
   @keyframes ex-skeleton-shimmer { to { background-position:-120% 0; } }
   ::view-transition-group(*) { animation-duration:var(--ke-exhibitions-motion-base); animation-timing-function:var(--ke-exhibitions-ease-cinematic); }
+  @media (min-width:760px) { .ex-deck { --media-frame-radius:var(--ke-shape-radius-control); border-radius:var(--ke-shape-radius-control); } }
   @media (min-width:760px) and (max-width:1020px) {
     body:has(.ex-page)>.site-header .site-header__inner { gap:clamp(.45rem,2vw,2rem); }
-    body:has(.ex-page)>.site-header .site-nav a { padding-inline:clamp(.42rem,1.15vw,.7rem); font-size:clamp(.78rem,1.15vw,.86rem); }
   }
   @media (max-width:1020px) {
     .ex-intro { align-items:start; flex-direction:column; }
@@ -545,6 +545,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
     const root = document.querySelector('[data-exhibitions-prototype]');
     if (!(root instanceof HTMLElement)) return;
     root.dataset.exhibitionsTheme = new URLSearchParams(window.location.search).get('theme') === 'light' ? 'light' : 'graphite';
+    document.body.dataset.exhibitionsTheme = root.dataset.exhibitionsTheme;
     const STATE_KEY = 'ke_exhibitions_prototype_v1';
     const rows = () => Array.from(root.querySelectorAll('[data-exhibition-row]'));
     const originalRowOrder = new WeakMap(rows().map((row,index) => [row,index]));

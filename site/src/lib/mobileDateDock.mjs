@@ -5,6 +5,7 @@ export function initMobileDateDock(accessory,doc=document,win=window){
  const sheet=accessory.nextElementSibling,trigger=accessory.querySelector('[data-calendar-open]'),close=sheet?.querySelector('[data-calendar-close]'),rail=accessory.querySelector('.date-rail');
  const root=sheet?.querySelector('[data-calendar-months]'),months=[...(root?.querySelectorAll('[data-calendar-month]')||[])],label=sheet?.querySelector('[data-calendar-month-label]'),previous=sheet?.querySelector('[data-calendar-month-previous]'),next=sheet?.querySelector('[data-calendar-month-next]'),nav=doc.querySelector('[data-mobile-bottom-nav]');
  if(!sheet||!nav||!months.length)return;
+ const calendarOnly=accessory.dataset.calendarOnly==='true',datesLink=nav.querySelector('[data-mobile-nav-section="dates"]');
  const media=win.matchMedia('(max-width:720px)'),reduced=()=>win.matchMedia('(prefers-reduced-motion: reduce)').matches;
  const origin=doc.createComment('date-dock-origin');accessory.before(origin);
  const navOrigin=doc.createComment('date-dock-nav-origin');nav.before(navOrigin);
@@ -22,19 +23,24 @@ export function initMobileDateDock(accessory,doc=document,win=window){
   if(animate&&old!==index&&!reduced())months[index].animate([{transform:`translateX(${index>old?18:-18}px)`},{transform:'translateX(0)'}],{duration:180,easing:'ease-out'});
   resize(false);
  }
- function setOpen(value,focus=true){if(!active||opened===value)return;const before=dock.getBoundingClientRect().height;opened=value;motion?.cancel();motion=null;
-  sheet.hidden=!opened;sheet.setAttribute('aria-hidden',String(!opened));sheet.classList.toggle('is-open',opened);accessory.hidden=opened;trigger.setAttribute('aria-expanded',String(opened));dock.dataset.expanded=String(opened);
+ function setOpen(value,focus=true){if(opened===value)return;const before=dock.getBoundingClientRect().height;opened=value;motion?.cancel();motion=null;
+  sheet.hidden=!opened;sheet.setAttribute('aria-hidden',String(!opened));sheet.classList.toggle('is-open',opened);accessory.hidden=calendarOnly||opened;trigger.setAttribute('aria-expanded',String(opened));dock.dataset.expanded=String(opened);
   // Nav stays anchored to the bottom while the one shared skin changes height.
-  dock.style.height=`${before}px`;resize(true);
-  if(focus)(opened?close:trigger).focus({preventScroll:true});
+  if(active){dock.style.height=`${before}px`;resize(true);}
+  datesLink?.setAttribute('aria-expanded',String(opened));
+  if(focus)(opened?close:active?trigger:datesLink).focus({preventScroll:true});
  }
- function mount(){if(media.matches===active)return;
-  if(media.matches){active=true;origin.parentNode.insertBefore(dock,origin.nextSibling);dock.append(accessory,sheet,nav);doc.body.dataset.dateDock='';sheet.querySelector('[role="dialog"]').setAttribute('aria-modal','false');showMonth(index);resize();center();}
-  else{setOpen(false,false);active=false;motion?.cancel();motion=null;origin.after(accessory,sheet);navOrigin.after(nav);dock.remove();delete doc.body.dataset.dateDock;sheet.hidden=true;accessory.hidden=false;}
+ function mount(){
+  setOpen(false,false);
+  const mobile=media.matches&&!calendarOnly;
+  if(mobile){active=true;delete sheet.dataset.desktopCalendar;origin.parentNode.insertBefore(dock,origin.nextSibling);dock.append(accessory,sheet,nav);doc.body.dataset.dateDock='';sheet.querySelector('[role="dialog"]').setAttribute('aria-modal','false');showMonth(index);resize();center();}
+  else{active=false;motion?.cancel();motion=null;origin.after(accessory);doc.body.append(sheet);navOrigin.after(nav);dock.remove();delete doc.body.dataset.dateDock;sheet.hidden=true;sheet.dataset.desktopCalendar='';accessory.hidden=calendarOnly;}
  }
+ datesLink?.setAttribute('aria-haspopup','dialog');
+ datesLink?.addEventListener('click',e=>{if(media.matches||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();setOpen(!opened);});
  previous.addEventListener('click',()=>showMonth(index-1,true));next.addEventListener('click',()=>showMonth(index+1,true));trigger.addEventListener('click',()=>setOpen(true));close.addEventListener('click',()=>setOpen(false));
- doc.addEventListener('keydown',e=>{if(!active||!opened)return;if(e.key==='Escape'){e.preventDefault();setOpen(false);}if(root.contains(e.target)&&['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();showMonth(index+(e.key==='ArrowRight'?1:-1),true);}});
- doc.addEventListener('pointerdown',e=>{if(opened&&!dock.contains(e.target))setOpen(false,false);});
+ doc.addEventListener('keydown',e=>{if(!opened)return;if(e.key==='Escape'){e.preventDefault();setOpen(false);}if(root.contains(e.target)&&['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();showMonth(index+(e.key==='ArrowRight'?1:-1),true);}});
+ doc.addEventListener('pointerdown',e=>{if(opened&&!dock.contains(e.target)&&!sheet.contains(e.target)&&!datesLink?.contains(e.target))setOpen(false,false);});
  root.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;pointer={x:e.clientX,y:e.clientY,id:e.pointerId};});
  root.addEventListener('pointercancel',()=>pointer=null);
  root.addEventListener('pointerup',e=>{if(!pointer||pointer.id!==e.pointerId)return;const dx=e.clientX-pointer.x,dy=e.clientY-pointer.y;pointer=null;if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)*1.5){suppressClickUntil=Date.now()+400;showMonth(index+(dx<0?1:-1),true);}});

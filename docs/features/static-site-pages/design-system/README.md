@@ -34,7 +34,7 @@ not licenses to introduce arbitrary per-route typography.
 The existing `site/scripts/check-browser-release-gate.mjs` verifies rendered
 metrics and negative local overrides, text/ancestor clipping, header occlusion,
 internal card overflow, row geometry, product Home links and mobile navigation.
-It also exercises restored Home scenes, pause/resume, reduced motion, no-JS
+It also exercises restored Home scenes, single cursor/no Pause control, reduced motion, no-JS
 fallback, and schematic floating context. The fixed-number oracle is not
 regenerated from the page being tested.
 
@@ -199,3 +199,7 @@ semantic certification of every historical linked-event family.
 Lower media chrome exposes its title once; its aria-hidden duplicate image
 caption no longer overlaps the counter, and the window title can wrap rather
 than being forced into a single truncated line.
+
+## Desktop continuation, 2026-09-26
+
+The [desktop review checklist](../desktop-review-20260926.md) owns this iteration. Versioned shared island/calendar/Hero/weekend/exhibitions/festival changes are candidates; mobile owner review and native Penpot parity are not claimed. Shared geometry remains in shell foundations, typography in surface foundations and the typography authority record. Old/new immutable runtime catalog references are at `/lab/design-system/#desktop-review-20260926`.

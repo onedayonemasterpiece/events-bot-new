@@ -74,7 +74,13 @@ export function initMobileFloatingIslands(doc=document,win=window){
   titleMarker.style.position='';marker.style.position='';marker.style.transition='none';marker.style.setProperty('--fi-city-top',`${geometry.approachTop}px`);
   title.style.cssText=titleStyle;
   if(!nativeTimeline){title.style.animation='none';titleSkin.style.animation='none';}
-  context.style.cssText=`--fi-title-height:${singleDay?38:contextHeight}px;--fi-title-x:${left+pad-tr.x}px;--fi-title-scale:${geometry.title.scale};--fi-title-end:${titleEnd}px;--fi-skin-x:${left-tr.x}px;--fi-skin-width:${contextWidth}px;`;
+  context.style.cssText='';
+  context.style.setProperty('--fi-title-height',`${singleDay?38:contextHeight}px`);
+  context.style.setProperty('--fi-title-x',`${left+pad-tr.x}px`);
+  context.style.setProperty('--fi-title-scale',String(geometry.title.scale));
+  context.style.setProperty('--fi-title-end',`${titleEnd}px`);
+  context.style.setProperty('--fi-skin-x',`${left-tr.x}px`);
+  context.style.setProperty('--fi-skin-width',`${contextWidth}px`);
   if(weekend){context.style.setProperty('--fi-title-height','44px');weekendNav.style.cssText=`left:${left-tr.x}px;width:${contextWidth}px;`;title.style.cssText=titleStyle;}
   section.style.cssText=`left:${left+pad-tr.x}px;top:30px;width:${contextWidth-2*pad}px;height:${contextHeight-38}px;`;section.hidden=true;
   controls.style.cssText='';content.append(row,toggle);toggle.style.cssText='position:absolute;left:0;top:0;width:44px;';row.style.width=`${originWidth}px`;

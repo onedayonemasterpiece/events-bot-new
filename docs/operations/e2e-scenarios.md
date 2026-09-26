@@ -211,3 +211,7 @@ swipe dismissal, short/horizontal gestures preserved, date state/focus restored,
 Escape/close, calendar reopening and real Popular link navigation. Anonymous
 L1 responsive-layout/native-touch regression, not physical-phone acceptance.
 Run alongside `islands-sequential.playwright.mjs` for prior city/calendar motion.
+
+### Desktop voice review, 2026-09-26
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<managed artifact directory> node site/tests/desktop-review-20260926.playwright.mjs` checks Home, Today, Tomorrow, Weekend, Exhibitions and Festivals at 1920/1440 px: shared navigation geometry/hover, cursor count, spacing, calendar open/Escape/exact-date navigation, compact time context, weekend headings, dark canvas/radii and one sticky month switcher. Delayed modules compare city/nav before and after hydration. 320/390/430 checks are responsive regressions only; mobile owner/native acceptance is not claimed. See the [owning checklist](../features/static-site-pages/desktop-review-20260926.md).

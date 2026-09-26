@@ -15,6 +15,7 @@ export function cityEntries(field){
 }
 export function visibleHeading(doc){return [...doc.querySelectorAll('main h1')].find(n=>n.getClientRects().length&&n.getBoundingClientRect().height>0);}
 export function sectionHeadings(doc){
- return [...doc.querySelectorAll('main h2, main [data-mobile-listing-rails] .feed-head__copy > strong')].filter(n=>n.getClientRects().length&&n.getBoundingClientRect().height>0&&!n.closest('dialog,[role="dialog"],[data-keyboard-help],.ke-weekend-day__head'));
+ const timed=doc.defaultView?.matchMedia('(min-width:760px)').matches&&doc.querySelector('.ke-listing-time-marker h2');
+ return [...doc.querySelectorAll(timed?'.ke-listing-time-marker h2':'main h2, main [data-mobile-listing-rails] .feed-head__copy > strong')].filter(n=>n.getClientRects().length&&n.getBoundingClientRect().height>0&&!n.closest('dialog,[role="dialog"],[data-keyboard-help],.ke-weekend-day__head'));
 }
 export function sectionRanges(doc,win){return sectionHeadings(doc).map(heading=>({heading,node:heading.parentElement,top:heading.getBoundingClientRect().top+win.scrollY,bottom:heading.parentElement.getBoundingClientRect().bottom+win.scrollY}));}

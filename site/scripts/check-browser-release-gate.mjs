@@ -417,10 +417,8 @@ export async function assertRestoredHomeHero(page, origin, route='/', artifactDi
         states.push(await inspect());
       }
       invariant(states.at(-1).active===states[0].active,'Hero did not complete its cycle');
-      const pause=root.locator('[data-home-hero-controls] button');await pause.click();
-      const active=states.at(-1).active;await page.evaluate(()=>document.activeElement?.blur?.());await page.waitForTimeout(8000);
-      invariant(await pause.getAttribute('aria-pressed')==='true','Hero pause state is missing');
-      invariant(await root.locator('.is-active').getAttribute('data-scene-index')===String(active),'Paused Hero keeps changing');
+      invariant(await root.locator('[data-home-hero-controls]').count()===0,'Removed Hero pause control returned');
+      invariant(await root.locator('.is-active .home-hero-talk__cursor').count()===1,'Hero must have one cursor per active scene');
     }
     reports.push({width,count,states,feedSectionRole:'checked'});
   }
@@ -437,7 +435,7 @@ export async function assertRestoredHomeHero(page, origin, route='/', artifactDi
     invariant(await n.locator('[data-home-hero-scene]:visible a').count()>0,'No-JS Home lost its event link');
     if(artifactDir){await p.screenshot({path:join(artifactDir,'home-reduced-motion.png')});await n.screenshot({path:join(artifactDir,'home-no-js.png')});}
   } finally {await reduced.close();await nojs.close();}
-  return {reports,hydratedFeed,cycle:'observed',pause:'observed',reducedMotion:'checked',noJavaScript:'checked'};
+  return {reports,hydratedFeed,cycle:'observed',pauseControl:'removed-by-owner-review',reducedMotion:'checked',noJavaScript:'checked'};
 }
 
 /** Real committed Home nodes filtered by an explicit local-profile fixture.

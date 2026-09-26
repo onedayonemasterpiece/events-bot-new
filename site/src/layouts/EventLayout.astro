@@ -5,6 +5,7 @@ import FocusGroupLabPanel from '../components/FocusGroupLabPanel.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
+import MobileDateAccessory from '../components/listings/MobileDateAccessory.astro';
 import MobileToastRegion from '../components/MobileToastRegion.astro';
 import PwaTelemetry from '../components/PwaTelemetry.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
@@ -2493,15 +2494,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       body[data-shell-composition="home-navigation-only"] .site-header__inner {
         height:auto; min-height:0; padding-block-end:var(--ke-space-3);
       }
-      @media (min-width:760px) {
-        body[data-shell-composition="home-navigation-only"] .site-nav {
-          position:fixed; top:16px; right:max(24px,env(safe-area-inset-right));
-          max-width:calc(100vw - 320px); padding:6px;
-          border-radius:24px; background:var(--ke-color-background-header);
-          box-shadow:var(--ke-elevation-mobile-nav); border:1px solid var(--ke-color-line);
-        }
-        body[data-shell-composition="home-navigation-only"] .site-nav a::after { display:none; }
-      }
       @media (max-width:759px) {
         body[data-shell-composition="home-navigation-only"] .site-header__brand-tag { display:none; }
       }
@@ -2511,7 +2503,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       body[data-lower-surface-state="keyboard"] .mobile-bottom-nav { visibility:hidden; pointer-events:none; }
     </style>
   </head>
-  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="3" data-shell-composition={shellComposition.id} data-shell-composition-version={shellComposition.version} data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingPageContext ? 'site' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body data-exhibitions-theme={headerCurrent === 'exhibitions' ? 'graphite' : undefined} class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="4" data-shell-composition={shellComposition.id} data-shell-composition-version={shellComposition.version} data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingPageContext ? 'site' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
@@ -2590,6 +2582,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <SiteFooter socialLinks={FOOTER_SOCIAL_LINKS} />
     {resolvedMobileBottomMode !== 'none' && <MobileBottomNav current={mobileSection} />}
 
+    {resolvedMobileBottomMode !== 'none' && !/^\/(?:segodnya|zavtra|date-\d{4}-\d{2}-\d{2}|vyhodnye)(?:\/|$)/u.test(routePath) && <MobileDateAccessory today={getCurrentDate()} selectedDate={getCurrentDate()} current="today" calendarOnly />}
     <ShellIslandRuntime />
     <script>
       import { lowerNavigationState } from '../lib/shellComposition.ts';

@@ -139,3 +139,32 @@ body[data-fi-desktop] .fi-city-visible {opacity:1;}
 /* A cropped, full-length text row must not enlarge document scrollWidth.
    clip (unlike hidden/auto) does not create a scroll container for sticky. */
 body[data-fi-desktop] .fi-desktop-city-origin {overflow-x:clip;overflow-y:visible;}
+
+/* Desktop v4: one server-rendered navigation geometry on every user route. */
+@media(min-width:760px){
+ body[data-floating-islands="site"] .ke-listing-discovery-rail__date-context {display:none;}
+ body[data-primary-island="true"] .site-header .site-nav {position:fixed;top:var(--ke-island-top);right:clamp(24px,2.6vw,48px);display:flex;flex:0 1 auto;flex-wrap:nowrap;gap:2px;align-items:center;justify-content:center;min-height:var(--ke-island-height);box-sizing:border-box;padding:5px;max-width:calc(100vw - 320px);overflow:visible;border-radius:var(--ke-island-radius);background:var(--ke-island-surface);border:1px solid var(--ke-island-border);box-shadow:var(--ke-island-shadow);backdrop-filter:blur(18px);transition:none;pointer-events:auto;}
+ body[data-primary-island="true"] .site-header .site-nav a {display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 9px;border:0;border-radius:var(--ke-island-control-radius);font:var(--ke-island-font);white-space:nowrap;text-decoration:none;box-shadow:none;}
+ body[data-primary-island="true"] .site-header .site-nav a::after {display:none;}
+ body[data-primary-island="true"] .site-header .site-nav a:hover,
+ body[data-primary-island="true"] .site-header .site-nav a[aria-current="page"] {background:color-mix(in srgb,var(--ke-color-action-primary) 9%,transparent);color:var(--ke-color-action-primary);font-weight:650;}
+ body[data-primary-island="true"] .site-nav .site-header__badge {min-width:18px;height:18px;padding:0 4px;font-size:10px;line-height:18px;}
+ body[data-floating-islands="site"] .ke-listing-discovery-rail,
+ body[data-floating-islands="site"] .ke-listing-discovery-rail__inner {display:contents;}
+ body[data-floating-islands="site"] [data-listing-controls]:not([data-fi-docked]) {height:56px;min-height:56px;padding:0;margin:12px auto 24px;border-radius:var(--ke-island-radius);}
+ body[data-floating-islands="site"] [data-listing-city-filter] {flex-wrap:nowrap;gap:6px;padding:7px;box-sizing:border-box;height:54px;}
+ body[data-floating-islands="site"] [data-listing-city-filter] label {height:40px;min-height:40px;box-sizing:border-box;padding:0 10px;gap:4px;font:var(--ke-island-font);border-radius:var(--ke-island-control-radius);}
+ body[data-floating-islands="site"] [data-listing-city-filter] label::before {display:none;}
+ body[data-floating-islands="site"] [data-listing-city-filter] label strong {font:600 10px/1.2 var(--ke-font-family-sans);opacity:.55;}
+ body[data-exhibitions-theme="graphite"] {background:var(--ke-color-background-inverse);}
+ body[data-exhibitions-theme="light"] {background:var(--ke-color-background-page);}
+ body[data-primary-island="true"] .festival-month-nav {position:sticky;top:calc(var(--ke-island-top) + var(--ke-island-height) + var(--ke-space-3));z-index:62;border-radius:var(--ke-island-radius);background:var(--ke-island-surface);border:1px solid var(--ke-island-border);box-shadow:var(--ke-island-shadow);padding:5px;}
+ body[data-primary-island="true"] .festival-month-nav a {display:flex;align-items:center;min-height:40px;padding:0 12px;font:var(--ke-island-font);border-radius:var(--ke-island-control-radius);}
+ body[data-primary-island="true"] .festival-page h2 {scroll-margin-top:160px;}
+ body[data-primary-island="true"] .ke-weekend-day__head--sat {background:var(--ke-weekend-saturday-surface);}
+ body[data-primary-island="true"] .ke-weekend-day__head--sun {background:var(--ke-weekend-sunday-surface);}
+ body[data-primary-island="true"] .ke-weekend-day__head {color:var(--ke-color-text-inverse);}
+ body[data-primary-island="true"] .ke-weekend-day__head :is(p,span,strong,small,.ke-weekend-day__label) {color:inherit;}
+ body[data-primary-island="true"] .ke-weekend-day__label {font:var(--ke-weekend-heading-font);letter-spacing:-.02em;}
+ body[data-primary-island="true"] .ke-weekend-weekday-chip {background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);}
+}

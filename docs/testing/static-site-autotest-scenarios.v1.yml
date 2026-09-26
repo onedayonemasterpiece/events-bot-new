@@ -915,6 +915,23 @@ scenarios:
       pull_request: advisory_unless_high_risk
       release: selector_defined
 
+  browser.desktop_voice_review_20260926:
+    title: Desktop review — shared islands, Hero, exact dates, exhibitions and festivals
+    status: implemented
+    layers: [L1]
+    platforms: [browser]
+    trigger_tags: [visual-layout, static-route, static-data]
+    auth_mode: anonymous
+    cost: medium
+    side_effects: none
+    runner: site/tests/desktop-review-20260926.playwright.mjs
+    evidence: geometry_screenshots_calendar_navigation_first_paint
+    owner_review_scope: desktop_only
+    mobile_checks: responsive_regression_not_owner_or_native_acceptance
+    blocking:
+      pull_request: changed_desktop_review_surfaces
+      release: true
+
 policies:
   full_catalog_on_emulators: forbidden
   mobile_viewport_substitutes_android_or_ios: false

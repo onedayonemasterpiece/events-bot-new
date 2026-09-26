@@ -92,11 +92,20 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
         <span>Дизайн-система</span>
       </nav>
 
+      <section class="ds-section" id="desktop-review-20260926">
+        <h2>Десктопное ревью · 26 сентября · кандидат</h2>
+        <p>Единая навигация v4, календарь v3, Hero Talk v4, выходные v2, выставки v3 и фестивали v2. Предыдущие версии deprecated; все текущие потребители переведены. Мобильная приёмка владельцем не проводилась.</p>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px">
+          <div><h3>Предыдущая версия · deprecated</h3><iframe loading="lazy" title="Предыдущая версия интерфейса" src="https://static.kenigevents.ru/preview-integrated-islands-home-20260926/" style="width:100%;height:560px;border:1px solid var(--ke-color-line)"></iframe></div>
+          <div><h3>Текущий кандидат</h3><iframe loading="lazy" title="Текущий десктопный кандидат" src={withBase('/')} style="width:100%;height:560px;border:1px solid var(--ke-color-line)"></iframe></div>
+        </div>
+        <p>Полноразмерные страницы: <a href={withBase('/')}>Главная</a> · <a href={withBase('/segodnya/')}>Сегодня</a> · <a href={withBase('/zavtra/')}>Завтра</a> · <a href={withBase('/vyhodnye/')}>Выходные</a> · <a href={withBase('/vystavki/')}>Выставки</a> · <a href={withBase('/festivali/')}>Фестивали</a>.</p>
+      </section>
       <section class="section-card" id="home-final-candidate">
         <div class="section-card__inner">
           <Badge tone="accent">Кандидат для аудиоревью</Badge>
           <h2>Главная: единая композиция</h2>
-          <p>HomePage v2 · EventLayout v3 · HomeSearchEntry v1 · HomeQuickNav v2 · HomeColdStartFeed v2 · HeroTalkPageEnd v1.
+          <p>HomePage v2 · EventLayout v4 · HomeHeroTalk v4 · HomeSearchEntry v2 · HomeQuickNav v2 · HomeColdStartFeed v2 · HeroTalkPageEnd v3.
             Предыдущая кандидатная композиция v1 заменена; это не утверждение нового дизайна Hero-talk.</p>
           <p><a href={withBase('/')}>Открыть реальную главную: Hero → набор → ссылки → лента → продолжение</a></p>
           <h3>Hero-talk v2: общий evergreen fallback</h3>

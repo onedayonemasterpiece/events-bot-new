@@ -55,9 +55,11 @@ export function initDesktopFloatingIslands(doc=document,win=window){
   marker.style.position='static';row.style.cssText='';toggle.style.cssText='';row.append(toggle);controls.style.cssText=originalControlsStyle+';animation:none;transform:none;width:max-content;max-width:100%;margin:0 auto;';items.forEach(i=>i.button.hidden=false);toggle.hidden=true;panel.hidden=true;
   for(const link of navLinks)nav.insertBefore(link,more);more.hidden=true;nav.style.cssText=originalNavStyle;
   ranges();
-  // Reserve the longest FULL heading once. Changing sections must not resize the dock.
+  // Reserve the longest numeric time on date routes; unrelated long labels must
+  // not widen every time context. Non-time contexts keep their full headings.
   const probe=doc.createElement('span');probe.style.cssText='position:fixed;visibility:hidden;white-space:nowrap;font:650 13px/18px Inter,ui-sans-serif,system-ui,sans-serif;';doc.body.append(probe);
-  let headingWidth=0;for(const r of sectionRanges){probe.textContent=r.heading?.textContent.trim()||'';headingWidth=Math.max(headingWidth,probe.getBoundingClientRect().width);}probe.remove();
+  const timed=sectionRanges.some(r=>/^\d{1,2}:\d{2}$/u.test(r.heading.textContent.trim()));
+  let headingWidth=0;for(const r of sectionRanges){if(timed&&!/^\d{1,2}:\d{2}$/u.test(r.heading.textContent.trim()))continue;probe.textContent=r.heading?.textContent.trim()||'';headingWidth=Math.max(headingWidth,probe.getBoundingClientRect().width);}probe.remove();
   const brand=doc.querySelector('.site-header__brand-tag').getBoundingClientRect(),left=brand.right+12,right=parseFloat(win.getComputedStyle(nav).right),space=win.innerWidth-right-left;
   const contextWidth=headingWidth===0?0:Math.min(Math.ceil(headingWidth)+44,Math.max(240,win.innerWidth*.28));
   widths=items.map(i=>i.button.getBoundingClientRect().width);
@@ -148,5 +150,5 @@ export function initDesktopFloatingIslands(doc=document,win=window){
  const personal=doc.querySelector('[data-popular-personalized]');
  const personalObserver=new MutationObserver(()=>schedule(true));if(personal)personalObserver.observe(personal,{attributes:true,attributeFilter:['hidden']});
  band.__islands={get geometry(){return geometry},destroy(){dead=true;personalObserver.disconnect();cancelMotion();abort.abort();win.cancelAnimationFrame(frame);close(false);for(const link of navLinks)nav.insertBefore(link,more);more.remove();nav.style.cssText=originalNavStyle;contextParent.insertBefore(context,contextNext);sectionParent.insertBefore(section,sectionNext);context.style.cssText=originalContextStyle;if(pageButton)pageButton.hidden=false;row.remove();skin.remove();controls.prepend(toggle);toggle.style.cssText='';controls.style.cssText=originalControlsStyle;controlParent.insertBefore(controls,controlNext);marker.remove();panel.hidden=false;layer.remove();delete doc.body.dataset.fiDesktop;delete band.__islands;}};
- doc.fonts.ready.then(()=>new Promise(r=>win.requestAnimationFrame(()=>win.requestAnimationFrame(r)))).then(()=>{if(dead)return;sync();ready=true;measure();render();doc.body.dataset.fiMotion='ready';});return band.__islands;
+ sync();ready=true;measure();render();doc.body.dataset.fiMotion='ready';return band.__islands;
 }

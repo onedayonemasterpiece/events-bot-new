@@ -4,7 +4,7 @@ import { initContentFloatingIslands } from './contentFloatingIslands.mjs';
 import { initMobileFloatingIslands, initMobileWeekendWithoutCities } from './mobileFloatingIslands.mjs';
 import { initDesktopFloatingIslands } from './desktopFloatingIslands.mjs';
 /** Isolated Popular review: one geometry owner; measured once, transform-only title. */
-export const FLOATING_ISLANDS_VERSION='3.0.0-review-motion';
+export const FLOATING_ISLANDS_VERSION='4.0.0-desktop-review';
 export const userIslandRoute=path=>!/^\/(?:lab|__preview|admin|api)(?:\/|$)/u.test(path);
 export const clamp=n=>Math.max(0,Math.min(1,n));
 export const smooth=n=>{const t=clamp(n);return t*t*(3-2*t)};
@@ -16,6 +16,13 @@ export function initShellFloatingIslands(doc=document,win=window){
  const media=win.matchMedia('(min-width:760px)');
  const mount=()=>{
   band.__islands?.destroy();delete doc.body.dataset.fiMotion;
+  // The festival month switcher is the section island; never duplicate its label.
+  if(media.matches&&doc.querySelector('.festival-month-nav')){
+   const nodes=[...band.querySelectorAll('[data-floating-page-context],[data-floating-section-context]')],hidden=nodes.map(n=>n.hidden);nodes.forEach(n=>n.hidden=true);
+   doc.body.dataset.fiMotion='ready';
+   band.__islands={destroy(){nodes.forEach((n,i)=>n.hidden=hidden[i]);delete band.__islands;}};
+   return band.__islands;
+  }
   if(doc.querySelector('[data-free-collection-surface]'))return initFreeMedallionIsland(doc,win);
   const surface=citySurface(doc,!media.matches),rail=doc.querySelector('[data-mobile-listing-rails]');
   // Mobile event details already own their title/content and action surfaces.
@@ -37,5 +44,5 @@ export function initShellFloatingIslands(doc=document,win=window){
   if(!media.matches&&!surface&&rail?.getBoundingClientRect().height>0&&rail.dataset.mobileV23Page==='weekend')return initMobileWeekendWithoutCities(doc,win);
   return !surface?initContentFloatingIslands(doc,win):media.matches?initDesktopFloatingIslands(doc,win):initMobileFloatingIslands(doc,win);
  };
- media.addEventListener('change',mount);band.__islandResponsive=true;return mount();
+ media.addEventListener('change',mount);band.__islandResponsive=true;return doc.fonts.ready.then(mount);
 }

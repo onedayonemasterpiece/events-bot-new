@@ -3,13 +3,14 @@ import EventLayout from '../../layouts/EventLayout.astro';
 import WeekendListingSurface from '../../components/listings/WeekendListingSurface.astro';
 import weekendEditorial from '../../data/weekend-editorial-prototype.json';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, eventHref, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, PREVIEW_BUILD_ID, SITE_MODE, SITE_NAME } from '../../lib/events';
+import { getPreviewBuild, absoluteUrl, eventHref, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, PREVIEW_BUILD_ID, SITE_MODE, SITE_NAME } from '../../lib/events';
 import { isAmberArtifactResearchEnabled, selectAmberArtifactEventId } from '../../lib/artifacts.mjs';
 
 const events = getWeekendEvents();
 const editorialItems = weekendEditorial.items.map(item => ({ ...item, event: events.find(event => event.id === item.event_id) }));
 const weekend = getWeekendRange();
 const editorialEnabled = SITE_MODE === 'preview'
+  && weekendEditorial.source_snapshot === getPreviewBuild().generated_at
   && ['preview-islands-20260906-archetypes-date-b7', 'preview-islands-20260906-archetypes-firstpaint-b9','preview-islands-20260906-archetypes-firstpaint-b10','preview-islands-review-20260906','preview-islands-sequential-20260906','preview-islands-menu-20260906'].includes(PREVIEW_BUILD_ID)
   && weekend.start === weekendEditorial.weekend_start && weekend.end === weekendEditorial.weekend_end
   && editorialItems.every(item => item.event);

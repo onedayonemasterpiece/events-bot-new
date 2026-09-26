@@ -17,7 +17,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   <section
     class="home-hero-talk"
     data-ds-family="HomeHeroTalk"
-    data-ds-version="3"
+    data-ds-version="4"
     data-ds-variant="editorial-scenes"
     data-ds-state="populated"
     data-floating-context-label="Анонсы"
@@ -72,6 +72,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
                     {fragment.breakAfter ? <br /> : ' '}
                   </>
                 ))}
+                <span class="home-hero-talk__cursor" aria-hidden="true"></span>
               </h2>
             </div>
             {image && asset && (
@@ -97,15 +98,12 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
         );
       })}
     </div>
-    {visibleScenes.length > 1 && <div class="home-hero-talk__controls" data-home-hero-controls hidden>
-      <Button variant="quiet" size="compact" pressed={false} ariaLabel="Приостановить смену сцен">Пауза</Button>
-    </div>}
   </section>
 )}
 
 {visibleScenes.length === 0 && (
   <section class="home-hero-talk home-hero-talk--generic" data-home-hero-talk data-scene-count="0"
-    data-ds-family="HomeHeroTalk" data-ds-version="3" data-ds-variant="service-fallback" data-ds-state="generic"
+    data-ds-family="HomeHeroTalk" data-ds-version="4" data-ds-variant="service-fallback" data-ds-state="generic"
     aria-labelledby={titleId}>
     <div class="home-hero-talk__scene">
       <div class="home-hero-talk__generic-copy">
@@ -176,9 +174,9 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   }
   .home-hero-talk__media {
     --mosaic-columns:16;
-    position:absolute;z-index:0;top:50%;right:0;width:75vw;
+    position:absolute;z-index:0;top:0;right:0;width:75vw;
     height:calc((75vw - (var(--mosaic-columns) - 1)*3px)*5/var(--mosaic-columns));
-    max-height:100%;overflow:hidden;transform:translateY(-50%);pointer-events:none;
+    max-height:100%;overflow:hidden;pointer-events:none;
   }
   .home-hero-talk__preload { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
   .home-hero-talk__mosaic {
@@ -202,15 +200,13 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     opacity:0;transform:translateY(.28em);filter:blur(1px);
     animation:home-hero-fragment-in 240ms cubic-bezier(.16,1,.3,1) var(--word-delay) forwards;
   }
-  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__fragment:last-of-type::after {
-    content:"";display:inline-block;width:.11em;height:.78em;margin-left:.08em;background:var(--ke-color-action-primary);
+  .home-hero-talk__cursor { display:none; }
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__cursor {
+    display:inline-block;width:.08em;height:.78em;margin-left:.08em;background:var(--ke-color-action-primary);
     animation:home-hero-cursor 780ms step-end infinite;vertical-align:-.03em;
   }
   @keyframes home-hero-fragment-in { to { opacity:1;transform:none;filter:none; } }
   @keyframes home-hero-cursor { 50% { opacity:0; } }
-  .home-hero-talk__controls { position:absolute; right:1rem; bottom:.5rem; z-index:3; }
-  .home-hero-talk__controls[hidden] { display:none; }
-  .home-hero-talk__controls :global(.ke-button) { background:var(--ke-color-surface-warm); }
   .home-hero-talk__scene--text-only .home-hero-talk__message { width:min(90vw,45rem);max-width:100%; }
   @media (min-width:1536px) { .home-hero-talk__media { --mosaic-columns:18; } }
   @media (min-width:1792px) { .home-hero-talk__media { --mosaic-columns:20; } }
@@ -219,13 +215,13 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     .home-hero-talk__scene { padding-inline:1rem; }
     .home-hero-talk__message { width:100%;max-width:none;align-self:center;margin:0; }
     .home-hero-talk__message h2 { max-width:20ch;font-size:var(--ke-type-display-home-size-compact);line-height:1; }
-    .home-hero-talk__media { display:block; width:100vw; height:calc(100vw / 3.6); top:65%; right:0; }
+    .home-hero-talk__media { display:block; width:100vw; height:calc(100vw / 3.6); top:65%; right:0; transform:translateY(-50%); }
   }
   @media (prefers-reduced-motion:reduce) {
     .home-hero-talk__scene:not(:first-child) { display:none!important; }
     .home-hero-talk__scene:first-child { position:relative!important;opacity:1!important;visibility:visible!important; }
     .home-hero-talk__word, .home-hero-talk__fragment { animation:none!important;opacity:1!important;transform:none!important;filter:none!important; }
-    .home-hero-talk__fragment::after { display:none!important; }
+    .home-hero-talk__cursor { display:none!important; }
     .home-hero-talk__tile { transition:none!important;opacity:var(--tile-opacity,0)!important; }
   }
   @media (max-width:759px) {
@@ -250,10 +246,6 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     let active = 0;
     let timer = 0;
     let visible = true;
-    let paused = false;
-    const controls = root.querySelector<HTMLElement>('[data-home-hero-controls]');
-    const pauseButton = controls?.querySelector<HTMLButtonElement>('button');
-    if (controls) controls.hidden = reduced || scenes.length < 2;
     let transitionToken = 0;
 
     const clamp = (value:number, minimum=0, maximum=1) => Math.max(minimum, Math.min(maximum, value));
@@ -338,13 +330,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
       scenes.forEach((scene,sceneIndex)=>{const selected=sceneIndex===active;scene.classList.toggle('is-active',selected);scene.setAttribute('aria-hidden',String(!selected));scene.querySelectorAll<HTMLAnchorElement>('a').forEach((link)=>link.tabIndex=selected?0:-1);});
     };
     const stop=()=>{window.clearTimeout(timer);timer=0;};
-    const schedule=()=>{stop();if(reduced||paused||root.contains(document.activeElement)||!visible||document.hidden||scenes.length<2)return;timer=window.setTimeout(async()=>{await activate(active+1);schedule();},7200);};
-    pauseButton?.addEventListener('click',()=>{
-      paused=!paused;pauseButton.setAttribute('aria-pressed',String(paused));
-      pauseButton.textContent=paused?'Продолжить':'Пауза';
-      pauseButton.setAttribute('aria-label',paused?'Продолжить смену сцен':'Приостановить смену сцен');
-      root.dataset.playback=paused?'paused':'playing';schedule();
-    });
+    const schedule=()=>{stop();if(reduced||root.contains(document.activeElement)||!visible||document.hidden||scenes.length<2)return;timer=window.setTimeout(async()=>{await activate(active+1);schedule();},7200);};
     root.addEventListener('focusin',stop);
     root.addEventListener('focusout',()=>window.setTimeout(schedule,0));
     root.dataset.playback=reduced?'reduced-motion':'playing';

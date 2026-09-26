@@ -1,0 +1,22 @@
+{
+  "schema_version": "interest-clubs-static-v2",
+  "projection_version": 2,
+  "generated_at": "2026-09-26T07:33:38.125800+00:00",
+  "current_date": "2026-09-26",
+  "source": "disabled-by-build-gate",
+  "window": {},
+  "exclusion_receipts": {
+    "approved_identity_count": 0,
+    "invalid_identity_count": 0,
+    "non_active_relation_count": 0,
+    "unaccepted_relation_count": 0,
+    "event_public_gate_count": 0,
+    "event_lifecycle_count": 0,
+    "event_silent_count": 0,
+    "outside_six_month_window_count": 0,
+    "dormant_identity_count": 0,
+    "catalog_event_id_omitted_count": 0,
+    "festival_relation_allowed_count": 0
+  },
+  "clubs": []
+}

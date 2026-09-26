@@ -57,8 +57,9 @@
   --ke-type-display-home-size: clamp(2.8rem, 4vw, 3rem);
   --ke-type-display-home-size-compact: clamp(1.72rem, 8.5vw, 2.12rem);
   --ke-type-display-home-line: 1.05;
-  --ke-type-display-home-letter: -0.055em;
-  --ke-type-display-home: var(--ke-type-h1-weight) var(--ke-type-display-home-size) / var(--ke-type-display-home-line) var(--ke-font-family-sans);
+  --ke-type-display-home-letter: -0.03em;
+  --ke-type-display-home-weight: 500;
+  --ke-type-display-home: var(--ke-type-display-home-weight) var(--ke-type-display-home-size) / var(--ke-type-display-home-line) var(--ke-font-family-sans);
 
   --ke-type-display-unusual-size: var(--ke-type-h1-size);
   --ke-type-display-unusual-line: var(--ke-type-h1-line);

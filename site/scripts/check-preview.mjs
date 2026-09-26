@@ -17,6 +17,13 @@ const distDir = join(siteDir, 'dist');
 const buildId = process.env.PREVIEW_BUILD_ID || readdirSync(distDir).find((name) => name.startsWith('preview-'));
 if (!buildId) throw new Error('No preview-* folder found in dist');
 const root = join(distDir, buildId);
+// Every new full preview must retain the integrated desktop review contract.
+for (const route of ['index.html','segodnya/index.html','zavtra/index.html','vyhodnye/index.html','vystavki/index.html','festivali/index.html']) {
+  const html=readFileSync(join(root,route),'utf8');
+  if (!/data-ds-family="EventLayout" data-ds-version="4"/u.test(html)) throw new Error(`Desktop shell version drift: ${route}`);
+  if (!html.includes('data-calendar-sheet')) throw new Error(`Shared calendar missing: ${route}`);
+  if (html.includes('data-home-hero-controls')) throw new Error(`Removed Hero Pause control returned: ${route}`);
+}
 const required = [
   '__preview/index.html',
   'segodnya/index.html',

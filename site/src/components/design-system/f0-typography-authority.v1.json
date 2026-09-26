@@ -196,5 +196,15 @@
     },
     "palette": "Retain explicit content themes; a page must not recolor shared shell/controls through body inheritance.",
     "claim": "Source contract only. Require compiled computed styles, negative override control and personal visual review."
+  },
+  "desktop_review_20260926": {
+    "source": "voice-20260926-090623-08876172",
+    "scope": "desktop-only",
+    "home_display_weight_token": "--ke-type-display-home-weight",
+    "home_display_weight": 500,
+    "weekend_heading_font_token": "--ke-weekend-heading-font",
+    "weekend_heading_font": "500 24px/1.2 var(--ke-font-family-sans)",
+    "font_family_changed": false,
+    "owner_visual_acceptance": false
   }
 }

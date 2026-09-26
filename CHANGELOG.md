@@ -13,6 +13,14 @@ public festival/club counts and native Penpot acceptance remain open.
 
 ## [Unreleased]
 
+### Desktop review (2026-09-26)
+
+- Shared desktop floating navigation has stable initial geometry on Home and listings; time context sizes to time labels. Dates opens the shared exact-date calendar across user pages.
+- Hero Talk v4 removes the duplicate cursor/Pause control, softens typography, aligns desktop mosaic to the top and adjusts page-end spacing.
+- Weekend headings gain contrast; exhibitions keep a continuous dark canvas and standard desktop media corners; festivals retain one sticky month switcher.
+- Refresh the full event catalog from the 2026-09-26 public projection. Versioned runtime DS, consumer graph, catalog and desktop browser regression contract updated. Mobile remains unreviewed by owner.
+
+
 ### Preview integration (2026-09-26)
 - Integrated the accepted floating-island listing shell with the Home assembly, so Home → Today keeps the shared floating navigation and contextual islands in one full-site preview.
 - Added a browser regression journey for Home → Today and aligned preview validation with the accepted Popular listing and OCR fallback markup. The review build uses the historical 2026-07-23 event snapshot.

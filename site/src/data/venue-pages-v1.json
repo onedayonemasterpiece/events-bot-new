@@ -1,0 +1,5805 @@
+{
+  "schema_version": "venue-pages-v1",
+  "generated_at": "2026-09-26T07:33:38.125800+00:00",
+  "catalog_hash": "bc6ff62bbc02244bf8ef1145f2348200b089464184a1819f35876577fb4817d2",
+  "registry_hash": "f76155d4eaded013a94c374366c7b65e448744492b953e19524e297f31b94ce5",
+  "theatre_organizations": [
+    {
+      "entity_id": "act-opus",
+      "slug": "act-opus",
+      "name": "Театр современной драмы «Акт.Опус»",
+      "medallion_slug": "act-opus",
+      "event_count": 1,
+      "event_memberships": [
+        {
+          "event_id": 9141,
+          "reasons": [
+            {
+              "code": "organizer",
+              "binding": "organizer:акт опус"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "city-theatre-zheleznodorozhny",
+      "slug": "city-theatre-zheleznodorozhny",
+      "name": "«Город-Театр», Железнодорожный",
+      "medallion_slug": null,
+      "event_count": 0,
+      "event_memberships": []
+    },
+    {
+      "entity_id": "dom-iskusstv",
+      "slug": "dom-iskusstv",
+      "name": "Калининградский театр эстрады / Дом искусств",
+      "medallion_slug": "dom-iskusstv",
+      "event_count": 72,
+      "event_memberships": [
+        {
+          "event_id": 7172,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7173,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7174,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7175,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7176,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7177,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7178,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7179,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7180,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7181,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7182,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7183,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7316,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7444,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7633,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7722,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7801,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8317,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8361,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8623,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8624,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8625,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8714,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8755,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8756,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8757,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8890,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8945,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8946,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8955,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8956,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8957,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8958,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9088,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9089,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9090,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9100,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9101,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9102,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9103,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9104,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9105,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9106,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9107,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9120,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9122,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9123,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9238,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9261,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9284,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9285,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9286,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9287,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9288,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9289,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9306,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9316,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9317,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9330,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9331,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9332,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9333,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9334,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9335,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9336,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9337,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9338,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9339,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9340,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9341,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9342,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9343,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:domiskusstv.edinoepole.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:estrada"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "dramteatr39",
+      "slug": "dramteatr39",
+      "name": "Калининградский областной драматический театр",
+      "medallion_slug": "dramteatr39",
+      "event_count": 51,
+      "event_memberships": [
+        {
+          "event_id": 6317,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6318,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6407,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:dramteatr39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6408,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:dramteatr39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7222,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            }
+          ]
+        },
+        {
+          "event_id": 7318,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:dramteatr39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7359,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7360,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7458,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7459,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "organizer",
+              "binding": "organizer:драматический театр"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7597,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8363,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8500,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "telegram:dramteatr39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8871,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8872,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8873,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8874,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8875,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8876,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8877,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8878,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8879,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8880,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8891,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8892,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8893,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8894,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8895,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8896,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8897,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8898,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8899,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8900,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8901,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8902,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "organizer",
+              "binding": "organizer:драматический театр"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8903,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8904,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8905,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8906,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8909,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8914,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8915,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8916,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8930,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8931,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8932,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8933,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8973,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9156,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9157,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9292,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:dramteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:dramteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "kaliningrad-puppet-theatre",
+      "slug": "kaliningrad-puppet-theatre",
+      "name": "Калининградский областной театр кукол",
+      "medallion_slug": null,
+      "event_count": 2,
+      "event_memberships": [
+        {
+          "event_id": 9213,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "vk:20898960"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:театр кукол|победы 1а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9315,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "vk:20898960"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:театр кукол|победы 1а|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "muzteatr39",
+      "slug": "muzteatr39",
+      "name": "Калининградский областной музыкальный театр",
+      "medallion_slug": "muzteatr39",
+      "event_count": 32,
+      "event_memberships": [
+        {
+          "event_id": 6586,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7020,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:muztear39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7021,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:muztear39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7110,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:muztear39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7111,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7112,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7113,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7114,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7115,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7116,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7117,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7118,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:muztear39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7119,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7120,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7121,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "official_source",
+              "binding": "telegram:muztear39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7248,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8574,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8674,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "telegram:muztear39"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9028,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9029,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9030,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9183,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9266,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9267,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9268,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9269,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "organizer",
+              "binding": "organizer:музыкальный театр"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9270,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9271,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9272,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9273,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9293,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9294,
+          "reasons": [
+            {
+              "code": "official_source",
+              "binding": "domain:muzteatr39.ru"
+            },
+            {
+              "code": "official_source",
+              "binding": "parser:muzteatr"
+            },
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "my-theatre-kaliningrad",
+      "slug": "my-theatre-kaliningrad",
+      "name": "«Мой театр»",
+      "medallion_slug": null,
+      "event_count": 0,
+      "event_memberships": []
+    },
+    {
+      "entity_id": "third-floor-theatre",
+      "slug": "third-floor-theatre",
+      "name": "Театр «Третий этаж»",
+      "medallion_slug": null,
+      "event_count": 3,
+      "event_memberships": [
+        {
+          "event_id": 7815,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:театр третий этаж (сцена чердак)|коммунальная 6|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8573,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:театр третий этаж (сцена чердак)|коммунальная 6|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8790,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:театр третий этаж (сцена чердак)|коммунальная 6|калининград"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "venues": [
+    {
+      "entity_id": "dom-iskusstv",
+      "slug": "dom-iskusstv",
+      "name": "Калининградский театр эстрады / Дом искусств",
+      "medallion_slug": "dom-iskusstv",
+      "venue": {
+        "venueId": "dom-iskusstv",
+        "name": "Калининградский театр эстрады (Дом искусств)",
+        "address": "Ленинский проспект 155",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградский театр эстрады / Дом искусств",
+          "Калининградский театр эстрады",
+          "Театр эстрады",
+          "Дом искусств"
+        ],
+        "approvedLocationAliases": [
+          "Калининградский театр эстрады (Дом искусств), Ленинский проспект 155, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "status": "ready",
+      "event_count": 72,
+      "family_count": 43,
+      "date_count": 51,
+      "occurrences": [
+        {
+          "event_id": 7172,
+          "family_id": "title-98c4e654277aa2e1",
+          "start_date": "2026-09-26",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7722,
+          "family_id": "title-98c4e654277aa2e1",
+          "start_date": "2026-09-26",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7173,
+          "family_id": "title-ece95e580135be76",
+          "start_date": "2026-09-27",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7174,
+          "family_id": "title-f8447254b3daa9c1",
+          "start_date": "2026-09-29",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7316,
+          "family_id": "title-5a1a9dae30cbf072",
+          "start_date": "2026-09-30",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8714,
+          "family_id": "title-a3834505f52b4177",
+          "start_date": "2026-10-02",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8755,
+          "family_id": "title-a5c0ee4a3291a543",
+          "start_date": "2026-10-04",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8945,
+          "family_id": "title-b8c00eeaf83b292f",
+          "start_date": "2026-10-07",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8955,
+          "family_id": "title-2776b8ea20990974",
+          "start_date": "2026-10-07",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8956,
+          "family_id": "title-c6876b3846d2a0b8",
+          "start_date": "2026-10-08",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8957,
+          "family_id": "title-088773c7b626e206",
+          "start_date": "2026-10-08",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7444,
+          "family_id": "title-65f3eb77be19f3f7",
+          "start_date": "2026-10-09",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7175,
+          "family_id": "title-488a72475cb7eae2",
+          "start_date": "2026-10-10",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8958,
+          "family_id": "title-e76896918edaf74e",
+          "start_date": "2026-10-10",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7176,
+          "family_id": "title-ec78bf7a89d120e0",
+          "start_date": "2026-10-11",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7177,
+          "family_id": "title-ec78bf7a89d120e0",
+          "start_date": "2026-10-11",
+          "start_time": "13:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9100,
+          "family_id": "title-5844e76dbc1cf1de",
+          "start_date": "2026-10-16",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8946,
+          "family_id": "title-da52f9806e081d69",
+          "start_date": "2026-10-17",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7178,
+          "family_id": "title-1c929fc6137186bc",
+          "start_date": "2026-10-18",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8756,
+          "family_id": "title-996f8dda71dc3604",
+          "start_date": "2026-10-20",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9088,
+          "family_id": "title-1f46368e7e8795fb",
+          "start_date": "2026-10-24",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7801,
+          "family_id": "title-18102e83d3c83038",
+          "start_date": "2026-10-25",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7633,
+          "family_id": "title-3212d55e139dcee4",
+          "start_date": "2026-10-26",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8757,
+          "family_id": "title-59654aad4fed99b7",
+          "start_date": "2026-10-27",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9101,
+          "family_id": "title-3505278f27f9ca29",
+          "start_date": "2026-10-30",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9089,
+          "family_id": "title-86e7ade601de1981",
+          "start_date": "2026-10-31",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9306,
+          "family_id": "title-da52f9806e081d69",
+          "start_date": "2026-10-31",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8361,
+          "family_id": "title-2a10e90df8c2aea6",
+          "start_date": "2026-11-01",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9122,
+          "family_id": "title-df3a91bef0496187",
+          "start_date": "2026-11-05",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7179,
+          "family_id": "title-f85801eb0569caa8",
+          "start_date": "2026-11-06",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9102,
+          "family_id": "title-a6e77b56aef060a7",
+          "start_date": "2026-11-07",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7180,
+          "family_id": "title-8fcbc77994c29ff3",
+          "start_date": "2026-11-07",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8317,
+          "family_id": "title-b86dfbc8659b1ef8",
+          "start_date": "2026-11-08",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9103,
+          "family_id": "title-e76896918edaf74e",
+          "start_date": "2026-11-13",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9090,
+          "family_id": "title-24ab6c7e09c68224",
+          "start_date": "2026-11-14",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9104,
+          "family_id": "title-804ed658c9ed45a1",
+          "start_date": "2026-11-17",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9123,
+          "family_id": "title-3505278f27f9ca29",
+          "start_date": "2026-11-21",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9105,
+          "family_id": "title-98c4e654277aa2e1",
+          "start_date": "2026-11-22",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9106,
+          "family_id": "title-98c4e654277aa2e1",
+          "start_date": "2026-11-22",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7181,
+          "family_id": "title-0a59cbae0ef90490",
+          "start_date": "2026-11-23",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9120,
+          "family_id": "title-a3834505f52b4177",
+          "start_date": "2026-11-27",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7182,
+          "family_id": "title-abbd32e75c22dc3a",
+          "start_date": "2026-11-29",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8890,
+          "family_id": "title-54552dd0eac0d6ec",
+          "start_date": "2026-11-30",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8623,
+          "family_id": "title-aec2800302641c39",
+          "start_date": "2026-12-05",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8624,
+          "family_id": "title-7a872d90b567ef35",
+          "start_date": "2026-12-05",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7183,
+          "family_id": "title-b166d251eaa15b0b",
+          "start_date": "2026-12-06",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9284,
+          "family_id": "title-b13e1c5eb2ac4704",
+          "start_date": "2026-12-17",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9285,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-17",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9286,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-18",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9287,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-18",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9288,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-19",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9289,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-19",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9316,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-20",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9317,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-20",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9330,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-21",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9331,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-21",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9332,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-22",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9333,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-23",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9334,
+          "family_id": "title-b13e1c5eb2ac4704",
+          "start_date": "2026-12-23",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9335,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-25",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9336,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-25",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9337,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-26",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9338,
+          "family_id": "title-b13e1c5eb2ac4704",
+          "start_date": "2026-12-26",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9339,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-26",
+          "start_time": "16:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9340,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-27",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9341,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-27",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9342,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-27",
+          "start_time": "16:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9343,
+          "family_id": "title-ae1971954beb92cf",
+          "start_date": "2026-12-29",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9107,
+          "family_id": "title-d784ccbf813c48f7",
+          "start_date": "2027-01-07",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9238,
+          "family_id": "title-eb05e6c497c0be30",
+          "start_date": "2027-01-10",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8625,
+          "family_id": "title-eb05e6c497c0be30",
+          "start_date": "2027-01-10",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9261,
+          "family_id": "title-3a69013ba1e4ed8c",
+          "start_date": "2027-01-13",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:калининградский театр эстрады (дом искусств)|ленинский проспект 155|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "dramteatr39",
+      "slug": "dramteatr39",
+      "name": "Калининградский областной драматический театр",
+      "medallion_slug": "dramteatr39",
+      "venue": {
+        "venueId": "dramteatr39",
+        "name": "Драматический театр",
+        "address": "Мира 4",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградский областной драматический театр",
+          "Калининградский драматический театр",
+          "Драмтеатр"
+        ],
+        "approvedLocationAliases": [
+          "Драматический театр, Мира 4, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "status": "ready",
+      "event_count": 50,
+      "family_count": 37,
+      "date_count": 38,
+      "occurrences": [
+        {
+          "event_id": 8500,
+          "family_id": "title-e931214c0cad3bde",
+          "start_date": "2026-09-26",
+          "start_time": null,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7359,
+          "family_id": "title-e931214c0cad3bde",
+          "start_date": "2026-09-26",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7318,
+          "family_id": "title-e931214c0cad3bde",
+          "start_date": "2026-09-27",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8363,
+          "family_id": "title-18f2eb05b4e1dd84",
+          "start_date": "2026-09-28",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7458,
+          "family_id": "title-4e1e4ff8b5880b45",
+          "start_date": "2026-09-29",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7597,
+          "family_id": "title-e3eb5802525ff628",
+          "start_date": "2026-09-29",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7459,
+          "family_id": "title-fbefd3cd5d991807",
+          "start_date": "2026-09-30",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8891,
+          "family_id": "title-74e8207473643c32",
+          "start_date": "2026-10-01",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8892,
+          "family_id": "title-74e8207473643c32",
+          "start_date": "2026-10-01",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8871,
+          "family_id": "title-ad75b2848bb73562",
+          "start_date": "2026-10-02",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8930,
+          "family_id": "title-0b071aa0cc39b9cb",
+          "start_date": "2026-10-03",
+          "start_time": "14:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8909,
+          "family_id": "title-3c0ecbe61f6693a8",
+          "start_date": "2026-10-03",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8914,
+          "family_id": "title-0b071aa0cc39b9cb",
+          "start_date": "2026-10-04",
+          "start_time": "14:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8893,
+          "family_id": "title-2776b8ea20990974",
+          "start_date": "2026-10-04",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6407,
+          "family_id": "title-18daecc798595ab0",
+          "start_date": "2026-10-06",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6408,
+          "family_id": "title-8b7a94fe244e9d2f",
+          "start_date": "2026-10-07",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8872,
+          "family_id": "title-82cce221e98e829b",
+          "start_date": "2026-10-08",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8873,
+          "family_id": "title-90df655bb1b4a8af",
+          "start_date": "2026-10-09",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8874,
+          "family_id": "title-581786367c8bef0f",
+          "start_date": "2026-10-10",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8915,
+          "family_id": "title-0b071aa0cc39b9cb",
+          "start_date": "2026-10-11",
+          "start_time": "14:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8875,
+          "family_id": "title-8e5cad35bb06641d",
+          "start_date": "2026-10-11",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8973,
+          "family_id": "title-dcfff85b6a0e066a",
+          "start_date": "2026-10-12",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8876,
+          "family_id": "title-4e1e4ff8b5880b45",
+          "start_date": "2026-10-13",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8877,
+          "family_id": "title-6eca15b15155f0f0",
+          "start_date": "2026-10-14",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8878,
+          "family_id": "title-e6609dd1db83a50a",
+          "start_date": "2026-10-15",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8894,
+          "family_id": "title-2458d30b087088d8",
+          "start_date": "2026-10-16",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8895,
+          "family_id": "title-76c86f99f4cde567",
+          "start_date": "2026-10-17",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8916,
+          "family_id": "title-0b071aa0cc39b9cb",
+          "start_date": "2026-10-18",
+          "start_time": "14:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8896,
+          "family_id": "title-a339781a9e17c81b",
+          "start_date": "2026-10-18",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8897,
+          "family_id": "title-daa6197f1e9c6290",
+          "start_date": "2026-10-20",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8898,
+          "family_id": "title-e3eb5802525ff628",
+          "start_date": "2026-10-21",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8899,
+          "family_id": "title-8b25813666b6419e",
+          "start_date": "2026-10-22",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8900,
+          "family_id": "title-dcc91e4ad4c4c89c",
+          "start_date": "2026-10-23",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8931,
+          "family_id": "title-0b071aa0cc39b9cb",
+          "start_date": "2026-10-24",
+          "start_time": "14:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8901,
+          "family_id": "title-3e2765fbac98826e",
+          "start_date": "2026-10-24",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8932,
+          "family_id": "title-70bab27bad1d98d8",
+          "start_date": "2026-10-25",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8879,
+          "family_id": "title-74e8207473643c32",
+          "start_date": "2026-10-27",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8880,
+          "family_id": "title-74e8207473643c32",
+          "start_date": "2026-10-27",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8902,
+          "family_id": "title-3fdba35f04dc8c46",
+          "start_date": "2026-10-28",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8903,
+          "family_id": "title-73668d73da22a3c4",
+          "start_date": "2026-10-29",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8904,
+          "family_id": "title-1ebdcfc2aa18c320",
+          "start_date": "2026-10-30",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8933,
+          "family_id": "title-22ab41b00fc873a5",
+          "start_date": "2026-10-31",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8905,
+          "family_id": "title-22ab41b00fc873a5",
+          "start_date": "2026-10-31",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6317,
+          "family_id": "title-7e7d31ccf0725000",
+          "start_date": "2026-11-02",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6318,
+          "family_id": "title-60730553d047cc17",
+          "start_date": "2026-11-02",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8906,
+          "family_id": "title-e9c6c59e50ec4b12",
+          "start_date": "2026-11-09",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9292,
+          "family_id": "title-d02aef01953d1b19",
+          "start_date": "2026-11-16",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7360,
+          "family_id": "title-ea87e7f44d3c7b68",
+          "start_date": "2026-12-03",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9156,
+          "family_id": "title-eb05e6c497c0be30",
+          "start_date": "2026-12-21",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9157,
+          "family_id": "title-eb05e6c497c0be30",
+          "start_date": "2026-12-21",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:драматический театр|мира 4|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "kaliningrad-philharmonic",
+      "slug": "kaliningrad-philharmonic",
+      "name": "Филармония им. Светланова",
+      "medallion_slug": "kaliningrad-philharmonic",
+      "venue": {
+        "venueId": "kaliningrad-philharmonic",
+        "name": "Филармония им. Светланова",
+        "address": "Хмельницкого 61а",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградская филармония",
+          "Калининградская областная филармония",
+          "Филармония"
+        ],
+        "approvedLocationAliases": [
+          "Филармония им. Светланова, Хмельницкого 61а, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "status": "ready",
+      "event_count": 30,
+      "family_count": 30,
+      "date_count": 28,
+      "occurrences": [
+        {
+          "event_id": 7428,
+          "family_id": "title-cb7b37b71973c7da",
+          "start_date": "2026-09-26",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7463,
+          "family_id": "title-a361eaf4bfaa3175",
+          "start_date": "2026-09-27",
+          "start_time": "12:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7464,
+          "family_id": "title-6487d0e7d411bac0",
+          "start_date": "2026-09-27",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7515,
+          "family_id": "title-a20ec3348158dca3",
+          "start_date": "2026-10-01",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8429,
+          "family_id": "title-98432e747c05df3a",
+          "start_date": "2026-10-03",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8788,
+          "family_id": "title-eb93334abe0e697f",
+          "start_date": "2026-10-04",
+          "start_time": "12:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8795,
+          "family_id": "title-1efe6e787d182517",
+          "start_date": "2026-10-04",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7516,
+          "family_id": "title-5cb25fdfa81f2a11",
+          "start_date": "2026-10-15",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7517,
+          "family_id": "title-eed2553672488764",
+          "start_date": "2026-10-22",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7518,
+          "family_id": "title-9195bbc7b3badadb",
+          "start_date": "2026-10-29",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7519,
+          "family_id": "title-21f66a16b8afd9ee",
+          "start_date": "2026-11-05",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7465,
+          "family_id": "title-eb52d0f58eff7c3a",
+          "start_date": "2026-11-12",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7520,
+          "family_id": "title-4a03dbda0da6d990",
+          "start_date": "2026-11-19",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7521,
+          "family_id": "title-79f2bc3c8670f819",
+          "start_date": "2026-11-26",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7522,
+          "family_id": "title-6470a7fed9f8c7e8",
+          "start_date": "2026-12-10",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7466,
+          "family_id": "title-b6398d9fe3c9796c",
+          "start_date": "2026-12-17",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7523,
+          "family_id": "title-6b6b09165581bdc8",
+          "start_date": "2027-01-28",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7524,
+          "family_id": "title-f0a0d8355eb25d46",
+          "start_date": "2027-02-04",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7525,
+          "family_id": "title-56d695da688285b6",
+          "start_date": "2027-02-11",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7526,
+          "family_id": "title-852c4c025a4ff213",
+          "start_date": "2027-02-18",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7467,
+          "family_id": "title-43f57819b00ea955",
+          "start_date": "2027-02-25",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7527,
+          "family_id": "title-4b841c019dd81639",
+          "start_date": "2027-03-04",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7528,
+          "family_id": "title-75d11189c7fbc8c2",
+          "start_date": "2027-03-11",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7529,
+          "family_id": "title-0c0c3256fc90cb75",
+          "start_date": "2027-03-18",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7530,
+          "family_id": "title-f8e638566babe4c3",
+          "start_date": "2027-03-25",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7531,
+          "family_id": "title-12f802b86538a687",
+          "start_date": "2027-04-01",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7468,
+          "family_id": "title-7b9671ca43f2d4f9",
+          "start_date": "2027-04-08",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7532,
+          "family_id": "title-80f97e8dbd30481b",
+          "start_date": "2027-04-15",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7533,
+          "family_id": "title-635d506c14e64c01",
+          "start_date": "2027-04-22",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7534,
+          "family_id": "title-aee4d5b42e2cca8a",
+          "start_date": "2027-04-29",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филармония им. светланова|хмельницкого 61а|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "muzteatr39",
+      "slug": "muzteatr39",
+      "name": "Калининградский областной музыкальный театр",
+      "medallion_slug": "muzteatr39",
+      "venue": {
+        "venueId": "muzteatr39",
+        "name": "Музыкальный театр",
+        "address": "Мира 87",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Калининградский областной музыкальный театр",
+          "Калининградский музыкальный театр"
+        ],
+        "approvedLocationAliases": [
+          "Музыкальный театр, Мира 87, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "status": "ready",
+      "event_count": 32,
+      "family_count": 25,
+      "date_count": 25,
+      "occurrences": [
+        {
+          "event_id": 7020,
+          "family_id": "title-94b33a3c20e7d13a",
+          "start_date": "2026-09-26",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7021,
+          "family_id": "title-94b33a3c20e7d13a",
+          "start_date": "2026-09-27",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8674,
+          "family_id": "title-fd8ab1a7a59bcbd9",
+          "start_date": "2026-09-27",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7110,
+          "family_id": "title-ebacc14dc533923b",
+          "start_date": "2026-10-02",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7111,
+          "family_id": "title-ebacc14dc533923b",
+          "start_date": "2026-10-03",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9028,
+          "family_id": "title-ad073fa7a026b64e",
+          "start_date": "2026-10-03",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7112,
+          "family_id": "title-a087cc1af8c1d211",
+          "start_date": "2026-10-04",
+          "start_time": "11:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7113,
+          "family_id": "title-2af93b4015322e0a",
+          "start_date": "2026-10-09",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7114,
+          "family_id": "title-2af93b4015322e0a",
+          "start_date": "2026-10-10",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7115,
+          "family_id": "title-3bb087828e893780",
+          "start_date": "2026-10-17",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9183,
+          "family_id": "title-42a878ecfcdb7eea",
+          "start_date": "2026-10-17",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7116,
+          "family_id": "title-3bb087828e893780",
+          "start_date": "2026-10-18",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9029,
+          "family_id": "title-42a878ecfcdb7eea",
+          "start_date": "2026-10-18",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7117,
+          "family_id": "title-73b6db8bc4032e35",
+          "start_date": "2026-10-23",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7118,
+          "family_id": "title-73b6db8bc4032e35",
+          "start_date": "2026-10-24",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8574,
+          "family_id": "title-19ddbac2ba82bbb5",
+          "start_date": "2026-10-24",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7248,
+          "family_id": "title-50322815326328fa",
+          "start_date": "2026-10-25",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7119,
+          "family_id": "title-7c25f74f28b8a14b",
+          "start_date": "2026-10-25",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9030,
+          "family_id": "title-9695469db2801e92",
+          "start_date": "2026-10-25",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7120,
+          "family_id": "title-b5922dd729c9165b",
+          "start_date": "2026-10-30",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7121,
+          "family_id": "title-13ce8b6f285059fe",
+          "start_date": "2026-10-31",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9266,
+          "family_id": "title-74486af7a80d1a7c",
+          "start_date": "2026-11-01",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 6586,
+          "family_id": "title-60730553d047cc17",
+          "start_date": "2026-11-03",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9267,
+          "family_id": "title-a3c8a0c200d95054",
+          "start_date": "2026-11-04",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9268,
+          "family_id": "title-1f39fe56342f9e74",
+          "start_date": "2026-11-06",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9269,
+          "family_id": "title-c90e9b37e8e36e06",
+          "start_date": "2026-11-08",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9293,
+          "family_id": "title-ae1925ba4608fc1e",
+          "start_date": "2026-11-15",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9270,
+          "family_id": "title-202b0f4da5dfb179",
+          "start_date": "2026-11-21",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9271,
+          "family_id": "title-202b0f4da5dfb179",
+          "start_date": "2026-11-22",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9294,
+          "family_id": "title-648efec319bd988d",
+          "start_date": "2026-11-27",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9272,
+          "family_id": "title-92c05ffa9b41a4a8",
+          "start_date": "2026-11-28",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9273,
+          "family_id": "title-4937f5f7053d991f",
+          "start_date": "2026-11-29",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:музыкальный театр|мира 87|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "tretyakovka-kaliningrad",
+      "slug": "tretyakovka-kaliningrad",
+      "name": "Филиал Третьяковской галереи",
+      "medallion_slug": "tretyakovka-kaliningrad",
+      "venue": {
+        "venueId": "tretyakovka-kaliningrad",
+        "name": "Филиал Третьяковской галереи",
+        "address": "Парадная наб. 3",
+        "city": "Калининград",
+        "approvedNameAliases": [
+          "Третьяковская галерея",
+          "Третьяковская галерея Калининград",
+          "Третьяковка",
+          "Кинозал Третьяковской галереи"
+        ],
+        "approvedLocationAliases": [
+          "Филиал Третьяковской галереи, Парадная наб. 3, Калининград"
+        ],
+        "approvedTuples": []
+      },
+      "status": "ready",
+      "event_count": 14,
+      "family_count": 13,
+      "date_count": 11,
+      "occurrences": [
+        {
+          "event_id": 5370,
+          "family_id": "title-ca8218e6a7863e14",
+          "start_date": "2026-06-12",
+          "start_time": "12:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8758,
+          "family_id": "title-fe1bc62b07a55797",
+          "start_date": "2026-09-26",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8794,
+          "family_id": "title-8eb4eca6708606b1",
+          "start_date": "2026-09-27",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8934,
+          "family_id": "title-8eb4eca6708606b1",
+          "start_date": "2026-09-27",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9323,
+          "family_id": "title-d0a6ca76729c67ba",
+          "start_date": "2026-10-01",
+          "start_time": "16:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7371,
+          "family_id": "title-628e7128907ecfd2",
+          "start_date": "2026-10-01",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9322,
+          "family_id": "title-8483fab951e5342e",
+          "start_date": "2026-10-02",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9321,
+          "family_id": "title-6bedffc1c27ebf2f",
+          "start_date": "2026-10-03",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 8979,
+          "family_id": "title-c64b1ba17b55ecaa",
+          "start_date": "2026-10-03",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9320,
+          "family_id": "title-8397a64b0f45ac38",
+          "start_date": "2026-10-04",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9296,
+          "family_id": "title-a41fc7dce40c3a10",
+          "start_date": "2026-10-11",
+          "start_time": "14:30",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9295,
+          "family_id": "title-ab0fcde1401d09a6",
+          "start_date": "2026-10-25",
+          "start_time": "14:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 9297,
+          "family_id": "title-0acd86aa19498fa4",
+          "start_date": "2026-12-11",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        },
+        {
+          "event_id": 7496,
+          "family_id": "title-51f2b28dbc59fbaf",
+          "start_date": "2027-06-16",
+          "start_time": null,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:филиал третьяковской галереи|парадная наб. 3|калининград"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "entity_id": "yantar-hall",
+      "slug": "yantar-hall",
+      "name": "Янтарь холл",
+      "medallion_slug": "yantar-hall",
+      "venue": {
+        "venueId": "yantar-hall",
+        "name": "Янтарь холл",
+        "address": "Ленина 11",
+        "city": "Светлогорск",
+        "approvedNameAliases": [
+          "Янтарь-холл",
+          "Янтарь Холл",
+          "Зал Янтарный",
+          "Театр эстрады Янтарь-холл",
+          "Театр эстрады Янтарь холл",
+          "Арт-пространство Янтарь-холл",
+          "Арт-пространство Янтарь холл"
+        ],
+        "approvedLocationAliases": [
+          "Янтарь холл, Ленина 11, Светлогорск"
+        ],
+        "approvedTuples": []
+      },
+      "status": "ready",
+      "event_count": 43,
+      "family_count": 37,
+      "date_count": 34,
+      "occurrences": [
+        {
+          "event_id": 5725,
+          "family_id": "title-19b2943835b211a9",
+          "start_date": "2026-06-11",
+          "start_time": "16:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7220,
+          "family_id": "title-3fe116189dbcfb3d",
+          "start_date": "2026-09-26",
+          "start_time": "16:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9216,
+          "family_id": "title-4091d38a186a704e",
+          "start_date": "2026-09-27",
+          "start_time": "00:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9262,
+          "family_id": "title-4091d38a186a704e",
+          "start_date": "2026-09-27",
+          "start_time": "00:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7221,
+          "family_id": "title-3cc7ec7860a49511",
+          "start_date": "2026-09-27",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7222,
+          "family_id": "title-378b8c6160e04b01",
+          "start_date": "2026-10-03",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7223,
+          "family_id": "title-c680aa98dc17634c",
+          "start_date": "2026-10-04",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9139,
+          "family_id": "title-1caa78b0179f8527",
+          "start_date": "2026-10-04",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 6357,
+          "family_id": "title-31e3c035e5b72864",
+          "start_date": "2026-10-09",
+          "start_time": null,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 8240,
+          "family_id": "title-7bd3f898472629a2",
+          "start_date": "2026-10-09",
+          "start_time": null,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9150,
+          "family_id": "title-e81238ffb048cd00",
+          "start_date": "2026-10-10",
+          "start_time": null,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7224,
+          "family_id": "title-e81238ffb048cd00",
+          "start_date": "2026-10-10",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7225,
+          "family_id": "title-e81238ffb048cd00",
+          "start_date": "2026-10-11",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7226,
+          "family_id": "title-4c8e9c98ee93c6d0",
+          "start_date": "2026-10-16",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9290,
+          "family_id": "title-2226d9049db47c79",
+          "start_date": "2026-10-18",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7227,
+          "family_id": "title-b7a23c11833d6df8",
+          "start_date": "2026-10-23",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9217,
+          "family_id": "title-a7e51a9e9c1feb6a",
+          "start_date": "2026-10-24",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7228,
+          "family_id": "title-e89ca7f73c3e05f7",
+          "start_date": "2026-10-25",
+          "start_time": "16:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9318,
+          "family_id": "title-73d62384ee16f795",
+          "start_date": "2026-10-26",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7229,
+          "family_id": "title-81fe3cb90dd8a247",
+          "start_date": "2026-10-30",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7230,
+          "family_id": "title-35ba14ec73795179",
+          "start_date": "2026-10-31",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7231,
+          "family_id": "title-7e7d31ccf0725000",
+          "start_date": "2026-11-04",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9218,
+          "family_id": "title-b1e942d9d5ec5675",
+          "start_date": "2026-11-04",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7232,
+          "family_id": "title-514456e51e25d701",
+          "start_date": "2026-11-06",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9068,
+          "family_id": "title-7d52a91a2ed7aea6",
+          "start_date": "2026-11-08",
+          "start_time": "15:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7233,
+          "family_id": "title-68f8c04a16ddeaf8",
+          "start_date": "2026-11-13",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7234,
+          "family_id": "title-abc01b8c2bb2f440",
+          "start_date": "2026-11-15",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7235,
+          "family_id": "title-9eb6454af761ef3b",
+          "start_date": "2026-11-20",
+          "start_time": "19:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7577,
+          "family_id": "title-3183cd5bc4d123a5",
+          "start_date": "2026-11-21",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9239,
+          "family_id": "title-947a9bdfbc75f4f8",
+          "start_date": "2026-12-05",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7028,
+          "family_id": "title-bb80571f98d91ae6",
+          "start_date": "2026-12-09",
+          "start_time": null,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 8362,
+          "family_id": "title-8da6924385171d0a",
+          "start_date": "2026-12-12",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 8868,
+          "family_id": "title-3070b0a550a15473",
+          "start_date": "2026-12-13",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7236,
+          "family_id": "title-eb05e6c497c0be30",
+          "start_date": "2026-12-19",
+          "start_time": "12:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7237,
+          "family_id": "title-124b60fab7ed72b1",
+          "start_date": "2026-12-19",
+          "start_time": "17:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 8869,
+          "family_id": "title-582e69e0b0eb160c",
+          "start_date": "2026-12-26",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 5344,
+          "family_id": "title-c5e5e92481e217bd",
+          "start_date": "2027-01-01",
+          "start_time": null,
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 8870,
+          "family_id": "title-5640187a7fa29521",
+          "start_date": "2027-01-06",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7578,
+          "family_id": "title-e7e356ea85da4e45",
+          "start_date": "2027-02-13",
+          "start_time": "18:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9263,
+          "family_id": "title-b8bd9b742728069b",
+          "start_date": "2027-04-02",
+          "start_time": "00:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9291,
+          "family_id": "title-b8bd9b742728069b",
+          "start_date": "2027-04-02",
+          "start_time": "00:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 9319,
+          "family_id": "title-b8bd9b742728069b",
+          "start_date": "2027-04-02",
+          "start_time": "00:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        },
+        {
+          "event_id": 7297,
+          "family_id": "title-4091d38a186a704e",
+          "start_date": "2027-07-28",
+          "start_time": "16:00",
+          "reasons": [
+            {
+              "code": "venue",
+              "binding": "canonical_tuple:янтарь холл|ленина 11|светлогорск"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "manifest_sha256": "cd236ea86bca2256cfb00d7b37e75e289e5d3fcca76e932f677fa4223470f5ef"
+}

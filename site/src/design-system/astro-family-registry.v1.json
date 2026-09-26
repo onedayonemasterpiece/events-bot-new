@@ -370,7 +370,7 @@
     },
     {
       "id": "WeekendListingSurface",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/WeekendListingSurface.astro",
       "style_owners": [
         "site/src/components/listings/WeekendListingSurface.astro"
@@ -446,7 +446,7 @@
     },
     {
       "id": "ExhibitionsPersonalSurface",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/ExhibitionsPersonalSurface.astro",
       "style_owners": [
         "site/src/components/ExhibitionsPersonalSurface.astro"
@@ -484,7 +484,7 @@
     },
     {
       "id": "EventLayout",
-      "version": 3,
+      "version": 4,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro",
@@ -510,7 +510,8 @@
         "MobileBottomNav",
         "MobileToastRegion",
         "Reference4MobileMenu",
-        "Button"
+        "Button",
+        "MobileDateAccessory"
       ],
       "runtime_factories": [
         {
@@ -896,7 +897,7 @@
     },
     {
       "id": "MobileDateAccessory",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
       "style_owners": [
         "site/src/styles/mobile-date-dock.css"
@@ -1097,7 +1098,7 @@
     },
     {
       "id": "FestivalsTimelineRouteComposition",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/pages/festivali/index.astro",
       "style_owners": [
         "site/src/pages/festivali/index.astro"
@@ -2327,7 +2328,7 @@
     },
     {
       "id": "HomeHeroTalk",
-      "version": 3,
+      "version": 4,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
@@ -3701,7 +3702,7 @@
     },
     {
       "id": "HeroTalkPageEnd",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/HeroTalkPageEnd.astro",
       "style_owners": [
         "site/src/components/HeroTalkPageEnd.astro"
