@@ -413,7 +413,7 @@
     },
     {
       "id": "PopularListingSurface",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/PopularListingSurface.astro",
       "style_owners": [],
       "variants": [
@@ -426,8 +426,7 @@
       "nested_families": [
         "ListingEventCard",
         "AdaptiveEventCardGrid",
-        "MobileListingRailSurface",
-        "ListingMobileDensitySwitch"
+        "MobileListingRailSurface"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -488,7 +487,9 @@
       "version": 3,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
-        "site/src/layouts/EventLayout.astro"
+        "site/src/layouts/EventLayout.astro",
+        "site/src/styles/floating-islands.css",
+        "site/src/styles/mobile-floating-islands.css"
       ],
       "variants": [
         "afisha",
@@ -543,6 +544,18 @@
           "symbols": [
             "KenigEventsSearchCardHost"
           ]
+        },
+        {
+          "path": "site/src/lib/shellFloatingIslands.mjs",
+          "symbols": [
+            "initShellFloatingIslands"
+          ]
+        },
+        {
+          "path": "site/src/components/ShellIslandRuntime.astro",
+          "symbols": [
+            "initShellFloatingIslands"
+          ]
         }
       ],
       "consumer_signals": [],
@@ -568,7 +581,7 @@
           "suspended",
           "unavailable"
         ],
-        "visual_status": "SCHEMATIC_EXISTING_SHELL_NOT_FINAL_ISLAND_DESIGN",
+        "visual_status": "INTEGRATED_HOME_AND_ISLAND_REVIEW_CANDIDATE",
         "occupied_space": {
           "source": "site/src/lib/shellOccupiedSpace.mjs",
           "read_api": "KenigEventsShellOccupiedSpace",
@@ -577,17 +590,11 @@
           "owns_network_or_served_identity": false
         },
         "floating_islands": {
-          "scope": "popular_schematic_top_band",
+          "scope": "shared_user_routes_focused_archetype_review",
           "route_identity": "BASE_PATH_relative",
-          "section_event": "kenigevents:section-context",
-          "controls": "move_existing_eligible_ListingDiscoveryRail_after_H1_restore_on_return",
-          "headings": "real_H1_H2_remain_in_flow",
-          "bottom_navigation": "four_destinations_desktop_and_mobile",
-          "modal_settlement": [
-            "mutation",
-            "transitionend",
-            "transitioncancel"
-          ]
+          "controls": "original_checkbox_or_mobile_button_owner",
+          "headings": "actual_visible_H1_and_full_H2",
+          "bottom_navigation": "existing_lower_occupied_space_owner"
         },
         "composition": {
           "source": "site/src/lib/shellComposition.ts",
@@ -742,10 +749,11 @@
     },
     {
       "id": "MobileListingRailSurface",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
-        "site/src/components/listings/MobileListingRailSurface.astro"
+        "site/src/components/listings/MobileListingRailSurface.astro",
+        "site/src/styles/weekend-first-paint.css"
       ],
       "variants": [
         "today",
@@ -888,9 +896,11 @@
     },
     {
       "id": "MobileDateAccessory",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/styles/mobile-date-dock.css"
+      ],
       "variants": [
         "today",
         "tomorrow",
@@ -903,7 +913,20 @@
       ],
       "nested_families": [],
       "runtime_factories": [],
-      "runtime_clients": [],
+      "runtime_clients": [
+        {
+          "path": "site/src/lib/mobileDateDock.mjs",
+          "symbols": [
+            "initMobileDateDock"
+          ]
+        },
+        {
+          "path": "site/src/components/listings/MobileDateAccessory.astro",
+          "symbols": [
+            "initMobileDateDock"
+          ]
+        }
+      ],
       "consumer_signals": [],
       "explicit_override_exceptions": [
         {
@@ -2983,7 +3006,7 @@
     },
     {
       "id": "ListingControls",
-      "version": 1,
+      "version": 6,
       "astro_root": "site/src/components/listings/ListingControls.astro",
       "style_owners": [],
       "variants": [],
@@ -3178,7 +3201,7 @@
     },
     {
       "id": "PopularMobileGroupContext",
-      "version": 1,
+      "version": 3,
       "astro_root": "site/src/components/listings/PopularMobileGroupContext.astro",
       "style_owners": [],
       "variants": [],
@@ -3195,8 +3218,7 @@
       ],
       "penpot_binding": null,
       "behavior_states": {
-        "section_event": "kenigevents:section-context",
-        "islands_mode": "publish_actual_H2_without_second_sticky_floor"
+        "islands_mode": "compatibility_marker_only_shared_EventLayout_owner"
       }
     },
     {

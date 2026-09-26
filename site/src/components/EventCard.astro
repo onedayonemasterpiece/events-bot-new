@@ -2,7 +2,7 @@
 import SemanticIcon from './design-system/SemanticIcon.astro';
 import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOccurrencePresentation, isCalendarEligible, withBase } from '../lib/events';
+import { displayDate, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventCardAdmissionLabel, eventAdmissionLabel, getOccurrencePresentation, isCalendarEligible, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { relatedCardMediaFrameBinding, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia, resolveRelatedCardMediaTreatment } from '../lib/relatedCardLayout.mjs';
 import './media-frame.css';
@@ -62,14 +62,15 @@ const absolute = eventAbsoluteUrl(event);
 const dateLabel = displayDate(event);
 const occurrencePresentation = getOccurrencePresentation(event);
 const dateTimeLabel = occurrencePresentation.compactLabel;
-const statusLabel = eventAdmissionLabel(event);
+const statusLabel = eventCardAdmissionLabel(event);
+const shareAdmissionLabel = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? 0;
 const primaryImageAsset = relatedCardPrimaryImageAsset(event);
 const imageUrl = primaryImageAsset?.src?.startsWith('/')
   ? withBase(primaryImageAsset.src)
   : eventImageUrl(primaryImageAsset?.src || event.image_url);
-const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), statusLabel].filter(Boolean).join('\n');
+const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), shareAdmissionLabel].filter(Boolean).join('\n');
 const shareImageType = imageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : imageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
 const shareFileName = `kenigevents-${event.slug}`;
 function eventTypeLabel(value: string | null | undefined) {
@@ -376,7 +377,7 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
         data-share-file-name={shareFileName}
         data-share-date-time={dateTimeLabel}
         data-share-place={event.venue_name || event.city || ''}
-        data-share-admission={statusLabel}
+        data-share-admission={shareAdmissionLabel}
         aria-label={`Поделиться событием: ${event.title}`}
       >
         <SemanticIcon name="share" role="action" />
@@ -423,7 +424,7 @@ const cardClass = ['event-card', `event-card--${variant}`, rootClassName].filter
           data-share-file-name={shareFileName}
           data-share-date-time={dateTimeLabel}
           data-share-place={event.venue_name || event.city || ''}
-          data-share-admission={statusLabel}
+          data-share-admission={shareAdmissionLabel}
           aria-label={`Поделиться событием: ${event.title}`}
         >
           <SemanticIcon name="share" role="action" />

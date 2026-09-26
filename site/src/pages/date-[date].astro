@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../layouts/EventLayout.astro';
 import DateListingSurface from '../components/listings/DateListingSurface.astro';
+import DateEditorialReview from '../components/listings/DateEditorialReview.astro';
 import PersonalFeedSlot from '../components/PersonalFeedSlot.astro';
 import { absoluteUrl, getDateEvents, SITE_NAME } from '../lib/events';
 import { getStaticEventDateAvailability } from '../lib/staticEventDates';
@@ -36,5 +37,6 @@ const title = new Intl.DateTimeFormat('ru-RU', {
   <main id="main" class="ke-listing-page">
     <DateListingSurface kind="date" title={title} date={date} dateLabel={formattedDate} events={events} />
     <div class="ke-listing-shell"><PersonalFeedSlot context="date" /></div>
+    <DateEditorialReview date={date} events={events} />
   </main>
 </EventLayout>

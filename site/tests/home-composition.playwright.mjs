@@ -33,7 +33,7 @@ try{
    assert.equal(await page.locator('[data-mobile-bottom-nav]').count(),1);
    assert.equal(await page.locator('[data-home-search-entry]').count(),0);
    assert.equal(await page.locator('[data-home-search-launcher]').count(),1);
-   assert.ok(Math.abs((await page.locator('[data-home-hero-talk]').boundingBox()).y)<=1,'Hero starts at page top');
+   assert.ok(Math.abs((await page.locator('[data-home-hero-talk]').first().boundingBox()).y)<=1,'Hero starts at page top');
    assert.equal(await page.locator('[data-mobile-nav-section="afisha"]').getAttribute('aria-current'),'page');
    const order=await page.evaluate(()=>['[data-home-hero-talk]','[data-home-quick-nav]','[data-home-cold-start-feed]','[data-hero-talk-page-end]'].map(selector=>{const el=document.querySelector(selector);return el&&!el.hidden?el.getBoundingClientRect().top:null;}));
    for(let i=1;i<order.length;i++)if(order[i]!==null&&order[i-1]!==null)assert.ok(order[i]>=order[i-1],`block order ${i}`);
@@ -45,7 +45,7 @@ try{
    await page.screenshot({path:`${out}/home-${width}-top.png`});
    const pageEnd=page.locator('[data-hero-talk-page-end]');
    if(await pageEnd.isVisible()){
-    await pageEnd.locator('a').focus();await pageEnd.scrollIntoViewIfNeeded();
+    await pageEnd.locator('a').first().focus();await pageEnd.scrollIntoViewIfNeeded();
     const rect=await pageEnd.boundingBox(),dock=await page.locator('[data-mobile-bottom-nav]').boundingBox();
     assert.ok(rect.y+rect.height<=dock.y,'page-end remains above lower navigation');
    }else await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));

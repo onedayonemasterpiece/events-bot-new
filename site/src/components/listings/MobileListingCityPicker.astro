@@ -1,0 +1,18 @@
+---
+interface Props { cities: {name:string;count:number}[]; total:number; prepared?:boolean; }
+const {cities,total,prepared=false}=Astro.props;
+const choices=[{name:'Вся область',value:'all',count:total},...cities.map(c=>({...c,value:c.name}))];
+---
+<div class="city-picker" data-mobile-v23-city-picker data-listing-controls data-fi-ssr-city={prepared || undefined}>
+  <span data-mobile-v23-city-label hidden>Вся область</span>
+  {prepared && <>
+    <div class="fi-city-skin" aria-hidden="true"></div>
+    <div class="fi-city-visible" role="group" aria-label="Города">
+      {choices.map(c=><button type="button" class="fi-city-item" data-fi-city-value={c.value} aria-label={c.name} aria-pressed={c.value==='all'?'true':'false'}><span>{c.name}</span><small>{c.count}</small></button>)}
+    </div>
+  </>}
+  <button type="button" data-island-city-toggle aria-expanded="false" hidden={prepared}>Выбрать город</button>
+  <div class="city-picker__panel" data-island-city-panel hidden><div data-listing-city-filter role="group" aria-label="Города">
+    {choices.map(c=><button type="button" data-mobile-v23-city={c.value} aria-pressed={c.value==='all'?'true':'false'}><span>{c.name}</span><b>{c.count}</b></button>)}
+  </div><button type="button" data-island-city-close hidden>Закрыть</button></div>
+</div>

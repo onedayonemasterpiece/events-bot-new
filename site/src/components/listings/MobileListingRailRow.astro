@@ -1,6 +1,6 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
-import { displayDate, displayDateRange, eventAdmissionLabel, eventHref, getOccurrencePresentation, withBase } from '../../lib/events';
+import { displayDate, displayDateRange, eventCardAdmissionLabel, eventHref, getOccurrencePresentation, withBase } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 import { occurrenceTime } from '../../lib/eventOccurrences';
 import { selectListingImage } from '../../lib/listingPresentation';
@@ -33,7 +33,7 @@ const scheduleAria = compactRailDateRange
   : occurrence?.ariaLabel || [fullDateLine, timeLine].filter(Boolean).join(', ');
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ') || 'Место уточняется';
 const identities = getListingIdentityMedallions(event).slice(0, event.ticket?.is_free ? 1 : 2);
-const admission = eventAdmissionLabel(event);
+const admission = eventCardAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const href = eventHref(event);
 const useDatePrimary = occurrenceMode === 'per-family' && Boolean(occurrence);

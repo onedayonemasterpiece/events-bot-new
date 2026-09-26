@@ -1,5 +1,7 @@
 # E2E Scenario Index
 
+`site/tests/home-to-today-islands.playwright.mjs` is the preview integration gate for the Home → «Сегодня» click at mobile and desktop widths. It verifies the destination's floating shell, sticky city/navigation islands and absence of the old solid header. Run it on the complete preview, alongside `site/tests/island-archetypes.playwright.mjs` for Today/Weekend and `site/tests/single-day-density.playwright.mjs` for narrow one-day listings, before sending an integrated UI review link. See `INC-2026-09-26-islands-preview-assembly-gap`.
+
 Канонический реестр E2E/BDD сценариев проекта.
 
 Focus email has two distinct gates. The fixed
@@ -130,3 +132,82 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 - `site/tests/home-search-handoff.browser.test.mjs`: cross-document IndexedDB handoff with mocked Auth/transport, not live ASR acceptance.
 - `site/tests/home-feed-runtime.browser.mjs`: synthetic ranking/prefix/hide/Undo/storage regression; real media and published navigation require the integrated preview.
 - Canonical details: [Home composition](../features/static-site-pages/design-system/home-composition.md).
+
+### One-day mobile content density
+
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/single-day-density.playwright.mjs` checks Today/Tomorrow/Date at320/384/430px: first card within230px, three full rows at720px/four at844px, flow-only H1, a44px content-sized “Все города” picker anchored12px from the right edge (visible chevron with open-state feedback, actual selected-city caption, full original popover), real city filtering and counts, single-city/no-filter behavior, unchanged bottom dock, reduced motion and retained Weekend context. Anonymous L1 only. [Canonical scope](../features/static-site-pages/astro-preview.md#one-day-mobile-entry-cleanup--2026-09-06).
+
+### Mobile date dock B
+
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/date-dock.playwright.mjs` checks the actual rendered date rail and calendar with Chromium touch input at320/384/430px, future month arrows/swipe, empty-date disabling, navigation to the real23April2027 specimen, stationary lower nav and desktop breakpoint restoration. Compact B additionally asserts110px dock height, original64px stacked date rail,12px title gutter and adjacent live count, four text-only destinations and unchanged icon+label navigation on Popular. L1 anonymous preview evidence only; no phone/PWA or current-data claim. Canonical contract: [Date composition B](../features/static-site-pages/astro-preview.md#date-composition-b--2026-09-06).
+
+### Floating-island archetype review
+
+`CHECK_BASE=<isolated prefix> CHECK_OUTPUT=<artifact directory> node site/tests/island-archetypes.playwright.mjs` runs the seven specimens defined in `site/scripts/write-island-archetype-index.mjs`: anonymous Chromium384/1440, top/mid/settled geometry, city disclosure and real original mobile filtering. This is L1 preview evidence, not live Telegram E2E or Android/iOS acceptance. Canonical scope: [Astro preview](../features/static-site-pages/astro-preview.md#floating-island-archetypes--2026-09-06-owner-review).
+
+### Mobile city native horizontal scroll
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-city-scroll.playwright.mjs` checks the day, Weekend and Popular city rows using Chromium touch input, original filter delegation, compact/expanded restoration, frame-sampled mutually exclusive text masks and quick reversals. Anonymous L1; no native phone claim. [Contract](../features/static-site-pages/astro-preview.md#mobile-native-city-scrolling--2026-09-06).
+
+### Mobile Weekend editorial prototype
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/weekend-editorial.playwright.mjs` checks footer ordering and bottom-dock clearance at384/430px, all three actual internal event navigations, desktop hiding and exclusion on another weekend. Anonymous L1; no production LLM-generation claim. [Contract and plan](../features/static-site-pages/weekend-editorial-review.md).
+
+### Free archetype direct-link review
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/free-archetype.playwright.mjs` verifies the existing `/podborki/besplatnye-sobytiya/` at384/1440px: visible title/content, initialized shell, top/scrolled screenshots and no horizontal overflow/runtime errors. Anonymous review, not current-catalog or backend acceptance.
+
+### Mobile event without title island
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-event-no-island.playwright.mjs` checks two real event specimens at384/430px: H1 remains inside the event page, no top page/section island while scrolling, lower nav/actions retained, and desktop→mobile restoration. Anonymous L1 preview evidence.
+
+### Mobile event action/nav shared dock
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-event-dock.playwright.mjs` verifies original CTA/nav node reuse, scrolling hero→action→related feed, action/nav geometry and stable nav bottom edge, original href preservation, occupied-space updates and desktop restoration. No purchase/registration is performed.
+
+### Mobile Weekend day context
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/mobile-weekend-days.playwright.mjs` checks mobile current/future Weekend day-only context (СБ/ВС), normal-flow H1, city alignment, actual day jumps/active state, reduced motion and desktop restoration at320/384/430.
+
+### Free medallion as the single floating identity
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/free-medallion-island.playwright.mjs` checks320/384/430/1440: one real SVG/DOM node, no title island, intermediate smooth scale100%→84%, constant opacity/right edge, native sticky Y, reverse wheel, responsive restoration and reduced-motion. This replaces the old two-medallion/binary-fade acceptance in the cross-surface Unusual harness. Anonymous browser evidence only.
+
+### Weekend first-paint / static HTML regression
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifact directory> node site/tests/weekend-first-paint.playwright.mjs` holds real script downloads, verifies closed disclosures, actual poster visibility, inline wordmark and110px composed lower surface, then releases the same scripts and compares H1/city/first-card/date/nav rectangles within1px and original nodes at320/384/430. Additional JS-disabled runs and Free-without-breadcrumb check. Run together with native city/day/date-dock interaction tests; waiting only for `data-fi-motion=ready` is no longer sufficient loading acceptance.
+
+### Lower-island shadow parity
+
+`CHECK_BEFORE=<previous preview> CHECK_BASE=<candidate> CHECK_OUTPUT=<artifacts> node site/tests/lower-island-shadow.playwright.mjs` compares actual standalone/date/Weekend/Buy surfaces, lower geometry and unchanged upper shadow at mobile widths plus desktop. Nested dock navigation must not gain a second shadow. Pair with Weekend delayed/no-JS first paint and existing event-dock action-state checks; this is rendered CSS acceptance, not physical-phone or purchase acceptance.
+
+### Compact Popular entry, bounded city text and day editorial
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/islands-review.playwright.mjs`
+checks Popular before withheld scripts and without JavaScript, then the same
+compact picker after enhancement; mobile date frame-by-frame surface/content
+bounds, three real day-editorial event navigations and desktop behavior.
+Pair with `mobile-city-scroll.playwright.mjs` using
+`CHECK_ROUTES='["/date-2026-07-23/","/vyhodnye/"]'` for native swipe/filter/reversal.
+Anonymous L1, not phone certification, fresh live data or automated LLM evidence.
+
+### Sequential city caption and downward calendar gesture
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/islands-sequential.playwright.mjs`
+checks320/390/430: caption only after real surface x/y/width/height settles,
+caption hidden before reverse list expansion, mid-motion reversal, reduced motion;
+native touch downward from calendar header/grid, short and horizontal gestures,
+retained month, date navigation, Escape/close/focus. Pair with native city swipe
+and `date-dock.playwright.mjs` future-month/date-strip regression. Anonymous L1;
+not physical Android/iPhone evidence. Reproduction artifacts preserve the old
+premature caption and absent downward-dismiss behavior.
+
+### Fullscreen mobile menu / composed lower dock
+
+`CHECK_BASE=<preview prefix> CHECK_OUTPUT=<artifacts> node site/tests/mobile-menu-dock.playwright.mjs`
+checks Date and Weekend at390x844/600: full outer dock hidden/inert, no hit-test
+occlusion through close animation, native menu scrolling, upward header/end
+swipe dismissal, short/horizontal gestures preserved, date state/focus restored,
+Escape/close, calendar reopening and real Popular link navigation. Anonymous
+L1 responsive-layout/native-touch regression, not physical-phone acceptance.
+Run alongside `islands-sequential.playwright.mjs` for prior city/calendar motion.

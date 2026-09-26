@@ -658,3 +658,12 @@ owner decisions → clickable accessible prototype → first-class egg/progress 
 review. Материальный приз и social-share multiplier не наследуют этот релиз и
 требуют отдельного legal/anti-abuse решения. Полный contract:
 [static-site easter eggs](../static-site-easter-eggs/README.md).
+
+## Planned follow-up — mobile Weekend editorial review
+
+Owner-requested preview footer is separate from production release readiness.
+Work stages: linked mobile prototype → owner copy/composition review → grounded
+LLM generation on the existing snapshot/build pipeline → freshness and event-link
+validation → measured preview → separately authorized production rollout.
+Status and acceptance checklist have one canonical owner in
+[Weekend editorial review](weekend-editorial-review.md#implementation-plan).

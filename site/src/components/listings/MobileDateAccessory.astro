@@ -3,6 +3,7 @@ import { getAvailableWeekendRanges, getWeekendRange, withBase } from '../../lib/
 import { getStaticEventDateAvailability } from '../../lib/staticEventDates';
 import Icon from '../Icon.astro';
 import './mobile-listing-foundation-bindings.css';
+import '../../styles/mobile-date-dock.css';
 
 interface Props {
   today: string;
@@ -21,9 +22,12 @@ const availability = getStaticEventDateAvailability();
 // On Sunday the current weekend starts one day before the build reference.
 // Keep that selected Saturday in the rail/sheet instead of producing a
 // calendar with no aria-current date.
-const calendarDates = selectedDate < availability.today
+const railDates = selectedDate < availability.today
   ? [selectedDate, ...availability.allDates]
   : availability.allDates;
+// Full calendar months keep their conventional grid; past/empty dates have no link.
+const firstCalendarDate = `${railDates[0].slice(0, 7)}-01`;
+const calendarDates = Array.from({ length:Math.round((parseDate(availability.horizonEnd).getTime() - parseDate(firstCalendarDate).getTime()) / DAY) + 1 }, (_, index) => isoDate(new Date(parseDate(firstCalendarDate).getTime() + index * DAY)));
 const dates = calendarDates.map((iso) => {
   const date = parseDate(iso);
   const weekday = new Intl.DateTimeFormat('ru-RU', { weekday:'short', timeZone:'Europe/Kaliningrad' })
@@ -57,6 +61,7 @@ const dates = calendarDates.map((iso) => {
     monthLong,
     monthKey,
     href,
+    calendarHref: hasEvents ? (iso === today ? '/segodnya/' : iso === tomorrow ? '/zavtra/' : `/date-${iso}/`) : null,
     hasEvents,
     isSaturday,
     isSunday,
@@ -67,9 +72,7 @@ const dates = calendarDates.map((iso) => {
 });
 const monthGroups = [...new Set(dates.map((item) => item.monthKey))].map((monthKey) => {
   const items = dates.filter((item) => item.monthKey === monthKey);
-  // The first (current) month intentionally starts at `today`, not at day 1.
-  // Align the grid from the first rendered date; otherwise the weekday headers
-  // and the selectable dates drift whenever earlier days are omitted.
+  // Calendar months start at day 1; the compact rail still starts at the reference day.
   const firstVisibleIso = items[0]?.iso || `${monthKey}-01`;
   const firstWeekday = (parseDate(firstVisibleIso).getUTCDay() + 6) % 7;
   return { monthKey, label: items[0]?.monthLong || monthKey, firstWeekday, items };
@@ -87,7 +90,7 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
 <div
   class="date-accessory"
   data-ds-family="MobileDateAccessory"
-  data-ds-version="1"
+  data-ds-version="2"
   data-ds-variant={current}
   data-ds-state={selectedDate < today ? 'archived-selection' : 'current-horizon'}
   data-mobile-date-accessory
@@ -95,8 +98,8 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
   data-calendar-horizon={availability.horizonEnd}
   data-calendar-furthest-event-date={availability.furthestEventDate}
 >
-  <nav class="date-rail" aria-label="Выбор даты">
-    {dates.map((item, index) => item.href ? (
+  <nav class="date-rail" aria-label="Выбор даты — листайте влево и вправо">
+    {dates.filter(item => item.iso >= railDates[0]).map((item, index) => item.href ? (
       <a
         class:list={[
           'date-chip',
@@ -124,12 +127,12 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
       </span>
     ))}
   </nav>
-  <button type="button" class="date-calendar-trigger" data-calendar-open aria-haspopup="dialog" aria-label="Открыть календарь">
+  <button type="button" class="date-calendar-trigger" data-calendar-open aria-haspopup="dialog" aria-expanded="false" aria-label="Открыть календарь">
     <Icon name="calendar" className="ke-icon-role ke-icon-role--action" />
   </button>
 </div>
 <div class="calendar-sheet" data-calendar-sheet hidden aria-hidden="true">
-  <section data-app-lower-surface="calendar" data-app-lower-lifecycle="persistent" class="calendar-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-calendar-title">
+  <section data-app-lower-surface="calendar" data-app-lower-lifecycle="persistent" class="calendar-panel" role="dialog" aria-modal="false" aria-labelledby="mobile-calendar-title">
     <header>
       <div><h2 id="mobile-calendar-title">Выбрать дату</h2><p>{selectedLabel} · события до {availability.furthestEventDate}</p></div>
       <button type="button" data-calendar-close aria-label="Закрыть">×</button>
@@ -146,12 +149,12 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
           <h3 class="sr-only">{month.label}</h3>
           <div class="calendar-grid">
             {Array.from({ length:month.firstWeekday }, () => <span class="calendar-grid__blank" aria-hidden="true"></span>)}
-            {month.items.map((item) => item.href ? (
-              <a href={withBase(item.href)} data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined} aria-label={dateAria(item)}>
+            {month.items.map((item) => item.calendarHref ? (
+              <a href={withBase(item.calendarHref)} data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined} aria-label={`${item.weekday}, ${item.day} ${item.month.toLocaleLowerCase('ru-RU')}`}>
                 <span>{item.weekday}</span><b>{item.day}</b>
               </a>
             ) : (
-              <span data-calendar-date={item.iso} aria-disabled="true" aria-label={`${dateAria(item)}. Событий нет`}>
+              <span data-calendar-date={item.iso} aria-disabled="true" aria-label={`${item.weekday}, ${item.day} ${item.month.toLocaleLowerCase('ru-RU')}. Событий нет`}>
                 <span>{item.weekday}</span><b>{item.day}</b>
               </span>
             ))}
@@ -163,59 +166,6 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
 </div>
 
 <script>
-  document.querySelectorAll('[data-mobile-date-accessory]').forEach((accessory) => {
-    if (accessory.dataset.calendarReady === 'true') return;
-    accessory.dataset.calendarReady = 'true';
-    const sheet = accessory.nextElementSibling;
-    const trigger = accessory.querySelector('[data-calendar-open]');
-    const close = sheet?.querySelector('[data-calendar-close]');
-    const selected = accessory.querySelector('[aria-current="date"]');
-    const monthsRoot = sheet?.querySelector('[data-calendar-months]');
-    const months = [...(monthsRoot?.querySelectorAll('[data-calendar-month]') || [])];
-    const monthLabel = sheet?.querySelector('[data-calendar-month-label]');
-    const previous = sheet?.querySelector('[data-calendar-month-previous]');
-    const next = sheet?.querySelector('[data-calendar-month-next]');
-    let monthIndex = Math.max(0, months.findIndex((month) => month.dataset.calendarMonth === monthsRoot?.dataset.selectedMonth));
-    const showMonth = (index) => {
-      monthIndex = Math.max(0, Math.min(months.length - 1, index));
-      months.forEach((month, itemIndex) => { month.hidden = itemIndex !== monthIndex; });
-      if (monthLabel) monthLabel.textContent = months[monthIndex]?.dataset.calendarMonthLabel || '';
-      if (previous) previous.disabled = monthIndex === 0;
-      if (next) next.disabled = monthIndex >= months.length - 1;
-    };
-    const centerSelected = () => selected?.scrollIntoView({ inline:'center', block:'nearest', behavior:'instant' });
-    const closeSheet = () => {
-      if (!sheet || sheet.hidden) return;
-      sheet.classList.remove('is-open');
-      sheet.setAttribute('aria-hidden', 'true');
-      setTimeout(() => { sheet.hidden = true; trigger?.focus(); }, 220);
-    };
-    const openSheet = () => {
-      if (!sheet) return;
-      sheet.hidden = false;
-      sheet.setAttribute('aria-hidden', 'false');
-      showMonth(monthIndex);
-      requestAnimationFrame(() => {
-        sheet.classList.add('is-open');
-        sheet.querySelector('[data-calendar-close]')?.focus();
-      });
-    };
-    showMonth(monthIndex);
-    requestAnimationFrame(centerSelected);
-    addEventListener('pageshow', centerSelected);
-    previous?.addEventListener('click', () => showMonth(monthIndex - 1));
-    next?.addEventListener('click', () => showMonth(monthIndex + 1));
-    trigger?.addEventListener('click', openSheet);
-    close?.addEventListener('click', closeSheet);
-    sheet?.addEventListener('click', (event) => { if (event.target === sheet) closeSheet(); });
-    addEventListener('keydown', (event) => {
-      if (!sheet || sheet.hidden) return;
-      if (event.key === 'Escape') { event.preventDefault(); closeSheet(); }
-      if (event.key !== 'Tab') return;
-      const controls = Array.from(sheet.querySelectorAll('button:not(:disabled),a[href],[tabindex="0"]')).filter(node => node.getClientRects().length);
-      const first = controls[0], last = controls.at(-1);
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-    });
-  });
+  import { initMobileDateDock } from '../../lib/mobileDateDock.mjs';
+  document.querySelectorAll('[data-mobile-date-accessory]').forEach(accessory => initMobileDateDock(accessory));
 </script>

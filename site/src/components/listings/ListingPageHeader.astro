@@ -24,11 +24,5 @@ const routes = [
       <span data-listing-page-count-value>{count}</span> <span data-listing-page-count-label>{eventCountLabel(count)}</span>
     </p>
   </div>
-  <nav class="ke-listing-date-nav" aria-label="Выбор даты">
-    {routes.map((route) => (
-      <a href={withBase(route.href)} aria-current={route.key === current ? 'page' : undefined}>
-        {route.label}<span aria-hidden="true">→</span>
-      </a>
-    ))}
-  </nav>
+
 </header>

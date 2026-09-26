@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "bf493e6049f09fc9c78563a9257657e4b0965fc2cdae4a915a2f4a71c8d66874",
+  "registry_sha256": "627d923d50c011b9b48a130e1e3d8b18b81d8176716dfcf851573e7faf997f8d",
   "source_root": "site/src",
-  "import_inventory_sha256": "6e6866de6778c210be432564cf3363596a1f59cb0a0413c5b4de1426f566d907",
+  "import_inventory_sha256": "d7c822e35e75daace1d770b57608c93ed59f4e81307418a7e18bafe32e3b8eed",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -183,6 +183,7 @@
       "site/src/components/KeyboardEventNavigationPrototype.astro",
       "site/src/components/ListingPersonalFilter.astro",
       "site/src/components/listings/AmberRailArtifact.astro",
+      "site/src/components/listings/DateEditorialReview.astro",
       "site/src/components/listings/DateListingSurface.astro",
       "site/src/components/listings/ExactTimeTimeline.astro",
       "site/src/components/listings/ListingControls.astro",
@@ -195,6 +196,7 @@
       "site/src/components/listings/ListingWeekendTimeNav.astro",
       "site/src/components/listings/mobile-listing-foundation-bindings.css",
       "site/src/components/listings/MobileDateAccessory.astro",
+      "site/src/components/listings/MobileListingCityPicker.astro",
       "site/src/components/listings/MobileListingRailRow.astro",
       "site/src/components/listings/MobileListingRailSurface.astro",
       "site/src/components/listings/PopularBehaviorRows.astro",
@@ -223,6 +225,7 @@
       "site/src/components/Reference4MobileMenu.astro",
       "site/src/components/SearchCollectionLinks.astro",
       "site/src/components/ServiceShareAction.astro",
+      "site/src/components/ShellIslandRuntime.astro",
       "site/src/components/SiteFooter.astro",
       "site/src/components/SocialIcon.astro",
       "site/src/components/transport/DepartureBoardTimetable.astro",
@@ -277,8 +280,10 @@
       "site/src/lib/clubs.ts",
       "site/src/lib/connectivityDiagnostic.test.ts",
       "site/src/lib/connectivityDiagnostic.ts",
+      "site/src/lib/contentFloatingIslands.mjs",
       "site/src/lib/desktopEventPresentation.ts",
       "site/src/lib/desktopEventTransport.ts",
+      "site/src/lib/desktopFloatingIslands.mjs",
       "site/src/lib/emailOtp.test.ts",
       "site/src/lib/emailOtp.ts",
       "site/src/lib/event-medallions.test.mjs",
@@ -309,6 +314,7 @@
       "site/src/lib/focus-personalization.ts",
       "site/src/lib/focus-pwa-install-controller.ts",
       "site/src/lib/freeCollection.mjs",
+      "site/src/lib/freeMedallionIsland.mjs",
       "site/src/lib/heroTalkPlacement.ts",
       "site/src/lib/homeFeed.mjs",
       "site/src/lib/homeFeedRuntime.ts",
@@ -317,12 +323,16 @@
       "site/src/lib/icsFilenames.mjs",
       "site/src/lib/idempotentOutbox.ts",
       "site/src/lib/imageCrop.mjs",
+      "site/src/lib/islandSurface.mjs",
       "site/src/lib/keyboardEventNavigation.mjs",
       "site/src/lib/listing-medallions.test.mjs",
       "site/src/lib/listingChronology.ts",
       "site/src/lib/listingPresentation.ts",
       "site/src/lib/listingVenueMedallions.ts",
+      "site/src/lib/mobileDateDock.mjs",
       "site/src/lib/mobileDiscoveryRoutes.ts",
+      "site/src/lib/mobileEventDock.mjs",
+      "site/src/lib/mobileFloatingIslands.mjs",
       "site/src/lib/mobileListingRailMedia.mjs",
       "site/src/lib/onboarding/standard-placement-context.test.ts",
       "site/src/lib/onboarding/standard-placement-context.ts",
@@ -352,6 +362,7 @@
       "site/src/lib/seo.ts",
       "site/src/lib/service-share/controller.js",
       "site/src/lib/shellComposition.ts",
+      "site/src/lib/shellFloatingIslands.mjs",
       "site/src/lib/shellOccupiedSpace.mjs",
       "site/src/lib/staticAuthReset.ts",
       "site/src/lib/staticCollections.ts",
@@ -408,29 +419,34 @@
       "site/src/pages/zavtra/index.astro",
       "site/src/scripts/prelaunchForm.ts",
       "site/src/styles/design-system.css",
+      "site/src/styles/floating-islands.css",
+      "site/src/styles/mobile-date-dock.css",
+      "site/src/styles/mobile-event-dock.css",
+      "site/src/styles/mobile-floating-islands.css",
       "site/src/styles/prelaunch-calibration.css",
       "site/src/styles/prelaunch-consent.css",
       "site/src/styles/prelaunch-page.css",
       "site/src/styles/prelaunch-polish.css",
       "site/src/styles/prelaunch-static.css",
-      "site/src/styles/staticSiteSignIn.css"
+      "site/src/styles/staticSiteSignIn.css",
+      "site/src/styles/weekend-first-paint.css"
     ],
     "policy": "Exclude only proven service-only closure; retain shared, explicit runtime and unresolved sources."
   },
   "summary": {
     "product_family_count": 110,
     "family_count": 112,
-    "source_file_count": 355,
-    "import_edge_count": 908,
-    "direct_consumer_edges": 288,
+    "source_file_count": 371,
+    "import_edge_count": 924,
+    "direct_consumer_edges": 287,
     "protocol_consumer_edges": 34,
     "runtime_factory_edges": 2,
-    "runtime_consumer_edges": 9,
-    "production_route_edges": 551,
+    "runtime_consumer_edges": 13,
+    "production_route_edges": 549,
     "unique_direct_consumers": 122,
     "unique_protocol_consumers": 34,
     "unique_runtime_factories": 1,
-    "unique_runtime_consumers": 6,
+    "unique_runtime_consumers": 10,
     "unique_production_routes": 27
   },
   "families": {
@@ -1094,7 +1110,7 @@
       ]
     },
     "PopularListingSurface": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/PopularListingSurface.astro",
       "style_owners": [],
       "direct_component_consumers": [
@@ -1155,7 +1171,9 @@
       "version": 3,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
-        "site/src/layouts/EventLayout.astro"
+        "site/src/layouts/EventLayout.astro",
+        "site/src/styles/floating-islands.css",
+        "site/src/styles/mobile-floating-islands.css"
       ],
       "direct_component_consumers": [
         "site/src/pages/[preview]/index.astro",
@@ -1282,6 +1300,12 @@
       ],
       "runtime_clients": [
         {
+          "path": "site/src/components/ShellIslandRuntime.astro",
+          "symbols": [
+            "initShellFloatingIslands"
+          ]
+        },
+        {
           "path": "site/src/layouts/EventLayout.astro",
           "symbols": [
             "shellOccupiedSpace"
@@ -1297,6 +1321,12 @@
           "path": "site/src/lib/homeFeedRuntime.ts",
           "symbols": [
             "KenigEventsSearchCardHost"
+          ]
+        },
+        {
+          "path": "site/src/lib/shellFloatingIslands.mjs",
+          "symbols": [
+            "initShellFloatingIslands"
           ]
         },
         {
@@ -1566,10 +1596,11 @@
       ]
     },
     "MobileListingRailSurface": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
-        "site/src/components/listings/MobileListingRailSurface.astro"
+        "site/src/components/listings/MobileListingRailSurface.astro",
+        "site/src/styles/weekend-first-paint.css"
       ],
       "direct_component_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
@@ -1577,11 +1608,13 @@
       ],
       "direct_style_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro",
         "site/src/components/listings/WeekendListingSurface.astro"
       ],
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/components/listings/DateListingSurface.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro",
         "site/src/components/listings/WeekendListingSurface.astro"
       ],
       "runtime_factories": [],
@@ -1675,9 +1708,11 @@
       ]
     },
     "MobileDateAccessory": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/components/listings/MobileDateAccessory.astro",
-      "style_owners": [],
+      "style_owners": [
+        "site/src/styles/mobile-date-dock.css"
+      ],
       "direct_component_consumers": [
         "site/src/components/listings/MobileListingRailSurface.astro"
       ],
@@ -1687,7 +1722,20 @@
         "site/src/components/listings/MobileListingRailSurface.astro"
       ],
       "runtime_factories": [],
-      "runtime_clients": [],
+      "runtime_clients": [
+        {
+          "path": "site/src/components/listings/MobileDateAccessory.astro",
+          "symbols": [
+            "initMobileDateDock"
+          ]
+        },
+        {
+          "path": "site/src/lib/mobileDateDock.mjs",
+          "symbols": [
+            "initMobileDateDock"
+          ]
+        }
+      ],
       "production_routes": [
         {
           "pattern": "/date-*/",
@@ -2691,28 +2739,15 @@
       "version": 6,
       "astro_root": "site/src/components/listings/ListingMobileDensitySwitch.astro",
       "style_owners": [],
-      "direct_component_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
-      "direct_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_consumers": [],
       "runtime_factories": [],
       "runtime_clients": [],
-      "production_routes": [
-        {
-          "pattern": "/populyarnoe/",
-          "source": "site/src/pages/populyarnoe/index.astro"
-        }
-      ],
-      "production_route_patterns": [
-        "/populyarnoe/"
-      ],
-      "production_route_sources": [
-        "site/src/pages/populyarnoe/index.astro"
-      ]
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
     },
     "ArtifactCollection": {
       "version": 1,
@@ -4199,7 +4234,7 @@
       ]
     },
     "ListingControls": {
-      "version": 1,
+      "version": 6,
       "astro_root": "site/src/components/listings/ListingControls.astro",
       "style_owners": [],
       "direct_component_consumers": [
@@ -4665,28 +4700,15 @@
       "version": 1,
       "astro_root": "site/src/components/listings/PopularMobileAdaptiveRows.astro",
       "style_owners": [],
-      "direct_component_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_component_consumers": [],
       "direct_style_consumers": [],
       "protocol_consumers": [],
-      "direct_consumers": [
-        "site/src/components/listings/PopularListingSurface.astro"
-      ],
+      "direct_consumers": [],
       "runtime_factories": [],
       "runtime_clients": [],
-      "production_routes": [
-        {
-          "pattern": "/populyarnoe/",
-          "source": "site/src/pages/populyarnoe/index.astro"
-        }
-      ],
-      "production_route_patterns": [
-        "/populyarnoe/"
-      ],
-      "production_route_sources": [
-        "site/src/pages/populyarnoe/index.astro"
-      ]
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
     },
     "PopularMobileBehaviorRows": {
       "version": 1,
@@ -4716,7 +4738,7 @@
       ]
     },
     "PopularMobileGroupContext": {
-      "version": 1,
+      "version": 3,
       "astro_root": "site/src/components/listings/PopularMobileGroupContext.astro",
       "style_owners": [],
       "direct_component_consumers": [

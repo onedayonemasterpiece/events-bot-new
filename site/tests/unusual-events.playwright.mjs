@@ -57,11 +57,11 @@ try {
 
   await page.goto(route(productBase, '/podborki/besplatnye-sobytiya/'), { waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('[data-free-collection-medallion="large"]').count(), 1);
-  assert.equal(await page.locator('[data-free-collection-medallion="compact"]').count(), 1);
+  assert.equal(await page.locator('[data-free-collection-medallion="large"]').count(), 1);
   const hero = page.locator('[data-free-collection-hero]');
   await hero.evaluate((node) => window.scrollTo({ top: node.getBoundingClientRect().bottom + window.scrollY + 80 }));
-  await page.waitForFunction(() => document.querySelector('[data-free-collection-sticky-identity]')?.hasAttribute('data-compact-visible'));
-  assert.equal(await page.locator('[data-free-collection-medallion="compact"]').isVisible(), true);
+  await page.waitForFunction(() => document.querySelector('[data-free-collection-medallion]')?.dataset.fiFreeCompact === 'true');
+  assert.equal(await page.locator('[data-free-collection-medallion="large"]').isVisible(), true);
   assert.equal(await page.locator('[data-free-collection-event-group="exhibitions"]').count() <= 1, true);
 
   await page.goto(route(productBase, '/date-2026-07-30/'), { waitUntil: 'domcontentloaded' });

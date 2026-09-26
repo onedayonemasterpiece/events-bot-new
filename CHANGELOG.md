@@ -13,6 +13,10 @@ public festival/club counts and native Penpot acceptance remain open.
 
 ## [Unreleased]
 
+### Preview integration (2026-09-26)
+- Integrated the accepted floating-island listing shell with the Home assembly, so Home → Today keeps the shared floating navigation and contextual islands in one full-site preview.
+- Added a browser regression journey for Home → Today and aligned preview validation with the accepted Popular listing and OCR fallback markup. The review build uses the historical 2026-07-23 event snapshot.
+
 ### Fixed
 - Shared lower-island shadow, contextual exhibition badge in mobile menu, and clearer Home feed labels.
 - Home Hero word timing and mobile mosaic rendering; page-end reuses the animated Hero renderer with a separate event deck.
@@ -24,6 +28,27 @@ public festival/club counts and native Penpot acceptance remain open.
 ### Added
 - Home owner-review candidate: shared navigation without contextual upper islands, inline durable voice/text handoff to existing Search, compact quick links, full-pool shared ranked feed and shared Hero-talk page-end. Existing Hero mosaic and other page shells are preserved.
 - Source-bound Home structural export alongside the existing Free exporter, executable Home UI SoT profile and isolated preview-only assistant public configuration through the existing Kaggle rail. No production promotion.
+
+### Floating-island archetype review
+- Mobile fullscreen menu now hides the entire composed date/event lower dock until closing completes, rather than leaving its date rail and empty skin above the menu. Upward header/scroll-end swipe closes the menu while preserving normal menu scrolling, focus and calendar state.
+
+### Changed
+- Strengthen the shared lower-island contact and ambient shadow across single navigation, date/calendar and event Buy docks, including Weekend static first paint; preserve geometry and upper-island styling.
+- Weekend initial HTML now contains its native city row, closed picker and final lower composition; posters and the canonical wordmark no longer wait for client scripts to become visible. Separate lightweight island startup from unrelated Auth imports and add delayed-JS/no-JS first-paint checks.
+- Remove the redundant back-to-Afisha breadcrumb from Free without changing its medallion or global navigation.
+- Free page uses its existing medallion as the only floating identity: a single native-sticky SVG smoothly shrinks16%, without a duplicate title island or fading between two badges.
+- Mobile Weekend top context is now a compact «СБ · ВС» navigator with active-day tracking and jumps to the original day sections; the full H1/meta scroll away and numeric dates are not repeated.
+- Combine the mobile event action (buy/calendar/phone) and navigation into one adaptive two-tier bottom dock, preserving the existing action visibility, links and occupied-space owner.
+- Remove the top title/section island from mobile event detail pages, preserving the in-page heading, bottom navigation, event actions and desktop behavior.
+- Include the existing Free collection as a directly linked mobile/desktop review specimen in the focused floating-islands preview.
+- Add a preview-only AI-editorial draft at the bottom of mobile Weekend, with three internal links to built event detail pages; document the separate grounded-generation and freshness rollout plan.
+- Allow native horizontal swiping through all mobile cities before compaction, without +N; preserve the compact right-hand picker and separate outgoing/incoming text masks to prevent overlapping captions.
+- Restore the compact one-day city picker to the right viewport edge; add a visible disclosure chevron with open-state feedback so it reads as a selector, not a static label.
+- Compact the scrolled one-day mobile city island to one content-sized “Все города” / selected-city button, preserving the full city picker, normal-flow row, easing and bottom date dock.
+- Make one-day mobile listings content-first: static date/title with live count, no permanent order/tutorial row, and city controls filling the top space beside the brand. Preserve Weekend section context, card sizes and the110px date dock.
+- Compact only the lower row of the two-tier mobile date dock: retain the original64px date rail above44px text-only navigation (110px total); standalone navigation retains icons. Restore mobile listing title/metadata gutters lost through the sticky display:contents wrapper.
+- Mobile dates use the approved B single lower dock with the existing navigation: native horizontal day scrolling, an expanding full-month calendar with arrows/touch swipes through the event horizon, and disabled individual days without events.
+- Extend accepted mobile12 floating-island kinetics to date/weekend city owners and city-free content archetypes; preserve original filters, full section headings and actions. Add a seven-page focused review index and browser checks, without a full site build or root publication.
 
 
 ### Fixed
@@ -5409,6 +5434,16 @@ public festival/club counts and native Penpot acceptance remain open.
 - **Admin / Delete Event**: Event deletion no longer attempts to delete source VK wall posts; only bot-managed VK posts (`event.vk_source_hash` present) are deleted.
 - **VK Auto Queue / Event Parse**: Added a conservative prefilter for obvious long historical/admin non-event VK posts before full `event_parse`; ambiguous or event-like posts still go through the normal LLM parse unchanged, reducing wasted TPM on repeated non-events.
 - **General Stats / Festivals Queue**: `/general_stats` now shows current festival queue snapshot (`total/pending/running/done/error`), active backlog (`pending+running`), and active breakdown by source (`vk/tg/url`) in addition to daily inflow.
+
+### Fixed
+- Mobile island review: city text clips to the actual eased surface bounds; Popular starts compact in static HTML/CSS rather than flashing expanded. Free event cards say only «Бесплатно» while detail conditions stay intact.
+
+### Added
+- Source-bound, preview-only mobile Date editorial draft with three real event links; extends the existing documented Weekend prototype without runtime generation or current-data claims.
+
+### Fixed
+- Mobile city caption waits for complete contraction and vertical settling; reverse hides the caption before expanding city choices.
+- Open calendar dismisses with a downward touch pull from its header/grid while retaining horizontal months, selected dates and keyboard/close controls.
 
 ## [1.12.0] - 2026-03-04
 ### Highlights

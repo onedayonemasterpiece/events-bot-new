@@ -160,8 +160,8 @@ for (const route of listingRoutes) {
     throw new Error(`Listing route ${route} misses the tracked accepted mobile event rail`);
   }
   if (route === 'populyarnoe') {
-    if (mobileRailTag || !html.includes('data-popular-representation="mobile-large"') || !html.includes('data-popular-representation="mobile-adaptive"')) {
-      throw new Error('Popular must expose exactly the accepted Large/Compact representations without a disconnected v23 rail');
+    if (mobileRailTag || !html.includes('data-popular-density-representations') || !html.includes('data-popular-representation="desktop"') || !html.includes('data-floating-islands="site"')) {
+      throw new Error('Popular must expose the accepted shared island shell and mobile density surface without a disconnected v23 rail');
     }
   } else {
     for (const contract of [
@@ -308,13 +308,18 @@ if (
 let moreRail = '';
 if (moreRoutePath && existsSync(moreRoutePath)) {
   moreRail = mobileRailRow(moreRoute, moreEventId);
+  const naturalDocument = moreRail.includes('data-media-frame-fit="contain"')
+    && moreRail.includes('data-media-frame-crop-permission="forbidden"');
+  const roundingFallback = moreRail.includes('data-media-frame-fit="cover"')
+    && moreRail.includes('data-media-frame-crop-permission="fallback-minimal"')
+    && moreRail.includes('data-media-frame-crop-safety="unverified-text"')
+    && moreRail.includes('data-media-frame-crop-reason="natural_rounding_fallback:protected_natural_geometry"');
   if (
     !moreRail.includes('data-image-text-mode="ocr_text"')
-    || !moreRail.includes('data-media-frame-fit="contain"')
-    || !moreRail.includes('data-media-frame-crop-permission="forbidden"')
+    || !(naturalDocument || roundingFallback)
     || !moreRail.includes('data-media-frame-style-owner="media-frame.css"')
   ) {
-    throw new Error('More vnutri 4211 OCR media must remain fail-closed');
+    throw new Error('More vnutri 4211 OCR media must preserve its truthful framing state');
   }
   if (!moreRail.includes(moreManifest.avatarUrl)) {
     throw new Error('More vnutri 4211 misses its structured external festival medallion');
@@ -382,14 +387,17 @@ for (const headerContract of [
 }
 
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
+const sharedIslandPopular = popularHtml.includes('data-floating-islands="site"');
 for (const marker of [
   'data-listing-variant="POPULAR-V26"',
   'data-desktop-popular-version="V28"',
   'data-popular-representation="desktop"',
   'data-popular-representation="mobile-large"',
-  'data-popular-representation="mobile-adaptive"',
-  'data-ds-component="ListingMobileDensitySwitch"',
-  'data-ds-version="6"',
+  ...(sharedIslandPopular ? ['data-popular-density-representations'] : [
+    'data-popular-representation="mobile-adaptive"',
+    'data-ds-component="ListingMobileDensitySwitch"',
+    'data-ds-version="6"',
+  ]),
   'data-ds-component="PopularMobileGroupContext"',
   'data-popular-group-sentinel',
   'ke-popular-behavior__head-label',
@@ -400,15 +408,15 @@ const popularDesktopAt = popularHtml.indexOf('data-popular-representation="deskt
 const popularLargeAt = popularHtml.indexOf('data-popular-representation="mobile-large"');
 const popularAdaptiveAt = popularHtml.indexOf('data-popular-representation="mobile-adaptive"');
 const popularDockAt = popularHtml.indexOf('data-listing-mobile-density-dock');
-if (!(popularDesktopAt < popularLargeAt && popularLargeAt < popularAdaptiveAt && popularAdaptiveAt < popularDockAt)) {
+if (!(popularDesktopAt < popularLargeAt && (sharedIslandPopular || (popularLargeAt < popularAdaptiveAt && popularAdaptiveAt < popularDockAt)))) {
   throw new Error('Popular V26 representations are not isolated in desktop / large / adaptive order');
 }
 const popularDesktopHtml = popularHtml.slice(popularDesktopAt, popularLargeAt);
 const popularPersonalizedAt = popularDesktopHtml.indexOf('data-popular-personalized');
 if (popularPersonalizedAt < 0) throw new Error('Popular desktop V28 misses the optional personalized shelf');
 const popularDesktopGlobalHtml = popularDesktopHtml.slice(0, popularPersonalizedAt);
-const popularLargeHtml = popularHtml.slice(popularLargeAt, popularAdaptiveAt);
-const popularAdaptiveHtml = popularHtml.slice(popularAdaptiveAt, popularDockAt);
+const popularLargeHtml = popularHtml.slice(popularLargeAt, sharedIslandPopular ? popularHtml.indexOf('data-listing-no-events', popularLargeAt) : popularAdaptiveAt);
+const popularAdaptiveHtml = sharedIslandPopular ? '' : popularHtml.slice(popularAdaptiveAt, popularDockAt);
 const listingIds = (html) => [...html.matchAll(/data-listing-item(?:="")?[^>]*data-event-id="(\d+)"/gu)].map((match) => match[1]);
 const popularDesktopIds = listingIds(popularDesktopGlobalHtml);
 const popularLargeIds = listingIds(popularLargeHtml);
@@ -416,7 +424,7 @@ const popularAdaptiveIds = listingIds(popularAdaptiveHtml);
 if (popularDesktopIds.length === 0 || new Set(popularDesktopIds).size !== popularDesktopIds.length) {
   throw new Error('Popular desktop V28 ranking must be present and event-id deduplicated');
 }
-if (popularLargeIds.join(',') !== popularAdaptiveIds.join(',')) {
+if (!sharedIslandPopular && popularLargeIds.join(',') !== popularAdaptiveIds.join(',')) {
   throw new Error('Popular V26 mobile density representations must preserve identical ranked event order');
 }
 const popularDesktopFamilyKeys = [...popularDesktopGlobalHtml.matchAll(/data-listing-family-key="([^"]+)"/gu)].map((match) => match[1]);
@@ -497,12 +505,12 @@ if (!/data-popular-personalized[^>]*hidden/u.test(popularDesktopHtml)) {
 if (!popularLargeHtml.includes('event-card--split-actions') || popularLargeHtml.includes('listing-proof')) {
   throw new Error('Popular V26 large mode must reuse canonical EventCard split-actions without listing-proof');
 }
-if (!popularAdaptiveHtml.includes('data-ds-component="ListingEventCard"') || !/data-popular-mobile-layout="adaptive"[^>]*hidden[^>]*inert/u.test(popularAdaptiveHtml)) {
+if (!sharedIslandPopular && (!popularAdaptiveHtml.includes('data-ds-component="ListingEventCard"') || !/data-popular-mobile-layout="adaptive"[^>]*hidden[^>]*inert/u.test(popularAdaptiveHtml))) {
   throw new Error('Popular V26 adaptive mode must use inactive-by-default ListingEventCard rows');
 }
-if (!popularHtml.includes('maximum-scale=1, user-scalable=no')) throw new Error('Popular V26 must disable page zoom only on its gesture-enabled listing route');
+if (!sharedIslandPopular && !popularHtml.includes('maximum-scale=1, user-scalable=no')) throw new Error('Popular V26 must disable page zoom only on its gesture-enabled listing route');
 const popularCss = readFileSync(join(siteDir, 'src/styles/design-system.css'), 'utf8');
-for (const cssContract of [
+for (const cssContract of sharedIslandPopular ? [] : [
   '[data-popular-representation="mobile-adaptive"] .ke-popular-behavior__row',
   'flex-wrap: wrap',
   'right: 0;',
@@ -525,15 +533,21 @@ for (const cssContract of [
   if (!popularCss.includes(cssContract)) throw new Error(`Popular V26 CSS misses ${cssContract}`);
 }
 const densitySource = readFileSync(join(siteDir, 'src/components/listings/ListingMobileDensitySwitch.astro'), 'utf8');
-for (const gestureContract of ['pinchDistance', "matchMedia('(max-width: 720px)')", "ratio <= 0.84 ? 'adaptive'", "ratio >= 1.16 ? 'large'", "{ passive: false }", "dataset.listingPinchReady = 'true'", 'preferredEventId', 'dataset.listingContextEventId = anchorId', "new CustomEvent('listing:density-change'"]) {
+for (const gestureContract of sharedIslandPopular ? [] : ['pinchDistance', "matchMedia('(max-width: 720px)')", "ratio <= 0.84 ? 'adaptive'", "ratio >= 1.16 ? 'large'", "{ passive: false }", "dataset.listingPinchReady = 'true'", 'preferredEventId', 'dataset.listingContextEventId = anchorId', "new CustomEvent('listing:density-change'"]) {
   if (!densitySource.includes(gestureContract)) throw new Error(`Popular V26 pinch/context contract misses ${gestureContract}`);
 }
 const groupContextSource = readFileSync(join(siteDir, 'src/components/listings/PopularMobileGroupContext.astro'), 'utf8');
-assertPopularSectionContext({
-  groupSource: groupContextSource,
-  layoutSource: readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8'),
-  html: popularHtml,
-});
+if (sharedIslandPopular) {
+  if (!groupContextSource.includes('data-popular-section-source="EventLayout"') || !popularHtml.includes('data-ds-component="PopularMobileGroupContext"')) {
+    throw new Error('Popular shared island must own section context through EventLayout');
+  }
+} else {
+  assertPopularSectionContext({
+    groupSource: groupContextSource,
+    layoutSource: readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8'),
+    html: popularHtml,
+  });
+}
 
 for (const scenario of templateContract.lab_scenarios) {
   const scenarioHtml = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');

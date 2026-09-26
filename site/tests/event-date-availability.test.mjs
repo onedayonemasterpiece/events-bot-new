@@ -105,3 +105,23 @@ test('immutable review uses the manifest clock while live production retains mid
   assert.equal(resolveTodayReview('2026-09-04', reviewRuntimeDate(undefined, wall), ['2026-09-05']).state, 'redirect');
   assert.throws(() => reviewRuntimeDate('not-a-clock', wall), /Invalid review reference clock/u);
 });
+
+
+test('date B shares the real nav and keeps individual calendar dates separate from weekend ranges', async () => {
+  const [accessory, runtime, css, layout] = await Promise.all([
+    read('src/components/listings/MobileDateAccessory.astro'),
+    read('src/lib/mobileDateDock.mjs'),
+    read('src/styles/mobile-date-dock.css'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+  assert.match(accessory, /calendarHref: hasEvents \?/u);
+  assert.match(accessory, /month\.items\.map\(\(item\) => item\.calendarHref \?/u);
+  assert.match(accessory, /const firstCalendarDate = .*?-01/u);
+  assert.match(runtime, /dock\.append\(accessory,sheet,nav\)/u);
+  assert.doesNotMatch(runtime, /cloneNode|innerHTML|opacity|scrollIntoView/u);
+  assert.match(runtime, /prefers-reduced-motion/u);
+  assert.match(runtime, /pointerup/u);
+  assert.match(css, /touch-action:pan-x/u);
+  assert.match(css, /touch-action:pan-y/u);
+  assert.match(layout, /kenigevents:date-dock-change/u);
+});

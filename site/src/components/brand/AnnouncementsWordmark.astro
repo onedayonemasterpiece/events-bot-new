@@ -1,5 +1,7 @@
 ---
-import { withBase } from '../../lib/events';
+import wordmarkSvg from '../../../public/brand/announcements-wordmark-ui.svg?raw';
+const wordmarkPath=wordmarkSvg.match(/<path\b[^>]*\/\s*>/s)?.[0]?.replace(/ id="[^"]*"/, '');
+if(!wordmarkPath)throw new Error('Canonical announcements wordmark path missing');
 
 interface Props {
   class?: string;
@@ -9,5 +11,5 @@ const { class: className } = Astro.props;
 ---
 
 <svg class:list={['announcements-wordmark', className]} viewBox="0 0 7819 1514" aria-hidden="true" focusable="false">
-  <use href={`${withBase('/brand/announcements-wordmark-ui.svg')}#announcements-wordmark-ui`}></use>
+  <Fragment set:html={wordmarkPath} />
 </svg>

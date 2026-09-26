@@ -1279,3 +1279,469 @@ failed this stale post-build source assertion, so it was not published. The fail
 run removed its transient dist before archiving; the checked artifact is absent,
 so a checker-fixed successor requires a new same-corpus build, not an unchecked
 upload or false resume of a nonexistent archive.
+
+
+## Floating-island archetypes — 2026-09-06 owner review
+
+The owner accepted mobile12 as the base (not a production release). This branch
+imports that exact city kinetic approach into the shared EventLayout, replacing
+its old Popular-only observer. Mobile city docking begins within48px, uses
+540ms `cubic-bezier(.25,.1,.25,1)` and native sticky holding plus180ms settling;
+no animation time seeking, scroll-written city Y, font-size animation or text
+crossfade. Original tag, card/media owners and lower occupied-space owner remain.
+
+`islandSurface.mjs` adapts original ListingControls checkboxes and mobile rail city
+buttons, delegating selection to their existing filtering/storage handlers.
+Date/weekend use their visible representation's heading/filter, never the hidden
+desktop H1. The retired mobile sticky title and second sticky day label are
+suppressed; day headings remain in normal flow and full text becomes context.
+Desktop parallel weekend lanes do not claim a single active day. The nav fits
+whole destinations; overflow retains the current route and Clubs.
+
+Pages without city controls use `contentFloatingIslands.mjs` (except mobile event
+details, which now keep a flow-only title): no invented filter
+or second shell. On mobile the actual H1 retains its flow placeholder and travels
+on the browser scroll timeline into a separately revealing skin; full visible H2
+supplies context. On desktop only section context is shown, not a duplicate page
+menu label. Exhibition modes/categories, festival month links and event actions
+retain their original owners; old top control rails no longer create a fixed
+second tier. Long festival headings are intentionally a stress specimen.
+
+Bounded build `preview-islands-20260906-archetypes1`: seven real routes (Popular,
+Today, explicit23July, Weekend, Exhibitions, Festivals, event5370), plus the review
+index and robots. No full build, Kaggle, main/root promotion or voice changes.
+`site/scripts/write-island-archetype-index.mjs` writes the focused index; all pages
+carry a truthful historical23July catalog disclosure. Other routes are not part
+of this preview; shared-source rollout is not a claim that the full site shipped.
+
+Checks (`anonymous`, trigger tags `static-route,visual-layout`):
+- `node --test site/tests/island-archetypes.test.mjs` — fitting, original city-owner
+  delegation, route coverage/exclusions, accepted time easing.
+- `CHECK_BASE=<prefix URL> CHECK_OUTPUT=<artifacts dir> node
+  site/tests/island-archetypes.playwright.mjs` — real rendered384/1440 specimens,
+  top/intermediate/settled states, horizontal overflow, runtime errors, city popup
+  and actual mobile row filtering. `CHECK_WIDTHS` selects additional widths.
+- Evidence under `artifacts/codex/islands-archetypes-20260906/`; no video.
+
+This is a source-saved review preview, not DS/Penpot certification, current-event
+validation, authenticated API acceptance, native Android/iOS or production release.
+The owner will inspect the phone. Full catalog/emulator/native-system runs are not
+part of this bounded CSS/DOM archetype review; no Auth/PWA/provider changes made.
+
+
+### Date composition B — 2026-09-06
+
+Owner chose B after the three Telegram composition boards. MobileDateAccessory v2
+owns one lower skin around the **original** horizontal date rail, calendar and
+existing global nav; no cloned navigation, second shell or extra sticky tier.
+`mobileDateDock.mjs` reparents/restores these nodes at the720px breakpoint.
+The shared EventLayout lower occupied-space owner receives dock geometry; the dock
+does not create another global offset writer. Existing tag, top islands, filters,
+icon assets and event cards are unchanged.
+
+- Closed: native horizontal day scrolling remains independent of calendar opening.
+  The calendar button stays visible beside the scrolling rail.
+- Open: the same skin expands upward over340ms with ease, while global navigation
+  remains anchored at the bottom. Reduced motion skips animation. Escape/close
+  returns focus; this is a non-modal calendar, not a trapping overlay over the nav.
+- Full conventional months have Monday-first grids. Arrows and horizontal touch
+  swipes navigate every month through the real event-start horizon, including
+  entirely empty months; no42-day/month-count cap is imposed.
+- Individual empty/past dates have no anchor and are visually/semantically disabled.
+  The strip retains combined weekend links; the full calendar uses single-day
+  availability instead. Thus an empty Saturday is disabled even when Sunday in
+  its weekend has events. Exhibitions retain the existing separate inventory rule.
+
+Preview `preview-islands-20260906-archetypes-date-b1` contains eight selected real
+routes plus index: Today, Tomorrow,23July,29January2027,23April2027, current Weekend,
+19December weekend, and Popular as a lower-nav regression specimen. This historical
+snapshot reaches23April2027 (calendar end30April); February/March are empty but
+navigable. Other date routes are deliberately not built and the existing preview
+route guard explains that boundary. This is not a current catalog/full-site release.
+
+Validation: anonymous L0 event-date/archetype contracts; L1
+`CHECK_BASE=<prefix> CHECK_OUTPUT=<directory> node site/tests/date-dock.playwright.mjs`
+at320/384/430px: native touch scrolling, touch month swipe, arrows across empty
+months to April, real future event navigation, disabled Saturday, stable nav,
+Escape and desktop/mobile restoration. The existing archetype runner covers
+Popular/Today/Weekend top islands and original city filtering. Source family,
+surface and icon gates apply. Evidence lives under
+`artifacts/codex/date-dock-b-20260906/`. Public verification uses the immutable
+prefix; browser touch emulation is not native phone/PWA acceptance. No video,
+Kaggle, full build, production/root promotion or voice changes.
+
+
+The first compact successor `preview-islands-20260906-archetypes-date-b2` (superseded below)
+keeps the same selected routes and calendar behavior. Only the two-tier date dock
+uses text-only lower navigation (44px); its horizontal date row is also44px,
+with weekday/number/month inline. The shared skin occupies90px including borders,
+down from146px, without scroll-triggered icon/text swapping. Single-tier nav on
+Popular and other non-date pages retains both icons and labels. The calendar's
+month cells remain44px and its lower navigation stays anchored during expansion.
+The existing browser scenario additionally asserts90px geometry, four labels,
+no visible icons in the date dock, and four retained icons on Popular.
+Evidence: `artifacts/codex/date-dock-compact-20260906/`; the same preview-only and
+historical-data limitations apply.
+
+
+Owner correction: `preview-islands-20260906-archetypes-date-b3` restores the exact
+B1 date row (64px, stacked weekday/number/month and48px chips); **only** the lower
+nav is compact/text-only (44px). The shared dock is110px with borders, not90px.
+The B2 inline-date reduction was explicitly rejected. Existing calendar, swipe,
+empty-day behavior, single-tier icons and top-island kinetics remain unchanged.
+
+The mobile title and metadata had lost their horizontal gutter because the
+native-sticky wrapper uses `display:contents`. Keep that required full scroll
+range; apply the shared12px mobile gutter to its actual title-origin/metadata
+children, not to the boxless wrapper. Do not change title transforms or add a
+short containing block. Browser checks assert title/meta x=12px,64px rail,48px
+stacked date chips and110px total; existing archetype checks cover sticky/context
+and city filtering on Date/Today/Weekend. Evidence is under
+`artifacts/codex/date-dock-correction-20260906/`; preview-only limitations unchanged.
+
+
+### One-day mobile entry cleanup — 2026-09-06
+
+Owner approved a content-first follow-up, `preview-islands-20260906-archetypes-date-b4`,
+for Today/Tomorrow/explicit-date pages only (MobileListingRailSurface v2). The real H1 and a live result count
+stay in normal flow; neither date nor “По времени” becomes a top island. The
+permanent feed-order/gesture-instruction row is removed from this mobile view;
+this review does not introduce a replacement tutorial overlay. The actual city
+filter retains its native sticky/540ms easing mechanism. The B4 fitting row
+beside the brand is superseded by the owner-requested compact state (B6 corrects B5 anchoring): one
+content-sized “Все города” button (44px island height, top20px), or the actual
+selected city name. It docks12px from the right viewport edge, not next to the brand. A visible
+downward chevron identifies it as a picker and turns upward while open; its
+width includes the arrow budget. This corrects the B5 regression that wrongly
+left-anchored a label-only button. It does not fill the remaining row with “Все +N”. Long names are width-capped and
+ellipsized with the full accessible selection retained. The original popover contains every city. The B7 normal-flow row now contains
+all city buttons in a native horizontal touch scroller, with no +N. Desktop
+whole-item fitting is unchanged. Its normal-flow reserve is56px with8px
+margins, not72px with12/24px margins. One-city/empty days keep a static heading
+through the existing responsive shell owner: no fabricated filter or second shell.
+The original filter updates the heading count after city selection and row hiding.
+
+The lower B3 dock is unchanged:64px stacked dates +44px labels,110px with border.
+Cards remain112px tall. Weekend still retains its current-day section context;
+Popular and other multi-section headings keep their accepted behavior. Desktop
+source layout and calendar horizon/empty-date rules are unchanged.
+
+Anonymous Chromium measures the first event at224px (previously341.64px), giving
+three full rows in384×720 without reducing cards, dates or the brand. The initial
+200–220px proposal was an estimate; the acceptance check allows230px and separately
+requires three complete rows at720px/four at844px when the route has enough events.
+`site/tests/single-day-density.playwright.mjs` covers320/384/430px, three day routes,
+static heading exit, right-aligned content-sized compact picker with an open/closed chevron, real city filtering
+and live counts, single-city routing, reduced motion and the Weekend exception.
+`site/tests/date-dock.playwright.mjs` remains the calendar and unchanged-lower-nav
+regression. Evidence: `artifacts/codex/date-page-clean-20260906/`. Same eight routes,
+review index and historical snapshot. B5 follow-up evidence is in
+`artifacts/codex/date-city-compact-20260906/`, preview prefix
+`preview-islands-20260906-archetypes-date-b5`. The B6 right-edge/affordance
+correction is published at `preview-islands-20260906-archetypes-date-b6`, with
+evidence in `artifacts/codex/date-city-right-20260906/`; not a full build, native phone, Auth/PWA,
+Penpot certification or production/root release.
+
+### Mobile native city scrolling — 2026-09-06
+
+Owner requested faster selection without opening overflow before compaction.
+B7 (`preview-islands-20260906-archetypes-date-b7`) uses native overflow-x:auto
+for the expanded city row on day, Weekend and Popular mobile surfaces. All
+original choices remain available by horizontal swipe; vertical page gestures
+remain native. No custom drag handler or JS-driven scroll inertia is added.
+The existing compact right-hand picker remains: named/chevron on one-day pages,
+ellipsis beside section context elsewhere. The row retains its scroll offset
+through docking/expansion and delegates selection to the original filter.
+
+B6 frame inspection showed overlapping outgoing city names and incoming compact
+caption: independent mask/position animations exposed both at once. The shared moving
+wrapper also inherited overflow:hidden on date/weekend pages, prematurely
+clipping the animated skin to its compact layout width; its mobile override now
+covers every real city owner, not Popular alone. B7 uses a
+two-phase clipping handoff within the same540ms easing, without opacity fades,
+font scaling or replacing row nodes; row and compact caption are never exposed
+simultaneously during either direction or reversal. Sticky Y and180ms settling
+are unchanged. No bottom dock, desktop style, brand or card-size changes.
+
+`site/tests/mobile-city-scroll.playwright.mjs` checks real Chromium touch swipes,
+original city selection, restoration, right-edge docking and per-rAF mask
+exclusivity. Evidence and diagnostic frame captures live under
+`artifacts/codex/mobile-city-native-20260906/`. Anonymous L1 only, not native-phone
+or production acceptance. Owner receives direct page links in Telegram, not a
+new design-system catalog. Same focused date/popular/weekend routes; no full build.
+
+### Mobile Weekend editorial prototype — 2026-09-06
+
+Owner-requested mobile-only footer prototype, with pre-written AI draft and
+three internal links to real event detail pages, is included in the B7 review
+on `/vyhodnye/`. The three detail routes are explicitly included in this focused
+build. Canonical scope, provenance and follow-up plan: [Weekend editorial review](weekend-editorial-review.md).
+
+The owner also requested the missing **Free** archetype. B7 explicitly includes
+`/podborki/besplatnye-sobytiya/` (the existing FreeCollectionSurface), not a new
+`/besplatno/` alias. Its direct mobile/desktop review link is sent separately in
+Telegram. Previously supplied archetype/date prefixes did not contain this route.
+
+### Mobile event details: no top context island — 2026-09-06
+
+Owner explicitly removed the mobile event title/section island. The existing
+responsive shell recognizes `[data-mobile-event-production]`, keeps the real
+H1 in normal page content and hides its top context nodes; no content-morph
+controller or replacement header is created. Brand, lower navigation and event
+actions remain owned by their original components. Desktop context is unchanged
+and breakpoint teardown restores the prior nodes. B7 includes the previously
+shared event5370 plus the three linked Weekend review events for direct checking.
+
+### Mobile event action + navigation dock — 2026-09-06
+
+Owner requested the same single-surface composition as the date dock when
+«Купить» appears. `mobileEventDock.mjs` reparents the **actual** sticky event CTA
+and global nav into one bottom skin on mobile (≤720px). The existing hero/feed
+IntersectionObservers remain the only CTA-visibility owner: this layout listens
+to their `.is-hidden` decision, without adding a competing scroll rule.
+
+Visible CTA:64px action/date row above44px text-only nav (110px with border).
+No CTA at the hero or related feed: the same nav returns to80px icon+label mode
+inside82px skin. Labels stay bottom-aligned; height changes use340ms easing,
+not a second floating strip. Purchase/phone/calendar hrefs and action attributes
+are preserved, not duplicated. The shared occupied-space coordinator includes
+this dock and receives its size updates. Modal hiding and breakpoint restoration
+retain the existing shell contract. Desktop is unchanged.
+
+`site/tests/mobile-event-dock.playwright.mjs` covers real scroll-triggered states,
+non-overlap, original-node/URL identity, lower-space reporting,
+related-feed dismissal and resize restoration. Anonymous L1 preview only; no
+purchase is submitted and no native-phone/PWA acceptance is claimed.
+
+### Mobile Weekend: day-only context — 2026-09-06
+
+On both current and dated Weekend routes, full «Выходные» H1 and its meta stay
+in page flow and scroll away. The existing top context becomes one44px
+«СБ · ВС» day navigator beside the compact city picker, without subtitle or
+numeric dates (dates already exist below in the lower island). The relevant
+day uses a filled selected state, never an underline. Clicking a day scrolls
+to its original mobile section; scrolling updates the selection. Days without
+a visible section are disabled. Accessible names retain full dates. The
+context gradually appears over24–96px of scroll, only as its sticky slot approaches the top row; short pages do not reveal it over their content. Reduced-motion skips the fade.
+One-city/empty weekends use the same day context without inventing city choices.
+Desktop stays unchanged. `mobile-weekend-days.playwright.mjs` checks current and
+future routes at320/384/430, day navigation, lower-priority title flow, city
+alignment, reduced motion and responsive teardown.
+
+### Free: the medallion is the floating identity — 2026-09-06
+
+Owner correction: Free must not use the generic content-title/section island.
+The existing `free-listing-medallion.svg` is the identity on mobile **and** desktop.
+`FreeCollectionSurface` now renders one real medallion across the header/results
+grid; its native sticky range spans the list rather than the short hero. The H1
+and description remain in ordinary flow. The former hidden compact duplicate
+and binary fade-in handler are removed, not layered behind the new controller.
+
+`freeMedallionIsland.mjs`, selected by the existing responsive shell, measures
+only the arrival range. Over the last112px before reaching its top boundary,
+the medallion smoothly scales from1 to0.84 with a fixed right edge; its opacity,
+SVG bytes and DOM node never change. Native sticky owns vertical positioning.
+Mobile retains its100px initial identity (84px docked); desktop retains58px
+(48.72px docked), below the measured global menu. Native scroll-timeline has a
+transform-only rAF fallback; reduced-motion uses settled states without tweening.
+No title card, city filter or new sticky floor is introduced. Existing cards,
+Free eligibility/count/loading and bottom navigation are unchanged.
+
+Focused B8 review: `/preview-islands-20260906-archetypes-free-b8/podborki/besplatnye-sobytiya/`.
+B7 links for the other archetypes remain unchanged. Evidence is retained under
+`artifacts/codex/free-medallion-island-20260906/`: real rendered320/384/430/1440,
+intermediate scales/opacity/right edge/native sticky, wheel reversal, responsive
+node identity and reduced-motion. This is an anonymous historical preview, not
+current-event validation, native phone acceptance or Penpot/production promotion.
+
+### Weekend first paint must be static — 2026-09-06
+
+Owner screenshot in Telegram 1436 exposed the **pre-enhancement** HTML, not an
+API-generated listing: the city dialog lacked `hidden`, the old tutorial/title
+rail remained visible, dates/nav were two overlapping surfaces, and completed
+poster images remained opacity 0 until the rail script marked them loaded. The
+shared island initializer also waited behind unrelated Auth/transport imports.
+The external SVG-use wordmark could arrive after the colored brand background.
+
+B9 corrects the initial document, rather than covering it with a spinner:
+- `MobileListingCityPicker` builds the complete horizontal Weekend city row in
+  HTML; the disclosure is closed in HTML. Enhancement reuses these same nodes.
+- `weekend-first-paint.css` supplies the final heading, row, shelf and 110px lower
+  composition before JS, including when scripts are delayed or disabled. The
+  original date/nav nodes are composed by CSS before the existing runtime moves
+  them into its shared dock; their geometry does not change on initialization.
+- Posters already have real `src` values. Weekend no longer hides decoded
+  posters behind a JS-only skeleton/opacity switch. Native image fetching still
+  takes time; reserved 112px rows do not depend on its completion.
+- The canonical 1.4 KB wordmark path is inlined at build time without altering its
+  geometry; the existing mobile leather texture is preloaded. The initial badge
+  displays its numeric count, matching its subsequent personalized update.
+- `ShellIslandRuntime` is a separate lightweight module entry. Initial city
+  geometry does not wait for `document.fonts.ready`; a later font measurement
+  can update it. Auth, transport, stored filters and personalization are not
+  disabled or replaced.
+
+The site remains Astro static HTML. Client JS still enhances scrolling, city
+filtering, calendar interactions, saved state and existing actions; optional
+existing weather/personalization/Auth requests are not a prerequisite for the
+initial title, cards or lower composition. No on-open event-generation/API
+pipeline was added. The prepared Weekend editorial remains static and its real
+linked detail pages are included in B9. Other published review links remain valid.
+
+First-paint acceptance now explicitly holds real script downloads, inspects
+initial HTML/CSS and poster visibility, releases those same scripts, and compares
+H1/city/first-card/date/nav geometry and node identity. It also runs with JS off,
+then checks native city gestures, day navigation and the existing date calendar.
+Anonymous Chromium 320/384/430; source and public evidence:
+`artifacts/codex/weekend-first-paint-20260906/`. No native-phone or production
+promotion claim. Separately, Free has no redundant «← Афиша» breadcrumb; its
+original medallion and ordinary heading remain, with existing global navigation.
+Desktop retains header clearance without a breadcrumb row, so the heading does
+not collide with the brand and the medallion still has a smooth approach range.
+The day-navigation test waits for the actual selected day and settled anchor,
+not an assumed one-second native smooth-scroll duration.
+
+### Lower-island reference shadow — 2026-09-06
+
+B10 increases only the lower island elevation, following the approved reference:
+stronger near/contact shadow and a soft broad warm ambient shadow, not a darker
+fill. `--ke-island-lower-shadow` in `floating-islands.css` is the shared owner for
+the standalone nav, date/calendar dock, event Buy/nav dock and pre-JS Weekend
+composition. Inner nav tiers still have no independent shadow. Upper islands,
+brand, sizes, positions, motion, card layouts and icon assets are unchanged.
+The B9 static first-paint corrections, Free breadcrumb removal and Weekend
+editorial remain in this focused preview. Acceptance compares B9/B10 rendered
+geometry and upper shadows, single/composed lower shadows, calendar and CTA
+states, and initial Weekend before script enhancement. Evidence:
+`artifacts/codex/lower-island-shadow-20260906/`. No root/full-catalog promotion.
+
+### Owner review corrections: compact entry and contained city motion — 2026-09-06
+
+- Card admission is now `Бесплатно` via `eventCardAdmissionLabel`; detailed
+  registration/booking conditions remain on event details. Sold-out precedence
+  is unchanged. This is presentation only, not classification of event facts.
+- Mobile city content has one rounded, two-axis clipping viewport inside the
+  actual animated surface. Its width/height follow that same finite540ms eased
+  animation; the shadow remains outside. The former independently scaled skin
+  could become44px high while its54px text row painted beyond the edge. The
+  two-phase row/picker handoff remains, including reversal and native horizontal
+  scroll before docking. No opacity flashes or text scaling were introduced.
+- Mobile Popular starts with the compact right-hand picker in server HTML/CSS,
+  even while scripts are withheld. Its enhancer preserves that state at scroll0
+  and on return to the top. Desktop continues to expose the maximal fitting
+  city choices; it is not reduced to a mobile-only ellipsis.
+- The Date specimen now includes a mobile bottom editorial block with three
+  real internal links, prepared before build. Provenance, historical-data scope
+  and production-generation gap are documented in the existing
+  [editorial owner](weekend-editorial-review.md#date-specimen-extension--2026-09-06).
+
+Review prefix: `preview-islands-review-20260906`; direct specimens are
+`/date-2026-07-23/`, `/populyarnoe/`, `/vyhodnye/` and
+`/podborki/besplatnye-sobytiya/`, not a design-system catalog.
+The same historical23July snapshot/reference date is deliberately retained for
+comparison; this is not a current September-event freshness acceptance.
+
+Checks: `islands-review.test.mjs`, `island-archetypes.test.mjs`,
+`islands-review.playwright.mjs`, `mobile-city-scroll.playwright.mjs`
+(date/Weekend only: Popular no longer has an expanded mobile initial row), and
+source production-surface gate. Tags: static-data, static-route, visual-layout;
+auth_mode=anonymous. L0/L1 only; no Auth/native-system change, L2/L3 not claimed.
+Artifacts: `artifacts/codex/islands-review-20260906/`.
+
+Published review receipt: source
+`cd90e408d526259cbb2411032f8489694b38feee`, [PR639](https://github.com/onedayonemasterpiece/events-bot-new/pull/639)
+against `feature/islands-archetypes-20260906`, not voice/main.
+- [Date + day editorial](https://kenigevents.ru/preview-islands-review-20260906/date-2026-07-23/)
+- [Popular](https://kenigevents.ru/preview-islands-review-20260906/populyarnoe/)
+- [Free](https://kenigevents.ru/preview-islands-review-20260906/podborki/besplatnye-sobytiya/)
+- [Weekend](https://kenigevents.ru/preview-islands-review-20260906/vyhodnye/)
+
+PASS:16 L0 tests; source-surface contract;6 native city swipe/filter/reversal
+cases;7 Weekend delayed/no-JS cases;6 dedicated route/width cases both locally
+and against the published target (320/390/430 plus desktop1440).
+All13 emitted route/support files and `preview-build.json` read back byte-exact.
+CI [34024739021](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34024739021)
+completed its contract/facts/gate jobs successfully; its browser job was skipped,
+not presented as the separate public L1 run. No phone/production certification.
+
+### Sequential city caption and calendar swipe dismissal — 2026-09-06
+
+Owner follow-up supersedes the earlier in-animation58% caption handoff.
+Reproduction on the published review found22 frames with incoming text while
+geometry still moved; reciprocal row/caption masks alone were insufficient.
+The city island now contracts for540ms, finishes its180ms vertical settling
+(with a40ms completion margin), and only then reveals the compact caption over
+180ms. Reverse first closes the caption mask, then expands the list; reversing
+before the caption appeared skips that unnecessary wait. The existing clipping
+viewport, native horizontal city row, reduced motion and Popular compact SSR
+remain. Caption visibility is tested against actual settled x/y/width/height,
+not a phase name alone. The masked caption remains inert throughout geometry,
+settling and reveal, becoming keyboard-actionable only when ready. Reverse native scroll may move Y; list expansion still
+waits until the caption is hidden.
+
+The opened calendar now closes on a downward single-finger pull over56px,
+starting at the scroll-top of its panel, from either header or month grid.
+Horizontal months, day-strip native scrolling, short drags, selected month,
+real date links, Escape/close and focus return are regression cases. No global
+body-scroll lock, alternate calendar or voice overlay is introduced. Touch
+arbitration is localized to the sheet: [MDN touch events](https://developer.mozilla.org/en-US/docs/Web/API/Touch_events)
+and [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)
+explain why a vertical browser gesture cancels pointerup and why preventDefault
+must act on the first directional touchmove, not only after the final threshold.
+
+Focused successor prefix: `preview-islands-sequential-20260906`; same historical
+corpus and existing date/weekend editorial drafts, with24July and23April2027
+included only as real navigation regression targets. L1 native touch injection
+is not physical-phone certification. Artifacts:
+`artifacts/codex/islands-sequential-20260906/`.
+
+The native city regression waits for the actual terminal caption phase after
+reverse, rather than assuming all main-thread callbacks have completed after
+1150ms. Per-frame mask/geometry checks remain; this does not skip motion checks.
+
+Published successor receipt: runtime `e1150f4ee5683c3235677b3dd4235db1b560e953`,
+exact built source `e08e7e74a7b605a71c1964bea6316382b9f2242e`, same PR639.
+[Date: city handoff and downward calendar gesture](https://kenigevents.ru/preview-islands-sequential-20260906/date-2026-07-23/),
+[Popular](https://kenigevents.ru/preview-islands-sequential-20260906/populyarnoe/),
+[Weekend](https://kenigevents.ru/preview-islands-sequential-20260906/vyhodnye/),
+[Free](https://kenigevents.ru/preview-islands-sequential-20260906/podborki/besplatnye-sobytiya/).
+
+PASS:18 L0; surface contract; sequential geometry/inert/native gestures at
+320/390/430 plus reduced-motion both locally and publicly;6 native city cases;
+5 calendar/date-strip/future-date/desktop cases;6 prior review cases locally.
+All15 route/support files plus manifest read back byte-exact. CI
+[34028608681](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34028608681)
+contract/facts/gate PASS; its browser job skipped, separate public L1 above.
+
+### Fullscreen menu owns lower-surface occlusion (2026-09-06)
+
+The mobile Date/Weekend regression was reproduced on the public sequential
+preview: the date dock (z64) remained above the menu (z60), because the old rule
+hid only its nested navigation. Reference4 now occludes and makes inert the
+whole existing composed date/event dock or standalone nav; no z-index escalation
+or second shell. Native `[open]` also occludes before controller startup. The
+previous inert state is restored only after the drawer's closing animation.
+The legacy layout controller skips Reference4, leaving a single lifecycle owner.
+
+A single-finger upward swipe over56px closes from the menu header or scroll end.
+Elsewhere a long menu scrolls natively; short and horizontal gestures do not
+close it. Escape, close button, real menu links, focus return and date/calendar
+state are preserved. This is anonymous L1 native Chromium touch injection, not
+physical-phone certification. Focused successor: `preview-islands-menu-20260906`,
+same historical corpus and approved editorial drafts; no full build or root
+promotion. Evidence: `artifacts/codex/islands-menu-20260906/`.
+
+Published source: `591a1e06148e07dfec1910db9623ccf5a3f4aa30`, PR639.
+[Date](https://kenigevents.ru/preview-islands-menu-20260906/date-2026-07-23/),
+[Weekend](https://kenigevents.ru/preview-islands-menu-20260906/vyhodnye/).
+All15 route/support files and the public manifest were read back byte-exact.
+PASS:20 L0, surface contract, local/public native menu suite4 plus no-JS and
+reduced motion; local sequential city/calendar320/390/430 plus reduced motion.
+The menu suite also checks service/back, collections reset and breakpoint
+close/release. Supplementary public checks verify expanded-calendar occlusion
+and preservation of the page's scrolled position. Public screenshots inspected.
+CI [34030418199](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/34030418199)
+contract/facts/gate PASS; CI browser skipped, public L1 was run separately.
+The optional desktop outside-click probe was not applicable at1440px, where
+this mobile disclosure is hidden in favor of normal desktop navigation; it is
+not counted as passing desktop interaction evidence.

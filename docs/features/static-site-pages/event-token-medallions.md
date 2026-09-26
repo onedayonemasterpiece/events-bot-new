@@ -608,3 +608,11 @@ This source-channel badge is a **static event-detail-page surface only**. Source
 and aggregator identities are not event attributes and must never be included
 in Telegram `@kldevents` graphical-medallion strips. Telegram may still show
 source-grounded organizer, venue, festival, program and Pushkin-card marks.
+
+### Free page identity motion (2026-09-06 owner correction)
+
+The existing page-level `site/public/assets/badges/free-listing-medallion.svg`
+remains unchanged (reused from the current `7be486d6a` baseline; no redraw).
+Its single-node sticky/compaction contract is owned by
+[Free page identity](astro-preview.md#free-the-medallion-is-the-floating-identity--2026-09-06).
+This is not a change to organizer, venue or event-card medallions.

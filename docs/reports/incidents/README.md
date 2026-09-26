@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-26-islands-preview-assembly-gap.md`
+  - Scope: complete static-site review preview assembly and Home → Today navigation.
+  - Must not regress: a link described as the integrated floating-islands interface must use one complete build containing both Home and listing-shell changes; the actual browser click must retain the floating shell at mobile and desktop widths.
+
 - `INC-2026-09-01-yandex-storage-cdn-media-outage.md`
   - Scope: Yandex bucket capacity, immutable secret-candidate retention,
     event-media materialization, VK/TG media gates and public CDN TLS recovery.

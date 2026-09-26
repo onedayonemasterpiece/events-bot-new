@@ -5,6 +5,8 @@ import WeatherDateContext from '../WeatherDateContext.astro';
 import SemanticIcon from '../design-system/SemanticIcon.astro';
 import MobileListingRailRow from './MobileListingRailRow.astro';
 import MobileDateAccessory from './MobileDateAccessory.astro';
+import MobileListingCityPicker from './MobileListingCityPicker.astro';
+import '../../styles/weekend-first-paint.css';
 import './mobile-listing-foundation-bindings.css';
 
 interface WeatherContext { date: string; dateLabel: string; routeKind: WeatherRouteKind; }
@@ -41,12 +43,13 @@ const {
   weather,
 } = Astro.props;
 let rowIndex = 0;
+const singleDay = ['today', 'tomorrow', 'date'].includes(current);
 const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 ---
 <div
   class="ke-mobile-listing-rails ke-mobile-listing-rails--v23"
   data-ds-family="MobileListingRailSurface"
-  data-ds-version="1"
+  data-ds-version="2"
   data-ds-variant={current}
   data-ds-state={total > 0 ? 'populated' : 'empty'}
   data-mobile-listing-rails
@@ -55,23 +58,18 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 >
   <section class="page-head" aria-labelledby={`mobile-v23-title-${current}`}>
     <h1 id={`mobile-v23-title-${current}`}>{title}</h1>
-    <p>{meta}</p>
+    <p>{singleDay ? <>Событий: <span data-mobile-v23-result-count aria-live="polite">{total}</span></> : meta}</p>
   </section>
   {weather ? <WeatherDateContext {...weather} surface="mobile" /> : null}
   <div class="mobile-listing-pin-sentinel" data-mobile-listing-pin-sentinel aria-hidden="true"></div>
   <div class="sticky-date mobile-listing-sticky-title" data-mobile-listing-sticky-title aria-hidden="true">
     <strong>{title}</strong><span>{meta}</span>
   </div>
+  {current === 'weekend' && cities.length > 1 && <div class="fi-mobile-city-origin" data-fi-ssr-origin><MobileListingCityPicker cities={cities} total={total} prepared /></div>}
   <div class="feed-head">
     <div class="feed-head__copy"><strong>{feedTitle}</strong><span>{feedMeta}</span></div>
     {cities.length > 1 ? (
-      <details class="city-picker" data-mobile-v23-city-picker>
-        <summary data-mobile-v23-city-label>Вся область</summary>
-        <div class="city-picker__panel" role="group" aria-label="Города">
-          <button type="button" data-mobile-v23-city="all" aria-pressed="true"><span>Вся область</span><b>{total}</b></button>
-          {cities.map((city) => <button type="button" data-mobile-v23-city={city.name} aria-pressed="false"><span>{city.name}</span><b>{city.count}</b></button>)}
-        </div>
-      </details>
+      current !== 'weekend' && <MobileListingCityPicker cities={cities} total={total} />
     ) : <span class="city-pill">Вся область</span>}
   </div>
   <div class="mobile-v23-sections">
@@ -218,6 +216,8 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
         if (countNode) countNode.textContent = String(count);
       });
       if (empty) empty.hidden = visible !== 0;
+      const resultCount = surface.querySelector('[data-mobile-v23-result-count]');
+      if (resultCount) resultCount.textContent = String(visible);
     };
     const syncRowVisibility = (row) => {
       const cityFiltered = selectedCity !== 'all' && row.dataset.listingCity !== selectedCity;
