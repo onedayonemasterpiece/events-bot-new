@@ -1,0 +1,47 @@
+name: KenigEvents Live Search daily canary
+
+on:
+  schedule:
+    - cron: '37 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: kenigevents-live-search-daily
+  cancel-in-progress: false
+
+jobs:
+  live-search:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: { name: search-e2e }
+    env:
+      FLY_APP_NAME: ${{ vars.SEARCH_E2E_FLY_APP_NAME }}
+      AUTH_SESSION_BROKER_URL: ${{ secrets.SEARCH_E2E_AUTH_BROKER_URL }}
+      AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
+      PERSONALIZATION_SUPABASE_URL: ${{ vars.SEARCH_E2E_SUPABASE_URL }}
+      PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY }}
+      SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER: ${{ secrets.SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER }}
+      LIVE_SEARCH_CANARY_RECEIPT: artifacts/live-search-daily/receipt.json
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.22.0
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install static-site test dependencies
+        run: npm ci --prefix site --no-audit --no-fund
+      - name: Run one real Live search conversation
+        run: node .github/scripts/run-live-search-daily-canary.mjs
+      - name: Upload sanitized receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-search-daily-${{ github.run_id }}
+          path: artifacts/live-search-daily/receipt.json
+          if-no-files-found: warn
+          retention-days: 14

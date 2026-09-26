@@ -90,3 +90,6 @@ site/src/data/event-search-corpus-receipt.json
 
 # Generated from tracked, hash-verified prelaunch source parts at build time.
 site/public/assets/prelaunch/*.webp
+
+# Private release wheels are materialized only for trusted production builds.
+vendor-private/*.whl

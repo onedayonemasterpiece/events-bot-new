@@ -135,3 +135,21 @@ def test_invalid_notebook_fails_closed(tmp_path: Path) -> None:
 
     assert not report.passed
     assert report.unreadable_files == ("kaggle/broken.ipynb",)
+
+def test_versioned_shared_live_transport_is_approved_but_other_dependency_provider_is_not(tmp_path: Path) -> None:
+    shared = (
+        "site/node_modules/@onedayonemasterpiece/live-interaction/"
+        "python/live_interaction/provider.py"
+    )
+    _write(tmp_path, shared, 'ENDPOINT = "wss://generativelanguage.googleapis.com/ws"\n')
+    _write(
+        tmp_path,
+        "site/node_modules/unreviewed/provider.py",
+        'ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"\n',
+    )
+
+    report = audit.audit_repository(tmp_path)
+
+    assert not report.passed
+    assert report.summary["approved_shared_live_transport"] == 1
+    assert report.summary["unapproved"] == 1

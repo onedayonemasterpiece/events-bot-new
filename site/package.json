@@ -54,6 +54,7 @@
     "check:prelaunch-form": "node scripts/check-prelaunch-form-security.mjs"
   },
   "dependencies": {
+    "@onedayonemasterpiece/live-interaction": "github:onedayonemasterpiece/live-interaction#v0.1.4",
     "@supabase/supabase-js": "2.108.2",
     "astro": "^6.0.5"
   },

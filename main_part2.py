@@ -22692,9 +22692,11 @@ def create_app() -> web.Application:
     app.router.add_get("/metrics", metrics_handler)
     from kaggle_status import make_kaggle_run_event_handler
     from serverless.static_site_auth_session_broker_http import register as register_static_site_auth_session_broker
+    from static_site_live_search import register as register_static_site_live_search
 
     app.router.add_post("/internal/kaggle/run-event", make_kaggle_run_event_handler(db))
     register_static_site_auth_session_broker(app)
+    register_static_site_live_search(app)
 
     async def on_startup(app: web.Application):
         await init_db_and_scheduler(app, db, bot, webhook)

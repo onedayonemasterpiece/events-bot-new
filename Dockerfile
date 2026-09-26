@@ -9,7 +9,8 @@ WORKDIR /app
 RUN test "$(printf '%s' "$STATIC_SITE_IMAGE_REPO_SHA" | wc -c)" -eq 40 \
     && ! printf '%s' "$STATIC_SITE_IMAGE_REPO_SHA" | grep -q '[^0-9a-f]'
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY vendor-private/ /tmp/vendor-private/
+RUN test -f /tmp/vendor-private/ai_resource_control-0.1.2-py3-none-any.whl     && pip install --no-cache-dir /tmp/vendor-private/ai_resource_control-0.1.2-py3-none-any.whl     && pip install --no-cache-dir -r requirements.txt     && rm -rf /tmp/vendor-private
 # Region Talk renders at most three JavaScript-only article pages per bounded
 # materializer invocation.  Install only Chromium and its system dependencies;
 # the worker is not a general-purpose crawler.
