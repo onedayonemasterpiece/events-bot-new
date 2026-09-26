@@ -235,6 +235,27 @@ The **initial provider decision** that restricted the rotated token cannot be at
 - [ ] Audit other recent text-only posts and repair only those with exact, date-consistent source media.
 - [ ] Alert on prolonged absence of fresh managed VK posts plus increasing `vk_flood_wait`, even when `/healthz` is ready.
 
+### Media-review allowance recurrence, 2026-09-26
+
+- After the separate storage recovery, eight future `vk_sync` jobs still had
+  `vk_sync_missing_materialized_media`; seven lacked a stored URL for the
+  managed Afisha group. Source-group URLs do not prove an Afisha post exists.
+  The job for September 27 event 8934 resolves through linked event 8794,
+  whose gallery is empty while its role classification is pending. Event 8934
+  also has a separate failed CDN mirror for one candidate. These are media
+  gates, not disk errors or a renewed VK code-9 restriction.
+- The unchanged `EVENT_MEDIA_ROLE_DAILY_CALLS=150` allowance was exhausted by
+  00:34 UTC on September 26. Some blocked-future review jobs were created or
+  rescheduled after that time and cannot classify until the September 27 reset.
+  Due-job ordering alone cannot reserve capacity for such later arrivals.
+- Reserve 20% of the existing semantic-role allowance for active future events
+  with a `vk_sync_missing_materialized_media` error. Ordinary reviews stop at
+  80%; all reviews share the original 150-call counter. The fix does not raise
+  a provider budget or permit text-only VK publication. Verify after the next
+  UTC reset that blocked-future jobs use the reserve, and inspect their media
+  outcomes and Afisha wall readback. A missing or wrong image must remain
+  blocked for source-specific repair.
+
 ## Release And Closure Evidence
 
 - Deployed first hotfix SHA: `6df3aa0484bf306bd16dd9f5059792677bb5887d`, merged via PR #655; Fly machine `48e419df93e078`, version `2078` after secret rotation, image `deployment-01M39RD6WGEJJWXSYSAC3V4Q4K`.

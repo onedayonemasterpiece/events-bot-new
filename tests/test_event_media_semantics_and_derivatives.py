@@ -17,7 +17,40 @@ from media_dedup import (
     build_event_thumbnail_object_path,
     prepare_image_for_supabase,
 )
-from models import Event, EventImageGeometry, EventMediaPairReview, EventPoster
+from models import Event, EventImageGeometry, EventMediaPairReview, EventPoster, JobOutbox, JobStatus, JobTask
+
+
+@pytest.mark.asyncio
+async def test_semantic_role_budget_reserves_calls_for_blocked_future_vk_posts(tmp_path) -> None:
+    db = Database(str(tmp_path / "semantic-role-budget.sqlite"))
+    await db.init()
+    future_day = (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat()
+    async with db.get_session() as session:
+        ordinary = Event(
+            title="Ordinary media review", description="desc", source_text="source",
+            date=future_day, time="18:00", location_name="Venue",
+        )
+        blocked = Event(
+            title="Blocked VK publication", description="desc", source_text="source",
+            date=future_day, time="19:00", location_name="Venue",
+        )
+        session.add_all([ordinary, blocked])
+        await session.flush()
+        session.add(JobOutbox(
+            event_id=int(blocked.id), task=JobTask.vk_sync,
+            status=JobStatus.error, last_error="vk_sync_missing_materialized_media",
+        ))
+        await session.flush()
+
+        assert all([await event_media._claim_semantic_role_budget(session, ordinary, 5) for _ in range(4)])
+        assert not await event_media._claim_semantic_role_budget(session, ordinary, 5)
+        assert await event_media._claim_semantic_role_budget(session, blocked, 5)
+        assert not await event_media._claim_semantic_role_budget(session, blocked, 5)
+        calls = (await session.execute(event_media.text(
+            "SELECT calls FROM event_media_review_usage WHERE stage='semantic_role'"
+        ))).scalar_one()
+        assert calls == 5
+    await db.close()
 
 
 def _jpeg_bytes(width: int = 1600, height: int = 1000) -> bytes:
