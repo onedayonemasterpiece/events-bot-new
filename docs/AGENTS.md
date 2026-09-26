@@ -44,3 +44,11 @@ Documentation must distinguish:
 
 Never describe an unfinished background run, a planned emulator job or a
 workflow that ChatGPT cannot actually start as PASS/ready.
+
+## UI conformance routing
+
+Documentation for a material UI component, foundation, archetype, or consumer
+change must point to the canonical `lovekgd-design-system` project skill
+`ui-three-way-conformance`. Do not duplicate its lifecycle or procedure here.
+Record the exact conformance case/receipt, or an explicit machine-readable
+`not_applicable` reason; Telegram agent PASS is not owner acceptance.
