@@ -192,3 +192,14 @@ publication state for each accepted semantic collection. Missing configuration
 cannot masquerade as a valid empty feed. Once a route is publicly accepted, its
 absence is a release failure: hold the previous valid artifact or fail promotion
 and alert, rather than silently removing the page.
+
+## 2026-09-26 mobile review re-observation
+
+Voice `voice-20260926-100814-a927be2f` observes a heading without collection
+results. Current UI review source still contains `source-fallback-empty` with
+zero items; snapshot refresh does not execute the separate pinned BGE/owner gold
+qualification. No current Unusual/Gastronomy payload found in the checked
+`data/`, `_meta/`, `builds/`, `static-site/` bucket prefixes. This is not proof
+that no historical object exists anywhere. Remains open; the current UI
+iteration provides an explicit unavailable state and working Today destination.
+Nonempty semantic delivery is not claimed fixed by this UI change.

@@ -49,7 +49,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 <div
   class="ke-mobile-listing-rails ke-mobile-listing-rails--v23"
   data-ds-family="MobileListingRailSurface"
-  data-ds-version="2"
+  data-ds-version="3"
   data-ds-variant={current}
   data-ds-state={total > 0 ? 'populated' : 'empty'}
   data-mobile-listing-rails
@@ -65,11 +65,11 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
   <div class="sticky-date mobile-listing-sticky-title" data-mobile-listing-sticky-title aria-hidden="true">
     <strong>{title}</strong><span>{meta}</span>
   </div>
-  {current === 'weekend' && cities.length > 1 && <div class="fi-mobile-city-origin" data-fi-ssr-origin><MobileListingCityPicker cities={cities} total={total} prepared /></div>}
+  {cities.length > 1 && <div class="fi-mobile-city-origin" data-fi-ssr-origin><MobileListingCityPicker cities={cities} total={total} prepared /></div>}
   <div class="feed-head">
     <div class="feed-head__copy"><strong>{feedTitle}</strong><span>{feedMeta}</span></div>
     {cities.length > 1 ? (
-      current !== 'weekend' && <MobileListingCityPicker cities={cities} total={total} />
+      null
     ) : <span class="city-pill">Вся область</span>}
   </div>
   <div class="mobile-v23-sections">

@@ -932,6 +932,22 @@ scenarios:
       pull_request: changed_desktop_review_surfaces
       release: true
 
+  browser.mobile_voice_review_20260926:
+    title: Mobile review — square Hero, stable cities, local personal feed
+    status: implemented
+    layers: [L1]
+    platforms: [browser]
+    trigger_tags: [visual-layout, static-route, personalization]
+    auth_mode: anonymous
+    cost: medium
+    side_effects: local_browser_profile_only
+    runner: site/tests/mobile-review-20260926.playwright.mjs
+    evidence: screenshots_ssr_geometry_cold_start_like_persistence
+    native_acceptance: not_claimed
+    blocking:
+      pull_request: changed_mobile_review_surfaces
+      release: true
+
 policies:
   full_catalog_on_emulators: forbidden
   mobile_viewport_substitutes_android_or_ios: false

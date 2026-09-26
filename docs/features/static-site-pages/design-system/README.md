@@ -203,3 +203,13 @@ than being forced into a single truncated line.
 ## Desktop continuation, 2026-09-26
 
 The [desktop review checklist](../desktop-review-20260926.md) owns this iteration. Versioned shared island/calendar/Hero/weekend/exhibitions/festival changes are candidates; mobile owner review and native Penpot parity are not claimed. Shared geometry remains in shell foundations, typography in surface foundations and the typography authority record. Old/new immutable runtime catalog references are at `/lab/design-system/#desktop-review-20260926`.
+
+### September 26 mobile extension
+
+The same candidate now incorporates mobile voice `voice-20260926-100814-a927be2f`.
+MobileListingRailSurface v3, PersonalFeedSlot v3 and ForMeRouteComposition v2
+replace their previous versions across consumers. HomeHeroTalk v4 is still the
+unapproved desktop/mobile iteration. See `/lab/design-system/#mobile-review-20260926`
+for predecessor/current rendered pages and the [review checklist](../desktop-review-20260926.md)
+for checks and unresolved collection data qualification. No Penpot parity or
+native-device acceptance is implied by L1 browser screenshots.

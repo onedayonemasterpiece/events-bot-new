@@ -3,9 +3,9 @@
   "version": "1.2.0",
   "registry": "site/src/design-system/astro-family-registry.v1.json",
   "registry_version": "1.2.0",
-  "registry_sha256": "67339a33c32f67cae4309cd2829cdf592970406cd0fec031d4c86bc6fae83b73",
+  "registry_sha256": "9e6fee4a7a9fc8755d8c0a6450436e8c67f1399b0143b7b2ed3145fddacabbc9",
   "source_root": "site/src",
-  "import_inventory_sha256": "318ea15001fd96a898d2f68a537008c53994396327ebc28c60835cde1c658a6f",
+  "import_inventory_sha256": "c5b388da9f6cb8cf4cc2f49fbb2a061e9eb3a70ea0adf0d186b14d835a44cfbb",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -438,8 +438,8 @@
     "product_family_count": 110,
     "family_count": 112,
     "source_file_count": 372,
-    "import_edge_count": 926,
-    "direct_consumer_edges": 288,
+    "import_edge_count": 923,
+    "direct_consumer_edges": 286,
     "protocol_consumer_edges": 34,
     "runtime_factory_edges": 2,
     "runtime_consumer_edges": 13,
@@ -964,6 +964,10 @@
           "source": "site/src/pages/date-[date].astro"
         },
         {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
+        },
+        {
           "pattern": "/izbrannoe/",
           "source": "site/src/pages/izbrannoe/index.astro"
         },
@@ -1003,6 +1007,7 @@
       "production_route_patterns": [
         "/",
         "/date-*/",
+        "/dlya-menya/",
         "/izbrannoe/",
         "/neobychnoe/",
         "/podborki/*/",
@@ -1015,6 +1020,7 @@
       ],
       "production_route_sources": [
         "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/index.astro",
         "site/src/pages/izbrannoe/index.astro",
         "site/src/pages/neobychnoe/index.astro",
@@ -1597,7 +1603,7 @@
       ]
     },
     "MobileListingRailSurface": {
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
         "site/src/components/listings/MobileListingRailSurface.astro",
@@ -3166,36 +3172,27 @@
         "site/src/components/FocusGroupFeedback.astro"
       ],
       "direct_component_consumers": [
-        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ],
       "direct_style_consumers": [
-        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ],
       "protocol_consumers": [],
       "direct_consumers": [
-        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
       "production_routes": [
         {
-          "pattern": "/dlya-menya/",
-          "source": "site/src/pages/dlya-menya/index.astro"
-        },
-        {
           "pattern": "/zakrytaya-afisha/",
           "source": "site/src/pages/zakrytaya-afisha/index.astro"
         }
       ],
       "production_route_patterns": [
-        "/dlya-menya/",
         "/zakrytaya-afisha/"
       ],
       "production_route_sources": [
-        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/zakrytaya-afisha/index.astro"
       ]
     },
@@ -3485,7 +3482,6 @@
       "direct_component_consumers": [
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupLabPanel.astro",
-        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
@@ -3494,7 +3490,6 @@
       "direct_style_consumers": [
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupLabPanel.astro",
-        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
@@ -3504,7 +3499,6 @@
       "direct_consumers": [
         "site/src/components/FocusGroupInviteIntake.astro",
         "site/src/components/FocusGroupLabPanel.astro",
-        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/fokus-gruppa/index.astro",
         "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
         "site/src/pages/fokus-gruppa/zavershenie/index.astro",
@@ -3789,39 +3783,25 @@
       "style_owners": [
         "site/src/components/InterestProfile.astro"
       ],
-      "direct_component_consumers": [
-        "site/src/pages/dlya-menya/index.astro"
-      ],
-      "direct_style_consumers": [
-        "site/src/pages/dlya-menya/index.astro"
-      ],
+      "direct_component_consumers": [],
+      "direct_style_consumers": [],
       "protocol_consumers": [],
-      "direct_consumers": [
-        "site/src/pages/dlya-menya/index.astro"
-      ],
+      "direct_consumers": [],
       "runtime_factories": [],
       "runtime_clients": [],
-      "production_routes": [
-        {
-          "pattern": "/dlya-menya/",
-          "source": "site/src/pages/dlya-menya/index.astro"
-        }
-      ],
-      "production_route_patterns": [
-        "/dlya-menya/"
-      ],
-      "production_route_sources": [
-        "site/src/pages/dlya-menya/index.astro"
-      ]
+      "production_routes": [],
+      "production_route_patterns": [],
+      "production_route_sources": []
     },
     "PersonalFeedSlot": {
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/PersonalFeedSlot.astro",
       "style_owners": [
         "site/src/components/PersonalFeedSlot.astro"
       ],
       "direct_component_consumers": [
         "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/lab/design-system/index.astro",
         "site/src/pages/segodnya/index.astro",
         "site/src/pages/sobytiya/[slug].astro",
@@ -3830,6 +3810,7 @@
       ],
       "direct_style_consumers": [
         "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/lab/design-system/index.astro",
         "site/src/pages/segodnya/index.astro",
         "site/src/pages/sobytiya/[slug].astro",
@@ -3839,6 +3820,7 @@
       "protocol_consumers": [],
       "direct_consumers": [
         "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/lab/design-system/index.astro",
         "site/src/pages/segodnya/index.astro",
         "site/src/pages/sobytiya/[slug].astro",
@@ -3851,6 +3833,10 @@
         {
           "pattern": "/date-*/",
           "source": "site/src/pages/date-[date].astro"
+        },
+        {
+          "pattern": "/dlya-menya/",
+          "source": "site/src/pages/dlya-menya/index.astro"
         },
         {
           "pattern": "/segodnya/",
@@ -3871,6 +3857,7 @@
       ],
       "production_route_patterns": [
         "/date-*/",
+        "/dlya-menya/",
         "/segodnya/",
         "/sobytiya/*/",
         "/vyhodnye/",
@@ -3878,6 +3865,7 @@
       ],
       "production_route_sources": [
         "site/src/pages/date-[date].astro",
+        "site/src/pages/dlya-menya/index.astro",
         "site/src/pages/segodnya/index.astro",
         "site/src/pages/sobytiya/[slug].astro",
         "site/src/pages/vyhodnye/index.astro",
@@ -3972,7 +3960,7 @@
       ]
     },
     "ForMeRouteComposition": {
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/pages/dlya-menya/index.astro",
       "style_owners": [
         "site/src/pages/dlya-menya/index.astro"

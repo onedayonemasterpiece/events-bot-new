@@ -181,7 +181,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   .home-hero-talk__preload { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
   .home-hero-talk__mosaic {
     display:grid;width:100%;height:100%;grid-template-columns:repeat(var(--mosaic-columns),minmax(0,1fr));
-    grid-template-rows:repeat(5,minmax(0,1fr));column-gap:3px;row-gap:0;
+    grid-template-rows:repeat(var(--mosaic-rows,5),minmax(0,1fr));column-gap:3px;row-gap:0;
   }
   .home-hero-talk__tile {
     position:relative;display:block;min-width:0;min-height:0;overflow:hidden;opacity:0;
@@ -225,6 +225,9 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     .home-hero-talk__tile { transition:none!important;opacity:var(--tile-opacity,0)!important; }
   }
   @media (max-width:759px) {
+    .home-hero-talk { height:max(320px,100vw);min-height:320px;max-height:540px; }
+    .home-hero-talk__media { --mosaic-columns:8;--mosaic-rows:8;width:100vw;height:100%;top:0;transform:none; }
+    .home-hero-talk__message { align-self:end;margin-bottom:24px; }
     :global(body[data-shell-composition="home-navigation-only"]) .home-hero-talk { min-height:320px; }
     :global(body[data-shell-composition="home-navigation-only"]) .home-hero-talk__scene { padding-top:88px; padding-bottom:16px; }
   }
@@ -286,8 +289,8 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
       const allTiles=[...scene.querySelectorAll<HTMLElement>('[data-home-hero-tile]')];
       if(!media||!mosaic||!image) return false;
       try { await decodeImage(image); } catch { media.hidden=true;return false; }
-      const columns=columnsForViewport(),activeCount=columns*5,scenario=scene.dataset.editorialId||'scene';
-      media.style.setProperty('--mosaic-columns',String(columns));mosaic.style.setProperty('--mosaic-columns',String(columns));
+      const columns=columnsForViewport(),rows=window.innerWidth<760?8:5,activeCount=columns*rows,scenario=scene.dataset.editorialId||'scene';
+      media.style.setProperty('--mosaic-rows',String(rows));media.style.setProperty('--mosaic-columns',String(columns));mosaic.style.setProperty('--mosaic-columns',String(columns));
       allTiles.forEach((tile,index)=>{tile.hidden=index>=activeCount;if(index<activeCount){tile.dataset.col=String(index%columns);tile.dataset.row=String(Math.floor(index/columns));}});
       const rootRect=mosaic.getBoundingClientRect(),sourceWidth=Number(scene.dataset.sourceWidth),sourceHeight=Number(scene.dataset.sourceHeight);
       if(!rootRect.width||!rootRect.height||!sourceWidth||!sourceHeight) return false;

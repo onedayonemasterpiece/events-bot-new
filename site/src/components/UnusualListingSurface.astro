@@ -1,6 +1,7 @@
 ---
 import AdaptiveEventCardGrid, { type AdaptiveEventCardItemRoot } from './AdaptiveEventCardGrid.astro';
 import './design-system/product-contour-foundations.css';
+import { withBase } from '../lib/events';
 import type { UnusualFeed } from '../lib/unusualEvents';
 
 interface Props { feed: UnusualFeed; }
@@ -65,7 +66,8 @@ const surfaceState = feed.approved
     ) : (
       <section class="unusual-page__empty" aria-labelledby="unusual-empty-title" data-unusual-feed="empty" data-unusual-feed-empty>
         <h2 id="unusual-empty-title">Подборка пока готовится</h2>
-        <p>Показываем её только после проверки качества. При неполных данных, миграции или ошибке список остаётся пустым — обычные события сюда не подмешиваются.</p>
+        <p>Список необычных событий сейчас недоступен. Пока можно выбрать событие в общей афише.</p>
+        <a href={withBase('/segodnya/')}>Посмотреть события сегодня</a>
       </section>
     )}
   </div>

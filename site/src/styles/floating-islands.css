@@ -156,8 +156,7 @@ body[data-fi-desktop] .fi-desktop-city-origin {overflow-x:clip;overflow-y:visibl
  body[data-floating-islands="site"] [data-listing-city-filter] label {height:40px;min-height:40px;box-sizing:border-box;padding:0 10px;gap:4px;font:var(--ke-island-font);border-radius:var(--ke-island-control-radius);}
  body[data-floating-islands="site"] [data-listing-city-filter] label::before {display:none;}
  body[data-floating-islands="site"] [data-listing-city-filter] label strong {font:600 10px/1.2 var(--ke-font-family-sans);opacity:.55;}
- body[data-exhibitions-theme="graphite"] {background:var(--ke-color-background-inverse);}
- body[data-exhibitions-theme="light"] {background:var(--ke-color-background-page);}
+
  body[data-primary-island="true"] .festival-month-nav {position:sticky;top:calc(var(--ke-island-top) + var(--ke-island-height) + var(--ke-space-3));z-index:62;border-radius:var(--ke-island-radius);background:var(--ke-island-surface);border:1px solid var(--ke-island-border);box-shadow:var(--ke-island-shadow);padding:5px;}
  body[data-primary-island="true"] .festival-month-nav a {display:flex;align-items:center;min-height:40px;padding:0 12px;font:var(--ke-island-font);border-radius:var(--ke-island-control-radius);}
  body[data-primary-island="true"] .festival-page h2 {scroll-margin-top:160px;}
@@ -168,3 +167,9 @@ body[data-fi-desktop] .fi-desktop-city-origin {overflow-x:clip;overflow-y:visibl
  body[data-primary-island="true"] .ke-weekend-day__label {font:var(--ke-weekend-heading-font);letter-spacing:-.02em;}
  body[data-primary-island="true"] .ke-weekend-weekday-chip {background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);}
 }
+
+/* The full canvas, including the mobile header, follows the exhibition theme. */
+body[data-exhibitions-theme="graphite"] {background:var(--ke-color-background-inverse);}
+body[data-exhibitions-theme="light"] {background:var(--ke-color-background-page);}
+body[data-exhibitions-theme]::before {display:none;}
+body[data-exhibitions-theme] .site-header {background:transparent;border:0;box-shadow:none;}

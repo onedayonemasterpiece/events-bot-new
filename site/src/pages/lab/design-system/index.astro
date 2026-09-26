@@ -93,13 +93,22 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
       </nav>
 
       <section class="ds-section" id="desktop-review-20260926">
-        <h2>Десктопное ревью · 26 сентября · кандидат</h2>
-        <p>Единая навигация v4, календарь v3, Hero Talk v4, выходные v2, выставки v3 и фестивали v2. Предыдущие версии deprecated; все текущие потребители переведены. Мобильная приёмка владельцем не проводилась.</p>
+        <h2>Десктопное и мобильное ревью · 26 сентября · кандидат</h2>
+        <p>Единая навигация v4, календарь v3, Hero Talk v4, выходные v2, выставки v3 и фестивали v2. Предыдущие версии deprecated; все текущие потребители переведены. Дополнено мобильным ревью 10:08: квадратная мозаика, города без пересборки, «Для меня» v2 с немедленной лентой PersonalFeedSlot v3. Новая приёмка владельцем ожидается.</p>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px">
           <div><h3>Предыдущая версия · deprecated</h3><iframe loading="lazy" title="Предыдущая версия интерфейса" src="https://static.kenigevents.ru/preview-integrated-islands-home-20260926/" style="width:100%;height:560px;border:1px solid var(--ke-color-line)"></iframe></div>
           <div><h3>Текущий кандидат</h3><iframe loading="lazy" title="Текущий десктопный кандидат" src={withBase('/')} style="width:100%;height:560px;border:1px solid var(--ke-color-line)"></iframe></div>
         </div>
         <p>Полноразмерные страницы: <a href={withBase('/')}>Главная</a> · <a href={withBase('/segodnya/')}>Сегодня</a> · <a href={withBase('/zavtra/')}>Завтра</a> · <a href={withBase('/vyhodnye/')}>Выходные</a> · <a href={withBase('/vystavki/')}>Выставки</a> · <a href={withBase('/festivali/')}>Фестивали</a>.</p>
+      </section>
+      <section class="ds-section" id="mobile-review-20260926">
+        <h2>Мобильная итерация: предыдущие и новые потребители</h2>
+        <p>MobileListingRailSurface v2 → v3; PersonalFeedSlot v2 → v3; ForMeRouteComposition v1 → v2. Предшественники deprecated, все текущие потребители мигрированы.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:24px">
+          <iframe loading="lazy" title="Для меня v1 deprecated" src="https://static.kenigevents.ru/preview-integrated-islands-home-20260926/dlya-menya/" style="width:390px;height:650px"></iframe>
+          <iframe loading="lazy" title="Для меня v2 кандидат" src={withBase('/dlya-menya/')} style="width:390px;height:650px"></iframe>
+          <iframe loading="lazy" title="Сегодня v3 кандидат" src={withBase('/segodnya/')} style="width:390px;height:650px"></iframe>
+        </div>
       </section>
       <section class="section-card" id="home-final-candidate">
         <div class="section-card__inner">
@@ -467,7 +476,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="ListingPersonalFilter" data-ds-version="3"><td>ListingPersonalFilter · optional floating mode</td><td><code>v3</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>quiet bottom-center research prototype; yields to the footer and stays separate from discovery navigation</td></tr>
                 <tr data-ds-component="ListingPersonalFilter" data-ds-version="2" data-ds-replaced-by="ListingPersonalFilter@3"><td>ListingPersonalFilter · explicit full default</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>replaced on listing surfaces: inline placement overloaded the sticky discovery plane</td></tr>
                 <tr data-ds-component="ListingPersonalFilter" data-ds-version="1" data-ds-replaced-by="ListingPersonalFilter@2"><td>ListingPersonalFilter · implicit personal</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>replaced by ListingPersonalFilter v2; catalog-only</td></tr>
-                <tr data-ds-component="PersonalFeedSlot" data-ds-version="1"><td>PersonalFeedSlot</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
+                <tr data-ds-component="PersonalFeedSlot" data-ds-version="3"><td>PersonalFeedSlot</td><td><code>v3</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
                 <tr data-ds-component="AuthorizedEventSearch" data-ds-version="1"><td>AuthorizedEventSearch</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td><a href={withBase('/poisk/')}>auth/search route</a></td></tr>
                 <tr data-ds-component="IconSocialIcon" data-ds-version="1"><td>Icon / SocialIcon</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/Icon.astro</code></td><td>complete visible icon inventory</td></tr>
                 <tr data-ds-component="AnnouncementsLockup" data-ds-version="1"><td>AnnouncementsLockup</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/brand/AnnouncementsLockup.astro</code></td><td>desktop/mobile/favicon sizes</td></tr>

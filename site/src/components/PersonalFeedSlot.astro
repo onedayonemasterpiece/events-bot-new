@@ -1,17 +1,19 @@
 ---
 import AdaptiveEventCardGrid from './AdaptiveEventCardGrid.astro';
 import './design-system/product-contour-foundations.css';
-import { siteHomeHref, withBase } from '../lib/events';
+import { getPopularEvents, siteHomeHref, withBase } from '../lib/events';
 
 interface Props {
-  context: 'today' | 'tomorrow' | 'date' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular';
+  context: 'today' | 'tomorrow' | 'date' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular' | 'for-me';
   currentEventId?: number;
   relatedSrc?: string;
 }
 const { context, currentEventId, relatedSrc } = Astro.props;
 const isEventDetail = context === 'event-detail';
+const isForMe = context === 'for-me';
+const initialEvents = isForMe ? getPopularEvents(12) : [];
 const eyebrow = isEventDetail ? 'Продолжить выбор' : 'Личная лента';
-const heading = isEventDetail ? 'Ещё события' : 'Дальше — под ваши интересы';
+const heading = isForMe ? 'Ваша лента' : isEventDetail ? 'Ещё события' : 'Дальше — под ваши интересы';
 const explanation = isEventDetail
   ? 'Шесть разных событий без бесконечной ленты. Когда накопятся ваши оценки, подборка станет персональной.'
   : 'События меняются с учётом ваших лайков и отметок «Не интересно».';
@@ -20,7 +22,7 @@ const headingId = `personal-feed-${context}-title`;
 <section
   class:list={['section-card', 'personal-feed-section', 'ke-personal-feed-slot', { 'personal-feed-section--event-detail': isEventDetail }]}
   data-ds-family="PersonalFeedSlot"
-  data-ds-version="2"
+  data-ds-version="3"
   data-ds-variant={context}
   data-ds-state={isEventDetail ? 'pending' : 'dormant'}
   data-personal-feed-section
@@ -31,19 +33,20 @@ const headingId = `personal-feed-${context}-title`;
   data-personal-feed-mode={isEventDetail ? 'pending' : undefined}
   data-personal-feed-desktop-only={isEventDetail ? 'true' : undefined}
   aria-labelledby={headingId}
-  hidden={!isEventDetail}
+  hidden={!isEventDetail && !isForMe}
 >
   <div class="section-card__inner">
     <p class="eyebrow">{eyebrow}</p>
     <h2 id={headingId} data-personal-feed-title>{heading}</h2>
     <p class="muted-note personal-feed-section__explanation" data-personal-feed-explanation>{explanation}</p>
-    <p class="muted-note personal-feed-section__status" data-personal-feed-status role="status" aria-live="polite">Подбираем события…</p>
+    <p class="muted-note personal-feed-section__status" data-personal-feed-status hidden={isForMe} role="status" aria-live="polite">Подбираем события…</p>
     <AdaptiveEventCardGrid
-      events={[]}
+      events={initialEvents}
       mode="packed"
       rowSize={3}
       responsive="progressive"
       personalFeed
+      mobileFlowMedia
       runtimeManaged
       runtimeSourcePolicy="mirror-rendered"
       ariaLive="polite"

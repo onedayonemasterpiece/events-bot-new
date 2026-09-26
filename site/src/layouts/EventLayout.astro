@@ -2764,7 +2764,6 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         const discoveryStores = new WeakMap();
         const servedListByFeed = new WeakMap();
         let shareCalloutTimer = 0;
-        let pendingConsentAction = null;
         let personalFeedRequest = null;
         const personalFeedMemoryCache = new Map();
 
@@ -3181,7 +3180,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function activeProfile(manifest) {
-          const profile = readProfile();
+          const profile = ensureProfileAfterConsent();
           return isCompatibleProfile(profile, manifest?.feature_schema_version, manifest?.taxonomy_version) ? profile : null;
         }
 
@@ -3197,36 +3196,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           return profile;
         }
 
-        function consentBanner() {
-          let banner = document.querySelector('[data-personalization-consent]');
-          if (banner) return banner;
-          banner = document.createElement('div');
-          banner.className = 'personalization-consent';
-          banner.dataset.appLowerSurface = 'consent';
-          banner.dataset.appLowerLifecycle = 'persistent';
-          banner.dataset.personalizationConsent = 'true';
-          banner.setAttribute('role', 'dialog');
-          banner.setAttribute('aria-live', 'polite');
-          banner.innerHTML = `<p><strong>Настроить рекомендации?</strong> Лайки и отметки «не интересно» сохранятся только в этом браузере и помогут убрать неподходящее.</p><div class="personalization-consent__actions"><button type="button" class="secondary-button" data-personalization-consent-dismiss>Пока нет</button><button type="button" class="cta-button" data-personalization-consent-accept>ОК</button></div>`;
-          document.body.appendChild(banner);
-          banner.querySelector('[data-personalization-consent-dismiss]')?.addEventListener('click', () => {
-            pendingConsentAction = null;
-            banner.classList.remove('is-visible');
-          });
-          banner.querySelector('[data-personalization-consent-accept]')?.addEventListener('click', async () => {
-            ensureProfileAfterConsent();
-            banner.classList.remove('is-visible');
-            const action = pendingConsentAction;
-            pendingConsentAction = null;
-            await applyFeedbackState();
-            if (typeof action === 'function') setTimeout(action, 0);
-          });
-          return banner;
-        }
-
         function requestConsent(action) {
-          pendingConsentAction = action || null;
-          consentBanner().classList.add('is-visible');
+          ensureProfileAfterConsent();
+          if (typeof action === 'function') action();
         }
 
         function mapScore(map, key) {
@@ -3801,7 +3773,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         async function getPersonalFeedManifest(section, { force = false } = {}) {
           const profile = readProfile();
-          const allowsPopularFallback = section?.dataset.listingContext === 'event-detail';
+          const allowsPopularFallback = ['event-detail', 'for-me'].includes(section?.dataset.listingContext);
           if (!personalFeedProfileIsReady(profile) && !allowsPopularFallback) return null;
           if (!force) {
             const cached = readPersonalFeedCache(profile, section);
@@ -4023,7 +3995,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const discoveryFeed = document.querySelector('[data-discovery-feed]');
           const currentId = asId(discoveryFeed?.dataset.currentEventId);
           if (currentId) ids.add(currentId);
-          section?.querySelectorAll('[data-event-card]').forEach((card) => {
+          (section?.dataset.listingContext === 'for-me' ? [] : section?.querySelectorAll('[data-event-card]') || []).forEach((card) => {
             const id = asId(card.dataset.eventId);
             if (id) ids.add(id);
           });
@@ -4116,6 +4088,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               section.hidden = false;
               section.dataset.personalFeedMode = 'unavailable';
               if (status) status.textContent = 'Подборка временно недоступна — можно перейти ко всем анонсам.';
+            } else if (section.dataset.listingContext === 'for-me') {
+              section.hidden = false;
+              if (status) status.hidden = true;
             } else {
               section.hidden = true;
             }
@@ -4155,6 +4130,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               section.hidden = false;
               section.dataset.personalFeedMode = 'unavailable';
               if (status) status.textContent = 'Других подходящих событий пока нет — откройте все анонсы.';
+            } else if (section.dataset.listingContext === 'for-me') {
+              section.hidden = false;
+              if (status) status.hidden = true;
             } else {
               section.hidden = true;
             }
@@ -4225,7 +4203,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         function initializePersonalFeedObservers() {
           const sections = Array.from(document.querySelectorAll('[data-personal-feed-section]'));
-          sections.forEach((section) => startPersonalFeedHydration(section));
+          sections.forEach((section) => startPersonalFeedHydration(section, { eager: section.dataset.listingContext === 'for-me' }));
           const desktopOnlySections = sections.filter((section) => section.dataset.personalFeedDesktopOnly === 'true');
           personalFeedDesktopMedia?.addEventListener?.('change', (event) => {
             if (!event.matches) return;
@@ -5219,6 +5197,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
         window.applyFeedbackState = applyFeedbackState;
         window.addEventListener('kenigevents:card-geometry-ready', () => {
+          initializePersonalFeedObservers();
           applyFeedbackState({ skipDiscoveryHydration:false });
         }, { once:true });
 
@@ -6412,7 +6391,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         hydrateListingFilterFooterGuard();
         updatePersonalizationResetStatus();
         hydrateCalendarActions();
-        initializePersonalFeedObservers();
+        if (typeof window.KenigEventsResolveMobileEventCardMedia === 'function') initializePersonalFeedObservers();
         hydrateHeroParallax();
         hydrateDesktopEventReading();
         hydrateHeroGallery();

@@ -1,5 +1,7 @@
 ## 2026-09-05 — owner audio-review correction (not production)
 
+- 2026-09-26 mobile voice review: square Hero mosaics, SSR city geometry and coordinated travel, dark exhibition header, no mobile breadcrumbs, immediate For Me feed with automatic local reactions. Nonempty Unusual/Gastronomy remain blocked by existing data qualification; see desktop-review-20260926.md.
+
 Restored semantic H1/H2 roles and current-data Hero Talk scenes; fixed
 partial-row stretching, product Home, exhibitions mobile navigation,
 global new-count ownership, preview clock, share label and ArrowDown

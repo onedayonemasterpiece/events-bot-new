@@ -215,3 +215,10 @@ Run alongside `islands-sequential.playwright.mjs` for prior city/calendar motion
 ### Desktop voice review, 2026-09-26
 
 `CHECK_BASE=<preview prefix> CHECK_OUTPUT=<managed artifact directory> node site/tests/desktop-review-20260926.playwright.mjs` checks Home, Today, Tomorrow, Weekend, Exhibitions and Festivals at 1920/1440 px: shared navigation geometry/hover, cursor count, spacing, calendar open/Escape/exact-date navigation, compact time context, weekend headings, dark canvas/radii and one sticky month switcher. Delayed modules compare city/nav before and after hydration. 320/390/430 checks are responsive regressions only; mobile owner/native acceptance is not claimed. See the [owning checklist](../features/static-site-pages/desktop-review-20260926.md).
+
+### Mobile voice review 2026-09-26 (L1)
+
+`CHECK_BASE=<immutable-preview> CHECK_OUTPUT=<managed-artifact-dir> node site/tests/mobile-review-20260926.playwright.mjs`
+checks mobile widths 320/390/430, shared Hero crops, first-paint city parity,
+scroll/picker transitions, theme/breadcrumbs and automatic For Me local reactions.
+Auth mode `anonymous`; no OTP/mail. Native Android/iOS acceptance is not claimed.

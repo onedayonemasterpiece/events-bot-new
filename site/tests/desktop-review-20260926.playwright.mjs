@@ -51,7 +51,7 @@ try{
    const priorUrl=page.url();await dateLink.click();const calendar=page.locator('[data-calendar-sheet]');await calendar.waitFor({state:'visible'});assert.equal(page.url(),priorUrl);
    assert.equal(await calendar.getByRole('dialog').count(),1);await page.keyboard.press('Escape');assert.equal(await calendar.isVisible(),false);assert.equal(await dateLink.evaluate(e=>e===document.activeElement),true);
    await dateLink.click();
-   const date=calendar.locator('[data-calendar-month]:not([hidden]) a[href*="/date-"]').first();const href=await date.getAttribute('href');assert.ok(href.includes('/preview-desktop-review-20260926-r2/date-'));await date.click();await page.waitForURL('**/date-*/');assert.equal((await page.request.get(page.url())).status(),200);
+   const date=calendar.locator('[data-calendar-month]:not([hidden]) a[href*="/date-"]').first();const href=await date.getAttribute('href');assert.ok(href.includes(new URL(base).pathname+'/date-'));await date.click();await page.waitForURL('**/date-*/');assert.equal((await page.request.get(page.url())).status(),200);
    assert.deepEqual(errors,[]);results.push({width,route:route||'home',navigation:true,calendarExactDate:href,errors});await page.close();
   }
  }

@@ -19,7 +19,7 @@ const collectionState = collection.lifecycle === 'last_good'
   : collection.lifecycle === 'blocked' ? 'blocked'
     : collection.lifecycle === 'recent_empty' || collection.lifecycle === 'dormant' ? 'empty' : 'ready';
 const stateCopy = collection.lifecycle === 'blocked'
-  ? 'Состав подборки проходит проверку. Мы не показываем неподтверждённые события как пустой или готовый результат.'
+  ? 'Гастрономическая подборка сейчас недоступна. Пока можно выбрать событие в общей афише.'
   : collection.lifecycle === 'low_supply'
     ? 'Сейчас подтверждено немного будущих событий. Страница сохранена и обновится после появления новых дат.'
     : collection.lifecycle === 'recent_empty'
@@ -64,6 +64,7 @@ const gridItemRoots = (items: GastronomyItem[]): Record<string, AdaptiveEventCar
       <h1>Гастрономические события Калининграда и области</h1>
       <p class="lead">Дегустации, гастроужины, фестивали еды и другие события, где гастрономия — центр программы.</p>
       {stateCopy && <p class="collection-state" role="status">{stateCopy}</p>}
+      {collection.lifecycle === 'blocked' && <a href={withBase('/segodnya/')}>Посмотреть события сегодня</a>}
     </div></section>
 
     {[...grouped.entries()].map(([key, items]) => (

@@ -750,7 +750,7 @@
     },
     {
       "id": "MobileListingRailSurface",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/listings/MobileListingRailSurface.astro",
       "style_owners": [
         "site/src/components/listings/MobileListingRailSurface.astro",
@@ -2417,7 +2417,7 @@
     },
     {
       "id": "PersonalFeedSlot",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/PersonalFeedSlot.astro",
       "style_owners": [
         "site/src/components/PersonalFeedSlot.astro"
@@ -2429,7 +2429,8 @@
         "weekend",
         "event-detail",
         "exhibitions",
-        "popular"
+        "popular",
+        "for-me"
       ],
       "states": [
         "pending",
@@ -2453,7 +2454,8 @@
             "weekend",
             "event-detail",
             "exhibitions",
-            "popular"
+            "popular",
+            "for-me"
           ]
         },
         {
@@ -2572,13 +2574,13 @@
     },
     {
       "id": "ForMeRouteComposition",
-      "version": 1,
+      "version": 2,
       "astro_root": "site/src/pages/dlya-menya/index.astro",
       "style_owners": [
         "site/src/pages/dlya-menya/index.astro"
       ],
       "variants": [
-        "explainable-local-profile"
+        "automatic-local-feed"
       ],
       "states": [
         "anonymous",
@@ -2589,9 +2591,7 @@
       ],
       "nested_families": [
         "EventLayout",
-        "FocusGroupFeedback",
-        "FocusLabBadge",
-        "InterestProfile"
+        "PersonalFeedSlot"
       ],
       "runtime_factories": [],
       "runtime_clients": [],
@@ -2600,11 +2600,8 @@
       "penpot_binding": null,
       "responsive_behavior": {
         "source": "site/src/pages/dlya-menya/index.astro",
-        "rules": [
-          "@media (max-width:700px) line175",
-          "@media (prefers-reduced-motion:reduce) line181"
-        ],
-        "fallback": "page-local media rules compose nested component contracts"
+        "rules": [],
+        "fallback": "inherits shared PersonalFeedSlot and AdaptiveEventCardGrid responsive contracts"
       }
     },
     {
