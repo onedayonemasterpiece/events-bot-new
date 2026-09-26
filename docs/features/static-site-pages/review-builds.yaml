@@ -1,9 +1,9 @@
 version: 1
-generated_at: '2026-09-26T06:00:38+00:00'
+generated_at: '2026-09-26T06:41:14+00:00'
 bucket: kenigevents.ru
 scope: Observed public named preview-* builds; deleted builds remain as history after their first inventory. Secret _review
   tokens are excluded.
-latest_named_preview: preview-home-1ea0faeb-voice-review-20260906
+latest_named_preview: preview-integrated-islands-home-20260926
 canonical_full_candidate_lookup: python scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review (on
   Fly)
 canonical_full_candidate:
@@ -13,6 +13,27 @@ canonical_full_candidate:
   snapshot_id: snapshot-20260824T012406-7379314275
   verified_at: '2026-08-24T04:12:44.779984Z'
 builds:
+- build_id: preview-integrated-islands-home-20260926
+  built_at: '2026-09-26T06:37:13.346Z'
+  bucket_entry_modified_at: '2026-09-26T06:40:16+00:00'
+  source_sha: ec531852764604420722465d474370612f670c9d
+  source_commit: 'feat(site): integrate Home with accepted floating islands'
+  reference_date: '2026-07-23'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-integrated-islands-home-20260926/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-integrated-islands-home-20260926/index.html
+  entry_etag: ba7be4bec56dde4165dbe5297c6e963d
+  entry_bytes: 1376492
+  manifest_url: https://kenigevents.ru/preview-integrated-islands-home-20260926/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Объединены новая главная и плавающие острова листингов в одной полной сборке; переход «Главная → Сегодня» проверен в публичном браузере на 390 и 1440 px.
+  - Сохранены плавающие оболочки «Сегодня» и «Выходные»; интеграция не меняет production root.
+  review_url: https://t.me/c/4337049383/1476
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: 'Для ревью использовать https://static.kenigevents.ru/preview-integrated-islands-home-20260926/ ; данные событий — исторический снимок от 2026-07-23.'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
 - build_id: preview-home-1ea0faeb-voice-review-20260906
   built_at: '2026-09-06T20:41:26.853Z'
   bucket_entry_modified_at: '2026-09-06T20:43:59+00:00'
@@ -32,7 +53,7 @@ builds:
   - Исправлены календарные ссылки и скачок страницы при скрытии карточки.
   review_url: https://t.me/c/4337049383/1464
   catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
-  notes: UI preview, не обновление афиши; дата reference_date относится к сборке, не к экспорту событий.
+  notes: 'Устаревшая сборка для ревью только главной: переход «Главная → Сегодня» открывает старую шапку. Данные афиши — снимок от 2026-07-23; актуальная интегрированная сборка указана выше.'
   http_status_at_sync: 200
   bucket_http_status_at_sync: 200
 - build_id: preview-home-b7431426-20260906-v3
