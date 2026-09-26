@@ -1,5 +1,8 @@
 # Static Site Event Pages
 
+Опубликованные тестовые сборки, их назначение, даты данных и фактические
+ссылки: [единый реестр](review-builds.yaml) и [порядок обновления](review-builds.md).
+
 > **Status:** accepted v11 baseline plus v12 fidelity corrections are the primary preproduction event-page family, integrated with the checked Smart Update/Kaggle secret-candidate pipeline; atomic two-bucket/ALB promotion exists default-off, while live infrastructure/DNS promotion remains blocked
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
