@@ -1,0 +1,30 @@
+{
+  "status": "PREPARED_NOT_APPLIED_TO_RUNTIME",
+  "source_commit": "b8f463f5c35fa62befcfed171a7a8a0886af20f7",
+  "baseline_linked_blob": "af0ebafdd4e7f6a18ade11e083eb9cb031eabfb9",
+  "baseline": {
+    "tests": 39,
+    "passed": 8,
+    "failed": 31,
+    "skipped": 0
+  },
+  "patched": {
+    "tests": 39,
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0
+  },
+  "python": "3.13.5",
+  "pytest": "9.0.2",
+  "sqlalchemy": "2.0.50",
+  "test_boundary": "production function bodies and SQL; real temporary SQLite; SQLAlchemy model and sync-to-async facade injected; not native bot Database/SQLModel/LLM/concurrency",
+  "hashes": {
+    "occurrence-integrity.patch": "606305d46b1dc4d1305bcecefadd624904562fae45527cc1e0f7d6651f17aa9e",
+    "test_linked_occurrence_integrity.py": "5dc036ac32281864cb539f3728a0f176b19fad181ef29707c4b80ad0cd32373f",
+    "baseline-results.txt": "37dd5f7818a94e0c240044b42ddee57cca73bd75d07b1b33af44041adb1ba60b",
+    "patched-results.txt": "0a0296041ed2a2474f5eebf14d83bbeb0b6ec5a85c61c4410afb1d28df261997",
+    "reproduce.py": "26129419b56d530a3e62fe69887683e12938a27a341ae6c0f1c1fbb87794f47f"
+  },
+  "patch_application_check": "linked source exact; changelog context hunk tested on independently read header plus a sentinel body, not a reconstructed full changelog",
+  "reproduce_script": "ran successfully; before39/31fail/0error/0skip, after39/0fail/0error/0skip"
+}
