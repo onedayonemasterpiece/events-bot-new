@@ -17166,9 +17166,13 @@ async def schedule_event_update_tasks(
         for value in list(getattr(ev, "photo_urls", None) or [])
         if str(value or "").strip()
     ]
-    needs_media_reconcile = event_media_require_cdn() and (
-        not event_photo_urls
-        or any(not is_event_media_cdn_url(url) for url in event_photo_urls)
+    needs_media_reconcile = (
+        event_media_require_cdn()
+        and not _event_has_ended_before_today(ev)
+        and (
+            not event_photo_urls
+            or any(not is_event_media_cdn_url(url) for url in event_photo_urls)
+        )
     )
     if needs_media_reconcile and "event_media_review" in JOB_HANDLERS:
         media_dep_key = f"{JobTask.event_media_review.value}:{eid}"
@@ -19139,6 +19143,28 @@ async def add_event_queue_worker(db: Database, bot: Bot, limit: int = 2):
 BACKOFF_SCHEDULE = [30, 120, 600, 3600]
 
 
+def _is_missing_event_media(task: JobTask, error: str | None) -> bool:
+    reason = str(error or "")
+    return (
+        task == JobTask.event_media_review
+        and reason.startswith("event_media_cdn_materialization_pending:")
+    ) or (
+        task == JobTask.vk_sync
+        and reason in {
+            "vk_sync_missing_materialized_media",
+            "vk_sync_missing_media_for_telegram_event",
+        }
+    )
+
+
+def _next_missing_event_media_check(now: datetime) -> datetime:
+    """One daily check after the media-role allowance resets at 00:00 UTC."""
+
+    return datetime.combine(
+        now.date() + timedelta(days=1), time(hour=0, minute=5), tzinfo=timezone.utc
+    )
+
+
 TASK_LABELS = {
     "event_media_review": "Проверка изображений",
     "telegraph_build": "Telegraph (событие)",
@@ -20157,6 +20183,7 @@ async def _run_due_jobs_once_locked(
         static_deferred = False
         vector_deferred_at = None
         vk_flood_retry_at: datetime | None = None
+        missing_event_media = False
         if not handler:
             status = JobStatus.done
             err = None
@@ -20349,20 +20376,29 @@ async def _run_due_jobs_once_locked(
                     if obj.task == JobTask.static_site_build:
                         static_failure = classify_static_site_failure(exc)
                         retry = static_failure.retryable
-                logline(
-                    "RUN",
-                    obj.event_id,
-                    "error",
-                    job_id=obj.id,
-                    task=obj.task.value,
-                    exc=(err.splitlines()[0] if err.splitlines() else "error"),
-                )
+                missing_event_media = _is_missing_event_media(obj.task, err)
+                if missing_event_media:
+                    logline(
+                        "RUN", obj.event_id, "deferred", job_id=obj.id,
+                        task=obj.task.value, reason=err,
+                    )
+                else:
+                    logline(
+                        "RUN", obj.event_id, "error", job_id=obj.id,
+                        task=obj.task.value,
+                        exc=(err.splitlines()[0] if err.splitlines() else "error"),
+                    )
                 if isinstance(exc, VKFloodControlError):
                     logging.info(
                         "job %s deferred by VK flood circuit task=%s retry_at=%s",
                         job.id,
                         obj.task.value,
                         vk_flood_retry_at.isoformat() if vk_flood_retry_at else None,
+                    )
+                elif missing_event_media:
+                    logging.info(
+                        "job %s waiting for event media task=%s event_id=%s reason=%s",
+                        job.id, obj.task.value, obj.event_id, err,
                     )
                 else:
                     logging.exception("job %s failed", job.id)
@@ -20406,6 +20442,32 @@ async def _run_due_jobs_once_locked(
                         send = False
                     obj.last_result = cur_res
                     obj.next_run_at = datetime.now(timezone.utc)
+                elif missing_event_media:
+                    # Missing or unreachable source media is a product state,
+                    # not a transient 30s/1h transport failure. Never publish
+                    # text-only and never spin through the ordinary backoff.
+                    event = (
+                        await session.get(Event, int(obj.event_id))
+                        if obj.event_id else None
+                    )
+                    obj.attempts += 1
+                    if (
+                        event is None
+                        or str(getattr(event, "lifecycle_status", "active") or "active")
+                        != "active"
+                        or bool(getattr(event, "silent", False))
+                        or _event_has_ended_before_today(event)
+                    ):
+                        obj.next_run_at = datetime.now(timezone.utc) + timedelta(
+                            days=3650
+                        )
+                    else:
+                        obj.next_run_at = _next_missing_event_media_check(
+                            datetime.now(timezone.utc)
+                        )
+                    # An interactive event pipeline still gets its one status
+                    # update; the background worker has no progress context.
+                    send = obj.event_id in _EVENT_PROGRESS
                 else:
                     if obj.task == JobTask.static_site_build:
                         disposition = static_failure or classify_static_site_failure(
