@@ -1,0 +1,437 @@
+name: Temporary documentation network audit
+
+on:
+  push:
+    branches:
+      - agent/launch-readiness-dashboard-20260804
+    paths:
+      - ".github/workflows/docs-network-audit-temp.yml"
+      - ".docs-audit-trigger"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build documentation graph and open-PR inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import collections
+          import datetime as dt
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import urllib.parse
+
+          ROOT = pathlib.Path.cwd()
+          OUT = ROOT / "artifacts" / "docs-network-audit"
+          OUT.mkdir(parents=True, exist_ok=True)
+
+          EXCLUDED_PARTS = {
+              ".git", "node_modules", ".venv", "venv", "dist", "build",
+              "artifacts", ".pytest_cache", ".mypy_cache", "__pycache__",
+          }
+          EXCLUDED_PREFIXES = (
+              ".codex/", "site/.astro/", "site/dist/", "site/node_modules/",
+          )
+
+          def run(*args: str, check: bool = True) -> str:
+              proc = subprocess.run(args, cwd=ROOT, text=True, capture_output=True)
+              if check and proc.returncode != 0:
+                  raise RuntimeError(
+                      f"command failed ({proc.returncode}): {' '.join(args)}\n"
+                      f"stdout={proc.stdout[-4000:]}\nstderr={proc.stderr[-4000:]}"
+                  )
+              return proc.stdout
+
+          def rel(path: pathlib.Path) -> str:
+              return path.relative_to(ROOT).as_posix()
+
+          def included(path: pathlib.Path) -> bool:
+              p = rel(path)
+              if any(part in EXCLUDED_PARTS for part in path.parts):
+                  return False
+              return not p.startswith(EXCLUDED_PREFIXES)
+
+          md_paths = sorted(
+              rel(p) for p in ROOT.rglob("*.md") if p.is_file() and included(p)
+          )
+          md_set = set(md_paths)
+
+          link_re = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+          ref_re = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
+          path_re = re.compile(
+              r"(?<![A-Za-z0-9_./-])"
+              r"((?:\.\./|\./)*"
+              r"(?:docs|\.github)/[A-Za-z0-9_./() -]+?\.(?:md|yml|yaml|toml|json)"
+              r"|(?:\.\./|\./)+[A-Za-z0-9_./() -]+?\.md"
+              r"|(?:README|AGENTS)\.md)"
+              r"(?=$|[\s`'\"),;:])"
+          )
+          heading_re = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+          status_re = re.compile(
+              r"(?:\*\*)?(?:Статус|Status)(?:\*\*)?\s*[:—-]\s*([^\n]+)",
+              re.IGNORECASE,
+          )
+
+          def clean_target(raw: str) -> str:
+              raw = raw.strip().strip("<>")
+              # Markdown targets may contain a quoted title after whitespace.
+              if " \"" in raw:
+                  raw = raw.split(" \"", 1)[0]
+              elif " '" in raw:
+                  raw = raw.split(" '", 1)[0]
+              return urllib.parse.unquote(raw)
+
+          def resolve_doc(source: str, raw: str) -> str | None:
+              target = clean_target(raw)
+              if not target or target.startswith(("#", "http://", "https://", "mailto:", "tel:", "data:", "javascript:")):
+                  return None
+              target = target.split("#", 1)[0].split("?", 1)[0]
+              if not target:
+                  return None
+              if target.startswith("/"):
+                  candidate = pathlib.PurePosixPath(target.lstrip("/"))
+              elif target.startswith(("docs/", ".github/")) or target in {"README.md", "AGENTS.md"}:
+                  candidate = pathlib.PurePosixPath(target)
+              else:
+                  candidate = pathlib.PurePosixPath(source).parent / target
+              normalized = pathlib.PurePosixPath(os.path.normpath(candidate.as_posix())).as_posix()
+              if normalized.endswith("/"):
+                  normalized += "README.md"
+              if normalized in md_set:
+                  return normalized
+              if not pathlib.PurePosixPath(normalized).suffix:
+                  for suffix in (".md", "/README.md"):
+                      alt = normalized + suffix
+                      if alt in md_set:
+                          return alt
+              return None
+
+          docs: dict[str, dict] = {}
+          outgoing: dict[str, set[str]] = {p: set() for p in md_paths}
+          raw_missing: list[dict] = []
+
+          for path in md_paths:
+              text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
+              title_match = heading_re.search(text)
+              title = title_match.group(1).strip() if title_match else pathlib.PurePosixPath(path).name
+              status_match = status_re.search("\n".join(text.splitlines()[:50]))
+              status = status_match.group(1).strip().strip("*`>") if status_match else ""
+              try:
+                  last = run("git", "log", "-1", "--format=%cI|%H|%s", "--", path).strip()
+              except Exception:
+                  last = ""
+              last_date = last_sha = last_subject = ""
+              if last:
+                  parts = last.split("|", 2)
+                  if len(parts) == 3:
+                      last_date, last_sha, last_subject = parts
+
+              candidates: list[str] = []
+              candidates.extend(link_re.findall(text))
+              candidates.extend(ref_re.findall(text))
+              candidates.extend(path_re.findall(text))
+              for raw in candidates:
+                  resolved = resolve_doc(path, raw)
+                  if resolved:
+                      outgoing[path].add(resolved)
+                  else:
+                      clean = clean_target(raw)
+                      if clean.lower().endswith(".md") and not clean.startswith(("http://", "https://")):
+                          raw_missing.append({"source": path, "target": clean})
+
+              docs[path] = {
+                  "path": path,
+                  "title": title,
+                  "status": status,
+                  "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                  "bytes": len(text.encode("utf-8")),
+                  "lines": len(text.splitlines()),
+                  "last_commit_date": last_date,
+                  "last_commit_sha": last_sha,
+                  "last_commit_subject": last_subject,
+                  "outgoing": sorted(outgoing[path]),
+              }
+
+          incoming: dict[str, set[str]] = {p: set() for p in md_paths}
+          for source, targets in outgoing.items():
+              for target in targets:
+                  incoming[target].add(source)
+          for path in md_paths:
+              docs[path]["incoming"] = sorted(incoming[path])
+
+          roots = [
+              "README.md",
+              "docs/README.md",
+              "docs/features/README.md",
+              "docs/features/static-site-pages/README.md",
+              "docs/features/static-site-pages/release-plan.md",
+              "docs/release/README.md",
+              "docs/release/2026-09-01/README.md",
+          ]
+          roots = [p for p in roots if p in md_set]
+
+          def reachable(start: str) -> set[str]:
+              seen: set[str] = set()
+              queue = collections.deque([start])
+              while queue:
+                  current = queue.popleft()
+                  if current in seen:
+                      continue
+                  seen.add(current)
+                  queue.extend(outgoing.get(current, ()))
+              return seen
+
+          reach_by_root = {root: sorted(reachable(root)) for root in roots}
+          reached = set().union(*(set(v) for v in reach_by_root.values())) if roots else set()
+          no_incoming = sorted(p for p in md_paths if not incoming[p] and p not in roots)
+          unreachable = sorted(p for p in md_paths if p not in reached and p not in roots)
+
+          topic_specs: dict[str, list[str]] = {
+              "Чек-лист и канбан": ["checklist", "kanban", "launch readiness", "сводный чеклист"],
+              "Контроль доработок сайта": ["general follow-up", "генеральная доработка", "follow-up code agent", "контроль доработок"],
+              "Аудит Smart Update": ["smart update", "smart-update-prod-audit", "static site builder", "staticsitebuilder"],
+              "Роли и экологичность СУБД": ["data ownership", "субд", "database role", "ydb", "supabase", "ecology"],
+              "Клавиатурная навигация": ["keyboard", "клавиатур", "desktop navigation"],
+              "Гипотеза о волонтёрах": ["volunteer", "волонт"],
+              "Медальоны": ["medallion", "медальон"],
+              "Заглушка 1 сентября — техно": ["prelaunch", "заглуш", "1 сентября", "launch tile", "tile mosaic"],
+              "Заглушка 1 сентября — стекло": ["prelaunch", "glass", "стекл", "mosaic", "tile"],
+              "Стратегия онбординга": ["onboarding", "онбординг"],
+              "Редакционный стиль сайта": ["editorial style", "редакцион", "tone of voice", "golden corpus"],
+              "OTP и авторизация": ["otp", "auth", "авторизац", "identity"],
+              "Тестирование надёжности соединения": ["transport reliability", "dependency resilience", "connection", "fault profile", "надёжност"],
+              "Контроль лимитов LLM": ["llm rate", "limiter", "quota", "лимит"],
+              "Hero-talk": ["hero-talk", "hero talk", "typed briefing"],
+              "Умный поиск": ["smart vector search", "authorized event search", "умный поиск", "search"],
+              "Персонализация": ["personalization", "personalizaion", "персонализац", "для меня"],
+              "SEO и GEO": ["seo", "geo", "structured data", "sitemap"],
+              "Гастрособытия": ["gastronomy", "гастро"],
+              "Фокус-группа": ["focus group", "focus-group", "фокус-груп"],
+              "Подборки": ["podborki", "collection", "подборк"],
+              "Статистика": ["analytics", "statistics", "статистик", "метрик"],
+              "Пользовательские истории": ["user stories", "user-story", "пользовательск"],
+          }
+
+          def score_topic(path: str, topic_terms: list[str]) -> tuple[int, list[str]]:
+              text = (ROOT / path).read_text(encoding="utf-8", errors="replace").lower()
+              hay_path = path.lower()
+              hay_title = docs[path]["title"].lower()
+              matched: list[str] = []
+              score = 0
+              for term in topic_terms:
+                  term_l = term.lower()
+                  if term_l in hay_path:
+                      score += 8
+                      matched.append(term)
+                  elif term_l in hay_title:
+                      score += 5
+                      matched.append(term)
+                  elif term_l in text:
+                      score += 1
+                      matched.append(term)
+              return score, matched
+
+          topic_map: dict[str, list[dict]] = {}
+          for topic, terms in topic_specs.items():
+              rows = []
+              for path in md_paths:
+                  score, matched = score_topic(path, terms)
+                  if score:
+                      rows.append({
+                          "path": path,
+                          "title": docs[path]["title"],
+                          "score": score,
+                          "matched": matched,
+                          "incoming_count": len(incoming[path]),
+                          "reachable_from_hubs": path in reached,
+                          "status": docs[path]["status"],
+                      })
+              rows.sort(key=lambda row: (-row["score"], row["path"]))
+              topic_map[topic] = rows[:20]
+
+          # Open PR documentation inventory. This deliberately records paths and
+          # PR metadata only; current-branch reachability remains the release truth.
+          prs_raw = run(
+              "gh", "pr", "list", "--state", "open", "--limit", "200",
+              "--json", "number,title,url,headRefName,headRefOid,baseRefName,isDraft,updatedAt"
+          )
+          prs = json.loads(prs_raw or "[]")
+          open_pr_docs: list[dict] = []
+          pr_errors: list[dict] = []
+          for pr in prs:
+              number = int(pr["number"])
+              try:
+                  names = run("gh", "pr", "diff", str(number), "--name-only").splitlines()
+              except Exception as exc:
+                  pr_errors.append({"number": number, "error": str(exc)})
+                  continue
+              md_names = sorted({name.strip() for name in names if name.strip().lower().endswith(".md")})
+              for path in md_names:
+                  open_pr_docs.append({
+                      "number": number,
+                      "title": pr["title"],
+                      "url": pr["url"],
+                      "head_ref": pr["headRefName"],
+                      "head_sha": pr["headRefOid"],
+                      "base_ref": pr["baseRefName"],
+                      "draft": pr["isDraft"],
+                      "updated_at": pr["updatedAt"],
+                      "path": path,
+                      "exists_in_current_branch": path in md_set,
+                  })
+
+          # Side-branch topic hints based on PR title and changed path.
+          side_topic_map: dict[str, list[dict]] = {}
+          for topic, terms in topic_specs.items():
+              rows = []
+              for row in open_pr_docs:
+                  hay = f"{row['title']} {row['path']}".lower()
+                  matched = [term for term in terms if term.lower() in hay]
+                  if matched:
+                      enriched = dict(row)
+                      enriched["matched"] = matched
+                      rows.append(enriched)
+              rows.sort(key=lambda row: (row["exists_in_current_branch"], -row["number"], row["path"]))
+              side_topic_map[topic] = rows[:30]
+
+          payload = {
+              "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+              "repository": os.environ.get("GITHUB_REPOSITORY"),
+              "ref": os.environ.get("GITHUB_REF_NAME"),
+              "sha": os.environ.get("GITHUB_SHA"),
+              "counts": {
+                  "markdown_files": len(md_paths),
+                  "references": sum(len(v) for v in outgoing.values()),
+                  "no_incoming": len(no_incoming),
+                  "unreachable_from_hubs": len(unreachable),
+                  "raw_missing_md_references": len(raw_missing),
+                  "open_prs": len(prs),
+                  "open_pr_markdown_changes": len(open_pr_docs),
+              },
+              "roots": roots,
+              "reach_by_root": reach_by_root,
+              "no_incoming": no_incoming,
+              "unreachable_from_hubs": unreachable,
+              "raw_missing_md_references": raw_missing,
+              "docs": docs,
+              "topic_map": topic_map,
+              "open_pr_docs": open_pr_docs,
+              "side_topic_map": side_topic_map,
+              "pr_errors": pr_errors,
+          }
+          (OUT / "audit.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          lines: list[str] = []
+          lines.append("# Documentation network audit")
+          lines.append("")
+          lines.append(f"Generated: `{payload['generated_at']}`")
+          lines.append(f"Ref: `{payload['ref']}@{payload['sha']}`")
+          lines.append("")
+          lines.append("## Counts")
+          lines.append("")
+          for key, value in payload["counts"].items():
+              lines.append(f"- `{key}`: **{value}**")
+          lines.append("")
+          lines.append("## Hubs")
+          lines.append("")
+          for root in roots:
+              lines.append(f"- `{root}` → {len(reach_by_root[root])} reachable Markdown files")
+          lines.append("")
+          lines.append("## Screenshot topic routing")
+          lines.append("")
+          for topic in topic_specs:
+              lines.append(f"### {topic}")
+              current = topic_map.get(topic, [])[:8]
+              side = side_topic_map.get(topic, [])[:8]
+              if current:
+                  lines.append("Current branch candidates:")
+                  for row in current:
+                      reach = "reachable" if row["reachable_from_hubs"] else "UNREACHABLE"
+                      lines.append(
+                          f"- `{row['path']}` — {row['title']} · score {row['score']} · "
+                          f"incoming {row['incoming_count']} · {reach}"
+                      )
+              else:
+                  lines.append("- No current-branch candidate")
+              if side:
+                  lines.append("Open-PR candidates:")
+                  for row in side:
+                      current_flag = "also current" if row["exists_in_current_branch"] else "SIDE-BRANCH ONLY"
+                      lines.append(
+                          f"- PR #{row['number']} `{row['path']}` — {row['title']} · {current_flag}"
+                      )
+              lines.append("")
+
+          lines.append("## Unreachable from configured hubs")
+          lines.append("")
+          for path in unreachable[:400]:
+              lines.append(f"- `{path}` — {docs[path]['title']} · incoming {len(incoming[path])}")
+          if len(unreachable) > 400:
+              lines.append(f"- … {len(unreachable) - 400} more in audit.json")
+          lines.append("")
+          lines.append("## No incoming references")
+          lines.append("")
+          for path in no_incoming[:400]:
+              lines.append(f"- `{path}` — {docs[path]['title']}")
+          if len(no_incoming) > 400:
+              lines.append(f"- … {len(no_incoming) - 400} more in audit.json")
+          lines.append("")
+          lines.append("## Open PR Markdown changes absent from current branch")
+          lines.append("")
+          absent = [row for row in open_pr_docs if not row["exists_in_current_branch"]]
+          for row in absent[:500]:
+              lines.append(
+                  f"- PR #{row['number']} `{row['path']}` — {row['title']} "
+                  f"(`{row['head_ref']}`)"
+              )
+          if len(absent) > 500:
+              lines.append(f"- … {len(absent) - 500} more in audit.json")
+          lines.append("")
+          lines.append("## Unresolved local Markdown-looking references")
+          lines.append("")
+          dedup_missing = []
+          seen_missing = set()
+          for row in raw_missing:
+              key = (row["source"], row["target"])
+              if key not in seen_missing:
+                  seen_missing.add(key)
+                  dedup_missing.append(row)
+          for row in dedup_missing[:300]:
+              lines.append(f"- `{row['source']}` → `{row['target']}`")
+          if len(dedup_missing) > 300:
+              lines.append(f"- … {len(dedup_missing) - 300} more in audit.json")
+
+          (OUT / "audit.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+          print(json.dumps(payload["counts"], ensure_ascii=False))
+          PY
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-network-audit
+          path: artifacts/docs-network-audit/
+          if-no-files-found: error
+          retention-days: 3
