@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- A tested backend boundary for shared Live resources through the existing
+  quota authority. No browser Live route or production activation is included;
+  compatible transport and verified provider-limit semantics remain rollout
+  gates. See `docs/features/llm-gateway/live-resources.md`.
 - A bucket-backed YAML registry of all currently accessible named KenigEvents
   preview builds, including actual HTML links, upload/build dates, source SHA,
   catalog-date evidence and review context. Preview upload now updates its

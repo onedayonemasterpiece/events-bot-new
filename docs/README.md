@@ -1,5 +1,8 @@
 # Документация
 
+Shared Live resource integration candidate and activation gates:
+`docs/features/llm-gateway/live-resources.md`.
+
 Этот каталог устроен **feature‑ориентированно**: у каждой фичи есть свой “дом” в `docs/features/`.
 
 ## Быстрый роутинг (для агентов)
