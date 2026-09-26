@@ -1,0 +1,120 @@
+ }
+--- a/site/e2e/focus-email/helpers/failure-domain.mjs
++++ b/site/e2e/focus-email/helpers/failure-domain.mjs
+@@ -6,7 +6,10 @@
+   if (/release_evidence/iu.test(message)) return 'FAIL_RELEASE_EVIDENCE';
+   if (/fault_not_active/iu.test(message)) return 'FAIL_FAULT_NOT_ACTIVE';
+   if (/fault_route_selection/iu.test(message)) return 'FAIL_ROUTE_SELECTION';
+-  if (/fault_route_policy/iu.test(message)) return 'FAIL_ROUTE_POLICY';
++  if (/fault_route_policy|search_transport_(?:policy|route|initial_route|outcome|status|outcome_count)/iu.test(message)) return 'FAIL_ROUTE_POLICY';
++  if (/search_surface|search_session|search_navigation/iu.test(message)) return 'FAIL_SEARCH_SURFACE';
++  if (/search_cache|search_cold_probe/iu.test(message)) return 'FAIL_SEARCH_CACHE';
++  if (/search_result|search_ui|search_card|search_schema|search_response|search_dispatch/iu.test(message)) return 'FAIL_SEARCH_RESULT';
+   if (/mail_/iu.test(message)) return 'FAIL_DELIVERY';
+   if (/fail_mobile_keyboard/iu.test(message)) return 'FAIL_MOBILE_KEYBOARD';
+   if (/fail_mobile_viewport/iu.test(message)) return 'FAIL_MOBILE_VIEWPORT';
+--- a/site/e2e/focus-email/helpers/platform.mjs
++++ b/site/e2e/focus-email/helpers/platform.mjs
+@@ -32,15 +32,19 @@
+   };
+ }
+ 
+-export function classifyKeyboardAcceptance({ shown, active, visible, inputMode, viewport }) {
++export function classifyKeyboardAcceptance({ shown, active, visible, inputMode, enterKeyHint, viewport }) {
+   const viewportHeight = Number(viewport?.focused?.height ?? viewport?.height ?? viewport?.innerHeight);
+   const elementBottom = Number(viewport?.focused?.element_bottom ?? viewport?.elementBottom);
+   const geometry = viewportHeight > 0 && elementBottom <= viewportHeight + Number(viewport?.focused?.offset_top || 0) + 2;
+-  const inputPath = ['email', 'numeric', 'decimal', 'tel'].includes(String(inputMode || '').toLowerCase());
++  const normalizedInputMode = String(inputMode || '').toLowerCase();
++  const normalizedEnterKeyHint = String(enterKeyHint || '').toLowerCase();
++  const inputPath = ['email', 'numeric', 'decimal', 'tel', 'search'].includes(normalizedInputMode)
++    || normalizedEnterKeyHint === 'search';
+   return {
+     passed: shown === true && active === true && visible === true && geometry && inputPath,
+     shown: shown === true, active: active === true, visible: visible === true,
+-    input_mode: String(inputMode || ''), input_visible_in_visual_viewport: Boolean(geometry),
++    input_mode: String(inputMode || ''), enter_key_hint: String(enterKeyHint || ''),
++    input_visible_in_visual_viewport: Boolean(geometry),
+     visual_viewport: viewport || null,
+   };
+ }
+--- a/site/e2e/focus-email/helpers/search-acceptance.mjs
++++ b/site/e2e/focus-email/helpers/search-acceptance.mjs
+@@ -0,0 +1,116 @@
++const SEARCH_OPERATION = 'functions.event-search';
++const SEARCH_PATH = '/functions/v1/event-search';
++
++export function syntheticSearchQuery(runId) {
++  const nonce = String(runId || 'local')
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/gu, '')
++    .slice(-10)
++    .padStart(6, '0');
++  return {
++    query_id: 'evening_music_transport_v1',
++    value: `музыка вечером в Калининграде контроль ${nonce}`,
++  };
++}
++
++export function summarizeSearchPayload(payload) {
++  if (!payload || typeof payload !== 'object') return null;
++  const llm = payload.llm_verifier && typeof payload.llm_verifier === 'object'
++    ? payload.llm_verifier : {};
++  const timings = payload.timings_ms && typeof payload.timings_ms === 'object'
++    ? Object.fromEntries(Object.entries(payload.timings_ms)
++      .filter(([key, value]) => /^[a-z_]+_ms$/u.test(key) && Number.isFinite(Number(value)))
++      .map(([key, value]) => [key, Number(value)]))
++    : {};
++  return {
++    schema_version: String(payload.schema_version || ''),
++    algorithm_id: String(payload.algorithm_id || ''),
++    request_id: /^[0-9a-f-]{16,64}$/iu.test(String(payload.request_id || '')) ? String(payload.request_id) : null,
++    served_list_id: /^[0-9a-f-]{16,64}$/iu.test(String(payload.served_list_id || '')) ? String(payload.served_list_id) : null,
++    result_cache_status: String(payload.result_cache_status || ''),
++    served_from_cache: payload.served_from_cache === true,
++    embedding_cache_status: String(payload.embedding_cache_status || ''),
++    item_count: Array.isArray(payload.items) ? payload.items.length : 0,
++    fallback_count: Array.isArray(payload.fallback_items) ? payload.fallback_items.length : 0,
++    has_more: payload.has_more === true,
++    llm: {
++      requested: llm.requested === true,
++      used: llm.used === true,
++      status: String(llm.status || ''),
++      model: llm.model == null ? null : String(llm.model).slice(0, 80),
++      policy: llm.policy == null ? null : String(llm.policy).slice(0, 80),
++    },
++    timings_ms: timings,
++  };
++}
++
++export function expectedSearchRoute(profile) {
++  if (profile === 'client_supabase_direct_unreachable') return 'relay';
++  if (profile === 'client_yandex_relay_unreachable') return 'direct';
++  return null;
++}
++
++export function assertSearchRouteMatrix({ profile, platform, attempts, responses = [], outcomes = [], uiStates = [] }) {
++  const expectedAttempts = platform === 'browser' ? 2 : 1;
++  if (attempts !== expectedAttempts) throw new Error(`search_dispatch_count:${attempts}:${expectedAttempts}`);
++  if (uiStates.length !== expectedAttempts) throw new Error(`search_ui_attempt_count:${uiStates.length}:${expectedAttempts}`);
++  for (const [index, state] of uiStates.entries()) {
++    if (!state?.completed) throw new Error(`search_result_incomplete:${index + 1}`);
++    if (Math.max(Number(state.rendered_card_count || 0), Number(state.result_child_count || 0) - 1) < 1) {
++      throw new Error(`search_result_cards_empty:${index + 1}`);
++    }
++    if (state.card_renderer_unavailable === true) throw new Error(`search_card_renderer_unavailable:${index + 1}`);
++  }
++
++  const searchOutcomes = outcomes.filter((item) => item.operation === SEARCH_OPERATION);
++  if (searchOutcomes.length !== expectedAttempts) {
++    throw new Error(`search_transport_outcome_count:${searchOutcomes.length}:${expectedAttempts}`);
++  }
++  const expectedRoute = expectedSearchRoute(profile);
++  for (const [index, outcome] of searchOutcomes.entries()) {
++    if (outcome.policy !== 'selected-once') throw new Error(`search_transport_policy:${index + 1}:${outcome.policy}`);
++    if (!['definitive', 'recovered'].includes(String(outcome.kind || ''))) {
++      throw new Error(`search_transport_outcome:${index + 1}:${outcome.kind}`);
++    }
++    if (Number(outcome.status) !== 200) throw new Error(`search_transport_status:${index + 1}:${outcome.status}`);
++    if (expectedRoute && outcome.finalRoute !== expectedRoute) {
++      throw new Error(`search_transport_route:${index + 1}:${outcome.finalRoute}:${expectedRoute}`);

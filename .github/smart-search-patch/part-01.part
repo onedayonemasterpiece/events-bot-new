@@ -1,0 +1,120 @@
+@@ -297,7 +305,7 @@
+         if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-ios-*/.redaction-ok') != '' }}
+         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+         with:
+-          name: static-site-qa-focus-otp-ios-${{ github.run_id }}-${{ github.run_attempt }}
++          name: static-site-qa-${{ inputs.scenario }}-ios-${{ github.run_id }}-${{ github.run_attempt }}
+           path: site/artifacts/external-focus-email-otp-evidence-ios-*
+           if-no-files-found: error
+           retention-days: 7
+--- a/.github/workflows/static-site-qa-command.yml
++++ b/.github/workflows/static-site-qa-command.yml
+@@ -20,6 +20,8 @@
+       scenario: ${{ steps.parse.outputs.scenario }}
+       platform: ${{ steps.parse.outputs.platform }}
+       target_url: ${{ steps.parse.outputs.target_url }}
++      search_target_url: ${{ steps.parse.outputs.search_target_url }}
++      fault_profile: ${{ steps.parse.outputs.fault_profile }}
+       expected_repo_sha: ${{ steps.parse.outputs.expected_repo_sha }}
+       mode: ${{ steps.parse.outputs.mode }}
+       duplicate: ${{ steps.dedupe.outputs.duplicate }}
+@@ -67,9 +69,11 @@
+           SHA: ${{ steps.parse.outputs.expected_repo_sha }}
+           TARGET_ORIGIN: ${{ steps.parse.outputs.target_origin }}
+           TARGET_PATH: ${{ steps.parse.outputs.target_path }}
++          SEARCH_TARGET_PATH: ${{ steps.parse.outputs.search_target_path }}
++          FAULT_PROFILE: ${{ steps.parse.outputs.fault_profile }}
+           SCENARIO: ${{ steps.parse.outputs.scenario }}
+         run: |
+-          gh issue comment "$ISSUE" --body "ACCEPTED · ${SCENARIO} · ${PLATFORM} · ${SHA} · ${TARGET_ORIGIN}${TARGET_PATH} · run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
++          gh issue comment "$ISSUE" --body "ACCEPTED · ${SCENARIO} · ${PLATFORM} · fault=${FAULT_PROFILE} · ${SHA} · ${TARGET_ORIGIN}${TARGET_PATH}${SEARCH_TARGET_PATH:+ -> ${SEARCH_TARGET_PATH}} · run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+ 
+   run:
+     if: ${{ needs.prepare.outputs.duplicate != 'true' }}
+@@ -77,6 +81,8 @@
+     uses: ./.github/workflows/external-focus-email-otp.yml
+     with:
+       target_url: ${{ needs.prepare.outputs.target_url }}
++      search_target_url: ${{ needs.prepare.outputs.search_target_url }}
++      fault_profile: ${{ needs.prepare.outputs.fault_profile }}
+       expected_repo_sha: ${{ needs.prepare.outputs.expected_repo_sha }}
+       platform: ${{ needs.prepare.outputs.platform }}
+       scenario: ${{ needs.prepare.outputs.scenario }}
+@@ -92,7 +98,7 @@
+         continue-on-error: true
+         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+         with:
+-          pattern: static-site-qa-focus-otp-*
++          pattern: static-site-qa-*
+           path: ${{ runner.temp }}/static-site-qa-artifacts
+       - name: Build strict terminal receipt from qa-summary
+         working-directory: site
+--- a/site/e2e/focus-email/adapters/appium-ui.mjs
++++ b/site/e2e/focus-email/adapters/appium-ui.mjs
+@@ -10,6 +10,8 @@
+   install: '[data-intake-stage="install"]:not([hidden])', skip: '[data-focus-install-skip]',
+   emailOpen: '[data-focus-email-open]', email: '#focus-email', send: '[data-focus-email-send]',
+   code: '[data-focus-email-code-step]:not([hidden])', otp: '#focus-email-otp', done: '[data-focus-done-title]',
++  searchRoot: '[data-authorized-search]', searchInput: '[data-search-input]', searchSubmit: '[data-search-submit]',
++  searchResults: '[data-search-results]', searchStatus: '[data-search-status]',
+ });
+ 
+ export function extractDriverNetworkEvents(logs) {
+@@ -288,6 +290,7 @@
+   let transportPageEventsSeen = 0;
+   const transportOutcomes = [];
+   const transportOutcomeIds = new Set();
++  let searchStartedAt = 0;
+   const keyboard = {};
+   const keyboardPreflight = { status: 'not_run', controls: {}, product: {} };
+   let safariStartup = { status: platform === 'ios' ? 'pending' : 'not_applicable' };
+@@ -457,7 +460,8 @@
+     const dom = await driver.execute((css) => {
+       const input = document.querySelector(css); const rect = input?.getBoundingClientRect();
+       return { active: document.activeElement === input, visible: Boolean(rect && rect.width > 0 && rect.height > 0),
+-        inputMode: input?.inputMode || input?.getAttribute('inputmode') || input?.type || '' };
++        inputMode: input?.inputMode || input?.getAttribute('inputmode') || input?.type || '',
++        enterKeyHint: input?.enterKeyHint || input?.getAttribute('enterkeyhint') || '' };
+     }, selector);
+     const focused = await viewportSnapshot(selector);
+     const shown = nativeKeyboardAtTap[kind] ?? await withNativeContext(() => driver.isKeyboardShown().catch(() => false));
+@@ -473,7 +477,7 @@
+     return accepted;
+   }
+ 
+-  async function focusWithNativeTap(selector, label, kind) {
++  async function focusWithNativeTap(selector, label, kind, nativeTypes = ['XCUIElementTypeTextField']) {
+     await assertNoBlockingSafariModal();
+     await driver.execute((css) => document.querySelector(css)?.scrollIntoView({ block: 'center', inline: 'center' }), selector);
+     await driver.pause(200);
+@@ -488,9 +492,10 @@
+     } else {
+       await withNativeContext(async () => {
+         const escapedLabel = label.replaceAll("'", "\\'");
+-        const predicate = `type == 'XCUIElementTypeTextField' AND visible == 1 AND (name == '${escapedLabel}' OR label == '${escapedLabel}')`;
++        const typePredicate = nativeTypes.map((type) => `type == '${type}'`).join(' OR ');
++        const predicate = `(${typePredicate}) AND visible == 1 AND (name == '${escapedLabel}' OR label == '${escapedLabel}')`;
+         const matches = await driver.findElements('-ios predicate string', predicate);
+-        attempts.push({ route: 'xcuitest_exact_accessibility_field', match_count: matches.length });
++        attempts.push({ route: 'xcuitest_exact_accessibility_input', input_types: [...nativeTypes], match_count: matches.length });
+         if (matches.length !== 1) throw new Error(`fail_browser_context:native_input_match_count:${kind}:${matches.length}`);
+         const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;
+         if (!elementId) throw new Error(`fail_browser_context:native_input_id_missing:${kind}`);
+@@ -536,7 +541,7 @@
+ 
+   async function maskDom() {
+     await driver.execute(() => {
+-      const sensitiveInputs = Array.from(document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"]'));
++      const sensitiveInputs = Array.from(document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"], [data-search-input]'));
+       if (sensitiveInputs.includes(document.activeElement)) document.activeElement.blur();
+       sensitiveInputs.forEach((node) => { node.value = ''; node.setAttribute('data-e2e-masked', 'true'); });
+       document.querySelectorAll('[data-focus-email-destination], [data-static-auth-name]').forEach((node) => { node.textContent = 'f***@k***'; });
+@@ -656,6 +661,90 @@
+     },
+     async transportFaultEvidence() { return syncTransportFaultEvidence(); },
+     async waitForReturningMember() { await waitText(driver, /Вы уже в фокус-группе|Участие подтверждено/u, 20_000); },
++
++    async openSearch(searchTarget) {
++      await syncNetwork();
++      await syncTransportFaultEvidence();
++      searchStartedAt = Date.now();

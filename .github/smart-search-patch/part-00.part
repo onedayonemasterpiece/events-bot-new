@@ -1,0 +1,120 @@
+--- a/.github/workflows/external-focus-email-otp.yml
++++ b/.github/workflows/external-focus-email-otp.yml
+@@ -5,6 +5,7 @@
+     inputs:
+       target_url: { required: true, type: string }
+       expected_repo_sha: { required: true, type: string }
++      search_target_url: { required: false, type: string, default: '' }
+       platform: { required: true, type: string }
+       scenario: { required: false, type: string, default: focus.otp.browser_tab }
+       fault_profile: { required: false, type: string, default: normal }
+@@ -14,6 +15,10 @@
+         description: Exact deployed KenigEvents onboarding URL
+         required: true
+         type: string
++      search_target_url:
++        description: Optional exact Smart Search URL; defaults to /poisk/ under the onboarding preview prefix
++        required: false
++        type: string
+       expected_repo_sha:
+         description: Exact full repository SHA recorded by deployed preview metadata
+         required: true
+@@ -29,7 +34,7 @@
+         required: true
+         default: focus.otp.browser_tab
+         type: choice
+-        options: [focus.otp.browser_tab, focus.otp.ios_keyboard_preflight]
++        options: [focus.otp.browser_tab, focus.otp.ios_keyboard_preflight, search.transport_route_matrix]
+       fault_profile:
+         description: Immutable transport fault profile recorded by preview-build.json
+         required: true
+@@ -55,20 +60,20 @@
+           FAULT_PROFILE: ${{ inputs.fault_profile }}
+         run: |
+           case "${SCENARIO}:${PLATFORM}" in
+-            focus.otp.browser_tab:browser|focus.otp.browser_tab:android|focus.otp.browser_tab:ios|focus.otp.browser_tab:all|focus.otp.ios_keyboard_preflight:ios) ;;
++            focus.otp.browser_tab:browser|focus.otp.browser_tab:android|focus.otp.browser_tab:ios|focus.otp.browser_tab:all|focus.otp.ios_keyboard_preflight:ios|search.transport_route_matrix:browser|search.transport_route_matrix:android|search.transport_route_matrix:ios|search.transport_route_matrix:all) ;;
+             *) echo 'Unsupported scenario/platform pair' >&2; exit 1 ;;
+           esac
+           case "$FAULT_PROFILE" in
+             normal|client_supabase_direct_unreachable|client_yandex_relay_unreachable|both_client_routes_unreachable) ;;
+             *) echo 'Unsupported fault profile' >&2; exit 1 ;;
+           esac
+-          if [ "$SCENARIO" != focus.otp.browser_tab ] && [ "$FAULT_PROFILE" != normal ]; then
+-            echo 'Fault profiles are only valid for the full OTP journey' >&2; exit 1
++          if [ "$SCENARIO" = focus.otp.ios_keyboard_preflight ] && [ "$FAULT_PROFILE" != normal ]; then
++            echo 'Fault profiles are invalid for the side-effect-free keyboard preflight' >&2; exit 1
+           fi
+ 
+   browser:
+     needs: validate
+-    if: ${{ inputs.scenario == 'focus.otp.browser_tab' && (inputs.platform == 'browser' || inputs.platform == 'all') }}
++    if: ${{ inputs.scenario != 'focus.otp.ios_keyboard_preflight' && (inputs.platform == 'browser' || inputs.platform == 'all') }}
+     runs-on: ubuntu-24.04
+     timeout-minutes: 15
+     environment: { name: external-e2e }
+@@ -78,6 +83,7 @@
+       E2E_TRANSPORT_FAULT_PROFILE: ${{ inputs.fault_profile }}
+       E2E_HARNESS_REPO_SHA: ${{ github.sha }}
+       E2E_TARGET_URL: ${{ inputs.target_url }}
++      E2E_SEARCH_TARGET_URL: ${{ inputs.search_target_url }}
+       E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+       E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+       E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-browser-${{ github.run_id }}-${{ github.run_attempt }}
+@@ -101,20 +107,20 @@
+         with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
+       - run: npm ci --no-audit --no-fund
+       - run: npx playwright install --with-deps chromium
+-      - name: Run Chromium compatibility journey
++      - name: Run protected Chromium journey
+         run: npm run e2e:external-focus-email-otp
+       - name: Upload sanitized browser evidence
+         if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-browser-*/.redaction-ok') != '' }}
+         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+         with:
+-          name: static-site-qa-focus-otp-browser-${{ github.run_id }}-${{ github.run_attempt }}
++          name: static-site-qa-${{ inputs.scenario }}-browser-${{ github.run_id }}-${{ github.run_attempt }}
+           path: site/artifacts/external-focus-email-otp-evidence-browser-*
+           if-no-files-found: error
+           retention-days: 7
+ 
+   android:
+     needs: [validate, browser]
+-    if: ${{ always() && needs.validate.result == 'success' && inputs.scenario == 'focus.otp.browser_tab' && ((inputs.platform == 'android' && needs.browser.result == 'skipped') || (inputs.platform == 'all' && needs.browser.result == 'success')) }}
++    if: ${{ always() && needs.validate.result == 'success' && inputs.scenario != 'focus.otp.ios_keyboard_preflight' && ((inputs.platform == 'android' && needs.browser.result == 'skipped') || (inputs.platform == 'all' && needs.browser.result == 'success')) }}
+     runs-on: ubuntu-24.04
+     timeout-minutes: 35
+     environment: { name: external-e2e }
+@@ -126,6 +132,7 @@
+       E2E_DEVICE_NAME: Pixel 7
+       E2E_PLATFORM_VERSION: '15'
+       E2E_TARGET_URL: ${{ inputs.target_url }}
++      E2E_SEARCH_TARGET_URL: ${{ inputs.search_target_url }}
+       E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+       E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+       E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-android-${{ github.run_id }}-${{ github.run_attempt }}
+@@ -176,14 +183,14 @@
+         if: ${{ always() && hashFiles('site/artifacts/external-focus-email-otp-evidence-android-*/.redaction-ok') != '' }}
+         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+         with:
+-          name: static-site-qa-focus-otp-android-${{ github.run_id }}-${{ github.run_attempt }}
++          name: static-site-qa-${{ inputs.scenario }}-android-${{ github.run_id }}-${{ github.run_attempt }}
+           path: site/artifacts/external-focus-email-otp-evidence-android-*
+           if-no-files-found: error
+           retention-days: 7
+ 
+   ios:
+     needs: [validate, android]
+-    if: ${{ always() && needs.validate.result == 'success' && ((inputs.platform == 'ios' && needs.android.result == 'skipped') || (inputs.scenario == 'focus.otp.browser_tab' && inputs.platform == 'all' && needs.android.result == 'success')) }}
++    if: ${{ always() && needs.validate.result == 'success' && ((inputs.platform == 'ios' && needs.android.result == 'skipped') || (inputs.scenario != 'focus.otp.ios_keyboard_preflight' && inputs.platform == 'all' && needs.android.result == 'success')) }}
+     runs-on: macos-15
+     timeout-minutes: 40
+     environment: { name: external-e2e }
+@@ -193,6 +200,7 @@
+       E2E_TRANSPORT_FAULT_PROFILE: ${{ inputs.fault_profile }}
+       E2E_HARNESS_REPO_SHA: ${{ github.sha }}
+       E2E_TARGET_URL: ${{ inputs.target_url }}
++      E2E_SEARCH_TARGET_URL: ${{ inputs.search_target_url }}
+       E2E_EXPECTED_REPO_SHA: ${{ inputs.expected_repo_sha }}
+       E2E_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+       E2E_EVIDENCE_DIR: artifacts/external-focus-email-otp-evidence-ios-${{ github.run_id }}-${{ github.run_attempt }}

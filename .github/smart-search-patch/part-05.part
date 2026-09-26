@@ -1,0 +1,120 @@
++    }
++    if (expectedRoute && outcome.initialRoute !== expectedRoute) {
++      throw new Error(`search_transport_initial_route:${index + 1}:${outcome.initialRoute}:${expectedRoute}`);
++    }
++  }
++
++  if (platform === 'browser') {
++    if (responses.length !== 2) throw new Error(`search_response_count:${responses.length}:2`);
++    const [first, second] = responses;
++    if (first?.served_from_cache === true || first?.result_cache_status === 'hit') {
++      throw new Error('search_cold_probe_unexpected_cache_hit');
++    }
++    if (first?.schema_version !== 'event-search-results-v1') throw new Error(`search_schema:${first?.schema_version}`);
++    if ((Number(first?.item_count || 0) + Number(first?.fallback_count || 0)) < 1) {
++      throw new Error('search_cold_probe_no_cards');
++    }
++    if (second?.served_from_cache !== true || second?.result_cache_status !== 'hit') {
++      throw new Error(`search_cache_hit_missing:${second?.result_cache_status}:${second?.served_from_cache}`);
++    }
++    if ((Number(second?.item_count || 0) + Number(second?.fallback_count || 0)) < 1) {
++      throw new Error('search_cache_hit_no_cards');
++    }
++  }
++
++  return {
++    operation: SEARCH_OPERATION,
++    path: SEARCH_PATH,
++    expected_route: expectedRoute,
++    dispatch_count: expectedAttempts,
++    outcome_count: searchOutcomes.length,
++    routes: searchOutcomes.map((item) => item.finalRoute),
++    cache: platform === 'browser' ? {
++      first: responses[0]?.result_cache_status || null,
++      second: responses[1]?.result_cache_status || null,
++      first_served_from_cache: responses[0]?.served_from_cache === true,
++      second_served_from_cache: responses[1]?.served_from_cache === true,
++    } : null,
++  };
++}
+--- a/site/e2e/focus-email/helpers/target-url.mjs
++++ b/site/e2e/focus-email/helpers/target-url.mjs
+@@ -1,5 +1,7 @@
+ const PREVIEW_PATH = /^\/preview-[a-z0-9][a-z0-9-]{5,100}\/(?:[a-z0-9_()\-./]*)?$/u;
+ const PRODUCTION_PATH = /^\/fokus-gruppa\/priglashenie\/$/u;
++const SEARCH_PREVIEW_PATH = /^\/preview-[a-z0-9][a-z0-9-]{5,100}\/poisk\/$/u;
++const SEARCH_PRODUCTION_PATH = /^\/poisk\/$/u;
+ const CONTROL_CHARS = /[\u0000-\u001f\u007f]/u;
+ 
+ export function validateFocusE2eTarget(value) {
+@@ -26,6 +28,31 @@
+   return url;
+ }
+ 
++
++export function validateSearchE2eTarget(value, focusTarget = null) {
++  let raw = String(value || '').trim();
++  if (!raw && focusTarget) {
++    const source = focusTarget instanceof URL ? focusTarget : validateFocusE2eTarget(focusTarget);
++    const first = source.pathname.split('/').filter(Boolean)[0] || '';
++    raw = new URL(first.startsWith('preview-') ? `/${first}/poisk/` : '/poisk/', source.origin).href;
++  }
++  if (!raw || CONTROL_CHARS.test(raw) || /%(?:0[0-9a-f]|1[0-9a-f]|7f)/iu.test(raw)) {
++    throw new Error('search_target_url_invalid_characters');
++  }
++  let url;
++  try { url = new URL(raw); } catch { throw new Error('search_target_url_invalid'); }
++  if (url.protocol !== 'https:' || url.hostname !== 'kenigevents.ru' || url.port || url.username || url.password) {
++    throw new Error('search_target_url_origin_not_allowed');
++  }
++  let pathname;
++  try { pathname = decodeURIComponent(url.pathname); } catch { throw new Error('search_target_url_path_invalid'); }
++  if (CONTROL_CHARS.test(pathname) || (!SEARCH_PREVIEW_PATH.test(pathname) && !SEARCH_PRODUCTION_PATH.test(pathname))) {
++    throw new Error('search_target_url_path_not_allowed');
++  }
++  if (url.search || url.hash) throw new Error('search_target_url_suffix_not_allowed');
++  return url;
++}
++
+ export function targetEvidence(url) {
+   const value = url instanceof URL ? url : validateFocusE2eTarget(url);
+   return { target_origin: value.origin, target_path: value.pathname };
+--- a/site/e2e/focus-email/helpers/transport-fault-acceptance.mjs
++++ b/site/e2e/focus-email/helpers/transport-fault-acceptance.mjs
+@@ -4,7 +4,7 @@
+   'rpc.register_focus_group_participant_v1',
+ ]);
+ 
+-export function assertExpectedTransportRoutes(profile, outcomes = []) {
++export function assertExpectedTransportRoutes(profile, outcomes = [], { searchDispatches = 0 } = {}) {
+   const expectedRoute = profile === 'client_supabase_direct_unreachable' ? 'relay'
+     : profile === 'client_yandex_relay_unreachable' ? 'direct' : null;
+   if (!expectedRoute) return;
+@@ -19,4 +19,13 @@
+       throw new Error(`fault_route_selection:${operation}:${directCount}:${relayCount}`);
+     }
+   }
++
++  if (searchDispatches > 0) {
++    const matching = outcomes.filter((event) => event.operation === 'functions.event-search');
++    const expectedCount = matching.filter((event) => event.finalRoute === expectedRoute).length;
++    const oppositeCount = matching.filter((event) => event.finalRoute !== expectedRoute).length;
++    if (expectedCount !== searchDispatches || oppositeCount !== 0) {
++      throw new Error(`fault_route_selection:functions.event-search:${expectedCount}:${oppositeCount}:${searchDispatches}`);
++    }
++  }
+ }
+--- a/site/e2e/focus-email/journey.mjs
++++ b/site/e2e/focus-email/journey.mjs
+@@ -89,3 +89,52 @@
+   step('product_email_keyboard_passed');
+   return { observedRepoSha, counts, keyboardAcceptance: { ...ui.keyboard, email }, keyboardPreflight: ui.keyboardPreflight };
+ }
++
++/**
++ * Authenticated Smart Search journey layered on the already accepted OTP
++ * identity path. Browser performs a cold request and an identical cache retry;
++ * mobile performs one query after the browser job has seeded the shared cache.
++ */
++export async function runAuthenticatedSearchRouteMatrix({ ui, searchTarget, query, queryId, platform, profile, step }) {
++  const { assertSearchRouteMatrix } = await import('./helpers/search-acceptance.mjs');
