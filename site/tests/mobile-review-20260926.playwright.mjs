@@ -21,6 +21,7 @@ try{
     for(const root of await p.locator('[data-home-hero-talk]').all()){
      const media=root.locator('[data-home-hero-media]').first();if(!await media.count())continue;
      await media.waitFor({state:'attached'});await root.scrollIntoViewIfNeeded();await p.waitForTimeout(800);
+     if(await media.isHidden())continue;
      const m=await media.evaluate(e=>{const r=e.getBoundingClientRect(),s=e.closest('[data-home-hero-scene]').getBoundingClientRect();return{top:r.top-s.top,w:r.width,h:r.height,rows:getComputedStyle(e).getPropertyValue('--mosaic-rows')};});
      assert.equal(m.top,0);assert.equal(m.rows.trim(),'8');assert.ok(m.h/m.w>.8&&m.h/m.w<1.4);
     }

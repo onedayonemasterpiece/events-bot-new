@@ -82,7 +82,7 @@ try{
   assert.equal(await eventPage.locator('[data-floating-top-band]').count(),0);
   assert.equal(Math.round((await box(eventPage,'.site-header')).height),0);
   assert.equal(Math.round((await box(eventPage,'.site-nav')).y),20);
-  assert.equal(await eventPage.locator('main#main').count(),1);assert.ok(await eventPage.locator('main#main h1').count()>=1);
+  assert.equal(await eventPage.locator('#main').count(),1);assert.ok(await eventPage.locator('[data-event-title]:visible').count()>=1);
   await eventPage.screenshot({path:`${out}/${width}-event-detail-r5.png`});assert.deepEqual(eventErrors,[]);await eventPage.close();
 
   const feedPage=await browser.newPage({viewport:{width,height:1080}}),feedErrors=[];feedPage.on('pageerror',e=>feedErrors.push(e.message));
