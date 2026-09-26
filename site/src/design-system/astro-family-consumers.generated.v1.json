@@ -5,7 +5,7 @@
   "registry_version": "1.2.0",
   "registry_sha256": "67339a33c32f67cae4309cd2829cdf592970406cd0fec031d4c86bc6fae83b73",
   "source_root": "site/src",
-  "import_inventory_sha256": "5676bc9ddf7bcbc24e2dc2c621c658ede05ece4c7b770ad413af9f57d17591ad",
+  "import_inventory_sha256": "318ea15001fd96a898d2f68a537008c53994396327ebc28c60835cde1c658a6f",
   "product_scope": {
     "route_sources": [
       "site/src/pages/artefakty/index.astro",
@@ -288,6 +288,7 @@
       "site/src/lib/emailOtp.ts",
       "site/src/lib/event-medallions.test.mjs",
       "site/src/lib/eventBusTransport.ts",
+      "site/src/lib/eventCatalogIndex.mjs",
       "site/src/lib/eventContinuation.mjs",
       "site/src/lib/eventDateAvailability.ts",
       "site/src/lib/eventFallbackArt.ts",
@@ -436,8 +437,8 @@
   "summary": {
     "product_family_count": 110,
     "family_count": 112,
-    "source_file_count": 371,
-    "import_edge_count": 925,
+    "source_file_count": 372,
+    "import_edge_count": 926,
     "direct_consumer_edges": 288,
     "protocol_consumer_edges": 34,
     "runtime_factory_edges": 2,

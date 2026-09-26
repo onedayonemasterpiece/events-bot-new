@@ -1,3 +1,4 @@
+import { createEventCatalogIndex } from './eventCatalogIndex.mjs';
 import previewData from '../data/preview-events.json';
 import archivedEventData from '../data/preview-event-archive.json';
 import relatedData from '../data/preview-related.json';
@@ -69,24 +70,10 @@ export function getPreviewBuild() {
   };
 }
 
-export function getEvents(): PreviewEvent[] {
-  return [...data.events].sort((a, b) => {
-    const av = a.starts_at || a.start_date;
-    const bv = b.starts_at || b.start_date;
-    return av.localeCompare(bv) || a.id - b.id;
-  });
-}
-
+const eventCatalogIndex = createEventCatalogIndex(data.events, archivedDetails.events);
+export function getEvents(): PreviewEvent[] { return eventCatalogIndex.current(); }
 /** Recently elapsed canonical events remain addressable as detail pages only. */
-export function getEventDetailEvents(): PreviewEvent[] {
-  const byId = new Map<number, PreviewEvent>();
-  for (const event of [...data.events, ...archivedDetails.events]) byId.set(event.id, event);
-  return [...byId.values()].sort((a, b) => {
-    const av = a.starts_at || a.start_date;
-    const bv = b.starts_at || b.start_date;
-    return av.localeCompare(bv) || a.id - b.id;
-  });
-}
+export function getEventDetailEvents(): PreviewEvent[] { return eventCatalogIndex.details(); }
 
 /** True only for the bounded direct-link grace pool, never for active listings. */
 export function isArchivedEventDetail(event: PreviewEvent): boolean {
@@ -201,11 +188,11 @@ export function displayUpdatedAtKaliningrad(value: string | null | undefined): s
 
 
 export function getEventBySlug(slug: string): PreviewEvent | undefined {
-  return getEventDetailEvents().find((event) => event.slug === slug);
+  return eventCatalogIndex.bySlug(slug);
 }
 
 export function getEventById(id: number): PreviewEvent | undefined {
-  return getEventDetailEvents().find((event) => event.id === id);
+  return eventCatalogIndex.byId(id);
 }
 
 export function withBase(path: string): string {

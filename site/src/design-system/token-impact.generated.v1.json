@@ -5,9 +5,9 @@
   "registry_version": "1.0.0",
   "registry_sha256": "4f991aff77086abe5e2c3027beb6b2050b9492c73d3ab624053b56087eb1e35a",
   "source_root": "site/src",
-  "source_inventory_sha256": "23280e18c130fed0235e06b39200b01220328b919798d97b4296005c7b3b5178",
+  "source_inventory_sha256": "9cfc384549f18d2b6490255596a66251fa1e4485ea513e55b56272f1fba90423",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "2c6cb055b568189c1a2fd5a311c062130b27dd88318fa06e0a2d74c404b9352d",
+  "astro_family_graph_sha256": "f5635892438d23127c7d57355eb4928dfa438a0870d3e1f3eda5f772903a1dd7",
   "summary": {
     "token_count": 2572,
     "definition_count": 2888,
