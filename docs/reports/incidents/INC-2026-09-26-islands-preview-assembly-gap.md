@@ -1,6 +1,6 @@
 # INC-2026-09-26-islands-preview-assembly-gap Review preview lost the floating shell after Home → Today
 
-Status: mitigated
+Status: monitoring
 Severity: sev3
 Service: KenigEvents static-site review preview
 Opened: 2026-09-26
@@ -26,7 +26,7 @@ The review link described as the latest interface used the Home assembly from co
 
 - 2026-09-06: Home and island branches and their separate previews were created.
 - 2026-09-26: Owner observed the shell mismatch in the linked full-site preview.
-- 2026-09-26: Both branches were integrated into one complete local build; the Home → Today browser journey and Today/Weekend archetype checks passed.
+- 2026-09-26: Both branches were integrated into one complete preview build, published at an immutable prefix, and the public Home → Today browser journey passed at 390 and 1440 px.
 
 ## Root Cause
 
@@ -78,10 +78,10 @@ The review link described as the latest interface used the Home assembly from co
 
 ## Release And Closure Evidence
 
-- Deployed SHA: pending preview publication.
-- Deploy path: isolated immutable preview prefix, no production-root promotion.
-- Regression checks: local Home → Today and Today/Weekend checks passed; public readback pending.
-- Post-deploy verification: pending.
+- Deployed SHA: `ec531852764604420722465d474370612f670c9d`, matching the public `preview-build.json`.
+- Deploy path: `https://static.kenigevents.ru/preview-integrated-islands-home-20260926/` in the isolated immutable preview prefix; production root was not promoted.
+- Regression checks: preview validation (288 historical events), local Home → Today and 18 Today/Weekend archetype checks; public Home → Today browser journey passed at 390 and 1440 px. Single-day density and city interactions passed on the public build at 320, 384 and 430 px; the test now taps the actual sticky island and checks the accepted Weekend day navigator.
+- Post-deploy verification: public Home, Today, Weekend and manifest returned HTTP 200; Telegram review message `https://t.me/c/4337049383/1476`; registry update in separate branch `feature/review-registry-islands-home-20260926`.
 
 ## Prevention
 
