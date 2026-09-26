@@ -75,3 +75,12 @@ no-JS/JS geometry parity, exhibition canvas, breadcrumbs, immediate personal
 feed, first like without consent and persistence after reload. It does not claim
 native Android/iOS acceptance; no OS keyboard/share/install behavior changed.
 The existing desktop suite remains a blocking regression check.
+
+## Owner-requested stop checkpoint
+
+Owner asked to retain only critical work and stop to conserve tokens. Runtime
+commit `26868cfc4fabd0b91c8606cee2f98f9dee0bcb42` is pushed. Mobile L1 run passed
+22 checks; desktop predecessor passed 16 checks. Combined r3 build was stopped
+before publication. No r3 URL was sent to Telegram; combined public verification
+and the two collection data repairs remain unfinished. Resume from this commit,
+not from the interrupted local dist tree.
