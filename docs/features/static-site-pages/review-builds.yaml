@@ -1,9 +1,9 @@
 version: 1
-generated_at: '2026-09-26T16:11:18+00:00'
+generated_at: '2026-09-26T16:46:29+00:00'
 bucket: kenigevents.ru
 scope: Observed public named preview-* builds; deleted builds remain as history after their first inventory. Secret _review
   tokens are excluded.
-latest_named_preview: preview-review-20260926-r6
+latest_named_preview: preview-review-20260926-r7
 canonical_full_candidate_lookup: python scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review (on
   Fly)
 canonical_full_candidate:
@@ -13,6 +13,28 @@ canonical_full_candidate:
   snapshot_id: snapshot-20260824T012406-7379314275
   verified_at: '2026-08-24T04:12:44.779984Z'
 builds:
+- build_id: preview-review-20260926-r7
+  built_at: '2026-09-26T16:21:39.693Z'
+  bucket_entry_modified_at: '2026-09-26T16:27:54+00:00'
+  source_sha: 7a62dd5fb0feaf1e6bf988c0f8ac69cd296fe57d
+  source_commit: Harden public R7 preview reliability
+  reference_date: '2026-09-26'
+  repo_catalog_generated_at: '2026-09-26T07:33:38.125800+00:00'
+  public_url: https://kenigevents.ru/preview-review-20260926-r7/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-review-20260926-r7/index.html
+  entry_etag: 6b954fa79a8238c4593fb207908cdf90
+  entry_bytes: 1738427
+  manifest_url: https://kenigevents.ru/preview-review-20260926-r7/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Desktop voice-review surfaces: geometry-aware Hero framing, 2px mosaic gaps, baseline cursor, pinned Home brand tag, navigation-only event detail and Today without duplicated time context.'
+  - 'Personal feed desktop first hydration renders up to 12 cards while later/mobile chunks remain bounded; real SQLite interest-club projection exposes Game Vibes and Клуб исследователей нейронок.'
+  - 'Reliability follow-up: service-share background PNG timeout is consumed instead of leaking a pageerror; desktop and mobile first-paint gates compare styled server paint with enhanced geometry.'
+  - 'Public acceptance on 26 September 2026: desktop 19/19 PASS; mobile PASS; no service-share asset_timeout pageerror. Runtime source identity 7a62dd5fb0feaf1e6bf988c0f8ac69cd296fe57d.'
+  catalog_snapshot_at: '2026-09-26T07:33:38.125800+00:00'
+  notes: 'Current owner-review preview. PR #673 later received test-only mobile acceptance commit 450989befb6d88fa0d004b69ae7399648100a843; runtime bytes in this preview remain source SHA 7a62dd5fb0feaf1e6bf988c0f8ac69cd296fe57d. Static site is hosted in Yandex Object Storage/CDN; Fly is only the trusted credential/control host.'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
 - build_id: preview-review-20260926-r6
   built_at: '2026-09-26T15:34:26.482Z'
   bucket_entry_modified_at: '2026-09-26T15:41:08+00:00'
@@ -27,11 +49,13 @@ builds:
   manifest_url: https://kenigevents.ru/preview-review-20260926-r6/preview-build.json
   present_in_bucket: true
   changes:
-  - 'Desktop R5 voice-review surfaces: geometry-aware Hero framing, 2px mosaic gaps, baseline cursor, pinned Home brand tag, navigation-only event detail and Today without duplicated time context.'
-  - 'Personal feed desktop first hydration renders up to 12 cards while later/mobile chunks remain bounded; real SQLite interest-club projection exposes Game Vibes and Клуб исследователей нейронок.'
-  - 'Public acceptance on 26 September 2026: desktop 19/19 PASS after CSS-ready first-paint semantics; mobile PASS; source runtime identity bfda4aef0bd3acdba6bc44322db416a6ded526b4.'
+  - 'Desktop R5 voice-review surfaces: geometry-aware Hero framing, 2px mosaic gaps, baseline cursor, pinned Home brand tag,
+    navigation-only event detail and Today without duplicated time context.'
+  - Personal feed desktop first hydration renders up to 12 cards while later/mobile chunks remain bounded; real SQLite interest-club
+    projection exposes Game Vibes and Клуб исследователей нейронок.
+  - 'Initial public acceptance found a latent service-share background asset timeout race under CDN latency; superseded by R7.'
   catalog_snapshot_at: '2026-09-26T07:33:38.125800+00:00'
-  notes: 'Current owner-review preview. Static site is hosted in Yandex Object Storage/CDN; Fly is only the trusted credential/control host for publication.'
+  notes: 'Historical reliability evidence only. Do not use for owner review; use preview-review-20260926-r7.'
   http_status_at_sync: 200
   bucket_http_status_at_sync: 200
 - build_id: preview-review-20260926-r5
@@ -48,9 +72,9 @@ builds:
   manifest_url: https://kenigevents.ru/preview-review-20260926-r5/preview-build.json
   present_in_bucket: true
   changes:
-  - 'Superseded intermediate publication of the same reviewed source family; do not use for owner review.'
+  - Superseded intermediate publication of the same reviewed source family; do not use for owner review.
   catalog_snapshot_at: '2026-09-26T07:33:38.125800+00:00'
-  notes: 'Historical only. Public desktop acceptance was not accepted; use preview-review-20260926-r6 instead.'
+  notes: Historical only. Public desktop acceptance was not accepted; use preview-review-20260926-r7 instead.
   http_status_at_sync: 200
   bucket_http_status_at_sync: 200
 - build_id: preview-home-1ea0faeb-voice-review-20260906
