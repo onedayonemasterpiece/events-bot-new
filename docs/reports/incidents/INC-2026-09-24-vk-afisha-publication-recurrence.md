@@ -288,6 +288,17 @@ The **initial provider decision** that restricted the rotated token cannot be at
   deferred to the next UTC day and sends no notification; a past event is
   parked; an immediate second worker cycle runs neither job. Verify unrelated
   VK provider errors retain their own backoff and fail-closed publication.
+- Release evidence: PR #678 passed contract tests and all three CI jobs;
+  74 focused local tests passed. Exact merged `origin/main` SHA
+  `6a856d0b22a3962321538f909f459507dbea27ca` deployed through
+  `scripts/deploy_fly_main.sh --remote-only` as image
+  `deployment-01M3F6N8WSB3B3073CNB9J77YT`. The one Fly machine passed 1/1
+  checks on the sole 3 GiB volume; embedded SHA matched. External `/healthz`
+  returned `ready=true`, no issues and 1,431 MiB free. SQLite
+  `quick_check=ok`; all contained queue rows kept their deferred times after
+  restart. Fresh runtime logs contained no missing-media or disk-full entry.
+  The next-day cadence can be checked only after the September 27 UTC reset;
+  absence of a suitable image must continue to block publication.
 
 ## Release And Closure Evidence
 
