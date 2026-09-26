@@ -111,3 +111,21 @@ that own the observed regressions:
 
 Verification and immutable public R5 evidence are recorded only after the focused
 tests, full build, local browser review and public-CDN rerun succeed.
+
+## Public R6 reliability follow-up
+
+The immutable preview-review-20260926-r6 publication verified every uploaded
+object and passed local desktop/mobile acceptance. Public CDN acceptance then
+exposed two timing-specific test/runtime facts that local loopback could hide:
+
+- the first-paint geometry gate must wait until linked stylesheets have loaded
+  while JavaScript remains blocked; otherwise CDN latency compares unstyled
+  HTML against styled/enhanced geometry and reports a false navigation jump;
+- service-share eagerly prefetches its PNG asset. A slow CDN asset could reject
+  the background prefetch with asset_timeout before the user invokes sharing,
+  leaking an unhandled page error. The prefetch now consumes that rejection and
+  leaves the existing image-copy action fail-closed.
+
+Because R6 is immutable, the runtime reliability fix is delivered under a new
+review prefix; R6 remains publication evidence but is superseded for owner
+review by the next clean preview.

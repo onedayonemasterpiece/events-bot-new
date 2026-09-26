@@ -103,7 +103,9 @@ try{
  // Delay modules to compare server paint against enhanced geometry, including
  // the city control whose original reparenting produced center/left jumps.
  const page=await browser.newPage({viewport:{width:1920,height:1080}});let release;const gate=new Promise(r=>release=r);
- await page.route('**/*.js',async r=>{await gate;await r.continue();});await page.goto(base+'/zavtra/',{waitUntil:'commit'});await page.locator('.site-nav').waitFor({state:'visible'});await page.waitForTimeout(200);
+ await page.route('**/*.js',async r=>{await gate;await r.continue();});await page.goto(base+'/zavtra/',{waitUntil:'commit'});await page.locator('.site-nav').waitFor({state:'visible'});
+ await page.waitForFunction(()=>{const links=[...document.querySelectorAll('link[rel="stylesheet"]')];return links.length>0&&links.every(link=>Boolean(link.sheet));});
+ await page.waitForTimeout(50);
  const before={nav:await box(page,'.site-nav'),city:await box(page,'[data-listing-controls]')};release();await page.waitForFunction(()=>document.body.dataset.fiMotion==='ready');
  const after={nav:await box(page,'.site-nav'),city:await box(page,'[data-listing-controls]')};
  for(const key of ['nav','city'])for(const axis of ['x','y','width','height'])assert.ok(Math.abs(before[key][axis]-after[key][axis])<=1,`${key}.${axis} changed ${before[key][axis]} → ${after[key][axis]}`);

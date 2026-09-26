@@ -30,6 +30,7 @@ public festival/club counts and native Penpot acceptance remain open.
 - Added a browser regression journey for Home → Today and aligned preview validation with the accepted Popular listing and OCR fallback markup. The review build uses the historical 2026-07-23 event snapshot.
 
 ### Fixed
+- Static-site service-share background PNG prefetch now consumes asset timeout/fetch rejection instead of leaking an unhandled page error; image copy remains fail-closed and text/share fallback semantics are unchanged.
 - Shared lower-island shadow, contextual exhibition badge in mobile menu, and clearer Home feed labels.
 - Home Hero word timing and mobile mosaic rendering; page-end reuses the animated Hero renderer with a separate event deck.
 - Home voice-review fixes: preview calendar links use packaged ICS, failed downloads stay on page, and feedback reconciliation preserves reading position.

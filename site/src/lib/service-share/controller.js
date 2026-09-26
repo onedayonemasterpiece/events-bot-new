@@ -195,6 +195,10 @@ function loadAsset(asset) {
   return assetCache.get(asset.url);
 }
 
+export function settleServiceSharePrefetch(promise) {
+  return Promise.resolve(promise).catch(() => null);
+}
+
 export function loadServiceShareManifest(manifestUrl) {
   const url = new URL(manifestUrl, globalThis.location?.href || SERVICE_SHARE_CANONICAL_URL).href;
   if (!manifestCache.has(url)) {
@@ -375,7 +379,7 @@ function prepare(root) {
   prepared.ready = loadServiceShareManifest(manifestUrl).then((manifest) => {
     prepared.manifest = manifest;
     prepared.manifestReady = true;
-    prepared.pngPromise = loadAsset(manifest.assets.png);
+    prepared.pngPromise = settleServiceSharePrefetch(loadAsset(manifest.assets.png));
     return loadAsset(manifest.assets.webp).then((blob) => {
       prepared.webpBlob = blob;
       root.dataset.serviceShareReady = 'file';
