@@ -172,6 +172,13 @@ Legacy exact-full-page rows, ошибочно отмеченные `done`, reope
   payload/revision hashes, discovery/date hints, `event_ts_hint`, OCR/LLM
   state, lease, attempts, prompt/model/quota scope, `next_attempt_at`, typed
   reason and carrier outcome.
+  Large `raw_payload_json` and `attachment_metadata_json` values use a
+  lossless `zlib64:` storage encoding; the original JSON bytes are recovered
+  before replay or admission. Older plain JSON rows remain readable. The
+  packet payload/revision hashes continue to describe the original JSON, not
+  its encoded storage representation. Historical rows can be compacted in
+  bounded batches with `scripts/ops/compress_vk_packet_storage.py` after the
+  dual-format reader is deployed.
 - `vk_source_packet_attempt` — append-only receipt каждого physical primary,
   repair, conditional-verification, terminal-adjudication или exact-replay
   attempt: evidence manifest,

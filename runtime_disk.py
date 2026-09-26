@@ -89,7 +89,7 @@ def runtime_disk_health(path: str | Path | None = None) -> dict[str, Any]:
 
     return writable_disk_health(
         path or (os.getenv("RUNTIME_DISK_PATH") or "/data"),
-        warn_free_mb=_env_nonnegative_int("RUNTIME_DISK_WARN_FREE_MB", 350),
+        warn_free_mb=_env_nonnegative_int("RUNTIME_DISK_WARN_FREE_MB", 768),
         critical_free_mb=_env_nonnegative_int("RUNTIME_DISK_CRITICAL_FREE_MB", 256),
     )
 

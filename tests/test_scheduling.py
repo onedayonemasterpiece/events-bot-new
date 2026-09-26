@@ -2315,6 +2315,90 @@ async def test_critical_scheduler_watchdog_dispatches_vk_auto_import_after_slot_
 
 
 @pytest.mark.asyncio
+async def test_vk_auto_import_watchdog_waits_for_storage_then_dispatches(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_VK_AUTO_IMPORT", "1")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TIMES_LOCAL", "23:40")
+    monkeypatch.setenv("VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+
+    calls = []
+
+    async def fake_scheduler(*_args, **_kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(
+        sys.modules, "vk_auto_queue", SimpleNamespace(vk_auto_import_scheduler=fake_scheduler)
+    )
+
+    def blocked(_db):
+        raise RuntimeError("vk_crawl_storage_admission_blocked:free_mb=400:min_free_mb=512")
+
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", blocked)
+    assert await scheduling._maybe_dispatch_vk_auto_import_watchdog(db, object()) == 0
+    assert await scheduling._maybe_dispatch_vk_auto_import_watchdog(db, object()) == 0
+    assert calls == []
+
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", lambda _db: None)
+    assert await scheduling._maybe_dispatch_vk_auto_import_watchdog(db, object()) == 1
+    assert calls == [1]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_vk_auto_import_watchdog_paces_terminal_failures_across_restarts(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_VK_AUTO_IMPORT", "1")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TIMES_LOCAL", "23:40")
+    monkeypatch.setenv("VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", lambda _db: None)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+
+    run_id = await start_ops_run(
+        db, kind="vk_auto_import", trigger="scheduled", operator_id=0,
+        started_at=datetime(2026, 6, 12, 22, 19, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(
+        db, run_id=run_id, status="error",
+        finished_at=datetime(2026, 6, 12, 22, 19, tzinfo=timezone.utc),
+    )
+    calls = []
+
+    async def fake_scheduler(*_args, **_kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(
+        sys.modules, "vk_auto_queue", SimpleNamespace(vk_auto_import_scheduler=fake_scheduler)
+    )
+    assert await scheduling._maybe_dispatch_vk_auto_import_watchdog(db, object()) == 0
+    assert calls == []
+
+    _FixedCriticalAfterMidnightDatetime.fixed_now = datetime(
+        2026, 6, 12, 22, 35, tzinfo=timezone.utc
+    )
+    try:
+        assert await scheduling._maybe_dispatch_vk_auto_import_watchdog(db, object()) == 1
+        assert calls == [1]
+    finally:
+        _FixedCriticalAfterMidnightDatetime.fixed_now = datetime(
+            2026, 6, 12, 22, 20, tzinfo=timezone.utc
+        )
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_critical_scheduler_watchdog_skips_guide_when_full_run_exists(
     tmp_path, monkeypatch
 ):

@@ -20,6 +20,10 @@ import sqlite3
 import sys
 from typing import Any, Iterable, Mapping, Sequence
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 
 REPORT_SCHEMA = "kenigevents.smart_update_loss_census.v1"
 LOSS_CLASSES: tuple[tuple[str, str], ...] = (
@@ -430,7 +434,14 @@ def _json_mapping(value: Any) -> dict[str, Any]:
 def _vk_packet_replayability(data: Mapping[str, Any]) -> str:
     """Classify retained VK evidence without trusting rollout-era flags."""
 
-    payload = _json_mapping(data.get("raw_payload_json"))
+    from vk_packet_storage import decode_packet_json
+
+    raw_payload = data.get("raw_payload_json")
+    try:
+        decoded = decode_packet_json(raw_payload) if isinstance(raw_payload, str) else raw_payload
+    except ValueError:
+        decoded = None
+    payload = _json_mapping(decoded)
     completeness = payload.get("completeness") if isinstance(payload, Mapping) else None
     try:
         schema_version = int(payload.get("schema_version") or 0)

@@ -2824,6 +2824,39 @@ def _last_vk_auto_import_slot(now_utc: datetime) -> tuple[datetime, datetime, da
     return max(candidates, key=lambda item: item[2])
 
 
+async def _latest_vk_auto_import_retry_hold_started_at(
+    db: Any, *, day_start_utc: datetime, day_end_utc: datetime
+) -> datetime | None:
+    """Persist retry pacing across watchdog ticks and process restarts."""
+    if db is None or not hasattr(db, "raw_conn"):
+        return None
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, details_json, started_at, finished_at
+            FROM ops_run
+            WHERE kind = 'vk_auto_import' AND trigger = 'scheduled'
+              AND started_at >= ? AND started_at < ?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    status, details_raw, started_at_raw, finished_at_raw = row
+    if str(status or "").strip() not in {"error", "crashed", "skipped"}:
+        return None
+    try:
+        details = json.loads(details_raw) if isinstance(details_raw, str) else details_raw
+    except (TypeError, ValueError):
+        details = {}
+    # A recovered volume should allow catch-up immediately after the preflight passes.
+    if isinstance(details, dict) and details.get("skip_reason") == "storage_admission":
+        return None
+    return _parse_ops_run_datetime(finished_at_raw or started_at_raw)
+
+
 async def _maybe_dispatch_vk_auto_import_watchdog(db: Any, bot: Any) -> int:
     if not _env_enabled("ENABLE_VK_AUTO_IMPORT", default=False):
         return 0
@@ -2855,6 +2888,20 @@ async def _maybe_dispatch_vk_auto_import_watchdog(db: Any, bot: Any) -> int:
     if catchup_key in _critical_catchup_completed:
         return 0
     if catchup_key in _critical_catchup_inflight:
+        return 0
+
+    from vk_intake import _require_vk_crawl_storage_headroom
+
+    try:
+        _require_vk_crawl_storage_headroom(db)
+    except RuntimeError as exc:
+        logging.warning("SCHED vk_auto_import catch-up deferred: %s", exc)
+        return 0
+
+    retry_hold_started = await _latest_vk_auto_import_retry_hold_started_at(
+        db, day_start_utc=window_start, day_end_utc=now_utc + timedelta(seconds=1)
+    )
+    if retry_hold_started is not None and now_utc < retry_hold_started + timedelta(minutes=15):
         return 0
 
     from vk_auto_queue import vk_auto_import_scheduler
