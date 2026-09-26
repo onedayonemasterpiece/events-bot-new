@@ -166,7 +166,9 @@ disk-full errors. Full non-secret evidence and restricted migration archives
 are in the retained incident artifact directory above.
 
 The storage recovery does not resolve the separate media-review gate. Eight
-future `vk_sync` jobs still report `vk_sync_missing_materialized_media`; three
-currently have no managed VK URL, including event 8934 on September 27. These
+future `vk_sync` jobs still report `vk_sync_missing_materialized_media`; seven
+have no stored URL for the managed Afisha group, including event 8934 on
+September 27. Some have URLs from their source groups, which are not managed
+Afisha publication evidence. These
 jobs have retry times and require their own publication/media follow-up. This
 is also tracked in `INC-2026-09-24-vk-afisha-publication-recurrence`.
