@@ -15,6 +15,8 @@ public festival/club counts and native Penpot acceptance remain open.
 
 ### Desktop review (2026-09-26)
 
+- Follow-up 09:40: retain expired festivals in a separate, closed historical list; current and archived projections are disjoint and tested at the inclusive end-date boundary.
+
 - Shared desktop floating navigation has stable initial geometry on Home and listings; time context sizes to time labels. Dates opens the shared exact-date calendar across user pages.
 - Hero Talk v4 removes the duplicate cursor/Pause control, softens typography, aligns desktop mosaic to the top and adjusts page-end spacing.
 - Weekend headings gain contrast; exhibitions keep a continuous dark canvas and standard desktop media corners; festivals retain one sticky month switcher.

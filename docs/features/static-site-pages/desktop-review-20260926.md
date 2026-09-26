@@ -36,3 +36,7 @@ Size: 90,517,504 bytes; local hash and SQLite quick_check verified. Export uses 
 ## Verification
 
 Local focused browser run PASS: 12 desktop route/viewport cases (1920 and 1440), delayed-module first-paint comparison, and 3 mobile viewport regressions (320/390/430). 22 focused unit checks, design-system primitives, family graph and token graph checks PASS. Public full-build checks pending. Evidence retained in `/home/dev/artifacts/events-bot-new/20260926T071729Z-voice-review-20260926`.
+
+## Follow-up voice 09:40
+
+[voice-20260926-094037-4582c258](https://github.com/onedayonemasterpiece/idea-hub/blob/2c30acba/inbox/voice/2026/09/voice-20260926-094037-4582c258.md) requires precise removal of ended festivals and suggests an optional historical list. The current exporter already excludes ended editions. Added a disjoint archived projection and a closed-by-default historical list with neutral/grayscale artwork and organizer source links. Fresh snapshot: 8 current/future, 13 archived, 21 total. Exact end date is inclusive; no speculative end date is invented for broad/unknown periods.

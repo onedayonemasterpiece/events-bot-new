@@ -43,6 +43,9 @@ try{
    if(route==='festivali/'){
     assert.equal(await page.locator('.festival-month-nav').count(),1);assert.equal(Math.round((await box(page,'.festival-month-nav')).y),88);
     assert.equal(await page.locator('[data-floating-page-context]').isVisible(),false);
+    const ends=await page.locator('[data-festival-card][data-festival-end]').evaluateAll(es=>es.map(e=>e.dataset.festivalEnd));assert.ok(ends.every(d=>d>='2026-09-26'));
+    const archive=page.locator('[data-festival-archive]');assert.equal(await archive.getAttribute('open'),null);await archive.locator('summary').click();assert.equal(await archive.locator('[data-archived-festival]').count(),13);
+    assert.ok((await archive.locator('[data-festival-end]').evaluateAll(es=>es.map(e=>e.dataset.festivalEnd))).every(d=>d<'2026-09-26'));await archive.locator('summary').click();
    }
    const dateLink=page.locator('[data-mobile-bottom-nav] [data-mobile-nav-section="dates"]');
    const priorUrl=page.url();await dateLink.click();const calendar=page.locator('[data-calendar-sheet]');await calendar.waitFor({state:'visible'});assert.equal(page.url(),priorUrl);

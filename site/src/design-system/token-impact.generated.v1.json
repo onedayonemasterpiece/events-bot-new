@@ -11,7 +11,7 @@
   "summary": {
     "token_count": 2572,
     "definition_count": 2888,
-    "consumer_count": 3743,
+    "consumer_count": 3768,
     "alias_edge_count": 906,
     "family_count": 112
   },
@@ -66862,7 +66862,7 @@
         {
           "token": "--bg-soft",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 598,
+          "line": 624,
           "has_fallback": false
         }
       ],
@@ -69629,7 +69629,7 @@
       "definitions": [
         {
           "path": "site/src/pages/festivali/index.astro",
-          "line": 329,
+          "line": 333,
           "scope": "сейчас это локальная закладка.</span></p> </div> <span class=\"festival-guide__live\" data-festival-like-live aria-live=\"polite\"></span> </section> <div class=\"festival-timeline\"> > </p> </div> </div> </header> <div class=\"festival-month__cards\"> > > > row.items.map((baseItem, itemIndex) => > style=",
           "kind": "css",
           "value": "${frameAspect.toFixed(5)",
@@ -69643,19 +69643,19 @@
         {
           "token": "--festival-card-aspect",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1012,
+          "line": 1038,
           "has_fallback": false
         },
         {
           "token": "--festival-card-aspect",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1028,
+          "line": 1054,
           "has_fallback": false
         },
         {
           "token": "--festival-card-aspect",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 785,
+          "line": 811,
           "has_fallback": false
         }
       ],
@@ -69667,7 +69667,7 @@
       "definitions": [
         {
           "path": "site/src/pages/festivali/index.astro",
-          "line": 286,
+          "line": 290,
           "scope": "сейчас это локальная закладка.</span></p> </div> <span class=\"festival-guide__live\" data-festival-like-live aria-live=\"polite\"></span> </section> <div class=\"festival-timeline\"> > > > > <i aria-hidden=\"true\" style=",
           "kind": "css",
           "value": "url(\"${withBase(category.icon)",
@@ -69676,7 +69676,7 @@
         },
         {
           "path": "site/src/pages/festivali/index.astro",
-          "line": 369,
+          "line": 374,
           "scope": "сейчас это локальная закладка.</span></p> </div> <span class=\"festival-guide__live\" data-festival-like-live aria-live=\"polite\"></span> </section> <div class=\"festival-timeline\"> > </p> </div> </div> </header> <div class=\"festival-month__cards\"> > > > row.items.map((baseItem, itemIndex) => > > <span class=\"festival-card__theme-icons\" aria-hidden=\"true\"> > style=",
           "kind": "css",
           "value": "url(\"${withBase(icon)",
@@ -69690,25 +69690,25 @@
         {
           "token": "--festival-category-icon",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 756,
+          "line": 1015,
           "has_fallback": false
         },
         {
           "token": "--festival-category-icon",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 757,
+          "line": 1016,
           "has_fallback": false
         },
         {
           "token": "--festival-category-icon",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 989,
+          "line": 782,
           "has_fallback": false
         },
         {
           "token": "--festival-category-icon",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 990,
+          "line": 783,
           "has_fallback": false
         }
       ],
@@ -69720,7 +69720,7 @@
       "definitions": [
         {
           "path": "site/src/pages/festivali/index.astro",
-          "line": 329,
+          "line": 333,
           "scope": "сейчас это локальная закладка.</span></p> </div> <span class=\"festival-guide__live\" data-festival-like-live aria-live=\"polite\"></span> </section> <div class=\"festival-timeline\"> > </p> </div> </div> </header> <div class=\"festival-month__cards\"> > > > row.items.map((baseItem, itemIndex) => > style=",
           "kind": "css",
           "value": "${item.mobileAspect.toFixed(5)",
@@ -69734,7 +69734,7 @@
         {
           "token": "--festival-mobile-aspect",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1132,
+          "line": 1158,
           "has_fallback": false
         }
       ],
@@ -69746,7 +69746,7 @@
       "definitions": [
         {
           "path": "site/src/pages/festivali/index.astro",
-          "line": 303,
+          "line": 307,
           "scope": "сейчас это локальная закладка.</span></p> </div> <span class=\"festival-guide__live\" data-festival-like-live aria-live=\"polite\"></span> </section> <div class=\"festival-timeline\"> > </p> </div> </div> </header> <div class=\"festival-month__cards\"> > style=",
           "kind": "css",
           "value": "${(row.widthFraction * 100).toFixed(2)",
@@ -69760,7 +69760,7 @@
         {
           "token": "--festival-row-width",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 778,
+          "line": 804,
           "has_fallback": false
         }
       ],
@@ -74860,6 +74860,12 @@
         },
         {
           "token": "--ke-color-action-primary",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 498,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-action-primary",
           "path": "site/src/pages/fokus-gruppa/index.astro",
           "line": 159,
           "has_fallback": false
@@ -79766,6 +79772,12 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 493,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-color-clubs-intro-surface-start",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 97,
@@ -83022,57 +83034,63 @@
           "has_fallback": false
         },
         {
-          "token": "--primary",
+          "token": "--ke-color-action-primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 514,
+          "line": 498,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 532,
+          "line": 540,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 636,
+          "line": 558,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 691,
+          "line": 662,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 709,
+          "line": 717,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 710,
+          "line": 735,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 749,
+          "line": 736,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 838,
+          "line": 775,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 897,
+          "line": 864,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 923,
           "has_fallback": false
         },
         {
@@ -83846,7 +83864,7 @@
         {
           "token": "--primary-strong",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 598,
+          "line": 624,
           "has_fallback": false
         },
         {
@@ -86151,7 +86169,7 @@
         {
           "token": "--bg-soft",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 598,
+          "line": 624,
           "has_fallback": false
         },
         {
@@ -89734,6 +89752,18 @@
           "token": "--ke-color-copy",
           "path": "site/src/components/Reference4MobileMenu.astro",
           "line": 195,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-secondary",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 491,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-secondary",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 495,
           "has_fallback": false
         },
         {
@@ -97151,7 +97181,7 @@
         {
           "token": "--ke-color-festival-card-border",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 787,
+          "line": 813,
           "has_fallback": false
         }
       ],
@@ -97177,7 +97207,7 @@
         {
           "token": "--ke-color-festival-card-border-hover",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 795,
+          "line": 821,
           "has_fallback": false
         }
       ],
@@ -97203,7 +97233,7 @@
         {
           "token": "--ke-color-festival-card-caption",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 931,
+          "line": 957,
           "has_fallback": false
         }
       ],
@@ -97229,7 +97259,7 @@
         {
           "token": "--ke-color-festival-card-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 789,
+          "line": 815,
           "has_fallback": false
         }
       ],
@@ -97255,7 +97285,7 @@
         {
           "token": "--ke-color-festival-card-theme-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 966,
+          "line": 992,
           "has_fallback": false
         }
       ],
@@ -97281,7 +97311,7 @@
         {
           "token": "--ke-color-festival-card-theme-text",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 967,
+          "line": 993,
           "has_fallback": false
         }
       ],
@@ -97307,7 +97337,7 @@
         {
           "token": "--ke-color-festival-category-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 748,
+          "line": 774,
           "has_fallback": false
         }
       ],
@@ -97333,7 +97363,7 @@
         {
           "token": "--ke-color-festival-guide-icon",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 630,
+          "line": 656,
           "has_fallback": false
         }
       ],
@@ -97359,7 +97389,7 @@
         {
           "token": "--ke-color-festival-guide-icon-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 629,
+          "line": 655,
           "has_fallback": false
         }
       ],
@@ -97385,7 +97415,7 @@
         {
           "token": "--ke-color-festival-guide-like-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 635,
+          "line": 661,
           "has_fallback": false
         }
       ],
@@ -97449,7 +97479,7 @@
         {
           "token": "--ke-color-festival-hero-border",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 490,
+          "line": 516,
           "has_fallback": false
         }
       ],
@@ -97475,7 +97505,7 @@
         {
           "token": "--ke-color-festival-hero-glow",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 493,
+          "line": 519,
           "has_fallback": false
         }
       ],
@@ -97501,7 +97531,7 @@
         {
           "token": "--ke-color-festival-hero-orbit",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 505,
+          "line": 531,
           "has_fallback": false
         }
       ],
@@ -97527,7 +97557,7 @@
         {
           "token": "--ke-color-festival-hero-surface-end",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 494,
+          "line": 520,
           "has_fallback": false
         }
       ],
@@ -97553,7 +97583,7 @@
         {
           "token": "--ke-color-festival-hero-surface-start",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 494,
+          "line": 520,
           "has_fallback": false
         }
       ],
@@ -97579,7 +97609,7 @@
         {
           "token": "--ke-color-festival-like-line",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 816,
+          "line": 842,
           "has_fallback": false
         }
       ],
@@ -97605,7 +97635,7 @@
         {
           "token": "--ke-color-festival-like-line-hover",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 827,
+          "line": 853,
           "has_fallback": false
         }
       ],
@@ -97631,7 +97661,7 @@
         {
           "token": "--ke-color-festival-like-line-selected",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 836,
+          "line": 862,
           "has_fallback": false
         }
       ],
@@ -97657,7 +97687,7 @@
         {
           "token": "--ke-color-festival-like-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 818,
+          "line": 844,
           "has_fallback": false
         }
       ],
@@ -97683,7 +97713,7 @@
         {
           "token": "--ke-color-festival-like-surface-hover",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 828,
+          "line": 854,
           "has_fallback": false
         }
       ],
@@ -97709,7 +97739,7 @@
         {
           "token": "--ke-color-festival-status-confirmed-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 905,
+          "line": 931,
           "has_fallback": false
         }
       ],
@@ -97735,7 +97765,7 @@
         {
           "token": "--ke-color-festival-status-confirmed-text",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 906,
+          "line": 932,
           "has_fallback": false
         }
       ],
@@ -97761,7 +97791,7 @@
         {
           "token": "--ke-color-festival-status-pending-surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 911,
+          "line": 937,
           "has_fallback": false
         }
       ],
@@ -97787,7 +97817,7 @@
         {
           "token": "--ke-color-festival-status-pending-text",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 912,
+          "line": 938,
           "has_fallback": false
         }
       ],
@@ -97813,7 +97843,7 @@
         {
           "token": "--ke-color-festival-surface-raised",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 661,
+          "line": 687,
           "has_fallback": false
         }
       ],
@@ -97839,7 +97869,7 @@
         {
           "token": "--ke-color-festival-surface-translucent",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 610,
+          "line": 636,
           "has_fallback": false
         }
       ],
@@ -102509,15 +102539,21 @@
           "has_fallback": false
         },
         {
-          "token": "--text",
+          "token": "--ke-color-text-primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 642,
+          "line": 497,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 663,
+          "line": 668,
+          "has_fallback": false
+        },
+        {
+          "token": "--text",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 689,
           "has_fallback": false
         },
         {
@@ -105064,6 +105100,24 @@
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
           "line": 730,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-line",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 489,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-line",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-line",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 493,
           "has_fallback": false
         },
         {
@@ -108422,31 +108476,31 @@
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 540,
+          "line": 566,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 556,
+          "line": 582,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 593,
+          "line": 619,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 649,
+          "line": 675,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 727,
+          "line": 753,
           "has_fallback": false
         },
         {
@@ -110519,55 +110573,55 @@
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 514,
+          "line": 540,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 532,
+          "line": 558,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 636,
+          "line": 662,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 691,
+          "line": 717,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 709,
+          "line": 735,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 710,
+          "line": 736,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 749,
+          "line": 775,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 838,
+          "line": 864,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 897,
+          "line": 923,
           "has_fallback": false
         },
         {
@@ -114198,9 +114252,15 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-color-background-surface",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 493,
+          "has_fallback": false
+        },
+        {
           "token": "--surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 707,
+          "line": 733,
           "has_fallback": false
         },
         {
@@ -120778,6 +120838,12 @@
         },
         {
           "token": "--ke-color-text-primary",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-primary",
           "path": "site/src/pages/fokus-gruppa/index.astro",
           "line": 112,
           "has_fallback": false
@@ -121035,6 +121101,18 @@
           "token": "--ke-color-text-secondary",
           "path": "site/src/components/HomeSearchEntry.astro",
           "line": 45,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-secondary",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 491,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-color-text-secondary",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 495,
           "has_fallback": false
         },
         {
@@ -126042,25 +126120,25 @@
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1144,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1144,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 812,
+          "line": 838,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 813,
+          "line": 839,
           "has_fallback": false
         },
         {
@@ -128274,7 +128352,7 @@
         {
           "token": "--ke-elevation-festival-caption-copy",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 936,
+          "line": 962,
           "has_fallback": false
         }
       ],
@@ -128300,7 +128378,7 @@
         {
           "token": "--ke-elevation-festival-caption-heading",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 953,
+          "line": 979,
           "has_fallback": false
         }
       ],
@@ -128326,7 +128404,7 @@
         {
           "token": "--ke-elevation-festival-card",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 790,
+          "line": 816,
           "has_fallback": false
         }
       ],
@@ -128352,7 +128430,7 @@
         {
           "token": "--ke-elevation-festival-card-hover",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 796,
+          "line": 822,
           "has_fallback": false
         }
       ],
@@ -128397,7 +128475,7 @@
         {
           "token": "--ke-elevation-festival-guide",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 611,
+          "line": 637,
           "has_fallback": false
         }
       ],
@@ -128423,7 +128501,7 @@
         {
           "token": "--ke-elevation-festival-hero",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 495,
+          "line": 521,
           "has_fallback": false
         }
       ],
@@ -128449,7 +128527,7 @@
         {
           "token": "--ke-elevation-festival-like",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 819,
+          "line": 845,
           "has_fallback": false
         }
       ],
@@ -128475,7 +128553,7 @@
         {
           "token": "--ke-elevation-festival-live",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 662,
+          "line": 688,
           "has_fallback": false
         }
       ],
@@ -128520,7 +128598,7 @@
         {
           "token": "--ke-elevation-festival-status",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 907,
+          "line": 933,
           "has_fallback": false
         }
       ],
@@ -133089,7 +133167,7 @@
         {
           "token": "--ke-festival-card-radius",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 788,
+          "line": 814,
           "has_fallback": false
         }
       ],
@@ -133115,13 +133193,13 @@
         {
           "token": "--ke-festival-category-asset-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 753,
+          "line": 779,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-category-asset-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 754,
+          "line": 780,
           "has_fallback": false
         }
       ],
@@ -133147,19 +133225,19 @@
         {
           "token": "--ke-festival-category-container-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 743,
+          "line": 769,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-category-container-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 744,
+          "line": 770,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-category-container-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 745,
+          "line": 771,
           "has_fallback": false
         }
       ],
@@ -133185,7 +133263,7 @@
         {
           "token": "--ke-festival-copy-line",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 542,
+          "line": 568,
           "has_fallback": false
         }
       ],
@@ -133211,7 +133289,7 @@
         {
           "token": "--ke-festival-copy-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 541,
+          "line": 567,
           "has_fallback": false
         }
       ],
@@ -133237,7 +133315,7 @@
         {
           "token": "--ke-festival-eyebrow-letter",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 517,
+          "line": 543,
           "has_fallback": false
         }
       ],
@@ -133263,7 +133341,7 @@
         {
           "token": "--ke-festival-eyebrow-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 515,
+          "line": 541,
           "has_fallback": false
         }
       ],
@@ -133293,7 +133371,7 @@
         {
           "token": "--ke-festival-eyebrow-weight",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 516,
+          "line": 542,
           "has_fallback": false
         }
       ],
@@ -133319,19 +133397,19 @@
         {
           "token": "--ke-festival-guide-icon-container-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 615,
+          "line": 641,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-guide-icon-container-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 625,
+          "line": 651,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-guide-icon-container-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 626,
+          "line": 652,
           "has_fallback": false
         }
       ],
@@ -133361,19 +133439,19 @@
         {
           "token": "--ke-festival-guide-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 631,
+          "line": 657,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-guide-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 638,
+          "line": 664,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-guide-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 638,
+          "line": 664,
           "has_fallback": false
         }
       ],
@@ -133399,7 +133477,7 @@
         {
           "token": "--ke-festival-guide-radius",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 609,
+          "line": 635,
           "has_fallback": false
         }
       ],
@@ -133429,7 +133507,7 @@
         {
           "token": "--ke-festival-heading-letter",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 526,
+          "line": 552,
           "has_fallback": false
         }
       ],
@@ -133459,7 +133537,7 @@
         {
           "token": "--ke-festival-heading-line",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 527,
+          "line": 553,
           "has_fallback": false
         }
       ],
@@ -133489,7 +133567,7 @@
         {
           "token": "--ke-festival-heading-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 524,
+          "line": 550,
           "has_fallback": false
         }
       ],
@@ -133519,7 +133597,7 @@
         {
           "token": "--ke-festival-heading-weight",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 525,
+          "line": 551,
           "has_fallback": false
         }
       ],
@@ -133545,7 +133623,7 @@
         {
           "token": "--ke-festival-hero-columns",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 484,
+          "line": 510,
           "has_fallback": false
         }
       ],
@@ -133571,7 +133649,7 @@
         {
           "token": "--ke-festival-hero-gap",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 486,
+          "line": 512,
           "has_fallback": false
         }
       ],
@@ -133597,7 +133675,7 @@
         {
           "token": "--ke-festival-hero-orbit-border",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 505,
+          "line": 531,
           "has_fallback": false
         }
       ],
@@ -133623,13 +133701,13 @@
         {
           "token": "--ke-festival-hero-orbit-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 503,
+          "line": 529,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-hero-orbit-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 504,
+          "line": 530,
           "has_fallback": false
         }
       ],
@@ -133655,7 +133733,7 @@
         {
           "token": "--ke-festival-hero-padding",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 488,
+          "line": 514,
           "has_fallback": false
         }
       ],
@@ -133681,7 +133759,7 @@
         {
           "token": "--ke-festival-hero-radius",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 491,
+          "line": 517,
           "has_fallback": false
         }
       ],
@@ -133711,13 +133789,13 @@
         {
           "token": "--ke-festival-like-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 834,
+          "line": 860,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 834,
+          "line": 860,
           "has_fallback": false
         }
       ],
@@ -133747,25 +133825,25 @@
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1144,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1144,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 812,
+          "line": 838,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 813,
+          "line": 839,
           "has_fallback": false
         }
       ],
@@ -133795,7 +133873,7 @@
         {
           "token": "--ke-festival-live-layer",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 656,
+          "line": 682,
           "has_fallback": false
         }
       ],
@@ -133821,7 +133899,7 @@
         {
           "token": "--ke-festival-live-radius",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 660,
+          "line": 686,
           "has_fallback": false
         }
       ],
@@ -133847,13 +133925,13 @@
         {
           "token": "--ke-festival-month-marker-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 705,
+          "line": 731,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-month-marker-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 706,
+          "line": 732,
           "has_fallback": false
         }
       ],
@@ -133902,7 +133980,7 @@
         {
           "token": "--ke-festival-month-rail-width",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 675,
+          "line": 701,
           "has_fallback": false
         }
       ],
@@ -133928,13 +134006,13 @@
         {
           "token": "--ke-festival-motion-fast",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 792,
+          "line": 818,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-motion-fast",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 792,
+          "line": 818,
           "has_fallback": false
         }
       ],
@@ -133960,7 +134038,7 @@
         {
           "token": "--ke-festival-page-gutter",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 475,
+          "line": 501,
           "has_fallback": false
         }
       ],
@@ -133986,7 +134064,7 @@
         {
           "token": "--ke-festival-page-max",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 475,
+          "line": 501,
           "has_fallback": false
         }
       ],
@@ -134012,7 +134090,7 @@
         {
           "token": "--ke-festival-page-padding-end",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 477,
+          "line": 503,
           "has_fallback": false
         }
       ],
@@ -134038,7 +134116,7 @@
         {
           "token": "--ke-festival-page-padding-start",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 477,
+          "line": 503,
           "has_fallback": false
         }
       ],
@@ -134064,13 +134142,13 @@
         {
           "token": "--ke-festival-row-gap",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 777,
+          "line": 803,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-row-gap",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 780,
+          "line": 806,
           "has_fallback": false
         }
       ],
@@ -141992,6 +142070,24 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-font-family-sans",
           "path": "site/src/pages/fokus-gruppa/index.astro",
           "line": 112,
@@ -143009,33 +143105,51 @@
           "has_fallback": false
         },
         {
-          "token": "--ke-font-sans",
+          "token": "--ke-type-body",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 478,
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
           "has_fallback": false
         },
         {
           "token": "--ke-font-sans",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 523,
+          "line": 504,
           "has_fallback": false
         },
         {
           "token": "--ke-font-sans",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 564,
+          "line": 549,
           "has_fallback": false
         },
         {
           "token": "--ke-font-sans",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 718,
+          "line": 590,
           "has_fallback": false
         },
         {
           "token": "--ke-font-sans",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 947,
+          "line": 744,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-font-sans",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 973,
           "has_fallback": false
         },
         {
@@ -143609,6 +143723,24 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-clubs-mobile-title-size",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 169,
@@ -144102,13 +144234,13 @@
         {
           "token": "--ke-type-h1-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1071,
+          "line": 1097,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-heading-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 524,
+          "line": 550,
           "has_fallback": false
         },
         {
@@ -148330,31 +148462,31 @@
         {
           "token": "--ke-festival-guide-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 631,
+          "line": 657,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-guide-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 638,
+          "line": 664,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-guide-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 638,
+          "line": 664,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 834,
+          "line": 860,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-icon-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 834,
+          "line": 860,
           "has_fallback": false
         },
         {
@@ -149770,7 +149902,7 @@
         {
           "token": "--ke-festival-live-layer",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 656,
+          "line": 682,
           "has_fallback": false
         }
       ],
@@ -149972,6 +150104,24 @@
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
           "line": 234,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
           "has_fallback": false
         }
       ],
@@ -164493,6 +164643,24 @@
           "has_fallback": true
         },
         {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 493,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 494,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-review-notice-radius",
           "path": "site/src/pages/segodnya/index.astro",
           "line": 48,
@@ -167210,19 +167378,19 @@
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 490,
+          "line": 516,
           "has_fallback": false
         },
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 787,
+          "line": 813,
           "has_fallback": false
         },
         {
           "token": "--ke-shape-border-hairline",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 816,
+          "line": 842,
           "has_fallback": false
         },
         {
@@ -167796,6 +167964,24 @@
           "path": "site/src/components/media-frame.css",
           "line": 118,
           "has_fallback": true
+        },
+        {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 493,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-shape-radius-control",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 494,
+          "has_fallback": false
         },
         {
           "token": "--ke-review-notice-radius",
@@ -169160,13 +169346,13 @@
         {
           "token": "--ke-site-header-bar-height",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 573,
+          "line": 599,
           "has_fallback": false
         },
         {
           "token": "--ke-site-header-bar-height",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 696,
+          "line": 722,
           "has_fallback": false
         },
         {
@@ -170276,25 +170462,25 @@
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1144,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1144,
+          "line": 1170,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 812,
+          "line": 838,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-like-target-min",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 813,
+          "line": 839,
           "has_fallback": false
         },
         {
@@ -170412,6 +170598,12 @@
           "token": "--ke-space-xs",
           "path": "site/src/layouts/PrelaunchLayout.astro",
           "line": 176,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-1",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
           "has_fallback": false
         },
         {
@@ -170725,6 +170917,12 @@
           "path": "site/src/components/HomeSearchEntry.astro",
           "line": 43,
           "has_fallback": true
+        },
+        {
+          "token": "--ke-space-2",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 491,
+          "has_fallback": false
         },
         {
           "token": "--ke-space-sm",
@@ -171051,6 +171249,24 @@
           "token": "--ke-space-3",
           "path": "site/src/layouts/EventLayout.astro",
           "line": 722,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 492,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-3",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 493,
           "has_fallback": false
         },
         {
@@ -172468,6 +172684,18 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-space-4",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-4",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 493,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-club-detail-gap",
           "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
           "line": 117,
@@ -172822,6 +173050,12 @@
         },
         {
           "token": "--ke-space-6",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 489,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-6",
           "path": "site/src/pages/index.astro",
           "line": 84,
           "has_fallback": false
@@ -172928,6 +173162,12 @@
         {
           "token": "--ke-space-section",
           "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "line": 489,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-space-8",
+          "path": "site/src/pages/festivali/index.astro",
           "line": 489,
           "has_fallback": false
         },
@@ -175670,6 +175910,24 @@
           "path": "site/src/components/HomeHeroTalk.astro",
           "line": 234,
           "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
+          "has_fallback": false
         }
       ],
       "component_set": "components-1bff7ac50d2418ce",
@@ -175733,6 +175991,24 @@
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
           "line": 234,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
           "has_fallback": false
         }
       ],
@@ -175872,6 +176148,24 @@
           "has_fallback": false
         },
         {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
+          "has_fallback": false
+        },
+        {
           "token": "--ke-clubs-mobile-title-size",
           "path": "site/src/pages/kluby-po-interesam/index.astro",
           "line": 169,
@@ -175913,6 +176207,18 @@
           "token": "--ke-type-body-strong-weight",
           "path": "site/src/components/DesktopEventPage.astro",
           "line": 2373,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body-strong-weight",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body-strong-weight",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
           "has_fallback": false
         }
       ],
@@ -175967,6 +176273,24 @@
           "token": "--ke-type-body",
           "path": "site/src/components/HomeHeroTalk.astro",
           "line": 234,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 490,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 496,
+          "has_fallback": false
+        },
+        {
+          "token": "--ke-type-body",
+          "path": "site/src/pages/festivali/index.astro",
+          "line": 497,
           "has_fallback": false
         }
       ],
@@ -177732,7 +178056,7 @@
         {
           "token": "--ke-festival-heading-letter",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 526,
+          "line": 552,
           "has_fallback": false
         },
         {
@@ -177999,7 +178323,7 @@
         {
           "token": "--ke-festival-heading-line",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 527,
+          "line": 553,
           "has_fallback": false
         },
         {
@@ -178259,13 +178583,13 @@
         {
           "token": "--ke-type-h1-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1071,
+          "line": 1097,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-heading-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 524,
+          "line": 550,
           "has_fallback": false
         },
         {
@@ -178487,7 +178811,7 @@
         {
           "token": "--ke-festival-heading-weight",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 525,
+          "line": 551,
           "has_fallback": false
         },
         {
@@ -178659,7 +178983,7 @@
         {
           "token": "--ke-festival-heading-letter",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 526,
+          "line": 552,
           "has_fallback": false
         },
         {
@@ -178885,7 +179209,7 @@
         {
           "token": "--ke-festival-heading-line",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 527,
+          "line": 553,
           "has_fallback": false
         },
         {
@@ -179105,13 +179429,13 @@
         {
           "token": "--ke-type-h1-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1071,
+          "line": 1097,
           "has_fallback": false
         },
         {
           "token": "--ke-festival-heading-size",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 524,
+          "line": 550,
           "has_fallback": false
         },
         {
@@ -179292,7 +179616,7 @@
         {
           "token": "--ke-festival-heading-weight",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 525,
+          "line": 551,
           "has_fallback": false
         },
         {
@@ -180718,7 +181042,7 @@
         {
           "token": "--ke-festival-eyebrow-weight",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 516,
+          "line": 542,
           "has_fallback": false
         },
         {
@@ -183431,7 +183755,7 @@
         {
           "token": "--mobile-top-chrome-bottom",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1083,
+          "line": 1109,
           "has_fallback": false
         }
       ],
@@ -183587,7 +183911,7 @@
         {
           "token": "--mobile-top-chrome-bottom",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 1083,
+          "line": 1109,
           "has_fallback": false
         }
       ],
@@ -184024,31 +184348,31 @@
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 540,
+          "line": 566,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 556,
+          "line": 582,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 593,
+          "line": 619,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 649,
+          "line": 675,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 727,
+          "line": 753,
           "has_fallback": false
         },
         {
@@ -185114,55 +185438,55 @@
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 514,
+          "line": 540,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 532,
+          "line": 558,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 636,
+          "line": 662,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 691,
+          "line": 717,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 709,
+          "line": 735,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 710,
+          "line": 736,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 749,
+          "line": 775,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 838,
+          "line": 864,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 897,
+          "line": 923,
           "has_fallback": false
         },
         {
@@ -185489,7 +185813,7 @@
         {
           "token": "--primary-strong",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 598,
+          "line": 624,
           "has_fallback": false
         },
         {
@@ -187365,7 +187689,7 @@
         {
           "token": "--surface",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 707,
+          "line": 733,
           "has_fallback": false
         },
         {
@@ -187605,13 +187929,13 @@
         {
           "token": "--text",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 642,
+          "line": 668,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/pages/festivali/index.astro",
-          "line": 663,
+          "line": 689,
           "has_fallback": false
         },
         {

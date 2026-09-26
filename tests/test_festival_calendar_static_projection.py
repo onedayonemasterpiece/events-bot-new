@@ -200,3 +200,24 @@ def test_full_export_fails_closed_without_calendar_schema(tmp_path: Path) -> Non
             require_complete=True,
         )
     con.close()
+
+
+def test_current_and_archived_festival_editions_are_disjoint(tmp_path: Path) -> None:
+    db = tmp_path / "editions.sqlite"
+    make_db(db)
+    backfill(db, apply=True)
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    exporter = load_exporter()
+    result = exporter.build_festival_timeline_projection(con, current_date="2026-09-26", generated_at="2026-09-26T07:22:20Z", require_complete=True)
+    current, archived = result["festivals"], result["archived_festivals"]
+    assert archived and current
+    assert all(not item["endDate"] or item["endDate"] >= "2026-09-26" for item in current)
+    assert all(item["endDate"] < "2026-09-26" for item in archived)
+    assert not ({item["slug"] for item in current} & {item["slug"] for item in archived})
+    assert len(current) + len(archived) == result["database_row_count"]
+    # The last day stays current; only the next date moves the edition to archive.
+    boundary = archived[-1]["endDate"]
+    boundary_result = exporter.build_festival_timeline_projection(con, current_date=boundary, generated_at="2026-09-26T07:22:20Z", require_complete=True)
+    assert archived[-1]["slug"] in {item["slug"] for item in boundary_result["festivals"]}
+    con.close()

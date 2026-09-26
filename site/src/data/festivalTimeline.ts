@@ -3,6 +3,9 @@ export type FestivalTimelineMediaMode = 'visual' | 'document' | 'unknown';
 
 export interface FestivalTimelineItem {
   slug: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  calendarYear?: number;
   title: string;
   dateLabel: string;
   monthKey: 'july' | 'august' | 'september' | 'october' | 'november' | 'december';

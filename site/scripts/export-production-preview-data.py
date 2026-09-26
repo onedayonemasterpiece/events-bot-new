@@ -3295,6 +3295,7 @@ def build_festival_timeline_projection(
         "catalog_versions": [],
         "database_row_count": 0,
         "festivals": [],
+        "archived_festivals": [],
     }
     if not contract_available:
         if require_complete:
@@ -3339,13 +3340,13 @@ def build_festival_timeline_projection(
             )
 
     festivals: list[dict[str, Any]] = []
+    archived_festivals: list[dict[str, Any]] = []
     for row in all_public_rows:
         end_date = clean_text(row_get(row, "end_date"))
         calendar_year = int(row_get(row, "calendar_year") or 0)
         # Exact ended editions leave the current calendar. Broad/unknown-end
         # periods remain only through their declared calendar year.
-        if end_date and end_date < current_date:
-            continue
+        is_past = bool(end_date and end_date < current_date)
         if not end_date and calendar_year < current_year:
             continue
         slug = clean_text(row_get(row, "slug"))
@@ -3359,7 +3360,7 @@ def build_festival_timeline_projection(
             if require_complete:
                 raise ValueError(f"invalid festival calendar row: {slug or row_get(row, 'id')}")
             continue
-        festivals.append(
+        (archived_festivals if is_past else festivals).append(
             {
                 "databaseId": int(row_get(row, "id")),
                 "calendarYear": calendar_year,
@@ -3398,6 +3399,7 @@ def build_festival_timeline_projection(
             }
         )
     projection["festivals"] = festivals
+    projection["archived_festivals"] = archived_festivals
     return projection
 
 

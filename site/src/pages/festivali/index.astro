@@ -11,6 +11,7 @@ import { festivalTimelineMedia } from '../../data/festivalTimelineMedia';
 import { packFestivalTimeline } from '../../lib/festivalTimelineLayout';
 import {
   absoluteUrl,
+  getCurrentDate,
   SITE_NAME,
   withBase,
 } from '../../lib/events';
@@ -19,7 +20,10 @@ const canonicalUrl = absoluteUrl('/festivali/');
 const title = 'Фестивали Калининградской области 2026 — календарь | Анонсы';
 const description = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: даты, города, направления, статус программы и официальные источники.';
 const pageSummary = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: музыка, кино, гастрономия, театр, история и семейные праздники. Сравнивайте даты и города, проверяйте статус программы и переходите к официальным сайтам и сообществам организаторов.';
-const festivalTimeline = festivalProjection.festivals as FestivalTimelineItem[];
+const referenceDate = getCurrentDate();
+const festivalTimeline = (festivalProjection.festivals as FestivalTimelineItem[]).filter(item=>!item.endDate||item.endDate>=referenceDate);
+const archivedFestivals = (festivalProjection.archived_festivals as FestivalTimelineItem[]).filter(item=>item.endDate&&item.endDate<referenceDate);
+if (festivalTimeline.length !== festivalProjection.festivals.length) throw new Error('Festival projection has expired entries: refresh the source projection');
 if (festivalProjection.schema_version !== 'festival-timeline-static-v1') {
   throw new Error('Festival timeline projection schema is unsupported');
 }
@@ -328,6 +332,7 @@ const structuredData = [{
                       ]}
                       style={`--festival-card-aspect:${frameAspect.toFixed(5)};--festival-mobile-aspect:${item.mobileAspect.toFixed(5)};`}
                       data-festival-card={item.slug}
+                      data-festival-end={item.endDate}
                       data-media-mode={item.mediaMode}
                       data-crop-fraction={cropFraction.toFixed(4)}
                       data-protected-crop-fit="cover"
@@ -395,6 +400,16 @@ const structuredData = [{
         </section>
       ))}
     </div>
+    {archivedFestivals.length > 0 && <details class="festival-archive" data-festival-archive>
+      <summary>Показать прошедшие фестивали <span>{archivedFestivals.length}</span></summary>
+      <p>Архив {referenceDate.slice(0,4)} года. Даты уже прошли; ссылки ведут к организаторам.</p>
+      <ul>
+        {archivedFestivals.map(item=><li data-archived-festival={item.slug} data-festival-end={item.endDate}>
+          <img src={withBase(item.image)} alt="" loading="lazy" width="80" height="64" />
+          <div><a href={item.sourceHref} target="_blank" rel="noopener noreferrer">{item.title}</a><p>{item.dateLabel} · {item.place}</p><small>{item.sourceLabel}</small></div>
+        </li>)}
+      </ul>
+    </details>}
   </main>
 </EventLayout>
 
@@ -471,6 +486,17 @@ const structuredData = [{
 </script>
 
 <style>
+  .festival-archive {margin-top:var(--ke-space-8);border-top:1px solid var(--ke-color-line);padding-top:var(--ke-space-6);}
+  .festival-archive summary {width:fit-content;padding:var(--ke-space-3) var(--ke-space-4);border:1px solid var(--ke-color-line);border-radius:var(--ke-shape-radius-control);font:var(--ke-type-body);font-weight:var(--ke-type-body-strong-weight);cursor:pointer;}
+  .festival-archive summary span {margin-left:var(--ke-space-2);color:var(--ke-color-text-secondary);}
+  .festival-archive ul {list-style:none;padding:0;display:grid;gap:var(--ke-space-3);}
+  .festival-archive li {display:flex;align-items:center;gap:var(--ke-space-4);padding:var(--ke-space-3);background:var(--ke-color-background-surface);border:1px solid var(--ke-color-line);border-radius:var(--ke-shape-radius-control);}
+  .festival-archive img {object-fit:cover;flex:none;filter:grayscale(1);border-radius:var(--ke-shape-radius-control);}
+  .festival-archive :is(p,small) {color:var(--ke-color-text-secondary);}
+  .festival-archive li p {margin:var(--ke-space-1) 0;font:var(--ke-type-body);}
+  .festival-archive a {color:var(--ke-color-text-primary);font:var(--ke-type-body);font-weight:var(--ke-type-body-strong-weight);}
+  .festival-archive summary:focus-visible {outline:2px solid var(--ke-color-action-primary);outline-offset:3px;}
+
   .festival-page {
     width: min(var(--ke-festival-page-max), calc(100% - (2 * var(--ke-festival-page-gutter))));
     margin: 0 auto;
