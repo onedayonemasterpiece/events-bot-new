@@ -1,0 +1,40 @@
+name: VK public HTML availability probe
+
+on:
+  push:
+    branches:
+      - agent/social-copy-corpus-run-2026-08-06
+    paths:
+      - tools/social_copy_corpus_research/probe_vk_public.py
+      - .github/workflows/vk-public-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check requests beautifulsoup4 lxml
+      - name: Probe public pages without collecting text
+        run: |
+          python tools/social_copy_corpus_research/probe_vk_public.py > vk-public-probe.json
+          python - <<'PY'
+          import json
+          data = json.load(open('vk-public-probe.json', encoding='utf-8'))
+          for source in data:
+              best = max((int(p.get('post_id_count') or 0) for p in source['probes']), default=0)
+              statuses = ','.join(str(p.get('status') or p.get('error') or 'unknown') for p in source['probes'])
+              print(f"{source['source_id']}: post_ids={best}; statuses={statuses}")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vk-public-probe-2026-08-06
+          path: vk-public-probe.json
+          retention-days: 1
