@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -27,6 +28,111 @@ REGISTRY = ROOT / "docs/features/static-site-pages/review-builds.yaml"
 PUBLIC_ORIGIN = "https://kenigevents.ru"
 OBJECT_ORIGIN = "https://storage.yandexcloud.net"
 MARKER = "STATIC_PREVIEW_INVENTORY_JSON="
+OPERATOR_PREFLIGHT_MARKER = "STATIC_PREVIEW_OPERATOR_PREFLIGHT_JSON="
+DEFAULT_FLY_APP = "events-bot-new-wngqia"
+FLYCTL_CANDIDATES = (
+    Path("/home/dev/.fly/bin/flyctl"),
+    Path("/home/dev/.local/bin/flyctl"),
+)
+REMOTE_OPERATOR_ENV = (
+    "KAGGLE_USERNAME",
+    "KAGGLE_KEY",
+    "KAGGLE_API_TOKEN",
+    "KENIGEVENTS_SITE_YC_BUCKET",
+    "KENIGEVENTS_SITE_YC_ACCESS_KEY_ID",
+    "KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY",
+    "KENIGEVENTS_SITE_YC_ENDPOINT",
+    "KENIGEVENTS_SITE_YC_REGION",
+)
+
+
+def find_flyctl() -> Path | None:
+    """Resolve the trusted DevCoveer Fly CLI without assuming it is in PATH."""
+    for candidate in FLYCTL_CANDIDATES:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    resolved = shutil.which("flyctl")
+    return Path(resolved) if resolved else None
+
+
+def operator_preflight(app: str) -> dict:
+    """Verify the existing trusted-host publication bootstrap without exposing secrets."""
+    flyctl = find_flyctl()
+    report = {
+        "schema_version": "static_site_preview_operator_preflight_v1",
+        "app": app,
+        "flyctl": str(flyctl) if flyctl else None,
+        "fly_auth_ok": False,
+        "remote_credentials": {name: False for name in REMOTE_OPERATOR_ENV},
+        "ready": False,
+        "blockers": [],
+    }
+    if flyctl is None:
+        report["blockers"].append("flyctl_not_found")
+        return report
+
+    status = subprocess.run(
+        [str(flyctl), "status", "--app", app],
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if status.returncode:
+        report["blockers"].append("fly_auth_or_app_access_failed")
+        return report
+    report["fly_auth_ok"] = True
+
+    source = "\n".join(
+        (
+            "import json,os",
+            f"keys={list(REMOTE_OPERATOR_ENV)!r}",
+            "flags={key:bool((os.getenv(key) or '').strip()) for key in keys}",
+            f"print({OPERATOR_PREFLIGHT_MARKER!r}+json.dumps(flags,sort_keys=True))",
+        )
+    )
+    encoded = base64.b64encode(source.encode()).decode()
+    remote = f"python3 -c 'import base64; exec(base64.b64decode(\"{encoded}\"))'"
+    probe = subprocess.run(
+        [str(flyctl), "ssh", "console", "--app", app, "--pty=false", "--command", remote],
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    if probe.returncode:
+        report["blockers"].append("fly_remote_preflight_failed")
+        return report
+
+    line = next(
+        (
+            part[len(OPERATOR_PREFLIGHT_MARKER) :]
+            for part in probe.stdout.splitlines()
+            if part.startswith(OPERATOR_PREFLIGHT_MARKER)
+        ),
+        None,
+    )
+    if line is None:
+        report["blockers"].append("fly_remote_preflight_payload_missing")
+        return report
+
+    flags = json.loads(line)
+    report["remote_credentials"] = {name: bool(flags.get(name)) for name in REMOTE_OPERATOR_ENV}
+    for name in (
+        "KAGGLE_USERNAME",
+        "KENIGEVENTS_SITE_YC_BUCKET",
+        "KENIGEVENTS_SITE_YC_ACCESS_KEY_ID",
+        "KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY",
+    ):
+        if not report["remote_credentials"][name]:
+            report["blockers"].append(f"missing_remote_env:{name}")
+    if not (
+        report["remote_credentials"]["KAGGLE_KEY"]
+        or report["remote_credentials"]["KAGGLE_API_TOKEN"]
+    ):
+        report["blockers"].append("missing_remote_env:KAGGLE_KEY_or_KAGGLE_API_TOKEN")
+    report["ready"] = not report["blockers"]
+    return report
 
 
 def bucket_inventory(build_id: str | None = None) -> list[dict]:
@@ -106,7 +212,7 @@ def bucket_inventory(build_id: str | None = None) -> list[dict]:
 
 
 def inventory_from_fly(app: str, build_id: str | None) -> list[dict]:
-    flyctl = next((p for p in (Path("/home/dev/.fly/bin/flyctl"), Path("/home/dev/.local/bin/flyctl")) if p.exists()), None)
+    flyctl = find_flyctl()
     if flyctl is None:
         raise RuntimeError("flyctl not found")
     # The deployed app may precede this file, so send the exact local inventory
@@ -141,7 +247,7 @@ def inventory_from_fly(app: str, build_id: str | None) -> list[dict]:
 
 
 def current_candidate_from_fly(app: str) -> dict | None:
-    flyctl = next((p for p in (Path("/home/dev/.fly/bin/flyctl"), Path("/home/dev/.local/bin/flyctl")) if p.exists()), None)
+    flyctl = find_flyctl()
     if flyctl is None:
         return None
     proc = subprocess.run(
@@ -234,7 +340,16 @@ def main() -> int:
     parser.add_argument("--fly-app", default="", help="Read bucket using the app's existing credentials")
     parser.add_argument("--build-id", default="", help="Update only one public preview prefix")
     parser.add_argument("--check", action="store_true", help="Validate the committed registry without reading the bucket")
+    parser.add_argument(
+        "--operator-preflight",
+        action="store_true",
+        help="Check the trusted Fly/Kaggle/Object Storage publication bootstrap without returning secrets",
+    )
     args = parser.parse_args()
+    if args.operator_preflight:
+        report = operator_preflight(args.fly_app or DEFAULT_FLY_APP)
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+        return 0 if report["ready"] else 2
     if args.check:
         raw_text = REGISTRY.read_text()
         assert not re.search(r"/_review/[A-Za-z0-9_-]{20,}", raw_text), "bearer review URL leaked into public registry"

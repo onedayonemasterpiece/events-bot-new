@@ -13,6 +13,51 @@ already-existing production env flags.
 
 ## Position
 
+## DevCoveer operator bootstrap
+
+The static site is not hosted on Fly. Public preview trees remain immutable
+objects in Yandex Object Storage/CDN. Fly is the existing trusted
+credential/control host for the static-site rail: the production app already
+holds the Kaggle execution credentials and the KENIGEVENTS_SITE_YC_* Object
+Storage credentials used by the checked host-side publisher.
+
+After a DevCoveer/tool refresh, do not infer that publication access is missing
+from flyctl being absent from PATH, a missing repository .env, or an expired
+local yc profile. The canonical secret-safe preflight is:
+
+    python3 scripts/sync_static_site_preview_registry.py       --operator-preflight       --fly-app events-bot-new-wngqia
+
+The preflight resolves /home/dev/.fly/bin/flyctl first
+(/home/dev/.local/bin/flyctl and PATH are fallbacks), verifies app access, and
+asks the running app only for boolean presence of KAGGLE_USERNAME,
+KAGGLE_KEY or KAGGLE_API_TOKEN and the required KENIGEVENTS_SITE_YC_*
+variables. It never returns credential values.
+
+A ready=true result means the existing trusted-host rail is available. Do not
+run yc init, create a new Yandex service account, add a second publisher or move
+the static site to Fly merely because the DevCoveer process has no local .env.
+Local npm build:preview remains diagnostic only. Publishable review output still
+goes through the existing checked Kaggle artifact and --publish-preview
+transaction.
+
+If the preflight is blocked:
+
+1. flyctl_not_found: restore the DevCoveer Fly CLI at the documented user-level
+   path; do not redesign deployment.
+2. fly_auth_or_app_access_failed: repair the existing Fly operator login.
+3. missing_remote_env:*: repair the corresponding Fly secret/config on the
+   trusted host.
+4. Only if the Object Storage credential has genuinely been lost or is being
+   deliberately rotated should an owner provision a dedicated least-privilege
+   Yandex Object Storage service account/static access key and store it under
+   the same KENIGEVENTS_SITE_YC_* names. The application code and public hosting
+   topology do not change.
+
+For owner/review flows, the desired MCP surface is preview.start,
+preview.status and preview.current delegating to this same rail and receipts.
+Until those owner operations are exposed, this runbook and the operator
+preflight are the canonical entry point.
+
 Kaggle is an accepted **batch executor** in this project because the repo already uses Kaggle for monitored parser/video/social jobs. For static pages it may build Astro HTML, related/discovery manifests, golden-facet manifests, share-card artifacts and offline evaluation reports.
 
 R15 unusual events reuse this executor, lease and immutable input dataset. The

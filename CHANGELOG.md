@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- Static-site preview operator preflight that survives DevCoveer/tool refreshes:
+  it resolves the user-level Fly CLI, verifies production-app access and checks
+  only boolean presence of the existing Kaggle/Yandex publication credentials.
+  The runbook now states explicitly that Fly is the trusted credential/control
+  host while preview HTML remains hosted in Yandex Object Storage/CDN.
 - A bucket-backed YAML registry of all currently accessible named KenigEvents
   preview builds, including actual HTML links, upload/build dates, source SHA,
   catalog-date evidence and review context. Preview upload now updates its

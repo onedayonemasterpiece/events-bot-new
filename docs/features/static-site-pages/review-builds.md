@@ -29,23 +29,37 @@ HTML-объект в бакете. `http_status_at_sync` и `bucket_http_status_
 найти код и правки, ради которых выпускали сборку. Неподтверждённые подробности
 не следует выводить из одного лишь имени префикса.
 
+## Operator preflight после обновления DevCoveer
+
+Не ищите локальный .env и не запускайте yc init, пока не проверен существующий
+trusted-host контур:
+
+    python3 scripts/sync_static_site_preview_registry.py       --operator-preflight       --fly-app events-bot-new-wngqia
+
+ready=true означает, что DevCoveer видит штатный Fly control host, а на нём
+присутствуют Kaggle и Yandex Object Storage credentials. Fly не хостит
+статический сайт: конечные preview-объекты остаются в kenigevents.ru Object
+Storage/CDN.
+
 ## Обновление
 
-Обычный `npm --prefix site run deploy:preview` после загрузки обновляет запись
-своего `build_id` в YAML. Включите изменённый YAML в commit с handoff. Для
-полной сверки с бакетом из devserver:
+Локальные npm build:preview/check:preview используются только для быстрой
+диагностики. Публикуемая review-сборка проходит единый rail:
 
-```bash
-python3 scripts/sync_static_site_preview_registry.py --fly-app events-bot-new-wngqia
-python3 scripts/sync_static_site_preview_registry.py --check
-```
+    python scripts/run_static_site_builder_kaggle.py       --kernel-ref zigomaro/kenigevents-static-site-builder-review-preview       --db <immutable-production-projection.sqlite>       --repo-sha <exact-40-character-SHA>       --profile preview --preview-data-mode real --catalog-mode slice       --page-class all       --build-id <new-preview-build-id>       --asset-base-url https://static.kenigevents.ru       --astro-asset-base-url https://static.kenigevents.ru/{buildId}       --download-output --publish-preview
 
-Команда читает бакет через уже настроенные права Fly, не выводит ключи и не
-запускает сборку. Существующие ручные `changes`, `review_url`,
-`catalog_snapshot_at` и `notes` сохраняются. Перед отправкой ссылки откройте
-`public_url` и проверьте, что `catalog_snapshot_at` соответствует обещанной
-свежести данных. Для нового превью дополните `changes` и `review_url` при
-handoff; пустое описание означает, что контекст сборки ещё не восстановлен.
+После успешной публикации обновите только фактическую запись нового build id и
+проверьте реестр:
+
+    python3 scripts/sync_static_site_preview_registry.py       --fly-app events-bot-new-wngqia       --build-id <new-preview-build-id>
+    python3 scripts/sync_static_site_preview_registry.py --check
+
+Registry sync читает бакет через уже настроенные права Fly, не выводит ключи и
+не запускает сборку. Существующие ручные changes, review_url,
+catalog_snapshot_at и notes сохраняются. Перед отправкой ссылки откройте
+public_url и проверьте, что catalog_snapshot_at соответствует обещанной
+свежести данных. Старый локальный npm deploy:preview не является каноническим
+publisher и не должен использоваться для новой review evidence.
 
 Полные `/_review/<token>/` кандидаты живут в отдельном безопасном контуре.
 Репозиторий публичный, поэтому bearer URL не записывается в YAML. Реестр
