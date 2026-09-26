@@ -907,7 +907,9 @@ async def _load_vk_durable_packet_evidence(
     if row is None:
         return {"replayability": "unavailable"}
     try:
-        raw_payload = json.loads(row[2] or "{}")
+        from vk_packet_storage import decode_packet_json
+
+        raw_payload = json.loads(decode_packet_json(row[2] or "{}"))
     except (TypeError, ValueError, json.JSONDecodeError):
         raw_payload = {}
     replayability = vk_source_envelope_replayability(raw_payload)

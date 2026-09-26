@@ -13,6 +13,7 @@ import main
 from db import Database
 import vk_intake
 from vk_source_envelope import build_vk_source_envelope
+from vk_packet_storage import decode_packet_json
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -128,7 +129,7 @@ async def test_continuation_persists_same_v1_envelope_contract_as_primary_crawl(
         )).fetchone()
     assert calls == 1
     assert result["added"] == 1
-    assert '"schema":"vk_source_envelope"' in row[0]
+    assert '"schema":"vk_source_envelope"' in decode_packet_json(row[0])
     assert row[1:] == (1, 1, "replayable_lossless")
 
 

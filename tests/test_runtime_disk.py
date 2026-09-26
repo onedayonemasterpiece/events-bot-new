@@ -33,7 +33,7 @@ def test_runtime_disk_health_handles_bad_env_and_probe_failure(monkeypatch) -> N
     monkeypatch.setattr(runtime_disk.shutil, "disk_usage", fail)
     payload = runtime_disk.runtime_disk_health("/missing")
     assert payload["status"] == "unknown"
-    assert payload["warn_free_mb"] == 500
+    assert payload["warn_free_mb"] == 768
     assert payload["critical_free_mb"] == 500
     assert payload["error"] == "FileNotFoundError"
 

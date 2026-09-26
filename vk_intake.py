@@ -1455,7 +1455,9 @@ async def requalify_vk_inbox_admission(
     invalid_rows: list[int] = []
     for inbox_id, group_id, owner_type, packet_id, raw_payload_json, default_time in rows:
         try:
-            post = json.loads(str(raw_payload_json or ""))
+            from vk_packet_storage import decode_packet_json
+
+            post = json.loads(decode_packet_json(str(raw_payload_json or "")))
         except Exception:
             post = None
         if not isinstance(post, dict):
@@ -5220,6 +5222,8 @@ async def _persist_vk_source_packet(
         sanitized_post = sanitize_vk_source_value(post)
         if isinstance(sanitized_post, dict):
             post = sanitized_post
+    from vk_packet_storage import encode_packet_json
+
     raw_payload_json = _vk_packet_json(post)
     revision_payload_json = _vk_packet_json(_vk_source_revision_payload(post))
     if is_vk_source_envelope(post):
@@ -5292,8 +5296,8 @@ async def _persist_vk_source_packet(
                 """,
                 (
                     int(group_id), owner_type, post_id, revision, source_url,
-                    published_at, raw_text, raw_payload_json,
-                    _vk_packet_json(attachment_metadata), envelope_version,
+                    published_at, raw_text, encode_packet_json(raw_payload_json),
+                    encode_packet_json(_vk_packet_json(attachment_metadata)), envelope_version,
                     1 if capture_complete else 0, replayability,
                     payload_hash, revision_hash,
                     keyword_json, date_json, event_ts_hint,

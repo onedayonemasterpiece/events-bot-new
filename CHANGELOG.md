@@ -27,6 +27,12 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK auto import storage incident (`INC-2026-09-26`): the critical watchdog
+  now checks disk headroom before catch-up and persists a 15-minute hold after
+  other terminal failures, preventing repeated operator notices every minute.
+  `/healthz` warns before VK admission stops. The configured volume cap remains
+  3 GiB. VK source packet JSON is stored losslessly compressed with dual-format
+  replay and a resumable compaction command for historical packets.
 - VK Afisha postponed posts now reconcile their changed public wall IDs every
   five minutes after publication. One service-token wall read selects recent
   exact title/date matches, newest first; a service-token old-ID check updates

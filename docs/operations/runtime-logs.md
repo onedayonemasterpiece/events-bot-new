@@ -22,8 +22,8 @@ Production file mirror **включён постоянно** и пишет root 
 - rotated retention ceiling: `RUNTIME_LOG_RETENTION_HOURS=48`;
 - volume free-space floor: `RUNTIME_LOG_MIN_FREE_MB=256`;
 - level: `RUNTIME_LOG_LEVEL=INFO`.
-- `/healthz` disk telemetry: warning below `350 MiB`, critical/HTTP 503 below `256 MiB` (`RUNTIME_DISK_WARN_FREE_MB`, `RUNTIME_DISK_CRITICAL_FREE_MB`).
-- Fly volume capacity: `/data` is provisioned at `2 GiB`; `fly.toml` requests bounded automatic extension at `80%` usage in `1 GiB` increments, capped at `3 GiB`. Capacity growth is a last-resort availability guard, not a replacement for the log budget, retention, DB/media cleanup, snapshots, or the free-space health floors above.
+- `/healthz` disk telemetry: warning below `768 MiB` (before the `512 MiB` VK admission floor), critical/HTTP 503 below `256 MiB` (`RUNTIME_DISK_WARN_FREE_MB`, `RUNTIME_DISK_CRITICAL_FREE_MB`).
+- Fly volume capacity: `/data` was extended to `4 GiB` during `INC-2026-09-26-vk-auto-storage-notice-storm` before the operator explicitly prohibited expansion. This was unauthorized and is recorded for correction. `fly.toml` retains the `3 GiB` automatic extension cap, preventing further growth. Capacity growth is not the remediation; retention, DB/media cleanup, snapshots, and early warnings remain required.
 
 При обычном потоке это даёт до двух суток evidence. При log storm размер, а не время, является приоритетным guard: старейшие rotated files удаляются, active file ротируется, а при достижении free-space floor file mirror временно пропускает записи. Console/stdout/Fly logs при этом продолжают работать. Неизвестные файлы и SQLite handler никогда не удаляет.
 
@@ -54,7 +54,7 @@ Production file mirror **включён постоянно** и пишет root 
 
 Нельзя повышать budget/retention или снижать free-space floor без фактического `df`/`du` и regression-check инцидента `INC-2026-04-16`.
 
-Нельзя без отдельного capacity review повышать `auto_extend_size_limit` выше `3 GiB`. После любого ручного или автоматического resize обязательны `df -h /data`, `PRAGMA quick_check`, `/healthz`, Fly health checks и проверка свежих логов на `Errno 28` / `database or disk is full`.
+Нельзя без отдельного разрешения владельца повышать `auto_extend_size_limit` выше `3 GiB` или вручную расширять том. После любого ручного или автоматического resize обязательны `df -h /data`, `PRAGMA quick_check`, `/healthz`, Fly health checks и проверка свежих логов на `Errno 28` / `database or disk is full`.
 
 ## Investigation Workflow
 
@@ -101,8 +101,9 @@ envelopes can grow the main DB much faster than the bounded runtime mirror;
 deleting logs or truncating WAL must not be reported as the durable root cause
 without that table-level comparison.
 
-`VK_CRAWL_MIN_FREE_MB` is a writer admission floor (default `512` MiB) and must
-remain above the `/healthz` warning/critical floors. It is rechecked before
+`VK_CRAWL_MIN_FREE_MB` is a writer admission floor (default `512` MiB). The
+`/healthz` warning floor is `768` MiB so operators see pressure before VK
+import stops; the critical floor remains `256` MiB. Admission is rechecked before
 every source/page fetch and packet transaction, so one admitted multi-source
 crawl cannot consume the full warning-to-critical margin before the next
 probe. Do not lower it to make a crawl run while `/data` is in
