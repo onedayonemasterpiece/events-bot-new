@@ -1,0 +1,1761 @@
+version: 1
+generated_at: '2026-09-26T06:00:38+00:00'
+bucket: kenigevents.ru
+scope: Observed public named preview-* builds; deleted builds remain as history after their first inventory. Secret _review
+  tokens are excluded.
+latest_named_preview: preview-home-1ea0faeb-voice-review-20260906
+canonical_full_candidate_lookup: python scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review (on
+  Fly)
+canonical_full_candidate:
+  status: current_review_ready
+  build_id: production-secret-20260824T032406-262b86bd
+  repo_sha: fc7fa8b0171099867e9ee8275082121b9b5b0c7e
+  snapshot_id: snapshot-20260824T012406-7379314275
+  verified_at: '2026-08-24T04:12:44.779984Z'
+builds:
+- build_id: preview-home-1ea0faeb-voice-review-20260906
+  built_at: '2026-09-06T20:41:26.853Z'
+  bucket_entry_modified_at: '2026-09-06T20:43:59+00:00'
+  source_sha: 1ea0faeb3341a30df5328b54c66f0ee2ea3efcaa
+  source_commit: 'fix(preview): forward validated approved Search destination'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-home-1ea0faeb-voice-review-20260906/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-home-1ea0faeb-voice-review-20260906/index.html
+  entry_etag: d89878032540e39c38ae07959f543eb9
+  entry_bytes: 1360787
+  manifest_url: https://kenigevents.ru/preview-home-1ea0faeb-voice-review-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Главная по голосовому ревью: Hero сверху и снизу, мобильная мозаика и появление по словам, голосовой вход и поиск, двухколоночные
+    быстрые ссылки, футер и тень.'
+  - Исправлены календарные ссылки и скачок страницы при скрытии карточки.
+  review_url: https://t.me/c/4337049383/1464
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: UI preview, не обновление афиши; дата reference_date относится к сборке, не к экспорту событий.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-home-b7431426-20260906-v3
+  built_at: '2026-09-06T19:52:07.416Z'
+  bucket_entry_modified_at: '2026-09-06T19:54:38+00:00'
+  source_sha: b743142636a3c73fe5cce9bc88781e4c9f7c2ee9
+  source_commit: 'fix(navigation): make Afisha and mobile Home return to homepage'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-home-b7431426-20260906-v3/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-home-b7431426-20260906-v3/index.html
+  entry_etag: 2fa9683976c4bc781c0ad9a9f23a05de
+  entry_bytes: 1311102
+  manifest_url: https://kenigevents.ru/preview-home-b7431426-20260906-v3/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Главная для телефонного и desktop-ревью: Hero от верха страницы, плавающий вход в поиск, общая навигация и переход «Афиша»
+    на главную.'
+  review_url: https://t.me/c/4337049383/1463
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-plan-20260906
+  built_at: '2026-09-06T15:29:18.150Z'
+  bucket_entry_modified_at: '2026-09-06T15:30:06+00:00'
+  source_sha: 8c03373d98c39c72160a3cc6db270eacdaac03af
+  source_commit: 'fix(voice): ground dialogue constraints dates and semantic verification'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-plan-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-plan-20260906/__preview/index.html
+  entry_etag: 153dcba9dc87fe8f0c647116146855f6
+  entry_bytes: 319341
+  manifest_url: https://kenigevents.ru/preview-voice-plan-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(voice): ground dialogue constraints dates and semantic verification'
+  review_url: https://t.me/c/4337049383/1460
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-dialogue-20260906
+  built_at: '2026-09-06T14:43:49.074Z'
+  bucket_entry_modified_at: '2026-09-06T14:44:16+00:00'
+  source_sha: 9c8c0f288fe92ac8c1c3295fb68107d91fa3f21b
+  source_commit: 'fix(search): remove clean conversation result footer controls'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-dialogue-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-dialogue-20260906/__preview/index.html
+  entry_etag: 28aeef9361c21a4f495cfcbd4fa7d0fb
+  entry_bytes: 319635
+  manifest_url: https://kenigevents.ru/preview-voice-dialogue-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(search): remove clean conversation result footer controls'
+  review_url: https://t.me/c/4337049383/1459
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-relevance-20260906
+  built_at: '2026-09-06T14:01:12.294Z'
+  bucket_entry_modified_at: '2026-09-06T14:02:06+00:00'
+  source_sha: 882e88f3d5e146334769276ba62d2696e8821b0f
+  source_commit: 'fix(voice): align verification deadline and record full-window recall audit'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-relevance-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-relevance-20260906/__preview/index.html
+  entry_etag: dbae85f52c3db7d3b5e2ba7c4db8d01e
+  entry_bytes: 319787
+  manifest_url: https://kenigevents.ru/preview-voice-relevance-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(voice): align verification deadline and record full-window recall audit'
+  review_url: https://t.me/c/4337049383/1458
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-clean2-20260906
+  built_at: '2026-09-06T13:06:06.568Z'
+  bucket_entry_modified_at: '2026-09-06T13:06:33+00:00'
+  source_sha: 52bdf4db4450e3a0ad300fb9727428874a6559ad
+  source_commit: 'fix(search): preserve mobile history hit target and record cleanup safeguards'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-clean2-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-clean2-20260906/__preview/index.html
+  entry_etag: 35c5369ccdaa1ed6ccea1a7b85c89ab8
+  entry_bytes: 319331
+  manifest_url: https://kenigevents.ru/preview-voice-clean2-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(search): preserve mobile history hit target and record cleanup safeguards'
+  review_url: https://t.me/c/4337049383/1456
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-clean-20260906
+  built_at: '2026-09-06T12:51:21.938Z'
+  bucket_entry_modified_at: '2026-09-06T12:52:53+00:00'
+  source_sha: b981f7b4199562c53494e14f9cd1f831d9268dcf
+  source_commit: 'fix(search): keep technical history and coverage details out of the chat flow'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-clean-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-clean-20260906/__preview/index.html
+  entry_etag: b4072cb8bcda1fc7d1c4fa525ab42761
+  entry_bytes: 319179
+  manifest_url: https://kenigevents.ru/preview-voice-clean-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(search): keep technical history and coverage details out of the chat flow'
+  review_url: https://t.me/c/4337049383/1455
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-chat-20260906
+  built_at: '2026-09-06T12:44:06.894Z'
+  bucket_entry_modified_at: '2026-09-06T12:45:07+00:00'
+  source_sha: fb28280d7cec103d87313b4e9d7cf78045ec3449
+  source_commit: 'fix(voice): allow ordinary conversational follow-ups to search beyond prior membership'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-chat-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-chat-20260906/__preview/index.html
+  entry_etag: a5281b651a59e65a9864ed964f3e7b23
+  entry_bytes: 319027
+  manifest_url: https://kenigevents.ru/preview-voice-chat-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(voice): allow ordinary conversational follow-ups to search beyond prior membership'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-diagnostics-20260906
+  built_at: '2026-09-06T11:32:23.008Z'
+  bucket_entry_modified_at: '2026-09-06T11:33:33+00:00'
+  source_sha: 87ca55d1346256ce1252b624787b7df6992db6da
+  source_commit: Add privacy-safe voice storage diagnostics and single-flight opens
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-diagnostics-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-diagnostics-20260906/__preview/index.html
+  entry_etag: cb022ec229343ae387f9e77a711714f0
+  entry_bytes: 315865
+  manifest_url: https://kenigevents.ru/preview-voice-diagnostics-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Add privacy-safe voice storage diagnostics and single-flight opens
+  review_url: https://t.me/c/4337049383/1452
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-menu-20260906
+  built_at: '2026-09-06T11:26:58.506Z'
+  bucket_entry_modified_at: '2026-09-06T11:30:32+00:00'
+  source_sha: 591a1e06148e07dfec1910db9623ccf5a3f4aa30
+  source_commit: 'fix(site): give fullscreen menu ownership of lower docks and upward dismissal'
+  reference_date: '2026-07-23'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-islands-menu-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-menu-20260906/__preview/index.html
+  entry_etag: 601a35f2630aa6673448bc495507c35c
+  entry_bytes: 379040
+  manifest_url: https://kenigevents.ru/preview-islands-menu-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(site): give fullscreen menu ownership of lower docks and upward dismissal'
+  review_url: https://t.me/c/4337049383/1451
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-startup-20260906
+  built_at: '2026-09-06T10:57:50.657Z'
+  bucket_entry_modified_at: '2026-09-06T10:58:30+00:00'
+  source_sha: f4a92b19bd010255b06821bdf8e494d62d72195d
+  source_commit: 'fix(voice): make preview storage startup bounded and safely retryable'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-startup-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-startup-20260906/__preview/index.html
+  entry_etag: 8bf2e35caba0fe4254da884cfcb0356c
+  entry_bytes: 315257
+  manifest_url: https://kenigevents.ru/preview-voice-startup-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(voice): make preview storage startup bounded and safely retryable'
+  review_url: https://t.me/c/4337049383/1448
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-sequential-20260906
+  built_at: '2026-09-06T10:52:28.382Z'
+  bucket_entry_modified_at: '2026-09-06T10:53:42+00:00'
+  source_sha: e08e7e74a7b605a71c1964bea6316382b9f2242e
+  source_commit: 'test(site): await terminal reverse caption state'
+  reference_date: '2026-07-23'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-islands-sequential-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-sequential-20260906/__preview/index.html
+  entry_etag: 524872282659adba0b9266fb00d8c1c1
+  entry_bytes: 379844
+  manifest_url: https://kenigevents.ru/preview-islands-sequential-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'test(site): await terminal reverse caption state'
+  review_url: https://t.me/c/4337049383/1447
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-devcoveer-20260906
+  built_at: '2026-09-06T09:25:11.569Z'
+  bucket_entry_modified_at: '2026-09-06T09:29:23+00:00'
+  source_sha: 923915eb7cc4a275c5e7cdee36fe378db9e1fceb
+  source_commit: 'feat(voice): host existing conversation pipeline on DevCoveer with compact audio'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-devcoveer-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-devcoveer-20260906/__preview/index.html
+  entry_etag: 58fc15a7937b74a7ac46e88bc596ba17
+  entry_bytes: 315561
+  manifest_url: https://kenigevents.ru/preview-voice-devcoveer-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(voice): host existing conversation pipeline on DevCoveer with compact audio'
+  review_url: https://t.me/c/4337049383/1445
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-review-20260906
+  built_at: '2026-09-06T09:27:54.895Z'
+  bucket_entry_modified_at: '2026-09-06T09:28:48+00:00'
+  source_sha: cd90e408d526259cbb2411032f8489694b38feee
+  source_commit: 'fix(site): contain city motion and serve compact Popular entry'
+  reference_date: '2026-07-23'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-islands-review-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-review-20260906/__preview/index.html
+  entry_etag: 16957fd2cc6a000fc489c5fe8c2c4e58
+  entry_bytes: 379224
+  manifest_url: https://kenigevents.ru/preview-islands-review-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(site): contain city motion and serve compact Popular entry'
+  review_url: https://t.me/c/4337049383/1444
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-orb-20260906
+  built_at: '2026-09-06T08:54:05.190Z'
+  bucket_entry_modified_at: '2026-09-06T08:55:07+00:00'
+  source_sha: 50ec4746f7408c4119bcca7f2f1cbd74bf549eb9
+  source_commit: 'fix(voice): nonmodal microphone orb and durable capture checkpoints'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-orb-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-orb-20260906/__preview/index.html
+  entry_etag: 0050e45a7f0dd498138a1026ab2a6fdf
+  entry_bytes: 314649
+  manifest_url: https://kenigevents.ru/preview-voice-orb-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(voice): nonmodal microphone orb and durable capture checkpoints'
+  review_url: https://t.me/c/4337049383/1443
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-floating-20260906
+  built_at: '2026-09-06T07:51:23.672Z'
+  bucket_entry_modified_at: '2026-09-06T07:52:14+00:00'
+  source_sha: 68452a2a6be5700bf46b09b4905d4e29a2f26048
+  source_commit: 'fix(search): replace recorder dashboard with responsive floating voice entry'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-floating-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-floating-20260906/__preview/index.html
+  entry_etag: 3fd822a877935274ec350b4d24709830
+  entry_bytes: 315409
+  manifest_url: https://kenigevents.ru/preview-voice-floating-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(search): replace recorder dashboard with responsive floating voice entry'
+  review_url: https://t.me/c/4337049383/1441
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-voice-desktop-capture-20260906
+  built_at: '2026-09-06T07:23:18.515Z'
+  bucket_entry_modified_at: '2026-09-06T07:24:45+00:00'
+  source_sha: f0dd8cca6e4dc07352eebbfb1e64b68be4191b42
+  source_commit: 'feat(search): add local-only desktop voice capture preview'
+  reference_date: '2026-09-06'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-voice-desktop-capture-20260906/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-voice-desktop-capture-20260906/__preview/index.html
+  entry_etag: 6dd6385bfe579779d8e2688b1be8888a
+  entry_bytes: 316473
+  manifest_url: https://kenigevents.ru/preview-voice-desktop-capture-20260906/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(search): add local-only desktop voice capture preview'
+  review_url: https://t.me/c/4337049383/1440
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-firstpaint-b10
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T07:07:46+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-firstpaint-b10/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-firstpaint-b10/__preview/index.html
+  entry_etag: 60a689190d84307e57fb85cdb87e8f19
+  entry_bytes: 3552
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Усилил тени нижнего острова по референсу: плотнее тень под краем и мягче широкий ореол. Одинаково у обычной навигации,
+    дат и блока с покупкой, без двойной тени между этажами. Верх, размеры и'
+  review_url: https://t.me/c/4337049383/1439
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-firstpaint-b9
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T07:01:16+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-firstpaint-b9/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-firstpaint-b9/__preview/index.html
+  entry_etag: 9520d0ec2437d21173c0d04b1148ef57
+  entry_bytes: 3544
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Обновил две страницы. На «Выходных» правильные города и единый нижний блок теперь оформлены уже в статическом HTML/CSS,
+    до запуска JS; афиши больше не скрываются до обработки скриптом. Прове
+  review_url: https://t.me/c/4337049383/1438
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-free-b8
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T06:40:41+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-free-b8/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-free-b8/__preview/index.html
+  entry_etag: 404e34dc9f73c851704bff84cdbb6189
+  entry_bytes: 377259
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Исправил «Бесплатно»: островом служит сам исходный медальон, без отдельной плашки заголовка и без второй копии. При приближении
+    к верху плавно уменьшается на16%, не исчезает. Проверено на мо'
+  review_url: https://t.me/c/4337049383/1437
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-date-b7
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T06:33:40+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-date-b7/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-date-b7/__preview/index.html
+  entry_etag: e570d8f21e3e752b3f7d5efb4564a56d
+  entry_bytes: 4591
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Прямые ссылки для проверки на телефоне и компьютере. На выходных сверху только СБ/ВС, без чисел; на событии нет верхнего
+    острова, «Купить» объединено с нижней навигацией. Города до сжатия ли
+  review_url: https://t.me/c/4337049383/1435
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-date-b6
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T05:56:28+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-date-b6/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-date-b6/__preview/index.html
+  entry_etag: b983b2edd10861989f5a336f333aa5f5
+  entry_bytes: 3245
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Исправил компактный выбор городов
+  review_url: https://t.me/c/4337049383/1433
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-date-b5
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T05:48:26+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-date-b5/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-date-b5/__preview/index.html
+  entry_etag: 5bbc6dc70d6a4471aeea9329481ded57
+  entry_bytes: 3245
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Компактный выбор городов
+  review_url: https://t.me/c/4337049383/1432
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-date-b4
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T05:38:45+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-date-b4/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-date-b4/__preview/index.html
+  entry_etag: 7d725d25c57f5ab26dab387c1697fc87
+  entry_bytes: 3245
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Страницы одного дня — очищенный верх
+  review_url: https://t.me/c/4337049383/1431
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-date-b3
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T05:21:53+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-date-b3/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-date-b3/__preview/index.html
+  entry_etag: de83d17729d3418e9e0faf59f59b0ef6
+  entry_bytes: 3245
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Исправил: уменьшен только нижний ряд'
+  review_url: https://t.me/c/4337049383/1430
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-date-b2
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T05:13:33+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-date-b2/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-date-b2/__preview/index.html
+  entry_etag: 7271b56a1a3e7994e5a3a92984b98d6a
+  entry_bytes: 3245
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Компактный Б — работающая сборка
+  review_url: https://t.me/c/4337049383/1428
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes-date-b1
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T04:54:06+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes-date-b1/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes-date-b1/__preview/index.html
+  entry_etag: 18ab764457f4934e0e30055fea7bf52d
+  entry_bytes: 3245
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Вариант Б — уже работающая выборочная сборка
+  review_url: https://t.me/c/4337049383/1426
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-20260906-archetypes1
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T04:14:12+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-20260906-archetypes1/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-20260906-archetypes1/__preview/index.html
+  entry_etag: 10c00814f727809cca1e110421574440
+  entry_bytes: 3107
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Архетипы с плавающими островами — выборочная сборка
+  review_url: https://t.me/c/4337049383/1422
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-mobile12
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T03:54:47+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-mobile12/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-mobile12/__preview/index.html
+  entry_etag: d8b7603f53b5e9079520920c862b1d4d
+  entry_bytes: 374155
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Мобильные острова — более спокойная кинетика
+  review_url: https://t.me/c/4337049383/1421
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-mobile11
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T03:44:43+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-mobile11/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-mobile11/__preview/index.html
+  entry_etag: fe4daef83a3cba8b0f3c9df66c03c8f1
+  entry_bytes: 374155
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Мобильный остров городов: компактизация начинается раньше'
+  review_url: https://t.me/c/4337049383/1420
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-mobile10
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T03:35:14+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-mobile10/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-mobile10/__preview/index.html
+  entry_etag: a84b72f8d49aefa8be41712462dc1d10
+  entry_bytes: 374155
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Мобильная компактизация — одна строка по согласованному образцу
+  review_url: https://t.me/c/4337049383/1419
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-mobile9
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T03:23:39+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-mobile9/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-mobile9/__preview/index.html
+  entry_etag: efb9b841aec295fff582a6eeb52b4b3b
+  entry_bytes: 373996
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Мобильный выбор городов: исправлена компактизация'
+  review_url: https://t.me/c/4337049383/1417
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-mobile8
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T03:17:16+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-mobile8/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-mobile8/__preview/index.html
+  entry_etag: 63c141f0b5a934c4429f85491f1beb03
+  entry_bytes: 373996
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Мобильные плавающие острова — новая сборка mobile8
+  review_url: https://t.me/c/4337049383/1416
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-solid7
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T02:40:35+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-solid7/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-solid7/__preview/index.html
+  entry_etag: b4ecf40f76bc8e5ea79003495fe8f134
+  entry_bytes: 373837
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Обновлённая сборка: без затухания текста и без полноширинных карточек'
+  review_url: https://t.me/c/4337049383/1414
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-kinetic6
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T02:26:44+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-kinetic6/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-kinetic6/__preview/index.html
+  entry_etag: 1a9957ac6bba43a4aecea59cf4f3e124
+  entry_bytes: 374155
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Новая сборка — горизонтальная кинетика и полные заголовки
+  review_url: https://t.me/c/4337049383/1413
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-sticky5
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T02:01:25+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-sticky5/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-sticky5/__preview/index.html
+  entry_etag: 2b510f1adf83dde801568840275fabf7
+  entry_bytes: 373852
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Новый механизм городского острова — native sticky
+  review_url: https://t.me/c/4337049383/1412
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-desktop4
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T01:38:07+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-desktop4/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-desktop4/__preview/index.html
+  entry_etag: 28adc209f90b772a9bd0a2f2a4fbd2c3
+  entry_bytes: 374010
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Переработанный десктоп — новая реальная сборка
+  review_url: https://t.me/c/4337049383/1411
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-motion3
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T01:11:27+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-motion3/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-motion3/__preview/index.html
+  entry_etag: 8e7b4c56aa27d93ce101eba51799e7ca
+  entry_bytes: 373852
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Новая открываемая сборка — исправлены нижний остров и скролл
+  review_url: https://t.me/c/4337049383/1410
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-islands-b-20260906-review2
+  built_at: null
+  bucket_entry_modified_at: '2026-09-06T00:37:12+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-islands-b-20260906-review2/__preview/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-islands-b-20260906-review2/__preview/index.html
+  entry_etag: 56bcc3e7d654e9427fee8df9ea918ea8
+  entry_bytes: 373852
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Открываемая страница — вариант B, mobile + desktop
+  review_url: https://t.me/c/4337049383/1409
+  catalog_snapshot_at: '2026-07-23T06:55:06.777309+00:00'
+  notes: Дизайн-превью на историческом каталоге 23 июля; не актуальная афиша.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-64f634207-normalized-20260905-v1
+  built_at: '2026-09-05T16:27:08.194Z'
+  bucket_entry_modified_at: '2026-09-05T16:29:40+00:00'
+  source_sha: 64f63420754eb702e877da281d9affe13dfd28b6
+  source_commit: 'fix(media): close listing and mobile rail framing fields'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-64f634207-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-64f634207-normalized-20260905-v1/index.html
+  entry_etag: 78b5bc035331b35be3bdda74a3d5e6f0
+  entry_bytes: 735924
+  manifest_url: https://kenigevents.ru/preview-real-64f634207-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(media): close listing and mobile rail framing fields'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-06ca43572-normalized-20260905-v1
+  built_at: '2026-09-05T15:59:09.459Z'
+  bucket_entry_modified_at: '2026-09-05T16:01:38+00:00'
+  source_sha: 06ca43572df8a976b158f4653acacdb547c4c704
+  source_commit: 'docs(ui): reconcile final crop and shared shape policy'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-06ca43572-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-06ca43572-normalized-20260905-v1/index.html
+  entry_etag: 6fb58eb626bc96bc4f0ee3c5412671a8
+  entry_bytes: 735924
+  manifest_url: https://kenigevents.ru/preview-real-06ca43572-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'docs(ui): reconcile final crop and shared shape policy'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-414a9cf10-normalized-20260905-v1
+  built_at: '2026-09-05T13:55:46.798Z'
+  bucket_entry_modified_at: '2026-09-05T13:58:51+00:00'
+  source_sha: 414a9cf103e77345132afc9b08e0147446d6496a
+  source_commit: 'fix(cards): reduce residual framing without cutting posters'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-414a9cf10-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-414a9cf10-normalized-20260905-v1/index.html
+  entry_etag: 109015fa62ac32fef0ec16d362df4231
+  entry_bytes: 734285
+  manifest_url: https://kenigevents.ru/preview-real-414a9cf10-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(cards): reduce residual framing without cutting posters'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-592a31612-normalized-20260905-v1
+  built_at: '2026-09-05T12:47:12.071Z'
+  bucket_entry_modified_at: '2026-09-05T12:49:37+00:00'
+  source_sha: 592a316127660f0a172743ef8bd74d59fd127b8f
+  source_commit: 'chore(sot): refresh runtime bridge token source map'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-592a31612-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-592a31612-normalized-20260905-v1/index.html
+  entry_etag: 78cbd8839d3d317af5cec7c6f455638b
+  entry_bytes: 734285
+  manifest_url: https://kenigevents.ru/preview-real-592a31612-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'chore(sot): refresh runtime bridge token source map'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-46fc5268a-normalized-20260905-v1
+  built_at: '2026-09-05T12:24:27.235Z'
+  bucket_entry_modified_at: '2026-09-05T12:27:29+00:00'
+  source_sha: 46fc5268a1cc7ee2a35172a1c6dd4c02389bc8bd
+  source_commit: 'fix(checks): validate current Popular shared-shell contract'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-46fc5268a-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-46fc5268a-normalized-20260905-v1/index.html
+  entry_etag: e14846f72d2e7ee55a9186a2664ef3c3
+  entry_bytes: 733859
+  manifest_url: https://kenigevents.ru/preview-real-46fc5268a-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(checks): validate current Popular shared-shell contract'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-26fb02851-normalized-20260905-v1
+  built_at: '2026-09-05T11:19:38.603Z'
+  bucket_entry_modified_at: '2026-09-05T11:22:15+00:00'
+  source_sha: 26fb028510f3e9571f6b5585c717ee576e2a639c
+  source_commit: 'fix(sot): resolve actual root identity beyond scoped CSS mentions'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-26fb02851-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-26fb02851-normalized-20260905-v1/index.html
+  entry_etag: 7e74ea7d9d67430249d410b60fff2e77
+  entry_bytes: 723479
+  manifest_url: https://kenigevents.ru/preview-real-26fb02851-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(sot): resolve actual root identity beyond scoped CSS mentions'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-2fe28b1f8-normalized-20260905-v1
+  built_at: '2026-09-05T09:11:45.340Z'
+  bucket_entry_modified_at: '2026-09-05T09:13:39+00:00'
+  source_sha: 2fe28b1f831ac607c0415a8aa6c2beab9eb67fac
+  source_commit: 'fix(site): converge omitted ordinary page-title consumers'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-2fe28b1f8-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-2fe28b1f8-normalized-20260905-v1/index.html
+  entry_etag: a08ba402b11dc730eb129942ff9af019
+  entry_bytes: 717288
+  manifest_url: https://kenigevents.ru/preview-real-2fe28b1f8-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(site): converge omitted ordinary page-title consumers'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-0b08f0a80-normalized-20260905-v1
+  built_at: '2026-09-05T08:51:15.811Z'
+  bucket_entry_modified_at: '2026-09-05T08:53:38+00:00'
+  source_sha: 0b08f0a806a9531c8bf253672e1bb5c712764064
+  source_commit: 'fix(site): bind inverse share paint across Astro child scope'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-0b08f0a80-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-0b08f0a80-normalized-20260905-v1/index.html
+  entry_etag: 6c16e46c63acee4303e12f3c69249e15
+  entry_bytes: 717288
+  manifest_url: https://kenigevents.ru/preview-real-0b08f0a80-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(site): bind inverse share paint across Astro child scope'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-4ff0aeb9f-normalized-20260905-v1
+  built_at: '2026-09-05T08:26:32.103Z'
+  bucket_entry_modified_at: '2026-09-05T08:29:18+00:00'
+  source_sha: 4ff0aeb9fde9bccfcad6aac70f4acc862588dd15
+  source_commit: 'fix(build): carry public club gates through remote sparse export'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-4ff0aeb9f-normalized-20260905-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-4ff0aeb9f-normalized-20260905-v1/index.html
+  entry_etag: 17d8db6a16794e38aa58874cf6a037c6
+  entry_bytes: 717288
+  manifest_url: https://kenigevents.ru/preview-real-4ff0aeb9f-normalized-20260905-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(build): carry public club gates through remote sparse export'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-8b1bb8129-normalized-20260904-v1
+  built_at: '2026-09-04T21:36:19.545Z'
+  bucket_entry_modified_at: '2026-09-04T21:39:08+00:00'
+  source_sha: 8b1bb81298bfca2fe2aaa3ceb7e5f654748b301f
+  source_commit: 'fix(sot): describe emitted product identities and reject empty ownership'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-8b1bb8129-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-8b1bb8129-normalized-20260904-v1/index.html
+  entry_etag: c73a7cf6387ced32285a73fc71ca1fba
+  entry_bytes: 691842
+  manifest_url: https://kenigevents.ru/preview-real-8b1bb8129-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(sot): describe emitted product identities and reject empty ownership'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-fdccd34f6-normalized-20260904-v1
+  built_at: '2026-09-04T21:03:34.797Z'
+  bucket_entry_modified_at: '2026-09-04T21:06:45+00:00'
+  source_sha: fdccd34f67f9b88ca28836fb58cdb7b44f38f105
+  source_commit: 'fix(kaggle): preserve frozen clock through Astro preview'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-fdccd34f6-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-fdccd34f6-normalized-20260904-v1/index.html
+  entry_etag: b5db71899824439969bfb4423f96c6d6
+  entry_bytes: 691842
+  manifest_url: https://kenigevents.ru/preview-real-fdccd34f6-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(kaggle): preserve frozen clock through Astro preview'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-aed32da93-normalized-20260904-v1
+  built_at: '2026-09-04T20:56:24.866Z'
+  bucket_entry_modified_at: '2026-09-04T20:59:40+00:00'
+  source_sha: aed32da93129c2512fe2bfa7cdf2929d2e8c606d
+  source_commit: 'feat(sot): export source-bound free collection structure for review'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-aed32da93-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-aed32da93-normalized-20260904-v1/index.html
+  entry_etag: fc5478b9bedc712b229fa4e19e00733b
+  entry_bytes: 691842
+  manifest_url: https://kenigevents.ru/preview-real-aed32da93-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(sot): export source-bound free collection structure for review'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-621a1fb51-normalized-20260904-v1
+  built_at: '2026-09-04T19:29:08.278Z'
+  bucket_entry_modified_at: '2026-09-04T19:32:09+00:00'
+  source_sha: 621a1fb51525030bc5b99720c1854fed99debb5d
+  source_commit: 'refactor(site): connect event media and editorial roles'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-621a1fb51-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-621a1fb51-normalized-20260904-v1/index.html
+  entry_etag: 74299884a3d7228dbedbc0334286ab10
+  entry_bytes: 691950
+  manifest_url: https://kenigevents.ru/preview-real-621a1fb51-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'refactor(site): connect event media and editorial roles'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-8fec68b80-normalized-20260904-v1
+  built_at: '2026-09-04T18:47:22.807Z'
+  bucket_entry_modified_at: '2026-09-04T18:50:32+00:00'
+  source_sha: 8fec68b800d4c3d4bbb5b31dd55e3a9180a0095b
+  source_commit: 'refactor(site): adopt mobile toast shell roles'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-8fec68b80-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-8fec68b80-normalized-20260904-v1/index.html
+  entry_etag: 425238fffa21aa661b0a93d8362d7009
+  entry_bytes: 691950
+  manifest_url: https://kenigevents.ru/preview-real-8fec68b80-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'refactor(site): adopt mobile toast shell roles'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-e682f0d6-normalized-20260904-v1
+  built_at: '2026-09-04T18:06:30.638Z'
+  bucket_entry_modified_at: '2026-09-04T18:09:58+00:00'
+  source_sha: e682f0d6c863ed69709bd237c20e0623cf12d9ff
+  source_commit: 'refactor(site): adopt inverse surface roles on event detail'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-e682f0d6-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-e682f0d6-normalized-20260904-v1/index.html
+  entry_etag: 232af0ed260b42a41785b71b6ec27d1d
+  entry_bytes: 691679
+  manifest_url: https://kenigevents.ru/preview-real-e682f0d6-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'refactor(site): adopt inverse surface roles on event detail'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-a01fb4dd3-normalized-20260904-v1
+  built_at: '2026-09-04T17:10:42.890Z'
+  bucket_entry_modified_at: '2026-09-04T17:14:26+00:00'
+  source_sha: a01fb4dd330e756e8ae4adf7249a7dade39e7995
+  source_commit: 'refactor(site): adopt event detail color roles'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-a01fb4dd3-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-a01fb4dd3-normalized-20260904-v1/index.html
+  entry_etag: e6a0d0768e40bc700a4150c861c6902e
+  entry_bytes: 691181
+  manifest_url: https://kenigevents.ru/preview-real-a01fb4dd3-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'refactor(site): adopt event detail color roles'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-ab7cb5597-normalized-20260904-v1
+  built_at: '2026-09-04T16:50:34.804Z'
+  bucket_entry_modified_at: '2026-09-04T16:53:40+00:00'
+  source_sha: ab7cb55971016e41e3af775ef6207c53e4d801ed
+  source_commit: 'refactor(site): consume footer service pwa paint tokens'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-ab7cb5597-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-ab7cb5597-normalized-20260904-v1/index.html
+  entry_etag: 74ee5337b4ea96f866d1326960f3006c
+  entry_bytes: 690188
+  manifest_url: https://kenigevents.ru/preview-real-ab7cb5597-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'refactor(site): consume footer service pwa paint tokens'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-5862a4ec6-normalized-20260904-v1
+  built_at: '2026-09-04T15:37:57.510Z'
+  bucket_entry_modified_at: '2026-09-04T15:40:26+00:00'
+  source_sha: 5862a4ec6728359548e6c4af76f97f1d9b94fb27
+  source_commit: 'fix(ui): preserve semantic icon DOM identity'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-5862a4ec6-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-5862a4ec6-normalized-20260904-v1/index.html
+  entry_etag: 6a0b96d73146441ea34a4219891347b8
+  entry_bytes: 689537
+  manifest_url: https://kenigevents.ru/preview-real-5862a4ec6-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(ui): preserve semantic icon DOM identity'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-557019d68-normalized-20260904-v1
+  built_at: '2026-09-04T14:55:29.564Z'
+  bucket_entry_modified_at: '2026-09-04T14:57:56+00:00'
+  source_sha: 557019d68166ae9efe59f625168d6da853d277ac
+  source_commit: 'feat(site): add token impact authority graph'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-557019d68-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-557019d68-normalized-20260904-v1/index.html
+  entry_etag: 84b15057f25766f004c050707d0a5b7c
+  entry_bytes: 669714
+  manifest_url: https://kenigevents.ru/preview-real-557019d68-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(site): add token impact authority graph'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-ce9b0db18-normalized-20260904-v1
+  built_at: '2026-09-04T14:01:20.839Z'
+  bucket_entry_modified_at: '2026-09-04T14:04:22+00:00'
+  source_sha: ce9b0db180af430b20b64e88205434996b9ae99a
+  source_commit: 'fix(site): separate festival mobile facts'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-ce9b0db18-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-ce9b0db18-normalized-20260904-v1/index.html
+  entry_etag: 424216bba043d1763747c6dd045e7d05
+  entry_bytes: 669714
+  manifest_url: https://kenigevents.ru/preview-real-ce9b0db18-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(site): separate festival mobile facts'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-35d1d7328-normalized-20260904-v1
+  built_at: '2026-09-04T13:20:17.559Z'
+  bucket_entry_modified_at: '2026-09-04T13:23:30+00:00'
+  source_sha: 35d1d73286c61ed8f11759bea985e65b23183d18
+  source_commit: 'fix(preview): select current real gate specimens'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-35d1d7328-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-35d1d7328-normalized-20260904-v1/index.html
+  entry_etag: eb46cf3cf6577ee13c5601b34475427e
+  entry_bytes: 669820
+  manifest_url: https://kenigevents.ru/preview-real-35d1d7328-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(preview): select current real gate specimens'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-90f566253-normalized-20260904-v1
+  built_at: '2026-09-04T12:24:27.658Z'
+  bucket_entry_modified_at: '2026-09-04T12:27:39+00:00'
+  source_sha: 90f566253628808c96ccc1d4bc712ab195aab6aa
+  source_commit: 'feat(preview): expose arbitrary date archetype'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-90f566253-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-90f566253-normalized-20260904-v1/index.html
+  entry_etag: d554f53b69ae86a2628b718c81760e10
+  entry_bytes: 669751
+  manifest_url: https://kenigevents.ru/preview-real-90f566253-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(preview): expose arbitrary date archetype'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-5b027deb-normalized-20260904-v1
+  built_at: '2026-09-04T11:27:17.551Z'
+  bucket_entry_modified_at: '2026-09-04T11:30:42+00:00'
+  source_sha: 5b027deb67c0da5e3f2862d73779d63df88c1e61
+  source_commit: 'feat(preview): expose all owner archetypes'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-5b027deb-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-5b027deb-normalized-20260904-v1/index.html
+  entry_etag: cc58002f303e0c02b871623ddb539a03
+  entry_bytes: 669480
+  manifest_url: https://kenigevents.ru/preview-real-5b027deb-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(preview): expose all owner archetypes'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-26ddb4afe-normalized-20260904-v1
+  built_at: '2026-09-04T10:42:58.145Z'
+  bucket_entry_modified_at: '2026-09-04T10:46:25+00:00'
+  source_sha: 26ddb4afe31df583d4caca2c2c41472e44eae0c6
+  source_commit: 'fix: bootstrap review Kaggle kernel identity'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-26ddb4afe-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-26ddb4afe-normalized-20260904-v1/index.html
+  entry_etag: a4b72d15e0b03dda2d9ad25c4e43b1e1
+  entry_bytes: 669751
+  manifest_url: https://kenigevents.ru/preview-real-26ddb4afe-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix: bootstrap review Kaggle kernel identity'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-06d92362f-normalized-20260904-v1
+  built_at: '2026-09-04T07:23:23.420Z'
+  bucket_entry_modified_at: '2026-09-04T08:33:35+00:00'
+  source_sha: 06d92362f91a2d56c2898cf596a9232876dd7561
+  source_commit: 'fix(ui): isolate CopyAction canonical style owner'
+  reference_date: '2026-09-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-06d92362f-normalized-20260904-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-06d92362f-normalized-20260904-v1/index.html
+  entry_etag: c1c147f104a8a1dbc695548b7fe0b204
+  entry_bytes: 661772
+  manifest_url: https://kenigevents.ru/preview-real-06d92362f-normalized-20260904-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(ui): isolate CopyAction canonical style owner'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-3ca6a143e-normalized-20260903-v1
+  built_at: '2026-09-03T21:20:30.799Z'
+  bucket_entry_modified_at: '2026-09-03T21:23:45+00:00'
+  source_sha: 3ca6a143e4286c165282c2d8ceef1759a41185b7
+  source_commit: 'test(ui): reconcile post-cutover integration gates'
+  reference_date: '2026-09-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/index.html
+  entry_etag: 3cb5046e2208e47888ca245aa2b63b4f
+  entry_bytes: 665218
+  manifest_url: https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'test(ui): reconcile post-cutover integration gates'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-cebeafeee-normalized-20260903-v1
+  built_at: '2026-09-03T20:21:55.122Z'
+  bucket_entry_modified_at: '2026-09-03T20:25:22+00:00'
+  source_sha: cebeafeee08251a327145ee973ee035cced65204
+  source_commit: Stabilize repeated footer shortcut browser gate
+  reference_date: '2026-09-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/index.html
+  entry_etag: 6db8a15f0f95b686876a0fbb3a6d4075
+  entry_bytes: 611557
+  manifest_url: https://kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Stabilize repeated footer shortcut browser gate
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-7f4d04b7-normalized-20260903-v1
+  built_at: '2026-09-03T18:10:19.424Z'
+  bucket_entry_modified_at: '2026-09-03T18:13:11+00:00'
+  source_sha: 7f4d04b7de7003eb44980e4215871381686cb9b3
+  source_commit: 'fix(ui): load canonical route token registry'
+  reference_date: '2026-09-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-7f4d04b7-normalized-20260903-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-7f4d04b7-normalized-20260903-v1/index.html
+  entry_etag: a7a987f9dfbd3c900e0496c5742e30ad
+  entry_bytes: 608643
+  manifest_url: https://kenigevents.ru/preview-real-7f4d04b7-normalized-20260903-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(ui): load canonical route token registry'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-1bc6d9cb-normalized-20260903-v1
+  built_at: '2026-09-03T17:27:09.890Z'
+  bucket_entry_modified_at: '2026-09-03T17:30:42+00:00'
+  source_sha: 1bc6d9cb4c122046f4782532381de953727c1da6
+  source_commit: 'fix(site): secure festival external targets'
+  reference_date: '2026-09-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/index.html
+  entry_etag: ef5f50d531e2c596f3dfb56191f25b05
+  entry_bytes: 608643
+  manifest_url: https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(site): secure festival external targets'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-2e8f4dd2-normalized-20260903-v1
+  built_at: '2026-09-03T16:54:55.568Z'
+  bucket_entry_modified_at: '2026-09-03T16:58:11+00:00'
+  source_sha: 2e8f4dd2393ce0c5100f8b610aae3f01380aad8c
+  source_commit: 'test(site): isolate weekend seam overflow probe'
+  reference_date: '2026-09-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-2e8f4dd2-normalized-20260903-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-2e8f4dd2-normalized-20260903-v1/index.html
+  entry_etag: 5c07c6f0f8fcb7bb75974cf6ecb654ba
+  entry_bytes: 608643
+  manifest_url: https://kenigevents.ru/preview-real-2e8f4dd2-normalized-20260903-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'test(site): isolate weekend seam overflow probe'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-real-4536847f-fresh-20260903-v1
+  built_at: '2026-09-03T15:30:48.849Z'
+  bucket_entry_modified_at: '2026-09-03T15:33:48+00:00'
+  source_sha: 4536847f9fbdaa27326ebb3ec9ec1c825736e107
+  source_commit: 'fix(site): make real preview gates active-data aware'
+  reference_date: '2026-09-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/index.html
+  entry_etag: 175520e502f37fea2ccb742ea231e4c1
+  entry_bytes: 591142
+  manifest_url: https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(site): make real preview gates active-data aware'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-golden-84504f30-20270604-v1
+  built_at: '2026-09-03T14:20:44.704Z'
+  bucket_entry_modified_at: '2026-09-03T14:22:17+00:00'
+  source_sha: 84504f30eebc334deba46e94365601c3d572c5c0
+  source_commit: 'fix(static-site): bind preview assets to build prefix'
+  reference_date: '2027-06-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-golden-84504f30-20270604-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-golden-84504f30-20270604-v1/index.html
+  entry_etag: d8607efff4cde6c77b18f5d5307d0bf6
+  entry_bytes: 423760
+  manifest_url: https://kenigevents.ru/preview-golden-84504f30-20270604-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(static-site): bind preview assets to build prefix'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-golden-c124ca2a-20270604-v1
+  built_at: '2026-09-03T14:12:43.580Z'
+  bucket_entry_modified_at: '2026-09-03T14:14:30+00:00'
+  source_sha: c124ca2a810f100122230b7f51ec1221f7e74be4
+  source_commit: 'fix(static-site): enforce mobile card grid stack'
+  reference_date: '2027-06-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-golden-c124ca2a-20270604-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-golden-c124ca2a-20270604-v1/index.html
+  entry_etag: 0188ffce746e79bee5b0e34863fbc9a4
+  entry_bytes: 423760
+  manifest_url: https://kenigevents.ru/preview-golden-c124ca2a-20270604-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'fix(static-site): enforce mobile card grid stack'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-golden-e7e88026-20270604-v1
+  built_at: '2026-09-03T13:46:48.096Z'
+  bucket_entry_modified_at: '2026-09-03T13:50:04+00:00'
+  source_sha: e7e8802675103a04c207564f8dccd88a8c0c65de
+  source_commit: 'feat(static-site): route Golden previews through Kaggle rail'
+  reference_date: '2027-06-04'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-golden-e7e88026-20270604-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-golden-e7e88026-20270604-v1/index.html
+  entry_etag: df9646f107b92f0d7c3de3cb3364f478
+  entry_bytes: 423702
+  manifest_url: https://kenigevents.ru/preview-golden-e7e88026-20270604-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(static-site): route Golden previews through Kaggle rail'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-ui-normalized-7e219318-date-fresh-20260903-v1
+  built_at: '2026-09-03T13:02:34.764Z'
+  bucket_entry_modified_at: '2026-09-03T13:04:21+00:00'
+  source_sha: 7e219318cfeb331edadd3dee84701197759079aa
+  source_commit: 'feat(static-site): unify Kaggle preview publication'
+  reference_date: '2026-09-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-ui-normalized-7e219318-date-fresh-20260903-v1/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-ui-normalized-7e219318-date-fresh-20260903-v1/index.html
+  entry_etag: 25eede0ef936a6f805caed902c18ab07
+  entry_bytes: 587460
+  manifest_url: https://kenigevents.ru/preview-ui-normalized-7e219318-date-fresh-20260903-v1/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(static-site): unify Kaggle preview publication'
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260803-tile-mosaic-v2-3094c142dbe7d6848a48c40056156b68
+  built_at: '2026-08-03T18:32:02.199Z'
+  bucket_entry_modified_at: '2026-08-03T18:40:39+00:00'
+  source_sha: acef00dffdfd36a7050a2dfe6eaeed9dc1dc7f67
+  source_commit: 'feat(site): complete tile mosaic reference fidelity v2'
+  reference_date: '2026-08-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260803-tile-mosaic-v2-3094c142dbe7d6848a48c40056156b68/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260803-tile-mosaic-v2-3094c142dbe7d6848a48c40056156b68/index.html
+  entry_etag: 85d75235945452e3f9901cb320475281
+  entry_bytes: 536926
+  manifest_url: https://kenigevents.ru/preview-20260803-tile-mosaic-v2-3094c142dbe7d6848a48c40056156b68/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'feat(site): complete tile mosaic reference fidelity v2'
+  review_url: https://t.me/c/4337049383/967
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260803-tile-mosaic-af8dc8d2bd1b30327a3d5a13cb159955
+  built_at: '2026-08-03T17:03:57.108Z'
+  bucket_entry_modified_at: '2026-08-03T17:07:26+00:00'
+  source_sha: 8b22af29008456ec125b1404055a4283ddb2b57a
+  source_commit: 'docs: record tile mosaic integration evidence'
+  reference_date: '2026-08-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260803-tile-mosaic-af8dc8d2bd1b30327a3d5a13cb159955/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260803-tile-mosaic-af8dc8d2bd1b30327a3d5a13cb159955/index.html
+  entry_etag: 38bb93703d6023dd26e19b45c34a04b7
+  entry_bytes: 536086
+  manifest_url: https://kenigevents.ru/preview-20260803-tile-mosaic-af8dc8d2bd1b30327a3d5a13cb159955/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'docs: record tile mosaic integration evidence'
+  review_url: https://t.me/c/4337049383/966
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260803-transport-relay-unreachable-592ffb2d
+  built_at: '2026-08-02T23:41:38.474Z'
+  bucket_entry_modified_at: '2026-08-02T23:44:19+00:00'
+  source_sha: 592ffb2d5a68615b65481ee1acea65b728af8d8d
+  source_commit: Require direct routes when relay is unavailable
+  reference_date: '2026-08-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260803-transport-relay-unreachable-592ffb2d/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260803-transport-relay-unreachable-592ffb2d/index.html
+  entry_etag: 254c5033b6886953edb9a50c542430c9
+  entry_bytes: 533846
+  manifest_url: https://kenigevents.ru/preview-20260803-transport-relay-unreachable-592ffb2d/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Require direct routes when relay is unavailable
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260802-transport-direct-unreachable-routefix-3e892bd5
+  built_at: '2026-08-02T22:51:52.860Z'
+  bucket_entry_modified_at: '2026-08-02T22:55:28+00:00'
+  source_sha: 3e892bd510818c07b2e14b708db7d5f39e2ae845
+  source_commit: Keep disposable telemetry from poisoning route health
+  reference_date: '2026-08-03'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260802-transport-direct-unreachable-routefix-3e892bd5/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260802-transport-direct-unreachable-routefix-3e892bd5/index.html
+  entry_etag: 9fb96f2f7953f659db2aab5b4bd96553
+  entry_bytes: 536646
+  manifest_url: https://kenigevents.ru/preview-20260802-transport-direct-unreachable-routefix-3e892bd5/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Keep disposable telemetry from poisoning route health
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260802-transport-direct-unreachable-9a332176
+  built_at: '2026-08-02T21:59:40.220Z'
+  bucket_entry_modified_at: '2026-08-02T22:01:43+00:00'
+  source_sha: 9a33217649dba1f82186bff913bc4d60cf9ced32
+  source_commit: Add deterministic Supabase transport fault OTP gate
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260802-transport-direct-unreachable-9a332176/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260802-transport-direct-unreachable-9a332176/index.html
+  entry_etag: a1e9392bf81ad22df5abac34494d2244
+  entry_bytes: 533158
+  manifest_url: https://kenigevents.ru/preview-20260802-transport-direct-unreachable-9a332176/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Add deterministic Supabase transport fault OTP gate
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260802-mobile-otp-4a19fbe0
+  built_at: '2026-08-02T11:15:56.891Z'
+  bucket_entry_modified_at: '2026-08-02T11:17:43+00:00'
+  source_sha: 4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c
+  source_commit: Fix protected OTP delivery acceptance
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260802-mobile-otp-4a19fbe0/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260802-mobile-otp-4a19fbe0/index.html
+  entry_etag: 2a05bed192b9e44d32a2a7c0416a3b24
+  entry_bytes: 526658
+  manifest_url: https://kenigevents.ru/preview-20260802-mobile-otp-4a19fbe0/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Fix protected OTP delivery acceptance
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-pwa-capabilities-29893884
+  built_at: '2026-08-02T11:05:05.379Z'
+  bucket_entry_modified_at: '2026-08-02T11:08:19+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-pwa-capabilities-29893884/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-pwa-capabilities-29893884/index.html
+  entry_etag: 28e9d1ed840342dc408280bf2202a74f
+  entry_bytes: 525821
+  manifest_url: https://kenigevents.ru/preview-pwa-capabilities-29893884/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Обновлённая PWA Lab с честной диагностикой календаря:'
+  review_url: https://t.me/c/4337049383/962
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260802-mobile-otp-2b57be59
+  built_at: '2026-08-02T10:52:26.144Z'
+  bucket_entry_modified_at: '2026-08-02T10:54:07+00:00'
+  source_sha: 2b57be59c5d22b254376c354c43bb5f021e42750
+  source_commit: Fix GitHub workflow environment syntax
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260802-mobile-otp-2b57be59/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260802-mobile-otp-2b57be59/index.html
+  entry_etag: 4949ce99070f481f307e51dd78a19d9b
+  entry_bytes: 526658
+  manifest_url: https://kenigevents.ru/preview-20260802-mobile-otp-2b57be59/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Fix GitHub workflow environment syntax
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260802-mobile-otp-5cfd6569
+  built_at: '2026-08-02T10:46:04.921Z'
+  bucket_entry_modified_at: '2026-08-02T10:47:57+00:00'
+  source_sha: 5cfd6569ddad13b54c1d4db6bbc78c3fd93e0887
+  source_commit: Add mobile focus OTP E2E harness
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: '2026-07-23T06:55:06.777309+00:00'
+  public_url: https://kenigevents.ru/preview-20260802-mobile-otp-5cfd6569/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260802-mobile-otp-5cfd6569/index.html
+  entry_etag: 9969b66bd67f4851a5986625f561bf99
+  entry_bytes: 526658
+  manifest_url: https://kenigevents.ru/preview-20260802-mobile-otp-5cfd6569/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Add mobile focus OTP E2E harness
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-pwa-capabilities-cde99453
+  built_at: '2026-08-02T10:29:27.519Z'
+  bucket_entry_modified_at: '2026-08-02T10:31:13+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-pwa-capabilities-cde99453/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-pwa-capabilities-cde99453/index.html
+  entry_etag: 8c9693390903aba123ee897608ceec51
+  entry_bytes: 525821
+  manifest_url: https://kenigevents.ru/preview-pwa-capabilities-cde99453/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Диагностическая версия PWA Lab после проверки Git history:'
+  review_url: https://t.me/c/4337049383/955
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-pwa-capabilities-e076b658
+  built_at: '2026-08-02T09:58:25.157Z'
+  bucket_entry_modified_at: '2026-08-02T10:00:47+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-pwa-capabilities-e076b658/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-pwa-capabilities-e076b658/index.html
+  entry_etag: 34cbf236c8954d72fa1877f3228bac13
+  entry_bytes: 525821
+  manifest_url: https://kenigevents.ru/preview-pwa-capabilities-e076b658/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Исправленный Android PWA preview после результата «только ярлык»:'
+  review_url: https://t.me/c/4337049383/953
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-pwa-capabilities-b16ca75a
+  built_at: '2026-08-02T09:35:03.593Z'
+  bucket_entry_modified_at: '2026-08-02T09:38:48+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-pwa-capabilities-b16ca75a/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-pwa-capabilities-b16ca75a/index.html
+  entry_etag: eb94a00bfae73568a4ab5dcc7cd11d5e
+  entry_bytes: 525821
+  manifest_url: https://kenigevents.ru/preview-pwa-capabilities-b16ca75a/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Новый preview с контролируемой установкой PWA Lab:'
+  review_url: https://t.me/c/4337049383/951
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-pwa-capabilities-1bc45404
+  built_at: '2026-08-02T08:17:26.511Z'
+  bucket_entry_modified_at: '2026-08-02T08:19:15+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-08-02'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-pwa-capabilities-1bc45404/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-pwa-capabilities-1bc45404/index.html
+  entry_etag: 2274fb1432fb3ad1d830d854b30a82c5
+  entry_bytes: 525821
+  manifest_url: https://kenigevents.ru/preview-pwa-capabilities-1bc45404/preview-build.json
+  present_in_bucket: true
+  changes:
+  - 'Тестовая PWA-лаборатория для ручной проверки на Android:'
+  review_url: https://t.me/c/4337049383/949
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260801-focus-onboarding-otp-r5
+  built_at: null
+  bucket_entry_modified_at: '2026-08-01T21:40:47+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260801-focus-onboarding-otp-r5/fokus-gruppa/priglashenie/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260801-focus-onboarding-otp-r5/fokus-gruppa/priglashenie/index.html
+  entry_etag: c76b43ea86f682f26fb438a9227d485d
+  entry_bytes: 17232
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Повторная проверка входа по почте: после шестой цифры код проверяется автоматически. Ссылка начинает сценарий с чистого
+    состояния:'
+  review_url: https://t.me/c/4337049383/946
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260801-focus-onboarding-otp-r4
+  built_at: null
+  bucket_entry_modified_at: '2026-08-01T20:43:59+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260801-focus-onboarding-otp-r4/fokus-gruppa/priglashenie/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260801-focus-onboarding-otp-r4/fokus-gruppa/priglashenie/index.html
+  entry_etag: edbacdf6af86195113b746b8f5ccdc70
+  entry_bytes: 17138
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - 'Одна страница для повторной проверки онбординга с полной очисткой прежнего состояния:'
+  review_url: https://t.me/c/4337049383/942
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260801-focus-onboarding-transport-v3-r2
+  built_at: null
+  bucket_entry_modified_at: '2026-08-01T19:28:34+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260801-focus-onboarding-transport-v3-r2/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260801-focus-onboarding-transport-v3-r2/index.html
+  entry_etag: 01ab7ae7a00b24d1e1bea3ea773400b3
+  entry_bytes: 17018
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Сценарий входа в фокус-группу и транспорт авторизации; точный состав изменений не восстановлен из сообщения ревью.
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260801-focus-pwa-poller-r2-f877c6f2
+  built_at: '2026-08-01T15:45:44.477Z'
+  bucket_entry_modified_at: '2026-08-01T15:47:59+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-08-01'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260801-focus-pwa-poller-r2-f877c6f2/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260801-focus-pwa-poller-r2-f877c6f2/index.html
+  entry_etag: 9f4c0bafc0cbb97ed4e5c3fc750818f1
+  entry_bytes: 527057
+  manifest_url: https://kenigevents.ru/preview-20260801-focus-pwa-poller-r2-f877c6f2/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Обновлённая проверка установки «Анонсов»
+  review_url: https://t.me/c/4337049383/939
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260801-focus-pwa-install-r1-9b4ea4cc
+  built_at: '2026-08-01T15:14:25.844Z'
+  bucket_entry_modified_at: '2026-08-01T15:16:38+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-08-01'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260801-focus-pwa-install-r1-9b4ea4cc/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260801-focus-pwa-install-r1-9b4ea4cc/index.html
+  entry_etag: a7979bc0d23aab5e2ac5c9f07d0301e1
+  entry_bytes: 527336
+  manifest_url: https://kenigevents.ru/preview-20260801-focus-pwa-install-r1-9b4ea4cc/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Исправлена установка приложения «Анонсы» на Android
+  review_url: https://t.me/c/4337049383/938
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260729-focus-simple-r15-a5cc0256
+  built_at: '2026-07-30T13:24:24.094Z'
+  bucket_entry_modified_at: '2026-07-30T13:42:20+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-07-30'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256/index.html
+  entry_etag: 908d6397ac9ce3f943d14b817faf5605
+  entry_bytes: 587850
+  manifest_url: https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Новый QR для фокус-группы — старый больше не используйте.
+  review_url: https://t.me/c/4337049383/828
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260730-hero-talk-date-donor-r2
+  built_at: '2026-07-30T07:31:05.402Z'
+  bucket_entry_modified_at: '2026-07-30T07:47:45+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-07-30'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260730-hero-talk-date-donor-r2/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260730-hero-talk-date-donor-r2/index.html
+  entry_etag: ecbe4c23fc040450cc42d99eafe192d1
+  entry_bytes: 559555
+  manifest_url: https://kenigevents.ru/preview-20260730-hero-talk-date-donor-r2/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Новая сборка для проверки
+  review_url: https://t.me/c/4337049383/884
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260729-focus-home-date-r1-21f02dfc
+  built_at: '2026-07-29T22:30:00.194Z'
+  bucket_entry_modified_at: '2026-07-29T23:02:07+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: '2026-07-29'
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260729-focus-home-date-r1-21f02dfc/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260729-focus-home-date-r1-21f02dfc/index.html
+  entry_etag: 7b4428bffa94ff3b7cfdf4bfb0fe5420
+  entry_bytes: 558896
+  manifest_url: https://kenigevents.ru/preview-20260729-focus-home-date-r1-21f02dfc/preview-build.json
+  present_in_bucket: true
+  changes:
+  - Прототип главной и страницы даты для фокус-группы; точный состав изменений не восстановлен из сообщения ревью.
+  review_url: https://t.me/c/4337049383/877
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200
+- build_id: preview-20260715t2005-briefing-lab-f7d99384
+  built_at: null
+  bucket_entry_modified_at: '2026-07-15T20:05:58+00:00'
+  source_sha: null
+  source_commit: null
+  reference_date: null
+  repo_catalog_generated_at: null
+  public_url: https://kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/
+  bucket_url: https://storage.yandexcloud.net/kenigevents.ru/preview-20260715t2005-briefing-lab-f7d99384/lab/briefing/index.html
+  entry_etag: c24dd05f55b6c19815d4655d10031547
+  entry_bytes: 179393
+  manifest_url: null
+  present_in_bucket: true
+  changes:
+  - Итерация visual harmony готова · build preview-20260715t2005-briefing-lab-f7d99384 · source f7d99384
+  review_url: https://t.me/c/4337049383/77
+  http_status_at_sync: 200
+  bucket_http_status_at_sync: 200

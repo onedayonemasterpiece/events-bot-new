@@ -6,6 +6,8 @@
 
 - Машиночитаемая карта: `docs/routes.yml`
 - Статический сайт: `docs/features/static-site-pages/README.md`
+  - опубликованные тестовые сборки и проверенные ссылки:
+    `docs/features/static-site-pages/review-builds.yaml`;
   - reviewed Current UI Decoder v1 и immutable design-system handoff:
     `docs/features/static-site-pages/current-ui-resource-graph.md`;
   - аналитика и продуктовая статистика: `analytics/README.md`;

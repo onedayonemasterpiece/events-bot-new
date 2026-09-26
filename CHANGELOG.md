@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- A bucket-backed YAML registry of all currently accessible named KenigEvents
+  preview builds, including actual HTML links, upload/build dates, source SHA,
+  catalog-date evidence and review context. Preview upload now updates its
+  registry row; the current secret candidate remains a token-free pointer.
 - Register `gemini-3.8-flash` in the shared Google AI quota ledger with the
   owner-requested 20 RPD per-project cap and existing Flash RPM/TPM safety
   ceilings; these are local operating limits, not verified Google quotas.

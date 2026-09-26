@@ -172,3 +172,14 @@ if (publicFailures.length) {
 } else {
   console.log('Public preview verification: ok');
 }
+
+// Keep the review index tied to the objects that were actually uploaded.
+// The registry file is tracked; include its update in the handoff commit.
+const registry = spawnSync('python3', [
+  join(repoRoot, 'scripts', 'sync_static_site_preview_registry.py'),
+  '--build-id', buildId,
+], { cwd: repoRoot, env: { ...awsEnv, ...env }, stdio: 'inherit' });
+if (registry.status !== 0) {
+  console.error('Preview was uploaded, but the review registry was not updated. Run scripts/sync_static_site_preview_registry.py before handoff.');
+  process.exit(registry.status || 1);
+}
