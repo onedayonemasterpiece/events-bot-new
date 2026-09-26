@@ -1,10 +1,10 @@
 # INC-2026-09-26 VK auto import storage notice storm
 
-Status: monitoring
+Status: resolved; capacity trend monitoring continues
 Severity: sev1
 Service: events-bot-new-wngqia / VK auto import
 Opened: 2026-09-26
-Closed: —
+Closed: 2026-09-26 15:05 UTC
 Owners: bot operations
 Related incidents: INC-2026-09-05-vk-storage-admission, INC-2026-09-01-prod-redeploy-systemic-recovery
 
@@ -24,13 +24,18 @@ Untouched inbox rows remained queued, but new event import was delayed.
 - 14:09–14:11: copied two old backups and two September 4 static-site snapshots
   into retained incident artifacts; verified source and local SHA-256 before
   removing exact production originals. `/data` increased to about 725 MiB free.
-- 14:09:19: `ops_run` 9691 began catch-up after space recovery. Its terminal
-  outcome and queue/public readback are required before closure.
+- 14:09:19–14:39:20: `ops_run` 9691 processed 25 inbox rows after space
+  recovery: 4 imported, 16 rejected, 5 source-specific technical outcomes,
+  0 unresolved. No storage-admission failure recurred.
 - About 14:20: an assistant-initiated Fly volume extension to 4 GiB completed
   before the operator explicitly prohibited increasing the volume. This was a
-  mistake. Fly exposes extension, not an in-place shrink command. The config
-  cap remains 3 GiB; no further extension is authorized. Restoring the original
-  3 GiB volume requires a controlled new-volume migration with data checks.
+  mistake. The physical size was restored to 3 GiB by a controlled migration
+  to a new volume; the old 4 GiB volume and frozen machine were destroyed only
+  after integrity and health checks. The configured cap remained 3 GiB.
+- 14:57–15:05: sole app machine started with the released image on the new
+  3 GiB volume. External `/healthz` was ready with no issues and about
+  1,434 MiB free. A bounded VK import smoke run reached a terminal success
+  with no storage or technical errors; no fresh storage notice was found.
 
 ## Root Cause
 
@@ -50,13 +55,11 @@ Untouched inbox rows remained queued, but new event import was delayed.
 
 ## Capacity review
 
-At the observed 19 MiB/day DB growth, the restored 725 MiB free on the
-original 3 GiB volume would leave roughly 11 days before the 512 MiB admission
-floor, assuming no other growth. The operator forbids increasing the volume.
-The corrective plan must therefore reduce durable data growth and remove
-reclaimable historical data, while preserving source evidence and replayability.
-Keep the 512 MiB admission floor and a 768 MiB early warning. The accidental
-4 GiB resize is temporary state, not the approved remedy.
+At the pre-fix 19 MiB/day DB growth, clearing old files alone would have left
+roughly 11 days before the 512 MiB admission floor. The operator forbids
+increasing the volume. The fix therefore reduced durable packet storage while
+preserving source evidence and replayability. The production volume is again
+3 GiB, the 512 MiB admission floor remains, and the warning is now 768 MiB.
 
 The 15,286 VK packet rows contain about 597 MiB of raw envelope JSON and
 234 MiB of attachment metadata. A 151-row sample compressed from 7.48 MiB
@@ -65,8 +68,13 @@ to 0.74 MiB for raw JSON and from 2.86 MiB to 0.37 MiB for attachments with
 Other top tables are much smaller: `event` 97 MiB,
 `smart_update_candidate_state` 76 MiB, `vk_inbox` 41 MiB,
 `kaggle_run_event` 36 MiB, `eventposter` 34 MiB, and `ops_run` 29 MiB.
-The 10 MiB August incident backup table and 5 MiB June repair backup table
-were identified but are not a substitute for packet compaction.
+The 387 historical `codex_backup_` and `incident_` tables occupy about
+51.7 MiB in total. They warrant a reviewed lifecycle, but deleting them is
+not a substitute for packet compaction. The private auth database is about
+122 MiB, including a roughly 59 MiB social-provider-binding table, and is
+not the main growth driver. Guide media, guide results, runtime logs and
+parsing debug remain capped at 256, 128, 64 and 16 MiB respectively; no
+raised storage budget was found in the release diff.
 
 ## Automation Contract
 
@@ -91,7 +99,7 @@ health, Fly volume capacity, or source-packet retention.
 - Preserve VK inbox rows on batch admission failure and genuine source
   technical outcomes; run existing September 5 regression tests.
 - Verify `/data` free space, `/tmp` writeability, SQLite quick_check, Fly
-  health and fresh logs before and after resize/deploy.
+  health and fresh logs before and after volume migration/deploy.
 - Verify a same-day VK catch-up reaches a terminal outcome and advances the
   queue; inspect managed public publishing separately if due.
 - Deploy only a clean SHA reachable from `origin/main` after CI.
@@ -122,8 +130,8 @@ free-space floor was restored.
 
 ## Follow-up Actions
 
-- [ ] Restore the original 3 GiB volume via a controlled new-volume migration
-  after data reduction, with full integrity and cutover checks.
+- [x] Restore 3 GiB capacity via a controlled new-volume migration after data
+  reduction, with full integrity and cutover checks.
 - [ ] Monitor DB bytes and packet growth weekly; assess whether old terminal
   packet payloads need an external archive after compression.
 - [ ] Review retained production artifact lifetimes so old backups/snapshots
@@ -131,4 +139,36 @@ free-space floor was restored.
 
 ## Release And Closure Evidence
 
-Pending CI, deploy and terminal catch-up readback.
+PR #675 merged as `b754a4ea6f0f302689de9f6374700d65485bd929` after all
+three CI jobs passed. The exact main SHA was deployed through
+`scripts/deploy_fly_main.sh --remote-only` as image
+`deployment-01M3F2BBC9JETRE3RR3WCHF9H8`. Focused local checks passed:
+130 scheduler/storage tests, 82 continuation/import/census/compression tests,
+and 4 packet-boundary tests.
+
+Compaction encoded 14,789 historical packet rows, saving 769,236,534 logical
+bytes across raw payloads and attachment metadata. All 15,289 packet rows
+matched a pre-compaction SQLite backup byte-for-byte after decoding. `VACUUM`
+and WAL checkpoint reduced the main DB from 1,631,092,736 to 805,990,400
+bytes; `quick_check=ok`, freelist zero.
+
+The sole current volume is `vol_491x2m01q7589xor` at 3 GiB, attached to the
+sole started app machine `148eddde9b5778` (1/1 Fly checks, correct image).
+Both migrated SQLite databases passed `quick_check=ok`; main DB event, packet,
+inbox and ops-run row counts matched the frozen source. The old 4 GiB volume
+`vol_4m83jjyewxmjn6gr` and its machine were destroyed. External `/healthz`
+returned `ready=true`, `issues=[]`, about 1,434 MiB free, warning floor
+768 MiB. Same-day catch-up run 9691 ended without unresolved inbox rows.
+Post-cutover bounded run 9696 processed one inbox row and ended successfully
+with zero technical/storage errors. Timestamped runtime logs after cutover
+contained no new storage-admission, storage-notice, `Errno 28`, or SQLite
+disk-full errors. Full non-secret evidence and restricted migration archives
+are in the retained incident artifact directory above.
+
+The storage recovery does not resolve the separate media-review gate. Eight
+future `vk_sync` jobs still report `vk_sync_missing_materialized_media`; seven
+have no stored URL for the managed Afisha group, including event 8934 on
+September 27. Some have URLs from their source groups, which are not managed
+Afisha publication evidence. These
+jobs have retry times and require their own publication/media follow-up. This
+is also tracked in `INC-2026-09-24-vk-afisha-publication-recurrence`.
