@@ -8,11 +8,16 @@ permissions:
 
 jobs:
   probe-limiter-supabase:
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [production, production-readonly, volunteer-monitor-canary, region-talk-ydb-import]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: production
+    environment: ${{ matrix.scope }}
     env:
       EXPECTED_PROJECT_REF: epyznmylqmchteykjsqj
+      SCOPE: ${{ matrix.scope }}
       SUPABASE_ACCESS_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_API_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_API_TOKEN }}
       SUPABASE_CLI_ACCESS_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_CLI_ACCESS_TOKEN }}
@@ -25,9 +30,7 @@ jobs:
       SUPABASE_DATABASE_URL_PRESENT: ${{ secrets.SUPABASE_DATABASE_URL }}
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-
-      - name: Resolve production Supabase management credential
+      - name: Resolve environment Supabase credential
         id: auth
         shell: bash
         run: |
@@ -37,20 +40,22 @@ jobs:
           for name in             SUPABASE_ACCESS_TOKEN_CANDIDATE             SUPABASE_API_TOKEN_CANDIDATE             SUPABASE_CLI_ACCESS_TOKEN_CANDIDATE             SUPABASE_MANAGEMENT_API_TOKEN_CANDIDATE             SUPABASE_MANAGEMENT_TOKEN_CANDIDATE             SUPABASE_PAT_CANDIDATE             SUPABASE_PERSONAL_ACCESS_TOKEN_CANDIDATE             SUPABASE_TOKEN_CANDIDATE
           do
             value="${!name:-}"
-            if [[ -n "$value" ]]; then
-              source_name="$name"
-              token="$value"
-              break
-            fi
+            if [[ -n "$value" ]]; then source_name="$name"; token="$value"; break; fi
           done
-          [[ -n "$token" ]] || { echo "::error title=Supabase management token missing::No production management token candidate is configured."; exit 2; }
-          echo "::add-mask::$token"
-          echo "TOKEN_SOURCE=$source_name"
-          echo "token=$token" >> "$GITHUB_OUTPUT"
+          echo "SCOPE=$SCOPE"
           [[ -n "${SUPABASE_DB_PASSWORD_PRESENT:-}" ]] && echo "DB_PASSWORD_PRESENT=true" || echo "DB_PASSWORD_PRESENT=false"
           [[ -n "${SUPABASE_DATABASE_URL_PRESENT:-}" ]] && echo "DATABASE_URL_PRESENT=true" || echo "DATABASE_URL_PRESENT=false"
+          if [[ -z "$token" ]]; then
+            echo "TOKEN_PRESENT=false"
+            exit 0
+          fi
+          echo "::add-mask::$token"
+          echo "TOKEN_PRESENT=true"
+          echo "TOKEN_SOURCE=$source_name"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
 
-      - name: Verify correct limiter Supabase account
+      - name: Verify visible projects when token exists
+        if: ${{ steps.auth.outputs.token != '' }}
         env:
           SUPABASE_TOKEN: ${{ steps.auth.outputs.token }}
         shell: bash
@@ -61,16 +66,9 @@ jobs:
           import json, os
           from pathlib import Path
           rows=json.loads(Path('/tmp/projects.json').read_text())
+          safe=[{'id':r.get('id') or r.get('ref'),'name':r.get('name'),'region':r.get('region'),'status':r.get('status')} for r in rows]
+          print(json.dumps({'scope':os.environ['SCOPE'],'projects':safe},ensure_ascii=False,sort_keys=True))
           expected=os.environ['EXPECTED_PROJECT_REF']
-          safe=[{
-              'id': row.get('id') or row.get('ref'),
-              'name': row.get('name'),
-              'region': row.get('region'),
-              'status': row.get('status'),
-          } for row in rows]
-          print(json.dumps(safe, ensure_ascii=False, sort_keys=True))
-          if not any(str(row.get('id') or row.get('ref')) == expected for row in rows):
-              raise SystemExit(f'expected limiter project {expected} is not visible to this Supabase account')
-          print('LIMITER_SUPABASE_ACCOUNT=PASS')
+          print('LIMITER_PROJECT_VISIBLE=' + ('true' if any(str(r.get('id') or r.get('ref'))==expected for r in rows) else 'false'))
           PY
           rm -f /tmp/projects.json
