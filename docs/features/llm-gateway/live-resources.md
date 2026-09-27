@@ -78,19 +78,19 @@ receives an authority service credential or a Google key.
 
 ### KenigEvents authority-outage fallback
 
-KenigEvents owns exactly one emergency Live alias: `GOOGLE_API_KEY2`. The
-server-side Live boundary may pass central authority configuration, optional
-ledger id and that one alias to the shared SDK. It must not pass Wonderful
+KenigEvents owns exactly one emergency Live source alias: `GOOGLE_API_KEY2`. The
+trusted server-side Live boundary maps only that value to the shared SDK field
+`AI_RESOURCE_CONTROL_FALLBACK_KEY` together with central authority configuration and optional ledger id. It must not pass Wonderful
 Lections' `GOOGLE_API_KEY`, Street Story's `GOOGLE_API_KEY3`, Projects Hub's
 `GOOGLE_API_KEY4`, or shared reserve keys 5–6 as KenigEvents fallback.
 
-The SDK may use `GOOGLE_API_KEY2` only when the initial read-only authority
+The SDK may use the mapped `AI_RESOURCE_CONTROL_FALLBACK_KEY` only when the initial read-only authority
 capability probe returns `RESOURCE_CONTROL_UNAVAILABLE`, before any mutating
 acquire. It must not activate after a successful authority probe, for
 admission/quota/429/capacity/credential failures, after a lost mutating acquire
 response, or after provider ready. Emergency mode uses the same
 `live-interaction` resource guard, permits one local KenigEvents fallback
-session per process and expires after two hours. If the assigned alias is
+session per host and expires after two hours. If the assigned alias is
 unavailable, the outage stays an explicit Live error rather than borrowing
 another project's key.
 
