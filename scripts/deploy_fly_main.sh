@@ -93,9 +93,12 @@ trap cleanup_private_wheel EXIT
 }
 git -C "$AI_RESOURCE_CONTROL_REPO" fetch origin --tags >/dev/null
 AI_RESOURCE_TAG_SHA="$(git -C "$AI_RESOURCE_CONTROL_REPO" rev-list -n1 "v${AI_RESOURCE_CONTROL_VERSION}")"
-AI_RESOURCE_MAIN_SHA="$(git -C "$AI_RESOURCE_CONTROL_REPO" rev-parse "origin/main")"
-[[ -n "$AI_RESOURCE_TAG_SHA" && "$AI_RESOURCE_TAG_SHA" == "$AI_RESOURCE_MAIN_SHA" ]] || {
-  echo "Refusing deploy: ai-resource-control v${AI_RESOURCE_CONTROL_VERSION} is not exact current origin/main." >&2
+[[ -n "$AI_RESOURCE_TAG_SHA" ]] || {
+  echo "Refusing deploy: ai-resource-control v${AI_RESOURCE_CONTROL_VERSION} tag is unavailable." >&2
+  exit 2
+}
+git -C "$AI_RESOURCE_CONTROL_REPO" merge-base --is-ancestor "$AI_RESOURCE_TAG_SHA" "origin/main" || {
+  echo "Refusing deploy: ai-resource-control v${AI_RESOURCE_CONTROL_VERSION} is not in current main lineage." >&2
   exit 2
 }
 mkdir -p "$AI_RESOURCE_WHEEL_DIR"
