@@ -171,3 +171,14 @@ def test_event_search_edge_exposes_bounded_model_context_only_after_verification
     assert "model_context: truncateText(digest, contextLimit)" in source
     assert "items.length <= 3 ? 1800 : items.length <= 6 ? 1000 : 650" in source
     assert "v: 3," in source
+
+
+def test_event_search_pipeline_is_query_embedding_then_pgvector_then_digest_verifier() -> None:
+    source = Path("supabase/functions/event-search/index.ts").read_text(encoding="utf-8")
+    embedding_index = source.index("const embeddingResult = await embedQuery(")
+    vector_index = source.index('"search_events_by_embedding_internal_v1"')
+    digest_index = source.index("candidateDigests = await fetchCandidateDigests(")
+    verify_index = source.index("llmResult = await llmVerify(query, items, candidateDigests")
+
+    assert embedding_index < vector_index < digest_index < verify_index
+    assert 'algorithm_id: "pgvector_gemini_embedding_2_vector_first_v1"' in source
