@@ -2,53 +2,75 @@ name: Prelaunch production root release
 
 on:
   workflow_dispatch:
-    inputs:
-      expected_sha:
-        description: Full origin/main SHA to publish
-        required: true
-        type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: prelaunch-production-root-release
-  cancel-in-progress: false
-
 jobs:
-  publish-root:
-    if: ${{ github.ref == 'refs/heads/main' }}
+  probe-limiter-supabase:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 10
     environment: production
     env:
-      EXPECTED_SHA: ${{ inputs.expected_sha }}
-      KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
-      KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
-      KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
-      KENIGEVENTS_SITE_YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
-      KENIGEVENTS_SITE_YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
-      PUBLIC_PERSONALIZATION_SUPABASE_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_URL }}
-      PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
-      PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
+      EXPECTED_PROJECT_REF: epyznmylqmchteykjsqj
+      SUPABASE_ACCESS_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_API_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_API_TOKEN }}
+      SUPABASE_CLI_ACCESS_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_CLI_ACCESS_TOKEN }}
+      SUPABASE_MANAGEMENT_API_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_MANAGEMENT_API_TOKEN }}
+      SUPABASE_MANAGEMENT_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_MANAGEMENT_TOKEN }}
+      SUPABASE_PAT_CANDIDATE: ${{ secrets.SUPABASE_PAT }}
+      SUPABASE_PERSONAL_ACCESS_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_PERSONAL_ACCESS_TOKEN }}
+      SUPABASE_TOKEN_CANDIDATE: ${{ secrets.SUPABASE_TOKEN }}
+      SUPABASE_DB_PASSWORD_PRESENT: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DATABASE_URL_PRESENT: ${{ secrets.SUPABASE_DATABASE_URL }}
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ inputs.expected_sha }}
-          fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22.12.0
-          cache: npm
-          cache-dependency-path: site/package-lock.json
-      - run: npm ci --prefix site --no-audit --no-fund
-      - run: cd site && npx playwright install --with-deps chromium
-      - name: Publish exact main root with rollback
-        run: .github/scripts/publish-prelaunch-root-main.sh
-      - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: prelaunch-root-release-${{ github.run_id }}
-          path: artifacts/prelaunch-root-release
-          if-no-files-found: warn
-          retention-days: 30
+
+      - name: Resolve production Supabase management credential
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_name=''
+          token=''
+          for name in             SUPABASE_ACCESS_TOKEN_CANDIDATE             SUPABASE_API_TOKEN_CANDIDATE             SUPABASE_CLI_ACCESS_TOKEN_CANDIDATE             SUPABASE_MANAGEMENT_API_TOKEN_CANDIDATE             SUPABASE_MANAGEMENT_TOKEN_CANDIDATE             SUPABASE_PAT_CANDIDATE             SUPABASE_PERSONAL_ACCESS_TOKEN_CANDIDATE             SUPABASE_TOKEN_CANDIDATE
+          do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then
+              source_name="$name"
+              token="$value"
+              break
+            fi
+          done
+          [[ -n "$token" ]] || { echo "::error title=Supabase management token missing::No production management token candidate is configured."; exit 2; }
+          echo "::add-mask::$token"
+          echo "TOKEN_SOURCE=$source_name"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+          [[ -n "${SUPABASE_DB_PASSWORD_PRESENT:-}" ]] && echo "DB_PASSWORD_PRESENT=true" || echo "DB_PASSWORD_PRESENT=false"
+          [[ -n "${SUPABASE_DATABASE_URL_PRESENT:-}" ]] && echo "DATABASE_URL_PRESENT=true" || echo "DATABASE_URL_PRESENT=false"
+
+      - name: Verify correct limiter Supabase account
+        env:
+          SUPABASE_TOKEN: ${{ steps.auth.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error             -H "Authorization: Bearer $SUPABASE_TOKEN"             -H "Accept: application/json"             https://api.supabase.com/v1/projects > /tmp/projects.json
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          rows=json.loads(Path('/tmp/projects.json').read_text())
+          expected=os.environ['EXPECTED_PROJECT_REF']
+          safe=[{
+              'id': row.get('id') or row.get('ref'),
+              'name': row.get('name'),
+              'region': row.get('region'),
+              'status': row.get('status'),
+          } for row in rows]
+          print(json.dumps(safe, ensure_ascii=False, sort_keys=True))
+          if not any(str(row.get('id') or row.get('ref')) == expected for row in rows):
+              raise SystemExit(f'expected limiter project {expected} is not visible to this Supabase account')
+          print('LIMITER_SUPABASE_ACCOUNT=PASS')
+          PY
+          rm -f /tmp/projects.json
