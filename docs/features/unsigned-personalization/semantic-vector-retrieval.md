@@ -133,6 +133,16 @@ It consumes the exported `site/src/data/preview-events.json`, builds compact sea
 
 The list above is deliberately canonical-field-only. It excludes raw OCR, raw source HTML, raw poster text and provider/debug payloads; see the poster/OCR boundary above for the only supported indirect path.
 
+Terminology note: the `event_search_documents.search_digest` column used by
+this vector projection is the generated **`search_v3` vector document text**.
+`build_search_digest()` rebuilds it from canonical event fields during vector
+sync. It is not a passthrough of the older product/Smart-Update
+`event.search_digest` field, even though the historical name is the same.
+The search embedding is produced from this generated `search_v3` document and
+stored in `event_embeddings`; at query time the user query is independently
+embedded and the pgvector RPC selects candidates before any candidate digest is
+loaded for LLM verification.
+
 The sync is incremental by `(event_id, embedding_model, embedding_dim, embedding_doc_kind, text_hash)`: unchanged `search_v3` or `related_v1` rows are skipped independently, so adding the second document kind does not force a full re-embedding after the initial backfill.
 
 ### Static related pipeline

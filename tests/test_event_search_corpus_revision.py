@@ -404,3 +404,31 @@ def test_authoritative_main_report_publishes_terminal_zero_gap_coverage(
     assert report["stale_embedding_count"] == 0
     assert report["orphan_embedding_count"] == 0
     assert report["wrong_model_or_dimension_count"] == 0
+
+
+def test_search_v3_embedding_document_does_not_passthrough_legacy_event_search_digest() -> None:
+    event = _event(7, title="Камерный концерт")
+    event.update({
+        "event_type": "концерт",
+        "summary": "Струнный квартет и солист.",
+        "description_html": "<p>Музыка XX века в камерном зале.</p>",
+        "venue_name": "Филармония",
+        "address": "ул. Богдана Хмельницкого, 61",
+        "city": "Калининград",
+        "search_digest": "LEGACY_DIGEST_SENTINEL_MUST_NOT_BE_EMBEDDED",
+        "ticket": {"label": "по билетам"},
+    })
+    doc = sync.build_search_doc(
+        event,
+        site_origin="https://kenigevents.ru",
+        base_path="",
+        ics_base_url="",
+    )
+
+    assert doc.document["search_doc_version"] == "event-search-doc-v3-search-facets"
+    assert "LEGACY_DIGEST_SENTINEL_MUST_NOT_BE_EMBEDDED" not in doc.document["search_digest"]
+    assert "LEGACY_DIGEST_SENTINEL_MUST_NOT_BE_EMBEDDED" not in doc.search_embedding_input
+    assert "Камерный концерт" in doc.search_embedding_input
+    assert "Струнный квартет и солист" in doc.search_embedding_input
+    assert "Филармония" in doc.search_embedding_input
+    assert "Калининград" in doc.search_embedding_input

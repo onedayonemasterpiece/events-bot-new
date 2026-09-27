@@ -49,18 +49,23 @@ def validate_source(source_dir: Path, build_id: str) -> Path:
     base_path = manifest.get("basePath")
     if base_path not in (None, f"/{build_id}"):
         raise PreviewPublishError("preview manifest basePath mismatch")
-    required = (source / "__preview" / "index.html", source / "poisk" / "index.html")
+    required = (source / "index.html", source / "poisk" / "index.html")
     if any(not path.is_file() for path in required):
         raise PreviewPublishError("preview review/search entrypoint is missing")
     return source
 
 
-def iter_files(source: Path) -> Iterable[Path]:
+def iter_files(source: Path, *, owner_review: bool = False) -> Iterable[Path]:
+    service_roots = {"__preview", "lab", "_review"}
     for path in sorted(source.rglob("*")):
         if path.is_symlink():
             raise PreviewPublishError("symlinks are not allowed in preview artifact")
-        if path.is_file():
-            yield path
+        if not path.is_file():
+            continue
+        rel = path.relative_to(source)
+        if owner_review and rel.parts and rel.parts[0] in service_roots:
+            continue
+        yield path
 
 
 def object_metadata(rel: str) -> dict[str, str]:
@@ -109,6 +114,7 @@ def publish_preview(
     *,
     client: Any | None = None,
     bucket: str | None = None,
+    owner_review: bool = False,
 ) -> dict[str, Any]:
     build_id = validate_build_id(build_id)
     source = validate_source(source_dir, build_id)
@@ -119,7 +125,7 @@ def publish_preview(
         raise PreviewPublishError("bucket is required")
 
     uploaded = 0
-    for path in iter_files(source):
+    for path in iter_files(source, owner_review=owner_review):
         rel = path.relative_to(source).as_posix()
         if rel.startswith("../") or rel.startswith("/"):
             raise PreviewPublishError("invalid artifact path")
@@ -128,15 +134,30 @@ def publish_preview(
         uploaded += 1
     if uploaded == 0:
         raise PreviewPublishError("preview artifact is empty")
-    return {"build_id": build_id, "prefix": f"{build_id}/", "objects": uploaded}
+    return {
+        "build_id": build_id,
+        "prefix": f"{build_id}/",
+        "objects": uploaded,
+        "entry_path": "/",
+        "owner_review": owner_review,
+    }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", required=True)
     parser.add_argument("--build-id", required=True)
+    parser.add_argument(
+        "--owner-review",
+        action="store_true",
+        help="Publish only user-facing routes; omit __preview/lab/_review service surfaces.",
+    )
     args = parser.parse_args()
-    result = publish_preview(Path(args.source_dir), args.build_id)
+    result = publish_preview(
+        Path(args.source_dir),
+        args.build_id,
+        owner_review=args.owner_review,
+    )
     print(RESULT_MARKER + json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
 

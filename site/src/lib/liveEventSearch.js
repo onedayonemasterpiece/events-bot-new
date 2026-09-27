@@ -10,6 +10,8 @@ export function createLiveEventSearchController({
   endpoint,
   getAccessToken,
   onResults = () => {},
+  onTranscript = () => {},
+  onTurnComplete = () => {},
   onState = () => {},
   onNotice = () => {},
   onError = () => {},
@@ -61,6 +63,15 @@ export function createLiveEventSearchController({
   const client = clientFactory({
     request,
     onEvent(event) {
+      if (event?.type === 'input_transcript' || event?.type === 'output_transcript') {
+        const text = String(event.text || '').trim();
+        if (text) onTranscript({
+          role: event.type === 'input_transcript' ? 'user' : 'assistant',
+          text,
+          event,
+        });
+        return;
+      }
       if (event?.type === 'search_results') {
         resultPendingTurn = true;
         const query = String(event.query || lastQuery || '').trim();
@@ -68,10 +79,16 @@ export function createLiveEventSearchController({
         onResults({ query, offset, append: offset > 0, data: event.data || {} });
         return;
       }
-      if (event?.type === 'turn_complete' && resultPendingTurn) {
-        resultPendingTurn = false;
-        scheduleFollowupStop();
+      if (event?.type === 'turn_complete') {
+        onTurnComplete(event);
+        if (resultPendingTurn) {
+          resultPendingTurn = false;
+          scheduleFollowupStop();
+        }
       }
+    },
+    onTiming(kind) {
+      if (kind === 'speech_start') clearFollowup();
     },
     onState(state, detail) {
       onState(state, detail);
@@ -110,6 +127,13 @@ export function createLiveEventSearchController({
     return ensureStarted({ microphone: true });
   }
 
+  function mute() {
+    if (!client.sessionId || !client.microphoneEnabled) return false;
+    client.disableMicrophone();
+    onState('started', { microphone: false });
+    return true;
+  }
+
   async function more() {
     if (!lastQuery || !client.sessionId) throw liveError('SEARCH_CONTEXT_MISSING');
     clearFollowup();
@@ -127,6 +151,7 @@ export function createLiveEventSearchController({
     search,
     more,
     startVoice,
+    mute,
     stop,
     clearFollowup,
     get active() { return Boolean(client.sessionId || client.starting); },

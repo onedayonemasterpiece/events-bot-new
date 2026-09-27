@@ -23,6 +23,7 @@ class FakeClient:
 def make_preview(tmp_path: Path, build_id: str = "preview-review-test") -> Path:
     root = tmp_path / build_id
     (root / "__preview").mkdir(parents=True)
+    (root / "lab").mkdir()
     (root / "poisk").mkdir()
     (root / "_astro").mkdir()
     (root / "calendar").mkdir()
@@ -30,7 +31,9 @@ def make_preview(tmp_path: Path, build_id: str = "preview-review-test") -> Path:
         json.dumps({"buildId": build_id, "basePath": f"/{build_id}"}),
         encoding="utf-8",
     )
+    (root / "index.html").write_text("home", encoding="utf-8")
     (root / "__preview" / "index.html").write_text("review", encoding="utf-8")
+    (root / "lab" / "index.html").write_text("lab", encoding="utf-8")
     (root / "poisk" / "index.html").write_text("search", encoding="utf-8")
     (root / "_astro" / "app.js").write_text("x", encoding="utf-8")
     (root / "calendar" / "event.ics").write_text("BEGIN:VCALENDAR", encoding="utf-8")
@@ -66,3 +69,20 @@ def test_metadata_matches_existing_preview_policy() -> None:
     assert object_metadata("service-share/current/manifest.json")["CacheControl"] == "no-cache, max-age=0"
     assert object_metadata("manifest.webmanifest")["ContentType"].startswith("application/manifest+json")
     assert object_metadata("event.ics")["ContentDisposition"] == 'inline; filename="event.ics"'
+
+
+def test_owner_review_omits_service_surfaces(tmp_path: Path) -> None:
+    root = make_preview(tmp_path)
+    client = FakeClient()
+    result = publish_preview(
+        root,
+        root.name,
+        client=client,
+        bucket="bucket",
+        owner_review=True,
+    )
+    keys = [key for _, _, key, _ in client.calls]
+    assert result["owner_review"] is True
+    assert f"{root.name}/index.html" in keys
+    assert f"{root.name}/poisk/index.html" in keys
+    assert not any("/__preview/" in key or "/lab/" in key or "/_review/" in key for key in keys)

@@ -1,53 +1,117 @@
 ---
 import { withBase } from '../lib/events';
+import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 
 const items = [
-  { label: 'Сегодня', href: '/segodnya/', note: 'События на день' },
-  { label: 'Завтра', href: '/zavtra/', note: 'Планы заранее' },
-  { label: 'Выходные', href: '/vyhodnye/', note: 'Суббота и воскресенье' },
-  { label: 'Бесплатно', href: '/podborki/besplatnye-sobytiya/', note: 'С честными условиями' },
-  { label: 'Выставки', href: '/vystavki/', note: 'Идущие и новые' },
-  { label: 'Необычное', href: '/neobychnoe/', note: 'Новый маршрут выбора' },
+  { label: 'Сегодня', href: '/segodnya/' },
+  { label: 'Завтра', href: '/zavtra/' },
+  { label: 'Выходные', href: '/vyhodnye/' },
+  { label: 'Бесплатно', href: '/podborki/besplatnye-sobytiya/' },
+  { label: 'Выставки', href: '/vystavki/' },
+  { label: 'Фестивали', href: '/festivali/' },
+  { label: 'Популярное', href: '/populyarnoe/' },
+  { label: 'Необычное', href: '/neobychnoe/' },
+  ...(INTEREST_CLUBS_PUBLIC_ENABLED ? [{ label: 'Клубы по интересам', href: '/kluby-po-interesam/' }] : []),
 ];
 ---
 
-<nav class="home-quick-nav" data-home-quick-nav aria-label="Быстрый выбор событий">
-  {items.map((item, index) => (
-    <a href={withBase(item.href)} data-home-quick-nav-item={index + 1}>
-      <strong>{item.label}</strong>
-      <span>{item.note}</span>
-    </a>
-  ))}
-</nav>
+<div class="home-quick-nav-anchor" data-home-nav-anchor>
+  <nav class="home-quick-nav" data-home-quick-nav aria-label="Быстрый выбор событий">
+    {items.map((item, index) => (
+      <a href={withBase(item.href)} data-home-quick-nav-item={index + 1}>{item.label}</a>
+    ))}
+  </nav>
+</div>
 
 <style>
+  .home-quick-nav-anchor {
+    min-height: 64px;
+    margin: clamp(1rem, 3vw, 1.6rem) 0 clamp(1.4rem, 4vw, 2.4rem);
+  }
   .home-quick-nav {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: .7rem;
-    margin: 1rem 0;
+    width: max-content;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    margin: 0 auto;
+    padding: 5px;
+    border: 1px solid rgba(255,255,255,.95);
+    border-radius: 20px;
+    background: rgba(255,252,246,.94);
+    box-shadow: inset 0 1px 0 #fff, 0 3px 6px rgba(55,37,24,.045), 0 12px 26px -10px rgba(55,37,24,.25);
+    backdrop-filter: blur(18px);
+    transition: box-shadow 180ms ease, transform 260ms cubic-bezier(.22,1,.36,1);
   }
   .home-quick-nav a {
-    min-width: 0;
-    min-height: 92px;
-    display: grid;
-    align-content: center;
-    gap: .15rem;
-    padding: .85rem .9rem;
-    border: 1px solid rgba(121,48,20,.13);
-    border-radius: 20px;
-    background: #fffaf3;
-    color: var(--text);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: .18rem .78rem;
+    border-radius: 14px;
+    color: var(--muted);
+    font-size: clamp(.78rem, .84vw, .92rem);
+    font-weight: 680;
+    line-height: 1.1;
     text-decoration: none;
-    transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+    white-space: nowrap;
   }
-  .home-quick-nav a:hover { transform: translateY(-2px); border-color: rgba(121,48,20,.28); background: #fff; }
-  .home-quick-nav a:focus-visible { outline: 3px solid rgba(165,72,33,.25); outline-offset: 2px; }
-  .home-quick-nav strong { font-size: 1.02rem; line-height: 1.08; }
-  .home-quick-nav span { color: var(--muted); font-size: .75rem; font-weight: 680; line-height: 1.2; }
-  @media (max-width: 1020px) { .home-quick-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  @media (max-width: 560px) {
-    .home-quick-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
-    .home-quick-nav a { min-height: 82px; padding: .72rem; }
+  .home-quick-nav a:hover,
+  .home-quick-nav a:focus-visible { background: #f5eadc; color: var(--text); }
+
+  @media (min-width:760px) {
+    .home-quick-nav.is-docked {
+      position: fixed;
+      z-index: 70;
+      top: 12px;
+      right: max(20px, calc((100vw - 1240px) / 2));
+      max-width: calc(100vw - 310px);
+      margin: 0;
+      box-shadow: inset 0 1px 0 #fff, 0 7px 18px rgba(55,37,24,.09), 0 18px 42px -12px rgba(55,37,24,.30);
+    }
+  }
+
+  @media (max-width:759px) {
+    .home-quick-nav-anchor { min-height: 0; margin: .9rem 0 1.4rem; }
+    .home-quick-nav {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2,minmax(0,1fr));
+      gap: .42rem;
+      padding: .55rem;
+      border-radius: 22px;
+    }
+    .home-quick-nav a {
+      min-width: 0;
+      min-height: 46px;
+      padding-inline: .5rem;
+      text-align: center;
+      white-space: normal;
+    }
   }
 </style>
+
+<script>
+  const anchor = document.querySelector<HTMLElement>('[data-home-nav-anchor]');
+  const nav = anchor?.querySelector<HTMLElement>('[data-home-quick-nav]');
+  if (anchor && nav) {
+    const desktop = window.matchMedia('(min-width:760px)');
+    let frame = 0;
+    const sync = () => {
+      frame = 0;
+      const docked = desktop.matches && anchor.getBoundingClientRect().top <= 12;
+      nav.classList.toggle('is-docked', docked);
+      document.body.dataset.homeNavDocked = docked ? 'true' : 'false';
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(sync);
+    };
+    window.addEventListener('scroll', schedule, { passive:true });
+    window.addEventListener('resize', schedule, { passive:true });
+    window.addEventListener('pageshow', schedule);
+    desktop.addEventListener('change', schedule);
+    sync();
+  }
+</script>

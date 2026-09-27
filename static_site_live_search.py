@@ -179,12 +179,12 @@ async def verify_supabase_user(config: LiveSearchConfig, token: str) -> Mapping[
 async def call_event_search(config: LiveSearchConfig, token: str, query: str, offset: int) -> Mapping[str, Any]:
     body = {
         "query": query,
-        "limit": 8,
+        "limit": 9,
         "offset": offset,
-        "candidate_window": 10,
-        "include_fallback": True,
-        "use_llm_verifier": False,
-        "allow_llm_fallback": False,
+        "candidate_window": 18,
+        "include_fallback": False,
+        "use_llm_verifier": True,
+        "allow_llm_fallback": True,
         "client_request_id": str(uuid.uuid4()),
     }
     headers = {
@@ -201,6 +201,12 @@ async def call_event_search(config: LiveSearchConfig, token: str, query: str, of
                 if response.status != 200 or not isinstance(payload, Mapping) or payload.get("error"):
                     code = str(payload.get("error") if isinstance(payload, Mapping) else "search_failed")
                     raise LiveSearchToolError("SEARCH_TOOL_FAILED", code[:180])
+                verifier = payload.get("llm_verifier") if isinstance(payload.get("llm_verifier"), Mapping) else {}
+                if not bool(verifier.get("used")) or str(verifier.get("status") or "") != "ok":
+                    raise LiveSearchToolError(
+                        "SEARCH_RELEVANCE_UNAVAILABLE",
+                        str(verifier.get("status") or "llm_verifier_unavailable")[:180],
+                    )
     except LiveSearchToolError:
         raise
     except Exception as exc:
@@ -208,26 +214,64 @@ async def call_event_search(config: LiveSearchConfig, token: str, query: str, of
     return payload
 
 
+def _browser_search_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    browser = dict(payload)
+    for key in ("items", "fallback_items"):
+        rows = payload.get(key)
+        if not isinstance(rows, list):
+            continue
+        browser[key] = [
+            {name: value for name, value in row.items() if name != "model_context"}
+            if isinstance(row, Mapping)
+            else row
+            for row in rows
+        ]
+    return browser
+
+
 def _tool_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
     items = list(payload.get("items") or [])
     fallback = list(payload.get("fallback_items") or [])
     visible = items or fallback
     summary = []
-    for item in visible[:8]:
+    for item in visible[:9]:
         if not isinstance(item, Mapping):
             continue
         event = item.get("event") if isinstance(item.get("event"), Mapping) else item
+        display = event.get("display") if isinstance(event.get("display"), Mapping) else {}
+        tags = event.get("tags") if isinstance(event.get("tags"), list) else []
         summary.append(
             {
                 "id": event.get("id") or item.get("event_id"),
-                "title": str(event.get("title") or item.get("title") or "")[:160],
-                "date": event.get("date") or event.get("event_date") or item.get("date"),
-                "city": str(event.get("city") or item.get("city") or "")[:80],
+                "title": str(display.get("title") or event.get("title") or item.get("title") or "")[:160],
+                "href": str(display.get("href") or "")[:320],
+                "date": display.get("display_date_time") or event.get("date") or event.get("event_date") or item.get("date"),
+                "city": str(display.get("city") or event.get("city") or item.get("city") or "")[:80],
+                "venue": str(display.get("venue_name") or event.get("location_name") or "")[:120],
+                "category": str(event.get("category") or display.get("event_type") or "")[:80],
+                "tags": [str(tag)[:60] for tag in tags[:8]],
+                "conditions": str(display.get("status_label") or "")[:120],
+                "age": display.get("age_restriction") or event.get("age_restriction"),
+                "summary": re.sub(
+                    r"\s+",
+                    " ",
+                    str(
+                        item.get("model_context")
+                        or display.get("summary")
+                        or display.get("meta_description")
+                        or event.get("summary")
+                        or event.get("meta_description")
+                        or ""
+                    ),
+                ).strip()[:1800],
+                "semantic_score": round(float(event.get("semantic_score") or event.get("base_similarity") or 0), 4),
             }
         )
+    verifier = payload.get("llm_verifier") if isinstance(payload.get("llm_verifier"), Mapping) else {}
     return {
         "count": len(visible),
         "has_more": bool(payload.get("has_more")),
+        "query_interpretation": str(verifier.get("query_interpretation") or "")[:800],
         "results": summary,
         "cards_already_shown_to_user": True,
     }
@@ -271,11 +315,16 @@ class KenigEventsLiveSearchAdapter:
             },
         ]
         instruction = (
-            "Ты голосовой помощник поиска KenigEvents. Отвечай по-русски кратко и разговорно. "
-            "Для любого утверждения о конкретных событиях сначала вызывай search_events; для просьбы показать ещё — continue_search. "
-            "Карточки результата интерфейс показывает сам, поэтому не перечисляй длинный каталог голосом. "
-            "Не выдумывай даты, цены, места или события и не имитируй веб-поиск. "
-            "После карточек помоги уточнить запрос или выбрать из найденного."
+            "Ты разговорный помощник поиска KenigEvents. Отвечай по-русски естественно, кратко и по делу. "
+            "Когда пользователь сформулировал новый запрос, можно коротко живо подтвердить действие (например, что сейчас поищешь), "
+            "но затем обязательно вызови search_events до любых утверждений о конкретных событиях. "
+            "Для просьбы показать ещё используй continue_search; для уточнения запроса снова используй search_events с уточнённой формулировкой. "
+            "После результата презентуй найденное: назови общее число вариантов и выдели обычно 2–3 наиболее подходящих, "
+            "объясняя соответствие запросу только по фактам из результата инструмента. Названия событий произноси точно — интерфейс делает их ссылками. "
+            "Не зачитывай весь каталог: полный набор пользователь видит стандартными карточками ниже ответа. "
+            "Не заявляй о персонализации или учёте личных интересов, пока такие данные явно не переданы в контексте. "
+            "Не выдумывай даты, цены, места, участников или события и не имитируй веб-поиск. "
+            "После ответа оставляй пространство для естественного уточнения в той же сессии."
         )
         return {
             "state": {
@@ -315,7 +364,7 @@ class KenigEventsLiveSearchAdapter:
             query = str(session.state.get("query") or "")
             if not query:
                 raise LiveSearchToolError("SEARCH_CONTEXT_MISSING", "search_events_required_first")
-            session.state["offset"] = int(session.state.get("offset") or 0) + 8
+            session.state["offset"] = int(session.state.get("offset") or 0) + 9
         else:
             raise LiveSearchToolError("LIVE_TOOL_UNKNOWN", "unknown_live_search_tool")
         offset = int(session.state.get("offset") or 0)
@@ -326,7 +375,7 @@ class KenigEventsLiveSearchAdapter:
                 "type": "search_results",
                 "query": query,
                 "offset": offset,
-                "data": payload,
+                "data": _browser_search_payload(payload),
             },
         )
         return _tool_summary(payload)

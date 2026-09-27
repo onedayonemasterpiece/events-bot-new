@@ -1,5 +1,27 @@
 # Authorized event search with Supabase pgvector
 
+> **2026-09-27 conversational Live supersession.** The dedicated `/poisk/`
+> owner surface is no longer a large form followed by a disposable result list
+> when `PUBLIC_STATIC_SITE_LIVE_SEARCH_URL` is configured. It is one
+> messenger-like conversation: the user's typed text or Live input transcript
+> appears as the user message; provider output transcription is rendered as the
+> model's visible reply while the same audio is played; a text-and-three-card
+> skeleton occupies the pending assistant turn; verified event cards follow
+> inside that same turn; later text/voice refinements append new turns instead
+> of replacing the conversation. Desktop result grids use the canonical
+> EventCard three-up contract and mobile uses one card per row.
+>
+> The Live tool requests pgvector recall with the existing LLM verifier enabled,
+> no discovery fallback, and fails closed for the conversational surface when
+> verifier-confirmed relevance is unavailable. The model receives a bounded JSON
+> view of the verified cards (title, link, date, city/venue, type, admission,
+> topics, short summary and semantic score) so it can present 2–3 particularly
+> relevant choices using concrete catalogue facts. Personal interests must not
+> be claimed until an explicit personalization context is actually supplied.
+> Older form/progress sections below remain implementation history for the
+> direct/compatibility path; they are not the target Live UX.
+
+
 > Status, 2026-07-27: backend P0 infrastructure is deployed; the static client
 > now has one origin-scoped Supabase/Yandex PKCE controller shared by Search,
 > Personal and the mobile menu. Enter/search-key submission and bounded
