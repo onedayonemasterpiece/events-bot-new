@@ -19161,6 +19161,7 @@ def _is_missing_event_media(task: JobTask, error: str | None) -> bool:
         and reason in {
             "vk_sync_missing_materialized_media",
             "vk_sync_missing_media_for_telegram_event",
+            "vk_sync_missing_media",
         }
     )
 

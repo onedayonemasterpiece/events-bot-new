@@ -25,6 +25,9 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Changed
+- VK Afisha event sync now defers a new post when no photo was successfully
+  attached. Missing media uses the daily media-check schedule rather than the
+  ordinary retry loop; the publisher no longer emits a text-only event post.
 - Owner-review R9 corrects the Home/Search regression from the R8 mixed UI
   branch. Home event HeroTalk and page-end HeroTalk are mosaic-led again; one
   in-flow navigation island becomes the fixed desktop island after scrolling,
