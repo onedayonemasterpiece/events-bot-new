@@ -27,7 +27,7 @@
 ## Supabase CLI and documentation evidence
 
 - Read the project Supabase skill security checklist before changes.
-- Scanned `https://supabase.com/changelog.md` on 2026-08-09. No current hosted Supabase Auth Admin `generate_link` breaking change applied; the recent self-hosted `API_EXTERNAL_URL` change is unrelated.
+- Scanned `https://supabase.com/changelog.md` on 2026-08-09. No current hosted Supabase Auth Admin `generate_link` breaking change applied; the recent on-premises `API_EXTERNAL_URL` change is unrelated.
 - Checked the current official `auth.admin.generateLink` reference: `https://supabase.com/docs/reference/javascript/auth-admin-generatelink`.
 - CLI discovery:
   - `supabase --version` -> `2.111.0`
