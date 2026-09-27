@@ -9,6 +9,8 @@ function harness() {
   const results = [];
   const states = [];
   const stops = [];
+  const transcripts = [];
+  const completedTurns = [];
   let handlers;
   let sessionId = null;
   let microphoneEnabled = false;
@@ -18,6 +20,8 @@ function harness() {
     endpoint: 'https://api.example.test/api/live-search',
     getAccessToken: async () => 'token-1',
     onResults: (payload) => results.push(payload),
+    onTranscript: (payload) => transcripts.push(payload),
+    onTurnComplete: (event) => completedTurns.push(event),
     onState: (state) => states.push(state),
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
@@ -54,6 +58,10 @@ function harness() {
         async input(message) {
           calls.push({ input: message });
         },
+        disableMicrophone() {
+          calls.push({ disableMicrophone: true });
+          microphoneEnabled = false;
+        },
         stop({ reason }) {
           stops.push(reason);
           sessionId = null;
@@ -63,7 +71,7 @@ function harness() {
       };
     },
   });
-  return { controller, calls, results, states, stops, get handlers() { return handlers; }, get timerFn() { return timerFn; } };
+  return { controller, calls, results, states, stops, transcripts, completedTurns, get handlers() { return handlers; }, get timerFn() { return timerFn; } };
 }
 
 test('Live search sends authorized text through the shared session and surfaces canonical card payload', async () => {
@@ -85,7 +93,7 @@ test('continue stays in the same Live session and follow-up timeout releases it'
   await h.controller.more();
   assert.deepEqual(h.calls.at(-1).input, { text: 'Покажи ещё варианты' });
 
-  h.handlers.onEvent({ type: 'search_results', query: 'театр', offset: 8, data: { items: [], has_more: false } });
+  h.handlers.onEvent({ type: 'search_results', query: 'театр', offset: 9, data: { items: [], has_more: false } });
   h.handlers.onEvent({ type: 'turn_complete' });
   assert.equal(h.timerFn.ms, 15000);
   h.timerFn.fn();
@@ -111,4 +119,24 @@ test('typed Live search stays microphone-free and voice enables mic in the same 
   assert.equal(h.controller.microphoneEnabled, true);
   assert.equal(h.calls.filter((call) => call.start).length, 1);
   assert.equal(h.calls.filter((call) => call.enableMicrophone).length, 1);
+});
+
+
+test('Live controller surfaces both user and model transcripts and mute preserves the session', async () => {
+  const h = harness();
+  await h.controller.startVoice();
+  h.handlers.onEvent({ type: 'input_transcript', text: 'хочу камерный концерт' });
+  h.handlers.onEvent({ type: 'output_transcript', text: 'Сейчас поищу подходящие варианты.' });
+  assert.deepEqual(h.transcripts.map(({ role, text }) => [role, text]), [
+    ['user', 'хочу камерный концерт'],
+    ['assistant', 'Сейчас поищу подходящие варианты.'],
+  ]);
+
+  assert.equal(h.controller.mute(), true);
+  assert.equal(h.controller.sessionId, 'live-1');
+  assert.equal(h.controller.microphoneEnabled, false);
+  assert.equal(h.calls.filter((call) => call.disableMicrophone).length, 1);
+
+  h.handlers.onEvent({ type: 'turn_complete' });
+  assert.equal(h.completedTurns.length, 1);
 });

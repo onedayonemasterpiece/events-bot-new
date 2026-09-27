@@ -17,7 +17,7 @@ import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 import { focusGroupPageFamily, focusGroupPageLabel } from '../lib/focus-group-surface';
 import type { PreviewEvent } from '../lib/types';
 
-export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'festivals' | 'popular' | 'unusual' | 'clubs';
+export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'free' | 'exhibitions' | 'festivals' | 'popular' | 'unusual' | 'clubs';
 export type MobileTopMode = 'standard' | 'contextual' | 'immersive';
 export type MobileBottomMode = 'nav' | 'cta' | 'none';
 
@@ -45,9 +45,10 @@ interface Props {
   noindex?: boolean;
   disableViewportZoom?: boolean;
   headerBadge?: HeaderBadge;
+  homeFloatingNav?: boolean;
 }
 
-const { title, description, canonicalUrl, ogImage, ogImageAlt, ogImageType, ogImageWidth, ogImageHeight, ogType = 'article', structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false, disableViewportZoom = false, headerBadge } = Astro.props;
+const { title, description, canonicalUrl, ogImage, ogImageAlt, ogImageType, ogImageWidth, ogImageHeight, ogType = 'article', structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false, disableViewportZoom = false, headerBadge, homeFloatingNav = false } = Astro.props;
 const robots = IS_SECRET_CANDIDATE
   ? 'noindex,nofollow,noarchive,nosnippet'
   : (noindex ? 'noindex,nofollow,noarchive' : (IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive'));
@@ -141,6 +142,7 @@ const HEADER_NAVIGATION = [
   { key: 'today', label: 'Сегодня', href: '/segodnya/' },
   { key: 'tomorrow', label: 'Завтра', href: '/zavtra/' },
   { key: 'weekend', label: 'Выходные', href: '/vyhodnye/' },
+  { key: 'free', label: 'Бесплатно', href: '/podborki/besplatnye-sobytiya/' },
   { key: 'exhibitions', label: 'Выставки', href: '/vystavki/' },
   { key: 'festivals', label: 'Фестивали', href: '/festivali/' },
   { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
@@ -172,7 +174,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {ogImageWidth && <meta property="og:image:width" content={String(ogImageWidth)} />}
     {ogImageHeight && <meta property="og:image:height" content={String(ogImageHeight)} />}
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
-    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
+    <link rel="icon" href={`${withBase('/brand/favicon-tag-wide-o.svg')}?v=20260927-r9`} type="image/svg+xml" sizes="any" />
     <link rel="manifest" href={`${withBase('/manifest.webmanifest')}?v=20260727-brand-icon-v2`} />
     <meta name="theme-color" content="#f7efe3" />
     <meta name="format-detection" content="telephone=yes" />
@@ -209,7 +211,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
-      html { min-width: 320px; scroll-behavior: smooth; }
+      html { min-width: 320px; scroll-behavior: smooth; overflow-x: clip; }
       body {
         margin: 0;
         background:
@@ -220,6 +222,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
+        overflow-x: clip;
       }
       body::before {
         content: "";
@@ -305,7 +308,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         white-space: nowrap;
       }
       .mobile-discovery-menu__links a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 0.28em; }
-      .site-nav { min-width: 0; display: flex; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; margin-left: auto; }
+      .site-nav { min-width: 0; max-width: 100%; display: flex; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; margin-left: auto; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
+      .site-nav::-webkit-scrollbar { display: none; }
       .site-nav a {
         position: relative;
         min-height: 44px;
@@ -1476,6 +1480,28 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
          to paint through the media layer. */
       .event-card__media-shell.is-image-loaded .event-card__image-fallback { display: none; }
       @keyframes event-card-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+      @media (min-width:760px) {
+        body[data-home-floating-nav="true"] .site-header {
+          position:absolute;
+          inset:0 0 auto;
+          height:0;
+          min-height:0;
+          border:0;
+          background:transparent;
+          box-shadow:none;
+        }
+        body[data-home-floating-nav="true"] .site-header__inner {
+          height:auto;
+          min-height:0;
+        }
+        body[data-home-floating-nav="true"] .site-header__brand-tag {
+          position:fixed;
+          top:0;
+          z-index:61;
+        }
+        body[data-home-floating-nav="true"] .site-nav { display:none; }
+        body[data-home-floating-nav="true"] main { padding-top:0; }
+      }
       @media (prefers-reduced-motion: reduce) {
         .event-card__media-shell--dynamic::after { animation: none; background-position: 50% 0; }
       }
@@ -2515,7 +2541,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
     </style>
   </head>
-  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-home-floating-nav={homeFloatingNav ? 'true' : undefined} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">

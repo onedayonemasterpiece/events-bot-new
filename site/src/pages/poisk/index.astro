@@ -1,18 +1,28 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
+import ConversationalEventSearch from '../../components/ConversationalEventSearch.astro';
 import SearchCollectionLinks from '../../components/SearchCollectionLinks.astro';
 import { absoluteUrl, SITE_NAME } from '../../lib/events';
 
 const canonicalUrl = absoluteUrl('/poisk/');
 const title = `Умный поиск событий | ${SITE_NAME}`;
-const description = 'Векторный поиск по событиям Калининграда после входа через Яндекс: результаты выдаются карточками с лайками, календарём и поделиться.';
+const description = 'Разговорный поиск событий Калининградской области: голосом или текстом, с пояснением рекомендаций и обычными карточками событий.';
+const conversationalLiveEnabled = Boolean(import.meta.env.PUBLIC_STATIC_SITE_LIVE_SEARCH_URL);
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search">
   <main id="main">
     <div class="page-shell page-shell--search">
-      <AuthorizedEventSearch standalone headingLevel="h1" />
-      <SearchCollectionLinks />
+      {conversationalLiveEnabled
+        ? <ConversationalEventSearch />
+        : <AuthorizedEventSearch standalone headingLevel="h1" />}
+      <div class="search-collections-after-conversation">
+        <SearchCollectionLinks />
+      </div>
     </div>
   </main>
 </EventLayout>
+
+<style>
+  .search-collections-after-conversation { margin-top: clamp(3rem, 7vw, 6rem); }
+</style>

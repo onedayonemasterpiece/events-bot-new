@@ -25,6 +25,19 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Changed
+- Owner-review R9 corrects the Home/Search regression from the R8 mixed UI
+  branch. Home event HeroTalk and page-end HeroTalk are mosaic-led again; one
+  in-flow navigation island becomes the fixed desktop island after scrolling,
+  document-level horizontal overflow is clipped, and the current brand favicon
+  is used. The Live Search page is now a messenger-style conversation with
+  visible user/model transcripts, a large microphone entry, canonical
+  `OptimizedEventCardGrid` + `EventCard` results (3-up desktop / 1-up mobile),
+  verifier-required vector results and bounded verifier digest context so the
+  model can present 2–3 concrete relevant choices. Owner-review publication
+  starts at the normal preview root and omits `__preview`/lab service pages.
+  A provider-independent conversation fallback is documented as technical debt
+  but is not implemented in this release.
+
 - Reconciled the shared Google AI limiter with the owner's AI Studio readback
   across six distinct project scopes: raised Gemma 4 26B/31B base rows to
   30 RPM / 16K TPM / 14.4K RPD, Gemini Embedding 2 to 100 RPM, and Antigravity

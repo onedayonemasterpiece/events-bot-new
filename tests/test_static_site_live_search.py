@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -40,7 +41,7 @@ async def test_tool_emits_canonical_payload_and_returns_bounded_model_summary():
         calls.append((token, query, offset))
         return {
             "items": [
-                {"id": 11, "title": "Концерт", "date": "2026-09-27", "city": "Калининград"},
+                {"id": 11, "title": "Концерт", "date": "2026-09-27", "city": "Калининград", "model_context": "Описание: квартет играет Шостаковича. Исполнитель: ансамбль Камерата."},
                 {"id": 12, "title": "Лекция", "date": "2026-09-28", "city": "Светлогорск"},
             ],
             "fallback_items": [],
@@ -71,13 +72,22 @@ async def test_tool_emits_canonical_payload_and_returns_bounded_model_summary():
     assert calls == [("token-a", "джаз завтра", 0)]
     assert emitted[0]["type"] == "search_results"
     assert emitted[0]["data"]["items"][0]["id"] == 11
+    assert "model_context" not in emitted[0]["data"]["items"][0]
     assert result["cards_already_shown_to_user"] is True
     assert result["has_more"] is True
     assert result["results"][0] == {
         "id": 11,
         "title": "Концерт",
+        "href": "",
         "date": "2026-09-27",
         "city": "Калининград",
+        "venue": "",
+        "category": "",
+        "tags": [],
+        "conditions": "",
+        "age": None,
+        "summary": "Описание: квартет играет Шостаковича. Исполнитель: ансамбль Камерата.",
+        "semantic_score": 0.0,
     }
 
 
@@ -106,7 +116,7 @@ async def test_continue_search_reuses_query_and_moves_one_page():
     session = SimpleNamespace(state=initialized["state"])
     await adapter.execute_tool(session, {"name": "search_events", "args": {"query": "театр"}})
     await adapter.execute_tool(session, {"name": "continue_search", "args": {}})
-    assert calls == [("театр", 0), ("театр", 8)]
+    assert calls == [("театр", 0), ("театр", 9)]
 
 
 def test_session_binding_requires_same_authorized_token():
@@ -139,3 +149,25 @@ def test_enabled_register_uses_supplied_host_without_importing_private_controlle
     assert ("POST", "/api/live-search") in methods
     assert ("GET", "/api/live-search/{session_id}/events") in methods
     assert ("POST", "/api/live-search/{session_id}/stop") in methods
+
+
+def test_live_event_search_requests_verified_high_relevance_results():
+    import inspect
+    from static_site_live_search import call_event_search
+
+    source = inspect.getsource(call_event_search)
+    assert '"limit": 9' in source
+    assert '"candidate_window": 18' in source
+    assert '"include_fallback": False' in source
+    assert '"use_llm_verifier": True' in source
+    assert 'str(verifier.get("status") or "") != "ok"' in source
+    assert 'SEARCH_RELEVANCE_UNAVAILABLE' in source
+
+
+def test_event_search_edge_exposes_bounded_model_context_only_after_verification():
+    source = Path("supabase/functions/event-search/index.ts").read_text(encoding="utf-8")
+    assert "let candidateDigests = new Map<number, string>();" in source
+    assert "if (llmResult.used && items.length > 0)" in source
+    assert "model_context: truncateText(digest, contextLimit)" in source
+    assert "items.length <= 3 ? 1800 : items.length <= 6 ? 1000 : 650" in source
+    assert "v: 3," in source

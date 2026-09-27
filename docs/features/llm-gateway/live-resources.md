@@ -21,30 +21,44 @@ implementation or a second quota database.
 
 ## Browser product
 
-The existing AuthorizedEventSearch UI is preserved. When
-`PUBLIC_STATIC_SITE_LIVE_SEARCH_URL` is configured:
+When `PUBLIC_STATIC_SITE_LIVE_SEARCH_URL` is configured, `/poisk/` uses one
+conversational surface rather than preserving the legacy search form:
 
 1. Yandex/Supabase authentication remains the existing product authentication.
-2. Text submit or the microphone starts an authenticated Live session on the
-   EventsBot backend.
-3. The model must call `search_events`; the tool invokes the existing
-   Supabase `event-search` contract and emits `search_results`.
-4. The browser renders those results with the existing event-card renderer.
-5. `Показать ещё` stays in the same Live session and asks for the next page.
-6. After a completed result turn, the session remains available for roughly
-   15 seconds for a follow-up, then stops automatically.
-7. Page exit sends a keepalive Stop. If that request is lost, the server
+2. A large round microphone and the text composer are equal entry points into
+   the same Live session.
+3. Provider `input_transcript` is rendered immediately as the user's message;
+   `output_transcript` is rendered as the assistant message while the same
+   provider audio is played.
+4. A pending assistant turn shows a text skeleton and canonical event-card
+   skeletons; it is not represented by an isolated spinner.
+5. The model must call `search_events` before claiming facts about events. The
+   tool invokes the existing Supabase vector-search contract with LLM
+   verification enabled and no discovery fallback for this conversational
+   surface.
+6. The model receives a bounded factual JSON view of verifier-confirmed cards
+   and presents the result in text/audio: total result count plus normally 2–3
+   particularly relevant choices with a concrete reason grounded in the
+   returned fields. The full result is rendered as the canonical EventCard grid
+   (three cards per row on desktop, one on mobile).
+7. Further text or voice refinements append new messenger-style turns in the
+   same session. The browser scrolls to the new user turn / assistant answer
+   rather than replacing the previous result.
+8. A completed result keeps the Live session open for the bounded follow-up
+   window (currently roughly 15 seconds). Turning the microphone off does not
+   itself destroy the conversation.
+9. Page exit sends a keepalive Stop. If that request is lost, the server
    client-liveness watchdog closes the session and the resource lease expires
    fail-closed.
 
-The recording indicator pulses only while the Live session is active/listening.
-Reload intentionally discards conversational state. No provider key, model
-selector, resource receipt, transcript or user identifier is stored in the
-static page.
+Reload intentionally discards conversational state in the current implementation.
+No provider key, model selector, resource receipt or user identifier is stored
+in the static page. Personal interests are not claimed as ranking input until a
+real personalization context is explicitly connected.
 
-If the Live URL is absent, the pre-existing direct event-search orchestration
-remains available as a compatibility adapter. A configured Live path never
-silently falls back to it after a Live failure.
+If the Live URL is absent, the older direct event-search implementation remains
+a compatibility path for non-Live builds. A configured Live path never silently
+switches to that path after a Live failure.
 
 ## HTTP surface
 
@@ -86,6 +100,30 @@ session fails closed; admission/quota/capacity/credential decisions are never
 converted into a direct provider-key path. This keeps the deployed Search on
 one resource-control contract rather than maintaining an alternative runtime.
 
+### Technical debt: provider-independent conversational fallback
+
+The current product release has exactly one conversational provider:
+`gemini-3.8-live`. A provider outage is therefore a product availability risk.
+The required follow-up architecture is already fixed, but is **not implemented
+in this release**:
+
+- the browser conversation owns provider-neutral turns
+  (`user_transcript`, `assistant_text`, `search_results`, audio/listening
+  state and `turn_complete`) rather than Google-specific message shapes;
+- a future server adapter may bind the same conversation to another
+  Live-capable model;
+- a lower-capability fallback may run text dialogue plus the existing verified
+  vector search with no realtime audio model, while preserving the same visible
+  messenger history and EventCard result contract;
+- fallback selection must be explicit and observable. It must not duplicate a
+  user request after an outcome-unknown provider failure or silently lower
+  relevance guarantees;
+- this provider fallback is independent of resource authority. It is **not**
+  permission to use a raw local Google key when `ai-resource-control` is down.
+
+Until one of those adapters is implemented and accepted, Google Live outage
+remains an explicit unavailable state rather than a hidden degraded mode.
+
 Production activation was accepted on 2026-09-27: the Live HTTP surface was
 enabled on EventsBot and the real no-mail canary completed a
 `gemini-3.8-live` conversation with an actual `search_events` tool call,
@@ -99,7 +137,7 @@ real `gemini-3.8-live` session, sends one text request, requires an actual
 `search_events` function call and non-empty `search_results`, then stops the
 session and stores only a bounded sanitized receipt.
 
-Scheduled daily runs stay disabled until LIVE_SEARCH_DAILY_CANARY_ENABLED=1 after production cutover. Manual dispatch remains available for first acceptance.
+Scheduled daily runs are enabled after the 2026-09-27 production acceptance via `LIVE_SEARCH_DAILY_CANARY_ENABLED=1`; manual dispatch remains available for release acceptance and diagnosis.
 
 The daily canary intentionally does not depend on a virtual microphone. Real
 microphone/pulse/Stop acceptance is a release-time browser check; the daily
@@ -117,4 +155,4 @@ node --test site/tests/preview-search-env.test.mjs
 python scripts/inspect/audit_google_ai_provider_paths.py
 ```
 
-Owner provenance: `voice-20260926-180531-a07ef741` in IdeaHub.
+Owner provenance: `voice-20260926-180531-a07ef741` and detailed Search review `voice-20260927-114256-b9508e62` in IdeaHub.

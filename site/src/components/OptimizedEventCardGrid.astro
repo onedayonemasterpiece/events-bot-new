@@ -17,6 +17,7 @@ interface Props {
   currentEventId?: number;
   discoverySrc?: string;
   personalFeed?: boolean;
+  runtimeHost?: string;
 }
 
 const {
@@ -31,6 +32,7 @@ const {
   currentEventId,
   discoverySrc,
   personalFeed = false,
+  runtimeHost,
 } = Astro.props;
 
 const packed = packRelatedCardRows(events, {
@@ -57,6 +59,7 @@ const packed = packRelatedCardRows(events, {
   data-current-event-id={currentEventId}
   data-discovery-src={discoverySrc}
   data-feed-card-variant="split-actions"
+  data-runtime-event-card-grid={runtimeHost}
 >
   {packed.map(({ item, layout }) => (
     <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />

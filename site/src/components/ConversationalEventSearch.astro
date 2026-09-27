@@ -1,0 +1,640 @@
+---
+import OptimizedEventCardGrid from './OptimizedEventCardGrid.astro';
+
+const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const supabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || '').replace(/\/+$/u, '');
+const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
+const liveSearchUrl = (import.meta.env.PUBLIC_STATIC_SITE_LIVE_SEARCH_URL || '').replace(/\/+$/u, '');
+const enabled = Boolean(supabaseUrl && supabaseKey && liveSearchUrl);
+---
+
+<section
+  class="conversation-search"
+  data-conversation-search
+  data-search-enabled={enabled ? 'true' : 'false'}
+  data-search-live-url={liveSearchUrl || undefined}
+  data-supabase-url={supabaseUrl || undefined}
+  data-supabase-relay-url={supabaseRelayUrl || undefined}
+  data-supabase-key={supabaseKey || undefined}
+  data-yandex-provider={yandexProvider}
+  data-nosnippet
+>
+  <header class="conversation-search__head">
+    <div class="conversation-search__title">
+      <p class="eyebrow">Умный поиск</p>
+      <h1>Найти событие</h1>
+      <p>Скажите или напишите, чего хочется. Поиск останется одним разговором: можно уточнять, спорить с результатом и продолжать искать.</p>
+    </div>
+    {enabled && (
+      <div class="conversation-search__auth">
+        <button type="button" class="secondary-button conversation-search__login" data-conversation-login>
+          <span class="conversation-search__yandex" aria-hidden="true">Я</span>
+          <span>Войти через Яндекс</span>
+        </button>
+        <details class="conversation-search__account" data-conversation-account hidden>
+          <summary class="conversation-search__account-toggle" aria-label="Аккаунт пользователя">
+            <span class="conversation-search__avatar" data-conversation-avatar>?</span>
+            <span data-conversation-account-label>Аккаунт</span>
+          </summary>
+          <div class="conversation-search__account-popover">
+            <span>Вошли как</span>
+            <strong data-conversation-user-name></strong>
+            <button type="button" data-conversation-logout>Выйти</button>
+          </div>
+        </details>
+      </div>
+    )}
+  </header>
+
+  <template data-conversation-card-grid-template>
+    <OptimizedEventCardGrid
+      events={[]}
+      responsiveMobile
+      runtimeHost="conversation-search"
+    />
+  </template>
+
+  <div class="conversation-search__feed" data-conversation-feed aria-live="polite">
+    <section class="conversation-search__turn conversation-search__turn--welcome">
+      <div class="conversation-search__assistant-message">
+        <span class="conversation-search__speaker">Поиск</span>
+        <p>Что хочется найти?</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="conversation-search__composer">
+    <form class="conversation-search__text-form" data-conversation-form>
+      <label class="sr-only" for="conversation-search-input">Что хочется найти?</label>
+      <textarea
+        id="conversation-search-input"
+        rows="2"
+        maxlength="180"
+        data-conversation-input
+        placeholder="Например: камерный концерт завтра вечером или что-нибудь необычное с детьми"
+        autocomplete="off"
+        enterkeyhint="send"
+        disabled={!enabled}
+      ></textarea>
+      <button type="submit" class="conversation-search__send" data-conversation-send aria-label="Отправить запрос" title="Отправить запрос" disabled={!enabled}>
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </form>
+
+    <button
+      type="button"
+      class="conversation-search__mic"
+      data-conversation-mic
+      aria-label="Начать голосовой поиск"
+      aria-pressed="false"
+      disabled={!enabled}
+    >
+      <span class="conversation-search__mic-halo" aria-hidden="true"></span>
+      <svg class="conversation-search__mic-icon" viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg>
+    </button>
+  </div>
+
+  <p class="conversation-search__status" data-conversation-status role="status" aria-live="polite">
+    {enabled ? 'Войдите через Яндекс, чтобы начать поиск.' : 'Разговорный поиск в этой сборке не подключён.'}
+  </p>
+</section>
+
+<script>
+  import { getStaticSiteAuth } from '../lib/staticSiteAuth';
+  import { createLiveEventSearchController } from '../lib/liveEventSearch.js';
+  import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
+
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function element(tag, className, text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  document.querySelectorAll('[data-conversation-search]').forEach((root) => {
+    if (!(root instanceof HTMLElement) || root.dataset.bound === 'true') return;
+    root.dataset.bound = 'true';
+
+    const enabled = root.dataset.searchEnabled === 'true';
+    const feed = root.querySelector('[data-conversation-feed]');
+    const form = root.querySelector('[data-conversation-form]');
+    const input = root.querySelector('[data-conversation-input]');
+    const send = root.querySelector('[data-conversation-send]');
+    const mic = root.querySelector('[data-conversation-mic]');
+    const status = root.querySelector('[data-conversation-status]');
+    const login = root.querySelector('[data-conversation-login]');
+    const logout = root.querySelector('[data-conversation-logout]');
+    const account = root.querySelector('[data-conversation-account]');
+    const accountLabel = root.querySelector('[data-conversation-account-label]');
+    const avatar = root.querySelector('[data-conversation-avatar]');
+    const userName = root.querySelector('[data-conversation-user-name]');
+    const gridTemplate = root.querySelector('[data-conversation-card-grid-template]');
+
+    if (
+      !enabled
+      || !(feed instanceof HTMLElement)
+      || !(input instanceof HTMLTextAreaElement)
+      || !(gridTemplate instanceof HTMLTemplateElement)
+    ) return;
+
+    const auth = getStaticSiteAuth({
+      supabaseUrl: root.dataset.supabaseUrl || '',
+      relayUrl: root.dataset.supabaseRelayUrl || '',
+      publishableKey: root.dataset.supabaseKey || '',
+      provider: root.dataset.yandexProvider || 'custom:yandex',
+    });
+
+    let controller = null;
+    let activeTurn = null;
+    let activeUserDraft = null;
+    let turnSerial = 0;
+    let signedIn = false;
+
+    const setStatus = (message, kind = 'info') => {
+      if (!(status instanceof HTMLElement)) return;
+      status.textContent = message || '';
+      if (kind === 'error') status.setAttribute('role', 'alert');
+      else status.setAttribute('role', 'status');
+    };
+
+    const scrollToTurn = (turn) => {
+      window.requestAnimationFrame(() => {
+        turn?.scrollIntoView({ block: 'start', behavior: reduceMotion() ? 'auto' : 'smooth' });
+      });
+    };
+
+    const displayName = (user) => {
+      const meta = user?.user_metadata || {};
+      return [meta.name, meta.full_name, user?.email, meta.preferred_username]
+        .map((value) => String(value || '').trim())
+        .find(Boolean) || 'пользователь';
+    };
+
+    const renderAuth = (session) => {
+      signedIn = Boolean(session?.user);
+      if (login instanceof HTMLElement) login.hidden = signedIn;
+      if (account instanceof HTMLDetailsElement) {
+        account.hidden = !signedIn;
+        if (!signedIn) account.open = false;
+      }
+      if (signedIn) {
+        const name = displayName(session.user);
+        if (accountLabel instanceof HTMLElement) accountLabel.textContent = name;
+        if (userName instanceof HTMLElement) userName.textContent = name;
+        if (avatar instanceof HTMLElement) avatar.textContent = Array.from(name)[0]?.toLocaleUpperCase('ru-RU') || '?';
+        setStatus('Можно говорить или писать. После ответа поиск ещё некоторое время слушает продолжение.');
+      } else {
+        setStatus('Войдите через Яндекс, чтобы начать поиск.');
+      }
+    };
+
+    const beginLogin = async () => {
+      setStatus('Открываю вход через Яндекс…');
+      const started = await auth.signIn();
+      if (!started) setStatus('Не удалось открыть вход. Попробуйте ещё раз.', 'error');
+      return started;
+    };
+
+    const resultLinkData = (item) => {
+      const display = item?.display || item || {};
+      const rawHref = String(display.href || item?.href || '').trim();
+      const normalize = window.KenigEventsNormalizeInternalEventUrl;
+      const href = typeof normalize === 'function'
+        ? normalize(rawHref, { absolute: false })
+        : rawHref;
+      return {
+        title: String(display.title || item?.title || '').trim(),
+        href: String(href || '').trim(),
+      };
+    };
+
+    const renderAssistantText = (turn) => {
+      const plain = String(turn?.assistantBuffer || '');
+      const body = turn?.assistantText;
+      if (!(body instanceof HTMLElement)) return;
+      const links = (turn.resultItems || [])
+        .map(resultLinkData)
+        .filter((item) => item.title && item.href)
+        .sort((left, right) => right.title.length - left.title.length);
+      if (!plain || !links.length) {
+        body.textContent = plain;
+        return;
+      }
+      const lower = plain.toLocaleLowerCase('ru-RU');
+      const fragment = document.createDocumentFragment();
+      let cursor = 0;
+      while (cursor < plain.length) {
+        let match = null;
+        for (const item of links) {
+          const index = lower.indexOf(item.title.toLocaleLowerCase('ru-RU'), cursor);
+          if (index < 0) continue;
+          if (!match || index < match.index || (index === match.index && item.title.length > match.item.title.length)) {
+            match = { index, item };
+          }
+        }
+        if (!match) {
+          fragment.append(document.createTextNode(plain.slice(cursor)));
+          break;
+        }
+        if (match.index > cursor) fragment.append(document.createTextNode(plain.slice(cursor, match.index)));
+        const anchor = document.createElement('a');
+        anchor.href = match.item.href;
+        anchor.textContent = plain.slice(match.index, match.index + match.item.title.length);
+        anchor.dataset.conversationEventLink = 'true';
+        fragment.append(anchor);
+        cursor = match.index + match.item.title.length;
+      }
+      body.replaceChildren(fragment);
+    };
+
+    const createTurn = (question = '', source = 'text') => {
+      turnSerial += 1;
+      const turn = element('section', 'conversation-search__turn');
+      turn.dataset.conversationTurn = String(turnSerial);
+      turn.dataset.inputSource = source;
+
+      const user = element('div', 'conversation-search__user-message');
+      user.append(element('span', 'conversation-search__speaker', 'Вы'));
+      const userText = element('p', 'conversation-search__user-text', question);
+      user.append(userText);
+      user.hidden = !question;
+
+      const response = element('div', 'conversation-search__response');
+      const assistant = element('div', 'conversation-search__assistant-message');
+      assistant.append(element('span', 'conversation-search__speaker', 'Поиск'));
+      const assistantText = element('p', 'conversation-search__assistant-text');
+      assistant.append(assistantText);
+
+      const skeleton = element('div', 'conversation-search__skeleton');
+      skeleton.setAttribute('aria-hidden', 'true');
+      const lines = element('div', 'conversation-search__skeleton-lines');
+      lines.append(element('span', 'conversation-search__skeleton-line'), element('span', 'conversation-search__skeleton-line'), element('span', 'conversation-search__skeleton-line'));
+      const cards = element('div', 'conversation-search__skeleton-cards');
+      for (let index = 0; index < 3; index += 1) {
+        const card = element('div', 'conversation-search__skeleton-card');
+        card.append(element('span', 'conversation-search__skeleton-poster'), element('span', 'conversation-search__skeleton-line'), element('span', 'conversation-search__skeleton-line'));
+        cards.append(card);
+      }
+      skeleton.append(lines, cards);
+
+      const resultHost = gridTemplate.content.firstElementChild?.cloneNode(true);
+      if (!(resultHost instanceof HTMLElement)) throw new Error('conversation_event_grid_template_missing');
+      resultHost.dataset.conversationCards = '';
+      resultHost.hidden = true;
+      const actions = element('div', 'conversation-search__result-actions');
+      actions.hidden = true;
+
+      response.append(assistant, skeleton, resultHost, actions);
+      turn.append(user, response);
+      feed.append(turn);
+      activeTurn = { turn, userText, assistant, assistantText, skeleton, resultHost, actions, assistantBuffer: '', userBuffer: question, resultItems: [], hasResults: false, finalized: false };
+      activeUserDraft = source === 'voice' ? activeTurn : null;
+      scrollToTurn(turn);
+      return activeTurn;
+    };
+
+    const ensureVoiceTurn = () => activeTurn && !activeTurn.finalized
+      ? activeTurn
+      : createTurn('', 'voice');
+
+    const appendTranscript = ({ role, text }) => {
+      const value = String(text || '').replace(/\s+/gu, ' ').trim();
+      if (!value) return;
+      const turn = role === 'user' ? ensureVoiceTurn() : (activeTurn && !activeTurn.finalized ? activeTurn : createTurn('', 'voice'));
+      if (role === 'user') {
+        const next = turn.userBuffer ? `${turn.userBuffer} ${value}` : value;
+        turn.userBuffer = next.slice(-1200).trim();
+        turn.userText.textContent = turn.userBuffer;
+        turn.userText.parentElement.hidden = false;
+        activeUserDraft = turn;
+      } else {
+        const next = turn.assistantBuffer ? `${turn.assistantBuffer} ${value}` : value;
+        turn.assistantBuffer = next.slice(-6000).trim();
+        renderAssistantText(turn);
+        turn.assistant.hidden = false;
+      }
+      scrollToTurn(turn.turn);
+    };
+
+    const renderCards = (turn, items, rankBase = 0) => {
+      const createCard = window.KenigEventsCreateEventCard;
+      if (typeof createCard !== 'function') {
+        turn.resultHost.textContent = 'Карточки найдены, но общий компонент EventCard не загрузился.';
+        turn.resultHost.hidden = false;
+        return;
+      }
+      const ranked = items.map((candidate, index) => ({
+        candidate: {
+          ...candidate,
+          base_similarity: candidate.semantic_score || candidate.base_similarity || 0,
+        },
+        rank: rankBase + index,
+        personal_score: candidate.semantic_score || candidate.base_similarity || 0,
+      }));
+      const packed = packRelatedCardRows(ranked, {
+        limit: ranked.length,
+        rowSize: 3,
+        mediaTreatment: 'hybrid',
+      });
+      for (const { item, layout } of packed) {
+        const card = createCard(item, 'split-actions', layout);
+        if (card) turn.resultHost.append(card);
+      }
+      if (!turn.resultHost.children.length) return;
+      turn.resultHost.hidden = false;
+      turn.hasResults = true;
+      turn.skeleton.hidden = true;
+      scrollToTurn(turn.turn);
+    };
+
+    const acceptResults = ({ query, offset = 0, data = {} }) => {
+      let turn = activeTurn;
+      if (!turn || turn.finalized) turn = createTurn(query || '', 'live');
+      if (query && !turn.userBuffer) {
+        turn.userBuffer = query;
+        turn.userText.textContent = query;
+      }
+      const items = Array.isArray(data.items) ? data.items : [];
+      turn.resultItems = items;
+      renderAssistantText(turn);
+      turn.skeleton.hidden = true;
+      if (items.length) {
+        renderCards(turn, items, Number(offset) || 0);
+      } else {
+        turn.resultHost.hidden = true;
+        if (!turn.assistantBuffer) {
+          turn.assistantBuffer = 'Точных совпадений не нашлось. Можно уточнить запрос — разговор остаётся открыт.';
+          turn.assistantText.textContent = turn.assistantBuffer;
+          turn.assistant.hidden = false;
+        }
+      }
+      if (data.has_more) {
+        const more = element('button', 'secondary-button conversation-search__more', 'Ещё варианты');
+        more.type = 'button';
+        more.addEventListener('click', async () => {
+          more.disabled = true;
+          more.textContent = 'Ищу ещё…';
+          activeTurn.finalized = true;
+          createTurn('Покажи ещё варианты', 'control');
+          try {
+            await controller.more();
+          } catch (_error) {
+            setStatus('Не удалось продолжить поиск. Попробуйте сформулировать уточнение.', 'error');
+          }
+        }, { once: true });
+        turn.actions.replaceChildren(more);
+        turn.actions.hidden = false;
+      }
+      setStatus('Можно продолжить: уточните запрос текстом или голосом.');
+    };
+
+    const setMicState = (state) => {
+      if (!(mic instanceof HTMLButtonElement)) return;
+      const active = ['starting', 'started', 'listening', 'answering', 'reconnecting'].includes(state) && Boolean(controller?.microphoneEnabled);
+      mic.classList.toggle('is-active', active);
+      mic.classList.toggle('is-answering', state === 'answering');
+      mic.setAttribute('aria-pressed', active ? 'true' : 'false');
+      mic.setAttribute('aria-label', active ? 'Выключить микрофон, не закрывая разговор' : 'Продолжить голосовой поиск');
+    };
+
+    controller = createLiveEventSearchController({
+      endpoint: root.dataset.searchLiveUrl,
+      getAccessToken: async () => (await auth.getSession())?.access_token || '',
+      onResults: acceptResults,
+      onTranscript: appendTranscript,
+      onTurnComplete: () => {
+        if (activeTurn) {
+          activeTurn.skeleton.hidden = true;
+          activeTurn.finalized = true;
+        }
+        activeUserDraft = null;
+      },
+      onState: (state) => {
+        root.dataset.liveState = state || 'off';
+        setMicState(state);
+        if (state === 'starting' || state === 'reconnecting') setStatus('Подключаю разговорный поиск…');
+        else if (state === 'listening') setStatus('Слушаю. Говорите обычной фразой.');
+        else if (state === 'answering') setStatus('Модель отвечает — текст появляется здесь же.');
+        else if (state === 'followup_timeout') setStatus('Разговорная сессия завершена. Новый запрос запустит следующую.');
+      },
+      onError: (error) => {
+        activeTurn?.skeleton && (activeTurn.skeleton.hidden = true);
+        setStatus(error?.status === 429 ? 'Сейчас все голосовые слоты заняты. Попробуйте через минуту.' : 'Разговорный поиск временно недоступен. Попробуйте чуть позже.', 'error');
+      },
+    });
+
+    const requireSession = async () => {
+      const session = await auth.getSession().catch(() => null);
+      if (session?.user && session?.access_token) return session;
+      await beginLogin();
+      return null;
+    };
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const value = input.value.replace(/\s+/gu, ' ').trim();
+      if (value.length < 3) {
+        setStatus('Опишите запрос хотя бы несколькими словами.', 'error');
+        return;
+      }
+      if (!await requireSession()) return;
+      const turn = createTurn(value, 'text');
+      input.value = '';
+      send && (send.disabled = true);
+      try {
+        const started = await controller.search(value);
+        if (!started) throw new Error('live_start_failed');
+        setStatus('Ищу и проверяю наиболее подходящие варианты…');
+      } catch (_error) {
+        turn.skeleton.hidden = true;
+        setStatus('Не удалось запустить поиск. Попробуйте ещё раз.', 'error');
+      } finally {
+        send && (send.disabled = false);
+      }
+    });
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
+      form?.requestSubmit();
+    });
+
+    mic?.addEventListener('click', async () => {
+      if (!await requireSession()) return;
+      if (controller.microphoneEnabled) {
+        controller.mute();
+        setMicState('started');
+        setStatus('Микрофон выключен, разговор остаётся открыт.');
+        return;
+      }
+      try {
+        if (!activeTurn || activeTurn.finalized) createTurn('', 'voice');
+        const started = await controller.startVoice();
+        if (!started) throw new Error('microphone_unavailable');
+        setStatus('Слушаю. Скажите, что хочется найти.');
+      } catch (_error) {
+        setStatus('Не удалось включить микрофон. Проверьте разрешение браузера.', 'error');
+      }
+    });
+
+    login?.addEventListener('click', () => { void beginLogin(); });
+    logout?.addEventListener('click', async () => {
+      controller.stop('logout');
+      await auth.signOut();
+      renderAuth(null);
+    });
+    account?.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && account instanceof HTMLDetailsElement) account.open = false;
+    });
+    document.addEventListener('click', (event) => {
+      if (!(account instanceof HTMLDetailsElement) || !account.open || account.contains(event.target)) return;
+      account.open = false;
+    });
+
+    auth.subscribe((snapshot) => {
+      renderAuth(snapshot.status === 'signed_in' && snapshot.user ? { user: snapshot.user } : null);
+      if (snapshot.status === 'checking') setStatus(snapshot.message || 'Проверяю вход…');
+      if (snapshot.status === 'error') setStatus(snapshot.message || 'Не удалось проверить вход.', 'error');
+    });
+
+    window.addEventListener('pagehide', () => controller.stop('pagehide', { keepalive: true }), { once: true });
+    void auth.initialize().catch(() => setStatus('Не удалось проверить сохранённый вход. Перезагрузите страницу.', 'error'));
+  });
+</script>
+
+<style>
+  .conversation-search {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+    padding: clamp(1rem, 2vw, 1.5rem) 0 7rem;
+  }
+  .conversation-search__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 2rem;
+    align-items: flex-start;
+    padding: .6rem 0 1.6rem;
+  }
+  .conversation-search__title { min-width: 0; }
+  .conversation-search__title h1 { max-width: none; font-size: clamp(2.3rem, 5vw, 4.7rem); line-height: .95; }
+  .conversation-search__title > p:last-child { max-width: 58ch; margin: .8rem 0 0; color: var(--muted); font-size: 1rem; line-height: 1.5; }
+  .conversation-search__auth { display:flex; align-items:flex-start; gap:.6rem; }
+  .conversation-search__yandex { width:1.35rem; height:1.35rem; display:grid; place-items:center; border-radius:50%; background:#fc3f1d; color:white; font-weight:900; }
+  .conversation-search__account { position:relative; }
+  .conversation-search__account-toggle { min-height:48px; display:flex; align-items:center; gap:.5rem; padding:.25rem .75rem .25rem .3rem; border:1px solid var(--line); border-radius:999px; background:#fffaf2; cursor:pointer; list-style:none; }
+  .conversation-search__account-toggle::-webkit-details-marker { display:none; }
+  .conversation-search__avatar { width:38px; height:38px; display:grid; place-items:center; border-radius:50%; background:#f0e3d6; font-weight:900; }
+  .conversation-search__account-popover { position:absolute; z-index:50; right:0; top:calc(100% + .5rem); min-width:240px; display:grid; gap:.45rem; padding:.8rem; border:1px solid var(--line); border-radius:18px; background:#fffdf8; box-shadow:var(--shadow); }
+  .conversation-search__account:not([open]) .conversation-search__account-popover { display:none; }
+  .conversation-search__account-popover span { color:var(--muted); font-size:.78rem; }
+  .conversation-search__account-popover button { min-height:42px; border:1px solid var(--line); border-radius:999px; background:#fff7ea; font:inherit; font-weight:800; cursor:pointer; }
+
+  .conversation-search__feed { display:grid; gap:1.25rem; min-height:34vh; padding:1rem 0 2rem; }
+  .conversation-search__turn { display:grid; gap:1rem; scroll-margin-top:7rem; }
+  .conversation-search__user-message { justify-self:end; width:fit-content; max-width:min(78%, 700px); padding:.85rem 1.15rem; border-radius:24px 24px 7px 24px; background:#f0e3d6; color:#30241b; box-shadow:0 8px 24px rgba(67,45,31,.07); }
+  .conversation-search__assistant-message { max-width:780px; padding:.2rem 0; }
+  .conversation-search__speaker { display:block; margin-bottom:.28rem; color:#855138; font-size:.75rem; font-weight:760; }
+  .conversation-search__user-message p,
+  .conversation-search__assistant-message p { margin:0; white-space:pre-wrap; line-height:1.55; }
+  .conversation-search__assistant-message p:empty { display:none; }
+  .conversation-search__assistant-text a {
+    color: var(--primary-strong);
+    font-weight: 800;
+    text-underline-offset: .18em;
+  }
+  .conversation-search__response { display:grid; gap:1rem; min-width:0; }
+  .conversation-search__turn--welcome .conversation-search__assistant-message { font-size:clamp(1.2rem, 2vw, 1.55rem); }
+
+  .conversation-search__skeleton { display:grid; gap:1rem; }
+  .conversation-search__skeleton-lines { display:grid; gap:.55rem; max-width:620px; }
+  .conversation-search__skeleton-line { display:block; height:.72rem; border-radius:999px; background:linear-gradient(110deg,#eadfd3 8%,#f8efe5 18%,#eadfd3 33%); background-size:200% 100%; animation:conversation-shimmer 1.35s ease-in-out infinite; }
+  .conversation-search__skeleton-lines .conversation-search__skeleton-line:last-child { width:58%; }
+  .conversation-search__skeleton-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+  .conversation-search__skeleton-card { display:grid; gap:.55rem; min-width:0; }
+  .conversation-search__skeleton-poster { display:block; aspect-ratio:4/5; border-radius:22px; background:linear-gradient(110deg,#17191c 8%,#30343a 18%,#17191c 33%); background-size:200% 100%; animation:conversation-shimmer 1.35s ease-in-out infinite; }
+  @keyframes conversation-shimmer { to { background-position-x:-200%; } }
+
+  [data-conversation-cards] { margin-top:.15rem; }
+  [data-conversation-cards][hidden] { display:none; }
+  .conversation-search__result-actions { display:flex; flex-wrap:wrap; gap:.6rem; }
+  .conversation-search__result-actions[hidden] { display:none; }
+  .conversation-search__more { justify-self:start; }
+
+  .conversation-search__composer {
+    position:sticky;
+    z-index:45;
+    bottom:calc(env(safe-area-inset-bottom) + 1rem);
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 92px;
+    gap:.8rem;
+    align-items:end;
+    margin-top:1rem;
+    padding:.75rem;
+    border:1px solid rgba(121,48,20,.14);
+    border-radius:30px;
+    background:rgba(255,252,246,.94);
+    box-shadow:0 18px 44px rgba(55,37,24,.18);
+    backdrop-filter:blur(18px);
+  }
+  .conversation-search__text-form { position:relative; min-width:0; }
+  .conversation-search__text-form textarea {
+    box-sizing:border-box;
+    width:100%;
+    min-height:76px;
+    max-height:180px;
+    resize:vertical;
+    border:1px solid rgba(121,48,20,.16);
+    border-radius:22px;
+    background:#fffdf8;
+    color:var(--text);
+    padding:.95rem 3.7rem .95rem 1rem;
+    font:inherit;
+    font-size:1rem;
+    line-height:1.4;
+  }
+  .conversation-search__send { position:absolute; right:.55rem; bottom:.55rem; width:44px; height:44px; display:grid; place-items:center; border:0; border-radius:50%; background:#221a14; color:#fffdf8; cursor:pointer; }
+  .conversation-search__send:disabled { opacity:.42; cursor:not-allowed; }
+
+  .conversation-search__mic {
+    position:relative;
+    width:88px;
+    height:88px;
+    display:grid;
+    place-items:center;
+    border:1px solid rgba(121,48,20,.18);
+    border-radius:50%;
+    background:#fffaf2;
+    color:#98401f;
+    box-shadow:0 10px 26px rgba(72,45,25,.16);
+    cursor:pointer;
+  }
+  .conversation-search__mic:disabled { opacity:.42; cursor:not-allowed; }
+  .conversation-search__mic-halo { position:absolute; inset:-7px; border:2px solid rgba(160,68,37,.38); border-radius:50%; opacity:.35; }
+  .conversation-search__mic.is-active .conversation-search__mic-halo { animation:conversation-mic-pulse 1.45s ease-in-out infinite; }
+  .conversation-search__mic.is-answering { color:#0f766e; }
+  @keyframes conversation-mic-pulse { 50% { transform:scale(1.12); opacity:.12; } }
+
+  .conversation-search__status { margin:.65rem .2rem 0; color:var(--muted); font-size:.86rem; }
+
+  @media (max-width:759px) {
+    .conversation-search { padding-bottom:6rem; }
+    .conversation-search__head { display:grid; gap:1rem; }
+    .conversation-search__auth { width:100%; }
+    .conversation-search__login { width:100%; }
+    .conversation-search__user-message { max-width:92%; }
+    .conversation-search__skeleton-cards { grid-template-columns:1fr; }
+    .conversation-search__composer { grid-template-columns:minmax(0,1fr) 76px; padding:.55rem; border-radius:24px; bottom:calc(var(--mobile-bottom-stack-h, 72px) + env(safe-area-inset-bottom) + .65rem); }
+    .conversation-search__mic { width:72px; height:72px; }
+    .conversation-search__mic-icon { width:28px; height:28px; }
+    .conversation-search__text-form textarea { min-height:64px; padding:.75rem 3.25rem .75rem .85rem; }
+  }
+
+  @media (prefers-reduced-motion:reduce) {
+    .conversation-search__mic.is-active .conversation-search__mic-halo,
+    .conversation-search__skeleton-line,
+    .conversation-search__skeleton-poster { animation:none; }
+  }
+</style>

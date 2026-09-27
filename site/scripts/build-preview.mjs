@@ -97,6 +97,6 @@ writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({
   transportFaultRegistryDigest: transportFault.registry_digest,
 }, null, 2));
 console.log(`Preview build ready: dist/${buildId}/`);
-console.log(`Preview URL: https://kenigevents.ru/${buildId}/__preview/`);
+console.log(`Owner review URL: https://kenigevents.ru/${buildId}/`);
 if (astroAssetBaseUrl) console.log(`Astro asset CDN: ${astroAssetBaseUrl}/_astro/`);
 console.log(`Authorized Search: ${publicSearchConfig.configured ? 'configured with browser-safe public values' : 'disabled (public config unavailable)'}`);
