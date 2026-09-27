@@ -46,7 +46,7 @@ function bytes(value: string): number {
 
 function isSupabaseAuthKey(key: string): boolean {
   // Never let application cleanup rewrite authentication state. Project refs
-  // are usually hyphenless, but older/self-hosted refs need not be.
+  // are usually hyphenless, but older/custom-deployment refs need not be.
   return /^sb-.+-auth-token(?:-code-verifier)?$/u.test(key);
 }
 
