@@ -100,8 +100,9 @@
   напрямую с `GOOGLE_API_KEY*`, даже «один тестовый запрос». Нельзя добавлять
   dangerous/manual override для обхода ledger. Единственное исключение —
   versioned Live availability contract `ai-resource-control 0.1.5`: consumer
-  `kenigevents` назначен только `GOOGLE_API_KEY2`, и сам shared SDK может
-  использовать его лишь при `RESOURCE_CONTROL_UNAVAILABLE` от начального
+  `kenigevents` назначен только `GOOGLE_API_KEY2`; trusted backend мапит его значение в
+  `AI_RESOURCE_CONTROL_FALLBACK_KEY`, и shared SDK может использовать fallback лишь при
+  `RESOURCE_CONTROL_UNAVAILABLE` от начального
   read-only capability probe до любого mutating acquire. Это исключение не
   действует для ordinary Google calls, quota/admission/429/capacity/credential
   отказов, lost acquire response или уже начавшейся Live-сессии.
