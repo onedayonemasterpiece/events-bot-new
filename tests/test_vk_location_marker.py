@@ -5,6 +5,32 @@ import main
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_defers_event_without_photo(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+
+    async def unexpected_post(*_args, **_kwargs):
+        pytest.fail("VK post must not be created without an image")
+
+    monkeypatch.setattr(main, "post_to_vk", unexpected_post)
+    event = main.Event(
+        id=103,
+        title="Event without a poster",
+        date="2026-10-24",
+        time="18:00",
+        city="Калининград",
+        source_text="Text",
+        photo_urls=[],
+    )
+
+    with pytest.raises(RuntimeError, match="^vk_sync_missing_media$"):
+        await main.sync_vk_source_post(event, "Text", db, None)
+    assert main._is_missing_event_media(main.JobTask.vk_sync, "vk_sync_missing_media")
+
+
+@pytest.mark.asyncio
 async def test_post_to_vk_sends_location_marker_and_retries_without_on_invalid(monkeypatch):
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
     monkeypatch.setattr(main, "VK_TOKEN_AFISHA", "group-token")
@@ -47,6 +73,12 @@ async def test_sync_vk_source_post_applies_kaliningrad_location_marker(tmp_path,
     await db.init()
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+
+    async def fake_upload_vk_photo(*_args, **_kwargs):
+        return "photo-231920894_1"
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload_vk_photo)
 
     event = main.Event(
         id=101,
@@ -57,6 +89,7 @@ async def test_sync_vk_source_post_applies_kaliningrad_location_marker(tmp_path,
         location_name="Музей",
         city="Калининград",
         source_text="Text",
+        photo_urls=["https://example.test/poster.jpg"],
     )
 
     posted: dict[str, object] = {}
@@ -96,6 +129,12 @@ async def test_sync_vk_source_post_skips_cached_out_of_region_city(tmp_path, mon
     await db.init()
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+
+    async def fake_upload_vk_photo(*_args, **_kwargs):
+        return "photo-231920894_1"
+
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload_vk_photo)
 
     async with db.get_session() as session:
         await session.execute(
@@ -116,6 +155,7 @@ async def test_sync_vk_source_post_skips_cached_out_of_region_city(tmp_path, mon
         location_name="Venue",
         city="Москва",
         source_text="Text",
+        photo_urls=["https://example.test/poster.jpg"],
     )
 
     posted: dict[str, object] = {}

@@ -7547,6 +7547,16 @@ async def sync_vk_source_post(
     elif photo_urls_source:
         photo_urls_for_publish = photo_urls_source[:VK_MAX_ATTACHMENTS]
 
+    if not existing_vk_post_url and not attachments:
+        logging.warning(
+            "vk_sync.defer_missing_media event_id=%s source_url=%s photo_candidates=%s intentional_empty=%s",
+            event.id,
+            getattr(event, "source_post_url", None),
+            len(photo_urls_for_publish),
+            intentional_empty_media,
+        )
+        raise RuntimeError("vk_sync_missing_media")
+
     calendar_line_value: str | None = None
     previous_ics_url = event.ics_url
     calendar_source_url = event.ics_url if ics_url is None else ics_url
