@@ -13,10 +13,12 @@
 >
 > The Live tool requests pgvector recall with the existing LLM verifier enabled,
 > no discovery fallback, and fails closed for the conversational surface when
-> verifier-confirmed relevance is unavailable. The model receives a bounded JSON
-> view of the verified cards (title, link, date, city/venue, type, admission,
-> topics, short summary and semantic score) so it can present 2–3 particularly
-> relevant choices using concrete catalogue facts. Personal interests must not
+> verifier-confirmed relevance is unavailable. In R9 the model receives a bounded
+> JSON view of the verified canonical card facts (title, link, date, city/venue,
+> type, admission, tags, age and semantic score) so it can present 2–3 particularly
+> relevant choices without inventing event facts. Reusing the verifier's richer
+> generated `search_v3` digest as model-only context remains a follow-up because
+> the production Edge revision is intentionally unchanged in this release. Personal interests must not
 > be claimed until an explicit personalization context is actually supplied.
 > Older form/progress sections below remain implementation history for the
 > direct/compatibility path; they are not the target Live UX.

@@ -32,8 +32,9 @@
   is used. The Live Search page is now a messenger-style conversation with
   visible user/model transcripts, a large microphone entry, canonical
   `OptimizedEventCardGrid` + `EventCard` results (3-up desktop / 1-up mobile),
-  verifier-required vector results and bounded verifier digest context so the
-  model can present 2–3 concrete relevant choices. Owner-review publication
+  verifier-required vector results and bounded canonical card facts so the
+  model can present 2–3 concrete relevant choices. Rich verifier-digest context
+  remains follow-up work; R9 keeps the already deployed Edge revision. Owner-review publication
   starts at the normal preview root and omits `__preview`/lab service pages.
   A provider-independent conversation fallback is documented as technical debt
   but is not implemented in this release.
