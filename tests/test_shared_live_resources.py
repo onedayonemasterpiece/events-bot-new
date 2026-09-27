@@ -12,13 +12,13 @@ class SharedLiveResources(unittest.IsolatedAsyncioTestCase):
         calls=[]
         async def guard(**kwargs):calls.append(kwargs)
         with patch.dict(sys.modules,{'ai_resource_control':types.SimpleNamespace(run_guarded=guard)}):
-            await resources.run_live_search(authorized_session_id='fixture_session_123',environment={'AI_RESOURCE_CONTROL_URL':'https://authority.example','AI_RESOURCE_CONTROL_SERVICE_KEY':'service','GOOGLE_API_KEY':'wrong-one','GOOGLE_API_KEY2':'fallback-two','GOOGLE_API_KEY3':'wrong-three'},reader=object(),on_event=lambda e:None)
+            await resources.run_live_search(authorized_session_id='fixture_session_123',environment={'AI_RESOURCE_CONTROL_URL':'https://authority.example','AI_RESOURCE_CONTROL_SERVICE_KEY':'service','GOOGLE_API_KEY':'wrong-one','GOOGLE_API_KEY2':'wrong-two','GOOGLE_API_KEY3':'wrong-three'},reader=object(),on_event=lambda e:None)
         self.assertEqual(calls[0]['consumer'],'kenigevents')
         self.assertEqual(len(calls[0]['binding']),64)
         self.assertNotEqual(calls[0]['binding'],'fixture_session_123')
         self.assertNotIn('load_key',calls[0])
-        self.assertEqual(calls[0]['environment'],{'AI_RESOURCE_CONTROL_URL':'https://authority.example','AI_RESOURCE_CONTROL_SERVICE_KEY':'service','AI_RESOURCE_CONTROL_FALLBACK_KEY':'fallback-two'})
-    def test_live_environment_never_borrows_other_consumer_keys(self):
+        self.assertEqual(calls[0]['environment'],{'AI_RESOURCE_CONTROL_URL':'https://authority.example','AI_RESOURCE_CONTROL_SERVICE_KEY':'service'})
+    def test_live_environment_excludes_all_local_provider_keys(self):
         self.assertEqual(resources.live_resource_environment({
             'AI_RESOURCE_CONTROL_URL':'https://authority.example',
             'AI_RESOURCE_CONTROL_SERVICE_KEY':'service',
@@ -27,10 +27,10 @@ class SharedLiveResources(unittest.IsolatedAsyncioTestCase):
             'GOOGLE_API_KEY3':'three',
             'GOOGLE_API_KEY4':'four',
             'GOOGLE_API_KEY5':'five',
+            'AI_RESOURCE_CONTROL_FALLBACK_KEY':'also-excluded',
         }),{
             'AI_RESOURCE_CONTROL_URL':'https://authority.example',
             'AI_RESOURCE_CONTROL_SERVICE_KEY':'service',
-            'AI_RESOURCE_CONTROL_FALLBACK_KEY':'two',
         })
     async def test_unscoped_browser_input_rejected(self):
         with self.assertRaises(ValueError):

@@ -10,7 +10,7 @@ implementation or a second quota database.
   checks `resource_guard` before connect/setup/send/receive, pins one key for
   the session/resumption lifetime, treats resource failures as terminal, and
   the Python host owns client-liveness cleanup.
-- `ai-resource-control v0.1.5` extends the existing Google AI authority
+- `ai-resource-control v0.1.4` extends the existing Google AI authority
   Supabase with fenced expiring Live leases. The private wheel is built
   by the trusted Fly deploy script and never committed to this public repo.
 - `google_ai/live_resources.py::run_live_search` is the only KenigEvents
@@ -72,27 +72,24 @@ readback records Gemini 3.8 Live and Extended Thinking as RPM Unlimited / TPM
 65K / RPD Unlimited while guaranteed provider concurrency remains not exposed.
 Finite local safety ceilings remain authoritative.
 
-The backend serving `PUBLIC_STATIC_SITE_LIVE_SEARCH_URL` must run through
-`ai-resource-control 0.1.5` with the central authority. The static browser never
+The backend serving `PUBLIC_STATIC_SITE_LIVE_SEARCH_URL` runs through the
+pinned `ai-resource-control v0.1.4` central authority. The static browser never
 receives an authority service credential or a Google key.
 
-### KenigEvents authority-outage fallback
+### Authority outage policy
 
-KenigEvents owns exactly one emergency Live source alias: `GOOGLE_API_KEY2`. The
-trusted server-side Live boundary maps only that value to the shared SDK field
-`AI_RESOURCE_CONTROL_FALLBACK_KEY` together with central authority configuration and optional ledger id. It must not pass Wonderful
-Lections' `GOOGLE_API_KEY`, Street Story's `GOOGLE_API_KEY3`, Projects Hub's
-`GOOGLE_API_KEY4`, or shared reserve keys 5–6 as KenigEvents fallback.
+KenigEvents Live passes only central authority configuration (and the optional
+ledger id) to the shared resource controller. Host-local `GOOGLE_API_KEY*`
+values and `AI_RESOURCE_CONTROL_FALLBACK_KEY` are deliberately excluded from
+the Live resource environment. If the authority is unavailable, a new Live
+session fails closed; admission/quota/capacity/credential decisions are never
+converted into a direct provider-key path. This keeps the deployed Search on
+one resource-control contract rather than maintaining an alternative runtime.
 
-The SDK may use the mapped `AI_RESOURCE_CONTROL_FALLBACK_KEY` only when the initial read-only authority
-capability probe returns `RESOURCE_CONTROL_UNAVAILABLE`, before any mutating
-acquire. It must not activate after a successful authority probe, for
-admission/quota/429/capacity/credential failures, after a lost mutating acquire
-response, or after provider ready. Emergency mode uses the same
-`live-interaction` resource guard, permits one local KenigEvents fallback
-session per host and expires after two hours. If the assigned alias is
-unavailable, the outage stays an explicit Live error rather than borrowing
-another project's key.
+Production activation was accepted on 2026-09-27: the Live HTTP surface was
+enabled on EventsBot and the real no-mail canary completed a
+`gemini-3.8-live` conversation with an actual `search_events` tool call,
+eight returned cards, `has_more=true`, and explicit session release.
 
 ## Daily canary
 

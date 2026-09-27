@@ -98,14 +98,10 @@
   provider → finalize`).
 - Агентам запрещено делать диагностические `urllib`/`requests`/SDK-вызовы
   напрямую с `GOOGLE_API_KEY*`, даже «один тестовый запрос». Нельзя добавлять
-  dangerous/manual override для обхода ledger. Единственное исключение —
-  versioned Live availability contract `ai-resource-control 0.1.5`: consumer
-  `kenigevents` назначен только `GOOGLE_API_KEY2`; trusted backend мапит его значение в
-  `AI_RESOURCE_CONTROL_FALLBACK_KEY`, и shared SDK может использовать fallback лишь при
-  `RESOURCE_CONTROL_UNAVAILABLE` от начального
-  read-only capability probe до любого mutating acquire. Это исключение не
-  действует для ordinary Google calls, quota/admission/429/capacity/credential
-  отказов, lost acquire response или уже начавшейся Live-сессии.
+  dangerous/manual override или local provider-key fallback для обхода shared
+  authority. KenigEvents Live передаёт в resource controller только central
+  authority configuration; при недоступной authority новый Live-сеанс
+  fail-closed. Это blocker evidence, а не повод использовать сырой ключ.
 - Перед изменением или запуском Google consumer выполнять офлайн-аудит:
   `python3 scripts/inspect/audit_google_ai_provider_paths.py`. Результат должен
   иметь `unapproved=0` и `allowlisted_debt=0`.
