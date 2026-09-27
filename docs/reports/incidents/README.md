@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-27-static-cdn-tls-regression.md`
+  - Scope: `static.kenigevents.ru` public certificate/SAN, CDN poster delivery,
+    static-site writer IAM and owner-review publication.
+  - Must not regress: closure requires 10/10 TLS handshakes with the custom-domain
+    SAN, 20/20 strict representative object GETs, a bounded storage
+    PUT/HEAD/GET/DELETE canary, and image-bearing Home/Search browser acceptance.
+
+
 - `INC-2026-09-26-vk-auto-storage-notice-storm.md`
   - Scope: VK auto-import storage admission, critical watchdog retry pacing,
     operator notices, volume capacity and early disk warning. Must not regress:
