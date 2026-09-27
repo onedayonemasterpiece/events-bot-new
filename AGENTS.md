@@ -98,8 +98,13 @@
   provider → finalize`).
 - Агентам запрещено делать диагностические `urllib`/`requests`/SDK-вызовы
   напрямую с `GOOGLE_API_KEY*`, даже «один тестовый запрос». Нельзя добавлять
-  dangerous/manual override для обхода ledger. При недоступном limiter вызов
-  fail-closed; это blocker evidence, а не повод использовать сырой ключ.
+  dangerous/manual override для обхода ledger. Единственное исключение для
+  Live — versioned emergency fallback внутри общего `ai-resource-control`:
+  KenigEvents назначен только `GOOGLE_API_KEY2`; SDK может использовать его
+  лишь если начальный read-only capability probe не достигает authority, до
+  любого mutating acquire. Admission/quota/429/capacity/credential отказ,
+  потерянный ответ acquire или уже начатая central-сессия не разрешают fallback.
+  Никакой локальный код проекта не должен реализовывать этот обход самостоятельно.
 - Перед изменением или запуском Google consumer выполнять офлайн-аудит:
   `python3 scripts/inspect/audit_google_ai_provider_paths.py`. Результат должен
   иметь `unapproved=0` и `allowlisted_debt=0`.

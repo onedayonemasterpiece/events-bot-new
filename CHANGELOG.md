@@ -23,6 +23,13 @@
   no write capability, provider effect or schema migration is introduced (R0).
 
 ### Changed
+- Live resource availability now follows the shared `ai-resource-control 0.1.5`
+  authority-outage contract: KenigEvents forwards only central authority
+  configuration plus its dedicated emergency alias `GOOGLE_API_KEY2`.
+  That key is eligible only when the initial read-only authority probe is
+  transport-unavailable before any mutating acquire; quota/admission/429/
+  capacity/credential failures never switch to the local fallback.
+
 - Reconciled the shared Google AI limiter with the owner's AI Studio readback
   across six distinct project scopes: raised Gemma 4 26B/31B base rows to
   30 RPM / 16K TPM / 14.4K RPD, Gemini Embedding 2 to 100 RPM, and Antigravity
