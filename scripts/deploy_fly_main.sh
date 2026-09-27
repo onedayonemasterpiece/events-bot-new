@@ -82,11 +82,15 @@ AI_RESOURCE_CONTROL_REPO="${AI_RESOURCE_CONTROL_REPO:-/home/dev/projects/ai-reso
 AI_RESOURCE_WHEEL_DIR="$ROOT/vendor-private"
 AI_RESOURCE_WHEEL="$AI_RESOURCE_WHEEL_DIR/ai_resource_control-${AI_RESOURCE_CONTROL_VERSION}-py3-none-any.whl"
 AI_RESOURCE_TMP="$(mktemp -d)"
-cleanup_private_wheel() {
+dispatch_file=''
+cleanup_release_artifacts() {
   rm -rf "$AI_RESOURCE_TMP"
   rm -f "$AI_RESOURCE_WHEEL"
+  if [[ -n "$dispatch_file" ]]; then
+    rm -f "$dispatch_file"
+  fi
 }
-trap cleanup_private_wheel EXIT
+trap cleanup_release_artifacts EXIT
 [[ -d "$AI_RESOURCE_CONTROL_REPO/.git" ]] || {
   echo "Refusing deploy: private ai-resource-control checkout is unavailable." >&2
   exit 2
@@ -119,7 +123,6 @@ for arg in "${FLY_ARGS[@]}"; do
 done
 
 GH_BIN=''
-dispatch_file=''
 if [[ "$SEARCH_VALIDATION_PROFILE" != none ]]; then
   if command -v gh >/dev/null 2>&1; then
     GH_BIN="$(command -v gh)"
@@ -131,8 +134,6 @@ if [[ "$SEARCH_VALIDATION_PROFILE" != none ]]; then
   fi
   "$GH_BIN" auth status >/dev/null
   dispatch_file="$(mktemp)"
-  cleanup_dispatch() { rm -f "$dispatch_file"; }
-  trap cleanup_dispatch EXIT
   dispatch_args=(
     --site-runtime-sha "$HEAD_SHA"
     --search-backend-revision "$SEARCH_BACKEND_REVISION"
