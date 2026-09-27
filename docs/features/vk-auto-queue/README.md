@@ -23,7 +23,14 @@ carrier terminal скрывал уже сохранённый успешный p
 поэтому требует: при исчерпанном primary budget выполнить один independently
 limited Google OCR в том же claim; для video выполнить один user-token
 `video.get`, взять минимальный доступный MP4 и проанализировать короткий файл
-Google multimodal inline. Видео не превращается в poster и не сохраняется как
+Google multimodal inline. После повторного VK flood incident 2026-09-27
+автоматический `video.get` использует только `VK_SERVICE_TOKEN`: он не может
+заимствовать пользовательский токен публикации даже при ошибке конфигурации.
+Сервисный ответ может не содержать MP4; в этом случае остаются обновлённые
+preview и обычная проверка достаточности evidence. Полное видео/аудио в таком
+случае не считается просмотренным. Возврат полноты требует отдельного
+непубликационного read credential и отдельного лимита, а не общего токена
+публикации. Видео не превращается в poster и не сохраняется как
 event media; его распознанный текст/аудио входит только в EvidenceManifest и
 LLM source decision. `VK_VIDEO_EVIDENCE_MAX_BYTES` ограничен 19 MiB hard cap
 (default 18 MiB). Ошибка download/analysis остаётся видимым technical terminal,

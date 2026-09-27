@@ -2028,7 +2028,7 @@ async def test_fetch_vk_post_resolves_expiring_video_to_inline_evidence_file(mon
             }
         assert method == "video.get"
         assert params["videos"] == "-179910542_456239978"
-        assert params["_force_user_actor"] is True
+        assert "_force_user_actor" not in params
         return {
             "items": [
                 {
@@ -2053,6 +2053,27 @@ async def test_fetch_vk_post_resolves_expiring_video_to_inline_evidence_file(mon
     assert photos == []
     assert status.ok is True
     assert status.video_urls == ("https://fresh/video.mp4",)
+
+
+@pytest.mark.asyncio
+async def test_fetch_vk_post_keeps_preview_when_service_video_has_no_playable_file(monkeypatch):
+    async def fake_vk_api(method, **params):
+        if method == "wall.getById":
+            return {"items": [{"id": 12, "text": "Афиша", "date": 1760000000,
+                "attachments": [{"type": "video", "video": {"owner_id": -1, "id": 2,
+                    "image": [{"width": 720, "height": 1280, "url": "https://old/preview"}]}}]}]}
+        assert method == "video.get"
+        assert "_force_user_actor" not in params
+        return {"items": [{"owner_id": -1, "id": 2,
+            "image": [{"width": 720, "height": 1280, "url": "https://fresh/preview"}]}]}
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    _text, photos, _published_at, _metrics, status = (
+        await vk_auto_queue.fetch_vk_post_text_and_photos(1, 12)
+    )
+    assert status.ok is True
+    assert status.video_urls == ()
+    assert "https://fresh/preview" in photos
 
 
 @pytest.mark.asyncio

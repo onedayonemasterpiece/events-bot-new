@@ -240,6 +240,35 @@ async def test_public_users_get_uses_service_actor(monkeypatch):
     assert calls == ["service-token"]
 
 
+@pytest.mark.asyncio
+async def test_video_read_never_borrows_publishing_user_token(monkeypatch):
+    monkeypatch.setattr(main, "VK_READ_VIA_SERVICE", True)
+    monkeypatch.setattr(main, "VK_SERVICE_TOKEN", "service-token")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "publishing-token")
+    main.vk_actor_flood_blocked.clear()
+    calls = []
+
+    async def fake_http_call(name, method, url, timeout, params, **kwargs):
+        calls.append(params["access_token"])
+        return DummyResp({"response": {"items": []}})
+
+    async def no_throttle():
+        return None
+
+    monkeypatch.setattr(main, "http_call", fake_http_call)
+    monkeypatch.setattr(main, "_vk_throttle", no_throttle)
+
+    assert await main.vk_api("video.get", videos="1_2") == {"items": []}
+    assert calls == ["service-token"]
+
+    with pytest.raises(main.VKAPIError):
+        await main.vk_api("video.get", videos="1_2", _force_user_actor=True)
+    monkeypatch.setattr(main, "VK_SERVICE_TOKEN", None)
+    with pytest.raises(main.VKAPIError):
+        await main.vk_api("video.get", videos="1_2")
+    assert calls == ["service-token"]
+
+
 def test_choose_vk_actor(monkeypatch):
     monkeypatch.setattr(main, "VK_MAIN_GROUP_ID", "1")
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "2")
