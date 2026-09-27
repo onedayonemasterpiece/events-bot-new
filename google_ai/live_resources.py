@@ -17,15 +17,17 @@ RESOURCE_ENV_NAMES = (
 )
 
 def live_resource_environment(environment:Mapping[str,str]) -> dict[str,str]:
-    result = {
+    """Expose only shared-authority configuration to the Live controller.
+
+    Provider keys from the host environment are deliberately excluded. If the
+    shared authority is unavailable, KenigEvents Live fails closed instead of
+    switching to a local provider credential.
+    """
+    return {
         name: environment[name]
         for name in RESOURCE_ENV_NAMES
         if isinstance(environment.get(name),str) and environment[name].strip()
     }
-    fallback = str(environment.get('GOOGLE_API_KEY2') or '').strip()
-    if fallback:
-        result['AI_RESOURCE_CONTROL_FALLBACK_KEY'] = fallback
-    return result
 
 async def run_live_search(*,authorized_session_id:str,environment:Mapping[str,str],
                           reader:Any,on_event:Callable[[dict],None]) -> None:
