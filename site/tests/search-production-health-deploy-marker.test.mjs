@@ -84,20 +84,22 @@ async function makeFakeDeployRepo() {
   const python = join(root, 'bin/python3');
   await writeFile(fly, `#!/usr/bin/env bash\nset -euo pipefail\necho "fly:$*" >> "$CALL_LOG"\nif [[ "\${1:-}" == deploy ]]; then exit "\${FLY_DEPLOY_EXIT:-0}"; fi\n`);
   await writeFile(gh, `#!/usr/bin/env bash\nset -euo pipefail\necho "gh:$*" >> "$CALL_LOG"\nwhile (($#)); do if [[ "$1" == --input ]]; then cat "$2" >> "$CALL_LOG"; exit 0; fi; shift; done\n`);
-  await writeFile(python, `#!/usr/bin/env bash
-set -euo pipefail
-if [[ "${1:-}" == -m && "${2:-}" == pip && "${3:-}" == wheel ]]; then
-  wheel_dir=''
-  while (($#)); do
-    if [[ "$1" == --wheel-dir ]]; then wheel_dir="$2"; shift 2; continue; fi
-    shift
-  done
-  mkdir -p "$wheel_dir"
-  : > "$wheel_dir/ai_resource_control-0.1.4-py3-none-any.whl"
-  exit 0
-fi
-exec /usr/bin/python3 "$@"
-`);
+  await writeFile(python, [
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    'if [[ "${1:-}" == -m && "${2:-}" == pip && "${3:-}" == wheel ]]; then',
+    "  wheel_dir=''",
+    '  while (($#)); do',
+    '    if [[ "$1" == --wheel-dir ]]; then wheel_dir="$2"; shift 2; continue; fi',
+    '    shift',
+    '  done',
+    '  mkdir -p "$wheel_dir"',
+    '  : > "$wheel_dir/ai_resource_control-0.1.4-py3-none-any.whl"',
+    '  exit 0',
+    'fi',
+    'exec /usr/bin/python3 "$@"',
+    '',
+  ].join('\n'));
   await chmod(fly, 0o755);
   await chmod(gh, 0o755);
   await chmod(python, 0o755);
