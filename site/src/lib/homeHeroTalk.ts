@@ -79,13 +79,10 @@ function geometryInformationScore(asset: EventImageAsset): number {
 export function isHomeHeroAssetEligible(asset: EventImageAsset): boolean {
   const semanticPhoto = asset.image_kind === 'photo'
     || asset.media_role === 'event_photo' || asset.media_role === 'unknown_visual';
-  // HeroTalk is an editorial mosaic, not a full-bleed poster crop. Older/current
-  // catalogue exports may not yet carry the optional geometry-classifier fields,
-  // so absence of geometry must not collapse every event scene into text-only.
-  // Explicit unsafe/document evidence still fails closed.
   return asset.image_text_mode === 'visual_only' && semanticPhoto
-    && asset.safe_crop !== false && asset.recommended_hero_fit !== 'contain'
-    && Number(asset.width) >= 1000 && Number(asset.width) * Number(asset.height) >= 1_000_000;
+    && asset.safe_crop === true && asset.recommended_hero_fit === 'cover'
+    && Number(asset.width) >= 1000 && Number(asset.width) * Number(asset.height) >= 1_000_000
+    && Boolean(asset.focal_point) && hasCurrentHomeHeroGeometry(asset);
 }
 import {
   HOME_HERO_TALK_EDITORIAL,
@@ -160,8 +157,9 @@ function faceCropSafeAtRatio(asset: EventImageAsset, targetRatio: number): boole
 function eligibleHomeHeroAsset(event: PreviewEvent): EventImageAsset | null {
   return (event.image_assets || [])
     .filter(isHomeHeroAssetEligible)
-    .filter((asset) => asset.width >= 1_000)
-    .filter((asset) => !asset.face_boxes?.length || [3.2, 3.6, 4].every((ratio) => faceCropSafeAtRatio(asset, ratio)))
+    // 75vw at a 1920px acceptance viewport must not exceed donor's 1.10 cap.
+    .filter((asset) => asset.width >= 1_310)
+    .filter((asset) => [3.2, 3.6, 4].every((ratio) => faceCropSafeAtRatio(asset, ratio)))
     .sort((left, right) => (
       Number(right.quality_score || 0) - Number(left.quality_score || 0)
       || geometryInformationScore(right) - geometryInformationScore(left)
@@ -170,6 +168,13 @@ function eligibleHomeHeroAsset(event: PreviewEvent): EventImageAsset | null {
       || left.src.localeCompare(right.src)
     ))[0] || null;
 }
+
+const MODE_PATTERNS: HomeHeroTalkMode[][] = [
+  ['photo-mosaic', 'text-only', 'photo-mosaic', 'text-only'],
+  ['photo-mosaic', 'text-only', 'text-only', 'photo-mosaic'],
+  ['text-only', 'photo-mosaic', 'text-only', 'photo-mosaic'],
+  ['text-only', 'text-only', 'photo-mosaic', 'text-only'],
+];
 
 export function buildHomeHeroTalkDeck(
   events: PreviewEvent[],
@@ -209,22 +214,35 @@ export function buildHomeHeroTalkDeck(
       || hash32(`${seed}:${left.editorial.id}`) - hash32(`${seed}:${right.editorial.id}`)
     ));
   limit = Number.isFinite(limit) ? Math.max(0, Math.min(4, Math.floor(limit))) : 4;
-  // Event-linked HeroTalk scenes are image-led. Text-only is reserved for
-  // service/onboarding copy (the generic fallback below), rather than showing
-  // a clickable event title with its picture silently removed.
+  const desired = MODE_PATTERNS[hash32(seed) % MODE_PATTERNS.length];
+  const remaining = [...candidates];
   const scenes: HomeHeroTalkScene[] = [];
-  for (const { event, editorial } of candidates) {
-    const asset = eligibleHomeHeroAsset(event);
-    if (!asset) continue;
+
+  for (let index = 0; index < Math.min(limit, candidates.length); index += 1) {
+    let mode = desired[index % desired.length];
+    const laterNeedsPhoto = desired.slice(index + 1, Math.min(limit, desired.length))
+      .includes('photo-mosaic');
+    let candidateIndex = mode === 'photo-mosaic'
+      ? remaining.findIndex(({ event }) => Boolean(eligibleHomeHeroAsset(event)))
+      : laterNeedsPhoto
+        ? remaining.findIndex(({ event }) => !eligibleHomeHeroAsset(event))
+        : 0;
+    if (candidateIndex < 0 && mode === 'text-only') candidateIndex = 0;
+    if (candidateIndex < 0) {
+      mode = 'text-only';
+      candidateIndex = 0;
+    }
+    if (candidateIndex < 0 || !remaining[candidateIndex]) break;
+    const { event, editorial } = remaining.splice(candidateIndex, 1)[0];
+    const asset = mode === 'photo-mosaic' ? eligibleHomeHeroAsset(event) : null;
     scenes.push({
       event,
-      mode: 'photo-mosaic',
+      mode: asset ? mode : 'text-only',
       asset,
       editorialId: editorial.id,
       fragments: editorial.fragments,
       copySource: currentEditorialIds.has(event.id) ? 'editorial' : 'catalog-fact-fallback',
     });
-    if (scenes.length >= limit) break;
   }
 
   return scenes;

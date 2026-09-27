@@ -9,7 +9,7 @@ interface Props { scenes: HomeHeroTalkScene[]; placement?: string; }
 const { scenes, placement='home_intro' } = Astro.props;
 const titleId = `home-hero-talk-title-${placement}`;
 const visibleScenes = scenes.slice(0, 4);
-const generic = genericHeroTalkMessage(placement === 'page_end' ? 'page_end' : 'home_intro');
+const generic = genericHeroTalkMessage('home_intro');
 const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
 ---
 
@@ -123,10 +123,10 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
 <style>
   .home-hero-talk {
     position:relative;
-    width:100%;
+    width:100vw;
     height:min(42svh,360px);
     min-height:270px;
-    margin-left:0;
+    margin-left:calc(50% - 50vw);
     overflow:clip;
     color:var(--ke-color-text-primary);
     /* The accepted donor lived on the light page canvas. Keep that exact
@@ -180,8 +180,8 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   }
   .home-hero-talk__media {
     --mosaic-columns:16;
-    position:absolute;z-index:0;top:0;right:0;width:65vw;
-    height:calc((65vw - (var(--mosaic-columns) - 1)*2px)*5/var(--mosaic-columns));
+    position:absolute;z-index:0;top:0;right:0;width:75vw;
+    height:calc((75vw - (var(--mosaic-columns) - 1)*2px)*5/var(--mosaic-columns));
     max-height:100%;overflow:hidden;pointer-events:none;
   }
   .home-hero-talk__preload { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
@@ -308,7 +308,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
       const rootRect=mosaic.getBoundingClientRect(),sourceWidth=Number(scene.dataset.sourceWidth),sourceHeight=Number(scene.dataset.sourceHeight);
       if(!rootRect.width||!rootRect.height||!sourceWidth||!sourceHeight) return false;
       const scale=Math.max(rootRect.width/sourceWidth,rootRect.height/sourceHeight);
-      if(scale>1.35){media.dataset.mediaRejection='upscale';media.hidden=true;return false;}
+      if(scale>1.1){media.dataset.mediaRejection='upscale';media.hidden=true;return false;}
       media.hidden=false;delete media.dataset.mediaRejection;
       const renderWidth=sourceWidth*scale,renderHeight=sourceHeight*scale,focusX=clamp(Number(scene.dataset.focusX||.5)),focusY=clamp(Number(scene.dataset.focusY||.5));
       const offsetX=(rootRect.width-renderWidth)*focusX,offsetY=(rootRect.height-renderHeight)*focusY;

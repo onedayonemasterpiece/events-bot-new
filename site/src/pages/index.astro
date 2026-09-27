@@ -3,10 +3,12 @@ import EventLayout from '../layouts/EventLayout.astro';
 import PrelaunchLayout from '../layouts/PrelaunchLayout.astro';
 import HomeColdStartFeed from '../components/HomeColdStartFeed.astro';
 import HomeHeroTalk from '../components/HomeHeroTalk.astro';
+import { buildHomeHeroTalkDeck } from '../lib/homeHeroTalk.ts';
+import { homeSearchCapability } from '../lib/assistant/homeSearchCapability.ts';
+import HomeSearchEntry from '../components/HomeSearchEntry.astro';
 import HeroTalkPageEnd from '../components/HeroTalkPageEnd.astro';
 import HomeQuickNav from '../components/HomeQuickNav.astro';
 import PrelaunchPage from '../components/PrelaunchPage.astro';
-import { buildHomeHeroTalkDeck } from '../lib/homeHeroTalk.ts';
 import type { PreviewEvent } from '../lib/types';
 import {
   absoluteUrl,
@@ -21,10 +23,9 @@ import {
 
 const prelaunchMode = /^(?:1|true|yes|on)$/iu.test(String(import.meta.env.PUBLIC_PRELAUNCH_MODE || ''));
 const currentDate = getCurrentDate();
-const allEvents = getEvents();
 const popular = getPopularEvents(30);
 const fallback = collapseLinkedSessionEvents(
-  allEvents
+  getEvents()
     .filter((event) => !event.lifecycle_status || event.lifecycle_status === 'active')
     .filter((event) => eventIntersectsDateRange(event, currentDate, '9999-12-31')),
 );
@@ -35,20 +36,12 @@ for (const event of [...popular, ...fallback]) {
   if (familyIds.some((id) => offeredFamilyIds.has(id))) continue;
   feed.push(event);
   familyIds.forEach((id) => offeredFamilyIds.add(id));
-  if (feed.length >= 30) break;
 }
-
-const heroScenes = buildHomeHeroTalkDeck(allEvents, currentDate, `home:${currentDate}`, 4);
-const upperHeroIds = new Set(heroScenes.map((scene) => scene.event.id));
-const endHeroScenes = buildHomeHeroTalkDeck(
-  allEvents.filter((event) => !upperHeroIds.has(event.id)),
-  currentDate,
-  `home-end:${currentDate}`,
-  4,
-);
-const searchReady = Boolean(import.meta.env.PUBLIC_STATIC_SITE_LIVE_SEARCH_URL);
+const heroScenes = buildHomeHeroTalkDeck(getEvents(), currentDate, `home:${currentDate}`);
+const upperHeroIds=new Set(heroScenes.map(scene=>scene.event.id));
+const endHeroScenes=buildHomeHeroTalkDeck(getEvents().filter(event=>!upperHeroIds.has(event.id)),currentDate,`home-end:${currentDate}`);
 const title = SITE_NAME;
-const description = 'Афиша Калининграда без шума: актуальные события, быстрые маршруты и разговорный поиск.';
+const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';
 ---
 
 {prelaunchMode ? (
@@ -63,35 +56,34 @@ const description = 'Афиша Калининграда без шума: акт
     ogType="website"
     structuredData={[]}
     mobileSection="afisha"
-    homeFloatingNav
   >
-    <main id="main" class="home-page" data-home-page data-home-static-fallback-count={feed.length}>
-      <HomeHeroTalk scenes={heroScenes} placement="home_intro" />
-
+    <main
+      id="main"
+      class="home-page"
+      data-ds-family="HomePage"
+      data-ds-version="2"
+      data-ds-variant="cold-start"
+      data-ds-state={feed.length ? 'populated' : 'empty'}
+      data-home-page
+      data-home-static-fallback-count={Math.min(feed.length, 30)}
+      data-home-eligible-count={feed.length}
+    >
       <div class="page-shell home-page__shell">
+        <HomeHeroTalk scenes={heroScenes} />
+        <HomeSearchEntry variant="floating-link" />
         <HomeQuickNav />
         <HomeColdStartFeed events={feed} />
+        <HeroTalkPageEnd scenes={endHeroScenes} context={{route:'home',placement:'page_end',readyCapabilities:homeSearchCapability(import.meta.env) ? ['search'] : [],upperSceneIds:heroScenes.map(scene => scene.editorialId)}} />
       </div>
-
-      <HeroTalkPageEnd
-        scenes={endHeroScenes.length ? endHeroScenes : undefined}
-        context={{
-          route: 'home',
-          placement: 'page_end',
-          readyCapabilities: searchReady ? ['search'] : [],
-          upperSceneIds: heroScenes.map((scene) => scene.editorialId),
-        }}
-      />
     </main>
   </EventLayout>
 )}
 
 <style>
-  .home-page { padding: 0 0 5rem; overflow-x: clip; }
+  .home-page { padding:0; }
+  @media(max-width:759px) { .home-page { padding-bottom:calc(max(var(--ke-lower-surface-offset, 0px), var(--mobile-bottom-stack-h, 84px)) + var(--ke-space-6)); }
   .home-page__shell { width: min(1240px, calc(100% - 2rem)); }
-  :global(.home-page > [data-hero-talk-page-end]) { margin-top: clamp(3rem, 7vw, 6rem); }
-  @media (max-width:620px) {
-    .home-page { padding-bottom: calc(var(--mobile-bottom-stack-h, 84px) + 2rem); }
+  @media (max-width: 620px) {
     .home-page__shell { width: min(100% - 1rem, 46rem); padding-inline: 0; }
   }
 </style>

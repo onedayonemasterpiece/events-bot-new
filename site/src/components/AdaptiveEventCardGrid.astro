@@ -1,0 +1,557 @@
+---
+import EventCard, { type EventCardRootAttributes } from './EventCard.astro';
+import type { PreviewEvent } from '../lib/types';
+import { packRelatedCardRows, planRelatedCardRows } from '../lib/relatedCardLayout.mjs';
+
+type GridMode = 'flow' | 'packed';
+type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
+type ResponsiveStrategy = 'fixed' | 'progressive' | 'stack';
+type AdaptiveGridLive = 'off' | 'polite' | 'assertive';
+type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' | 'all-direct' | 'initial';
+type AdaptiveGridRemainderVariant = 'complete' | `regular-${number}-of-${number}`;
+
+export interface AdaptiveEventCardItemRoot {
+  className?: string;
+  attributes?: EventCardRootAttributes;
+}
+
+interface Props {
+  events: PreviewEvent[];
+  mode?: GridMode;
+  limit?: number;
+  rowSize?: number;
+  mediaTreatment?: MediaTreatment;
+  className?: string;
+  responsive?: ResponsiveStrategy;
+  /** @deprecated Use responsive="stack". */
+  responsiveMobile?: boolean;
+  surface?: string;
+  algorithmId?: string;
+  currentEventId?: number;
+  discoverySrc?: string;
+  personalFeed?: boolean;
+  discoveryFeed?: boolean;
+  mobileFlowMedia?: boolean;
+  legacyOptimizedContract?: boolean;
+  rootAttributes?: EventCardRootAttributes;
+  itemRoots?: Record<string, AdaptiveEventCardItemRoot>;
+  runtimeManaged?: boolean;
+  runtimeVisibleOnly?: boolean;
+  runtimeSourcePolicy?: AdaptiveGridRuntimeSourcePolicy;
+  ariaLive?: AdaptiveGridLive;
+  ariaAtomic?: boolean;
+  ariaBusy?: boolean;
+  ariaLabel?: string;
+  ariaLabelledby?: string;
+}
+
+const {
+  events,
+  mode = 'packed',
+  limit: requestedLimit,
+  rowSize: requestedRowSize = 3,
+  mediaTreatment = 'hybrid',
+  className,
+  responsive: requestedResponsive,
+  responsiveMobile = false,
+  surface,
+  algorithmId,
+  currentEventId,
+  discoverySrc,
+  personalFeed = false,
+  discoveryFeed = false,
+  mobileFlowMedia = mode === 'flow',
+  legacyOptimizedContract = false,
+  rootAttributes = {},
+  itemRoots = {},
+  runtimeManaged,
+  runtimeVisibleOnly: requestedRuntimeVisibleOnly,
+  runtimeSourcePolicy: requestedRuntimeSourcePolicy,
+  ariaLive,
+  ariaAtomic,
+  ariaBusy,
+  ariaLabel,
+  ariaLabelledby,
+} = Astro.props;
+
+const remainderVariantFor = (count: number, size: number): AdaptiveGridRemainderVariant => {
+  const remainder = count % size;
+  return remainder === 0 ? 'complete' : `regular-${remainder}-of-${size}`;
+};
+const numericRowSize = Number(requestedRowSize);
+const rowSize = Math.max(1, Math.min(6, Math.floor(Number.isFinite(numericRowSize) ? numericRowSize : 3)));
+const defaultLimit = mode === 'packed' ? 10 : events.length;
+const numericLimit = Number(requestedLimit ?? defaultLimit);
+const limit = Math.max(0, Math.floor(Number.isFinite(numericLimit) ? numericLimit : defaultLimit));
+const responsive: ResponsiveStrategy = requestedResponsive === 'progressive' || requestedResponsive === 'stack' || requestedResponsive === 'fixed'
+  ? requestedResponsive
+  : responsiveMobile ? 'stack' : 'fixed';
+const runtimeManagedGrid = runtimeManaged ?? (personalFeed || discoveryFeed);
+const runtimeVisibleOnly = requestedRuntimeVisibleOnly ?? discoveryFeed;
+const runtimeSourcePolicy: AdaptiveGridRuntimeSourcePolicy = requestedRuntimeSourcePolicy === 'initial'
+  || requestedRuntimeSourcePolicy === 'all-direct'
+  ? requestedRuntimeSourcePolicy
+  : discoveryFeed ? 'all-direct' : 'mirror-rendered';
+const gridVariant = `${mode}-${rowSize}-column`;
+const gridBaseState = [
+  responsive !== 'fixed' && `responsive-${responsive}`,
+  legacyOptimizedContract && 'legacy-adapter',
+  personalFeed && 'personal-feed',
+  discoveryFeed && 'discovery-feed',
+  runtimeManagedGrid && 'runtime-managed',
+  runtimeManagedGrid && runtimeVisibleOnly && 'runtime-visible-only',
+].filter(Boolean).join(' ') || undefined;
+const fullPoolFlowPlan = mode === 'flow' && events.length > limit
+  ? planRelatedCardRows(events, { rowSize, mediaTreatment, presentation:'flow' }).slice(0, limit)
+  : null;
+const resolved = mode === 'packed'
+  ? events.length > limit
+    ? planRelatedCardRows(events, { rowSize, mediaTreatment }).slice(0, limit)
+    : packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
+  : fullPoolFlowPlan || packRelatedCardRows(events, { limit, rowSize, mediaTreatment, presentation:'flow', preserveOrder:true });
+const framingPlan = resolved;
+const framingConflicts = [...new Set(framingPlan
+  .map(({ layout }) => layout?.framingConflict)
+  .filter(Boolean))].join(';');
+const framingStatus = framingPlan.some(({ layout }) => layout?.framingStatus === 'unsatisfied')
+  ? 'unsatisfied'
+  : 'satisfied';
+const remainderCount = resolved.length % rowSize;
+const initialRemainderVariant = remainderVariantFor(resolved.length, rowSize);
+const initialRuntimeState = runtimeManagedGrid ? (resolved.length ? 'populated' : 'empty') : undefined;
+const gridState = [gridBaseState, `remainder-${initialRemainderVariant}`, initialRuntimeState].filter(Boolean).join(' ') || undefined;
+
+const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
+  'data-ds-component',
+  'data-ds-family',
+  'data-ds-version',
+  'data-ds-variant',
+  'data-ds-state',
+  'data-adaptive-event-card-grid',
+  'data-adaptive-grid-mode',
+  'data-adaptive-grid-row-size',
+  'data-adaptive-grid-limit',
+  'data-adaptive-grid-media-treatment',
+  'data-adaptive-grid-card-root',
+  'data-adaptive-grid-layout-engine',
+  'data-adaptive-grid-remainder-policy',
+  'data-adaptive-grid-remainder-variant',
+  'data-adaptive-grid-responsive',
+  'data-adaptive-grid-diagnostics-owner',
+  'data-adaptive-grid-diagnostics-contract',
+  'data-adaptive-grid-input-count',
+  'data-adaptive-grid-input-order',
+  'data-adaptive-grid-source-count',
+  'data-adaptive-grid-rendered-count',
+  'data-adaptive-grid-remainder-count',
+  'data-adaptive-grid-source-order',
+  'data-adaptive-grid-rendered-order',
+  'data-adaptive-grid-item-root-contract',
+  'data-adaptive-grid-framing-status',
+  'data-adaptive-grid-framing-conflicts',
+  'data-adaptive-grid-live',
+  'data-adaptive-grid-runtime-managed',
+  'data-adaptive-grid-runtime-bound',
+  'data-adaptive-grid-runtime-state',
+  'data-adaptive-grid-base-state',
+  'data-adaptive-grid-runtime-visible-only',
+  'data-adaptive-grid-runtime-source-policy',
+  'data-row-normalize',
+  'data-optimized-event-card-grid',
+  'data-lab-row-normalize',
+  'data-discovery-feed',
+  'data-personal-feed-results',
+  'data-surface',
+  'data-algorithm-id',
+  'data-current-event-id',
+  'data-discovery-src',
+  'data-feed-card-variant',
+]);
+const safeRootAttributes = Object.fromEntries(
+  Object.entries(rootAttributes).filter(([name, value]) => (
+    value !== undefined
+    && value !== null
+    && /^data-[a-z0-9_.:-]+$/u.test(name)
+    && !ADAPTIVE_ROOT_RESERVED_ATTRIBUTES.has(name)
+  )),
+);
+const sourceIndexesByItem = new Map<PreviewEvent, number[]>();
+const sourceIndexesByEventId = new Map<string, number[]>();
+events.forEach((item, index) => {
+  const itemIndexes = sourceIndexesByItem.get(item) || [];
+  itemIndexes.push(index);
+  sourceIndexesByItem.set(item, itemIndexes);
+  const eventId = String(item.id);
+  const eventIndexes = sourceIndexesByEventId.get(eventId) || [];
+  eventIndexes.push(index);
+  sourceIndexesByEventId.set(eventId, eventIndexes);
+});
+const claimedSourceIndexes = new Set<number>();
+const resolvedSourceIndexes = resolved.map(({ item }) => {
+  const exactIndex = sourceIndexesByItem.get(item)?.find((index) => !claimedSourceIndexes.has(index));
+  const eventIdIndex = sourceIndexesByEventId.get(String(item.id))?.find((index) => !claimedSourceIndexes.has(index));
+  const sourceIndex = exactIndex ?? eventIdIndex ?? -1;
+  if (sourceIndex >= 0) claimedSourceIndexes.add(sourceIndex);
+  return sourceIndex;
+});
+const itemRootFor = (item: PreviewEvent, sourceIndex: number): AdaptiveEventCardItemRoot | undefined => (
+  itemRoots[`${item.id}:${sourceIndex}`] || itemRoots[String(item.id)]
+);
+const inputOrder = events.map((item) => item.id).join(',');
+const admittedSource = resolved
+  .map(({ item }, renderedIndex) => ({
+    item,
+    sourceIndex: resolvedSourceIndexes[renderedIndex] ?? -1,
+  }))
+  .filter(({ sourceIndex }) => sourceIndex >= 0)
+  .sort((left, right) => left.sourceIndex - right.sourceIndex);
+const sourceOrder = admittedSource.map(({ item }) => item.id).join(',');
+const renderedOrder = resolved.map(({ item }) => item.id).join(',');
+const hasItemRoots = Object.keys(itemRoots).length > 0;
+---
+
+<div
+  {...safeRootAttributes}
+  class:list={[
+    'cards-grid',
+    mode === 'packed' && 'cards-grid--immersive',
+    'adaptive-event-card-grid',
+    `adaptive-event-card-grid--${mode}`,
+    `adaptive-event-card-grid--responsive-${responsive}`,
+    responsiveMobile && 'adaptive-event-card-grid--responsive',
+    legacyOptimizedContract && 'optimized-event-card-grid',
+    legacyOptimizedContract && responsiveMobile && 'optimized-event-card-grid--responsive',
+    className,
+  ]}
+  data-ds-component="AdaptiveEventCardGrid"
+  data-ds-family="AdaptiveEventCardGrid"
+  data-ds-version="2"
+  data-ds-variant={gridVariant}
+  data-ds-state={gridState}
+  data-adaptive-event-card-grid
+  data-adaptive-grid-mode={mode}
+  data-adaptive-grid-row-size={rowSize}
+  data-adaptive-grid-limit={limit}
+  data-adaptive-grid-media-treatment={mode === 'packed' ? mediaTreatment : undefined}
+  data-adaptive-grid-card-root="EventCard"
+  data-adaptive-grid-layout-engine="grid-subgrid"
+  data-adaptive-grid-remainder-policy="regular-column"
+  data-adaptive-grid-remainder-variant={initialRemainderVariant}
+  data-adaptive-grid-responsive={responsive}
+  data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"
+  data-adaptive-grid-diagnostics-contract="input-source-rendered-v1"
+  data-adaptive-grid-input-count={events.length}
+  data-adaptive-grid-input-order={inputOrder}
+  data-adaptive-grid-source-count={admittedSource.length}
+  data-adaptive-grid-rendered-count={resolved.length}
+  data-adaptive-grid-remainder-count={remainderCount}
+  data-adaptive-grid-source-order={sourceOrder}
+  data-adaptive-grid-rendered-order={renderedOrder}
+  data-adaptive-grid-item-root-contract={hasItemRoots ? 'event-id-or-event-id-source-index' : undefined}
+  data-adaptive-grid-framing-status={framingStatus}
+  data-adaptive-grid-framing-conflicts={framingConflicts || undefined}
+  data-adaptive-grid-live={ariaLive}
+  data-adaptive-grid-runtime-managed={runtimeManagedGrid ? 'true' : undefined}
+  data-adaptive-grid-runtime-state={initialRuntimeState}
+  data-adaptive-grid-base-state={gridBaseState}
+  data-adaptive-grid-runtime-visible-only={runtimeManagedGrid && runtimeVisibleOnly ? 'true' : undefined}
+  data-adaptive-grid-runtime-source-policy={runtimeManagedGrid ? runtimeSourcePolicy : undefined}
+  data-row-normalize={mode === 'packed' ? '' : undefined}
+  data-optimized-event-card-grid={legacyOptimizedContract ? '' : undefined}
+  data-lab-row-normalize={mode === 'packed' ? '' : undefined}
+  data-discovery-feed={discoveryFeed ? '' : undefined}
+  data-personal-feed-results={personalFeed ? '' : undefined}
+  data-surface={surface}
+  data-algorithm-id={algorithmId}
+  data-current-event-id={currentEventId}
+  data-discovery-src={discoverySrc}
+  data-feed-card-variant="split-actions"
+  aria-live={ariaLive}
+  aria-atomic={ariaAtomic === undefined ? undefined : String(ariaAtomic)}
+  aria-busy={ariaBusy === undefined ? undefined : String(ariaBusy)}
+  aria-label={ariaLabel}
+  aria-labelledby={ariaLabelledby}
+>
+  {resolved.map(({ item, layout }, renderedIndex) => {
+    const itemRoot = itemRootFor(item, resolvedSourceIndexes[renderedIndex] ?? -1);
+    return (
+      <EventCard
+        event={item}
+        variant="split-actions"
+        desktopRelatedCrop={Boolean(layout)}
+        desktopRelatedLayout={layout}
+        mobileFlowMedia={mode === 'flow' && mobileFlowMedia}
+        rootClassName={itemRoot?.className}
+        rootAttributes={itemRoot?.attributes}
+      />
+    );
+  })}
+</div>
+
+<script>
+  function bindAdaptiveEventCardGridRuntime(root = document) {
+    root.querySelectorAll('[data-adaptive-event-card-grid][data-adaptive-grid-runtime-managed="true"]').forEach((grid) => {
+      if (!(grid instanceof HTMLElement) || grid.dataset.adaptiveGridRuntimeBound === 'true') return;
+      grid.dataset.adaptiveGridRuntimeBound = 'true';
+      const visibleOnly = grid.dataset.adaptiveGridRuntimeVisibleOnly === 'true';
+      const sourcePolicy = grid.dataset.adaptiveGridRuntimeSourcePolicy === 'initial'
+        ? 'initial'
+        : grid.dataset.adaptiveGridRuntimeSourcePolicy === 'all-direct'
+          ? 'all-direct'
+          : 'mirror-rendered';
+      const sync = () => {
+        const directCards = Array.from(grid.querySelectorAll(':scope > [data-event-card]'))
+          .filter((card) => card instanceof HTMLElement);
+        const cards = visibleOnly ? directCards.filter((card) => !card.hidden) : directCards;
+        const directOrder = directCards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
+        const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
+        const count = cards.length;
+        const parsedRowSize = Number.parseInt(grid.dataset.adaptiveGridRowSize || '1', 10);
+        const runtimeRowSize = Number.isFinite(parsedRowSize) && parsedRowSize > 0 ? parsedRowSize : 1;
+        const runtimeState = count ? 'populated' : 'empty';
+        const runtimeRemainderCount = count % runtimeRowSize;
+        const runtimeRemainderVariant = runtimeRemainderCount === 0
+          ? 'complete'
+          : `regular-${runtimeRemainderCount}-of-${runtimeRowSize}`;
+        if (grid.dataset.adaptiveGridMode === 'flow') {
+          const renderedColumns = getComputedStyle(grid).gridTemplateColumns.split(/\s+/u).filter(Boolean).length || 1;
+          const conflicts = [];
+          const applyFlowFrame = (card, ratio, fit, objectPosition, cropPermission, cropReason) => {
+            const shell = card.querySelector('[data-card-media-shell]');
+            if (!(shell instanceof HTMLElement)) return;
+            card.style.setProperty('--adaptive-flow-row-media-ratio', String(ratio));
+            shell.dataset.mediaFrameFit = fit;
+            shell.dataset.mediaFrameObjectPosition = objectPosition;
+            shell.dataset.mediaFrameFocalPosition = objectPosition;
+            shell.dataset.mediaFrameCropPermission = cropPermission;
+            shell.dataset.mediaFrameCropReason = cropReason;
+            shell.style.setProperty('--media-frame-object-position', objectPosition);
+            shell.classList.toggle('event-card__media-shell--cover', fit === 'cover');
+            shell.classList.toggle('event-card__media-shell--document', fit !== 'cover');
+          };
+          cards.forEach((card) => {
+            card.style.removeProperty('--adaptive-flow-row-media-ratio');
+            delete card.dataset.adaptiveFlowFramingStatus;
+            delete card.dataset.adaptiveFlowFramingRisk;
+          });
+          for (let offset = 0; offset < cards.length; offset += renderedColumns) {
+            const row = cards.slice(offset, offset + renderedColumns);
+            const documents = row.map((card) => {
+              const shell = card.querySelector('[data-card-media-shell]');
+              const state = shell?.dataset.mediaFrameResourceState || '';
+              const kind = shell?.dataset.mediaFrameKind || 'unknown';
+              if (!shell || kind === 'visual' || kind === 'fallback' || state === 'broken' || state === 'fallback') return null;
+              const width = Number(shell.dataset.mediaFrameSourceWidth);
+              const height = Number(shell.dataset.mediaFrameSourceHeight);
+              const ratio = width > 0 && height > 0 ? width / height : Number(shell.dataset.mediaFrameSourceRatio);
+              return { card, ratio, dimensions:width > 0 && height > 0 ? `${width}x${height}` : 'unknown' };
+            }).filter(Boolean);
+            if (renderedColumns === 1) {
+              const card = row[0];
+              const shell = card?.querySelector('[data-card-media-shell]');
+              const document = documents[0];
+              const ratio = document?.ratio || 5 / 4;
+              if (document && Number.isFinite(ratio) && ratio > 0) {
+                applyFlowFrame(card, ratio, 'contain', '50% 50%', 'forbidden', 'mobile_document_natural');
+              } else if (shell?.dataset.mediaFrameKind === 'visual') {
+                applyFlowFrame(card, 5 / 4, 'cover', card.dataset.labObjectPosition || '50% 50%', 'allowed', card.dataset.labCropReason || 'mobile_visual_fixed_5x4');
+              }
+              card.dataset.adaptiveFlowFramingStatus = document && !(Number.isFinite(ratio) && ratio > 0) ? 'unsatisfied' : 'satisfied';
+              if (card.dataset.adaptiveFlowFramingStatus === 'unsatisfied') conflicts.push(`document-natural-ratio-unknown:${card.dataset.eventId || 'unknown'}@unknown`);
+              continue;
+            }
+            const plannedRatio = Number(row[0]?.dataset.labRowRatio);
+            const coherentPlan = Number.isFinite(plannedRatio) && plannedRatio > 0
+              && row.every((card) => Number(card.dataset.labRowRatio) === plannedRatio
+                && card.dataset.labFramingStatus === 'satisfied');
+            if (coherentPlan) {
+              row.forEach((card) => {
+                const fit = card.dataset.labFit === 'cover' ? 'cover' : 'contain';
+                const treatment = card.dataset.labMediaTreatment || '';
+                applyFlowFrame(
+                  card,
+                  plannedRatio,
+                  fit,
+                  card.dataset.labObjectPosition || '50% 50%',
+                  card.dataset.labCropPermission || (fit === 'contain' ? 'forbidden' : treatment.startsWith('document-') ? 'reviewed-bounded' : 'allowed'),
+                  card.dataset.labCropReason || 'planned_flow_frame',
+                );
+                card.dataset.adaptiveFlowFramingStatus = 'satisfied';
+              });
+              continue;
+            }
+            const unknown = documents.find((entry) => !(Number.isFinite(entry.ratio) && entry.ratio > 0));
+            const anchor = documents[0];
+            const mismatch = anchor && documents.find((entry) => Number.isFinite(entry.ratio)
+              && Math.abs(entry.ratio - anchor.ratio) > 1e-9);
+            if (unknown || mismatch) {
+              const risk = unknown
+                ? `document-natural-ratio-unknown:${unknown.card.dataset.eventId || 'unknown'}@${unknown.dimensions}`
+                : `document-natural-ratio-mismatch:${anchor.card.dataset.eventId || 'unknown'}@${anchor.dimensions}=${anchor.ratio.toFixed(8)}|${mismatch.card.dataset.eventId || 'unknown'}@${mismatch.dimensions}=${mismatch.ratio.toFixed(8)}`;
+              const knownRatios = documents.map((entry) => entry.ratio).filter((ratio) => Number.isFinite(ratio) && ratio > 0);
+              const targetRatio = knownRatios.length
+                ? Math.sqrt(Math.min(...knownRatios) * Math.max(...knownRatios))
+                : 5 / 4;
+              row.forEach((card) => {
+                card.dataset.adaptiveFlowFramingStatus = 'satisfied';
+                card.dataset.adaptiveFlowFramingRisk = risk;
+                const document = documents.find((entry) => entry.card === card);
+                if (document) applyFlowFrame(card, targetRatio, 'cover', card.dataset.labObjectPosition || '50% 50%', 'fallback-minimal', 'fallback_minimal_crop_runtime_reconcile');
+                else applyFlowFrame(card, targetRatio, 'cover', card.dataset.labObjectPosition || '50% 50%', 'allowed', card.dataset.labCropReason || 'visual_row_cover');
+              });
+              continue;
+            }
+            const targetRatio = anchor?.ratio || 5 / 4;
+            row.forEach((card) => {
+              card.dataset.adaptiveFlowFramingStatus = 'satisfied';
+              const document = documents.find((entry) => entry.card === card);
+              if (document) applyFlowFrame(card, targetRatio, 'contain', '50% 50%', 'forbidden', 'document_natural_row');
+              else applyFlowFrame(card, targetRatio, 'cover', card.dataset.labObjectPosition || '50% 50%', 'allowed', card.dataset.labCropReason || 'visual_row_cover');
+            });
+          }
+          grid.dataset.adaptiveGridFramingStatus = conflicts.length ? 'unsatisfied' : 'satisfied';
+          if (conflicts.length) grid.dataset.adaptiveGridFramingConflicts = [...new Set(conflicts)].join(';');
+          else delete grid.dataset.adaptiveGridFramingConflicts;
+        }
+        if (sourcePolicy === 'mirror-rendered') {
+          grid.dataset.adaptiveGridSourceCount = String(count);
+          grid.dataset.adaptiveGridSourceOrder = order;
+        } else if (sourcePolicy === 'all-direct') {
+          grid.dataset.adaptiveGridSourceCount = String(directCards.length);
+          grid.dataset.adaptiveGridSourceOrder = directOrder;
+        }
+        grid.dataset.adaptiveGridRenderedCount = String(count);
+        grid.dataset.adaptiveGridRenderedOrder = order;
+        grid.dataset.adaptiveGridRemainderCount = String(runtimeRemainderCount);
+        grid.dataset.adaptiveGridRemainderVariant = runtimeRemainderVariant;
+        grid.dataset.adaptiveGridRuntimeState = runtimeState;
+        grid.dataset.dsState = [
+          grid.dataset.adaptiveGridBaseState || '',
+          `remainder-${runtimeRemainderVariant}`,
+          runtimeState,
+        ].filter(Boolean).join(' ');
+      };
+      const observerOptions = { childList:true, subtree:true, attributes:true,
+        attributeFilter:visibleOnly
+          ? ['hidden','data-media-frame-resource-state','data-media-frame-source-ratio']
+          : ['data-media-frame-resource-state','data-media-frame-source-ratio'] };
+      new MutationObserver(sync).observe(grid, observerOptions);
+      window.addEventListener('resize', sync, { passive:true });
+      sync();
+    });
+  }
+  bindAdaptiveEventCardGridRuntime();
+</script>
+
+<style>
+  .cards-grid.adaptive-event-card-grid {
+    --adaptive-event-card-gap: clamp(.85rem, 1.6vw, 1.25rem);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--adaptive-event-card-columns, 3), minmax(0, 1fr));
+    gap: var(--adaptive-event-card-gap);
+    align-items: stretch;
+  }
+
+  .adaptive-event-card-grid > :global(.event-card) {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    grid-row: span 4;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="1"] { --adaptive-event-card-columns: 1; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="2"] { --adaptive-event-card-columns: 2; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="3"] { --adaptive-event-card-columns: 3; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="4"] { --adaptive-event-card-columns: 4; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] { --adaptive-event-card-columns: 5; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] { --adaptive-event-card-columns: 6; }
+
+  /* Flow preserves ranked DOM order. Natural/protected rows keep their planned
+     ratio; a genuine incompatible residue receives the shared planner's
+     minimum-crop cover rather than painted fields. */
+  .adaptive-event-card-grid--flow > :global(.event-card) {
+    grid-template-rows: subgrid;
+  }
+  .adaptive-event-card-grid--flow > :global(.event-card[data-adaptive-flow-framing-status="satisfied"] .event-card__media-shell) {
+    aspect-ratio: var(--adaptive-flow-row-media-ratio) !important;
+  }
+  .adaptive-event-card-grid :global(.event-card__body) { align-content: start; }
+  .adaptive-event-card-grid :global(.event-card__utility-row) { min-width: 0; }
+  .adaptive-event-card-grid :global(.event-card__utility-row .feedback-button--negative) {
+    min-width: 0;
+    white-space: normal;
+  }
+
+  /* Packed rows receive one ratio from relatedCardLayout. They must keep
+     that media link in the card's own grid: an absolute MediaFrame cannot
+     size the outer subgrid row without overlapping the following anatomy. */
+  .adaptive-event-card-grid--packed > :global(.event-card[data-lab-related-card]) {
+    height: auto;
+    grid-row: auto;
+    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
+  }
+  /* The link is the first subgrid item. Give it the packer-selected shared
+     row ratio so absolute MediaFrame content participates in row sizing. */
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-link) {
+    display: block;
+    aspect-ratio: var(--lab-row-media-ratio);
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-shell) {
+    height: auto !important;
+    aspect-ratio: var(--lab-row-media-ratio) !important;
+    background: #d2c5b7;
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media) {
+    position: absolute !important;
+    z-index: 2;
+    inset: 0;
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-media-kind="visual"] .event-card__media-shell) {
+    background: linear-gradient(135deg, #e4ddd2, #d4c7b9);
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-media-kind="visual"] .event-card__media) { background: transparent !important; }
+  .adaptive-event-card-grid--packed :global([data-card-authoritative-fit="contain"]) { background: #15110f; }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__body) { min-height: 0; align-content: start; }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__utility-row) { min-height: 58px; }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px; }
+
+  @media (max-width: 1023px) {
+    .adaptive-event-card-grid--responsive-stack[data-adaptive-grid-row-size] {
+      --adaptive-event-card-columns: 1;
+    }
+  }
+
+  @media (max-width: 960px) {
+    .adaptive-event-card-grid--responsive-progressive:is(
+      [data-adaptive-grid-row-size="3"],
+      [data-adaptive-grid-row-size="4"],
+      [data-adaptive-grid-row-size="5"],
+      [data-adaptive-grid-row-size="6"]
+    ) {
+      --adaptive-event-card-columns: 2;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .adaptive-event-card-grid--responsive-progressive[data-adaptive-grid-row-size] {
+      --adaptive-event-card-columns: 1;
+    }
+    /* Flow rows use the shared desktop plan, but a one-column mobile row has
+       no scarcity: documents return to their factual natural frame. */
+    .adaptive-event-card-grid--flow > :global(.event-card[data-lab-media-kind="document"] .event-card__media-shell) {
+      aspect-ratio: var(--lab-media-ratio) !important;
+    }
+    .adaptive-event-card-grid--flow > :global(.event-card[data-lab-media-kind="document"] [data-media-frame-image]) {
+      object-fit: contain !important;
+      object-position: 50% 50% !important;
+    }
+    .adaptive-event-card-grid--flow > :global(.event-card[data-lab-media-kind="visual"] .event-card__media-shell) {
+      aspect-ratio: 5 / 4 !important;
+    }
+  }
+</style>

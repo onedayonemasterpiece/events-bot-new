@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import Icon from '../../components/Icon.astro';
+import SemanticIcon from '../../components/design-system/SemanticIcon.astro';
+import '../../components/design-system/product-contour-foundations.css';
 import festivalProjection from '../../data/festival-timeline.json';
 import {
   festivalTimelineMonths,
@@ -10,6 +11,7 @@ import { festivalTimelineMedia } from '../../data/festivalTimelineMedia';
 import { packFestivalTimeline } from '../../lib/festivalTimelineLayout';
 import {
   absoluteUrl,
+  getCurrentDate,
   SITE_NAME,
   withBase,
 } from '../../lib/events';
@@ -18,7 +20,10 @@ const canonicalUrl = absoluteUrl('/festivali/');
 const title = 'Фестивали Калининградской области 2026 — календарь | Анонсы';
 const description = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: даты, города, направления, статус программы и официальные источники.';
 const pageSummary = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: музыка, кино, гастрономия, театр, история и семейные праздники. Сравнивайте даты и города, проверяйте статус программы и переходите к официальным сайтам и сообществам организаторов.';
-const festivalTimeline = festivalProjection.festivals as FestivalTimelineItem[];
+const referenceDate = getCurrentDate();
+const festivalTimeline = (festivalProjection.festivals as FestivalTimelineItem[]).filter(item=>!item.endDate||item.endDate>=referenceDate);
+const archivedFestivals = (festivalProjection.archived_festivals as FestivalTimelineItem[]).filter(item=>item.endDate&&item.endDate<referenceDate);
+if (festivalTimeline.length !== festivalProjection.festivals.length) throw new Error('Festival projection has expired entries: refresh the source projection');
 if (festivalProjection.schema_version !== 'festival-timeline-static-v1') {
   throw new Error('Festival timeline projection schema is unsupported');
 }
@@ -126,6 +131,9 @@ for (const month of monthSections) {
     throw new Error(`Festival timeline could not safely pack every ${month.label} item`);
   }
 }
+const periodLabel = monthSections.length
+  ? monthSections.length === 1 ? monthSections[0].label : `${monthSections[0].label}—${monthSections.at(-1)!.label.toLowerCase()}`
+  : 'Период уточняется';
 const structuredData = [{
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -137,7 +145,6 @@ const structuredData = [{
   url: canonicalUrl,
   inLanguage: 'ru-RU',
   dateModified: lastReviewed,
-  lastReviewed,
   keywords: [
     'фестивали Калининградской области',
     'фестивали Калининграда 2026',
@@ -213,17 +220,27 @@ const structuredData = [{
   structuredData={structuredData}
   headerCurrent="festivals"
 >
-  <main id="main" class="festival-page" data-festival-timeline data-festival-count={resolvedItems.length}>
+  <main
+    id="main"
+    class="festival-page"
+    data-ds-family="FestivalsTimelineRouteComposition"
+    data-ds-version="2"
+    data-ds-variant="annual-timeline"
+    data-ds-state={resolvedItems.length > 0 ? 'populated' : 'empty'}
+    data-ke-foundation-consumer="festival-route"
+    data-festival-timeline
+    data-festival-count={resolvedItems.length}
+  >
     <section class="festival-hero" aria-labelledby="festival-title">
       <div class="festival-hero__copy">
-        <p class="festival-eyebrow">Календарь на 2026 год · июль—декабрь</p>
-        <h1 id="festival-title">Фестивали <em>Калининградской области</em></h1>
+        <p class="festival-eyebrow">Календарь на 2026 год · {periodLabel.toLowerCase()}</p>
+        <h1 id="festival-title">Фестивали <em>Калинин&shy;градской области</em></h1>
         <p>{pageSummary}</p>
       </div>
       <dl class="festival-hero__facts" aria-label="Коротко о календаре">
         <div><dt>Фестивалей</dt><dd>{resolvedItems.length}</dd></div>
-        <div><dt>Период</dt><dd>Июль—декабрь</dd></div>
-        <div><dt>Проверено</dt><dd>{lastReviewedLabel}</dd></div>
+        <div><dt>Период</dt><dd>{periodLabel}</dd></div>
+        <div><dt>Обновлено</dt><dd>{lastReviewedLabel}</dd></div>
       </dl>
     </section>
 
@@ -238,15 +255,15 @@ const structuredData = [{
 
     <section class="festival-guide" aria-label="Как пользоваться календарём">
       <div class="festival-guide__item">
-        <span class="festival-guide__icon festival-guide__icon--heart" aria-hidden="true"><Icon name="heart" /></span>
+        <span class="festival-guide__icon festival-guide__icon--heart" aria-hidden="true"><SemanticIcon name="heart" role="control" /></span>
         <p><strong>Отметьте интересное</strong><span>Нажмите сердце — фестиваль сохранится в этом браузере.</span></p>
       </div>
       <div class="festival-guide__item">
-        <span class="festival-guide__icon" aria-hidden="true">↗</span>
+        <span class="festival-guide__icon" aria-hidden="true"><SemanticIcon name="link" role="control" /></span>
         <p><strong>Проверьте дату и программу</strong><span>Статус показывает, что подтверждено; карточка откроет источник организатора.</span></p>
       </div>
       <div class="festival-guide__item">
-        <span class="festival-guide__icon" aria-hidden="true">＋</span>
+        <span class="festival-guide__icon" aria-hidden="true"><SemanticIcon name="calendar" role="control" /></span>
         <p><strong>Следите за обновлениями</strong><span>Позже отметка станет основой уведомлений; сейчас это локальная закладка.</span></p>
       </div>
       <span class="festival-guide__live" data-festival-like-live aria-live="polite"></span>
@@ -315,6 +332,7 @@ const structuredData = [{
                       ]}
                       style={`--festival-card-aspect:${frameAspect.toFixed(5)};--festival-mobile-aspect:${item.mobileAspect.toFixed(5)};`}
                       data-festival-card={item.slug}
+                      data-festival-end={item.endDate}
                       data-media-mode={item.mediaMode}
                       data-crop-fraction={cropFraction.toFixed(4)}
                       data-protected-crop-fit="cover"
@@ -325,7 +343,7 @@ const structuredData = [{
                         class="festival-card__link"
                         href={item.href}
                         target={item.isExternal ? '_blank' : undefined}
-                        rel={item.isExternal ? 'noreferrer' : undefined}
+                        rel={item.isExternal ? 'noopener noreferrer' : undefined}
                         aria-label={`${item.title}. ${item.dateLabel}. ${item.place}. ${item.statusLabel}. Источник: ${item.linkLabel}`}
                       >
                         <figure class="festival-card__media">
@@ -371,7 +389,7 @@ const structuredData = [{
                         aria-label={`Отметить как понравившийся фестиваль: ${item.title}`}
                         title="Отметить как понравившийся"
                       >
-                        <Icon name="heart" />
+                        <SemanticIcon name="heart" role="control" />
                       </button>
                     </article>
                   );
@@ -382,6 +400,16 @@ const structuredData = [{
         </section>
       ))}
     </div>
+    {archivedFestivals.length > 0 && <details class="festival-archive" data-festival-archive>
+      <summary>Показать прошедшие фестивали <span>{archivedFestivals.length}</span></summary>
+      <p>Архив {referenceDate.slice(0,4)} года. Даты уже прошли; ссылки ведут к организаторам.</p>
+      <ul>
+        {archivedFestivals.map(item=><li data-archived-festival={item.slug} data-festival-end={item.endDate}>
+          <img src={withBase(item.image)} alt="" loading="lazy" width="80" height="64" />
+          <div><a href={item.sourceHref} target="_blank" rel="noopener noreferrer">{item.title}</a><p>{item.dateLabel} · {item.place}</p><small>{item.sourceLabel}</small></div>
+        </li>)}
+      </ul>
+    </details>}
   </main>
 </EventLayout>
 
@@ -458,28 +486,39 @@ const structuredData = [{
 </script>
 
 <style>
+  .festival-archive {margin-top:var(--ke-space-8);border-top:1px solid var(--ke-color-line);padding-top:var(--ke-space-6);}
+  .festival-archive summary {width:fit-content;padding:var(--ke-space-3) var(--ke-space-4);border:1px solid var(--ke-color-line);border-radius:var(--ke-shape-radius-control);font:var(--ke-type-body);font-weight:var(--ke-type-body-strong-weight);cursor:pointer;}
+  .festival-archive summary span {margin-left:var(--ke-space-2);color:var(--ke-color-text-secondary);}
+  .festival-archive ul {list-style:none;padding:0;display:grid;gap:var(--ke-space-3);}
+  .festival-archive li {display:flex;align-items:center;gap:var(--ke-space-4);padding:var(--ke-space-3);background:var(--ke-color-background-surface);border:1px solid var(--ke-color-line);border-radius:var(--ke-shape-radius-control);}
+  .festival-archive img {object-fit:cover;flex:none;filter:grayscale(1);border-radius:var(--ke-shape-radius-control);}
+  .festival-archive :is(p,small) {color:var(--ke-color-text-secondary);}
+  .festival-archive li p {margin:var(--ke-space-1) 0;font:var(--ke-type-body);}
+  .festival-archive a {color:var(--ke-color-text-primary);font:var(--ke-type-body);font-weight:var(--ke-type-body-strong-weight);}
+  .festival-archive summary:focus-visible {outline:2px solid var(--ke-color-action-primary);outline-offset:3px;}
+
   .festival-page {
-    width: min(1240px, calc(100% - 2rem));
+    width: min(var(--ke-festival-page-max), calc(100% - (2 * var(--ke-festival-page-gutter))));
     margin: 0 auto;
-    padding: clamp(0.85rem, 1.7vw, 1.65rem) 0 clamp(5.5rem, 8vw, 7rem);
+    padding: var(--ke-festival-page-padding-start) 0 var(--ke-festival-page-padding-end);
     font-family: var(--ke-font-sans);
   }
 
   .festival-hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+    grid-template-columns: var(--ke-festival-hero-columns);
     align-items: center;
-    gap: clamp(1.5rem, 3.5vw, 3.5rem);
+    gap: var(--ke-festival-hero-gap);
     min-height: 0;
-    padding: clamp(1.35rem, 2.15vw, 2rem);
+    padding: var(--ke-festival-hero-padding);
     overflow: hidden;
-    border: 1px solid rgba(121, 48, 20, 0.13);
-    border-radius: clamp(24px, 3vw, 36px);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-hero-border);
+    border-radius: var(--ke-festival-hero-radius);
     background:
-      radial-gradient(circle at 82% 22%, rgba(15, 118, 110, 0.16), transparent 19rem),
-      linear-gradient(135deg, #fffdf8, #f0e3d2);
-    box-shadow: 0 24px 64px rgba(72, 45, 25, 0.1);
+      radial-gradient(circle at 82% 22%, var(--ke-color-festival-hero-glow), transparent 19rem),
+      linear-gradient(135deg, var(--ke-color-festival-hero-surface-start), var(--ke-color-festival-hero-surface-end));
+    box-shadow: var(--ke-elevation-festival-hero);
   }
 
   .festival-hero::after {
@@ -487,9 +526,9 @@ const structuredData = [{
     position: absolute;
     right: -7rem;
     bottom: -13rem;
-    width: 27rem;
-    height: 27rem;
-    border: 4.5rem solid rgba(165, 72, 33, 0.06);
+    width: var(--ke-festival-hero-orbit-size);
+    height: var(--ke-festival-hero-orbit-size);
+    border: var(--ke-festival-hero-orbit-border) solid var(--ke-color-festival-hero-orbit);
     border-radius: 50%;
   }
 
@@ -499,25 +538,25 @@ const structuredData = [{
   .festival-eyebrow {
     margin: 0 0 0.45rem;
     color: var(--primary);
-    font-size: 0.68rem;
-    font-weight: 850;
-    letter-spacing: 0.12em;
+    font-size: var(--ke-festival-eyebrow-size);
+    font-weight: var(--ke-festival-eyebrow-weight);
+    letter-spacing: var(--ke-festival-eyebrow-letter);
     text-transform: uppercase;
   }
 
   .festival-hero h1 {
     margin: 0;
     font-family: var(--ke-font-sans);
-    font-size: clamp(2.4rem, 3.25vw, 3.6rem);
-    font-weight: 850;
-    letter-spacing: -0.055em;
-    line-height: 0.94;
+    font-size: var(--ke-festival-heading-size);
+    font-weight: var(--ke-festival-heading-weight);
+    letter-spacing: var(--ke-festival-heading-letter);
+    line-height: var(--ke-festival-heading-line);
   }
 
   .festival-hero h1 em {
     display: block;
     color: var(--primary);
-    font-size: 0.72em;
+    font-size: inherit;
     font-style: normal;
     font-weight: inherit;
   }
@@ -525,8 +564,8 @@ const structuredData = [{
     max-width: 760px;
     margin: 0.78rem 0 0;
     color: var(--muted);
-    font-size: clamp(0.88rem, 1.05vw, 0.98rem);
-    line-height: 1.42;
+    font-size: var(--ke-festival-copy-size);
+    line-height: var(--ke-festival-copy-line);
   }
 
   .festival-hero__facts {
@@ -593,13 +632,13 @@ const structuredData = [{
     margin: 0 0 1.25rem;
     overflow: visible;
     border: 1px solid rgba(121, 48, 20, 0.12);
-    border-radius: 18px;
-    background: rgba(255, 253, 248, 0.76);
-    box-shadow: 0 12px 34px rgba(72, 45, 25, 0.07);
+    border-radius: var(--ke-festival-guide-radius);
+    background: var(--ke-color-festival-surface-translucent);
+    box-shadow: var(--ke-elevation-festival-guide);
   }
   .festival-guide__item {
     display: grid;
-    grid-template-columns: 1.9rem minmax(0, 1fr);
+    grid-template-columns: var(--ke-festival-guide-icon-container-size) minmax(0, 1fr);
     align-items: center;
     gap: 0.58rem;
     min-width: 0;
@@ -609,20 +648,20 @@ const structuredData = [{
   .festival-guide__item:first-child { border-left: 0; }
   .festival-guide__icon {
     display: grid;
-    width: 1.9rem;
-    height: 1.9rem;
+    width: var(--ke-festival-guide-icon-container-size);
+    height: var(--ke-festival-guide-icon-container-size);
     place-items: center;
     border-radius: 50%;
-    background: rgba(15, 118, 110, 0.09);
-    color: #0f766e;
-    font-size: 0.95rem;
+    background: var(--ke-color-festival-guide-icon-surface);
+    color: var(--ke-color-festival-guide-icon);
+    font-size: var(--ke-festival-guide-icon-size);
     font-weight: 760;
   }
   .festival-guide__icon--heart {
-    background: rgba(165, 72, 33, 0.1);
+    background: var(--ke-color-festival-guide-like-surface);
     color: var(--primary);
   }
-  .festival-guide__icon :global(svg) { width: 0.95rem; height: 0.95rem; fill: currentColor; }
+  .festival-guide__icon :global(svg) { width: var(--ke-festival-guide-icon-size); height: var(--ke-festival-guide-icon-size); fill: currentColor; }
   .festival-guide__item p { min-width: 0; margin: 0; line-height: 1.25; }
   .festival-guide__item strong {
     display: block;
@@ -640,13 +679,13 @@ const structuredData = [{
     position: fixed;
     right: 1.2rem;
     bottom: 1.2rem;
-    z-index: 60;
+    z-index: var(--ke-festival-live-layer);
     max-width: min(25rem, calc(100vw - 2rem));
     padding: 0.72rem 0.9rem;
     border: 1px solid rgba(121, 48, 20, 0.14);
-    border-radius: 12px;
-    background: rgba(255, 253, 248, 0.97);
-    box-shadow: 0 14px 40px rgba(36, 24, 16, 0.2);
+    border-radius: var(--ke-festival-live-radius);
+    background: var(--ke-color-festival-surface-raised);
+    box-shadow: var(--ke-elevation-festival-live);
     color: var(--text);
     font-size: 0.78rem;
     font-weight: 670;
@@ -659,7 +698,7 @@ const structuredData = [{
 
   .festival-month {
     display: grid;
-    grid-template-columns: 132px minmax(0, 1fr);
+    grid-template-columns: var(--ke-festival-month-rail-width) minmax(0, 1fr);
     scroll-margin-top: 9rem;
   }
 
@@ -689,8 +728,8 @@ const structuredData = [{
     top: 0.42rem;
     left: 0.22rem;
     z-index: 1;
-    width: 0.82rem;
-    height: 0.82rem;
+    width: var(--ke-festival-month-marker-size);
+    height: var(--ke-festival-month-marker-size);
     border: 3px solid var(--surface);
     border-radius: 50%;
     background: var(--primary);
@@ -727,18 +766,18 @@ const structuredData = [{
   }
   .festival-month__categories li {
     display: grid;
-    flex: 0 0 28px;
-    width: 28px;
-    height: 28px;
+    flex: 0 0 var(--ke-festival-category-container-size);
+    width: var(--ke-festival-category-container-size);
+    height: var(--ke-festival-category-container-size);
     place-items: center;
     border-radius: 8px;
-    background: rgba(165, 72, 33, 0.1);
+    background: var(--ke-color-festival-category-surface);
     color: var(--primary);
   }
   .festival-month__categories i {
     display: block;
-    width: 21px;
-    height: 21px;
+    width: var(--ke-festival-category-asset-size);
+    height: var(--ke-festival-category-asset-size);
     background: currentColor;
     -webkit-mask: var(--festival-category-icon) center / contain no-repeat;
     mask: var(--festival-category-icon) center / contain no-repeat;
@@ -761,26 +800,26 @@ const structuredData = [{
   .festival-row {
     display: grid;
     align-items: stretch;
-    gap: clamp(0.62rem, 1vw, 0.88rem);
+    gap: var(--ke-festival-row-gap);
     width: var(--festival-row-width);
   }
-  .festival-row + .festival-row { margin-top: clamp(0.62rem, 1vw, 0.88rem); }
+  .festival-row + .festival-row { margin-top: var(--ke-festival-row-gap); }
 
   .festival-card {
     position: relative;
     min-width: 0;
     aspect-ratio: calc(var(--festival-card-aspect) * 0.9);
     overflow: hidden;
-    border: 1px solid rgba(57, 39, 27, 0.08);
-    border-radius: clamp(8px, 0.78vw, 11px);
-    background: #31261f;
-    box-shadow: 0 5px 16px rgba(52, 32, 18, 0.12);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-card-border);
+    border-radius: var(--ke-festival-card-radius);
+    background: var(--ke-color-festival-card-surface);
+    box-shadow: var(--ke-elevation-festival-card);
     isolation: isolate;
-    transition: border-color 160ms ease, box-shadow 160ms ease;
+    transition: border-color var(--ke-festival-motion-fast), box-shadow var(--ke-festival-motion-fast);
   }
   .festival-card:hover {
-    border-color: rgba(57, 39, 27, 0.16);
-    box-shadow: 0 7px 20px rgba(52, 32, 18, 0.16);
+    border-color: var(--ke-color-festival-card-border-hover);
+    box-shadow: var(--ke-elevation-festival-card-hover);
   }
   .festival-card__link { display: block; width: 100%; height: 100%; color: #fff; text-decoration: none; }
   .festival-card__link:focus-visible {
@@ -796,14 +835,14 @@ const structuredData = [{
     bottom: clamp(0.58rem, 0.88vw, 0.76rem);
     z-index: 4;
     display: grid;
-    width: clamp(2rem, 2.35vw, 2.2rem);
-    height: clamp(2rem, 2.35vw, 2.2rem);
+    width: var(--ke-festival-like-target-min);
+    height: var(--ke-festival-like-target-min);
     padding: 0;
     place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.34);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-like-line);
     border-radius: 50%;
-    background: rgba(18, 14, 12, 0.58);
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
+    background: var(--ke-color-festival-like-surface);
+    box-shadow: var(--ke-elevation-festival-like);
     color: #fff;
     cursor: pointer;
     -webkit-backdrop-filter: blur(7px);
@@ -811,16 +850,16 @@ const structuredData = [{
     transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
   }
   .festival-card__like:hover {
-    border-color: rgba(255, 255, 255, 0.72);
-    background: rgba(18, 14, 12, 0.76);
+    border-color: var(--ke-color-festival-like-line-hover);
+    background: var(--ke-color-festival-like-surface-hover);
   }
   .festival-card__like:focus-visible {
     outline: 3px solid rgba(255, 255, 255, 0.96);
     outline-offset: 2px;
   }
-  .festival-card__like :global(svg) { width: 1.12rem; height: 1.12rem; fill: currentColor; }
+  .festival-card__like :global(svg) { width: var(--ke-festival-like-icon-size); height: var(--ke-festival-like-icon-size); fill: currentColor; }
   .festival-card__like[aria-pressed="true"] {
-    border-color: rgba(255, 255, 255, 0.86);
+    border-color: var(--ke-color-festival-like-line-selected);
     background: #fff;
     color: var(--primary);
   }
@@ -889,14 +928,14 @@ const structuredData = [{
   .festival-card__status {
     flex: 0 0 auto;
     max-width: 100%;
-    background: #e8f5e9;
-    color: #24743b;
-    box-shadow: 0 2px 7px rgba(34, 20, 12, 0.12);
+    background: var(--ke-color-festival-status-confirmed-surface);
+    color: var(--ke-color-festival-status-confirmed-text);
+    box-shadow: var(--ke-elevation-festival-status);
   }
   .festival-card--program-pending .festival-card__status,
   .festival-card--date-pending .festival-card__status {
-    background: #fff1bd;
-    color: #76540a;
+    background: var(--ke-color-festival-status-pending-surface);
+    color: var(--ke-color-festival-status-pending-text);
   }
 
   .festival-card__caption {
@@ -915,12 +954,12 @@ const structuredData = [{
   }
   .festival-card__caption p {
     margin: 0.24rem 0 0;
-    color: rgba(255, 255, 255, 0.94);
+    color: var(--ke-color-festival-card-caption);
     overflow: hidden;
     font-size: clamp(12.6px, 1vw, 14.7px);
     font-weight: 510;
     line-height: 1.25;
-    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
+    text-shadow: var(--ke-elevation-festival-caption-copy);
     display: -webkit-box;
     white-space: normal;
     -webkit-box-orient: vertical;
@@ -937,7 +976,7 @@ const structuredData = [{
     font-weight: 760;
     letter-spacing: -0.03em;
     line-height: 1.06;
-    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+    text-shadow: var(--ke-elevation-festival-caption-heading);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
@@ -950,8 +989,8 @@ const structuredData = [{
     overflow: hidden;
     border: 0;
     border-radius: 5px;
-    background: rgba(15, 15, 15, 0.66);
-    color: rgba(255, 255, 255, 0.96);
+    background: var(--ke-color-festival-card-theme-surface);
+    color: var(--ke-color-festival-card-theme-text);
     font-size: clamp(11.1px, 0.89vw, 12.9px);
     font-weight: 580;
     line-height: 1;
@@ -1038,7 +1077,7 @@ const structuredData = [{
   }
 
   @media (max-width: 819px) {
-    .festival-hero { grid-template-columns: 1fr; min-height: 0; }
+    .festival-hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
     .festival-hero__facts { max-width: 390px; }
     .festival-row--4 {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -1051,10 +1090,18 @@ const structuredData = [{
   @media (max-width: 760px) {
     .festival-page { width: min(100% - 1rem, 620px); padding-top: 0.5rem; }
     .festival-hero { gap: 1.15rem; padding: 1.45rem 1.2rem; border-radius: 26px; }
-    .festival-hero h1 { max-width: 12ch; font-size: clamp(2.35rem, 12vw, 4rem); }
-    .festival-hero h1 em { font-size: 0.84em; }
+    .festival-hero h1 {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: normal;
+      font-size: var(--ke-type-h1-size);
+    }
     .festival-hero__copy > p:last-child { margin-top: 0.9rem; font-size: 0.92rem; }
-    .festival-hero__facts { width: 100%; min-width: 0; }
+    .festival-hero__facts {
+      grid-template-columns: 1.05fr 1.2fr 1fr;
+      width: 100%;
+      min-width: 0;
+    }
     .festival-hero__facts div { padding-inline: 0.55rem; }
     .festival-hero__facts dt { font-size: 0.58rem; }
     .festival-hero__facts dd { font-size: 1.85rem; }
@@ -1120,7 +1167,7 @@ const structuredData = [{
     .festival-card__topline { top: 0.65rem; right: 0.65rem; left: 0.65rem; }
     .festival-card__date,
     .festival-card__status { min-height: 1.28rem; padding: 0.19rem 0.34rem; font-size: 0.56rem; }
-    .festival-card__like { top: auto; right: 0.65rem; bottom: 0.65rem; width: 1.8rem; height: 1.8rem; }
+    .festival-card__like { top: auto; right: 0.65rem; bottom: 0.65rem; width: var(--ke-festival-like-target-min); height: var(--ke-festival-like-target-min); }
     .festival-card__caption { right: 0.5rem; bottom: 0.5rem; left: 0.5rem; padding: 0.58rem; }
     .festival-card__caption h3,
     .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.9rem, 4.15vw, 1.08rem); }
