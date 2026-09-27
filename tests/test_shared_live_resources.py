@@ -17,7 +17,7 @@ class SharedLiveResources(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(calls[0]['binding']),64)
         self.assertNotEqual(calls[0]['binding'],'fixture_session_123')
         self.assertNotIn('load_key',calls[0])
-        self.assertEqual(calls[0]['environment'],{'AI_RESOURCE_CONTROL_URL':'https://authority.example','AI_RESOURCE_CONTROL_SERVICE_KEY':'service','GOOGLE_API_KEY2':'fallback-two'})
+        self.assertEqual(calls[0]['environment'],{'AI_RESOURCE_CONTROL_URL':'https://authority.example','AI_RESOURCE_CONTROL_SERVICE_KEY':'service','AI_RESOURCE_CONTROL_FALLBACK_KEY':'fallback-two'})
     def test_live_environment_never_borrows_other_consumer_keys(self):
         self.assertEqual(resources.live_resource_environment({
             'AI_RESOURCE_CONTROL_URL':'https://authority.example',
@@ -30,7 +30,7 @@ class SharedLiveResources(unittest.IsolatedAsyncioTestCase):
         }),{
             'AI_RESOURCE_CONTROL_URL':'https://authority.example',
             'AI_RESOURCE_CONTROL_SERVICE_KEY':'service',
-            'GOOGLE_API_KEY2':'two',
+            'AI_RESOURCE_CONTROL_FALLBACK_KEY':'two',
         })
     async def test_unscoped_browser_input_rejected(self):
         with self.assertRaises(ValueError):
