@@ -77,7 +77,7 @@ if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
-AI_RESOURCE_CONTROL_VERSION="0.1.3"
+AI_RESOURCE_CONTROL_VERSION="0.1.4"
 AI_RESOURCE_CONTROL_REPO="${AI_RESOURCE_CONTROL_REPO:-/home/dev/projects/ai-resource-control}"
 AI_RESOURCE_WHEEL_DIR="$ROOT/vendor-private"
 AI_RESOURCE_WHEEL="$AI_RESOURCE_WHEEL_DIR/ai_resource_control-${AI_RESOURCE_CONTROL_VERSION}-py3-none-any.whl"
