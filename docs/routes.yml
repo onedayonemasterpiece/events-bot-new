@@ -30,6 +30,7 @@ sections:
     vk_metrics: docs/operations/vk-metrics.md
     supabase_storage: docs/operations/supabase-storage.md
   llm:
+    shared_live_resources: docs/features/llm-gateway/live-resources.md
     prompts: docs/llm/prompts.md
     admin_actions: docs/llm/admin-actions.md
     guide_excursions_dedup: docs/llm/guide-excursions-dedup.md

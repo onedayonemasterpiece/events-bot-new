@@ -2,6 +2,7 @@
 /// <reference types="astro/client" />
 
 interface ImportMetaEnv {
+  readonly PUBLIC_STATIC_SITE_LIVE_SEARCH_URL?: string;
   readonly PUBLIC_SERVICE_SHARE_DESKTOP_MODE?: 'd0' | 'd1' | 'd2';
 }
 

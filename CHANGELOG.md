@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- KenigEvents Live Search end-to-end application integration: authenticated
+  browser text/microphone sessions use shared live-interaction v0.1.3, the
+  shared ai-resource-control v0.1.0 boundary and the existing event-search
+  function-call/cards contract. Direct search is retained only as an
+  unconfigured compatibility adapter. A once-daily real Live function-call
+  canary is included; production activation remains gated on applying the
+  additive lease SQL to the existing limiter authority.
 - A bucket-backed YAML registry of all currently accessible named KenigEvents
   preview builds, including actual HTML links, upload/build dates, source SHA,
   catalog-date evidence and review context. Preview upload now updates its

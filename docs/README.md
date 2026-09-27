@@ -1,5 +1,8 @@
 # Документация
 
+Shared Live Search implementation, quota authority and production activation gate:
+`docs/features/llm-gateway/live-resources.md`.
+
 Этот каталог устроен **feature‑ориентированно**: у каждой фичи есть свой “дом” в `docs/features/`.
 
 ## Быстрый роутинг (для агентов)

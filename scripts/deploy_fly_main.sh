@@ -77,6 +77,35 @@ if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
+AI_RESOURCE_CONTROL_VERSION="0.1.3"
+AI_RESOURCE_CONTROL_REPO="${AI_RESOURCE_CONTROL_REPO:-/home/dev/projects/ai-resource-control}"
+AI_RESOURCE_WHEEL_DIR="$ROOT/vendor-private"
+AI_RESOURCE_WHEEL="$AI_RESOURCE_WHEEL_DIR/ai_resource_control-${AI_RESOURCE_CONTROL_VERSION}-py3-none-any.whl"
+AI_RESOURCE_TMP="$(mktemp -d)"
+cleanup_private_wheel() {
+  rm -rf "$AI_RESOURCE_TMP"
+  rm -f "$AI_RESOURCE_WHEEL"
+}
+trap cleanup_private_wheel EXIT
+[[ -d "$AI_RESOURCE_CONTROL_REPO/.git" ]] || {
+  echo "Refusing deploy: private ai-resource-control checkout is unavailable." >&2
+  exit 2
+}
+git -C "$AI_RESOURCE_CONTROL_REPO" fetch origin --tags >/dev/null
+AI_RESOURCE_TAG_SHA="$(git -C "$AI_RESOURCE_CONTROL_REPO" rev-list -n1 "v${AI_RESOURCE_CONTROL_VERSION}")"
+AI_RESOURCE_MAIN_SHA="$(git -C "$AI_RESOURCE_CONTROL_REPO" rev-parse "origin/main")"
+[[ -n "$AI_RESOURCE_TAG_SHA" && "$AI_RESOURCE_TAG_SHA" == "$AI_RESOURCE_MAIN_SHA" ]] || {
+  echo "Refusing deploy: ai-resource-control v${AI_RESOURCE_CONTROL_VERSION} is not exact current origin/main." >&2
+  exit 2
+}
+mkdir -p "$AI_RESOURCE_WHEEL_DIR"
+git -C "$AI_RESOURCE_CONTROL_REPO" archive "v${AI_RESOURCE_CONTROL_VERSION}" | tar -x -C "$AI_RESOURCE_TMP"
+python3 -m pip wheel --no-deps --wheel-dir "$AI_RESOURCE_WHEEL_DIR" "$AI_RESOURCE_TMP" >/dev/null
+[[ -f "$AI_RESOURCE_WHEEL" ]] || {
+  echo "Refusing deploy: expected private ai-resource-control wheel was not produced." >&2
+  exit 2
+}
+
 for arg in "${FLY_ARGS[@]}"; do
   case "$arg" in
     --image|--image=*|--build-arg|--build-arg=*)

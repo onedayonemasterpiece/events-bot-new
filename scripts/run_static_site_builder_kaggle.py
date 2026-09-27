@@ -1275,6 +1275,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'public_personalization_supabase_url': args.public_personalization_supabase_url or None,
         'public_personalization_supabase_publishable_key': args.public_personalization_supabase_publishable_key or None,
         'public_personalization_supabase_relay_url': getattr(args, 'public_personalization_supabase_relay_url', '') or None,
+        'public_static_site_live_search_url': getattr(args, 'public_static_site_live_search_url', '') or None,
         'public_yandex_auth_provider': args.public_yandex_auth_provider or 'custom:yandex',
         'public_authorized_search_transport': getattr(args, 'public_authorized_search_transport', '') or 'json',
         'secret_candidate_artifact_research': bool(args.secret_candidate_artifact_research),
@@ -1542,6 +1543,14 @@ def main() -> int:
             'PERSONALIZATION_SUPABASE_RELAY_URL',
         ),
         help='Browser-safe stateless relay URL used only by resilient static clients.',
+    )
+    parser.add_argument(
+        '--public-static-site-live-search-url',
+        default=first_env(
+            'STATIC_SITE_PUBLIC_LIVE_SEARCH_URL',
+            'PUBLIC_STATIC_SITE_LIVE_SEARCH_URL',
+        ),
+        help='Browser-safe EventsBot Live search collection URL for AuthorizedEventSearch.',
     )
     parser.add_argument(
         '--public-yandex-auth-provider',

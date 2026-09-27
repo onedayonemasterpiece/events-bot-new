@@ -126,6 +126,15 @@ APPROVED_GATEWAY_PATHS = frozenset(
     }
 )
 
+# Installed shared Live transport is the reviewed provider boundary for
+# interactive sessions. Keep this exact path narrow: arbitrary node_modules or
+# arbitrary provider endpoints remain unapproved.
+APPROVED_SHARED_LIVE_TRANSPORT_PATHS = frozenset(
+    {
+        "site/node_modules/@onedayonemasterpiece/live-interaction/python/live_interaction/provider.py",
+    }
+)
+
 # Kaggle notebooks carry serialized snapshots of the central gateway package in
 # one assignment line.  Matches elsewhere in the same notebooks are not exempt.
 APPROVED_EMBEDDED_GATEWAYS = {
@@ -276,6 +285,7 @@ class AuditReport:
         counts = Counter(finding.disposition for finding in self.findings)
         return {
             "approved_gateway": counts["approved_gateway"],
+            "approved_shared_live_transport": counts["approved_shared_live_transport"],
             "approved_embedded_gateway": counts["approved_embedded_gateway"],
             "approved_dependency_probe": counts["approved_dependency_probe"],
             "allowlisted_debt": counts["allowlisted_debt"],
@@ -452,6 +462,9 @@ def audit_repository(root: str | Path) -> AuditReport:
         if raw.path in APPROVED_GATEWAY_PATHS:
             disposition = "approved_gateway"
             rationale = "central Google AI provider gateway implementation"
+        elif raw.path in APPROVED_SHARED_LIVE_TRANSPORT_PATHS:
+            disposition = "approved_shared_live_transport"
+            rationale = "versioned shared live-interaction provider transport"
         elif _is_embedded_gateway(raw, root_path):
             disposition = "approved_embedded_gateway"
             rationale = "serialized central gateway snapshot in a Kaggle notebook"
@@ -502,6 +515,7 @@ def render_text(report: AuditReport) -> str:
         "allowlisted_debt",
         "approved_dependency_probe",
         "approved_gateway",
+        "approved_shared_live_transport",
         "approved_embedded_gateway",
     ):
         if not grouped[disposition]:

@@ -10,18 +10,20 @@ const supabaseRelayUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_
 const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
 const searchTransport = import.meta.env.PUBLIC_AUTHORIZED_SEARCH_TRANSPORT === 'ndjson' ? 'ndjson' : 'json';
+const liveSearchUrl = (import.meta.env.PUBLIC_STATIC_SITE_LIVE_SEARCH_URL || '').replace(/\/+$/u, '');
+const liveSearchEnabled = Boolean(liveSearchUrl);
 // Execution overrides are an authenticated canary contract, not a public
 // product setting. Production and ordinary previews always omit the override.
 const searchExecutionModeControl = import.meta.env.PUBLIC_SITE_MODE === 'secret_candidate';
 const enabled = Boolean(supabaseUrl && supabaseKey);
 const HeadingTag = headingLevel;
 ---
-<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-search-execution-mode-control={searchExecutionModeControl ? 'true' : 'false'} data-search-state="idle" data-search-terminal="false" data-supabase-url={supabaseUrl || undefined} data-supabase-relay-url={supabaseRelayUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-live-enabled={liveSearchEnabled ? 'true' : 'false'} data-search-live-url={liveSearchUrl || undefined} data-search-transport={searchTransport} data-search-execution-mode-control={searchExecutionModeControl ? 'true' : 'false'} data-search-state="idle" data-search-terminal="false" data-supabase-url={supabaseUrl || undefined} data-supabase-relay-url={supabaseRelayUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
       <HeadingTag>{standalone ? 'Найти событие' : 'Найти событие по описанию'}</HeadingTag>
-      <p class="muted-note">{standalone ? 'Опишите желание обычной фразой — жанр, настроение, время или с кем хотите пойти.' : 'Войдите через Яндекс и напишите обычной фразой, что хочется найти. Результаты появятся лентой: карточки можно лайкать, скрывать как «не интересно», добавлять в календарь и делиться.'}</p>
+      <p class="muted-note">{standalone ? 'Напишите или скажите обычной фразой, что хочется найти. Карточки появятся здесь, а после результата можно продолжить разговор.' : 'Войдите через Яндекс и напишите или скажите обычной фразой, что хочется найти. Результаты останутся обычными карточками KenigEvents.'}</p>
     </div>
     {enabled && <div class="authorized-search__auth">
       <button type="button" class="secondary-button authorized-search__login" data-search-login>
@@ -55,6 +57,12 @@ const HeadingTag = headingLevel;
     <button type="submit" class="cta-button authorized-search__submit" data-search-submit disabled={!enabled}>
       <span class="authorized-search__submit-label" data-search-submit-label>{enabled ? 'Искать' : 'Поиск пока не запускается'}</span>
     </button>
+    {liveSearchEnabled && (
+      <button type="button" class="secondary-button authorized-search__voice" data-search-live-mic aria-pressed="false" aria-label="Голосовой поиск">
+        <span aria-hidden="true" class="authorized-search__voice-dot"></span>
+        <span data-search-live-mic-label>Голосом</span>
+      </button>
+    )}
   </form>
   <div class="authorized-search__progress" data-search-progress role="progressbar" aria-label="Ход поиска" aria-valuemin="0" aria-valuemax="100" hidden>
     <span class="authorized-search__progress-bar" data-search-progress-bar aria-hidden="true"></span>
@@ -81,6 +89,7 @@ const HeadingTag = headingLevel;
   import { getStaticSiteAuth } from '../lib/staticSiteAuth';
   import { boundedJsonRead, boundedJsonWrite } from '../lib/browserStorage';
   import { resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
+  import { createLiveEventSearchController } from '../lib/liveEventSearch.js';
 
   const roots = Array.from(document.querySelectorAll('[data-authorized-search]'));
   for (const root of roots) {
@@ -107,6 +116,9 @@ const HeadingTag = headingLevel;
     const skeletons = root.querySelector('[data-search-skeletons]');
     const more = root.querySelector('[data-search-more]');
     const moreDefaultLabel = more?.textContent || 'Показать ещё';
+    const liveMic = root.querySelector('[data-search-live-mic]');
+    const liveMicLabel = root.querySelector('[data-search-live-mic-label]');
+    const liveEnabled = root.dataset.searchLiveEnabled === 'true' && Boolean(root.dataset.searchLiveUrl);
     let supabase = null;
     let authController = null;
     let currentQuery = '';
@@ -125,6 +137,8 @@ const HeadingTag = headingLevel;
     let activeSearchController = null;
     let activeExecutionMode = '';
     let completionResetTimer = null;
+    let liveSearchController = null;
+    let liveResultWatchdog = null;
     const searchTimeoutOverrides = window.__KENIGEVENTS_SEARCH_TEST_TIMEOUTS__ || {};
     const timeoutValue = (name, fallback) => {
       const value = Number(searchTimeoutOverrides[name]);
@@ -1156,6 +1170,151 @@ const HeadingTag = headingLevel;
       return finalError ? { data: null, error: finalError } : { data: finalData, error: null };
     }
 
+    function clearLiveResultWatchdog() {
+      if (liveResultWatchdog != null) window.clearTimeout(liveResultWatchdog);
+      liveResultWatchdog = null;
+    }
+
+    function setLiveMicState(active, label = '') {
+      if (!liveMic) return;
+      liveMic.classList.toggle('is-live', active);
+      liveMic.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (liveMicLabel) liveMicLabel.textContent = label || (active ? 'Слушаю' : 'Голосом');
+    }
+
+    function liveErrorMessage(error) {
+      const code = String(error?.code || error?.message || '');
+      if (code === 'LIVE_BUSY' || error?.status === 429) return 'Сейчас все голосовые слоты заняты. Попробуйте через минуту.';
+      if (code === 'LIVE_AUTH_REQUIRED' || error?.status === 401) return 'Сессия закончилась. Войдите через Яндекс ещё раз.';
+      if (code.startsWith('RESOURCE_') || error?.status === 503) return 'Голосовой поиск временно недоступен. Попробуйте чуть позже.';
+      return 'Не удалось запустить голосовой поиск. Попробуйте ещё раз.';
+    }
+
+    function acceptLiveResults(payload) {
+      clearLiveResultWatchdog();
+      const data = payload?.data || {};
+      const pageOffset = Math.max(0, Number(payload?.offset) || 0);
+      const append = Boolean(payload?.append);
+      const query = String(payload?.query || currentQuery || input?.value || '').trim();
+      if (!append || query !== currentQuery) {
+        currentQuery = query;
+        offset = 0;
+        fallbackStarted = false;
+        feedbackShown = false;
+        lastResultEventIds = [];
+        pendingFallbackItems = [];
+        if (results) {
+          results.innerHTML = '';
+          setResultContext({});
+        }
+      }
+      if (input && query) input.value = query;
+      renderSearchPayload(data, { append, phase: 'final', pageOffset });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      const nextOffset = Number(data?.next_offset);
+      offset = Number.isFinite(nextOffset) && nextOffset >= pageOffset ? nextOffset : pageOffset + items.length;
+      if (more) more.hidden = !data?.has_more;
+      setSkeletonLoading(false);
+      setMoreLoading(false);
+      setSearchLoading(false);
+      setSearchLifecycle(items.length || (data?.fallback_items || []).length ? 'success' : 'empty');
+      setStatus(data?.has_more ? 'Можно уточнить запрос голосом или посмотреть ещё.' : 'Можно уточнить запрос голосом — я продолжу этот поиск.');
+      if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
+    }
+
+    function initializeLiveSearch() {
+      if (!liveEnabled || liveSearchController || !authController) return;
+      liveSearchController = createLiveEventSearchController({
+        endpoint: root.dataset.searchLiveUrl,
+        getAccessToken: async () => (await authController.getSession())?.access_token || '',
+        onResults: acceptLiveResults,
+        onState: (state) => {
+          root.dataset.liveSearchState = state || 'off';
+          const microphoneActive = Boolean(liveSearchController?.microphoneEnabled);
+          const active = microphoneActive && ['starting', 'started', 'listening', 'answering', 'reconnecting'].includes(state);
+          setLiveMicState(active, state === 'answering' ? 'Отвечаю' : (state === 'starting' || state === 'reconnecting' ? 'Подключаюсь' : 'Слушаю'));
+          if (state === 'followup_timeout' || state === 'off') setLiveMicState(false);
+        },
+        onError: (error) => {
+          clearLiveResultWatchdog();
+          setSkeletonLoading(false);
+          setMoreLoading(false);
+          setSearchLoading(false);
+          setSearchLifecycle('error');
+          setStatus(liveErrorMessage(error), 'error');
+        },
+      });
+    }
+
+    async function runLiveSearch({ append = false, voiceOnly = false } = {}) {
+      if (!liveSearchController || loading || searchStartPending) return;
+      searchStartPending = true;
+      let session;
+      try {
+        session = await authController?.getSession();
+      } catch (_error) {
+        searchStartPending = false;
+        setStatus('Не удалось проверить вход. Попробуйте ещё раз.', 'error');
+        return;
+      }
+      if (!session?.user || !session?.access_token) {
+        searchStartPending = false;
+        if (!voiceOnly) {
+          const validation = validateSearchInput(input?.value || '');
+          if (validation.ok) saveSearchDraft(validation.query, true);
+        }
+        await beginYandexLogin();
+        return;
+      }
+      searchStartPending = false;
+      try {
+        clearLiveResultWatchdog();
+        if (voiceOnly) {
+          const started = await liveSearchController.startVoice();
+          if (!started) throw new Error('LIVE_START_FAILED');
+          setStatus('Слушаю. Скажите, что хочется найти.');
+          return;
+        }
+        if (append) {
+          setMoreLoading(true);
+          setSearchLifecycle('loading');
+          await liveSearchController.more();
+        } else {
+          const prepared = prepareSearchRequest(input?.value || '', 0, resolveSearchExecutionMode());
+          if (!prepared.ok) {
+            setStatus(prepared.message, 'error');
+            setSearchLifecycle('validation');
+            return;
+          }
+          input?.blur();
+          currentQuery = prepared.query;
+          if (input) input.value = prepared.query;
+          setSearchLifecycle('loading');
+          setSearchLoading(true, { showSkeleton: true });
+          if (more) more.hidden = true;
+          beginSearchProgress(searchEpoch, 'Подключаю голосовой поиск…');
+          const started = await liveSearchController.search(prepared.query);
+          if (!started) throw new Error('LIVE_START_FAILED');
+        }
+        liveResultWatchdog = window.setTimeout(() => {
+          liveResultWatchdog = null;
+          liveSearchController?.stop('result_timeout');
+          setSkeletonLoading(false);
+          setMoreLoading(false);
+          setSearchLoading(false);
+          setSearchLifecycle('error');
+          setStatus('Ответ занимает слишком много времени. Попробуйте ещё раз.', 'error');
+        }, searchOverallTimeoutMs);
+      } catch (error) {
+        clearLiveResultWatchdog();
+        setSkeletonLoading(false);
+        setMoreLoading(false);
+        setSearchLoading(false);
+        setSearchLifecycle('error');
+        setStatus(liveErrorMessage(error), 'error');
+      }
+    }
+
     async function runSearch({ append = false } = {}) {
       if (!supabase || loading || searchStartPending) return;
       const sessionCheckEpoch = searchEpoch;
@@ -1363,6 +1522,7 @@ const HeadingTag = headingLevel;
         provider: root.dataset.yandexProvider || 'custom:yandex',
       });
       supabase = authController.client;
+      initializeLiveSearch();
       login?.addEventListener('click', async () => {
         const validation = validateSearchInput(input?.value || '');
         if (validation.ok) saveSearchDraft(validation.query, true);
@@ -1370,6 +1530,8 @@ const HeadingTag = headingLevel;
         await beginYandexLogin();
       });
       logout?.addEventListener('click', async () => {
+        clearLiveResultWatchdog();
+        liveSearchController?.stop('logout');
         abortActiveSearch();
         await authController.signOut();
         clearResults();
@@ -1387,7 +1549,8 @@ const HeadingTag = headingLevel;
       });
       form?.addEventListener('submit', async (event) => {
         event.preventDefault();
-        await runSearch({ append: false });
+        if (liveEnabled) await runLiveSearch({ append: false });
+        else await runSearch({ append: false });
       });
       input?.addEventListener('keydown', (event) => {
         if (
@@ -1401,8 +1564,25 @@ const HeadingTag = headingLevel;
         event.preventDefault();
         form?.requestSubmit();
       });
-      more?.addEventListener('click', async () => runSearch({ append: true }));
-      window.addEventListener('pagehide', abortActiveSearch, { once: true });
+      more?.addEventListener('click', async () => {
+        if (liveEnabled) await runLiveSearch({ append: true });
+        else await runSearch({ append: true });
+      });
+      liveMic?.addEventListener('click', async () => {
+        if (liveSearchController?.active && liveSearchController?.microphoneEnabled) {
+          clearLiveResultWatchdog();
+          liveSearchController.stop('user_stop');
+          setLiveMicState(false);
+          setStatus('Голосовой поиск остановлен.');
+          return;
+        }
+        await runLiveSearch({ voiceOnly: true });
+      });
+      window.addEventListener('pagehide', () => {
+        clearLiveResultWatchdog();
+        liveSearchController?.stop('pagehide', { keepalive: true });
+        abortActiveSearch();
+      }, { once: true });
       authController.subscribe((snapshot) => {
         authCallbackHadError = snapshot.status === 'error';
         const signedIn = renderAuthState(
