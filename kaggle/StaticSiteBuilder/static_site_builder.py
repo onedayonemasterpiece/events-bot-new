@@ -1075,6 +1075,11 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
         or os.environ.get('PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL', '').strip()
         or os.environ.get('PERSONALIZATION_SUPABASE_RELAY_URL', '').strip()
     )
+    live_search_url = (
+        str(config.get('public_static_site_live_search_url') or '').strip()
+        or os.environ.get('PUBLIC_STATIC_SITE_LIVE_SEARCH_URL', '').strip()
+        or os.environ.get('STATIC_SITE_PUBLIC_LIVE_SEARCH_URL', '').strip()
+    )
     yandex_provider = (
         str(config.get('public_yandex_auth_provider') or '').strip()
         or os.environ.get('PUBLIC_YANDEX_AUTH_PROVIDER', '').strip()
@@ -1093,6 +1098,10 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
         env['PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'] = public_key
     if relay_url:
         env['PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL'] = relay_url
+    if live_search_url:
+        if not live_search_url.startswith('https://') or not live_search_url.endswith('/api/live-search'):
+            raise RuntimeError('public_static_site_live_search_url must be an HTTPS /api/live-search collection URL')
+        env['PUBLIC_STATIC_SITE_LIVE_SEARCH_URL'] = live_search_url
     if yandex_provider:
         env['PUBLIC_YANDEX_AUTH_PROVIDER'] = yandex_provider
     env['PUBLIC_AUTHORIZED_SEARCH_TRANSPORT'] = search_transport

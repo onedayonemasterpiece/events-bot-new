@@ -531,6 +531,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         gap: 0.6rem;
         margin-top: 1rem;
       }
+      .authorized-search:not(.authorized-search--standalone)[data-search-live-enabled="true"] .authorized-search__form {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+      }
       .authorized-search__form input,
       .authorized-search__form textarea {
         width: 100%;
@@ -614,6 +617,36 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         animation: authorized-search-submit-indeterminate 1.1s ease-in-out infinite;
       }
       .authorized-search__submit-label { position: relative; z-index: 1; }
+      .authorized-search__voice {
+        min-width: 112px;
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.48rem;
+        border-radius: 999px;
+      }
+      .authorized-search__voice-dot {
+        width: 0.62rem;
+        height: 0.62rem;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: 0.72;
+      }
+      .authorized-search__voice.is-live .authorized-search__voice-dot {
+        opacity: 1;
+        animation: authorized-search-live-pulse 1.15s ease-in-out infinite;
+      }
+      .authorized-search__voice.is-live {
+        border-color: rgba(165,72,33,0.48);
+        background: #fff3dc;
+        color: var(--primary-strong);
+      }
+      @keyframes authorized-search-live-pulse {
+        0%,100% { transform: scale(0.82); box-shadow: 0 0 0 0 rgba(165,72,33,0.30); }
+        50% { transform: scale(1); box-shadow: 0 0 0 8px rgba(165,72,33,0); }
+      }
       .authorized-search__status { margin: 0.72rem 0 0; color: var(--muted); font-size: 0.92rem; }
       .authorized-search__progress { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
       .authorized-search__progress[hidden] { display: none; }
@@ -2442,7 +2475,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         .authorized-search__account-menu { margin-left: auto; }
         .authorized-search__account-popover { right: 0; width: min(86vw, 270px); }
         .authorized-search__form { grid-template-columns: 1fr; }
-        .authorized-search__submit { width: 100%; }
+        .authorized-search__submit,
+        .authorized-search__voice { width: 100%; }
         .page-shell--search .crumbs { display: none; }
         .authorized-search--standalone {
           margin-top: 0.75rem;

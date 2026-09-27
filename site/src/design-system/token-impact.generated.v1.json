@@ -5,13 +5,13 @@
   "registry_version": "1.0.0",
   "registry_sha256": "4f991aff77086abe5e2c3027beb6b2050b9492c73d3ab624053b56087eb1e35a",
   "source_root": "site/src",
-  "source_inventory_sha256": "4d1d3a025499b045dbc91ba6ca94821abd5b323e88fd64b8569a938a8aa801bb",
+  "source_inventory_sha256": "530ccb9e5fff40508e61b321ebcdb3f76149c7746729c9b4a01265d38c730979",
   "astro_family_graph": "site/src/design-system/astro-family-consumers.generated.v1.json",
-  "astro_family_graph_sha256": "643eca93c0ad80bf8ed3b043be3cd877285ecd281fc0856d3a1e7185d347a5e9",
+  "astro_family_graph_sha256": "4b5833894cf3937d58782ec24482304c9fdc51a237c9183e5244b9673bb6ff64",
   "summary": {
     "token_count": 2583,
     "definition_count": 2900,
-    "consumer_count": 3778,
+    "consumer_count": 3779,
     "alias_edge_count": 912,
     "family_count": 112
   },
@@ -66486,7 +66486,7 @@
         {
           "token": "--accent-soft",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 739,
+          "line": 772,
           "has_fallback": false
         }
       ],
@@ -67179,7 +67179,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4630,
+          "line": 4664,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67207,7 +67207,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4629,
+          "line": 4663,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -67747,7 +67747,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1083,
+          "line": 1116,
           "scope": "<top-level>",
           "kind": "css",
           "value": ":before {",
@@ -67969,7 +67969,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2543,
+          "line": 2577,
           "scope": "style=",
           "kind": "css",
           "value": "url('${withBase('/assets/ui/desktop-head-leather-r5.webp')",
@@ -67983,7 +67983,7 @@
         {
           "token": "--desktop-brand-tag-skin",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 924,
+          "line": 957,
           "has_fallback": false
         }
       ],
@@ -67995,7 +67995,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 6002,
+          "line": 6036,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68009,7 +68009,7 @@
         {
           "token": "--desktop-continuous-parallax-y",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2307,
+          "line": 2340,
           "has_fallback": true
         }
       ],
@@ -68587,7 +68587,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1418,
+          "line": 1451,
           "scope": "<top-level>",
           "kind": "css",
           "value": "hover {",
@@ -68665,7 +68665,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1959,
+          "line": 1992,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "cubic-bezier(0.22, 0.86, 0.32, 1)",
@@ -68685,7 +68685,7 @@
         {
           "token": "--drawer-ease",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1968,
+          "line": 2001,
           "has_fallback": false
         }
       ],
@@ -68697,7 +68697,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1958,
+          "line": 1991,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "max(0.85rem, env(safe-area-inset-left))",
@@ -68711,7 +68711,7 @@
         {
           "token": "--drawer-handle-left",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1979,
+          "line": 2012,
           "has_fallback": false
         }
       ],
@@ -68723,7 +68723,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1957,
+          "line": 1990,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "max(0px, calc(-1.15rem + env(safe-area-inset-top)))",
@@ -68742,7 +68742,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1956,
+          "line": 1989,
           "scope": "@media (max-width: 759px) > .mobile-discovery-menu",
           "kind": "css",
           "value": "clamp(10rem, 36vw, 10.85rem)",
@@ -68756,37 +68756,37 @@
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1964,
+          "line": 1997,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1967,
+          "line": 2000,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1975,
+          "line": 2008,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1980,
+          "line": 2013,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2039,
+          "line": 2072,
           "has_fallback": false
         },
         {
           "token": "--drawer-rail-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2067,
+          "line": 2100,
           "has_fallback": false
         }
       ],
@@ -68798,7 +68798,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1467,
+          "line": 1500,
           "scope": "<top-level>",
           "kind": "css",
           "value": ":after {",
@@ -68807,7 +68807,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1484,
+          "line": 1517,
           "scope": "@media (prefers-reduced-motion: reduce)",
           "kind": "css",
           "value": ":after { animation: none",
@@ -68844,7 +68844,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4628,
+          "line": 4662,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68853,7 +68853,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4665,
+          "line": 4699,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68862,7 +68862,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4718,
+          "line": 4752,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -68876,13 +68876,13 @@
         {
           "token": "--dynamic-media-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1464,
+          "line": 1497,
           "has_fallback": true
         },
         {
           "token": "--dynamic-media-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1506,
+          "line": 1539,
           "has_fallback": true
         }
       ],
@@ -69203,7 +69203,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2275,
+          "line": 2308,
           "scope": "@media (min-width: 1024px) > .desktop-event-reading-shell",
           "kind": "css",
           "value": "max(16px, calc((100vw - 1180px) / 2))",
@@ -69217,13 +69217,13 @@
         {
           "token": "--event-gutter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2277,
+          "line": 2310,
           "has_fallback": false
         },
         {
           "token": "--event-gutter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2277,
+          "line": 2310,
           "has_fallback": false
         }
       ],
@@ -70218,7 +70218,7 @@
         {
           "token": "--gallery-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1168,
+          "line": 1201,
           "has_fallback": true
         }
       ],
@@ -70244,7 +70244,7 @@
         {
           "token": "--gallery-source-height",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1008,
+          "line": 1041,
           "has_fallback": false
         }
       ],
@@ -70270,7 +70270,7 @@
         {
           "token": "--gallery-source-width",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1007,
+          "line": 1040,
           "has_fallback": false
         }
       ],
@@ -70282,7 +70282,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 745,
+          "line": 778,
           "scope": ".event-hero__visual",
           "kind": "css",
           "value": "#1c1c1c",
@@ -70291,7 +70291,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 763,
+          "line": 796,
           "scope": ".event-hero[data-hero-tint=\"warm\"] .event-hero__visual",
           "kind": "css",
           "value": "#2e1815",
@@ -70300,7 +70300,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 764,
+          "line": 797,
           "scope": ".event-hero[data-hero-tint=\"deep\"] .event-hero__visual",
           "kind": "css",
           "value": "#171b32",
@@ -70309,7 +70309,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 765,
+          "line": 798,
           "scope": ".event-hero[data-hero-tint=\"cool\"] .event-hero__visual",
           "kind": "css",
           "value": "#12302d",
@@ -70318,7 +70318,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 766,
+          "line": 799,
           "scope": ".event-hero[data-hero-tint=\"neutral\"] .event-hero__visual",
           "kind": "css",
           "value": "#1c1c1c",
@@ -70332,13 +70332,13 @@
         {
           "token": "--hero-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 756,
+          "line": 789,
           "has_fallback": false
         },
         {
           "token": "--hero-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 756,
+          "line": 789,
           "has_fallback": false
         }
       ],
@@ -70350,7 +70350,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5958,
+          "line": 5992,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -70364,7 +70364,7 @@
         {
           "token": "--hero-parallax-y",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2182,
+          "line": 2215,
           "has_fallback": true
         }
       ],
@@ -70376,7 +70376,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5956,
+          "line": 5990,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -70390,7 +70390,7 @@
         {
           "token": "--hero-poster-parallax-y",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2153,
+          "line": 2186,
           "has_fallback": true
         }
       ],
@@ -70402,7 +70402,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5955,
+          "line": 5989,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -70435,7 +70435,7 @@
         {
           "token": "--hero-source-height",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2199,
+          "line": 2232,
           "has_fallback": false
         }
       ],
@@ -70461,7 +70461,7 @@
         {
           "token": "--hero-source-width",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2198,
+          "line": 2231,
           "has_fallback": false
         }
       ],
@@ -82944,43 +82944,43 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1191,
+          "line": 1224,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1198,
+          "line": 1231,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1405,
+          "line": 1438,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1577,
+          "line": 1610,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1806,
+          "line": 1839,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1913,
+          "line": 1946,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2238,
+          "line": 2271,
           "has_fallback": false
         },
         {
@@ -82998,7 +82998,7 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 558,
+          "line": 561,
           "has_fallback": false
         },
         {
@@ -83633,115 +83633,97 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1102,
+          "line": 1135,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1247,
+          "line": 1280,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1274,
+          "line": 1307,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1278,
+          "line": 1311,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1325,
+          "line": 1358,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1386,
+          "line": 1419,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1406,
+          "line": 1439,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1407,
+          "line": 1440,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1432,
+          "line": 1465,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1557,
+          "line": 1590,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1568,
+          "line": 1601,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1576,
+          "line": 1609,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1584,
+          "line": 1617,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1600,
+          "line": 1633,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1627,
+          "line": 1660,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1731,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1787,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1805,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1812,
+          "line": 1764,
           "has_fallback": false
         },
         {
@@ -83753,25 +83735,43 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1868,
+          "line": 1838,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1883,
+          "line": 1845,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1895,
+          "line": 1853,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1901,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1916,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1928,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1992,
+          "line": 2025,
           "has_fallback": false
         },
         {
@@ -83819,13 +83819,7 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 622,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 648,
+          "line": 644,
           "has_fallback": false
         },
         {
@@ -83837,19 +83831,31 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 720,
+          "line": 681,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 778,
+          "line": 688,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 753,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 811,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 876,
+          "line": 909,
           "has_fallback": false
         },
         {
@@ -85144,13 +85150,13 @@
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1992,
+          "line": 2025,
           "has_fallback": false
         },
         {
           "token": "--ke-color-brand-tag",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 876,
+          "line": 909,
           "has_fallback": false
         }
       ],
@@ -85176,7 +85182,7 @@
         {
           "token": "--ke-color-brand-tag-hover",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2004,
+          "line": 2037,
           "has_fallback": false
         }
       ],
@@ -102376,67 +102382,49 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1098,
+          "line": 1131,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1539,
+          "line": 1572,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1573,
+          "line": 1606,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1597,
+          "line": 1630,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1799,
+          "line": 1832,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1819,
+          "line": 1852,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1843,
+          "line": 1876,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1846,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1858,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1872,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1889,
+          "line": 1879,
           "has_fallback": false
         },
         {
@@ -102448,7 +102436,25 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2046,
+          "line": 1905,
+          "has_fallback": false
+        },
+        {
+          "token": "--text",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1922,
+          "has_fallback": false
+        },
+        {
+          "token": "--text",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1924,
+          "has_fallback": false
+        },
+        {
+          "token": "--text",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2079,
           "has_fallback": false
         },
         {
@@ -102496,19 +102502,19 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 541,
+          "line": 544,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 570,
+          "line": 573,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 574,
+          "line": 577,
           "has_fallback": false
         },
         {
@@ -105006,43 +105012,43 @@
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1407,
+          "line": 1440,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1432,
+          "line": 1465,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1805,
+          "line": 1838,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1849,
+          "line": 1882,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1855,
+          "line": 1888,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1918,
+          "line": 1951,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 731,
+          "line": 764,
           "has_fallback": false
         },
         {
@@ -108269,115 +108275,115 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1114,
+          "line": 1147,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1192,
+          "line": 1225,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1197,
+          "line": 1230,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1203,
+          "line": 1236,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1228,
+          "line": 1261,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1290,
+          "line": 1323,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1316,
+          "line": 1349,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1433,
+          "line": 1466,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1574,
+          "line": 1607,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1596,
+          "line": 1629,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1599,
+          "line": 1632,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1813,
+          "line": 1846,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1818,
+          "line": 1851,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1845,
+          "line": 1878,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1854,
+          "line": 1887,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1855,
+          "line": 1888,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1905,
+          "line": 1938,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1910,
+          "line": 1943,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1916,
+          "line": 1949,
           "has_fallback": false
         },
         {
@@ -108401,13 +108407,13 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 617,
+          "line": 650,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 645,
+          "line": 678,
           "has_fallback": false
         },
         {
@@ -110456,43 +110462,43 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1191,
+          "line": 1224,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1198,
+          "line": 1231,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1405,
+          "line": 1438,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1577,
+          "line": 1610,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1806,
+          "line": 1839,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1913,
+          "line": 1946,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2238,
+          "line": 2271,
           "has_fallback": false
         },
         {
@@ -110504,7 +110510,7 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 558,
+          "line": 561,
           "has_fallback": false
         },
         {
@@ -117695,31 +117701,31 @@
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1405,
+          "line": 1438,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1577,
+          "line": 1610,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1806,
+          "line": 1839,
           "has_fallback": false
         },
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2205,
+          "line": 2238,
           "has_fallback": false
         },
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 743,
+          "line": 776,
           "has_fallback": false
         },
         {
@@ -141994,19 +142000,19 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -143050,19 +143056,19 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -144004,7 +144010,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -144201,13 +144207,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -152042,7 +152048,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2655,
+          "line": 2689,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -152118,7 +152124,7 @@
         {
           "token": "--ke-lower-surface-offset",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2539,
+          "line": 2573,
           "has_fallback": true
         },
         {
@@ -166636,7 +166642,7 @@
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2206,
+          "line": 2239,
           "has_fallback": false
         },
         {
@@ -171239,19 +171245,19 @@
         {
           "token": "--ke-space-3",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2496,
+          "line": 2530,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2531,
+          "line": 2565,
           "has_fallback": false
         },
         {
           "token": "--ke-space-3",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -172665,7 +172671,7 @@
         {
           "token": "--ke-space-4",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2539,
+          "line": 2573,
           "has_fallback": false
         },
         {
@@ -176367,7 +176373,7 @@
         {
           "token": "--ke-type-card-action-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1524,
+          "line": 1557,
           "has_fallback": false
         }
       ],
@@ -176393,13 +176399,13 @@
         {
           "token": "--ke-type-card-metadata-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1516,
+          "line": 1549,
           "has_fallback": false
         },
         {
           "token": "--ke-type-card-metadata-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1521,
+          "line": 1554,
           "has_fallback": false
         }
       ],
@@ -176425,19 +176431,19 @@
         {
           "token": "--ke-type-card-status-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1515,
+          "line": 1548,
           "has_fallback": false
         },
         {
           "token": "--ke-type-card-status-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1517,
+          "line": 1550,
           "has_fallback": false
         },
         {
           "token": "--ke-type-card-status-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1520,
+          "line": 1553,
           "has_fallback": false
         }
       ],
@@ -176463,7 +176469,7 @@
         {
           "token": "--ke-type-card-title-weight",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1518,
+          "line": 1551,
           "has_fallback": false
         },
         {
@@ -177855,13 +177861,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -178083,13 +178089,13 @@
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -178344,13 +178350,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -178598,13 +178604,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -178820,13 +178826,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -178986,13 +178992,13 @@
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -179206,13 +179212,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -179420,13 +179426,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -179601,13 +179607,13 @@
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2456,
+          "line": 2490,
           "has_fallback": false
         },
         {
           "token": "--ke-type-h1",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 722,
+          "line": 755,
           "has_fallback": false
         },
         {
@@ -179715,7 +179721,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -179795,7 +179801,7 @@
         {
           "token": "--ke-type-h2-letter",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -179891,7 +179897,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -180009,7 +180015,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -180135,7 +180141,7 @@
         {
           "token": "--ke-type-h2",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 723,
+          "line": 756,
           "has_fallback": false
         },
         {
@@ -182867,7 +182873,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4714,
+          "line": 4748,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183138,43 +183144,43 @@
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1407,
+          "line": 1440,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1432,
+          "line": 1465,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1805,
+          "line": 1838,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1849,
+          "line": 1882,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1855,
+          "line": 1888,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1918,
+          "line": 1951,
           "has_fallback": false
         },
         {
           "token": "--line",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 731,
+          "line": 764,
           "has_fallback": false
         }
       ],
@@ -183606,7 +183612,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4627,
+          "line": 4661,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183615,7 +183621,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4664,
+          "line": 4698,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183624,7 +183630,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4737,
+          "line": 4771,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183773,7 +183779,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4626,
+          "line": 4660,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183782,7 +183788,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4665,
+          "line": 4699,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -183791,7 +183797,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 4717,
+          "line": 4751,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -184012,13 +184018,13 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1948,
+          "line": 1981,
           "has_fallback": false
         },
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2539,
+          "line": 2573,
           "has_fallback": true
         },
         {
@@ -184063,13 +184069,13 @@
         {
           "token": "--mobile-header-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1951,
+          "line": 1984,
           "has_fallback": false
         },
         {
           "token": "--mobile-header-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1951,
+          "line": 1984,
           "has_fallback": false
         },
         {
@@ -184163,13 +184169,13 @@
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1948,
+          "line": 1981,
           "has_fallback": false
         },
         {
           "token": "--mobile-bottom-stack-h",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2539,
+          "line": 2573,
           "has_fallback": true
         },
         {
@@ -184568,115 +184574,115 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1114,
+          "line": 1147,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1192,
+          "line": 1225,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1197,
+          "line": 1230,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1203,
+          "line": 1236,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1228,
+          "line": 1261,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1290,
+          "line": 1323,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1316,
+          "line": 1349,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1433,
+          "line": 1466,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1574,
+          "line": 1607,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1596,
+          "line": 1629,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1599,
+          "line": 1632,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1813,
+          "line": 1846,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1818,
+          "line": 1851,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1845,
+          "line": 1878,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1854,
+          "line": 1887,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1855,
+          "line": 1888,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1905,
+          "line": 1938,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1910,
+          "line": 1943,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1916,
+          "line": 1949,
           "has_fallback": false
         },
         {
@@ -184700,13 +184706,13 @@
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 617,
+          "line": 650,
           "has_fallback": false
         },
         {
           "token": "--muted",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 645,
+          "line": 678,
           "has_fallback": false
         },
         {
@@ -185277,7 +185283,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 5920,
+          "line": 5954,
           "scope": "</script> <script is:inline> (() => > function hydrateHeroParallax()",
           "kind": "css",
           "value": "is(.event-hero--photo-cinematic-sheet, .event-hero--photo-parallax-sheet) .event-hero__visual, .event-hero--poster-stage:is(.event-hero--poster-billboard, .event-hero--poster-attached-card) .event-hero__visual'))",
@@ -185748,43 +185754,43 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1191,
+          "line": 1224,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1198,
+          "line": 1231,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1405,
+          "line": 1438,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1577,
+          "line": 1610,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1806,
+          "line": 1839,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1913,
+          "line": 1946,
           "has_fallback": false
         },
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2238,
+          "line": 2271,
           "has_fallback": false
         },
         {
@@ -185796,7 +185802,7 @@
         {
           "token": "--primary",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 558,
+          "line": 561,
           "has_fallback": false
         },
         {
@@ -185967,115 +185973,97 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1102,
+          "line": 1135,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1247,
+          "line": 1280,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1274,
+          "line": 1307,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1278,
+          "line": 1311,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1325,
+          "line": 1358,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1386,
+          "line": 1419,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1406,
+          "line": 1439,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1407,
+          "line": 1440,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1432,
+          "line": 1465,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1557,
+          "line": 1590,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1568,
+          "line": 1601,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1576,
+          "line": 1609,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1584,
+          "line": 1617,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1600,
+          "line": 1633,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1627,
+          "line": 1660,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1731,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1787,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1805,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1812,
+          "line": 1764,
           "has_fallback": false
         },
         {
@@ -186087,19 +186075,37 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1868,
+          "line": 1838,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1883,
+          "line": 1845,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1895,
+          "line": 1853,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1901,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1916,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1928,
           "has_fallback": false
         },
         {
@@ -186147,13 +186153,7 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 622,
-          "has_fallback": false
-        },
-        {
-          "token": "--primary-strong",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 648,
+          "line": 644,
           "has_fallback": false
         },
         {
@@ -186165,13 +186165,25 @@
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 720,
+          "line": 681,
           "has_fallback": false
         },
         {
           "token": "--primary-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 778,
+          "line": 688,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 753,
+          "has_fallback": false
+        },
+        {
+          "token": "--primary-strong",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 811,
           "has_fallback": false
         },
         {
@@ -186234,19 +186246,19 @@
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1405,
+          "line": 1438,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1577,
+          "line": 1610,
           "has_fallback": false
         },
         {
           "token": "--primary-text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1806,
+          "line": 1839,
           "has_fallback": false
         }
       ],
@@ -186258,7 +186270,7 @@
       "definitions": [
         {
           "path": "site/src/components/AuthorizedEventSearch.astro",
-          "line": 448,
+          "line": 462,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -186267,7 +186279,7 @@
         },
         {
           "path": "site/src/components/AuthorizedEventSearch.astro",
-          "line": 472,
+          "line": 486,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -186276,7 +186288,7 @@
         },
         {
           "path": "site/src/components/AuthorizedEventSearch.astro",
-          "line": 497,
+          "line": 511,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -186290,7 +186302,7 @@
         {
           "token": "--progress",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 620,
+          "line": 653,
           "has_fallback": false
         }
       ],
@@ -186302,7 +186314,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1668,
+          "line": 1701,
           "scope": ".event-token--pushkin",
           "kind": "css",
           "value": "1.077",
@@ -186316,13 +186328,13 @@
         {
           "token": "--pushkin-composite-height-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1670,
+          "line": 1703,
           "has_fallback": false
         },
         {
           "token": "--pushkin-composite-height-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1676,
+          "line": 1709,
           "has_fallback": false
         }
       ],
@@ -186334,7 +186346,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1667,
+          "line": 1700,
           "scope": ".event-token--pushkin",
           "kind": "css",
           "value": "1.212",
@@ -186348,13 +186360,13 @@
         {
           "token": "--pushkin-composite-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1669,
+          "line": 1702,
           "has_fallback": false
         },
         {
           "token": "--pushkin-composite-ratio",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1675,
+          "line": 1708,
           "has_fallback": false
         }
       ],
@@ -186407,7 +186419,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1560,
+          "line": 1593,
           "scope": ".like-burst span:nth-child(2)",
           "kind": "css",
           "value": "-16deg",
@@ -186416,7 +186428,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1561,
+          "line": 1594,
           "scope": ".like-burst span:nth-child(3)",
           "kind": "css",
           "value": "14deg",
@@ -186425,7 +186437,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1562,
+          "line": 1595,
           "scope": ".like-burst span:nth-child(4)",
           "kind": "css",
           "value": "8deg",
@@ -186439,7 +186451,7 @@
         {
           "token": "--r",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1563,
+          "line": 1596,
           "has_fallback": true
         }
       ],
@@ -186644,7 +186656,7 @@
         {
           "token": "--rail-count",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1337,
+          "line": 1370,
           "has_fallback": true
         }
       ],
@@ -187562,7 +187574,7 @@
       "definitions": [
         {
           "path": "site/src/components/AuthorizedEventSearch.astro",
-          "line": 453,
+          "line": 467,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -187571,7 +187583,7 @@
         },
         {
           "path": "site/src/components/AuthorizedEventSearch.astro",
-          "line": 477,
+          "line": 491,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -187580,7 +187592,7 @@
         },
         {
           "path": "site/src/components/AuthorizedEventSearch.astro",
-          "line": 502,
+          "line": 516,
           "scope": "<runtime-style-property>",
           "kind": "runtime",
           "value": "<runtime>",
@@ -187589,7 +187601,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 591,
+          "line": 594,
           "scope": ".authorized-search__submit",
           "kind": "css",
           "value": "0%",
@@ -187603,7 +187615,7 @@
         {
           "token": "--search-progress",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 603,
+          "line": 606,
           "has_fallback": false
         }
       ],
@@ -187670,7 +187682,7 @@
         {
           "token": "--shadow",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2206,
+          "line": 2239,
           "has_fallback": false
         },
         {
@@ -187774,7 +187786,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1540,
+          "line": 1573,
           "scope": "<top-level>",
           "kind": "css",
           "value": "hover { border-color: transparent",
@@ -188110,13 +188122,13 @@
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2205,
+          "line": 2238,
           "has_fallback": false
         },
         {
           "token": "--surface-strong",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 743,
+          "line": 776,
           "has_fallback": false
         }
       ],
@@ -188155,67 +188167,49 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1098,
+          "line": 1131,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1539,
+          "line": 1572,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1573,
+          "line": 1606,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1597,
+          "line": 1630,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1799,
+          "line": 1832,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1819,
+          "line": 1852,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1843,
+          "line": 1876,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1846,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1858,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1872,
-          "has_fallback": false
-        },
-        {
-          "token": "--text",
-          "path": "site/src/layouts/EventLayout.astro",
-          "line": 1889,
+          "line": 1879,
           "has_fallback": false
         },
         {
@@ -188227,7 +188221,25 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 2046,
+          "line": 1905,
+          "has_fallback": false
+        },
+        {
+          "token": "--text",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1922,
+          "has_fallback": false
+        },
+        {
+          "token": "--text",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 1924,
+          "has_fallback": false
+        },
+        {
+          "token": "--text",
+          "path": "site/src/layouts/EventLayout.astro",
+          "line": 2079,
           "has_fallback": false
         },
         {
@@ -188275,19 +188287,19 @@
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 541,
+          "line": 544,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 570,
+          "line": 573,
           "has_fallback": false
         },
         {
           "token": "--text",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 574,
+          "line": 577,
           "has_fallback": false
         },
         {
@@ -188501,19 +188513,19 @@
         {
           "token": "--token-brand-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1638,
+          "line": 1671,
           "has_fallback": true
         },
         {
           "token": "--token-brand-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1694,
+          "line": 1727,
           "has_fallback": true
         },
         {
           "token": "--token-brand-bg",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1701,
+          "line": 1734,
           "has_fallback": true
         }
       ],
@@ -188545,19 +188557,19 @@
         {
           "token": "--token-brand-ring",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1639,
+          "line": 1672,
           "has_fallback": true
         },
         {
           "token": "--token-brand-ring",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1696,
+          "line": 1729,
           "has_fallback": true
         },
         {
           "token": "--token-brand-ring",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1703,
+          "line": 1736,
           "has_fallback": true
         }
       ],
@@ -188605,7 +188617,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1620,
+          "line": 1653,
           "scope": ".event-token",
           "kind": "css",
           "value": "clamp(108px, 26vw, 128px)",
@@ -188614,7 +188626,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1649,
+          "line": 1682,
           "scope": ".event-token--badge",
           "kind": "css",
           "value": "clamp(88px,23vw,104px)",
@@ -188623,7 +188635,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1717,
+          "line": 1750,
           "scope": ".event-token--pill",
           "kind": "css",
           "value": "auto",
@@ -188637,55 +188649,55 @@
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1621,
+          "line": 1654,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1622,
+          "line": 1655,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1631,
+          "line": 1664,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1632,
+          "line": 1665,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1633,
+          "line": 1666,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1669,
+          "line": 1702,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1670,
+          "line": 1703,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1675,
+          "line": 1708,
           "has_fallback": false
         },
         {
           "token": "--token-size",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1676,
+          "line": 1709,
           "has_fallback": false
         }
       ],
@@ -188967,7 +188979,7 @@
       "definitions": [
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1560,
+          "line": 1593,
           "scope": ".like-burst span:nth-child(2)",
           "kind": "css",
           "value": "-42px",
@@ -188976,7 +188988,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1561,
+          "line": 1594,
           "scope": ".like-burst span:nth-child(3)",
           "kind": "css",
           "value": "38px",
@@ -188985,7 +188997,7 @@
         },
         {
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1562,
+          "line": 1595,
           "scope": ".like-burst span:nth-child(4)",
           "kind": "css",
           "value": "4px",
@@ -188999,7 +189011,7 @@
         {
           "token": "--x",
           "path": "site/src/layouts/EventLayout.astro",
-          "line": 1563,
+          "line": 1596,
           "has_fallback": true
         }
       ],
