@@ -10,12 +10,9 @@ implementation or a second quota database.
   checks `resource_guard` before connect/setup/send/receive, pins one key for
   the session/resumption lifetime, treats resource failures as terminal, and
   the Python host owns client-liveness cleanup.
-- `ai-resource-control v0.1.4` extends the existing Google AI authority
-  Supabase with fenced expiring Live leases. The private wheel is built
-  by the trusted Fly deploy script and never committed to this public repo.
+- `ai-resource-control v0.1.5` uses the existing Google AI authority Supabase with migrations 001–008, server-registry acquire, Vault-backed provider secrets, wrapped-key delivery and bounded Live retention. The private wheel is built by the trusted deployment path and never committed to this public repo.
 - `google_ai/live_resources.py::run_live_search` is the only KenigEvents
-  managed Live resource entry. It uses consumer `kenigevents` and a hash of
-  the server-authorized Live session as the binding.
+  managed Live resource entry. It uses consumer `kenigevents`, a hash of the server-authorized Live session as the binding, central authority configuration, and only `GOOGLE_API_KEY2` as the KenigEvents emergency alias.
 - Existing `GoogleAIClient`, ordinary event-search quota, Edge vector search
   and Kaggle paths keep their previous reserve/mark/finalize contracts.
 
@@ -61,33 +58,33 @@ not connect directly to Google.
 
 ## Quota authority and rollout state
 
-The application integration is implemented, but the production Live lease SQL
-must exist in the existing dedicated limiter Supabase before
-`ENABLE_STATIC_SITE_LIVE_SEARCH=1` is enabled. Never use product Supabase or
-create a second limiter.
+The production authority is deployed: migrations 001–008 are present on the
+canonical limiter, six verified Live scopes are active, and provider secrets are
+stored in Supabase Vault. Normal Live uses `AI_RESOURCE_CONTROL_URL` plus
+`AI_RESOURCE_CONTROL_SERVICE_KEY` (or the dedicated compatibility aliases);
+product Supabase is never a quota-authority fallback.
+
+KenigEvents has exactly one availability fallback alias: `GOOGLE_API_KEY2`.
+`google_ai/live_resources.py` forwards only central authority configuration,
+optional ledger id and that alias to the shared SDK; it never forwards keys
+1/3/4/5/6 or arbitrary process environment. The shared SDK may use key2 only
+when its initial **read-only** authority capability probe fails with
+`RESOURCE_CONTROL_UNAVAILABLE`, before any mutating acquire. It must not use
+the fallback after a successful authority probe, for admission/quota/429/
+capacity/credential decisions, after a lost mutating acquire response, or after
+provider ready. Emergency mode keeps the same `live-interaction`
+`resource_guard`, one fallback session per consumer/process and a two-hour
+maximum lifetime.
 
 Provider facts are not inferred from ordinary Flash quotas. Owner AI Studio
-readback dated 2026-09-24 records Gemini 3.8 Live and Extended Thinking as
-RPM Unlimited / TPM 65K / RPD Unlimited. The dashboard does not expose a
-guaranteed concurrent-session entitlement, so ai-resource-control records
-concurrency as not_exposed rather than guessing a number. Finite local safety
-ceilings still apply: v0.1.4 aligns all four consumers to six shared project
-slots with one lease per opaque product binding while per-scope policies remain
-the real capacity boundary.
+readback records Gemini 3.8 Live and Extended Thinking as RPM Unlimited /
+TPM 65K / RPD Unlimited; guaranteed concurrent-session entitlement remains
+not exposed, so finite local safety ceilings still apply. `GOOGLE_API_KEY5`
+and `GOOGLE_API_KEY6` are not consumer fallbacks and remain common reserve.
 
-Current operator access discovery on 2026-09-26 confirmed the dedicated limiter
-service-role credential, the existing six key-to-quota-scope registry rows and
-all six corresponding runtime keys. The Live resource migrations are not
-present yet (the ai_resource_* REST/RPC surface returns 404). DevCoveer does not
-currently have usable management/SQL authorization to that separate Supabase
-account, and the current ChatGPT Supabase account must not be used. Therefore
-production Live remains fail-closed until migrations 001-004 are applied through
-the correct limiter-account SQL/management path.
-
-After migration, read back the generated ledger id and set
-`AI_RESOURCE_LEDGER_ID` on the backend. Configure/verify key-state and policy
-rows using actual provider evidence; do not reset ordinary counters or registry
-seeds.
+If `GOOGLE_API_KEY2` is unavailable during an authority outage, KenigEvents
+fails Live explicitly; it does not borrow another consumer key and never exposes
+the authority credential or provider key to the browser.
 
 ## Daily canary
 
