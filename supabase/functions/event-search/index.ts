@@ -2195,7 +2195,7 @@ async function runEventSearch(
     ),
   });
   const resultCacheKey = await searchResultCacheKey({
-    v: 3,
+    v: 2,
     query_hash: queryEmbeddingHash,
     catalog_revision: revisions.catalog_revision,
     corpus_revision: revisions.corpus_revision,
@@ -2486,7 +2486,6 @@ async function runEventSearch(
       status: requestedLlm ? "llm_quota_exhausted" : "disabled",
       used: false,
     };
-    let candidateDigests = new Map<number, string>();
     let llmCandidateFactCount = 0;
     if (deterministicLlmFailure) {
       llmResult = {
@@ -2508,7 +2507,7 @@ async function runEventSearch(
         label: "Проверяю релевантность",
       });
       const digestStartedAt = performance.now();
-      candidateDigests = await fetchCandidateDigests(
+      const candidateDigests = await fetchCandidateDigests(
         supabaseUrl,
         items.map(candidateId).filter((id): id is number => id !== null),
       );
@@ -2532,17 +2531,6 @@ async function runEventSearch(
     items = collapseOccurrenceFamilies(
       llmResult.used ? llmResult.exact : llmResult.possible,
     ).slice(0, limit);
-
-    if (llmResult.used && items.length > 0) {
-      const contextLimit = items.length <= 3 ? 1800 : items.length <= 6 ? 1000 : 650;
-      items = items.map((candidate) => {
-        const id = candidateId(candidate);
-        const digest = id === null ? "" : String(candidateDigests.get(id) || "").trim();
-        return digest
-          ? { ...candidate, model_context: truncateText(digest, contextLimit) }
-          : candidate;
-      });
-    }
 
     let fallbackItems: Candidate[] = llmResult.used && includeFallback
       ? collapseOccurrenceFamilies(
