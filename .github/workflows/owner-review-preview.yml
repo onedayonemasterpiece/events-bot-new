@@ -1,0 +1,116 @@
+name: Owner review preview publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact origin/main SHA to build and publish
+        required: true
+        type: string
+      build_id:
+        description: Preview build id (must start with preview-)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owner-review-preview-${{ inputs.build_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      PREVIEW_BUILD_ID: ${{ inputs.build_id }}
+      PREVIEW_REQUIRE_AUTHORIZED_SEARCH: '1'
+      PUBLIC_STATIC_SITE_LIVE_SEARCH_URL: https://events-bot-new-wngqia.fly.dev/api/live-search
+      KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
+      KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
+      KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
+      KENIGEVENTS_SITE_YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
+      KENIGEVENTS_SITE_YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
+      PUBLIC_PERSONALIZATION_SUPABASE_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_URL }}
+      PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
+      PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
+      PUBLIC_YANDEX_AUTH_PROVIDER: custom:yandex
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PREVIEW_BUILD_ID" =~ ^preview-[A-Za-z0-9._-]+$ ]]
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]]
+          git fetch origin main --quiet
+          [[ "$(git rev-parse origin/main)" == "$EXPECTED_SHA" ]]
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - run: npm ci --prefix site --no-audit --no-fund
+      - run: python -m pip install --disable-pip-version-check 'boto3>=1.34.0'
+
+      - name: Build exact owner review preview
+        run: npm run --prefix site build:preview
+
+      - name: Publish only user-facing routes
+        run: |
+          python scripts/publish_static_site_preview.py \
+            --source-dir "site/dist/$PREVIEW_BUILD_ID" \
+            --build-id "$PREVIEW_BUILD_ID" \
+            --owner-review
+
+      - name: Verify owner-review object boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import boto3
+
+          endpoint = os.environ.get('KENIGEVENTS_SITE_YC_ENDPOINT') or 'https://storage.yandexcloud.net'
+          region = os.environ.get('KENIGEVENTS_SITE_YC_REGION') or 'ru-central1'
+          bucket = os.environ['KENIGEVENTS_SITE_YC_BUCKET']
+          build = os.environ['PREVIEW_BUILD_ID']
+          s3 = boto3.client(
+              's3',
+              endpoint_url=endpoint,
+              region_name=region,
+              aws_access_key_id=os.environ['KENIGEVENTS_SITE_YC_ACCESS_KEY_ID'],
+              aws_secret_access_key=os.environ['KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY'],
+          )
+          for key in (
+              f'{build}/index.html',
+              f'{build}/poisk/index.html',
+              f'{build}/preview-build.json',
+          ):
+              s3.head_object(Bucket=bucket, Key=key)
+          for key in (
+              f'{build}/__preview/index.html',
+              f'{build}/lab/index.html',
+              f'{build}/_review/index.html',
+          ):
+              try:
+                  s3.head_object(Bucket=bucket, Key=key)
+              except Exception:
+                  continue
+              raise SystemExit(f'service_route_published:{key}')
+          print(f"OWNER_REVIEW_PREVIEW_OK build_id={build} sha={os.environ['EXPECTED_SHA']}")
+          PY
