@@ -4,12 +4,14 @@
 
 ### Added
 - KenigEvents Live Search end-to-end application integration: authenticated
-  browser text/microphone sessions use shared live-interaction v0.1.3, the
-  shared ai-resource-control v0.1.0 boundary and the existing event-search
-  function-call/cards contract. Direct search is retained only as an
+  browser text/microphone sessions use shared live-interaction v0.1.4 and
+  ai-resource-control v0.1.5 with the existing event-search function-call/cards
+  contract. The central authority has migrations 001–008 and Vault-backed key
+  delivery. KenigEvents is assigned only GOOGLE_API_KEY2 as the shared SDK's
+  bounded authority-outage fallback; it cannot be used to bypass
+  admission/quota/429/capacity decisions. Direct search remains only an
   unconfigured compatibility adapter. A once-daily real Live function-call
-  canary is included; production activation remains gated on applying the
-  additive lease SQL to the existing limiter authority.
+  canary remains the production regression path.
 - A bucket-backed YAML registry of all currently accessible named KenigEvents
   preview builds, including actual HTML links, upload/build dates, source SHA,
   catalog-date evidence and review context. Preview upload now updates its
