@@ -318,6 +318,11 @@ app = "events-bot-new-wngqia"
   STATIC_SITE_KAGGLE_TIMEOUT_MINUTES = "90"
   STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH = "1"
   STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH = "1"
+  # Bounded owner-review fallback while the legacy preview Object Storage writer
+  # is unavailable. Serves only preview-review-* from the persistent data volume.
+  ENABLE_OWNER_REVIEW_STATIC = "1"
+  OWNER_REVIEW_STATIC_ROOT = "/data/owner_review_previews"
+  STATIC_SITE_LIVE_SEARCH_ALLOWED_ORIGINS = "https://kenigevents.ru,https://static.kenigevents.ru,https://events-bot-new-wngqia.fly.dev"
   ENABLE_EXHIBITION_DUPLICATE_AUDIT = "1"
   EXHIBITION_DUPLICATE_AUDIT_TIME_LOCAL = "07:45"
   EXHIBITION_DUPLICATE_AUDIT_TZ = "Europe/Kaliningrad"

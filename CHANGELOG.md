@@ -50,6 +50,13 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- Added a bounded Fly-hosted owner-review fallback for `preview-review-*`
+  artifacts after the legacy Yandex Object Storage preview writer began
+  returning `AccessDenied`. The fallback serves only the checked preview tree
+  from the persistent data volume, excludes `__preview`/lab/`_review`,
+  forbids traversal and dot paths, and is always noindex/no-cache. It does not
+  mutate or replace the production static-site root.
+
 - Missing event media no longer drives hourly VK publication and CDN-review
   retries. The publication remains fail-closed; known missing-media jobs check
   at most once on the next UTC day, past events stop retrying, and routine

@@ -48,3 +48,21 @@ the actual site routes directly.
 
 Owner evidence: voice review `voice-20260926-200723-dab0343f` plus the
 2026-09-27 screenshot review in the KenigEvents workstream.
+
+
+## Temporary review transport
+
+The canonical owner-review artifact remains the user-facing preview root, never
+a QA hub. If the shared `kenigevents.ru` Object Storage preview writer is
+temporarily unavailable, EventsBot may serve the same checked
+`preview-review-*` tree from `/data/owner_review_previews` on its Fly HTTPS
+origin. This fallback:
+
+- serves only `preview-review-*` build ids;
+- rejects `__preview`, `lab`, `_review`, dot paths and traversal;
+- returns `X-Robots-Tag: noindex, nofollow, noarchive` and no-cache headers;
+- never serves or mutates the production website root;
+- is a visual owner-review transport, not a replacement OAuth origin.
+  Authenticated Live product acceptance remains the canonical-domain/browser
+  contract plus the no-mail production Live canary until the Object Storage
+  writer is restored.
