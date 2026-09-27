@@ -10,7 +10,7 @@ implementation or a second quota database.
   checks `resource_guard` before connect/setup/send/receive, pins one key for
   the session/resumption lifetime, treats resource failures as terminal, and
   the Python host owns client-liveness cleanup.
-- `ai-resource-control v0.1.4` extends the existing Google AI authority
+- `ai-resource-control v0.1.5` extends the existing Google AI authority
   Supabase with fenced expiring Live leases. The private wheel is built
   by the trusted Fly deploy script and never committed to this public repo.
 - `google_ai/live_resources.py::run_live_search` is the only KenigEvents
@@ -61,33 +61,38 @@ not connect directly to Google.
 
 ## Quota authority and rollout state
 
-The application integration is implemented, but the production Live lease SQL
-must exist in the existing dedicated limiter Supabase before
-`ENABLE_STATIC_SITE_LIVE_SEARCH=1` is enabled. Never use product Supabase or
-create a second limiter.
+The canonical shared authority is deployed with migrations 001–008, six verified
+Live scopes, bounded retention, server-registry acquire v2 and Vault-backed
+lease-wrapped provider-key delivery. KenigEvents must use consumer
+`kenigevents`; product Supabase is not a substitute and a second limiter is
+forbidden.
 
 Provider facts are not inferred from ordinary Flash quotas. Owner AI Studio
-readback dated 2026-09-24 records Gemini 3.8 Live and Extended Thinking as
-RPM Unlimited / TPM 65K / RPD Unlimited. The dashboard does not expose a
-guaranteed concurrent-session entitlement, so ai-resource-control records
-concurrency as not_exposed rather than guessing a number. Finite local safety
-ceilings still apply: v0.1.4 aligns all four consumers to six shared project
-slots with one lease per opaque product binding while per-scope policies remain
-the real capacity boundary.
+readback records Gemini 3.8 Live and Extended Thinking as RPM Unlimited / TPM
+65K / RPD Unlimited while guaranteed provider concurrency remains not exposed.
+Finite local safety ceilings remain authoritative.
 
-Current operator access discovery on 2026-09-26 confirmed the dedicated limiter
-service-role credential, the existing six key-to-quota-scope registry rows and
-all six corresponding runtime keys. The Live resource migrations are not
-present yet (the ai_resource_* REST/RPC surface returns 404). DevCoveer does not
-currently have usable management/SQL authorization to that separate Supabase
-account, and the current ChatGPT Supabase account must not be used. Therefore
-production Live remains fail-closed until migrations 001-004 are applied through
-the correct limiter-account SQL/management path.
+The backend serving `PUBLIC_STATIC_SITE_LIVE_SEARCH_URL` must run through
+`ai-resource-control 0.1.5` with the central authority. The static browser never
+receives an authority service credential or a Google key.
 
-After migration, read back the generated ledger id and set
-`AI_RESOURCE_LEDGER_ID` on the backend. Configure/verify key-state and policy
-rows using actual provider evidence; do not reset ordinary counters or registry
-seeds.
+### KenigEvents authority-outage fallback
+
+KenigEvents owns exactly one emergency Live alias: `GOOGLE_API_KEY2`. The
+server-side Live boundary may pass central authority configuration, optional
+ledger id and that one alias to the shared SDK. It must not pass Wonderful
+Lections' `GOOGLE_API_KEY`, Street Story's `GOOGLE_API_KEY3`, Projects Hub's
+`GOOGLE_API_KEY4`, or shared reserve keys 5–6 as KenigEvents fallback.
+
+The SDK may use `GOOGLE_API_KEY2` only when the initial read-only authority
+capability probe returns `RESOURCE_CONTROL_UNAVAILABLE`, before any mutating
+acquire. It must not activate after a successful authority probe, for
+admission/quota/429/capacity/credential failures, after a lost mutating acquire
+response, or after provider ready. Emergency mode uses the same
+`live-interaction` resource guard, permits one local KenigEvents fallback
+session per process and expires after two hours. If the assigned alias is
+unavailable, the outage stays an explicit Live error rather than borrowing
+another project's key.
 
 ## Daily canary
 
