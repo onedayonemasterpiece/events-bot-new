@@ -10,7 +10,7 @@ implementation or a second quota database.
   checks `resource_guard` before connect/setup/send/receive, pins one key for
   the session/resumption lifetime, treats resource failures as terminal, and
   the Python host owns client-liveness cleanup.
-- `ai-resource-control v0.1.2` extends the existing dedicated Google AI
+- `ai-resource-control v0.1.3` extends the existing dedicated Google AI
   limiter Supabase with fenced expiring Live leases. The private wheel is built
   by the trusted Fly deploy script and never committed to this public repo.
 - `google_ai/live_resources.py::run_live_search` is the only KenigEvents
@@ -71,7 +71,7 @@ readback dated 2026-09-24 records Gemini 3.8 Live and Extended Thinking as
 RPM Unlimited / TPM 65K / RPD Unlimited. The dashboard does not expose a
 guaranteed concurrent-session entitlement, so ai-resource-control records
 concurrency as not_exposed rather than guessing a number. Finite local safety
-ceilings still apply: v0.1.2 aligns all four consumers to six shared project
+ceilings still apply: v0.1.3 aligns all four consumers to six shared project
 slots with one lease per opaque product binding while per-scope policies remain
 the real capacity boundary.
 
@@ -96,6 +96,8 @@ manual dispatch). It uses the existing no-mail auth-session broker, opens a
 real `gemini-3.8-live` session, sends one text request, requires an actual
 `search_events` function call and non-empty `search_results`, then stops the
 session and stores only a bounded sanitized receipt.
+
+Scheduled daily runs stay disabled until LIVE_SEARCH_DAILY_CANARY_ENABLED=1 after production cutover. Manual dispatch remains available for first acceptance.
 
 The daily canary intentionally does not depend on a virtual microphone. Real
 microphone/pulse/Stop acceptance is a release-time browser check; the daily

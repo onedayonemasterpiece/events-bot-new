@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   live-search:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.LIVE_SEARCH_DAILY_CANARY_ENABLED == '1' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     environment: { name: search-e2e }

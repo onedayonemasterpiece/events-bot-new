@@ -1,1 +1,1 @@
-Private build input directory. No private source or wheel is committed. The trusted Fly deploy script materializes ai-resource-control v0.1.2 here immediately before image build and removes it afterwards.
+Private build input directory. No private source or wheel is committed. The trusted Fly deploy script materializes ai-resource-control v0.1.3 here immediately before image build and removes it afterwards.

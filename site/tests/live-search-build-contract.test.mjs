@@ -39,6 +39,8 @@ test('daily Live Search canary is low-frequency and exercises the real Live func
   assert.doesNotMatch(workflow, /cron:[^\n]*(?:\*\/|,)/u);
   assert.match(workflow, /id-token:\s*write/u);
   assert.match(workflow, /run-live-search-daily-canary\.mjs/u);
+  assert.match(workflow, /LIVE_SEARCH_DAILY_CANARY_ENABLED/u);
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch'/u);
   assert.match(script, /\/api\/live-search/u);
   assert.match(script, /search_events/u);
   assert.match(script, /search_results/u);
