@@ -164,13 +164,12 @@ def test_live_event_search_requests_verified_high_relevance_results():
     assert 'SEARCH_RELEVANCE_UNAVAILABLE' in source
 
 
-def test_event_search_edge_exposes_bounded_model_context_only_after_verification():
+def test_r9_keeps_deployed_edge_response_shape_without_model_context():
     source = Path("supabase/functions/event-search/index.ts").read_text(encoding="utf-8")
-    assert "let candidateDigests = new Map<number, string>();" in source
-    assert "if (llmResult.used && items.length > 0)" in source
-    assert "model_context: truncateText(digest, contextLimit)" in source
-    assert "items.length <= 3 ? 1800 : items.length <= 6 ? 1000 : 650" in source
-    assert "v: 3," in source
+    assert "model_context" not in source
+    assert "candidateDigests = await fetchCandidateDigests(" in source
+    assert "llmResult = await llmVerify(query, items, candidateDigests" in source
+    assert "v: 2," in source
 
 
 def test_event_search_pipeline_is_query_embedding_then_pgvector_then_digest_verifier() -> None:
