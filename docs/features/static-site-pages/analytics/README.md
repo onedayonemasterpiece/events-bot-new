@@ -938,7 +938,7 @@ DataLens — основной интерактивный dashboard для вла
 |---|---|---|---|
 | **Yandex Metrica** | Pageviews, devices, traffic sources, goals, API | Может блокироваться; внешний tag; consent/legal; не знает authoritative product state | Optional secondary comparator, не SOR |
 | **PostHog Cloud** | Funnels, cohorts, experiments; большой free tier | Third-party raw event flow, data residency/legal review, vendor duplication | Не подключать к production сейчас |
-| **Umami self-hosted** | Open source, lightweight, basic page/event analytics | Нужны отдельные always-on compute + Postgres; дублирует собственный контур | Не разворачивать до реальной необходимости |
+| **Umami self-managed** | Open source, lightweight, basic page/event analytics | Нужны отдельные always-on compute + Postgres; дублирует собственный контур | Не разворачивать до реальной необходимости |
 | **Только Supabase** | Простая SQL-модель | 500 MB DB, egress, конкуренция с Auth/profile, риск raw accumulation | Только authoritative strong state, не clickstream |
 | **Raw firehose в YDB** | Простое append-only начало | RU/write explosion, cardinality, инцидентный риск | Запрещён |
 | **Static JSON reports** | Почти нулевая стоимость, простая публикация | Нет ad-hoc actor-level analysis | Использовать для daily aggregates и handoff |
