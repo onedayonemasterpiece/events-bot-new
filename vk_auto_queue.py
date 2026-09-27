@@ -616,13 +616,12 @@ async def _refresh_vk_video_evidence(
     if not refs:
         return refreshed_item, {}
     try:
-        # Service tokens expose metadata/previews but omit playable files.
-        # The configured user read token returns the low-resolution MP4 that
-        # can be analysed inline without borrowing any Telegram/Kaggle auth.
+        # Keep autonomous video reads on the service credential. A service
+        # response may omit playable files; preview evidence remains available
+        # without putting the publishing user token under reader load.
         response = await main_mod.vk_api(
             "video.get",
             videos=",".join(dict.fromkeys(refs)),
-            _force_user_actor=True,
         )
     except Exception as exc:
         logger.warning("vk_auto: video.get evidence refresh failed refs=%d err=%s", len(refs), exc)
@@ -663,7 +662,7 @@ async def _refresh_vk_video_evidence(
             video_files[(int(payload.get("owner_id")), int(payload.get("id")))] = file_url
         refreshed += 1
     if refreshed:
-        logger.info("vk_auto: refreshed video previews count=%d", refreshed)
+        logger.info("vk_auto.video_refresh refs=%d refreshed=%d playable=%d actor=service", len(refs), refreshed, len(video_files))
     return refreshed_item, video_files
 
 

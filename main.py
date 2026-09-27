@@ -3647,6 +3647,14 @@ async def vk_api(method: str, **params: Any) -> Any:
     service_allowed = method in VK_SERVICE_READ_METHODS or any(
         method.startswith(prefix) for prefix in VK_SERVICE_READ_PREFIXES
     )
+    # Video enrichment is autonomous and can run many times between managed
+    # publications. Never let it borrow the publishing credential, including
+    # when the service credential is temporarily missing or disabled.
+    if method.startswith("video.get") and (
+        force_user_actor or not VK_READ_VIA_SERVICE or not VK_SERVICE_TOKEN
+    ):
+        logging.warning("vk.read_policy_blocked method=%s reason=service_credential_required", method)
+        raise VKAPIError(None, "VK service credential required for video reads", method=method)
     token: str | None = None
     kind: str | None = None
     forced_user_token = _vk_user_token() if force_user_actor else None

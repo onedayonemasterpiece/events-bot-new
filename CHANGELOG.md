@@ -50,6 +50,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- VK auto import no longer forces its recurring `video.get` evidence refresh
+  through the VK publishing user token. It uses the service read credential
+  blocks that read when the credential is unavailable; the transport records
+  the number of refreshed previews and playable files without logging tokens.
 - Added a bounded Fly-hosted owner-review fallback for `preview-review-*`
   artifacts after the legacy Yandex Object Storage preview writer began
   returning `AccessDenied`. The fallback serves only the checked preview tree
