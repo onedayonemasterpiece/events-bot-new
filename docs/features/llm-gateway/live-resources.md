@@ -10,8 +10,8 @@ implementation or a second quota database.
   checks `resource_guard` before connect/setup/send/receive, pins one key for
   the session/resumption lifetime, treats resource failures as terminal, and
   the Python host owns client-liveness cleanup.
-- `ai-resource-control v0.1.3` extends the existing dedicated Google AI
-  limiter Supabase with fenced expiring Live leases. The private wheel is built
+- `ai-resource-control v0.1.4` extends the existing Google AI authority
+  Supabase with fenced expiring Live leases. The private wheel is built
   by the trusted Fly deploy script and never committed to this public repo.
 - `google_ai/live_resources.py::run_live_search` is the only KenigEvents
   managed Live resource entry. It uses consumer `kenigevents` and a hash of
@@ -71,7 +71,7 @@ readback dated 2026-09-24 records Gemini 3.8 Live and Extended Thinking as
 RPM Unlimited / TPM 65K / RPD Unlimited. The dashboard does not expose a
 guaranteed concurrent-session entitlement, so ai-resource-control records
 concurrency as not_exposed rather than guessing a number. Finite local safety
-ceilings still apply: v0.1.3 aligns all four consumers to six shared project
+ceilings still apply: v0.1.4 aligns all four consumers to six shared project
 slots with one lease per opaque product binding while per-scope policies remain
 the real capacity boundary.
 
