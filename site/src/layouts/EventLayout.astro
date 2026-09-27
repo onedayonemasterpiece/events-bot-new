@@ -161,6 +161,7 @@ const HEADER_NAVIGATION = [
   { key: 'today', label: 'Сегодня', href: '/segodnya/' },
   { key: 'tomorrow', label: 'Завтра', href: '/zavtra/' },
   { key: 'weekend', label: 'Выходные', href: '/vyhodnye/' },
+  { key: 'free', label: 'Бесплатно', href: '/podborki/besplatnye-sobytiya/' },
   { key: 'exhibitions', label: 'Выставки', href: '/vystavki/' },
   { key: 'festivals', label: 'Фестивали', href: '/festivali/' },
   { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
@@ -2500,6 +2501,21 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           top:0;
           z-index:61;
         }
+        body[data-shell-composition="home-navigation-only"] .site-nav {
+          opacity:0;
+          visibility:hidden;
+          pointer-events:none!important;
+          transform:translate3d(0,-10px,0) scale(.985);
+          transform-origin:top right;
+          transition:opacity 180ms ease,transform 320ms cubic-bezier(.22,1,.36,1),visibility 0s linear 320ms!important;
+        }
+        body[data-shell-composition="home-navigation-only"][data-home-nav-docked="true"] .site-nav {
+          opacity:1;
+          visibility:visible;
+          pointer-events:auto!important;
+          transform:none;
+          transition-delay:0s!important;
+        }
         body[data-shell-composition="event-navigation-only"] .site-header {
           position:absolute;
           inset:0 0 auto;
@@ -2524,7 +2540,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       body[data-lower-surface-state="keyboard"] .mobile-bottom-nav { visibility:hidden; pointer-events:none; }
     </style>
   </head>
-  <body data-exhibitions-theme={headerCurrent === 'exhibitions' ? 'graphite' : undefined} class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="5" data-shell-composition={shellComposition.id} data-shell-composition-version={shellComposition.version} data-desktop-section-context={shellComposition.desktopSectionContext} data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingPageContext ? 'site' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body data-exhibitions-theme={headerCurrent === 'exhibitions' ? 'graphite' : undefined} class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-ds-family="EventLayout" data-ds-version="6" data-shell-composition={shellComposition.id} data-shell-composition-version={shellComposition.version} data-desktop-section-context={shellComposition.desktopSectionContext} data-ds-variant={mobileSection || 'default'} data-ds-state="ready" data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-floating-islands={hasFloatingPageContext ? 'site' : undefined} data-primary-island={resolvedMobileBottomMode !== 'none' ? 'true' : undefined} data-current-year={getCurrentDate().slice(0, 4)} data-exhibitions-new-ids={JSON.stringify(newExhibitionIds)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-relay-url={personalizationSupabaseRelayUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">

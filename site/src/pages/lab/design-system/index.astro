@@ -94,7 +94,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
 
       <section class="ds-section" id="desktop-review-20260926">
         <h2>Десктопное и мобильное ревью · 26 сентября · кандидат</h2>
-        <p>Единая навигация EventLayout v5, календарь v3, Hero Talk v5, выходные v2, выставки v3 и фестивали v2. R5 использует geometry-bound framing Hero, navigation-only event detail, Today без дублирующего time-context и PersonalFeedSlot v4 с плотным первым desktop chunk. Новая приёмка владельцем ожидается.</p>
+        <p>Единая навигация EventLayout v6, календарь v3, Hero Talk v6, выходные v3, Popular v3, ListingPageHeader v4 и HomeQuickNav v3. R8 убирает desktop floating navigation поверх Home Hero: навигационный island сначала находится в потоке под Hero и появляется в верхнем shell только после прокрутки; добавляет Бесплатно, спокойную listing-типографику, island-шапки выходных и корректный typing-cursor.</p>
         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px">
           <div><h3>Предыдущая версия · deprecated</h3><iframe loading="lazy" title="Предыдущая версия интерфейса" src="https://static.kenigevents.ru/preview-integrated-islands-home-20260926/" style="width:100%;height:560px;border:1px solid var(--ke-color-line)"></iframe></div>
           <div><h3>Текущий кандидат</h3><iframe loading="lazy" title="Текущий десктопный кандидат" src={withBase('/')} style="width:100%;height:560px;border:1px solid var(--ke-color-line)"></iframe></div>
@@ -114,7 +114,7 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
         <div class="section-card__inner">
           <Badge tone="accent">Кандидат для аудиоревью</Badge>
           <h2>Главная: единая композиция</h2>
-          <p>HomePage v2 · EventLayout v5 · HomeHeroTalk v5 · HomeSearchEntry v2 · HomeQuickNav v2 · HomeColdStartFeed v2 · HeroTalkPageEnd v3.
+          <p>HomePage v2 · EventLayout v6 · HomeHeroTalk v6 · HomeSearchEntry v2 · HomeQuickNav v3 · HomeColdStartFeed v2 · HeroTalkPageEnd v3.
             Предыдущая кандидатная композиция v1 заменена; это не утверждение нового дизайна Hero-talk.</p>
           <p><a href={withBase('/')}>Открыть реальную главную: Hero → набор → ссылки → лента → продолжение</a></p>
           <h3>Hero-talk v2: общий evergreen fallback</h3>

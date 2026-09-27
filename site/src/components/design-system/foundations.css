@@ -63,6 +63,17 @@
   --ke-type-h1-letter: -0.06em;
   --ke-type-h1: var(--ke-type-h1-weight) var(--ke-type-h1-size) / var(--ke-type-h1-line) var(--ke-font-family-sans);
 
+  /* Listing hierarchy is intentionally calmer than editorial display type. */
+  --ke-type-listing-title-size: clamp(2.15rem, 5vw, 3.9rem);
+  --ke-type-listing-title-line: .98;
+  --ke-type-listing-title-weight: 760;
+  --ke-type-listing-title-letter: -.045em;
+  --ke-type-listing-title: var(--ke-type-listing-title-weight) var(--ke-type-listing-title-size) / var(--ke-type-listing-title-line) var(--ke-font-family-sans);
+  --ke-type-listing-time-size: clamp(1.75rem, 2.15vw, 2.15rem);
+  --ke-type-listing-time-line: .98;
+  --ke-type-listing-time-weight: 760;
+  --ke-type-listing-time-letter: -.035em;
+
   /* Intentional compact H1 variant used by dense mobile listing headers. */
   --ke-type-h1-compact-size: 2.25rem;
   --ke-type-h1-compact-line: 0.94;

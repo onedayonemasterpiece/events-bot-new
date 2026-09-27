@@ -215,3 +215,21 @@ desktop For Me hydration. See /lab/design-system/#mobile-review-20260926
 for predecessor/current rendered pages and the [review checklist](../desktop-review-20260926.md)
 for checks and unresolved collection data qualification. No Penpot parity or
 native-device acceptance is implied by L1 browser screenshots.
+
+### September 26 R8 owner voice-review follow-up
+
+Voice voice-20260926-200723-dab0343f promotes the following shared candidates:
+EventLayout v6, HomeHeroTalk v6, HomeQuickNav v3, ListingPageHeader v4,
+WeekendListingSurface v3 and PopularListingSurface v3.
+
+On desktop Home, the navigation island is no longer rendered over the Hero at
+first paint. HomeQuickNav v3 is the in-flow source island below HeroTalk and the
+existing shared site-nav becomes visible only after that source island scrolls
+out of the viewport. This removes the face/navigation collision structurally;
+Hero geometry/face crop safety remains an independent media guard.
+
+The same iteration adds Бесплатно immediately after Выходные in desktop
+navigation, introduces calmer listing-title/time typography tokens, gives
+weekend day headers full-radius shadowed island treatment with explicit
+contrast, adds spacing before later Popular groups, and makes the Hero typing
+cursor track word appearance before the final caret begins blinking.

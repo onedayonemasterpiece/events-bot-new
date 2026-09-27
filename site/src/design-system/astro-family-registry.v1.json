@@ -370,7 +370,7 @@
     },
     {
       "id": "WeekendListingSurface",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/listings/WeekendListingSurface.astro",
       "style_owners": [
         "site/src/components/listings/WeekendListingSurface.astro"
@@ -413,7 +413,7 @@
     },
     {
       "id": "PopularListingSurface",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/listings/PopularListingSurface.astro",
       "style_owners": [],
       "variants": [
@@ -484,7 +484,7 @@
     },
     {
       "id": "EventLayout",
-      "version": 5,
+      "version": 6,
       "astro_root": "site/src/layouts/EventLayout.astro",
       "style_owners": [
         "site/src/layouts/EventLayout.astro",
@@ -2328,7 +2328,7 @@
     },
     {
       "id": "HomeHeroTalk",
-      "version": 5,
+      "version": 6,
       "astro_root": "site/src/components/HomeHeroTalk.astro",
       "style_owners": [
         "site/src/components/HomeHeroTalk.astro"
@@ -2374,13 +2374,13 @@
     },
     {
       "id": "HomeQuickNav",
-      "version": 2,
+      "version": 3,
       "astro_root": "site/src/components/HomeQuickNav.astro",
       "style_owners": [
         "site/src/components/HomeQuickNav.astro"
       ],
       "variants": [
-        "rectangular-grid"
+        "in-flow-island"
       ],
       "states": [
         "populated"
@@ -3046,7 +3046,7 @@
     },
     {
       "id": "ListingPageHeader",
-      "version": 3,
+      "version": 4,
       "astro_root": "site/src/components/listings/ListingPageHeader.astro",
       "style_owners": [
         "site/src/styles/design-system.css"

@@ -129,3 +129,29 @@ exposed two timing-specific test/runtime facts that local loopback could hide:
 Because R6 is immutable, the runtime reliability fix is delivered under a new
 review prefix; R6 remains publication evidence but is superseded for owner
 review by the next clean preview.
+
+## R8 owner voice review — voice-20260926-200723-dab0343f
+
+The R7 owner review changes the Home navigation composition rather than asking
+media crop to compensate for UI layered on top of the mosaic:
+
+- HomeQuickNav v3 is a real in-flow navigation island directly below HeroTalk.
+  The desktop shell navigation is hidden and non-focusable while that island is
+  still visible; it docks into the existing upper-right navigation only after
+  the in-flow island scrolls out. Mobile keeps its established navigation.
+- Бесплатно is a first-class desktop destination immediately after Выходные;
+  ordinary island overflow/burger logic owns narrow desktop widths.
+- HomeHeroTalk v6 retains geometry/face crop safety, but its cursor now follows
+  the word-by-word reveal. The persistent blinking cursor waits until the word
+  sequence has completed.
+- ListingPageHeader v4 and the shared time marker use calmer dedicated listing
+  typography instead of 950-weight editorial display typography.
+- WeekendListingSurface v3 day headers are full rounded, shadowed islands with
+  explicit white/secondary-white contrast and less aggressive label weight.
+- PopularListingSurface v3 adds deliberate vertical air before later behavioral
+  groups and uses a calmer desktop group-heading weight.
+
+These are shared DS changes, not one-off route overrides. Acceptance must verify
+Home first paint (no floating nav over Hero), Home docking after scroll,
+navigation order, Weekend shadow/radius/contrast, Today title/time weights,
+Popular spacing and Hero cursor timing.

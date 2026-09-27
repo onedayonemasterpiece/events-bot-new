@@ -17,7 +17,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   <section
     class="home-hero-talk"
     data-ds-family="HomeHeroTalk"
-    data-ds-version="5"
+    data-ds-version="6"
     data-ds-variant="editorial-scenes"
     data-ds-state="populated"
     data-floating-context-label="Анонсы"
@@ -33,6 +33,11 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
         const focus = homeHeroCropFocus(asset);
         const focusX = focus.x;
         const focusY = focus.y;
+        const totalWordCount = scene.fragments.reduce(
+          (count, fragment) => count + fragment.text.split(/\s+/u).filter(Boolean).length,
+          0,
+        );
+        const cursorDelay = 160 + 190 * totalWordCount + 240;
         return (
           <article
             class={`home-hero-talk__scene home-hero-talk__scene--${scene.mode}`}
@@ -49,7 +54,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
             aria-hidden={sceneIndex === 0 ? 'false' : 'true'}
           >
             <div class="home-hero-talk__message">
-              <h2 data-home-hero-copy>
+              <h2 data-home-hero-copy style={'--cursor-delay:' + cursorDelay + 'ms'}>
                 {scene.fragments.map((fragment, fragmentIndex) => (
                   <>
                     {fragment.link ? (
@@ -104,7 +109,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
 
 {visibleScenes.length === 0 && (
   <section class="home-hero-talk home-hero-talk--generic" data-home-hero-talk data-scene-count="0"
-    data-ds-family="HomeHeroTalk" data-ds-version="5" data-ds-variant="service-fallback" data-ds-state="generic"
+    data-ds-family="HomeHeroTalk" data-ds-version="6" data-ds-variant="service-fallback" data-ds-state="generic"
     aria-labelledby={titleId}>
     <div class="home-hero-talk__scene">
       <div class="home-hero-talk__generic-copy">
@@ -198,16 +203,23 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   .home-hero-talk__media.is-present .home-hero-talk__tile { opacity:var(--tile-opacity); }
   .home-hero-talk__media.is-entering .home-hero-talk__tile { opacity:0;transition:none; }
   .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__word {
+    position:relative;
     opacity:0;transform:translateY(.28em);filter:blur(1px);
     animation:home-hero-fragment-in 240ms cubic-bezier(.16,1,.3,1) var(--word-delay) forwards;
+  }
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__word::after {
+    content:"";position:absolute;right:-.11em;bottom:.08em;width:.07em;height:.76em;
+    background:var(--ke-color-action-primary);opacity:0;
+    animation:home-hero-word-cursor 190ms step-end var(--word-delay) both;
   }
   .home-hero-talk__cursor { display:none; }
   .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__cursor {
     display:inline-block;width:.08em;height:.78em;margin-left:.08em;background:var(--ke-color-action-primary);
-    animation:home-hero-cursor 780ms step-end infinite;vertical-align:-.10em;
+    opacity:0;animation:home-hero-cursor 780ms step-end var(--cursor-delay) infinite;vertical-align:-.10em;
   }
   @keyframes home-hero-fragment-in { to { opacity:1;transform:none;filter:none; } }
-  @keyframes home-hero-cursor { 50% { opacity:0; } }
+  @keyframes home-hero-word-cursor { 0%,88% { opacity:1; } 100% { opacity:0; } }
+  @keyframes home-hero-cursor { 0%,49% { opacity:1; } 50%,100% { opacity:0; } }
   .home-hero-talk__scene--text-only .home-hero-talk__message { width:min(90vw,45rem);max-width:100%; }
   @media (min-width:1536px) { .home-hero-talk__media { --mosaic-columns:18; } }
   @media (min-width:1792px) { .home-hero-talk__media { --mosaic-columns:20; } }

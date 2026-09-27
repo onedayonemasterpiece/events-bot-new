@@ -13,15 +13,25 @@ try{
  for(const width of [1920,1440]){
   let expectedNav;
   const routeGeometry={};
-  for(const route of ['', 'segodnya/', 'zavtra/', 'vyhodnye/', 'vystavki/', 'festivali/']){
+  for(const route of ['', 'segodnya/', 'zavtra/', 'vyhodnye/', 'populyarnoe/', 'vystavki/', 'festivali/']){
    const page=await browser.newPage({viewport:{width,height:1080}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
    assert.equal((await page.goto(base+'/'+route,{waitUntil:'domcontentloaded'})).status(),200);
    await page.waitForTimeout(650);
    const nav=await box(page,'.site-nav'),link=await box(page,'.site-nav a');
-   assert.equal(nav.y,20);assert.equal(nav.height,56);assert.equal(nav.radius,'20px');assert.equal(link.radius,'14px');assert.equal(link.height,44);
-   expectedNav??={font:link.font,height:nav.height,radius:nav.radius};assert.deepEqual({font:link.font,height:nav.height,radius:nav.radius},expectedNav);
-   await page.locator('.site-nav a').first().hover();assert.equal((await box(page,'.site-nav a')).radius,'14px');
    let homeBrandTop=null;
+   if(!route){
+    assert.equal(await page.locator('.site-nav').isVisible(),false,'Home must not float navigation over Hero at first paint');
+    assert.equal(await page.locator('body').getAttribute('data-home-nav-docked'),'false');
+    assert.equal(await page.locator('[data-home-nav-origin]').isVisible(),true);
+    assert.equal(await page.locator('[data-home-nav-origin]').getAttribute('data-ds-version'),'3');
+   }else{
+    assert.equal(nav.y,20);assert.equal(nav.height,56);assert.equal(nav.radius,'20px');assert.equal(link.radius,'14px');assert.equal(link.height,44);
+    expectedNav??={font:link.font,height:nav.height,radius:nav.radius};assert.deepEqual({font:link.font,height:nav.height,radius:nav.radius},expectedNav);
+    await page.locator('.site-nav a').first().hover();assert.equal((await box(page,'.site-nav a')).radius,'14px');
+   }
+   const navLabels=await page.locator('.site-nav > a').allTextContents();
+   const weekendIndex=navLabels.findIndex(label=>label.trim()==='Выходные'),freeIndex=navLabels.findIndex(label=>label.trim()==='Бесплатно');
+   assert.ok(weekendIndex>=0&&freeIndex===weekendIndex+1,'desktop nav order '+navLabels.join(' | '));
    if(!route){
     assert.equal(await page.getByRole('button',{name:'Пауза',exact:true}).count(),0);
     for(const scene of await page.locator('[data-home-hero-scene]').all())assert.equal(await scene.locator('.home-hero-talk__cursor').count(),1);
@@ -35,8 +45,16 @@ try{
     const gap=await page.evaluate(()=>{const end=document.querySelector('[data-hero-talk-page-end]').getBoundingClientRect(),main=document.querySelector('main').getBoundingClientRect();return main.bottom-end.bottom;});assert.ok(gap<10,`page-end trailing gap ${gap}`);
    }
    if(route==='vyhodnye/'){
-    const heads=await page.locator('.ke-weekend-day__head').evaluateAll(es=>es.map(e=>({bg:getComputedStyle(e).backgroundColor,color:getComputedStyle(e.querySelector('.ke-weekend-day__label')).color,weight:getComputedStyle(e.querySelector('.ke-weekend-day__label')).fontWeight})));
-    assert.deepEqual(heads.map(h=>h.bg),['rgb(152, 64, 31)','rgb(15, 93, 87)']);assert.ok(heads.every(h=>h.color==='rgb(255, 255, 255)'&&h.weight==='500'));
+    const heads=await page.locator('.ke-weekend-day__head').evaluateAll(es=>es.map(e=>{const s=getComputedStyle(e),label=getComputedStyle(e.querySelector('.ke-weekend-day__label')),chip=getComputedStyle(e.querySelector('.ke-weekend-weekday-chip'));return{bg:s.backgroundColor,color:label.color,weight:label.fontWeight,radius:s.borderRadius,shadow:s.boxShadow,chipColor:chip.color};}));
+    assert.deepEqual(heads.map(h=>h.bg),['rgb(152, 64, 31)','rgb(15, 93, 87)']);
+    assert.ok(heads.every(h=>h.color==='rgb(255, 255, 255)'&&h.weight==='650'&&h.radius==='18px'&&h.shadow!=='none'&&h.chipColor==='rgb(255, 255, 255)'));
+   }
+   if(route==='populyarnoe/'){
+    const groups=page.locator('.ke-popular-desktop .ke-popular-behavior__group');
+    assert.ok(await groups.count()>=2);
+    const later=groups.nth(1);
+    assert.ok(parseFloat(await later.evaluate(e=>getComputedStyle(e).marginTop))>=16);
+    assert.equal(await later.locator('.ke-popular-behavior__head h2').evaluate(e=>getComputedStyle(e).fontWeight),'760');
    }
    if(route==='vystavki/'){
     assert.equal(await page.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(36, 33, 31)');
@@ -45,10 +63,15 @@ try{
    await page.screenshot({path:`${out}/${width}-${route.replaceAll('/','')||'home'}-top.png`});
    await page.evaluate(()=>scrollTo(0,1000));await page.waitForTimeout(550);
    if(!route){
+    await page.waitForFunction(()=>document.body.dataset.homeNavDocked==='true');
+    assert.equal(await page.locator('.site-nav').isVisible(),true);
+    assert.equal(Math.round((await box(page,'.site-nav')).y),20);
     const brandAfter=(await box(page,'.site-header__brand-tag')).y;
-    assert.ok(Math.abs(brandAfter-homeBrandTop)<=1,`home brand tag moved ${homeBrandTop} → ${brandAfter}`);
+    assert.ok(Math.abs(brandAfter-homeBrandTop)<=1,'home brand tag moved unexpectedly');
    }
    if(route==='segodnya/'){
+    assert.equal((await box(page,'.ke-listing-head h1')).fontWeight,'760');
+    assert.equal((await box(page,'.ke-listing-time-marker h2')).fontWeight,'760');
     const context=page.locator('[data-floating-page-context]');
     assert.equal(await context.isVisible(),false,'Today must not duplicate timeline time in a floating context');
     routeGeometry.todayCity=await box(page,'[data-listing-controls]');
@@ -68,7 +91,7 @@ try{
    const priorUrl=page.url();await dateLink.click();const calendar=page.locator('[data-calendar-sheet]');await calendar.waitFor({state:'visible'});assert.equal(page.url(),priorUrl);
    assert.equal(await calendar.getByRole('dialog').count(),1);await page.keyboard.press('Escape');assert.equal(await calendar.isVisible(),false);assert.equal(await dateLink.evaluate(e=>e===document.activeElement),true);
    await dateLink.click();
-   const date=calendar.locator('[data-calendar-month]:not([hidden]) a[href*="/date-"]').first();const href=await date.getAttribute('href');assert.ok(href.includes(new URL(base).pathname+'/date-'));await date.click();await page.waitForURL('**/date-*/');assert.equal((await page.request.get(page.url())).status(),200);
+   const date=calendar.locator('[data-calendar-month]:not([hidden]) a[href*="/date-"]').first();const href=await date.getAttribute('href');const rawBasePath=new URL(base).pathname;const basePath=rawBasePath.endsWith('/')?rawBasePath.slice(0,-1):rawBasePath;assert.ok(href.includes(basePath+'/date-'));await date.click();await page.waitForURL('**/date-*/');assert.equal((await page.request.get(page.url())).status(),200);
    assert.deepEqual(errors,[]);results.push({width,route:route||'home',navigation:true,calendarExactDate:href,errors});await page.close();
   }
   assert.ok(routeGeometry.todayCity&&routeGeometry.tomorrowCity);

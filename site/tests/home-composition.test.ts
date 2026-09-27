@@ -20,8 +20,11 @@ test('route shell policy selects only participants that belong to that archetype
 });
 test('desktop shell CSS keeps Home tag pinned and event detail navigation-only without restoring a header bar',()=>{
  const layout=source('../src/layouts/EventLayout.astro');
+ assert.match(layout,/data-ds-version="6"/u);
  assert.match(layout,/data-desktop-section-context=\{shellComposition\.desktopSectionContext\}/u);
  assert.match(layout,/data-shell-composition="home-navigation-only"\] \.site-header__brand-tag \{[\s\S]{0,160}position:fixed;[\s\S]{0,160}top:0;/u);
+ assert.match(layout,/data-shell-composition="home-navigation-only"\] \.site-nav \{[\s\S]{0,260}visibility:hidden;[\s\S]{0,180}pointer-events:none!important/u);
+ assert.match(layout,/data-home-nav-docked="true"\] \.site-nav \{[\s\S]{0,180}visibility:visible;[\s\S]{0,180}pointer-events:auto!important/u);
  assert.match(layout,/data-shell-composition="event-navigation-only"\] \.site-header \{[\s\S]{0,220}height:0;[\s\S]{0,120}background:transparent;/u);
 });
 test('home removes upper floating participants before mount while retaining global navigation',()=>{
@@ -51,13 +54,13 @@ test('empty/stale Hero deck has useful generic scene while current photo/text mo
  }
  const current={...old,id:2,start_date:'2026-09-07',title:'Текущее событие'};
  const deck=buildHomeHeroTalkDeck([current],'2026-09-06','fixture');assert.equal(deck.length,1);assert.equal(deck[0].mode,'text-only');assert.equal(deck[0].event.id,2);
- const hero=source('../src/components/HomeHeroTalk.astro');assert.match(hero,/visibleScenes.length === 0/);assert.match(hero,/data-ds-version="5"/);assert.match(hero,/data-ds-variant="service-fallback"/);assert.match(hero,/data-home-hero-mosaic/);assert.match(hero,/column-gap:2px;row-gap:2px/);assert.match(hero,/vertical-align:-\.10em/);
+ const hero=source('../src/components/HomeHeroTalk.astro');assert.match(hero,/visibleScenes.length === 0/);assert.match(hero,/data-ds-version="6"/);assert.match(hero,/data-ds-variant="service-fallback"/);assert.match(hero,/data-home-hero-mosaic/);assert.match(hero,/column-gap:2px;row-gap:2px/);assert.match(hero,/--cursor-delay/);assert.match(hero,/home-hero-word-cursor/);assert.match(hero,/animation:home-hero-cursor 780ms step-end var\(--cursor-delay\) infinite/);assert.match(hero,/vertical-align:-\.10em/);
 });
 test('home assembly has five ordered owners, no conversation widget or local card fork',()=>{
  const page=source('../src/pages/index.astro');let prior=-1;
  for(const tag of ['HomeHeroTalk','HomeSearchEntry','HomeQuickNav','HomeColdStartFeed','HeroTalkPageEnd']){const index=page.indexOf(`<${tag} `);const actual=index>=0?index:page.indexOf(`<${tag} />`);assert.ok(actual>prior,tag);prior=actual;}
  assert.doesNotMatch(page,/<ConversationalSearch|<EventCard|position:\s*(sticky|fixed)/);
- const nav=source('../src/components/HomeQuickNav.astro');assert.match(nav,/getCollectionNavigationEntries/);assert.match(nav,/withBase\(item.href\)/);assert.match(nav,/<Button variant="secondary" size="default"/);assert.doesNotMatch(nav,/sticky|note:|position:fixed/);
+ const nav=source('../src/components/HomeQuickNav.astro');assert.match(nav,/getCollectionNavigationEntries/);assert.match(nav,/homeNavDocked/);assert.match(nav,/withBase\(item.href\)/);assert.match(nav,/<Button variant="secondary" size="default"/);assert.doesNotMatch(nav,/position:fixed/);
  const end=source('../src/components/HeroTalkPageEnd.astro');assert.match(end,/withBase\(message.action.path\)/);assert.doesNotMatch(end,/StandardOnboarding|fixed|sticky|<EventCard/);
 });
 
