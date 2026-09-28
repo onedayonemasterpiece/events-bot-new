@@ -489,6 +489,8 @@ def test_tg_event_utility_hashtags_ignore_conflicting_description():
 async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
     import google_ai
 
+    monkeypatch.setenv("MONITORING_TEXT_RESERVE_MODELS", "gemini-3.6-flash,gemini-2.5-flash")
+
     source = (
         "Собранное сырье будет направлено на перерабатывающее предприятие, "
         "где из шин изготовят новые полезные продукты. От одного физического "

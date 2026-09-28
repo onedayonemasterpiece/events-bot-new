@@ -548,3 +548,10 @@ cap. The server notification sink coalesces identical kind/severity/consumer/mod
 code/recipient alerts for ten minutes across client instances; the next alert
 includes the repeat count. Full runtime failure logs remain. This is process-local
 suppression, not a cross-worker incident store.
+
+After the September 28 quota observation, public-copy generation is excluded
+from emergency monitoring reserves: its backlog keeps the ordinary Lite sibling
+chain and existing bounded 4o fallback. Production reserve order is temporarily
+3.6 -> 2.5 because the two compatible 2.5 projects reached their local 20 RPD
+caps. A local admission denial is not a Google 429 or evidence of a blocked key.
+No provider quotas or local caps were raised.

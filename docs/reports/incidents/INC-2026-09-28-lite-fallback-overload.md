@@ -242,3 +242,21 @@ Reconcile its exact remaining locks before finishing catch-up. No VK authorizati
 errors were found in the available log window since 16:00 UTC; VK credentials
 were not changed. Additional Fly-generated `depot-key3905902939` retained with
 0600 permissions; never publish the artifact directory wholesale.
+
+
+### Quota protection correction
+
+The initial emergency scope included tg_event_publish. Its old backlog consumed
+reserve capacity: local 2.5 counters reached 20 on both compatible projects.
+The observed rpm/rpd notifications are pre-send shared-limiter admission denials,
+not evidence of Google key blocking. No limits were raised or bypassed. At
+17:20 UTC, 39 due/soon public-copy jobs were delayed until 17:50:15 with their
+payload/state/attempt history preserved; no public-copy job was in flight.
+Stop additional manual replays. Correction excludes public copy from emergency
+routing and prefers still-admitted 3.6 for monitoring, preserving quota caps.
+
+Canary 9882: success, one created event 9402 and one confirmed non-event.
+Poster replay 9883: one created event 9403, one confirmed non-event, one remaining
+prose_location failure (59653). Neither run left locks. Public jobs are also
+blocked by the independently confirmed CDN TLS mismatch and storage PUT 403;
+see INC-2026-09-27-static-cdn-tls-regression. These are not VK-token failures.

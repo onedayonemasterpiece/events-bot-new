@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Protect scarce emergency monitoring quota from the public-copy backlog;
+  keep publication on its normal Lite chain and prefer the still-admitted 3.6
+  projects for monitoring after local 2.5 daily caps are reached.
 - Include post-create topic classification in emergency monitoring routing and
   coalesce identical LLM operator alerts across clients for ten minutes, keeping
   distinct failures, severity changes, repeat counts and full runtime logs.
