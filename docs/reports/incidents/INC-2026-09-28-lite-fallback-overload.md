@@ -39,10 +39,14 @@ All times below are UTC (the pasted Telegram display is UTC+2).
   Successes interleaved: 29 on 3.1 Lite and 4 on Gemma. No successful 3.5 call
   appears in this sample. These are physical calls, not unique lost events.
 
-Retained, payload-free evidence and test outputs:
+Retained evidence and test outputs:
 `/home/dev/artifacts/events-bot-new/20260928T134855Z-lite-fallback-20260928/`.
+The retained directory also contains Fly/Depot-generated temporary build
+certificate material, including `depot-key4000317115`; these files are sensitive
+and restricted to mode 0600. Do not share the whole directory as a public bundle.
 Live source: machine `148eddde9b5778`, `/data/runtime_logs/events-bot.log`.
-The mirror was enabled with rotated files present. No production data changed.
+The mirror was enabled with rotated files present. Initial investigation was
+read-only; the authorized compensating replay below uses the normal import path.
 
 ## Root cause and contributing factors
 
@@ -71,7 +75,7 @@ The library partner message about no eligible events is a separate selection
 outcome. This investigation does not establish its cause or equate it with
 Google overload. The prior VK publisher-token incident is also distinct.
 
-## Corrective changes prepared
+## Corrective changes delivered
 
 - Opt-in text-only Lite sibling chain in both directions for server parsing,
   Telegram hooks and Smart Update. No global change to Search/Live/tool routing.
@@ -115,15 +119,85 @@ Google quota ledger and generated remote gateway packages.
   publication file: 95 passed, 11 failed). They involve dated event/promo
   fixtures and typed rich-message fixtures, not the changed hook route.
 - Provider audit passed before changes; final audit recorded with the patch.
-- No merge, production deploy, live provider probe or public catch-up performed.
-  This record remains open; a prepared/tested patch is not outage closure.
+- PR #697 merged to `main`: `e1af8aaeeaf6990d2a63e0a6e8fe57304967de0d`.
+  All required PR checks passed. Manual `scripts/deploy_fly_main.sh --remote-only`
+  completed from that clean, exact-main checkout.
+- Fly image: `deployment-01M3M8SJ6K0QSGCB8XY5RX6PVV`; machine
+  `148eddde9b5778`, version 2108, started at 15:09:16 UTC. Live release marker
+  matches the merge SHA. Health: ready=true, DB=ok, issues=[], workers healthy.
+- Real source parsing and Telegram publication both attempted 3.1 Lite → 3.5
+  Lite after release. Separate per-model request IDs and shared logical ID are
+  visible in logs. Both endpoints still returned 503 for some requests.
+- Supabase ledger readback confirms distinct model rows finalized
+  `failed_provider`, plus successful 3.1 parsing finalized `succeeded` with
+  actual usage. No new negative-TPM/finalize error appeared in the sampled
+  post-release window. At 15:27:18 UTC, a real 3.5 → 3.1 fallback succeeded:
+  initial `028dabfe-e76a-4af6-b2f9-df7b16c0b0b5` finalized `failed_provider`
+  under 3.5; fallback `70665cc4-5839-41e6-a9cc-6bd235cd4752` finalized
+  `succeeded`, 7038 tokens, under 3.1. This verifies cross-model accounting.
+- Compensating replay: `ops_run=9870`, stable run ID
+  `INC-2026-09-28-lite-fallback-recovery-9860`, started 15:11:17 UTC. It targets
+  only the 20 failed carriers from original run 9860 (`auto:1790602200`). The
+  standard import/Smart Update path is retained; guards exclude changed rows
+  and prior successes. Source packets, cached parses and existing event links
+  remain intact. No blanket queue reset or permanent terminal retry was added.
+- The SSH-attached replay process disappeared after the local SSH command
+  exited 143. Remote process absence was verified. At 15:42:04, run 9870 was
+  marked `error`, and only its orphan locked row 59651 was terminalized with
+  `RECOVERY_PROCESS_INTERRUPTED`; cached parses and existing links were kept.
+  Eleven completed rows were not replayed. Changed-state guards skipped 59643
+  and 59678, which were already pending before selection reached them.
+- At 15:42:13, detached remainder run 9873 started with stable run ID
+  `INC-2026-09-28-lite-fallback-recovery-9860-remainder`, selecting only
+  59651, 59652, 59653, 59659, 59685, 59691 and 59697. It uses the same normal
+  import path and per-row expected-state guards, independently of the SSH
+  connection. Process stdout is discarded; runtime mirror and ops_run retain
+  outcomes. First-run reconciliation evidence is in `remainder-launch.txt`.
+- Remainder run 9873 finished at 15:48:54 UTC, status `partial`, 7 terminal
+  rows (1 confirmed no-event, 6 technical failures), no created/updated events.
+  Combined replay: 18 of the original 20 failed carriers processed, comprising
+  3 confirmed no-events, 3 product exclusions and 12 failures. Two changed-state
+  rows (59643, 59678) remained pending and were not forcibly reclaimed. All
+  current selected rows have clear leases and none is left locked.
+- Remaining failures: 6 source-parse technical errors, 3 verification errors,
+  and 3 Smart Update identity/occurrence/adjudicator failures. Both Lite models
+  still returned 503 in the final sample; this is not full availability recovery.
+- Existing event mappings remain 59678 → 9399 and 59698 → 9400. The replay
+  created no event mappings or duplicate events. Original source packets and
+  previous typed outcomes remain available.
+- Final audit initially failed the assumption that all five nonselected
+  successful rows would retain their queue statuses: 59623 and 59688 changed
+  from `confirmed_no_event` to `pending` with packet links reverting revision
+  2 → revision 1. Their old completed packets remain intact. Another revision
+  rollback affected skipped 59643; 59678 instead acquired a newer attachment
+  revision. Evidence: `packet-revisions.json`, `recovery-final.json`.
+  `vk_intake` upsert requeues whenever packet ID changes, including an older
+  revision; the actor producing these refreshes was not established. Do not
+  attribute these changes to the exact replay selector, which excluded them,
+  or claim the whole queue was restored. Revision ordering is an open follow-up.
+- Four ordinary Telegram publication jobs ended in error after release in the
+  sampled window; normal retries remain scheduled. Health remained ready, but
+  publication recovery is incomplete.
+- This record remains open: code routing/accounting fixes are delivered and
+  live-verified; provider capacity, remaining technical carriers and source
+  revision ordering still require follow-up.
 
 ## Follow-up actions
 
-- Release the reviewed patch and verify organic provider outcomes and per-model
-  ledger finalization. Do not repeatedly probe an overloaded provider.
+- Watch organic provider recovery; cross-model finalization is verified.
+  Do not repeatedly probe an overloaded provider.
 - Audit historical affected quota attempts before any reconciliation; do not
   blindly clamp negative counters or reset quota.
-- Reconcile exact failed carriers once capacity recovers, under the existing
-  terminal policy. Public publication reruns require explicit operator scope.
+- Exact authorized replay completed with partial recovery. Reconcile the 12
+  remaining failures after capacity/evidence problems are resolved; do not turn
+  them into non-events or add an unbounded retry loop. Existing publication
+  outbox retries retain their normal schedule.
 - Consider shared/batch-scoped incident deduplication separately.
+- Use detached, persisted operation tracking for long production replays;
+  do not tie their lifetime to a diagnostic SSH session.
+- Separately reconcile observed poster upload `403 AccessDenied` and source
+  evidence/identity-review failures. These are not fixed by model switching.
+
+- Prevent older source revisions from resetting newer terminal queue decisions;
+  retain both source versions and add a revision-order regression check before
+  changing this separate ingestion contract.
