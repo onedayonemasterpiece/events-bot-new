@@ -329,7 +329,10 @@ rebuild запускаются только для typed accepted `CREATED`, `ME
 
 `wall.getById` network/VK API failure допускает максимум два (configurable до
 трёх) коротких transport attempts внутри текущего row invocation. Primary LLM
-provider сохраняет собственный bounded physical-attempt contract; одинаковый
+provider сохраняет собственный bounded physical-attempt contract: для text-only
+Gemini Lite допускаются две gateway attempts (3.1 → 3.5 или 3.5 → 3.1),
+для Gemma остаётся одна. Общий row timeout продолжает ограничивать обработку;
+одинаковый
 complete evidence не запускает semantic background retry. После исчерпания
 текущего invocation quota/RPM/TPM/RPD/429, OCR/provider/schema/persist error,
 timeout или orphaned claim закрывают row как `FAILED_TECHNICAL`, очищают lease и

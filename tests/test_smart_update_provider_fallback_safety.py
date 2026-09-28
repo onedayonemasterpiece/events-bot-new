@@ -32,13 +32,24 @@ def test_legacy_create_bundle_has_no_unreviewed_4o_fallback() -> None:
     assert su._smart_update_4o_fallback_enabled("create_bundle_grounding") is False
 
 
-def test_facts_stages_use_bounded_lite_then_gemma_model_fallback() -> None:
+def test_facts_stages_use_bounded_lite_then_gemma_model_fallback(monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_AI_FALLBACK_MODELS", raising=False)
     assert su._smart_update_fallback_models(
         "create_bundle_grounding", su.SMART_UPDATE_FACTS_MODEL
     ) == ["gemini-3.5-flash-lite", "gemma-4-31b-it"]
     assert su._smart_update_fallback_models(
         "split_description_writer", su.SMART_UPDATE_WRITER_MODEL
-    ) is None
+    ) == ["gemini-3.5-flash-lite"]
+
+
+def test_smart_update_reverse_lite_and_legacy_gemma_chain(monkeypatch):
+    monkeypatch.setenv("GOOGLE_AI_FALLBACK_MODELS", "gemini-3.1-flash-lite,gemma-4-31b-it")
+    assert su._smart_update_fallback_models("match", "gemma-4-31b-it") == [
+        "gemini-3.1-flash-lite", "gemini-3.5-flash-lite",
+    ]
+    assert su._smart_update_fallback_models("split_description_writer", "gemini-3.5-flash-lite") == [
+        "gemini-3.1-flash-lite", "gemma-4-31b-it",
+    ]
 
 
 def test_create_prompts_have_no_incident_specific_proper_nouns() -> None:

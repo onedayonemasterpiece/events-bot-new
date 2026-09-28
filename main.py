@@ -10026,7 +10026,7 @@ def _build_prompt(
 
 
 def _configure_event_parse_gemma_client(client: Any) -> Any:
-    """Apply the explicit one-send event-parse provider contract."""
+    """Disable hidden retries; each parse call supplies its bounded model chain."""
 
     client.max_retries = 1
     client.hard_single_provider_attempt = True
@@ -10059,8 +10059,8 @@ def _get_event_parse_gemma_client():
         incident_notifier=notify_llm_incident,
     )
     # Event parsing is already bounded by its row/wall-clock orchestration.
-    # Keep provider sends explicit: no hidden application or SDK retries inside
-    # one parse attempt. A failed row can be retried deliberately by the queue.
+    # Keep provider sends explicit: no hidden same-model or SDK retries.
+    # Lite sibling failover is supplied per call within the existing row budget.
     return _configure_event_parse_gemma_client(client)
 
 
@@ -10324,9 +10324,11 @@ async def _parse_event_via_gemma(
             model,
             str(getattr(client, "consumer", "event_parse") or "event_parse"),
         )
-        # One physical attempt per durable carrier lease.  Quota errors bubble
-        # immediately to the owning queue, which releases the lease and stores
-        # provider retry metadata instead of sleeping on the row.
+        from google_ai.client import lite_text_model_chain
+
+        # Text-only Lite calls may try their sibling once within this invocation.
+        # Other models retain the single-send contract; no background retry.
+        model_chain = lite_text_model_chain(model)
         return await client.generate_content_async(
             model=model,
             prompt=prompt_text,
@@ -10335,8 +10337,9 @@ async def _parse_event_via_gemma(
             use_provider_count_tokens=True,
             reservation_calibration=calibration,
             prompt_version=_EVENT_PARSE_PROMPT_VERSION,
-            max_provider_attempts=1,
-            allow_model_fallback=False,
+            max_provider_attempts=len(model_chain),
+            allow_model_fallback=len(model_chain) > 1,
+            fallback_models=model_chain[1:],
         )
 
     if not source_channel:
@@ -10433,7 +10436,7 @@ async def _parse_event_via_gemma(
     try:
         await log_token_usage(
             BOT_CODE,
-            model,
+            getattr(usage, "model", None) or model,
             {
                 "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
                 "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),

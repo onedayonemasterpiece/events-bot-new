@@ -606,3 +606,28 @@ async def test_geo_region_llm_fallback_defaults_to_gemma4(monkeypatch):
 
     assert captured["model"] == "gemma-4-31b-it"
     assert decision.allowed is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("primary,other", [
+    ("gemini-3.1-flash-lite", "gemini-3.5-flash-lite"),
+    ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite"),
+])
+async def test_event_parse_lite_allows_only_one_sibling_attempt(monkeypatch, primary, other):
+    calls = []
+
+    class FakeClient:
+        async def generate_content_async(self, **kwargs):
+            calls.append(kwargs)
+            return "[]", SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2)
+
+    async def noop_log(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
+    monkeypatch.setattr(main, "log_token_usage", noop_log)
+    await main._parse_event_via_gemma("Нет событий.", gemma_model=primary)
+    assert calls[0]["model"] == primary
+    assert calls[0]["fallback_models"] == [other]
+    assert calls[0]["max_provider_attempts"] == 2
+    assert calls[0]["allow_model_fallback"] is True

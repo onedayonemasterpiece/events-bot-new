@@ -6399,6 +6399,7 @@ async def build_tg_event_hook_text(
     )
     try:
         from google_ai import GoogleAIClient, SecretsProvider
+        from google_ai.client import lite_text_model_chain
         from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 
         client = GoogleAIClient(
@@ -6411,7 +6412,7 @@ async def build_tg_event_hook_text(
         )
         # This is a public-copy writer, not an event-processing stage. Project
         # policy requires Gemini Lite first and forbids a Gemma fallback.
-        client.fallback_models = []
+        client.fallback_models = lite_text_model_chain(TG_EVENT_REWRITE_MODEL)[1:]
         client.max_retries = 1
         raw, _usage = await client.generate_content_async(
             model=TG_EVENT_REWRITE_MODEL,
@@ -6425,6 +6426,7 @@ async def build_tg_event_hook_text(
                 "response_json_schema": response_schema,
             },
             max_output_tokens=max_output_tokens,
+            max_provider_attempts=2,
         )
     except Exception:
         logging.warning(

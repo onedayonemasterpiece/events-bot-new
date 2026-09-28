@@ -48,6 +48,23 @@ _NORMAL_POOL_ENV_CANDIDATE_CACHE: dict[tuple[str, ...], tuple[str, ...] | None] 
 _NORMAL_POOL_CURSOR: dict[tuple[str, ...], int] = {}
 
 
+def lite_text_model_chain(model: str, fallbacks: Sequence[str] = ()) -> list[str]:
+    """Opt-in sibling routing for text consumers without provider tools."""
+    siblings = {
+        "gemini-3.1-flash-lite": "gemini-3.5-flash-lite",
+        "gemini-3.5-flash-lite": "gemini-3.1-flash-lite",
+    }
+    chain: list[str] = []
+    seen: set[str] = set()
+    for candidate in (model, *fallbacks):
+        normalized = candidate.strip().removeprefix("models/")
+        for item in (normalized, siblings.get(normalized, "")):
+            if item and item not in seen:
+                seen.add(item)
+                chain.append(item)
+    return chain
+
+
 @dataclass
 class ReserveResult:
     """Result of a successful rate limit reservation."""
@@ -210,6 +227,7 @@ class RequestContext:
     quota_scope: Optional[str] = None
     input_count_source: str = "heuristic_fallback"
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    logical_request_uid: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1167,6 +1185,7 @@ class GoogleAIClient:
             payload.update(
                 {
                     "request_uid": ctx.request_uid,
+                    "logical_request_uid": ctx.logical_request_uid or ctx.request_uid,
                     "model": ctx.model,
                     "requested_model": ctx.requested_model or ctx.model,
                     "provider_model": ctx.provider_model,
@@ -1620,7 +1639,10 @@ class GoogleAIClient:
                 model_name or limit_model
             )
             ctx = RequestContext(
-                request_uid=request_uid,
+                # The ledger's request.model is immutable. Reusing its UID for
+                # another model charges/finalizes the original model's bucket.
+                request_uid=request_uid if model_index == 0 else str(uuid.uuid4()),
+                logical_request_uid=request_uid,
                 consumer=self.consumer,
                 account_name=self.account_name,
                 model=limit_model,
@@ -3496,6 +3518,7 @@ class GoogleAIClient:
             "ts": datetime.now(timezone.utc).isoformat(),
             "event": event,
             "request_uid": ctx.request_uid,
+            "logical_request_uid": ctx.logical_request_uid or ctx.request_uid,
             "attempt_no": attempt_no,
             "consumer": ctx.consumer,
             "account_name": ctx.account_name,

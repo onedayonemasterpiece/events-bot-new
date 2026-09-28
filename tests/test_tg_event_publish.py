@@ -516,7 +516,8 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
             assert kwargs["generation_config"]["response_mime_type"] == "application/json"
             assert "response_json_schema" in kwargs["generation_config"]
             assert "response_schema" not in kwargs["generation_config"]
-            assert self.fallback_models == []
+            assert self.fallback_models == ["gemini-3.5-flash-lite"]
+            assert kwargs["max_provider_attempts"] == 2
             assert self.max_retries == 1
             return (
                 json.dumps(
@@ -649,7 +650,8 @@ async def test_tg_event_hook_lite_failure_uses_strict_budgeted_4o(
 
         async def generate_content_async(self, **kwargs):
             assert kwargs["model"] == "gemini-3.1-flash-lite"
-            assert self.fallback_models == []
+            assert self.fallback_models == ["gemini-3.5-flash-lite"]
+            assert kwargs["max_provider_attempts"] == 2
             assert self.max_retries == 1
             raise RuntimeError("lite unavailable")
 

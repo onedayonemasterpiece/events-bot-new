@@ -324,13 +324,14 @@ def _resolve_smart_update_model(label: str | None) -> str:
 
 
 def _smart_update_fallback_models(label: str | None, model: str) -> list[str] | None:
-    """Use the spare stable Lite lane only for facts-style Smart Update calls."""
+    """Try both Lite text lanes, retaining the stage's existing fallback tail."""
+    from google_ai.client import lite_text_model_chain
 
-    if model != SMART_UPDATE_FACTS_MODEL:
-        return None
-    if not _is_smart_update_facts_stage(label):
-        return None
-    return list(SMART_UPDATE_FACTS_FALLBACK_MODELS)
+    if model == SMART_UPDATE_FACTS_MODEL and _is_smart_update_facts_stage(label):
+        fallbacks = SMART_UPDATE_FACTS_FALLBACK_MODELS
+    else:
+        fallbacks = (os.getenv("GOOGLE_AI_FALLBACK_MODELS") or "").split(",")
+    return lite_text_model_chain(model, fallbacks)[1:]
 SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
     os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA", "0") or ""
 ).strip().lower() in {"1", "true", "yes", "on"}
