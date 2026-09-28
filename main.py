@@ -10775,9 +10775,10 @@ async def parse_event_via_llm(
 ) -> ParsedEvents:
     """Parse raw VK/TG text into structured event drafts via an LLM.
 
-    Default backend is Gemma. Set `EVENT_PARSE_LLM=4o` to force the legacy OpenAI parser.
+    Default backend is Gemma. `EVENT_PARSE_LLM=4o` selects OpenAI globally;
+    a caller may select it for one import with `gemma_model="4o"`.
     """
-    backend_raw = os.getenv("EVENT_PARSE_LLM")
+    backend_raw = os.getenv("EVENT_PARSE_LLM") or extra.get("gemma_model")
     backend = (backend_raw or "").strip().lower()
     use_4o = backend in {"4o", "openai", "gpt-4o", "chatgpt"}
     semantic_source_text = str(extra.get("semantic_source_text") or text or "")

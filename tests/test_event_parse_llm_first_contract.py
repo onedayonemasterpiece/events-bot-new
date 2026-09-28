@@ -89,6 +89,28 @@ async def test_t38_normal_carrier_has_exactly_one_primary_call(monkeypatch):
     assert result.disposition is SourceDisposition.EVENTS_FOUND
 
 
+@pytest.mark.asyncio
+async def test_caller_scoped_4o_parse_route_leaves_global_default_unchanged(monkeypatch):
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    called = []
+
+    async def fake_4o(*args, **kwargs):
+        called.append("4o")
+        return _decision([{"title": "Концерт «От фолка до джаза»", "date": "2026-10-24"}])
+
+    async def fake_gemma(*args, **kwargs):
+        called.append("gemma")
+        return _decision([{"title": "Лекция «Архитектура города»", "date": "2026-10-25"}])
+
+    monkeypatch.setattr(main, "_parse_event_via_4o", fake_4o)
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+
+    await main.parse_event_via_llm("Концерт 24 октября", gemma_model="4o")
+    await main.parse_event_via_llm("Лекция 25 октября")
+
+    assert called == ["4o", "gemma"]
+
+
 @pytest.mark.parametrize(
     ("source_text", "ocr", "primary", "expected_reason"),
     [

@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Route only scheduled VK auto-import parsing through the already verified
+  GPT-4o parser while Google models are overloaded, and cap each of the five
+  daily batches at 12 posts under the existing token budget.
 - Accept an empty, unused `no_event_reason` from structured LLM output when an
   event was found; still require a closed reason before excluding a source.
 - Protect scarce emergency monitoring quota from the public-copy backlog;

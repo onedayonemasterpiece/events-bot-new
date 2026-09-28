@@ -197,8 +197,10 @@ app = "events-bot-new-wngqia"
   ENABLE_VK_AUTO_IMPORT = "1"
   VK_AUTO_IMPORT_TIMES_LOCAL = "06:15,10:15,12:00,15:30,18:30"
   VK_AUTO_IMPORT_TZ = "Europe/Kaliningrad"
-  VK_AUTO_IMPORT_LIMIT = "25"
-  VK_AUTO_IMPORT_PARSE_GEMMA_MODEL = "models/gemma-4-31b-it"
+  # Incident route: five daily batches of at most 12 VK posts through the
+  # working parser, within the existing 4o daily token guard.
+  VK_AUTO_IMPORT_LIMIT = "12"
+  VK_AUTO_IMPORT_PARSE_GEMMA_MODEL = "4o"
   VK_AUTO_IMPORT_PREFETCH = "0"
   VK_AUTO_IMPORT_MAX_PHOTOS = "4"
   VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS = "10"
