@@ -65,6 +65,28 @@ def lite_text_model_chain(model: str, fallbacks: Sequence[str] = ()) -> list[str
     return chain
 
 
+def monitoring_text_model_chain(model: str, fallbacks: Sequence[str] = ()) -> list[str]:
+    """Operator-enabled emergency route for the text-only event pipeline."""
+    ordinary = lite_text_model_chain(model, fallbacks)
+    reserves = [m.strip() for m in os.getenv("MONITORING_TEXT_RESERVE_MODELS", "").split(",") if m.strip()]
+    allowed = {"gemini-2.5-flash", "gemini-3.6-flash"}
+    if any(m not in allowed for m in reserves):
+        raise ValueError("Unsupported MONITORING_TEXT_RESERVE_MODELS entry")
+    primary = model.strip().removeprefix("models/")
+    eligible = primary in allowed | {"gemini-3.1-flash-lite", "gemini-3.5-flash-lite"} or primary.startswith("gemma-")
+    if not reserves or not eligible:
+        return ordinary
+    return list(dict.fromkeys([*reserves, *ordinary]))
+
+
+def monitoring_text_primary(model: str) -> str:
+    return monitoring_text_model_chain(model)[0]
+
+
+def monitoring_attempt_cap() -> int | None:
+    return 2 if os.getenv("MONITORING_TEXT_RESERVE_MODELS", "").strip() else None
+
+
 @dataclass
 class ReserveResult:
     """Result of a successful rate limit reservation."""
@@ -2239,6 +2261,11 @@ class GoogleAIClient:
         candidate_key_ids: Optional[list[str]],
     ) -> ReserveResult:
         """Reserve rate limit slot via Supabase RPC."""
+        # Model-specific project routing requires the shared registry and ledger.
+        # A direct local key cannot preserve this scope, even during RPC outages.
+        allow_local_fallback = self.allow_local_limiter_fallback and not os.getenv(
+            "GOOGLE_AI_MODEL_KEY_ENVS_JSON", ""
+        ).strip()
         if not self.supabase:
             if self.reserve_key_envs:
                 logger.error(
@@ -2254,7 +2281,7 @@ class GoogleAIClient:
             # use the same process-local fail-fast limiter as the RPC-missing
             # fallback unless a local caller explicitly disables it.
             logger.warning("No Supabase client, using local rate limit reservation")
-            if self.allow_local_limiter_fallback:
+            if allow_local_fallback:
                 return await self._local_reserve(
                     ctx,
                     attempt_no=attempt_no,
@@ -2271,7 +2298,7 @@ class GoogleAIClient:
                 else 0.0
             )
             if age < self.reserve_rpc_recheck_seconds:
-                if self.allow_local_limiter_fallback:
+                if allow_local_fallback:
                     return await self._local_reserve(
                         ctx,
                         attempt_no=attempt_no,
@@ -2289,7 +2316,7 @@ class GoogleAIClient:
             )
 
         if self._reserve_rpc_missing:
-            if self.allow_local_limiter_fallback:
+            if allow_local_fallback:
                 return await self._local_reserve(
                     ctx,
                     attempt_no=attempt_no,
@@ -2312,6 +2339,29 @@ class GoogleAIClient:
             scoped_candidate_key_ids = self._resolve_default_env_candidate_key_ids(
                 consumer=ctx.consumer,
             )
+        # Model access can differ by Cloud project (e.g. legacy 2.5 access).
+        # Intersect the configured model pool with the caller's existing scope;
+        # never widen credentials, enable local accounting or borrow overflow.
+        raw_model_pools = os.getenv("GOOGLE_AI_MODEL_KEY_ENVS_JSON", "").strip()
+        if raw_model_pools:
+            try:
+                pools = json.loads(raw_model_pools)
+                if not isinstance(pools, dict):
+                    raise ValueError("model pools must be an object")
+                envs = pools.get(ctx.model)
+                if envs is not None:
+                    if not isinstance(envs, list) or not envs or not all(isinstance(e, str) and e.strip() for e in envs):
+                        raise ValueError("model pool must contain environment names")
+                    rows = self.supabase.table("google_ai_api_keys").select("id").eq("is_active", True).in_("env_var_name", envs).execute().data or []
+                    allowed_ids = {str(row["id"]) for row in rows}
+                    scoped_candidate_key_ids = [key for key in (scoped_candidate_key_ids or []) if key in allowed_ids]
+                    caller_candidate_scope_explicit = True
+                    if not scoped_candidate_key_ids:
+                        return ReserveResult(ok=False, blocked_reason="model_pool_no_keys")
+                    self._log_event("google_ai.model_pool_selected", ctx, candidates=len(scoped_candidate_key_ids))
+            except Exception as exc:
+                logger.warning("google_ai.model_pool_invalid model=%s error_type=%s", ctx.model, type(exc).__name__)
+                return ReserveResult(ok=False, blocked_reason="model_pool_invalid")
         if scoped_candidate_key_ids == []:
             logger.warning(
                 "google_ai.reserve_default_env_candidates_missing_fallback "
@@ -2319,7 +2369,7 @@ class GoogleAIClient:
                 ctx.consumer,
                 self.default_env_var_name,
             )
-            if self.allow_local_limiter_fallback:
+            if allow_local_fallback:
                 return await self._local_reserve(
                     ctx,
                     attempt_no=attempt_no,
@@ -2460,7 +2510,7 @@ class GoogleAIClient:
                     ),
                     details={"error": msg[:500]},
                 )
-                if self.allow_local_limiter_fallback:
+                if allow_local_fallback:
                     return await self._local_reserve(
                         ctx,
                         attempt_no=attempt_no,
@@ -2471,7 +2521,7 @@ class GoogleAIClient:
             if (
                 self.allow_reserve_fallback
                 and self.allow_local_limiter_on_reserve_error
-                and self.allow_local_limiter_fallback
+                and allow_local_fallback
             ):
                 msg = str(e)
                 logger.warning("Reserve RPC failed; using local limiter fallback. error=%s", msg)
@@ -2852,6 +2902,14 @@ class GoogleAIClient:
         # - For Gemma, "-it" is the tested interactive-tuned variant in this project.
         # - For Gemini, use the model name as-is (no "-it" suffix).
         _provider_model, model_name = self._resolve_provider_model(model)
+
+        if self.consumer in {"event_parse", "smart_update", "tg_event_publish"} and monitoring_attempt_cap():
+            thinking = {
+                "gemini-2.5-flash": {"thinking_budget": 0},
+                "gemini-3.6-flash": {"thinking_level": "minimal"},
+            }.get(self._normalize_rate_limit_model(model))
+            if thinking:
+                config.setdefault("thinking_config", thinking)
 
         # Hosted Gemma 4 thinking is enabled unless callers opt out through the
         # API. Most repository consumers are bounded extraction, validation,

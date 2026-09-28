@@ -2146,3 +2146,59 @@ def test_lite_text_chain_does_not_promote_unrelated_models():
     assert lite_text_model_chain("models/gemini-3.5-flash-lite") == [
         "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
     ]
+
+
+def test_monitoring_reserve_is_opt_in_and_does_not_reroute_pro(monkeypatch):
+    from google_ai.client import monitoring_text_model_chain
+    monkeypatch.delenv('MONITORING_TEXT_RESERVE_MODELS', raising=False)
+    assert monitoring_text_model_chain('gemma-4-31b-it') == ['gemma-4-31b-it']
+    monkeypatch.setenv('MONITORING_TEXT_RESERVE_MODELS', 'gemini-2.5-flash,gemini-3.6-flash')
+    assert monitoring_text_model_chain('gemini-3.1-flash-lite') == [
+        'gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite']
+    assert monitoring_text_model_chain('gemini-3.1-pro-preview') == ['gemini-3.1-pro-preview']
+    monkeypatch.setenv('MONITORING_TEXT_RESERVE_MODELS', 'gemini-unknown')
+    with pytest.raises(ValueError):
+        monitoring_text_model_chain('gemini-3.1-flash-lite')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('candidates,expected', [(['allowed', 'outside'], ['allowed']), (['outside'], [])])
+async def test_model_key_pool_only_intersects_caller_scope(monkeypatch, candidates, expected):
+    monkeypatch.setenv('GOOGLE_AI_MODEL_KEY_ENVS_JSON', '{"gemini-2.5-flash":["GOOGLE_API_KEY"]}')
+    monkeypatch.setenv('GOOGLE_AI_LOCAL_LIMITER_FALLBACK', '1')
+    supabase = _FakeSupabaseClient(data=[{'id': 'allowed'}])
+    client = GoogleAIClient(supabase_client=supabase)
+    ctx = RequestContext(request_uid='model-pool', consumer='event_parse', account_name=None,
+                         model='gemini-2.5-flash', reserved_tpm=100)
+    result = await client._reserve(ctx, attempt_no=1, candidate_key_ids=candidates)
+    if expected:
+        assert supabase.rpc_calls[0]['p_candidate_key_ids'] == expected
+    else:
+        assert not result.ok
+        assert result.blocked_reason == 'model_pool_no_keys'
+        assert supabase.rpc_calls == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_model_pool_fails_closed(monkeypatch):
+    monkeypatch.setenv('GOOGLE_AI_MODEL_KEY_ENVS_JSON', '{bad-json')
+    supabase = _FakeSupabaseClient()
+    client = GoogleAIClient(supabase_client=supabase)
+    ctx = RequestContext(request_uid='bad-pool', consumer='event_parse', account_name=None,
+                         model='gemini-2.5-flash', reserved_tpm=100)
+    result = await client._reserve(ctx, attempt_no=1, candidate_key_ids=['key'])
+    assert not result.ok and result.blocked_reason == 'model_pool_invalid'
+    assert not supabase.rpc_calls
+
+
+@pytest.mark.asyncio
+async def test_model_pool_cannot_use_cached_rpc_local_fallback(monkeypatch):
+    monkeypatch.setenv('GOOGLE_AI_MODEL_KEY_ENVS_JSON', '{"gemini-2.5-flash":["GOOGLE_API_KEY"]}')
+    client = GoogleAIClient(supabase_client=_FakeSupabaseClient())
+    client.allow_local_limiter_fallback = True
+    client._reserve_rpc_missing = True
+    client._reserve_rpc_missing_since = 0
+    ctx = RequestContext(request_uid='cached-pool', consumer='event_parse', account_name=None,
+                         model='gemini-2.5-flash', reserved_tpm=100)
+    result = await client._reserve(ctx, attempt_no=1, candidate_key_ids=['allowed'])
+    assert not result.ok and result.blocked_reason == 'reserve_rpc_missing'

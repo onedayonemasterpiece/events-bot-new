@@ -1069,3 +1069,23 @@ async def test_g4_split_create_bundle_uses_fact_ledger_fallback_when_writer_fail
     assert bundle["_split_create_warnings"] == ["writer_unavailable_fact_ledger_fallback"]
     assert "Цена: 1000" not in client.calls[1]["prompt"]
     assert "барельефы" in client.calls[1]["prompt"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('label', ['facts_extract', 'collection_candidate_adjudication', 'split_derived_fields'])
+async def test_emergency_reserve_covers_smart_update_stages(monkeypatch, label):
+    monkeypatch.setenv('MONITORING_TEXT_RESERVE_MODELS', 'gemini-2.5-flash,gemini-3.6-flash')
+    calls = []
+    class Client:
+        async def generate_content_async(self, **kwargs):
+            calls.append(kwargs)
+            return '{"ok":true}', None
+    monkeypatch.setattr(su, '_get_gemma_client', lambda: Client())
+    monkeypatch.setattr(su, 'SMART_UPDATE_GEMMA_NATIVE_SCHEMA', True)
+    monkeypatch.setattr(su, 'SMART_UPDATE_GEMMA_NATIVE_SCHEMA_STAGES', {label})
+    result = await su._ask_gemma_json_unbounded('check', {'type':'object','properties':{'ok':{'type':'boolean'}},'required':['ok']}, max_tokens=128, label=label)
+    assert result == {'ok': True}
+    assert calls[0]['model'] == 'gemini-2.5-flash'
+    assert calls[0]['max_provider_attempts'] == (1 if label == 'collection_candidate_adjudication' else 2)
+    if label != 'collection_candidate_adjudication':
+        assert calls[0]['fallback_models'][0] == 'gemini-3.6-flash'
