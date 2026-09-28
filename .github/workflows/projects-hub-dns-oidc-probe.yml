@@ -1,0 +1,75 @@
+name: Projects Hub DNS OIDC probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: region-talk-ydb-import
+    env:
+      YANDEX_WIF_OIDC_AUDIENCE: ${{ vars.YANDEX_WIF_OIDC_AUDIENCE }}
+      YANDEX_WIF_SERVICE_ACCOUNT_ID: ${{ vars.YANDEX_WIF_SERVICE_ACCOUNT_ID }}
+    steps:
+      - name: Exchange GitHub OIDC for short-lived Yandex IAM token
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ACTIONS_ID_TOKEN_REQUEST_URL:?GitHub OIDC request URL is required}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?GitHub OIDC request token is required}"
+          : "${YANDEX_WIF_OIDC_AUDIENCE:?YANDEX_WIF_OIDC_AUDIENCE is required}"
+          : "${YANDEX_WIF_SERVICE_ACCOUNT_ID:?YANDEX_WIF_SERVICE_ACCOUNT_ID is required}"
+
+          github_oidc="$({
+            curl --fail --silent --show-error               --header "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"               --get --data-urlencode "audience=${YANDEX_WIF_OIDC_AUDIENCE}"               "$ACTIONS_ID_TOKEN_REQUEST_URL"
+          } | jq --exit-status --raw-output '.value | strings | select(length > 100)')"
+
+          iam_response="$(curl --fail --silent --show-error             --request POST 'https://auth.yandex.cloud/oauth/token'             --header 'Content-Type: application/x-www-form-urlencoded'             --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange'             --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token'             --data-urlencode "audience=${YANDEX_WIF_SERVICE_ACCOUNT_ID}"             --data-urlencode "subject_token=${github_oidc}"             --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')"
+
+          iam_token="$(printf '%s' "$iam_response" | jq --exit-status --raw-output '.access_token | strings | select(length > 20)')"
+          echo "::add-mask::$iam_token"
+          echo "PROJECTS_HUB_DNS_IAM_TOKEN=$iam_token" >> "$GITHUB_ENV"
+
+      - name: Probe exact kenigevents.ru zone and Projects Hub record
+        shell: bash
+        run: |
+          set -euo pipefail
+          zone_id='dnsbhbtvj0l1lf8jpefb'
+          hostname='projects-hub.kenigevents.ru.'
+          edge_host='mcp-datahub.kenigevents.ru'
+
+          zone_json="$(curl --fail --silent --show-error             --header "Authorization: Bearer ${PROJECTS_HUB_DNS_IAM_TOKEN}"             "https://dns.api.cloud.yandex.net/dns/v1/zones/${zone_id}")"
+          test "$(printf '%s' "$zone_json" | jq -r '.zone')" = 'kenigevents.ru.'
+
+          edge_ip="$(getent ahostsv4 "$edge_host" | awk 'NR==1 {print $1}')"
+          printf '%s\n' "$edge_ip" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
+
+          status="$(curl --silent --show-error             --output "$RUNNER_TEMP/projects-hub-record.json"             --write-out '%{http_code}'             --get             --header "Authorization: Bearer ${PROJECTS_HUB_DNS_IAM_TOKEN}"             --data-urlencode "name=${hostname}"             --data-urlencode 'type=A'             "https://dns.api.cloud.yandex.net/dns/v1/zones/${zone_id}:getRecordSet")"
+
+          case "$status" in
+            200)
+              type="$(jq -r '.type' "$RUNNER_TEMP/projects-hub-record.json")"
+              name="$(jq -r '.name' "$RUNNER_TEMP/projects-hub-record.json")"
+              test "$type" = 'A'
+              test "$name" = "$hostname"
+              if jq -e --arg ip "$edge_ip" '.data | index($ip) != null' "$RUNNER_TEMP/projects-hub-record.json" >/dev/null; then
+                state='match'
+              else
+                state='conflict'
+              fi
+              ;;
+            404)
+              state='absent'
+              ;;
+            *)
+              echo "Unexpected Cloud DNS readback status: $status" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "PROJECTS_HUB_DNS_OIDC_PROBE_PASS record_state=$state edge_ipv4=$edge_ip"
