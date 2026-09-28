@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Accept an empty, unused `no_event_reason` from structured LLM output when an
+  event was found; still require a closed reason before excluding a source.
 - Protect scarce emergency monitoring quota from the public-copy backlog;
   keep publication on its normal Lite chain and prefer the still-admitted 3.6
   projects for monitoring after local 2.5 daily caps are reached.

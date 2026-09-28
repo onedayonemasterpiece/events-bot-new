@@ -65,6 +65,24 @@ def test_confirmed_giveaway_only_reason_is_closed_and_preserved():
     assert result.to_payload()["no_event_reason"] == "GIVEAWAY_ONLY"
 
 
+def test_empty_unused_no_event_reason_keeps_positive_verdict():
+    result = decision_from_provider_payload(
+        _typed(events=[{"title": "Концерт", "date": "2026-10-04"}], no_event_reason=""),
+        evidence_manifest=_manifest(),
+    )
+    assert result.disposition is SourceDisposition.EVENTS_FOUND
+    assert result.no_event_reason is None
+
+
+def test_empty_no_event_reason_does_not_prove_negative_verdict():
+    result = decision_from_provider_payload(
+        _typed("CONFIRMED_NO_EVENT", no_event_reason=""),
+        evidence_manifest=_manifest(),
+    )
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
 @pytest.mark.parametrize("reason", list(SourceNoEventReason))
 def test_n2_all_closed_no_event_reasons_round_trip(reason):
     result = decision_from_provider_payload(
