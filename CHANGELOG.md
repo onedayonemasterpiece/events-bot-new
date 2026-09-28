@@ -53,6 +53,10 @@
   release checks were updated to reject the previous date.
 
 ### Fixed
+- Text-only source parsing, Telegram event hooks and Smart Update now try the
+  sibling Gemini 3.1/3.5 Flash-Lite lane in either direction within bounded
+  attempts. Model fallback uses a separate ledger request per model and a
+  shared log correlation ID, preventing cross-model TPM finalization.
 - VK auto import no longer forces its recurring `video.get` evidence refresh
   through the VK publishing user token. It uses the service read credential
   blocks that read when the credential is unavailable; the transport records

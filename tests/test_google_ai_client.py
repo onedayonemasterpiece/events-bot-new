@@ -2095,3 +2095,54 @@ async def test_real_attempt_observer_runs_after_mark_sent_before_provider(
             "provider_model_name": "models/gemma-4-31b-it",
         }
     ]
+
+
+@pytest.mark.parametrize("primary,other", [
+    ("gemini-3.1-flash-lite", "gemini-3.5-flash-lite"),
+    ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite"),
+])
+@pytest.mark.parametrize("failure", ["503", "tpm"])
+@pytest.mark.asyncio
+async def test_lite_text_failover_both_directions_keeps_model_ledger_isolated(
+    monkeypatch, primary, other, failure,
+):
+    from google_ai.client import lite_text_model_chain
+
+    client = GoogleAIClient()
+    client.max_retries = 1
+    attempts = []
+    # Mirror the SQL ledger's immutable request.model contract.
+    request_models = {}
+
+    async def attempt(*, ctx, attempt_no, **kwargs):
+        attempts.append((ctx, attempt_no))
+        ledger_model = request_models.setdefault(ctx.request_uid, ctx.model)
+        assert ledger_model == ctx.model, "fallback must not finalize another model's bucket"
+        if len(attempts) == 1:
+            if failure == "tpm":
+                raise RateLimitError(blocked_reason="tpm", model=ctx.model)
+            raise ProviderError(error_type="ServerError", error_message="high demand",
+                                status_code=503, retryable=True)
+        return "recovered", UsageInfo(input_tokens=10, output_tokens=2, total_tokens=12)
+
+    monkeypatch.setattr(client, "_attempt_generate", attempt)
+    chain = lite_text_model_chain(primary, [primary, other])
+    text, usage = await client.generate_content_async(
+        model=primary, fallback_models=chain[1:], prompt="text only",
+        max_provider_attempts=2,
+    )
+    assert text == "recovered"
+    assert usage.model == other
+    assert [ctx.model for ctx, _ in attempts] == [primary, other]
+    assert [n for _, n in attempts] == [1, 2]
+    assert len(request_models) == 2
+    assert len({ctx.logical_request_uid for ctx, _ in attempts}) == 1
+
+
+def test_lite_text_chain_does_not_promote_unrelated_models():
+    from google_ai.client import lite_text_model_chain
+
+    assert lite_text_model_chain("gemini-3.1-pro-preview") == ["gemini-3.1-pro-preview"]
+    assert lite_text_model_chain("models/gemini-3.5-flash-lite") == [
+        "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
+    ]

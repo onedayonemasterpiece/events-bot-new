@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-28-lite-fallback-overload.md`
+  - Scope: text-only Lite failover, source-parse budgets and per-model quota accounting.
+  - Guard: sibling failover stays bounded, model changes use distinct ledger requests, and provider outage is not a semantic non-event.
+
 - `INC-2026-09-27-static-cdn-tls-regression.md`
   - Scope: `static.kenigevents.ru` public certificate/SAN, CDN poster delivery,
     static-site writer IAM and owner-review publication.

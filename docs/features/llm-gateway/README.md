@@ -378,6 +378,21 @@ fail-closed завершаться при недоступном shared limiter.
     * ENV `GOOGLE_AI_INCIDENT_NOTIFICATIONS=0` — выключить инцидент-алерты.
     * ENV `GOOGLE_AI_INCIDENT_COOLDOWN_SECONDS` — антиспам/дедуп уведомлений (по умолчанию 900 сек).
 *   **Model fallback chain**: при финальном провале основной модели клиент переключается на запасные модели из `GOOGLE_AI_FALLBACK_MODELS` (через запятую) и логирует `google_ai.model_fallback`.
+    * Text-only consumers явно включают `lite_text_model_chain`: соседние
+      `gemini-3.1-flash-lite` / `gemini-3.5-flash-lite` пробуются в обе стороны.
+      Это opt-in для server source parse, Telegram event hook и Smart Update;
+      поиск/Live/tool consumers автоматически не меняются. Source parse и hook
+      ограничены двумя попытками gateway, по одной на Lite-модель; обычный
+      Gemma source parse сохраняет одну. Hook не допускает Gemma, затем остаётся
+      прежний бюджетированный 4o fallback. Smart Update сохраняет хвост своего
+      stage/env fallback, добавляя соседнюю Lite сразу после первой Lite.
+    * `request_uid` принадлежит одной модели ledger; при смене модели создаётся
+      новый UID, same-model retry сохраняет его. `logical_request_uid` связывает
+      всю цепочку в structured logs/incident payload, а `attempt_no` и общий
+      предел попыток не сбрасываются. Это предотвращает списание TPM fallback
+      модели из бакета исходной модели без миграции SQL. Старые записи ledger
+      автоматически не исправляются; уже запущенные remote notebooks получают
+      новый gateway только при следующей сборке/запуске.
     * Gateway уважает `requested_model`: первой в цепочке всегда идёт запрошенная модель, а запасные модели остаются только fallback-хвостом.
     * Если atomic reserve блокирует модель по `rpm`, `tpm` или `rpd`, gateway сразу проверяет следующую модель и пишет `google_ai.model_quota_fallback`. До провайдера на заблокированной модели запрос не доходит.
     * Строго бюджетированные consumers могут выключить provider-error переход через `allow_provider_model_fallback=False`; quota fallback при этом сохраняется.
