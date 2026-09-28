@@ -542,3 +542,9 @@ Emergency 2.5 uses thinking budget 0; 3.6 uses minimal thinking unless explicitl
 configured. Revalidate compatibility before changing the allowlist, and clear
 reserve preference after normal provider recovery. See
 [September 28 incident](../../reports/incidents/INC-2026-09-28-lite-fallback-overload.md).
+
+Topic classification after creation uses the same emergency chain and two-attempt
+cap. The server notification sink coalesces identical kind/severity/consumer/model/
+code/recipient alerts for ten minutes across client instances; the next alert
+includes the repeat count. Full runtime failure logs remain. This is process-local
+suppression, not a cross-worker incident store.

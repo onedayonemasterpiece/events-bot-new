@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Include post-create topic classification in emergency monitoring routing and
+  coalesce identical LLM operator alerts across clients for ten minutes, keeping
+  distinct failures, severity changes, repeat counts and full runtime logs.
 - Restore monitoring text processing during simultaneous Lite/Gemma outages with
   opt-in Gemini 2.5/3.6 Flash reserves, verified project-specific key routing,
   bounded attempts and unchanged shared quotas. Apply to event parsing, Smart
