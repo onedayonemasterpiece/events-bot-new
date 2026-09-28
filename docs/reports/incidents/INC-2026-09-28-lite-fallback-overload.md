@@ -260,3 +260,29 @@ Poster replay 9883: one created event 9403, one confirmed non-event, one remaini
 prose_location failure (59653). Neither run left locks. Public jobs are also
 blocked by the independently confirmed CDN TLS mismatch and storage PUT 403;
 see INC-2026-09-27-static-cdn-tls-regression. These are not VK-token failures.
+
+### Product delivery verification and remaining automatic-import risk
+
+After the source-parse contract correction in PR #704 was deployed, exact
+failed carrier 59855 passed the normal VK import and Smart Update path in
+`ops_run=9906`: one imported source, no technical failures, existing event
+7223 updated. This is the opposite control against creating a duplicate.
+Exact carrier 59845 passed the same path in `ops_run=9907`: one new active
+event 9404, "От фолка до джаза", 24 October at 18:00. The source contains
+the date, time, venue and 800-ruble ticket price. Its approved poster returned
+HTTP 200 from the CDN. Scoped publication run 9909 completed VK sync,
+Telegraph, ICS and Telegram calendar dependencies. Native VK postponed readback
+found photo-bearing post `wall-231920894_11530` scheduled for 19:14 UTC;
+Telethon readback found photo-bearing Telegram channel post 4359 at 18:52:23
+UTC, and the calendar post is `kenigeventscalendar/9506`. The main Telegram
+publication job is `done`.
+
+These two source replays explicitly selected GPT-4o for parsing. Production
+scheduled VK import still selects Gemma and its overloaded Google fallback
+chain; the earlier run 9888 processed 25 posts with zero imports, 23 technical
+failures and two rejections. The next scheduled VK import is 29 September
+04:15 UTC. A narrow incident change routes only VK auto-import parsing to the
+verified GPT-4o path and reduces each of five daily batches from 25 to 12
+posts under the existing daily token guard. Its exact-main deployment and
+first automatic run remain required before declaring full recovery. Smart
+Update still uses bounded Google stages and can be slow or unavailable.
