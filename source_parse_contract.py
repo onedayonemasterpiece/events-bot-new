@@ -661,6 +661,15 @@ def decision_from_provider_payload(
             festival=festival,
         )
     raw_no_event_reason = payload.get("no_event_reason")
+    # Some structured-output providers fill an unused required string field
+    # with "". For a positive/lifecycle verdict this means no reason; a
+    # CONFIRMED_NO_EVENT verdict still needs a real closed reason below.
+    if isinstance(raw_no_event_reason, str) and not raw_no_event_reason.strip():
+        logger.info(
+            "source_parse_schema_normalized empty_no_event_reason disposition=%s",
+            disposition.value,
+        )
+        raw_no_event_reason = None
     no_event_reason: SourceNoEventReason | None = None
     if raw_no_event_reason is not None:
         try:
