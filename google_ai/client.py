@@ -2903,7 +2903,7 @@ class GoogleAIClient:
         # - For Gemini, use the model name as-is (no "-it" suffix).
         _provider_model, model_name = self._resolve_provider_model(model)
 
-        if self.consumer in {"event_parse", "smart_update", "tg_event_publish"} and monitoring_attempt_cap():
+        if self.consumer in {"event_parse", "smart_update", "tg_event_publish", "event_topics"} and monitoring_attempt_cap():
             thinking = {
                 "gemini-2.5-flash": {"thinking_budget": 0},
                 "gemini-3.6-flash": {"thinking_level": "minimal"},

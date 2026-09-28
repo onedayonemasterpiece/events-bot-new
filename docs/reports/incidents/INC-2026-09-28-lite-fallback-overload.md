@@ -223,3 +223,22 @@ Evidence in retained incident directory: gemini-lane-matrix.jsonl,
 real-parse-canary-25-scoped.log, reserve-thinking-probe.txt. Focused gateway,
 parser and Smart Update tests pass; broader publication suite has nine existing
 dated-fixture failures, unrelated to model routing. Live verification pending.
+
+
+### First reserve release and live canary
+
+PR #700 passed all CI, merged and deployed exact main
+`a1540fa07861b4cd1970a2c95f0c25007cb003fb` with ready health at 17:07 UTC.
+Image: `deployment-01M3MFJ08H812DNNQ083BWKSBY`. Actual env matches reserve
+preference/project map. Run 9882 replays exact failed rows 59871/59828. Parser
+and six Smart Update calls succeeded on 2.5; event 9402 was created for the
+October 4 play. Final import waited on uncovered Gemma topic classification.
+Follow-up includes that stage in the same reserve and coalesces duplicate alerts
+at the shared server sink. This is required to remove the observed post-create
+stall; it does not bypass LLM event/identity checks.
+
+The deployment terminated old scheduled run 9877; startup marked it crashed.
+Reconcile its exact remaining locks before finishing catch-up. No VK authorization
+errors were found in the available log window since 16:00 UTC; VK credentials
+were not changed. Additional Fly-generated `depot-key3905902939` retained with
+0600 permissions; never publish the artifact directory wholesale.

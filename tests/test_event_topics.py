@@ -368,3 +368,14 @@ async def test_assign_event_topics_adds_kaliningrad_to_urbanism(monkeypatch):
     assert topics == ["URBANISM", "KRAEVEDENIE_KALININGRAD_OBLAST"]
     assert error is None
     assert manual is False
+
+
+@pytest.mark.asyncio
+async def test_topics_use_verified_emergency_reserve(monkeypatch):
+    client = _FakeGemmaTopicsClient(['{"topics":["THEATRE_MODERN"]}'])
+    monkeypatch.setattr(main, "_get_event_topics_gemma_client", lambda: client)
+    monkeypatch.setenv("MONITORING_TEXT_RESERVE_MODELS", "gemini-2.5-flash,gemini-3.6-flash")
+    assert await main._classify_event_topics_gemma("Спектакль") == ["THEATRE_MODERN"]
+    assert client.calls[0]["model"] == "gemini-2.5-flash"
+    assert client.calls[0]["fallback_models"][0] == "gemini-3.6-flash"
+    assert client.calls[0]["max_provider_attempts"] == 2

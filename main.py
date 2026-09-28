@@ -5242,6 +5242,9 @@ async def notify_superadmin(db: Database, bot: Bot, text: str):
         logging.error("failed to notify superadmin: %s", e)
 
 
+_llm_incident_recent: dict[tuple[str, ...], tuple[float, int]] = {}
+
+
 async def notify_llm_incident(kind: str, payload: dict[str, Any]) -> None:
     """Send LLM incident to operator chat (if available) and superadmin chat.
 
@@ -5303,6 +5306,24 @@ async def notify_llm_incident(kind: str, payload: dict[str, Any]) -> None:
             operator_chat_id = int(payload.get("operator_chat_id") or 0) or None
         except Exception:
             operator_chat_id = None
+
+    # Different stages construct fresh clients: deduplicate at the shared sink,
+    # retaining first alerts and all structured failure logs. New error kinds,
+    # severity escalation and different operator recipients remain visible.
+    now = _time.monotonic()
+    key = (kind, severity, consumer, model, error_code, str(operator_chat_id or ""))
+    last, suppressed = _llm_incident_recent.get(key, (float("-inf"), 0))
+    if now - last < 600:
+        _llm_incident_recent[key] = (last, suppressed + 1)
+        logging.info("llm_incident.duplicate_suppressed kind=%s consumer=%s model=%s count=%d",
+                     kind, consumer, model, suppressed + 1)
+        return
+    _llm_incident_recent[key] = (now, 0)
+    for old_key, (sent_at, _) in list(_llm_incident_recent.items()):
+        if now - sent_at >= 1200:
+            _llm_incident_recent.pop(old_key, None)
+    if suppressed:
+        text += f"\nПовторов за предыдущие 10 минут: {suppressed}"
 
     if operator_chat_id:
         try:
@@ -11924,6 +11945,11 @@ async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
         "Верни только JSON без markdown и комментариев.\n"
         f"JSON schema:\n{schema_text}"
     )
+    from google_ai.client import monitoring_text_model_chain, monitoring_attempt_cap
+    chain = monitoring_text_model_chain(EVENT_TOPICS_MODEL)
+    route = {"model": chain[0]}
+    if monitoring_attempt_cap():
+        route.update(fallback_models=chain[1:], max_provider_attempts=2)
     raw = ""
     if EVENT_TOPICS_GEMMA_NATIVE_SCHEMA:
         native_prompt = (
@@ -11933,7 +11959,7 @@ async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
         )
         try:
             raw, _usage = await client.generate_content_async(
-                model=EVENT_TOPICS_MODEL,
+                **route,
                 prompt=native_prompt,
                 generation_config={
                     "temperature": 0,
@@ -11956,7 +11982,7 @@ async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
     if not raw:
         try:
             raw, _usage = await client.generate_content_async(
-                model=EVENT_TOPICS_MODEL,
+                **route,
                 prompt=full_prompt,
                 generation_config={"temperature": 0},
                 max_output_tokens=FOUR_O_RESPONSE_LIMIT,
@@ -11973,7 +11999,7 @@ async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
         )
         try:
             raw_fix, _usage = await client.generate_content_async(
-                model=EVENT_TOPICS_MODEL,
+                **route,
                 prompt=fix_prompt,
                 generation_config={"temperature": 0},
                 max_output_tokens=FOUR_O_RESPONSE_LIMIT,
