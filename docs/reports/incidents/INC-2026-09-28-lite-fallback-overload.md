@@ -42,7 +42,8 @@ All times below are UTC (the pasted Telegram display is UTC+2).
 Retained, payload-free evidence and test outputs:
 `/home/dev/artifacts/events-bot-new/20260928T134855Z-lite-fallback-20260928/`.
 Live source: machine `148eddde9b5778`, `/data/runtime_logs/events-bot.log`.
-The mirror was enabled with rotated files present. No production data changed.
+The mirror was enabled with rotated files present. Initial investigation was
+read-only; the authorized compensating replay below uses the normal import path.
 
 ## Root cause and contributing factors
 
@@ -71,7 +72,7 @@ The library partner message about no eligible events is a separate selection
 outcome. This investigation does not establish its cause or equate it with
 Google overload. The prior VK publisher-token incident is also distinct.
 
-## Corrective changes prepared
+## Corrective changes delivered
 
 - Opt-in text-only Lite sibling chain in both directions for server parsing,
   Telegram hooks and Smart Update. No global change to Search/Live/tool routing.
@@ -115,15 +116,36 @@ Google quota ledger and generated remote gateway packages.
   publication file: 95 passed, 11 failed). They involve dated event/promo
   fixtures and typed rich-message fixtures, not the changed hook route.
 - Provider audit passed before changes; final audit recorded with the patch.
-- No merge, production deploy, live provider probe or public catch-up performed.
-  This record remains open; a prepared/tested patch is not outage closure.
+- PR #697 merged to `main`: `e1af8aaeeaf6990d2a63e0a6e8fe57304967de0d`.
+  All required PR checks passed. Manual `scripts/deploy_fly_main.sh --remote-only`
+  completed from that clean, exact-main checkout.
+- Fly image: `deployment-01M3M8SJ6K0QSGCB8XY5RX6PVV`; machine
+  `148eddde9b5778`, version 2108, started at 15:09:16 UTC. Live release marker
+  matches the merge SHA. Health: ready=true, DB=ok, issues=[], workers healthy.
+- Real source parsing and Telegram publication both attempted 3.1 Lite → 3.5
+  Lite after release. Separate per-model request IDs and shared logical ID are
+  visible in logs. Both endpoints still returned 503 for some requests.
+- Supabase ledger readback confirms distinct model rows finalized
+  `failed_provider`, plus successful 3.1 parsing finalized `succeeded` with
+  actual usage. No new negative-TPM/finalize error appeared in the sampled
+  post-release window. Successful *cross-model* finalization remains to be
+  observed when provider capacity permits it.
+- Compensating replay: `ops_run=9870`, stable run ID
+  `INC-2026-09-28-lite-fallback-recovery-9860`, started 15:11:17 UTC. It targets
+  only the 20 failed carriers from original run 9860 (`auto:1790602200`). The
+  standard import/Smart Update path is retained; guards exclude changed rows
+  and prior successes. Source packets, cached parses and existing event links
+  remain intact. No blanket queue reset or permanent terminal retry was added.
+- This record remains open while replay is running and shared provider overload
+  persists; deployment alone is not outage closure.
 
 ## Follow-up actions
 
-- Release the reviewed patch and verify organic provider outcomes and per-model
-  ledger finalization. Do not repeatedly probe an overloaded provider.
+- Verify successful cross-model ledger finalization from organic traffic once
+  capacity recovers. Do not repeatedly probe an overloaded provider.
 - Audit historical affected quota attempts before any reconciliation; do not
   blindly clamp negative counters or reset quota.
-- Reconcile exact failed carriers once capacity recovers, under the existing
-  terminal policy. Public publication reruns require explicit operator scope.
+- Finish and record the exact authorized replay; retain technical failures as
+  failures if both Lite endpoints remain overloaded. Existing publication
+  outbox retries retain their normal schedule.
 - Consider shared/batch-scoped incident deduplication separately.
