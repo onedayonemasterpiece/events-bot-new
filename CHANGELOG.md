@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- Restore monitoring text processing during simultaneous Lite/Gemma outages with
+  opt-in Gemini 2.5/3.6 Flash reserves, verified project-specific key routing,
+  bounded attempts and unchanged shared quotas. Apply to event parsing, Smart
+  Update and Telegram copy; use model-appropriate minimal thinking settings.
+
+
 ### Added
 - KenigEvents Live Search end-to-end application integration: authenticated
   browser text/microphone sessions use shared live-interaction v0.1.4 and the

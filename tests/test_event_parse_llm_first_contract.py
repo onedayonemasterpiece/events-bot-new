@@ -507,3 +507,22 @@ async def test_vk_linear_parse_retries_rate_limit_within_bounded_provider_budget
     assert result.provider_attempts[0]["attempt_kind"] == "primary_rate_limit_wait"
     assert result.provider_attempts[0]["provider_retry_after_ms"] == 1
     assert result.provider_attempts[1]["provider_retry_after_ms"] == 1
+
+
+@pytest.mark.asyncio
+async def test_emergency_reserve_routes_real_parser_boundary_with_two_send_cap(monkeypatch):
+    monkeypatch.setenv('MONITORING_TEXT_RESERVE_MODELS', 'gemini-2.5-flash,gemini-3.6-flash')
+    calls = []
+    class Client:
+        async def generate_content_async(self, **kwargs):
+            calls.append(kwargs)
+            return '', SimpleNamespace(input_tokens=1, output_tokens=0, total_tokens=1)
+    async def noop(*args, **kwargs):
+        pass
+    monkeypatch.setattr(main, '_get_event_parse_gemma_client', lambda: Client())
+    monkeypatch.setattr(main, 'log_token_usage', noop)
+    result = await main._parse_event_via_gemma('source')
+    assert calls[0]['model'] == 'gemini-2.5-flash'
+    assert calls[0]['fallback_models'][0] == 'gemini-3.6-flash'
+    assert calls[0]['max_provider_attempts'] == 2
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED

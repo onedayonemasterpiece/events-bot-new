@@ -6,6 +6,9 @@ app = "events-bot-new-wngqia"
 
 
 [env]
+  # INC-2026-09-28: verified text reserves; clear preference after Google recovery.
+  MONITORING_TEXT_RESERVE_MODELS = "gemini-2.5-flash,gemini-3.6-flash"
+  GOOGLE_AI_MODEL_KEY_ENVS_JSON = '{"gemini-2.5-flash":["GOOGLE_API_KEY","GOOGLE_API_KEY4"],"gemini-3.6-flash":["GOOGLE_API_KEY2","GOOGLE_API_KEY3","GOOGLE_API_KEY6"]}'
   PORT = "8080"
   PYTHONOPTIMIZE = "2"
   ENABLE_RUNTIME_FILE_LOGGING = "1"

@@ -526,3 +526,19 @@ metadata. Он с первого запроса использует normal pool
 попытку на durable item и по умолчанию ограничен `100` calls/UTC day. External
 backfill дополнительно capped на `400` total calls/day и paced `>=6s`, поэтому
 не предполагает, что пять env keys автоматически означают пять provider quotas.
+
+
+### Emergency monitoring reserves
+
+`MONITORING_TEXT_RESERVE_MODELS=gemini-2.5-flash,gemini-3.6-flash` opts event
+parsing, Smart Update and Telegram copy into a verified reserve preference.
+Empty disables it. Pro and other consumers retain existing routing. Requests
+use at most two attempts; single-send collection stages retain one attempt.
+`GOOGLE_AI_MODEL_KEY_ENVS_JSON` maps model IDs to compatible key env names and
+intersects the caller/normal pool, never widening it. Missing keys or malformed
+configuration fail closed. With this setting, local limiter fallback is disabled.
+The shared atomic limiter and per-project caps remain authoritative.
+Emergency 2.5 uses thinking budget 0; 3.6 uses minimal thinking unless explicitly
+configured. Revalidate compatibility before changing the allowlist, and clear
+reserve preference after normal provider recovery. See
+[September 28 incident](../../reports/incidents/INC-2026-09-28-lite-fallback-overload.md).

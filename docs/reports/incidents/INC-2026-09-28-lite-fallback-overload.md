@@ -201,3 +201,25 @@ Google quota ledger and generated remote gateway packages.
 - Prevent older source revisions from resetting newer terminal queue decisions;
   retain both source versions and add a revision-order regression check before
   changing this separate ingestion contract.
+
+
+## Product recovery: verified Flash reserves (2026-09-28)
+
+The earlier Lite failover did not restore ingestion. Real shared-limiter probes
+found 2.5 Flash usable on GOOGLE_API_KEY/GOOGLE_API_KEY4, while four other normal
+projects return 404. 3.6 Flash succeeded on GOOGLE_API_KEY2/3/6; others returned
+503. 3/3.5/3.7/3.8 Flash probes were unavailable. Availability is project-specific;
+a model-name-only fallback cannot solve this incident.
+
+Prepared emergency preference 2.5 -> 3.6 for parsing, Smart Update and public
+copy, compatible project intersection, two-attempt maximum (collection one),
+model-specific thinking settings and fail-closed shared accounting. No quota
+increase: Flash remains 20 RPD per project/model. Synthetic JSON and full real
+parser probes succeeded, but a no-event parse is not ingestion recovery.
+Acceptance remains a normal failed-source replay creating/updating actual future
+events, plus negative control and outbox/queue verification after deployment.
+
+Evidence in retained incident directory: gemini-lane-matrix.jsonl,
+real-parse-canary-25-scoped.log, reserve-thinking-probe.txt. Focused gateway,
+parser and Smart Update tests pass; broader publication suite has nine existing
+dated-fixture failures, unrelated to model routing. Live verification pending.
