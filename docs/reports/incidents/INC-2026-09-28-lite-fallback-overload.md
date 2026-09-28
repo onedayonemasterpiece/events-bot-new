@@ -39,8 +39,11 @@ All times below are UTC (the pasted Telegram display is UTC+2).
   Successes interleaved: 29 on 3.1 Lite and 4 on Gemma. No successful 3.5 call
   appears in this sample. These are physical calls, not unique lost events.
 
-Retained, payload-free evidence and test outputs:
+Retained evidence and test outputs:
 `/home/dev/artifacts/events-bot-new/20260928T134855Z-lite-fallback-20260928/`.
+The retained directory also contains Fly/Depot-generated temporary build
+certificate material, including `depot-key4000317115`; these files are sensitive
+and restricted to mode 0600. Do not share the whole directory as a public bundle.
 Live source: machine `148eddde9b5778`, `/data/runtime_logs/events-bot.log`.
 The mirror was enabled with rotated files present. Initial investigation was
 read-only; the authorized compensating replay below uses the normal import path.
@@ -128,24 +131,73 @@ Google quota ledger and generated remote gateway packages.
 - Supabase ledger readback confirms distinct model rows finalized
   `failed_provider`, plus successful 3.1 parsing finalized `succeeded` with
   actual usage. No new negative-TPM/finalize error appeared in the sampled
-  post-release window. Successful *cross-model* finalization remains to be
-  observed when provider capacity permits it.
+  post-release window. At 15:27:18 UTC, a real 3.5 → 3.1 fallback succeeded:
+  initial `028dabfe-e76a-4af6-b2f9-df7b16c0b0b5` finalized `failed_provider`
+  under 3.5; fallback `70665cc4-5839-41e6-a9cc-6bd235cd4752` finalized
+  `succeeded`, 7038 tokens, under 3.1. This verifies cross-model accounting.
 - Compensating replay: `ops_run=9870`, stable run ID
   `INC-2026-09-28-lite-fallback-recovery-9860`, started 15:11:17 UTC. It targets
   only the 20 failed carriers from original run 9860 (`auto:1790602200`). The
   standard import/Smart Update path is retained; guards exclude changed rows
   and prior successes. Source packets, cached parses and existing event links
   remain intact. No blanket queue reset or permanent terminal retry was added.
-- This record remains open while replay is running and shared provider overload
-  persists; deployment alone is not outage closure.
+- The SSH-attached replay process disappeared after the local SSH command
+  exited 143. Remote process absence was verified. At 15:42:04, run 9870 was
+  marked `error`, and only its orphan locked row 59651 was terminalized with
+  `RECOVERY_PROCESS_INTERRUPTED`; cached parses and existing links were kept.
+  Eleven completed rows were not replayed. Changed-state guards skipped 59643
+  and 59678, which were already pending before selection reached them.
+- At 15:42:13, detached remainder run 9873 started with stable run ID
+  `INC-2026-09-28-lite-fallback-recovery-9860-remainder`, selecting only
+  59651, 59652, 59653, 59659, 59685, 59691 and 59697. It uses the same normal
+  import path and per-row expected-state guards, independently of the SSH
+  connection. Process stdout is discarded; runtime mirror and ops_run retain
+  outcomes. First-run reconciliation evidence is in `remainder-launch.txt`.
+- Remainder run 9873 finished at 15:48:54 UTC, status `partial`, 7 terminal
+  rows (1 confirmed no-event, 6 technical failures), no created/updated events.
+  Combined replay: 18 of the original 20 failed carriers processed, comprising
+  3 confirmed no-events, 3 product exclusions and 12 failures. Two changed-state
+  rows (59643, 59678) remained pending and were not forcibly reclaimed. All
+  current selected rows have clear leases and none is left locked.
+- Remaining failures: 6 source-parse technical errors, 3 verification errors,
+  and 3 Smart Update identity/occurrence/adjudicator failures. Both Lite models
+  still returned 503 in the final sample; this is not full availability recovery.
+- Existing event mappings remain 59678 → 9399 and 59698 → 9400. The replay
+  created no event mappings or duplicate events. Original source packets and
+  previous typed outcomes remain available.
+- Final audit initially failed the assumption that all five nonselected
+  successful rows would retain their queue statuses: 59623 and 59688 changed
+  from `confirmed_no_event` to `pending` with packet links reverting revision
+  2 → revision 1. Their old completed packets remain intact. Another revision
+  rollback affected skipped 59643; 59678 instead acquired a newer attachment
+  revision. Evidence: `packet-revisions.json`, `recovery-final.json`.
+  `vk_intake` upsert requeues whenever packet ID changes, including an older
+  revision; the actor producing these refreshes was not established. Do not
+  attribute these changes to the exact replay selector, which excluded them,
+  or claim the whole queue was restored. Revision ordering is an open follow-up.
+- Four ordinary Telegram publication jobs ended in error after release in the
+  sampled window; normal retries remain scheduled. Health remained ready, but
+  publication recovery is incomplete.
+- This record remains open: code routing/accounting fixes are delivered and
+  live-verified; provider capacity, remaining technical carriers and source
+  revision ordering still require follow-up.
 
 ## Follow-up actions
 
-- Verify successful cross-model ledger finalization from organic traffic once
-  capacity recovers. Do not repeatedly probe an overloaded provider.
+- Watch organic provider recovery; cross-model finalization is verified.
+  Do not repeatedly probe an overloaded provider.
 - Audit historical affected quota attempts before any reconciliation; do not
   blindly clamp negative counters or reset quota.
-- Finish and record the exact authorized replay; retain technical failures as
-  failures if both Lite endpoints remain overloaded. Existing publication
+- Exact authorized replay completed with partial recovery. Reconcile the 12
+  remaining failures after capacity/evidence problems are resolved; do not turn
+  them into non-events or add an unbounded retry loop. Existing publication
   outbox retries retain their normal schedule.
 - Consider shared/batch-scoped incident deduplication separately.
+- Use detached, persisted operation tracking for long production replays;
+  do not tie their lifetime to a diagnostic SSH session.
+- Separately reconcile observed poster upload `403 AccessDenied` and source
+  evidence/identity-review failures. These are not fixed by model switching.
+
+- Prevent older source revisions from resetting newer terminal queue decisions;
+  retain both source versions and add a revision-order regression check before
+  changing this separate ingestion contract.
