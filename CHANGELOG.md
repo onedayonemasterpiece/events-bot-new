@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- VK location grounding now recognizes mixed Cyrillic/Latin letters in a venue
+  name and routes a venue absent from the post and poster to semantic review.
+  This prevents a source-profile address from becoming an unsupported meeting
+  point for a bar tour and preserves the explicit club named in the Donera post.
 - Route only scheduled VK auto-import parsing through the already verified
   GPT-4o parser while Google models are overloaded, and cap each of the five
   daily batches at 12 posts under the existing token budget.

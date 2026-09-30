@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-30-bar-tour-false-venue.md`
+  - Scope: VK source-profile defaults, Smart Update venue grounding, Telegram forward, VK/Telegraph/calendar projections.
+  - Must not regress: источник без точки встречи не получает адрес профиля сообщества; replay с явной площадкой как противоположным контролем.
+
+- `INC-2026-09-30-donera-wrong-venue.md`
+  - Scope: VK venue extraction, source fallback, Smart Update and public projections.
+  - Must not regress: явно названный клуб и адрес сохраняются при смешении алфавитов в названии; replay с противоположным контролем.
+
 - `INC-2026-09-28-lite-fallback-overload.md`
   - Scope: text-only Lite failover, source-parse budgets and per-model quota accounting.
   - Guard: sibling failover stays bounded, model changes use distinct ledger requests, and provider outage is not a semantic non-event.
