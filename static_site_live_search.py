@@ -399,7 +399,7 @@ def build_host(
     search_call: Callable[[LiveSearchConfig, str, str, int], Awaitable[Mapping[str, Any]]] = call_event_search,
 ):
     try:
-        from live_interaction.session_host import LiveSessionHost
+        from live_interaction import LiveSocketSessionHost as LiveSessionHost
     except ImportError as exc:
         raise LiveSearchConfigError("live_interaction_package_missing") from exc
     return LiveSessionHost(
@@ -420,6 +420,8 @@ def _http_status(exc: Exception) -> int:
         return 403
     if code in {"LIVE_SESSION_NOT_FOUND"}:
         return 404
+    if code in {"LIVE_TRANSPORT_MISMATCH", "LIVE_SESSION_CLOSED", "LIVE_SOCKET_BUSY"}:
+        return 409
     if code in {"LIVE_BUSY"}:
         return 429
     if code.startswith("INVALID") or code in {"LIVE_AUTH_REQUIRED"}:
@@ -464,6 +466,7 @@ async def _start(request: web.Request) -> web.Response:
         result = await host.start(
             resource_id=RESOURCE_ID,
             actor=actor,
+            attempt_id=payload.get("attempt_id"),
             model=str(payload.get("model") or config.model),
             access_token=token,
         )
@@ -474,6 +477,10 @@ async def _start(request: web.Request) -> web.Response:
             _http_status(exc),
             {"error": str(getattr(exc, "code", "LIVE_START_FAILED"))},
         )
+    result = {
+        **result,
+        "socket_url": ROUTE_BASE + "/" + result["session_id"] + "/socket",
+    }
     return _json_response(request, config, 200, result)
 
 
@@ -490,6 +497,8 @@ async def _session_request(request: web.Request, operation: str) -> web.Response
     if actor is False:
         return _json_response(request, config, 403, {"error": "forbidden"})
     if actor is None:
+        if operation == "stop":
+            return _json_response(request, config, 200, {"ok": True, "session_id": session_id, "already_closed": True})
         return _json_response(request, config, 404, {"error": "LIVE_SESSION_NOT_FOUND"})
     try:
         if operation == "input":
@@ -500,6 +509,9 @@ async def _session_request(request: web.Request, operation: str) -> web.Response
                 actor=actor,
                 message=dict(payload),
             )
+        elif operation == "socket-ticket":
+            result = host.issue_socket_ticket(session_id=session_id, resource_id=RESOURCE_ID, actor=actor)
+            result = {**result, "socket_url": ROUTE_BASE + "/" + session_id + "/socket"}
         elif operation == "events":
             try:
                 after = max(0, int(request.query.get("after", "0")))
@@ -565,6 +577,16 @@ def register(
     app.router.add_get(ROUTE_BASE + "/{session_id}/events", _events)
     app.router.add_route("OPTIONS", ROUTE_BASE + "/{session_id}/stop", _preflight)
     app.router.add_post(ROUTE_BASE + "/{session_id}/stop", _stop)
+
+    from static_site_live_socket import socket_handler
+    async def renew_socket(request: web.Request) -> web.Response:
+        return await _session_request(request, "socket-ticket")
+    app.router.add_route("OPTIONS", ROUTE_BASE + "/{session_id}/socket-ticket", _preflight)
+    app.router.add_post(ROUTE_BASE + "/{session_id}/socket-ticket", renew_socket)
+    app.router.add_get(
+        ROUTE_BASE + "/{session_id}/socket",
+        socket_handler(host=host, config=config, resource_id=RESOURCE_ID, origin_check=_origin),
+    )
 
     async def cleanup(_app: web.Application) -> None:
         await host.stop_all()

@@ -57,10 +57,19 @@ export function createLiveEventSearchController({
       error.status = response.status;
       throw error;
     }
+    if (payload?.socket_url) {
+      const apiUrl = new URL(url, globalThis.location?.href || endpoint);
+      const socketUrl = new URL(payload.socket_url, apiUrl);
+      if (socketUrl.origin !== apiUrl.origin || socketUrl.username || socketUrl.password || socketUrl.search || socketUrl.hash) {
+        throw liveError('LIVE_SOCKET_ORIGIN', 'Некорректный адрес голосового соединения');
+      }
+      payload.socket_url = socketUrl.href;
+    }
     return payload;
   }
 
   const client = clientFactory({
+    transport: 'wss',
     request,
     onEvent(event) {
       if (event?.type === 'input_transcript' || event?.type === 'output_transcript') {
@@ -107,7 +116,7 @@ export function createLiveEventSearchController({
       if (microphone && !client.microphoneEnabled) return Boolean(await client.enableMicrophone());
       return true;
     }
-    await client.start({ url: endpoint, body: {}, microphone });
+    await client.start({ url: endpoint, body: {}, microphone, captureDuringStart: false });
     if (!client.sessionId) return false;
     return !microphone || Boolean(client.microphoneEnabled);
   }
