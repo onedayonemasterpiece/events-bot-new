@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Monitoring quota admission failures no longer consume the cap on actual
+  provider sends, so an exhausted reserve model can fall through to the
+  existing Lite/Gemma chain without bypassing event quality checks.
 - Telegram event publication uses its existing factual card layout without a
   narrative hook when both LLM writers cannot ground one in organizer text.
   Events without organizer evidence remain blocked.

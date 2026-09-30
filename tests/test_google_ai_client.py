@@ -372,6 +372,35 @@ async def test_quota_block_falls_through_to_next_model(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_quota_blocked_reserves_do_not_exhaust_physical_send_cap(monkeypatch):
+    client = GoogleAIClient()
+    calls = []
+
+    async def fake_attempt_generate(*, ctx, attempt_no, **_kwargs):
+        calls.append((ctx.model, attempt_no))
+        if ctx.model in {"gemini-3.6-flash", "gemini-2.5-flash"}:
+            raise RateLimitError(blocked_reason="rpd", model=ctx.model)
+        return "recovered", SimpleNamespace(total_tokens=1)
+
+    monkeypatch.setattr(client, "_attempt_generate", fake_attempt_generate)
+    text, usage = await client.generate_content_async(
+        model="gemini-3.6-flash",
+        fallback_models=["gemini-2.5-flash", "gemini-3.1-flash-lite"],
+        prompt="bounded",
+        max_output_tokens=16,
+        max_provider_attempts=2,
+    )
+
+    assert text == "recovered"
+    assert usage.model == "gemini-3.1-flash-lite"
+    assert calls == [
+        ("gemini-3.6-flash", 1),
+        ("gemini-2.5-flash", 2),
+        ("gemini-3.1-flash-lite", 3),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_non_quota_reservation_block_does_not_change_model(monkeypatch):
     client = GoogleAIClient()
     client.fallback_models = ["gemini-3.1-flash-lite"]
