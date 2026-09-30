@@ -19820,7 +19820,7 @@ async def _run_due_jobs_once_locked(
             # already-published post whose public defect was independently
             # confirmed.
             if has_existing_tg_post and payload.get("public_repair_priority") is True:
-                return (task_priority, 0, j.id, 0)
+                return (-2, 0, j.id, 0)
             # When an old catch-up/backfill backlog is being throttled one post at
             # a time, fresh Smart Update imports must not be starved behind rows
             # that can be safely announced later. Within the fresh lane, newest
@@ -19833,7 +19833,11 @@ async def _run_due_jobs_once_locked(
             # post every N minutes" lane while no-post event announcements are
             # waiting.
             if added_at and added_at >= fresh_cutoff and not has_existing_tg_post:
-                return (task_priority, 1, -int(added_at.timestamp()), j.id)
+                # A fresh public announcement outranks ordinary media review.
+                # Old reviews can consume their full runtime repeatedly and
+                # otherwise keep the channel quiet despite fresh imports.
+                # Media checks that block a VK announcement retain rank -3.
+                return (-2, 1, -int(added_at.timestamp()), j.id)
             if not has_existing_tg_post:
                 added_rank = -int(added_at.timestamp()) if added_at else 0
                 return (task_priority, 2, added_rank, j.id)

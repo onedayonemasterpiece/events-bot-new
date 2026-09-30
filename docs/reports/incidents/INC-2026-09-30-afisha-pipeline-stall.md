@@ -43,3 +43,11 @@ Related: `INC-2026-09-19-tg-monitoring-runtime-starvation.md`
 - Corrective patch lets local quota admission failures pass through the model
   chain without consuming the cap on actual provider sends. It requires live
   import and publication verification after deploy before incident closure.
+- PR #712 deployed at `4172be8971408e046b5adbf591f46413b6ec77fb`.
+  Production scheduled importer run 10115 completed with 12 processed,
+  3 imported, 3 created (events 9419–9421), 1 updated and 3 technical
+  failures. Event 9419 was created from the organizer's explicit meeting place.
+  Its due Telegram outbox job 91401 remained pending while ordinary old media
+  review jobs (for example event 7117, attempt 123) occupied the worker for
+  their 180-second timeout. The fresh announcement priority hotfix addresses
+  this independent publication delay; live public readback is still required.

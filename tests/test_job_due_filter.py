@@ -7,6 +7,52 @@ from main import Database, Event, JobOutbox, JobTask, JobStatus
 
 
 @pytest.mark.asyncio
+async def test_fresh_tg_announcement_precedes_stale_media_review(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc) - timedelta(minutes=5)
+    async with db.get_session() as session:
+        stale = Event(
+            title="Old media review", description="d", date="2025-01-01",
+            time="12:00", location_name="loc", source_text="src",
+            added_at=now - timedelta(days=30),
+        )
+        fresh = Event(
+            title="Fresh announcement", description="d",
+            date=(now + timedelta(days=1)).date().isoformat(), time="13:00",
+            location_name="loc", source_text="src", added_at=now,
+        )
+        session.add(stale)
+        session.add(fresh)
+        await session.commit()
+        await session.refresh(stale)
+        await session.refresh(fresh)
+        session.add(JobOutbox(
+            event_id=stale.id, task=JobTask.event_media_review,
+            status=JobStatus.pending, next_run_at=now,
+        ))
+        session.add(JobOutbox(
+            event_id=fresh.id, task=JobTask.tg_event_publish,
+            status=JobStatus.pending, next_run_at=now,
+        ))
+        await session.commit()
+        fresh_id = int(fresh.id)
+
+    calls = []
+
+    async def handler(eid, _db, _bot):
+        calls.append(eid)
+        return True
+
+    monkeypatch.setattr(main, "JOB_HANDLERS", {
+        "event_media_review": handler,
+        "tg_event_publish": handler,
+    })
+    await main._run_due_jobs_once(db, None)
+    assert calls[0] == fresh_id
+
+
+@pytest.mark.asyncio
 async def test_future_job_does_not_block_month_pages(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
