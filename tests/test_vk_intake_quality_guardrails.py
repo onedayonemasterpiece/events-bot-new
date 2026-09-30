@@ -54,6 +54,15 @@ def test_vk_location_guard_clears_unsupported_known_venue_without_choosing_repla
     )
 
 
+def test_vk_mixed_script_venue_stays_grounded_to_explicit_source():
+    assert not vk_intake._vk_location_value_ungrounded(
+        "СКЛАD",
+        source_text="Концерт в клубе «СКЛАД», ул. Ялтинская, 20п",
+        source_name="Тёрка",
+        location_hint="Пространство Тёрка, пл. Победы, 4",
+    )
+
+
 def test_vk_schedule_fragment_title_is_low_confidence():
     assert vk_intake._vk_title_is_schedule_fragment("пятница 22:00")
     assert vk_intake._vk_title_is_schedule_fragment("суббота 14:00 - 02:00")

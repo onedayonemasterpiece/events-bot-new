@@ -7238,6 +7238,19 @@ def _candidate_needs_llm_location_grounding_review(
     if not corpus:
         return True, "missing_source_evidence"
 
+    name_supported = _source_supports_location_value(corpus, candidate.location_name)
+    address_supported = _source_supports_location_value(corpus, candidate.location_address)
+    # A VK source profile can supply a default venue even for a multi-stop tour
+    # whose post never names a meeting point. Send that case to the semantic
+    # reviewer before publishing; the profile alone is not attendee evidence.
+    if (
+        str(candidate.source_type or "").strip().lower() == "vk"
+        and candidate.location_name
+        and not name_supported
+        and not address_supported
+    ):
+        return True, "vk_location_not_in_post"
+
     # Route only when the source itself exposes a location role. This avoids a
     # new LLM call merely because a short fixture/secondary source omits an
     # already-known venue, while covering explicit `📍/Где/Площадка/Адрес`
@@ -7251,8 +7264,6 @@ def _candidate_needs_llm_location_grounding_review(
     if not has_explicit_location_role:
         return False, "no_explicit_location_role"
 
-    name_supported = _source_supports_location_value(corpus, candidate.location_name)
-    address_supported = _source_supports_location_value(corpus, candidate.location_address)
     # A grounded address does not prove an independently supplied canonical
     # venue name.  This matters for address-only reference binding and linked
     # source enrichment: ``ИЦАЭ`` was not present in either casting source, but

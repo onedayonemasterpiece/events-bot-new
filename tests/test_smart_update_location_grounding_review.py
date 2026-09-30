@@ -27,7 +27,56 @@ def test_unsupported_named_island_routes_to_llm_review() -> None:
     )
     needed, reason = seu._candidate_needs_llm_location_grounding_review(candidate)
     assert needed is True
-    assert reason == "canonical_location_not_in_source"
+    assert reason == "vk_location_not_in_post"
+
+
+def test_bar_tour_profile_venue_without_meeting_point_routes_to_review() -> None:
+    candidate = _candidate(
+        "Пространство Тёрка",
+        "Открыт дополнительный набор в барный тур. Даты: 02.10 и 03.10.",
+    )
+    candidate.location_address = "Пл. Победы 4"
+    assert seu._candidate_needs_llm_location_grounding_review(candidate) == (
+        True, "vk_location_not_in_post"
+    )
+
+
+def test_bar_tour_profile_venue_is_rejected_by_semantic_review(monkeypatch) -> None:
+    candidate = _candidate(
+        "Пространство Тёрка",
+        "Открыт дополнительный набор в барный тур. Даты: 02.10 и 03.10.",
+    )
+    candidate.location_address = "Пл. Победы 4"
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "reject_missing_location",
+            "confidence": 0.99,
+            "location_name": None,
+            "location_address": None,
+            "city": "Калининград",
+            "evidence_quote": "Открыт дополнительный набор в барный тур",
+            "reason_short": "no meeting point in source",
+        }
+
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(seu, "_ask_gemma_json", fake_ask)
+    assert asyncio.run(
+        seu._llm_review_candidate_location_grounding(
+            candidate, trigger_reason="vk_location_not_in_post"
+        )
+    ) == (False, "llm_reject_missing_location")
+
+
+def test_vk_explicit_venue_does_not_route_as_profile_only() -> None:
+    candidate = _candidate(
+        "Пространство Тёрка",
+        "Встречаемся в пространстве Тёрка, пл. Победы, 4, в 19:00.",
+    )
+    candidate.location_address = "Пл. Победы 4"
+    assert seu._candidate_needs_llm_location_grounding_review(candidate) == (
+        False, "no_explicit_location_role"
+    )
 
 
 def test_inflected_museum_quote_allows_terminal_keep(monkeypatch) -> None:

@@ -2322,6 +2322,19 @@ _VK_GENERIC_LOCATION_TOKENS = {
 def _vk_grounding_norm(value: str | None) -> str:
     text = unicodedata.normalize("NFKC", value or "")
     text = text.replace("\xa0", " ").casefold().replace("ё", "е")
+    # OCR/LLM can mix scripts inside one Russian venue token (СКЛАD → СКЛАД).
+    # Fold lookalikes only inside mixed-script tokens, preserving Latin names.
+    mixed_script_letters = str.maketrans({
+        "a": "а", "b": "в", "c": "с", "d": "д", "e": "е", "h": "н",
+        "k": "к", "m": "м", "o": "о", "p": "р", "t": "т", "x": "х", "y": "у",
+    })
+    text = re.sub(
+        r"[a-zа-я]+",
+        lambda match: match.group().translate(mixed_script_letters)
+        if re.search(r"[a-z]", match.group()) and re.search(r"[а-я]", match.group())
+        else match.group(),
+        text,
+    )
     text = re.sub(r"https?://\S+", " ", text)
     text = re.sub(r"[^0-9a-zа-я]+", " ", text, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", text).strip()
