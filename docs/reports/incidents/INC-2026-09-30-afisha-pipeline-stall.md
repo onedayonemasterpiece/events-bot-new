@@ -15,10 +15,12 @@ Related: `INC-2026-09-19-tg-monitoring-runtime-starvation.md`
 
 Автоматическую публикацию блокировал несовместимый со строгим OpenAI structured-output `enum` с фрагментами исходного текста в схеме резервного автора. Публикация одного поста вручную не восстанавливает конвейер. Исправление удаляет `enum` только из схемы 4o; ответ по-прежнему проверяется на дословную цитату из организаторского источника. Telegram Monitoring и VK import требуют отдельного восстановления после этого узкого фикса.
 
+После релиза `34bb4a784` автоматический retry `joboutbox.id=90901` подтвердил второй блокер: модель вернула текст, который нельзя подтвердить общей текстовой подписью к афише, хотя событие было извлечено из изображения. Задание снова завершилось `strict 4o fallback returned invalid text`. Для таких принятых карточек с исходным организаторским текстом добавлен вариант публикации без повествовательного вступления: только уже сохранённые фактические поля карточки. При отсутствии исходного текста отказ остаётся.
+
 ## Regression contract and closure
 
 - Trigger: изменение Telegram public writer, его схемы/fallback, очереди публикаций или мониторинга.
 - Mandatory: тест strict fallback с цитатой, содержащей кавычки; проверка реального автоматического retry без ручного поста; readback поста и задания; отдельная проверка Telegram Monitoring и VK import с созданным событием.
-- Release evidence: pending.
+- Release evidence: PR #710, SHA `34bb4a7844ab6e48fc9db0d4aee7c7fcfea5dd9c`, Fly health passed; live 4o schema canary passed. Automatic retry job 90901 failed on a separate grounding gate, prompting the factual-shell fix.
 - [ ] Deploy и автоматический retry публикации.
 - [ ] Восстановить Telegram Monitoring и VK import; подтвердить новые события, а не только запуск задач.
