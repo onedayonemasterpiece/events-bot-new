@@ -6505,12 +6505,25 @@ async def build_tg_event_announcement_for_publish(
 ) -> tuple[str, bool]:
     if details_button_highlight is None:
         details_button_highlight = promo_highlight
-    hook_text = await build_tg_event_hook_text(
-        event,
-        text,
-        promo_highlight=promo_highlight,
-        db=db,
-    )
+    try:
+        hook_text = await build_tg_event_hook_text(
+            event,
+            text,
+            promo_highlight=promo_highlight,
+            db=db,
+        )
+    except TelegramEventPublicWriterUnavailable:
+        if not _tg_event_source_evidence(event):
+            raise
+        # An accepted event can have its date/title only on a source poster.
+        # When neither writer can ground a narrative sentence in the raw text,
+        # publish the existing factual event shell without inventing a hook.
+        logging.warning(
+            "tg_event.public_writer_shell_fallback event_id=%s source_url=%s",
+            getattr(event, "id", None),
+            getattr(event, "source_post_url", None),
+        )
+        hook_text = ""
     message_html = build_tg_event_announcement(
         event,
         hook_text,

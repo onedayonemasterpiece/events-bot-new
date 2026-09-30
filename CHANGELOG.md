@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Telegram event publication uses its existing factual card layout without a
+  narrative hook when both LLM writers cannot ground one in organizer text.
+  Events without organizer evidence remain blocked.
 - Telegram event publication fallback no longer sends source quote enums that
   the strict OpenAI structured-output endpoint rejects with HTTP 400. The
   returned quote is still checked against organizer evidence before publishing.

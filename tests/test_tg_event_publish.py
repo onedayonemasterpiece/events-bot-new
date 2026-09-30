@@ -556,6 +556,29 @@ def test_tg_event_hook_schema_bounds_grounded_sentence_array() -> None:
     assert sentences["maxItems"] == 3
 
 
+@pytest.mark.asyncio
+async def test_public_writer_failure_uses_factual_shell_with_source(monkeypatch) -> None:
+    event = _event(source_text="Афиша. Октябрь 2026")
+    async def unavailable(*_args, **_kwargs):
+        raise main.TelegramEventPublicWriterUnavailable("no grounded narrative")
+    monkeypatch.setattr(main, "build_tg_event_hook_text", unavailable)
+    rendered, _ = await main.build_tg_event_announcement_for_publish(event, "")
+    assert "Камерный концерт" in rendered
+    assert "19:00" in rendered
+    assert "Концертный зал" in rendered
+    assert "no grounded narrative" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_public_writer_failure_without_source_still_blocks(monkeypatch) -> None:
+    event = _event(source_text="")
+    async def unavailable(*_args, **_kwargs):
+        raise main.TelegramEventPublicWriterUnavailable("no organizer source")
+    monkeypatch.setattr(main, "build_tg_event_hook_text", unavailable)
+    with pytest.raises(main.TelegramEventPublicWriterUnavailable):
+        await main.build_tg_event_announcement_for_publish(event, "")
+
+
 def test_tg_event_hook_schema_constrains_quotes_to_exact_source_fragments() -> None:
     evidence = (
         "Первая точная фраза организатора о программе. "
