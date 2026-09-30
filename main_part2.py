@@ -6277,9 +6277,21 @@ async def _build_tg_event_hook_via_4o(
         raise TelegramEventPublicWriterUnavailable(
             "Telegram public writer unavailable: 4o fallback budget is exhausted or unavailable"
         )
+    # The Lite writer accepts a source-derived enum, but the strict OpenAI
+    # structured-output endpoint rejects some organizer quote literals with
+    # HTTP 400. Keep the output shape strict and verify the returned quote
+    # against the organizer corpus in _parse_tg_event_hook_payload instead.
+    fallback_schema = json.loads(json.dumps(response_schema, ensure_ascii=False))
+    fallback_schema["properties"]["sentences"]["items"]["properties"][
+        "evidence_quote"
+    ].pop("enum", None)
+    fallback_prompt = prompt.replace(
+        "Значение `evidence_quote` выбери из enum в JSON Schema и скопируй целиком без любых изменений регистра, орфографии и пунктуации.",
+        "Скопируй `evidence_quote` дословно из организаторского источника без изменений регистра, орфографии и пунктуации.",
+    )
     try:
         raw = await ask_4o(
-            prompt,
+            fallback_prompt,
             model=TG_EVENT_4O_FALLBACK_MODEL,
             max_tokens=max_output_tokens,
             temperature=0.4,
@@ -6289,7 +6301,7 @@ async def _build_tg_event_hook_via_4o(
                 "json_schema": {
                     "name": "tg_event_grounded_hook",
                     "strict": True,
-                    "schema": response_schema,
+                    "schema": fallback_schema,
                 },
             },
             meta={

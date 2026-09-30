@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Telegram event publication fallback no longer sends source quote enums that
+  the strict OpenAI structured-output endpoint rejects with HTTP 400. The
+  returned quote is still checked against organizer evidence before publishing.
 - VK location grounding now recognizes mixed Cyrillic/Latin letters in a venue
   name and routes a venue absent from the post and poster to semantic review.
   This prevents a source-profile address from becoming an unsupported meeting
