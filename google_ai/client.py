@@ -1641,6 +1641,7 @@ class GoogleAIClient:
             else None
         )
         attempt_cursor = 0
+        quota_admission_blocks = 0
 
         last_error: Optional[Exception] = None
         for model_index, model_name in enumerate(model_chain):
@@ -1706,6 +1707,11 @@ class GoogleAIClient:
                     if not e.quota_reason:
                         e.quota_reason = e.blocked_reason
                     blocked_reason = (e.blocked_reason or "").strip().lower()
+                    if blocked_reason in {"rpm", "tpm", "rpd"}:
+                        # Local quota admission denied the request before a provider
+                        # send. Keep the cap for physical sends, but let an unused
+                        # model in the fallback chain try its own quota pool.
+                        quota_admission_blocks += 1
                     has_quota_fallback = (
                         allow_model_fallback
                         and
@@ -1713,7 +1719,7 @@ class GoogleAIClient:
                         and model_index < (len(model_chain) - 1)
                         and (
                             provider_attempt_cap is None
-                            or attempt_cursor < provider_attempt_cap
+                            or attempt_cursor - quota_admission_blocks < provider_attempt_cap
                         )
                     )
                     if has_quota_fallback:
@@ -1796,7 +1802,7 @@ class GoogleAIClient:
                             and remaining_key_ids
                             and (
                                 provider_attempt_cap is None
-                                or attempt_cursor < provider_attempt_cap
+                                or attempt_cursor - quota_admission_blocks < provider_attempt_cap
                             )
                         ):
                             self._log_event(
@@ -1821,7 +1827,7 @@ class GoogleAIClient:
                             and model_index < (len(model_chain) - 1)
                             and (
                                 provider_attempt_cap is None
-                                or attempt_cursor < provider_attempt_cap
+                                or attempt_cursor - quota_admission_blocks < provider_attempt_cap
                             )
                         )
                         if has_fallback:
@@ -1853,7 +1859,7 @@ class GoogleAIClient:
                         and local_attempt_no < self.max_retries
                         and (
                             provider_attempt_cap is None
-                            or attempt_cursor < provider_attempt_cap
+                                or attempt_cursor - quota_admission_blocks < provider_attempt_cap
                         )
                     )
                     if can_retry:
@@ -1874,7 +1880,7 @@ class GoogleAIClient:
                         and model_index < (len(model_chain) - 1)
                         and (
                             provider_attempt_cap is None
-                            or attempt_cursor < provider_attempt_cap
+                            or attempt_cursor - quota_admission_blocks < provider_attempt_cap
                         )
                     )
                     await self._notify_incident(

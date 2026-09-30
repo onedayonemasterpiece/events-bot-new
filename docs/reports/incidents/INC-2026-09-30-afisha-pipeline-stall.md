@@ -24,3 +24,22 @@ Related: `INC-2026-09-19-tg-monitoring-runtime-starvation.md`
 - Release evidence: PR #710, SHA `34bb4a7844ab6e48fc9db0d4aee7c7fcfea5dd9c`, Fly health passed; live 4o schema canary passed. Automatic retry job 90901 failed on a separate grounding gate, prompting the factual-shell fix.
 - [ ] Deploy и автоматический retry публикации.
 - [ ] Восстановить Telegram Monitoring и VK import; подтвердить новые события, а не только запуск задач.
+
+## 30 September follow-up
+
+- PR #711 deployed at `cb6882a1fa406eb2d48bd4623d0ab06cb15e21c4`;
+  automatic outbox job 90901 completed and published event 9408 as
+  `https://t.me/kldevents/4406`. This verifies the publication stage only.
+- At 18:42 UTC, Telegram Kaggle run
+  `catchup-tg-monitoring-9f03bf6d0dd94e4d886e80abbb4a9907` still reported
+  `alive`, source 24/57, 319 messages scanned after the host ops run 10029 had
+  timed out. No second S22 scan was started.
+- VK auto-import run 10091 created zero events; 9/12 inbox rows failed
+  technically. Runtime logs show the opted-in Gemini 3.6 reserve was blocked
+  by daily quota and Gemini 2.5 was also blocked, while the two-attempt cap
+  prevented reaching the ordinary model chain. The four-per-hour 4o fallback
+  budget was then exhausted. This is mechanical provider routing; venue and
+  occurrence semantic gates remain required.
+- Corrective patch lets local quota admission failures pass through the model
+  chain without consuming the cap on actual provider sends. It requires live
+  import and publication verification after deploy before incident closure.
