@@ -31,7 +31,7 @@ Related incident: `INC-2026-09-30-donera-wrong-venue.md`
 
 ## Corrective actions
 
-- [x] Направлять VK-кандидатов с площадкой, отсутствующей в тексте и афише, на LLM review и fail closed при отсутствии подтверждения. Реализовано в `smart_event_update.py`, проверено целевыми тестами; production deploy ожидается.
+- [x] Направлять VK-кандидатов с площадкой, отсутствующей в тексте и афише, на LLM review и fail closed при отсутствии подтверждения. Реализовано в `smart_event_update.py` и выложено в production.
 - [ ] Replay сохранённого VK packet через import и Smart Update с противоположным контролем, где профиль источника действительно является площадкой.
 - [ ] После релиза проверить, что повторный импорт не возвращает ложный адрес.
 
@@ -39,4 +39,6 @@ Related incident: `INC-2026-09-30-donera-wrong-venue.md`
 
 - Source branch: `hotfix/venue-grounding-20260930` от `origin/main`.
 - Local checks: 39 targeted tests passed, включая неверный барный тур, mixed-script «СКЛАD» и противоположный случай с явной площадкой.
-- Deployed SHA: pending.
+- Merged PR: `https://github.com/onedayonemasterpiece/events-bot-new/pull/708`.
+- Deployed SHA: `f5ee69253c4991c713acd288a39bfe24d6f6941a` через `scripts/deploy_fly_main.sh` 2026-09-30; Fly machine 148eddde9b5778 started, health check passing, `/healthz` HTTP 200.
+- Production readback: container SHA совпадает; rows 9281/9282 показывают «Место встречи уточняется у организатора» без адреса; установленный router возвращает `(True, 'vk_location_not_in_post')` для сохранённого ошибочного варианта тура.

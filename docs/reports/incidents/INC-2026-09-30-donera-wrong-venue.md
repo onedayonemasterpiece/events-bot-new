@@ -80,21 +80,21 @@ Related docs: `docs/operations/incident-management.md`, `docs/operations/telegra
 
 ## Corrective Actions
 
-Публичная коррекция выполнена. Кодовый fix mixed-script grounding и проверка неподтверждённой площадки подготовлены в `hotfix/venue-grounding-20260930`; production deploy и полный replay ещё требуются.
+Публичная коррекция выполнена. Кодовый fix mixed-script grounding и проверка неподтверждённой площадки выложены в production SHA `f5ee69253c4991c713acd288a39bfe24d6f6941a`; полный VK import → Smart Update replay остаётся открытым.
 
 ## Follow-up Actions
 
-- [x] Исправить символьную нормализацию grounding и направить неподтверждённый source fallback на LLM review. Целевые тесты прошли; полный VK import → Smart Update replay и production deploy ожидаются.
+- [x] Исправить символьную нормализацию grounding и направить неподтверждённый source fallback на LLM review. Целевые тесты прошли, PR #708 merged, production SHA `f5ee69253` verified; полный VK import → Smart Update replay остаётся открытым.
 - [ ] Выполнить полный VK import → Smart Update replay с противоположным контролем.
 - [ ] Разобрать дубликат 9137/9379 и синхронизацию производных публикаций.
 - [ ] Исправить `update_source_post_keyboard` при `business_connection_id` типа int; ошибка замечена при ручной регенерации календарных .ics, на изменение площадки не повлияла.
 
 ## Release And Closure Evidence
 
-- deployed SHA: не требовался; код не изменён.
-- deploy path: guarded production DB repair и существующие publisher functions.
+- deployed SHA: `f5ee69253c4991c713acd288a39bfe24d6f6941a`.
+- deploy path: guarded production DB repair, существующие publisher functions и `scripts/deploy_fly_main.sh` после merge PR #708.
 - regression checks: Telegram API readback, production DB `events_search`, публичный HTML Telegraph, содержимое .ics, VK `wall.getById`.
-- post-deploy verification: в обоих event rows и Telegraph/Telegram/VK/ICS указан «СКЛАД» / Ялтинская, 20п; `@kenigevents/5141` отсутствует; два опровержения доступны.
+- post-deploy verification: в обоих event rows и Telegraph/Telegram/VK/ICS указан «СКЛАД» / Ялтинская, 20п; `@kenigevents/5141` отсутствует; два опровержения доступны. Fly machine 148eddde9b5778 проходит health check, `/healthz` HTTP 200, SHA внутри контейнера совпадает; установленный `_vk_location_value_ungrounded` принимает `СКЛАD` при наличии «СКЛАД» в тексте.
 
 ## Prevention
 
