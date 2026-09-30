@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-30-afisha-pipeline-stall.md`
+  - Scope: Telegram public writer fallback, publication queue, VK and Telegram source monitoring.
+  - Must not regress: strict fallback accepts source quotes with punctuation; closure requires automatic post and newly imported events.
+
 - `INC-2026-09-30-bar-tour-false-venue.md`
   - Scope: VK source-profile defaults, Smart Update venue grounding, Telegram forward, VK/Telegraph/calendar projections.
   - Must not regress: источник без точки встречи не получает адрес профиля сообщества; replay с явной площадкой как противоположным контролем.

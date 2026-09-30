@@ -574,6 +574,28 @@ def test_tg_event_hook_schema_constrains_quotes_to_exact_source_fragments() -> N
     assert all(quote in evidence for quote in quote_schema["enum"])
 
 
+@pytest.mark.asyncio
+async def test_strict_4o_fallback_omits_quote_enum_but_checks_source(monkeypatch) -> None:
+    evidence = '3 октября — спектакль «По щучьему велению» в Театре кукол.'
+    event = _event(title='По щучьему велению', source_text=evidence)
+    async def reserve(*_args, **_kwargs):
+        return 1
+    async def fake_ask(prompt, **kwargs):
+        quote = kwargs['response_format']['json_schema']['schema']['properties']['sentences']['items']['properties']['evidence_quote']
+        assert 'enum' not in quote
+        assert 'выбери из enum' not in prompt
+        return {'sentences': [{'text': 'Спектакль «По щучьему велению» пройдёт в Театре кукол.', 'evidence_quote': evidence}]}
+    monkeypatch.setattr(main, '_reserve_tg_event_4o_fallback', reserve)
+    monkeypatch.setattr(main, 'ask_4o', fake_ask)
+    result = await main._build_tg_event_hook_via_4o(
+        event, evidence, evidence,
+        'Значение `evidence_quote` выбери из enum в JSON Schema и скопируй целиком без любых изменений регистра, орфографии и пунктуации.',
+        db=None, max_chars=400, max_output_tokens=500,
+        response_schema=main._tg_event_hook_response_schema(evidence),
+    )
+    assert 'По щучьему велению' in result
+
+
 def test_tg_event_quote_enum_splits_long_source_without_inventing_text() -> None:
     evidence = " ".join(
         f"дословный фрагмент организатора номер {index}" for index in range(30)
