@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Prioritize fresh Telegram announcements ahead of ordinary media review jobs
+  that can repeatedly time out, while retaining priority for media checks
+  that actually block a VK announcement.
 - Monitoring quota admission failures no longer consume the cap on actual
   provider sends, so an exhausted reserve model can fall through to the
   existing Lite/Gemma chain without bypassing event quality checks.
