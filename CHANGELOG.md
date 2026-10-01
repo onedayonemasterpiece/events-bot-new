@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- The daily Live canary now checks the actual shared WSS transport, successful search tools, cards and model audio rather than legacy HTTP polling.
 - Live event search gains the shared ticket-bound WSS transport, binary PCM and
   pushed events with no silent HTTP-audio fallback. Python and browser consumers
   use the same versioned release; existing authentication/search tools remain.

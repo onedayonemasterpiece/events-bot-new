@@ -154,6 +154,11 @@ eight returned cards, `has_more=true`, and explicit session release.
 
 ## Daily canary
 
+The migrated canary uses the installed shared WSS client, never HTTP input or
+events polling. A PASS requires search_events/tool_result, non-empty cards,
+model PCM and turn_complete. Its sanitized v2 receipt records protocol and
+audio counts. Missing audio, timeout and foreign URLs have regression tests.
+
 `.github/workflows/live-search-daily-canary.yml` runs once per day (plus
 manual dispatch). It uses the existing no-mail auth-session broker, opens a
 real `gemini-3.8-live` session, sends one text request, requires an actual

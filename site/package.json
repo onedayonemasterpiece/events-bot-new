@@ -53,7 +53,7 @@
     "e2e:search-live": "node e2e/search/run.mjs",
     "test:search-e2e-harness": "node --test tests/search-e2e-*.test.mjs",
     "test:search-production-health": "node --experimental-strip-types --test tests/search-production-health-*.test.mjs tests/search-e2e-workflow-contract.test.mjs",
-    "test:live-wss": "node --test tests/live-event-search-controller.test.mjs tests/live-search-build-contract.test.mjs tests/live-wss-contract.test.mjs",
+    "test:live-wss": "node --test tests/live-*.test.mjs",
     "astro": "astro",
     "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --experimental-strip-types --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs",
     "test:transport-faults": "node --experimental-strip-types --test src/lib/transportFaultInjector.test.ts && node --test scripts/transport-fault-build-contract.test.mjs",
