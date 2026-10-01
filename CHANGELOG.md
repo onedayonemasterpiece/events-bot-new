@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- The daily Live canary now checks the actual shared WSS transport, successful search tools, cards and model audio rather than legacy HTTP polling.
+- Live event search gains the shared ticket-bound WSS transport, binary PCM and
+  pushed events with no silent HTTP-audio fallback. Python and browser consumers
+  use the same versioned release; existing authentication/search tools remain.
+  This is a release candidate; production voice acceptance is recorded separately.
 - Prioritize fresh Telegram announcements ahead of ordinary media review jobs
   that can repeatedly time out, while retaining priority for media checks
   that actually block a VK announcement.

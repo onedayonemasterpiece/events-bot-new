@@ -6,7 +6,8 @@ implementation or a second quota database.
 
 ## Runtime contract
 
-- `live-interaction v0.1.4` is the transport/session dependency. The provider
+- WSS integration candidate: `live-interaction v0.3.7-rc.1`; exact archive SHA-256
+  is recorded in `site/package.json.liveFramework` and Python requirements. The provider
   checks `resource_guard` before connect/setup/send/receive, pins one key for
   the session/resumption lifetime, treats resource failures as terminal, and
   the Python host owns client-liveness cleanup.
@@ -60,16 +61,38 @@ If the Live URL is absent, the older direct event-search implementation remains
 a compatibility path for non-Live builds. A configured Live path never silently
 switches to that path after a Live failure.
 
+## Cross-project WSS contract
+
+The migrated browser uses the shared `wl-live-v1` transport: authenticated HTTPS
+bootstrap, one-use 15-second subprotocol ticket, binary PCM and pushed events.
+Socket URLs resolve against the API origin, not the static-page origin; foreign
+origins, query credentials and reused tickets fail closed. Ping/pong maintains
+client liveness without events polling. A WSS session cannot fall back to HTTP input.
+
+EventsBot remains one Python/aiohttp service, using the same framework relay as
+Street Story/FastAPI. Its `static_site_live_socket.py` is only an authorization/I/O
+adapter, not an audio engine. Wonderful Lections keeps the Node framework binding.
+No Node sidecar, broker or shared cross-product outage domain is added. See the
+pinned framework's `docs/native-wss.md` for the runtime decision and tradeoffs.
+
+Startup capture remains disabled until hello acknowledgement; there is no promise
+of seamless audio replay. Real browser/public-TLS/search acceptance is required
+before production activation. Historical HTTP acceptance below does not prove WSS.
+
 ## HTTP surface
 
 EventsBot exposes an authenticated same product boundary:
 
 - `POST /api/live-search`
+- `POST /api/live-search/{session_id}/socket-ticket` (same authorized user)
+- `GET /api/live-search/{session_id}/socket` (WebSocket upgrade; one-use ticket)
 - `POST /api/live-search/{session_id}/input`
 - `GET /api/live-search/{session_id}/events?after=N`
 - `POST /api/live-search/{session_id}/stop`
 
-Every route binds the session to the same authorized Supabase token/user.
+HTTP routes bind the session to the same authorized Supabase token/user.
+WSS inherits that binding through its single-use ticket. Legacy HTTP input
+and events endpoints remain explicit compatibility paths, not automatic fallback.
 Allowed browser origins are explicit. The static site remains static; it does
 not connect directly to Google.
 
@@ -130,6 +153,11 @@ enabled on EventsBot and the real no-mail canary completed a
 eight returned cards, `has_more=true`, and explicit session release.
 
 ## Daily canary
+
+The migrated canary uses the installed shared WSS client, never HTTP input or
+events polling. A PASS requires search_events/tool_result, non-empty cards,
+model PCM and turn_complete. Its sanitized v2 receipt records protocol and
+audio counts. Missing audio, timeout and foreign URLs have regression tests.
 
 `.github/workflows/live-search-daily-canary.yml` runs once per day (plus
 manual dispatch). It uses the existing no-mail auth-session broker, opens a
