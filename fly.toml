@@ -9,6 +9,13 @@ app = "events-bot-new-wngqia"
   # INC-2026-09-28: verified text reserves; clear preference after Google recovery.
   MONITORING_TEXT_RESERVE_MODELS = "gemini-3.6-flash,gemini-2.5-flash"
   GOOGLE_AI_MODEL_KEY_ENVS_JSON = '{"gemini-2.5-flash":["GOOGLE_API_KEY","GOOGLE_API_KEY4"],"gemini-3.6-flash":["GOOGLE_API_KEY2","GOOGLE_API_KEY3","GOOGLE_API_KEY6"]}'
+  # INC-2026-10-01: bounded fresh-source recovery; key 3's 3.5 Lite RPD is exhausted.
+  TG_MONITORING_DAYS_BACK = "1"
+  TG_MONITORING_TEXT_MODEL = "gemini-3.1-flash-lite"
+  TG_MONITORING_VISION_MODEL = "gemini-3.1-flash-lite"
+  TG_MONITORING_TEXT_MODEL_FALLBACK = "gemini-3.5-flash-lite"
+  TG_MONITORING_VISION_MODEL_FALLBACK = "gemini-3.5-flash-lite"
+  TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV = "GOOGLE_API_KEY5"
   PORT = "8080"
   PYTHONOPTIMIZE = "2"
   ENABLE_RUNTIME_FILE_LOGGING = "1"

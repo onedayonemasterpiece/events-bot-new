@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-10-01-tg-monitor-stale-cursor-replay.md`
+  - Scope: Telegram Monitoring freshness cutoff, stale source cursors, Kaggle
+    producer throughput and all-source import. Must not regress: a saved cursor
+    cannot bypass the date window; production recovery needs fresh Smart Update
+    imports without stale public announcements.
+
 - `INC-2026-09-30-afisha-pipeline-stall.md`
   - Scope: Telegram public writer fallback, publication queue, VK and Telegram source monitoring.
   - Must not regress: strict fallback accepts source quotes with punctuation; closure requires automatic post and newly imported events.

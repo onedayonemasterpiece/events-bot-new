@@ -4,6 +4,7 @@ import ast
 import asyncio
 import hashlib
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 from types import SimpleNamespace
@@ -330,7 +331,7 @@ def test_telegram_quota_rejection_waits_inline_before_same_carrier_retry() -> No
         "LLM_QUOTA_WAIT_MAX_ATTEMPTS": 4,
         "LLM_QUOTA_WAIT_MAX_SECONDS": 65.0,
         "_get_gemma_client": lambda: client,
-        "_resolve_candidate_key_ids": lambda: None,
+        "_resolve_candidate_key_ids": lambda **_kwargs: None,
         "_is_not_found": lambda _exc: False,
         "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
     }
@@ -388,7 +389,7 @@ def test_telegram_quota_wait_does_not_abandon_carrier_after_four_minute_buckets(
         "LLM_TRANSIENT_RECOVERY_ATTEMPTS": 2,
         "LLM_MAX_OUTPUT_TOKENS": 8192,
         "_get_gemma_client": lambda: client,
-        "_resolve_candidate_key_ids": lambda: None,
+        "_resolve_candidate_key_ids": lambda **_kwargs: None,
         "_is_not_found": lambda _exc: False,
         "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
     }
@@ -444,7 +445,7 @@ def test_telegram_model_recovers_timeout_and_truncation_inside_same_carrier() ->
         "LLM_TRANSIENT_RECOVERY_ATTEMPTS": 3,
         "LLM_MAX_OUTPUT_TOKENS": 8192,
         "_get_gemma_client": lambda: client,
-        "_resolve_candidate_key_ids": lambda: None,
+        "_resolve_candidate_key_ids": lambda **_kwargs: None,
         "_is_not_found": lambda _exc: False,
         "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
     }
@@ -478,10 +479,10 @@ def test_telegram_exhausted_primary_quota_uses_independent_model_same_carrier() 
         error_type = "provider"
 
     class _Client:
-        calls: list[str] = []
+        calls: list[tuple[str, list[str] | None]] = []
 
         async def generate_content_async(self, **kwargs):
-            self.calls.append(kwargs["model"])
+            self.calls.append((kwargs["model"], kwargs["candidate_key_ids"]))
             if kwargs["model"] == "primary":
                 raise _RateLimitError()
             return '{"ok":true}', SimpleNamespace()
@@ -503,7 +504,7 @@ def test_telegram_exhausted_primary_quota_uses_independent_model_same_carrier() 
         "LLM_TRANSIENT_RECOVERY_ATTEMPTS": 2,
         "LLM_MAX_OUTPUT_TOKENS": 8192,
         "_get_gemma_client": lambda: client,
-        "_resolve_candidate_key_ids": lambda: None,
+        "_resolve_candidate_key_ids": lambda *, fallback=False: ["fallback-key"] if fallback else ["primary-key"],
         "_is_not_found": lambda _exc: False,
         "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
     }
@@ -512,7 +513,55 @@ def test_telegram_exhausted_primary_quota_uses_independent_model_same_carrier() 
     result = asyncio.run(namespace["_call_model"]("text", "carrier"))
 
     assert result == '{"ok":true}'
-    assert client.calls == ["primary", "gemini-3.5-flash-lite"]
+    assert client.calls == [
+        ("primary", ["primary-key"]),
+        ("gemini-3.5-flash-lite", ["fallback-key"]),
+    ]
+
+
+def test_telegram_key_candidate_resolver_keeps_fallback_on_its_own_lane() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    resolver = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "_resolve_candidate_key_ids"
+    )
+
+    class Query:
+        def __init__(self):
+            self.envs = []
+
+        def select(self, *_args):
+            return self
+
+        def eq(self, *_args):
+            return self
+
+        def in_(self, _column, envs):
+            self.envs = envs
+            return self
+
+        def order(self, *_args):
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=[
+                {"id": env, "env_var_name": env} for env in self.envs
+            ])
+
+    query = Query()
+    namespace = {
+        "_CANDIDATE_KEY_IDS": {},
+        "GOOGLE_KEY_ENV": "GOOGLE_API_KEY3",
+        "GOOGLE_FALLBACK_KEY_ENV": "GOOGLE_API_KEY5",
+        "SUPABASE_CONSUMER": "tg_monitor",
+        "_get_supabase_client": lambda: SimpleNamespace(table=lambda _name: query),
+        "_key_env_aliases": lambda env: [env],
+        "logger": SimpleNamespace(info=lambda *args: None),
+    }
+    exec(compile(ast.Module(body=[resolver], type_ignores=[]), "<key-lane>", "exec"), namespace)
+    resolve = namespace["_resolve_candidate_key_ids"]
+    assert resolve() == ["GOOGLE_API_KEY3"]
+    assert resolve(fallback=True) == ["GOOGLE_API_KEY5"]
 
 
 def test_telegram_producer_keeps_all_events_and_lifecycle_actions_in_mixed_decision() -> None:
@@ -1059,3 +1108,51 @@ def test_telegram_scan_has_no_free_form_or_regex_terminal_skip_authority() -> No
     assert "source_parse_pending = bool(grouped_id)" in scan_source
     assert "messages_out = _merge_media_groups(messages_out)" in scan_source
     assert "album_ocr_blocks" in scan_source
+
+
+@pytest.mark.parametrize("cursor_id", [None, 100])
+def test_telegram_scan_stops_at_freshness_cutoff_even_with_stale_cursor(cursor_id) -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    scan = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "scan_source"
+    )
+    old_message = SimpleNamespace(id=101, date=datetime.now(timezone.utc) - timedelta(days=4))
+
+    class Client:
+        async def get_entity(self, username):
+            return SimpleNamespace(id=1)
+
+        async def get_messages(self, entity, *, limit):
+            return [old_message]
+
+        async def iter_messages(self, entity, **kwargs):
+            yield old_message
+
+    async def tg_call(label, fn, *args, **kwargs):
+        return await fn(*args, **kwargs)
+
+    async def source_meta(*args):
+        return {}
+
+    namespace = {
+        "TelegramClient": Client,
+        "datetime": datetime,
+        "timezone": timezone,
+        "timedelta": timedelta,
+        "MAX_DAYS_BACK": 1,
+        "MAX_MESSAGES_PER_SOURCE": 50,
+        "MAX_MEDIA_PER_SOURCE": 0,
+        "logger": SimpleNamespace(info=lambda *args, **kwargs: None),
+        "tg_call": tg_call,
+        "_source_type": lambda entity: "channel",
+        "_build_source_meta": source_meta,
+        "_message_date_iso": lambda msg: msg.date.isoformat(),
+        "_merge_media_groups": lambda messages: messages,
+    }
+    exec(compile(ast.Module(body=[scan], type_ignores=[]), "<tg-scan>", "exec"), namespace)
+    result = asyncio.run(namespace["scan_source"](Client(), {
+        "username": "example_source",
+        "last_scanned_message_id": cursor_id,
+    }))
+    assert result["messages"] == []
