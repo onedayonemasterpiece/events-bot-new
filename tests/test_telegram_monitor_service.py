@@ -241,6 +241,34 @@ def test_build_secrets_payload_ships_exact_declared_video_pool(monkeypatch):
     assert payload["TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY"]
 
 
+def test_build_secrets_payload_ships_declared_text_key_pools(monkeypatch):
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "hash")
+    monkeypatch.setenv("TG_SESSION", "session")
+    monkeypatch.setenv("TG_MONITORING_GOOGLE_KEY_ENV", "GOOGLE_API_KEY3")
+    monkeypatch.setenv("TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV", "GOOGLE_API_KEY5")
+    monkeypatch.setenv(
+        "TG_MONITORING_GOOGLE_PRIMARY_KEY_ENVS",
+        "GOOGLE_API_KEY2,GOOGLE_API_KEY3,GOOGLE_API_KEY5",
+    )
+    monkeypatch.setenv(
+        "TG_MONITORING_GOOGLE_FALLBACK_KEY_ENVS",
+        "GOOGLE_API_KEY4,GOOGLE_API_KEY5",
+    )
+    for number in (2, 3, 4, 5):
+        monkeypatch.setenv(f"GOOGLE_API_KEY{number}", f"key-{number}")
+    payload = json.loads(_build_secrets_payload())
+    assert payload["TG_MONITORING_GOOGLE_PRIMARY_KEY_ENVS"] == (
+        "GOOGLE_API_KEY2,GOOGLE_API_KEY3,GOOGLE_API_KEY5"
+    )
+    assert payload["TG_MONITORING_GOOGLE_FALLBACK_KEY_ENVS"] == (
+        "GOOGLE_API_KEY4,GOOGLE_API_KEY5"
+    )
+    assert {key for key in payload if key.startswith("GOOGLE_API_KEY") and key != "GOOGLE_API_KEY"} == {
+        "GOOGLE_API_KEY2", "GOOGLE_API_KEY3", "GOOGLE_API_KEY4", "GOOGLE_API_KEY5"
+    }
+
+
 def test_build_secrets_payload_requires_every_declared_video_key(monkeypatch):
     import source_parsing.telegram.service as tg_service
 

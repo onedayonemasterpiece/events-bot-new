@@ -122,6 +122,9 @@ imported after all 57 sources finish.
   monitored primary and 3.5 Flash-Lite on key 5 as the reserve, with a
   temporary one-day freshness window. Reassess the window after a complete
   healthy run.
+- Expand both Lite model lanes to registered keys 2–6 under the shared limiter
+  before a broad recovery. Until source-level checkpoints exist, run bounded
+  source cohorts so quota exhaustion cannot discard all 57 sources' work.
 
 ## Follow-up Actions
 

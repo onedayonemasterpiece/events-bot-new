@@ -255,6 +255,16 @@ DEFAULT_TG_MONITORING_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
 DEFAULT_TG_MONITORING_VIDEO_MODEL = 'gemini-3.1-flash-lite'
 GOOGLE_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_KEY_ENV') or 'GOOGLE_API_KEY3').strip() or 'GOOGLE_API_KEY3'
 GOOGLE_FALLBACK_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV') or GOOGLE_KEY_ENV).strip() or GOOGLE_KEY_ENV
+GOOGLE_PRIMARY_KEY_ENVS = tuple(dict.fromkeys(
+    name.strip() for name in
+    (os.getenv('TG_MONITORING_GOOGLE_PRIMARY_KEY_ENVS') or GOOGLE_KEY_ENV).split(',')
+    if name.strip()
+))
+GOOGLE_FALLBACK_KEY_ENVS = tuple(dict.fromkeys(
+    name.strip() for name in
+    (os.getenv('TG_MONITORING_GOOGLE_FALLBACK_KEY_ENVS') or GOOGLE_FALLBACK_KEY_ENV).split(',')
+    if name.strip()
+))
 GOOGLE_ACCOUNT_ENV = (os.getenv('TG_MONITORING_GOOGLE_ACCOUNT_ENV') or 'GOOGLE_API_LOCALNAME3').strip() or 'GOOGLE_API_LOCALNAME3'
 GOOGLE_ACCOUNT_FALLBACK_ENV = (os.getenv('TG_MONITORING_GOOGLE_ACCOUNT_FALLBACK_ENV') or GOOGLE_ACCOUNT_ENV).strip() or GOOGLE_ACCOUNT_ENV
 PRIMARY_GOOGLE_API_KEY = (os.getenv(GOOGLE_KEY_ENV) or '').strip()
@@ -1503,14 +1513,17 @@ class _TelegramSecretsProviderAdapter:
 
 def _resolve_candidate_key_ids(*, fallback: bool = False) -> list[str]:
     global _CANDIDATE_KEY_IDS
-    selected_env = GOOGLE_FALLBACK_KEY_ENV if fallback else GOOGLE_KEY_ENV
-    if selected_env in _CANDIDATE_KEY_IDS:
-        return list(_CANDIDATE_KEY_IDS[selected_env])
+    selected_envs = GOOGLE_FALLBACK_KEY_ENVS if fallback else GOOGLE_PRIMARY_KEY_ENVS
+    cache_key = ','.join(selected_envs)
+    if cache_key in _CANDIDATE_KEY_IDS:
+        return list(_CANDIDATE_KEY_IDS[cache_key])
     supabase = _get_supabase_client()
     if supabase is None:
         raise RuntimeError('Telegram monitor Google limiter is unavailable')
 
-    env_names = _key_env_aliases(selected_env)
+    env_names = list(dict.fromkeys(
+        alias for env in selected_envs for alias in _key_env_aliases(env)
+    ))
     if not env_names:
         raise RuntimeError('Telegram monitor Google key lane is missing')
 
@@ -1527,7 +1540,7 @@ def _resolve_candidate_key_ids(*, fallback: bool = False) -> list[str]:
         rows = list(result.data or [])
     except Exception as exc:
         raise RuntimeError(
-            f'Telegram monitor Google key lane lookup failed: {selected_env}'
+            f'Telegram monitor Google key lane lookup failed: {cache_key}'
         ) from exc
 
     selected_ids = [
@@ -1536,11 +1549,11 @@ def _resolve_candidate_key_ids(*, fallback: bool = False) -> list[str]:
         if row.get('id') and str(row.get('env_var_name') or '') in env_names
     ]
     if not selected_ids:
-        raise RuntimeError(f'Telegram monitor Google key lane is unregistered: {selected_env}')
-    _CANDIDATE_KEY_IDS[selected_env] = list(selected_ids)
+        raise RuntimeError(f'Telegram monitor Google key lane is unregistered: {cache_key}')
+    _CANDIDATE_KEY_IDS[cache_key] = list(selected_ids)
     logger.info(
-        'tg_monitor.key_candidates_selected consumer=%s env=%s fallback=%s candidates=%d',
-        SUPABASE_CONSUMER, selected_env, fallback, len(selected_ids),
+        'tg_monitor.key_candidates_selected consumer=%s envs=%s fallback=%s candidates=%d',
+        SUPABASE_CONSUMER, cache_key, fallback, len(selected_ids),
     )
     return list(selected_ids)
 

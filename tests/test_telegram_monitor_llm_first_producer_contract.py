@@ -551,8 +551,8 @@ def test_telegram_key_candidate_resolver_keeps_fallback_on_its_own_lane() -> Non
     query = Query()
     namespace = {
         "_CANDIDATE_KEY_IDS": {},
-        "GOOGLE_KEY_ENV": "GOOGLE_API_KEY3",
-        "GOOGLE_FALLBACK_KEY_ENV": "GOOGLE_API_KEY5",
+        "GOOGLE_PRIMARY_KEY_ENVS": ("GOOGLE_API_KEY2", "GOOGLE_API_KEY3"),
+        "GOOGLE_FALLBACK_KEY_ENVS": ("GOOGLE_API_KEY4", "GOOGLE_API_KEY5"),
         "SUPABASE_CONSUMER": "tg_monitor",
         "_get_supabase_client": lambda: SimpleNamespace(table=lambda _name: query),
         "_key_env_aliases": lambda env: [env],
@@ -560,8 +560,8 @@ def test_telegram_key_candidate_resolver_keeps_fallback_on_its_own_lane() -> Non
     }
     exec(compile(ast.Module(body=[resolver], type_ignores=[]), "<key-lane>", "exec"), namespace)
     resolve = namespace["_resolve_candidate_key_ids"]
-    assert resolve() == ["GOOGLE_API_KEY3"]
-    assert resolve(fallback=True) == ["GOOGLE_API_KEY5"]
+    assert resolve() == ["GOOGLE_API_KEY2", "GOOGLE_API_KEY3"]
+    assert resolve(fallback=True) == ["GOOGLE_API_KEY4", "GOOGLE_API_KEY5"]
 
 
 def test_telegram_producer_keeps_all_events_and_lifecycle_actions_in_mixed_decision() -> None:
