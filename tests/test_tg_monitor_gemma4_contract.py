@@ -121,8 +121,8 @@ def test_tg_monitor_script_uses_google_ai_key3_and_gemma4() -> None:
     assert "import google.generativeai as genai" not in source
     assert "genai.configure(" not in source
     assert "raise RuntimeError('Telegram monitor Google limiter is unavailable')" in source
-    assert "selected_env = GOOGLE_FALLBACK_KEY_ENV if fallback else GOOGLE_KEY_ENV" in source
-    assert "_CANDIDATE_KEY_IDS[selected_env]" in source
+    assert "selected_envs = GOOGLE_FALLBACK_KEY_ENVS if fallback else GOOGLE_PRIMARY_KEY_ENVS" in source
+    assert "_CANDIDATE_KEY_IDS[cache_key]" in source
     assert "candidate_key_ids = _resolve_candidate_key_ids(fallback=idx > 0)" in source
     assert "GOOGLE_AI_PROVIDER_TIMEOUT_SEC" in source
     assert "TG_MONITORING_LLM_TIMEOUT_SECONDS" in source

@@ -508,6 +508,22 @@ def _build_secrets_payload() -> str:
     google_fallback_env = (
         _get_env_value("TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV") or google_key_env
     ).strip() or google_key_env
+    def text_key_pool(setting: str, default: str) -> list[str]:
+        names: list[str] = []
+        for item in (_get_env_value(setting) or default).split(","):
+            name = item.strip()
+            if not re.fullmatch(r"GOOGLE_API_KEY(?:_?\d+)?", name):
+                raise RuntimeError(f"{setting} contains invalid env name: {name}")
+            if name not in names:
+                names.append(name)
+        return names
+
+    primary_pool_envs = text_key_pool(
+        "TG_MONITORING_GOOGLE_PRIMARY_KEY_ENVS", google_key_env
+    )
+    fallback_pool_envs = text_key_pool(
+        "TG_MONITORING_GOOGLE_FALLBACK_KEY_ENVS", google_fallback_env
+    )
     video_pool_raw = (
         _get_env_value("TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS")
         or "GOOGLE_API_KEY3,GOOGLE_API_KEY5"
@@ -556,6 +572,8 @@ def _build_secrets_payload() -> str:
         google_key_env: google_key_value,
         "TG_MONITORING_GOOGLE_KEY_ENV": google_key_env,
         "TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV": google_fallback_env,
+        "TG_MONITORING_GOOGLE_PRIMARY_KEY_ENVS": ",".join(primary_pool_envs),
+        "TG_MONITORING_GOOGLE_FALLBACK_KEY_ENVS": ",".join(fallback_pool_envs),
         "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS": ",".join(video_pool_envs),
         "TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES": ",".join(
             normalized_video_sources
@@ -564,10 +582,8 @@ def _build_secrets_payload() -> str:
             "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY"
         ),
     }
-    if google_fallback_env != google_key_env:
-        payload[google_fallback_env] = _require_env(google_fallback_env)
-    for video_key_env in video_pool_envs:
-        payload[video_key_env] = _require_env(video_key_env)
+    for key_env in dict.fromkeys([*primary_pool_envs, *fallback_pool_envs, *video_pool_envs]):
+        payload[key_env] = _require_env(key_env)
     logger.info(
         "tg_monitor.secrets_payload bundle_env=%s bundle_len=%s bundle_ok=%s tg_session=%s days_back=%s limit=%s",
         bundle_env_key or "-",
