@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Telegram Monitoring applies its configured day cutoff even when a source has
+  an old cursor, preventing failed all-source runs from repeatedly parsing the
+  entire accumulated gap. It routes fallback-model calls to the configured
+  fallback key and temporarily uses a one-day window with 3.1 Flash-Lite as
+  primary while the Gemma/3.5 Lite lane is degraded.
 - The daily Live canary now checks the actual shared WSS transport, successful search tools, cards and model audio rather than legacy HTTP polling.
 - Live event search gains the shared ticket-bound WSS transport, binary PCM and
   pushed events with no silent HTTP-audio fallback. Python and browser consumers

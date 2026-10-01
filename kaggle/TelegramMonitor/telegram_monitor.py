@@ -1453,7 +1453,7 @@ os.environ.setdefault('GOOGLE_AI_MAX_RETRIES', str(GEMMA_CLIENT_MAX_RETRIES))
 
 _GEMMA_CLIENT: GoogleAIClient | None = None
 _VIDEO_GEMINI_CLIENT: GoogleAIClient | None = None
-_CANDIDATE_KEY_IDS: list[str] | None = None
+_CANDIDATE_KEY_IDS: dict[str, list[str]] = {}
 _SUPABASE_CLIENT = None
 _VIDEO_MODEL_CALLS_USED = 0
 _VIDEO_EVIDENCE_MODEL_CALLS_USED = 0
@@ -1501,21 +1501,18 @@ class _TelegramSecretsProviderAdapter:
         return self.base.get_secret(name)
 
 
-def _resolve_candidate_key_ids() -> list[str] | None:
+def _resolve_candidate_key_ids(*, fallback: bool = False) -> list[str]:
     global _CANDIDATE_KEY_IDS
-    if _CANDIDATE_KEY_IDS is not None:
-        return list(_CANDIDATE_KEY_IDS)
+    selected_env = GOOGLE_FALLBACK_KEY_ENV if fallback else GOOGLE_KEY_ENV
+    if selected_env in _CANDIDATE_KEY_IDS:
+        return list(_CANDIDATE_KEY_IDS[selected_env])
     supabase = _get_supabase_client()
     if supabase is None:
-        _CANDIDATE_KEY_IDS = []
-        return None
+        raise RuntimeError('Telegram monitor Google limiter is unavailable')
 
-    primary_envs = _key_env_aliases(GOOGLE_KEY_ENV)
-    fallback_envs = [name for name in _key_env_aliases(GOOGLE_FALLBACK_KEY_ENV) if name not in primary_envs]
-    env_names = [*primary_envs, *fallback_envs]
+    env_names = _key_env_aliases(selected_env)
     if not env_names:
-        _CANDIDATE_KEY_IDS = []
-        return None
+        raise RuntimeError('Telegram monitor Google key lane is missing')
 
     try:
         result = (
@@ -1529,32 +1526,23 @@ def _resolve_candidate_key_ids() -> list[str] | None:
         )
         rows = list(result.data or [])
     except Exception as exc:
-        logger.warning('tg_monitor.key_candidates_failed consumer=%s env=%s err=%s', SUPABASE_CONSUMER, ','.join(env_names), exc)
-        _CANDIDATE_KEY_IDS = []
-        return None
+        raise RuntimeError(
+            f'Telegram monitor Google key lane lookup failed: {selected_env}'
+        ) from exc
 
-    primary_ids = [
+    selected_ids = [
         str(row.get('id'))
         for row in rows
-        if row.get('id') and str(row.get('env_var_name') or '') in primary_envs
+        if row.get('id') and str(row.get('env_var_name') or '') in env_names
     ]
-    fallback_ids = [
-        str(row.get('id'))
-        for row in rows
-        if row.get('id') and str(row.get('env_var_name') or '') in fallback_envs
-    ]
-    if primary_envs and not primary_ids:
-        logger.warning(
-            'tg_monitor.key_candidates_missing_primary consumer=%s env=%s fallback=%s action=local_primary_limiter',
-            SUPABASE_CONSUMER,
-            ','.join(primary_envs),
-            bool(fallback_ids),
-        )
-        _CANDIDATE_KEY_IDS = []
-        return None
-    resolved = primary_ids
-    _CANDIDATE_KEY_IDS = list(resolved)
-    return list(resolved) if resolved else None
+    if not selected_ids:
+        raise RuntimeError(f'Telegram monitor Google key lane is unregistered: {selected_env}')
+    _CANDIDATE_KEY_IDS[selected_env] = list(selected_ids)
+    logger.info(
+        'tg_monitor.key_candidates_selected consumer=%s env=%s fallback=%s candidates=%d',
+        SUPABASE_CONSUMER, selected_env, fallback, len(selected_ids),
+    )
+    return list(selected_ids)
 
 
 def _get_gemma_client() -> GoogleAIClient:
@@ -2030,10 +2018,10 @@ async def _call_model(
 
     payload = prompt if not images else [prompt, *images]
     client = _get_gemma_client()
-    candidate_key_ids = _resolve_candidate_key_ids()
     last_error: Exception | None = None
 
     for idx, model_name in enumerate(models_to_try):
+        candidate_key_ids = _resolve_candidate_key_ids(fallback=idx > 0)
         quota_attempt = 0
         transient_attempt = 0
         output_token_budget = max(1, int(max_output_tokens))
@@ -6607,7 +6595,16 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 min_id=last_id or 0,
                 max_id=resume_max_id,
             ):
-                if not last_id and msg.date and msg.date.replace(tzinfo=timezone.utc) < cutoff:
+                # A stale cursor must not turn a short freshness window into an
+                # unbounded historical replay after an unsuccessful full run.
+                if msg.date and msg.date.replace(tzinfo=timezone.utc) < cutoff:
+                    logger.info(
+                        'source.cutoff username=%s cursor_id=%s message_id=%s cutoff=%s',
+                        username,
+                        last_id or 0,
+                        msg.id,
+                        cutoff.isoformat(),
+                    )
                     cutoff_hit = True
                     done = True
                     break
