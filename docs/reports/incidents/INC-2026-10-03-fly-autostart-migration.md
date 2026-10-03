@@ -1,10 +1,10 @@
 # INC-2026-10-03-fly-autostart-migration Legacy Fly writers restarted during migration
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: Events Bot / Kotopogoda runtime migration
 Opened: 2026-10-03
-Closed: —
+Closed: 2026-10-03
 Registry: `inc_046b7b765c94cba6b4571359`
 
 ## Summary and impact
@@ -79,3 +79,21 @@ snapshot `951065bf`. Deployment artifacts are in `deploy/runcoveer`.
 Rollback must stop the new writer before uncordoning/starting Fly; restore
 Events command to python main.py. Preserve latest writes before any rollback.
 Unrelated historical VK/Google/TG-monitor incidents remain open.
+
+## Closure verification (2026-10-03 UTC)
+
+Final recovery checksums and SQLite integrity passed before activation. Both
+legacy machines remain cordoned and stopped after old-origin probes. Production
+Telegram webhooks point to the new HTTPS origins; real `/start` and `/help`
+responses passed before and after reboot. Container restart, repeat deployment,
+Docker daemon restart and host reboot restored healthy services automatically.
+Post-reboot Events has 9,123 events (final baseline 9,121); Kotopogoda has 154
+assets, with SQLite quick_check=ok. A fresh consistent local backup completed
+at `/var/backups/runcoveer/20261003T090823Z`; verified final snapshots and delta
+remain retained off-host on DevCoveer. Registry incident is closed.
+
+External CDN TLS is tracked separately: Yandex billing became active and the
+disabled CDN resource was re-enabled with its existing certificate. The public
+site returns HTTP 200; edge TLS propagation still requires verification.
+Administrative publishing flows were not exercised with the unprivileged local
+E2E identity. Existing unrelated incidents are not resolved by this migration.

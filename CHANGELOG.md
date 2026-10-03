@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Recorded verified RunCoveer production cutover, persistence/reboot checks and closure of the legacy Fly autostart incident.
+
 ### Added
 - Reproducible RunCoveer Docker Compose runtime deployment for Events Bot and
   the preserved Kotopogoda runtime, with isolated preflight, persistent state,
