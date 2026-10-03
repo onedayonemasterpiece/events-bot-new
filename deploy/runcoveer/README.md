@@ -76,7 +76,7 @@ file rotation remains enabled. Firewall allows 22/80/443 only.
 Install `backup.service`/`backup.timer` to `/etc/systemd/system/runcoveer-backup.*`
 and enable the timer. `sudo python3 /opt/runcoveer/deployment/backup.py` makes
 consistent SQLite backups and copies non-SQLite persistent state with mode 0700.
-Keep the last three complete local backups; pruning applies only to snapshots
+Keep only the latest complete local backup; pruning applies only to snapshots
 with this script’s receipt and timestamp format, after the next backup succeeds.
 Copy backups off-host to a retained DevCoveer artifact directory and verify
 checksums. Local backup alone does not protect against host loss. Secrets have
@@ -122,3 +122,42 @@ Kotopogoda external RAG PostgreSQL still returns tenant/user not found, as
 already recorded in its pre-migration external-data inventory. This deployment
 restores the existing configuration; it does not repair the missing provider
 tenant. Basic Telegram runtime and local data are independently verified.
+
+## Encrypted private Kaggle recovery
+
+The daily timer at 03:00 UTC (05:00 Europe/Kaliningrad) runs `backup-kaggle.py`:
+consistent SQLite snapshots and persistent application files are archived with
+production env files, deployment configuration and Caddy configuration. No SSH
+private key or backup decryption key is included. `age` encrypts the streaming
+archive using `/etc/runcoveer/backup-age.recipient` before upload.
+
+Only DevCoveer holds `/home/dev/.config/runcoveer/backup-age.key` (0600).
+Losing this identity makes the dataset unrecoverable; protect it separately.
+Production only receives the public recipient. Install `age` on production;
+the Kaggle SDK is supplied by the existing Events image and uses its preserved
+production Kaggle identity, without starting an application worker.
+
+Dataset: `<KAGGLE_USERNAME>/runcoveer-production-backup`, always private.
+First upload explicitly uses `public=False`; updates refuse a public dataset
+and preserve version history (`delete_old_versions=False`). The fixed encrypted
+filename and manifest replace the current version without creating new datasets.
+Kaggle’s official private-dataset quota explanation counts the most recent
+version, so history is retained while the current archive remains bounded:
+https://www.kaggle.com/discussions/product-feedback/50755. Local snapshot retention is also one completed
+snapshot; an incomplete next upload never causes a blind repeated mutation.
+A pending intent records the exact encrypted checksum before upload. The next
+run reconciles that same remote manifest before generating another snapshot;
+unknown outcomes require inspection instead of creating duplicate versions.
+
+Manual run: `sudo systemctl start runcoveer-backup.service`.
+Receipt: `/var/backups/runcoveer/kaggle/receipt.json`; inspect the systemd unit
+result and receipt timestamp for off-host backup freshness. An upload failure
+leaves the local consistent backup and pending intent intact.
+
+Restore: download `backup.tar.gz.age` and `manifest.json` with authenticated
+Kaggle access, verify the encrypted SHA-256, decrypt with the DevCoveer age
+identity, and extract into a separate private directory. Verify all SQLite
+files with quick_check and key row counts before stopping applications and
+restoring state/env/config. Never extract a test restore over running data.
+Use streaming over SSH when DevCoveer lacks room for large archives. Preserve
+current state before a real restore and recheck health, webhooks and Telegram.

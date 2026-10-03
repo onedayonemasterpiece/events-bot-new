@@ -155,6 +155,10 @@ jobs:
           node-version: '22.12.0'
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Verify encrypted backup safety contracts
+        run: |
+          python -m py_compile deploy/runcoveer/backup.py deploy/runcoveer/backup-kaggle.py deploy/runcoveer/kaggle-backup.py
+          python -m pytest --noconftest -q tests/test_runcoveer_kaggle_backup.py
       - name: Run private-events MCP release gate
         run: |
           PYTHONPATH=. python -m compileall -q \
