@@ -70,8 +70,23 @@ read-only product routes. Check external callers using old Fly URLs separately.
 `deploy.sh` copies configuration and runs Compose; it does not restore or replace
 data. Keep images fixed to the verified release; build/tag a new image explicitly
 for an application upgrade. Docker and Caddy start with systemd; containers use
-`unless-stopped`. Logs rotate at 10 MB x 3 per container; existing Events runtime
-file rotation remains enabled. Firewall allows 22/80/443 only.
+`unless-stopped`. Docker logs rotate at 50 MB x 10 per container with compression. Persistent
+project logs rotate at 16 MB per file, retain up to 7 days and have a 512 MB
+cap per project with a 1 GB free-space floor. Kotopogoda reuses the existing
+stdlib bounded handler mounted from Events source and preserves its JSON
+formatter/redaction. Persistent logs survive container replacement; Docker
+stdout logs belong to the container and do not guarantee a time window. Firewall allows 22/80/443 only.
+
+The production host has an active 1 GB `/swapfile`, persisted in `/etc/fstab`.
+Check `swapon --show` and `free -h` after host changes. Swap helps absorb
+short memory spikes; continue monitoring available RAM and OOM events.
+
+Events includes the private MCP HTTP/OAuth service in its existing container.
+Its public base is `https://events.78.111.90.203.sslip.io`. Existing connectors
+must replace the old Fly origin while preserving their private endpoint path
+and authorize again: OAuth resources/tokens are bound to the public origin.
+OAuth metadata and unauthenticated MCP rejection were checked over HTTPS;
+these probes do not establish an authenticated client session.
 
 Install `backup.service`/`backup.timer` to `/etc/systemd/system/runcoveer-backup.*`
 and enable the timer. `sudo python3 /opt/runcoveer/deployment/backup.py` makes

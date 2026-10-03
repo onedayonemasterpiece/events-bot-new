@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Increased bounded RunCoveer production log retention to seven days, added persistent Kotopogoda JSON logs, and enlarged compressed Docker log rotation.
+
 - Added encrypted private Kaggle backups for RunCoveer production state/configuration with one quota-bounded dataset, preserved versions, upload reconciliation and restore verification.
 
 - Added RunCoveer Object Storage write/read verification and explicit external CDN propagation/RAG limitations.
