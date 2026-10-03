@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added RunCoveer Object Storage write/read verification and explicit external CDN propagation/RAG limitations.
+
 - Recorded verified RunCoveer production cutover, persistence/reboot checks and closure of the legacy Fly autostart incident.
 
 ### Added

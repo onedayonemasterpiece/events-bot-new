@@ -106,3 +106,19 @@ Post-reboot counts: Events 9,123, Kotopogoda 154 assets; SQLite integrity is ok.
 Daily backup timer is enabled and a post-cutover backup completed. Legacy Fly
 machines remain cordoned/stopped. Temporary public domains and administrative
 publishing checks remain explicit operational limitations.
+
+## External integration verification
+
+A 35-byte create-only probe from the production Events container wrote/read
+the existing `kenigevents.ru` Object Storage bucket with HTTP 200 and matching
+bytes, then deleted its own object. Existing publication credentials and CDN
+origins remain in place. Kaggle callback derives from the new webhook origin.
+CDN root and an 82,732-byte static asset passed strict TLS from the new container;
+other CDN workers intermittently still served the default certificate during
+post-billing propagation. Track this separately as `inc_e748d11ecc8bce50126485e1`;
+one successful response is not proof of global CDN recovery.
+
+Kotopogoda external RAG PostgreSQL still returns tenant/user not found, as
+already recorded in its pre-migration external-data inventory. This deployment
+restores the existing configuration; it does not repair the missing provider
+tenant. Basic Telegram runtime and local data are independently verified.
