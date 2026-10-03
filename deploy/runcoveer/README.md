@@ -77,7 +77,7 @@ stdlib bounded handler mounted from Events source and preserves its JSON
 formatter/redaction. Persistent logs survive container replacement; Docker
 stdout logs belong to the container and do not guarantee a time window. Firewall allows 22/80/443 only.
 
-The production host has an active 1 GB `/swapfile`, persisted in `/etc/fstab`.
+The production host has an active 4 GB `/swapfile-runcoveer`, persisted in `/etc/fstab`.
 Check `swapon --show` and `free -h` after host changes. Swap helps absorb
 short memory spikes; continue monitoring available RAM and OOM events.
 
@@ -176,3 +176,25 @@ files with quick_check and key row counts before stopping applications and
 restoring state/env/config. Never extract a test restore over running data.
 Use streaming over SSH when DevCoveer lacks room for large archives. Preserve
 current state before a real restore and recheck health, webhooks and Telegram.
+
+## Host capacity control
+
+Install `journald-runcoveer.conf` as `/etc/systemd/journald.conf.d/runcoveer.conf`
+and restart journald: persistent system journals have a 256 MB cap, 14-day
+retention and a 2 GB free-space floor. Existing OS logrotate and tmpfiles timers
+remain enabled. Run `disk-maintenance.py` for a dry run, then install/enable
+`disk-maintenance.service` and `.timer` under the `runcoveer-` prefix. Every
+15 minutes they check both disk bytes and inodes and prune only Docker build
+cache older than seven days. Under pressure they also clear the APT package
+cache. Service data, Docker images used for rollback and backups are preserved.
+Warning thresholds: 80% full (bytes or inodes) or less than 2 GB free. Critical:
+90% full or less than 1 GB free; the service fails visibly in systemd. Latest
+state: `/run/runcoveer/disk-status.json`, with results also in journalctl. No
+external notification integration is implied by these local checks.
+
+Before creating a backup, reserve twice the current data size plus 2 GiB for
+snapshot/encryption; otherwise defer with a clear error, retaining the previous
+complete backup. A failed snapshot removes only its own incomplete directory.
+Encrypted staging uses one fixed filename and pending uploads are reconciled
+before creating another archive. Persistent data growth requires capacity
+planning; the guard does not delete database rows or user assets.

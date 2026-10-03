@@ -1,0 +1,10 @@
+[Unit]
+Description=RunCoveer disk capacity guard and safe cache maintenance
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/runcoveer/deployment/disk-maintenance.py --apply
+UMask=0077
+Nice=10
+TimeoutStartSec=5min

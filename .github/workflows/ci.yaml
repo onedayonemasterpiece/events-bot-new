@@ -157,8 +157,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Verify encrypted backup safety contracts
         run: |
-          python -m py_compile deploy/runcoveer/backup.py deploy/runcoveer/backup-kaggle.py deploy/runcoveer/kaggle-backup.py
-          python -m pytest --noconftest -q tests/test_runcoveer_kaggle_backup.py
+          python -m py_compile deploy/runcoveer/backup.py deploy/runcoveer/backup-kaggle.py deploy/runcoveer/kaggle-backup.py deploy/runcoveer/disk-maintenance.py
+          python -m pytest --noconftest -q tests/test_runcoveer_kaggle_backup.py tests/test_runcoveer_disk_maintenance.py
       - name: Run private-events MCP release gate
         run: |
           PYTHONPATH=. python -m compileall -q \
