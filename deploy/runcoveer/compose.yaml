@@ -6,6 +6,11 @@ services:
       - /opt/runcoveer/events/.env.production
     environment:
       DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
+      ENABLE_RUNTIME_FILE_LOGGING: "1"
+      RUNTIME_LOG_RETENTION_HOURS: "168"
+      RUNTIME_LOG_MAX_FILE_MB: "16"
+      RUNTIME_LOG_MAX_TOTAL_MB: "512"
+      RUNTIME_LOG_MIN_FREE_MB: "1024"
     command: [python, /deployment/launch.py]
     volumes:
       - /var/lib/runcoveer/events/data:/data
@@ -13,7 +18,7 @@ services:
     ports: ["127.0.0.1:8081:8080"]
     logging:
       driver: json-file
-      options: {max-size: "10m", max-file: "3"}
+      options: {max-size: "50m", max-file: "10", compress: "true"}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=10).read()"]
       interval: 30s
@@ -27,16 +32,24 @@ services:
       - /opt/runcoveer/kotopogoda/.env.production
     environment:
       DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
+      ENABLE_RUNTIME_FILE_LOGGING: "1"
+      RUNTIME_LOG_RETENTION_HOURS: "168"
+      RUNTIME_LOG_MAX_FILE_MB: "16"
+      RUNTIME_LOG_MAX_TOTAL_MB: "512"
+      RUNTIME_LOG_MIN_FREE_MB: "1024"
       ASSET_STORAGE_DIR: /data/bot_assets
+      RUNTIME_LOG_DIR: /data/runtime_logs
+      RUNTIME_LOG_BASENAME: kotopogoda.log
     command: [python, /deployment/launch.py]
     volumes:
       - /var/lib/runcoveer/kotopogoda/data:/data
       - /var/lib/runcoveer/kotopogoda/app-data:/app/data
       - ./launch-kotopogoda.py:/deployment/launch.py:ro
+      - /opt/runcoveer/events/source/runtime_logging.py:/deployment/runtime_logging.py:ro
     ports: ["127.0.0.1:8082:8080"]
     logging:
       driver: json-file
-      options: {max-size: "10m", max-file: "3"}
+      options: {max-size: "50m", max-file: "10", compress: "true"}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=10).read()"]
       interval: 30s

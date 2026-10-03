@@ -70,8 +70,25 @@ read-only product routes. Check external callers using old Fly URLs separately.
 `deploy.sh` copies configuration and runs Compose; it does not restore or replace
 data. Keep images fixed to the verified release; build/tag a new image explicitly
 for an application upgrade. Docker and Caddy start with systemd; containers use
-`unless-stopped`. Logs rotate at 10 MB x 3 per container; existing Events runtime
-file rotation remains enabled. Firewall allows 22/80/443 only.
+`unless-stopped`. Docker logs rotate at 50 MB x 10 per container with compression. Persistent
+project logs rotate at 16 MB per file, retain up to 7 days and have a 512 MB
+cap per project with a 1 GB free-space floor. Kotopogoda reuses the existing
+stdlib bounded handler mounted from Events source and preserves its JSON
+formatter/redaction. Persistent logs survive container replacement; Docker
+stdout logs belong to the container and do not guarantee a time window. Firewall allows 22/80/443 only.
+
+The production host has an active 4 GB `/swapfile-runcoveer`, persisted in `/etc/fstab`.
+Check `swapon --show` and `free -h` after host changes. Swap helps absorb
+short memory spikes; continue monitoring available RAM and OOM events.
+
+Events includes the private MCP HTTP/OAuth service in its existing container.
+Its public base is `https://events.78.111.90.203.sslip.io`. Existing connectors
+must replace the old Fly origin while preserving their private endpoint path
+and authorize again: OAuth resources/tokens are bound to the public origin.
+Verified over HTTPS: OAuth metadata, unauthenticated rejection, a complete
+Codex OAuth/PKCE authorization, authenticated initialize (2025-06-18) and
+tools/list (7 tools). No tool calls were issued. This server verification does
+not update an existing client connector configuration.
 
 Install `backup.service`/`backup.timer` to `/etc/systemd/system/runcoveer-backup.*`
 and enable the timer. `sudo python3 /opt/runcoveer/deployment/backup.py` makes
@@ -161,3 +178,29 @@ files with quick_check and key row counts before stopping applications and
 restoring state/env/config. Never extract a test restore over running data.
 Use streaming over SSH when DevCoveer lacks room for large archives. Preserve
 current state before a real restore and recheck health, webhooks and Telegram.
+
+## Host capacity control
+
+Install `journald-runcoveer.conf` as `/etc/systemd/journald.conf.d/runcoveer.conf`
+and restart journald: persistent system journals have a 256 MB cap, 14-day
+retention and a 2 GB free-space floor. Install `logrotate-rsyslog.conf` as `/etc/logrotate.d/rsyslog` (daily,
+16 MB maximum size trigger, seven compressed rotations). Install
+`logrotate-timer.conf` as `/etc/systemd/system/logrotate.timer.d/runcoveer.conf`
+to check logrotate rules every 15 minutes. OS tmpfiles cleanup remains enabled.
+These size triggers are evaluated at checks; log bursts can exceed a trigger
+between checks. Run `disk-maintenance.py` for a dry run, then install/enable
+`disk-maintenance.service` and `.timer` under the `runcoveer-` prefix. Every
+15 minutes they check both disk bytes and inodes and prune only Docker build
+cache older than seven days. Under pressure they also clear the APT package
+cache. Service data, Docker images used for rollback and backups are preserved.
+Warning thresholds: 80% full (bytes or inodes) or less than 2 GB free. Critical:
+90% full or less than 1 GB free; the service fails visibly in systemd. Latest
+state: `/run/runcoveer/disk-status.json`, with results also in journalctl. No
+external notification integration is implied by these local checks.
+
+Before creating a backup, reserve twice the current data size plus 2 GiB for
+snapshot/encryption; otherwise defer with a clear error, retaining the previous
+complete backup. A failed snapshot removes only its own incomplete directory.
+Encrypted staging uses one fixed filename and pending uploads are reconciled
+before creating another archive. Persistent data growth requires capacity
+planning; the guard does not delete database rows or user assets.

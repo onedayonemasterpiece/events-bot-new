@@ -3,6 +3,17 @@ import os
 import sys
 sys.path.insert(0, "/app")
 import main
+# Reuse the existing bounded stdlib handler, preserving Kotopogoda JSON/redaction.
+from runtime_logging import install_runtime_file_logging
+
+root_logger = main.logging.getLogger()
+console_formatter = root_logger.handlers[0].formatter
+file_handler = install_runtime_file_logging(root_logger)
+if file_handler is not None:
+    os.chmod(os.environ.get("RUNTIME_LOG_DIR", "/data/runtime_logs"), 0o700)
+    file_handler.setFormatter(console_formatter)
+    for context_filter in root_logger.filters:
+        file_handler.addFilter(context_filter)
 app = main.create_app()
 if os.getenv("DEPLOY_PREFLIGHT", "1") == "1":
     app.on_startup.clear()
