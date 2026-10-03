@@ -61,8 +61,7 @@ machine/volume. Rollback uncordons it only after the new writer is stopped.
 For Events rollback also restore `python main.py` before activating the old writer.
 Capture/checkpoint final changed SQLite files and only changed non-SQLite state,
 then confirm old machines remain stopped even after an old-origin request.
- After data
-and product preflight, set `DEPLOY_PREFLIGHT=0` and recreate containers, then
+After data and product preflight, set `DEPLOY_PREFLIGHT=0` and recreate containers, then
 verify Telegram `getWebhookInfo`, real Telegram `/start` and representative
 read-only product routes. Check external callers using old Fly URLs separately.
 
@@ -96,3 +95,14 @@ starting its single writer; restore previous webhook/endpoints. Never run old
 and new writers concurrently or silently restore an older database over new
 writes. The earlier 50 GB server has no running production application and is
 not itself a traffic rollback target.
+
+## Verified cutover, 2026-10-03
+
+Both workloads run in production mode on this host with new Telegram webhooks.
+Real Telegram smoke, public TLS/health, container restart, repeat deploy, Docker
+restart and host reboot passed. Final changed snapshots supersede Oct 2 state:
+retained evidence is `/home/dev/artifacts/runcoveer/20261003T081708Z-production-migration`.
+Post-reboot counts: Events 9,123, Kotopogoda 154 assets; SQLite integrity is ok.
+Daily backup timer is enabled and a post-cutover backup completed. Legacy Fly
+machines remain cordoned/stopped. Temporary public domains and administrative
+publishing checks remain explicit operational limitations.
