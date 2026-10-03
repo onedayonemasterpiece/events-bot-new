@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- Reproducible RunCoveer Docker Compose runtime deployment for Events Bot and
+  the preserved Kotopogoda runtime, with isolated preflight, persistent state,
+  consistent SQLite backups and rollback instructions.
+
 ### Fixed
 - Telegram Monitoring applies its configured day cutoff even when a source has
   an old cursor, preventing failed all-source runs from repeatedly parsing the

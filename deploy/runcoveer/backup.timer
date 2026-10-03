@@ -1,0 +1,7 @@
+[Unit]
+Description=Daily RunCoveer backup
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
