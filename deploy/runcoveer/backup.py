@@ -38,6 +38,6 @@ for old in backup.parent.iterdir():
                 managed.append(old)
         except (ValueError, OSError):
             pass
-for old in sorted(managed, reverse=True)[3:]:
+for old in sorted(managed, reverse=True)[1:]:
     shutil.rmtree(old)
 print(backup)

@@ -4,4 +4,7 @@ After=docker.service
 [Service]
 Type=oneshot
 UMask=0077
-ExecStart=/usr/bin/python3 /opt/runcoveer/deployment/backup.py
+Nice=10
+IOSchedulingClass=idle
+ExecStart=/usr/bin/python3 /opt/runcoveer/deployment/backup-kaggle.py
+TimeoutStartSec=45min
