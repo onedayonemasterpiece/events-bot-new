@@ -183,8 +183,12 @@ current state before a real restore and recheck health, webhooks and Telegram.
 
 Install `journald-runcoveer.conf` as `/etc/systemd/journald.conf.d/runcoveer.conf`
 and restart journald: persistent system journals have a 256 MB cap, 14-day
-retention and a 2 GB free-space floor. Existing OS logrotate and tmpfiles timers
-remain enabled. Run `disk-maintenance.py` for a dry run, then install/enable
+retention and a 2 GB free-space floor. Install `logrotate-rsyslog.conf` as `/etc/logrotate.d/rsyslog` (daily,
+16 MB maximum size trigger, seven compressed rotations). Install
+`logrotate-timer.conf` as `/etc/systemd/system/logrotate.timer.d/runcoveer.conf`
+to check logrotate rules every 15 minutes. OS tmpfiles cleanup remains enabled.
+These size triggers are evaluated at checks; log bursts can exceed a trigger
+between checks. Run `disk-maintenance.py` for a dry run, then install/enable
 `disk-maintenance.service` and `.timer` under the `runcoveer-` prefix. Every
 15 minutes they check both disk bytes and inodes and prune only Docker build
 cache older than seven days. Under pressure they also clear the APT package
