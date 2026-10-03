@@ -1,0 +1,45 @@
+services:
+  events:
+    image: runcoveer/events:8105d069f
+    restart: unless-stopped
+    env_file:
+      - /opt/runcoveer/events/.env.production
+    environment:
+      DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
+    command: [python, /deployment/launch.py]
+    volumes:
+      - /var/lib/runcoveer/events/data:/data
+      - ./launch-events.py:/deployment/launch.py:ro
+    ports: ["127.0.0.1:8081:8080"]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=10).read()"]
+      interval: 30s
+      timeout: 15s
+      start_period: 180s
+      retries: 5
+  kotopogoda:
+    image: runcoveer/kotopogoda:runtime-951065bf
+    restart: unless-stopped
+    env_file:
+      - /opt/runcoveer/kotopogoda/.env.production
+    environment:
+      DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
+      ASSET_STORAGE_DIR: /data/bot_assets
+    command: [python, /deployment/launch.py]
+    volumes:
+      - /var/lib/runcoveer/kotopogoda/data:/data
+      - /var/lib/runcoveer/kotopogoda/app-data:/app/data
+      - ./launch-kotopogoda.py:/deployment/launch.py:ro
+    ports: ["127.0.0.1:8082:8080"]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=10).read()"]
+      interval: 30s
+      timeout: 15s
+      start_period: 120s
+      retries: 5

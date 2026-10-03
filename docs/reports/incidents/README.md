@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-10-03-fly-autostart-migration.md`
+  - Scope: Fly proxy autostart, single-writer host cutover, final-state snapshots
+    and rollback. Stopping a machine alone is insufficient; cordon and verify.
+
 - `INC-2026-10-01-tg-monitor-stale-cursor-replay.md`
   - Scope: Telegram Monitoring freshness cutoff, stale source cursors, Kaggle
     producer throughput and all-source import. Must not regress: a saved cursor

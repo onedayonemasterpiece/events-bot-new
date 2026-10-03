@@ -1,0 +1,6 @@
+events.78.111.90.203.sslip.io {
+    reverse_proxy 127.0.0.1:8081
+}
+weather.78.111.90.203.sslip.io {
+    reverse_proxy 127.0.0.1:8082
+}
