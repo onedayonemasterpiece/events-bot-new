@@ -85,8 +85,10 @@ Events includes the private MCP HTTP/OAuth service in its existing container.
 Its public base is `https://events.78.111.90.203.sslip.io`. Existing connectors
 must replace the old Fly origin while preserving their private endpoint path
 and authorize again: OAuth resources/tokens are bound to the public origin.
-OAuth metadata and unauthenticated MCP rejection were checked over HTTPS;
-these probes do not establish an authenticated client session.
+Verified over HTTPS: OAuth metadata, unauthenticated rejection, a complete
+Codex OAuth/PKCE authorization, authenticated initialize (2025-06-18) and
+tools/list (7 tools). No tool calls were issued. This server verification does
+not update an existing client connector configuration.
 
 Install `backup.service`/`backup.timer` to `/etc/systemd/system/runcoveer-backup.*`
 and enable the timer. `sudo python3 /opt/runcoveer/deployment/backup.py` makes
