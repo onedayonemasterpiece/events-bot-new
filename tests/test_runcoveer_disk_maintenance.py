@@ -49,3 +49,43 @@ def test_critical_cleanup_preserves_images_volumes_and_backups(monkeypatch, tmp_
         ['apt-get', 'clean'],
     ]
     assert (tmp_path / 'disk-status.json').exists()
+
+
+def load_backup():
+    path = Path(__file__).parents[1] / 'deploy/runcoveer/backup.py'
+    spec = importlib.util.spec_from_file_location('snapshot_backup', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_low_space_defers_backup_before_creating_files(monkeypatch, tmp_path):
+    import pytest
+    backup = load_backup()
+    root = tmp_path / 'live'
+    root.mkdir()
+    target = tmp_path / 'backups'
+    monkeypatch.setattr(backup.shutil, 'disk_usage', lambda _: SimpleNamespace(free=1024))
+    with pytest.raises(RuntimeError, match='Backup deferred'):
+        backup.create_snapshot(root, target)
+    assert not target.exists()
+
+
+def test_failed_snapshot_preserves_previous_backup(monkeypatch, tmp_path):
+    import pytest
+    backup = load_backup()
+    root = tmp_path / 'live'
+    for service in ('events', 'kotopogoda'):
+        (root / service).mkdir(parents=True)
+    target = tmp_path / 'backups'
+    previous = target / '20260101T000000Z'
+    previous.mkdir(parents=True)
+    (previous / 'receipt.json').write_text('{"sqlite": []}')
+    monkeypatch.setattr(backup.shutil, 'disk_usage', lambda _: SimpleNamespace(free=10**12))
+    def fail(*args, **kwargs):
+        raise RuntimeError('copy failed')
+    monkeypatch.setattr(backup.subprocess, 'run', fail)
+    with pytest.raises(RuntimeError, match='copy failed'):
+        backup.create_snapshot(root, target)
+    assert list(target.iterdir()) == [previous]
+    assert (root / 'events').exists()
