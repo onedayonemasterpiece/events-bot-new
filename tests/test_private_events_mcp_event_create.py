@@ -809,13 +809,21 @@ async def test_read_only_owner_can_inspect_status_but_cannot_create(
     )
     try:
         tools = await _list_tools(server.protocol, identity)
+        denied = await _call(
+            server.protocol,
+            identity,
+            "event_create_prepare",
+            _request(),
+        )
     finally:
         await runtime.shutdown()
         await database.close()
 
     assert "event_operation_get" in tools
-    assert "event_create_prepare" not in tools
-    assert "event_create_commit" not in tools
+    assert "event_create_prepare" in tools
+    assert "event_create_commit" in tools
+    assert denied["isError"] is True
+    assert "insufficient_scope" in denied["_meta"]["mcp/www_authenticate"][0]
 
 
 @pytest.mark.asyncio

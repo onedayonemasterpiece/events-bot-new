@@ -145,6 +145,23 @@ It uses the real `event_revisions`, `build_receipt.publication` and
 
 The private secret-candidate bearer URL is never returned by partner readback.
 
+## OAuth discovery and scope upgrade
+
+The owner ChatGPT/OpenCode resource advertises the complete enabled owner tool
+catalog permitted for those clients, including tools whose scopes were added
+after an existing access token was issued. This is discovery only: every
+`tools/call` still authorizes against the access token's actual scopes. A
+read-only historical owner token can therefore discover an
+`events:write`/`promo:write`/`partners:manage` tool and receive the normal
+OAuth `insufficient_scope` challenge, but it cannot execute the operation until
+the client completes scope upgrade.
+
+This discovery projection is not applied to the separate partner resource.
+Partner tools remain limited by the current server-side grant, tenant,
+organization, explicit event portfolio, actions and partner scopes. It is also
+not applied to the Codex resource, whose seven-tool evidence projection remains
+read-only.
+
 ## Tools and feature gates
 
 | Tools | Owner | Partner | Runtime gate |

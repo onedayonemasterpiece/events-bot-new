@@ -95,11 +95,13 @@ def social_scopes_authorized(
 CHATGPT_DEFAULT_SCOPES = READ_SCOPES
 CODEX_DEFAULT_SCOPES = READ_SCOPES
 OPENCODE_DEFAULT_SCOPES = READ_SCOPES
+OWNER_SCOPE_UPGRADE_SCOPES = (
+    EVENT_WRITE_SCOPES | {"promo:read", "promo:write", "partners:manage"}
+)
+
 CHATGPT_MAX_SCOPES = (
     READ_SCOPES
-    | EVENT_WRITE_SCOPES
-    | {"promo:read", "promo:write"}
-    | {"partners:manage"}
+    | OWNER_SCOPE_UPGRADE_SCOPES
     | SOCIAL_SCOPES
     | AUDIO_TRANSCRIPTION_SCOPES
     | {"offline_access"}

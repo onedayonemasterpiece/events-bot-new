@@ -87,6 +87,7 @@ class MCPProtocol:
         tool_timeout_seconds: float = 2.5,
         resource: str = "",
         allowed_client_ids: frozenset[str] | None = None,
+        discovery_scopes: frozenset[str] | None = None,
         policy_fingerprint: str = "read-only-v1",
         instructions: str | None = None,
         identity_validator=None,
@@ -99,6 +100,7 @@ class MCPProtocol:
         self.tool_timeout_seconds = max(0.25, float(tool_timeout_seconds))
         self.resource = resource
         self.allowed_client_ids = frozenset(allowed_client_ids or ())
+        self.discovery_scopes = frozenset(discovery_scopes or ())
         self.policy_fingerprint = policy_fingerprint
         self.instructions = instructions or (
             "Read-only access to canonical events, public source evidence, incident "
@@ -218,17 +220,22 @@ class MCPProtocol:
         if method == "ping":
             return self._response(request_id, result={})
         if method == "tools/list":
+            descriptor_scopes: frozenset[str] | None = None
             if identity is None:
                 visible = [tool for tool in self.tools if tool.publicly_discoverable]
             elif not self._identity_allowed(identity):
                 visible = []
+                descriptor_scopes = identity.scopes
             else:
-                visible = [tool for tool in self.tools if tool.is_visible(identity.scopes)]
+                descriptor_scopes = identity.scopes | self.discovery_scopes
+                visible = [
+                    tool for tool in self.tools if tool.is_visible(descriptor_scopes)
+                ]
             return self._response(
                 request_id,
                 result={
                     "tools": [
-                        tool.descriptor(identity.scopes if identity is not None else None)
+                        tool.descriptor(descriptor_scopes)
                         for tool in visible
                     ]
                 },

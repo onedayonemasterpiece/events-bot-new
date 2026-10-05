@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 
 from aiohttp import web
 
-from .access_policy import CHATGPT_MAX_SCOPES, CODEX_MAX_SCOPES
+from .access_policy import CHATGPT_MAX_SCOPES, CODEX_MAX_SCOPES, OWNER_SCOPE_UPGRADE_SCOPES
 from .config import PrivateEventsMCPConfig
 from .crypto import AccessIdentity, TokenValidationError
 from .limits import AdmissionController, RateLimitExceeded
@@ -403,6 +403,7 @@ class PrivateEventsMCPServer:
                 )
                 if client_id
             ),
+            discovery_scopes=OWNER_SCOPE_UPGRADE_SCOPES,
             policy_fingerprint=self.target_policy.fingerprint,
             instructions=(
                 "Access to canonical event and incident evidence. Social tools, when enabled "

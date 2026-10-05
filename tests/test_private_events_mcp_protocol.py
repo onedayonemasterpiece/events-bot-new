@@ -5,7 +5,7 @@ import pytest
 from private_events_mcp.crypto import AccessIdentity
 from private_events_mcp.protocol import MCPProtocol
 from private_events_mcp.repository import EventsEvidenceRepository
-from private_events_mcp.tool_catalog import ToolSpec, build_tools
+from private_events_mcp.tool_catalog import ToolExecutionError, ToolSpec, build_tools
 
 
 @pytest.fixture
@@ -174,3 +174,156 @@ async def test_stable_legacy_social_families_authorize_only_same_provider_and_mo
         )
         assert denied["result"]["isError"] is True
     assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_owner_can_discover_upgradeable_tools_without_gaining_authority(
+    config,
+) -> None:
+    calls = 0
+
+    async def handler(_arguments, _context):
+        nonlocal calls
+        calls += 1
+        return {"ok": True}
+
+    write_tool = ToolSpec(
+        "event_create_prepare",
+        "Prepare event create",
+        "Owner event mutation that requires an explicit write scope.",
+        {"type": "object", "additionalProperties": False, "properties": {}},
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["ok"],
+            "properties": {"ok": {"const": True}},
+        },
+        scopes=frozenset({"events:write"}),
+        handler=handler,
+        publicly_discoverable=False,
+    )
+    owner_protocol = MCPProtocol(
+        (write_tool,),
+        cache_ttl_seconds=0,
+        challenge='Bearer resource_metadata="https://example/metadata", error="invalid_token"',
+        resource=config.resource,
+        allowed_client_ids=frozenset({config.oauth_client_id}),
+        discovery_scopes=frozenset({"events:write"}),
+    )
+    read_only_owner = identity(config)
+
+    listed = await owner_protocol.dispatch(
+        {"jsonrpc": "2.0", "id": 7, "method": "tools/list", "params": {}},
+        read_only_owner,
+    )
+    assert [item["name"] for item in listed["result"]["tools"]] == [
+        "event_create_prepare"
+    ]
+    assert listed["result"]["tools"][0]["securitySchemes"] == [
+        {"type": "oauth2", "scopes": ["events:write"]}
+    ]
+
+    denied = await owner_protocol.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {"name": "event_create_prepare", "arguments": {}},
+        },
+        read_only_owner,
+    )
+    assert denied["result"]["isError"] is True
+    assert "insufficient_scope" in denied["result"]["_meta"]["mcp/www_authenticate"][0]
+    assert calls == 0
+
+    write_owner = AccessIdentity(
+        subject=read_only_owner.subject,
+        client_id=read_only_owner.client_id,
+        scopes=frozenset({"events:read", "events:write"}),
+        audience=read_only_owner.audience,
+        token_id="write-token-id",
+        expires_at=read_only_owner.expires_at,
+    )
+    allowed = await owner_protocol.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {"name": "event_create_prepare", "arguments": {}},
+        },
+        write_owner,
+    )
+    assert allowed["result"]["structuredContent"] == {"ok": True}
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_discovery_scopes_do_not_leak_to_rejected_client(config) -> None:
+    async def handler(_arguments, _context):
+        return {"ok": True}
+
+    tool = ToolSpec(
+        "promo_campaign_create",
+        "Promo create",
+        "Owner promo mutation.",
+        {"type": "object", "additionalProperties": False, "properties": {}},
+        {"type": "object"},
+        scopes=frozenset({"promo:write"}),
+        handler=handler,
+        publicly_discoverable=False,
+    )
+    protocol = MCPProtocol(
+        (tool,),
+        cache_ttl_seconds=0,
+        challenge='Bearer error="invalid_token"',
+        resource=config.resource,
+        allowed_client_ids=frozenset({config.oauth_client_id}),
+        discovery_scopes=frozenset({"promo:write"}),
+    )
+    foreign = AccessIdentity(
+        subject="events-bot-owner",
+        client_id="foreign-client",
+        scopes=frozenset({"events:read"}),
+        audience=config.resource,
+        token_id="foreign-token",
+        expires_at=9_999_999_999,
+    )
+    listed = await protocol.dispatch(
+        {"jsonrpc": "2.0", "id": 10, "method": "tools/list", "params": {}},
+        foreign,
+    )
+    assert listed["result"]["tools"] == []
+
+
+@pytest.mark.asyncio
+async def test_discovery_scopes_respect_identity_validator(config) -> None:
+    async def handler(_arguments, _context):
+        return {"ok": True}
+
+    tool = ToolSpec(
+        "partner_admin",
+        "Partner admin",
+        "Owner partner administration.",
+        {"type": "object", "additionalProperties": False, "properties": {}},
+        {"type": "object"},
+        scopes=frozenset({"partners:manage"}),
+        handler=handler,
+        publicly_discoverable=False,
+    )
+
+    def reject(_identity):
+        raise ToolExecutionError("PARTNER_ACCESS_REVOKED")
+
+    protocol = MCPProtocol(
+        (tool,),
+        cache_ttl_seconds=0,
+        challenge='Bearer error="invalid_token"',
+        resource=config.resource,
+        discovery_scopes=frozenset({"partners:manage"}),
+        identity_validator=reject,
+    )
+    listed = await protocol.dispatch(
+        {"jsonrpc": "2.0", "id": 11, "method": "tools/list", "params": {}},
+        identity(config),
+    )
+    assert listed["result"]["tools"] == []
