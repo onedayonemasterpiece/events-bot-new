@@ -671,6 +671,54 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_date_inferred ON event(date_is_inferred, date)"
             )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_change_log(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_ref TEXT NOT NULL UNIQUE,
+                    operation_kind TEXT NOT NULL,
+                    actor_subject TEXT NOT NULL,
+                    actor_client_id TEXT NOT NULL,
+                    actor_audience TEXT NOT NULL,
+                    idempotency_hash TEXT NOT NULL,
+                    action_digest TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_url TEXT NOT NULL,
+                    request_json JSON NOT NULL,
+                    status TEXT NOT NULL,
+                    event_id INTEGER,
+                    before_json JSON,
+                    after_json JSON,
+                    changed_fields_json JSON,
+                    organizer_comment TEXT,
+                    base_event_revision TEXT,
+                    result_event_revision TEXT,
+                    result_json JSON,
+                    error_code TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    started_at TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    UNIQUE(actor_subject, actor_client_id, actor_audience, operation_kind, idempotency_hash),
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await _add_column(conn, "event_change_log", "domain_receipt_json JSON")
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_change_log_status_updated "
+                "ON event_change_log(status,updated_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_change_log_event "
+                "ON event_change_log(event_id,created_at)"
+            )
+            # Canonical partner policy is separate from OAuth / Social Workspace state.
+            # Additive DDL only; no credentials or portfolio backfill at startup.
+            from private_events_mcp.partner_access import SCHEMA as partner_schema
+            for statement in partner_schema.split(";"):
+                if statement.strip():
+                    await conn.execute(statement)
             dbg("eventposter")
 
             eventposter_columns_before = await (
@@ -2522,6 +2570,9 @@ class Database:
                 """
             )
 
+            await _add_column(conn, "joboutbox", "target_event_revision TEXT")
+            await _add_column(conn, "joboutbox", "event_operation_ref TEXT")
+            await _add_column(conn, "joboutbox", "terminal_reason TEXT")
             await _add_column(conn, "joboutbox", "last_result TEXT")
             await _add_column(conn, "joboutbox", "coalesce_key TEXT")
             await _add_column(conn, "joboutbox", "depends_on TEXT")
@@ -2759,6 +2810,8 @@ class Database:
                 )
                 """
             )
+            for column in ("first_published_at TEXT", "last_published_at TEXT", "applied_event_revision TEXT", "provider_operation_ref TEXT"):
+                await _add_column(conn, "event_publication", column)
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_publication_target_status ON event_publication(target, status)"
             )

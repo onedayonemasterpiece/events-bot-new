@@ -11,6 +11,8 @@ from aiohttp import web
 from .chatgpt_refresh_policy import install_chatgpt_refresh_policy
 from .config import PrivateEventsMCPConfig
 from .media_contract import AssetIngestor
+from .event_create import EventCreateRequest, EventCreateRuntime
+from .event_create_adapter import MainEventCreateExecutor
 from .queue_read import attach_owner_queue_observability
 from .server import (
     ENDPOINT_FINGERPRINT_APP_KEY,
@@ -82,6 +84,38 @@ def _install_access_log_redaction(config: PrivateEventsMCPConfig) -> None:
     access_logger.addFilter(_PrivateEventsMCPAccessLogFilter(secrets))
 
 
+
+def event_create_actor_is_current(config: PrivateEventsMCPConfig, request: EventCreateRequest) -> bool:
+    """R1 owner boundary, including durable jobs; never infer partner grants.
+
+    Owner identity is the current configured resource/client/subject. Partner
+    mutations require their own live grant check and are deliberately not accepted
+    by this owner-only stage. Removing an owner client or disabling the capability
+    on restart prevents its queued work from crossing the executor boundary.
+    """
+    from .oauth import SUBJECT
+    return bool(config.enabled and config.event_create_enabled
+                and request.actor_subject == SUBJECT
+                and request.actor_audience == config.resource
+                and request.actor_client_id in {config.oauth_client_id, config.opencode_oauth_client_id}
+                and bool(request.actor_client_id))
+
+
+async def recover_private_event_creates(app: web.Application) -> int:
+    """Existing scheduler/startup hook; call only after canonical DB init."""
+    server = app.get(SERVER_APP_KEY)
+    if server is None or server.event_create_runtime is None:
+        return 0
+    runtime = server.event_create_runtime
+    if not server.config.enabled or not server.config.event_create_enabled:
+        return 0
+    from .event_create_reconciliation import EventCreateReconciler
+    recovered = await EventCreateReconciler(runtime).recover(limit=25)
+    if getattr(server, "event_commands", None) is not None:
+        recovered += await server.event_commands.recover()
+    return recovered + await runtime.recover_queued(authorize=runtime.authorize, limit=25)
+
+
 def attach_private_events_mcp(
     app: web.Application,
     config: PrivateEventsMCPConfig | None = None,
@@ -89,6 +123,7 @@ def attach_private_events_mcp(
     social_adapters: Mapping[str, SocialAdapter] | None = None,
     social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
     asset_ingestor: AssetIngestor | None = None,
+    event_database: Any | None = None,
 ) -> PrivateEventsMCPServer | None:
     """Attach the private MCP routes to the existing aiohttp app.
 
@@ -104,12 +139,69 @@ def attach_private_events_mcp(
     if SERVER_APP_KEY in app:
         return app[SERVER_APP_KEY]
     _install_access_log_redaction(resolved)
+    event_create_runtime = None
+    if resolved.event_create_enabled:
+        if event_database is None:
+            raise ValueError(
+                "event create requires the canonical EventsBot Database instance"
+            )
+        async def _authorize_event_create(request: EventCreateRequest) -> bool:
+            return event_create_actor_is_current(resolved, request)
+
+        event_create_runtime = EventCreateRuntime(
+            config=resolved,
+            database=event_database,
+            executor=MainEventCreateExecutor(event_database),
+            authorize=_authorize_event_create,
+        )
     server = PrivateEventsMCPServer(
         resolved,
         social_adapters=social_adapters,
         social_workspace_adapters=social_workspace_adapters,
         asset_ingestor=asset_ingestor,
+        event_create_runtime=event_create_runtime,
+        canonical_database=event_database,
     )
+    if event_create_runtime is not None:
+        async def current_create_policy(request: EventCreateRequest) -> bool:
+            if request.actor_audience == server.config.partner_resource:
+                return bool(server.partner_event_operations is not None
+                            and await server.partner_event_operations.authorize_request(request))
+            return event_create_actor_is_current(server.config, request)
+
+        async def assign_partner_accepted(request, result):
+            if request.actor_audience == server.config.partner_resource:
+                import asyncio
+                from .partner_accepted_event import assign_accepted_event
+                if not await current_create_policy(request):
+                    from .tool_catalog import ToolExecutionError
+                    raise ToolExecutionError("PARTNER_EVENT_ACCESS_DENIED")
+                await asyncio.to_thread(assign_accepted_event, server.partners, request, result)
+
+        event_create_runtime.authorize = current_create_policy
+        event_create_runtime.on_accepted = assign_partner_accepted
+
+        async def _resolve_event_media(request: EventCreateRequest):
+            from .tool_catalog import ToolExecutionError
+
+            async def current_policy() -> bool:
+                return bool(server.config.event_assets_enabled
+                            and await current_create_policy(request))
+
+            if server.event_assets is None or not await current_policy():
+                raise ToolExecutionError("EVENT_ASSETS_DISABLED", "Event image ingress is disabled.")
+            media = []
+            for image in request.media:
+                media.append(await server.event_assets.read_durable(
+                    image.asset_ref, expected_digest=image.content_digest,
+                    actor_subject=request.actor_subject, actor_client_id=request.actor_client_id,
+                    actor_audience=request.actor_audience, authorize=current_policy,
+                ))
+            if not await current_policy():
+                raise ToolExecutionError("EVENT_CREATE_ACCESS_REVOKED", "Event create access was revoked.")
+            return media
+
+        event_create_runtime.executor.resolve_media = _resolve_event_media
     # R0 deliberately extends only the owner ChatGPT/OpenCode descriptor and
     # handler for the existing operations_snapshot tool. The Codex protocol,
     # scopes, database schema, workers, and provider adapters remain unchanged.
@@ -137,6 +229,11 @@ def attach_private_events_mcp(
         if audio_service is not None and server.social_workspace is not None:
             server.social_workspace.enable_audio_transcription(audio_service)
     server.register(app)
+    if event_create_runtime is not None:
+        async def _shutdown_event_create(_app: web.Application) -> None:
+            await event_create_runtime.shutdown()
+
+        app.on_cleanup.append(_shutdown_event_create)
     logger.info(
         "private_events_mcp attached endpoint_fingerprint=%s mode=%s",
         app.get(ENDPOINT_FINGERPRINT_APP_KEY, "unknown"),

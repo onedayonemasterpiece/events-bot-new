@@ -124,3 +124,7 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
   - ссылка на `/log <event_id>`,
   - видимость события в нужном списке (`/events`, `/exhibitions` и т.д.).
 - Для постов об отмене/переносе проверять, что событие помечается неактивным (`event.lifecycle_status=cancelled|postponed`) и исчезает из month/weekend страниц после rebuild.
+
+## Partner event operations source checkpoint (2026-09-26)
+
+See [operations guide](partner-event-operations.md) and [scoped v2 registry](../testing/private-events-mcp-event-operations-scenarios.v2.yml). Local suites exercise actual owner/partner PKCE HTTP sessions, two tenants, canonical SQLite, current-policy review, staged media, exact-ID changes, publication receipts and existing promo services. Provider adapters and the model gateway are faked; this is not isolated-live provider acceptance. No production grants, campaigns or public posts are created.
