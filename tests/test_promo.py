@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from db import Database
 from handlers.promo_cmd import _campaign_lines, _parse_until_date
@@ -2799,6 +2799,47 @@ async def test_promo_vk_repost_uses_local_day_count_not_rolling_window(
         "https://vk.com/wall-111_older",
         "https://vk.com/wall-111_20",
     ]
+    async with db.get_session() as session:
+        outcome = (
+            await session.execute(
+                text(
+                    "SELECT status,reason_code,event_id FROM promo_activity_outcome "
+                    "WHERE activity_id=:id"
+                ),
+                {"id": int(activity.id)},
+            )
+        ).one()
+    assert tuple(outcome) == ("published", None, int(event.id))
+
+    async def no_sources(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("promo._recent_event_vk_posts", no_sources)
+    async with db.get_session() as session:
+        current = await session.get(PromoActivity, int(activity.id))
+        current.max_per_publish = 2
+        session.add(current)
+        await session.commit()
+
+    skipped = await run_promo_vk_activities(
+        db, None, now_utc=now_utc + timedelta(hours=4)
+    )
+    assert [
+        (item.surface, item.status, item.reason)
+        for item in skipped
+        if item.activity_id == int(activity.id)
+    ] == [(PROMO_SURFACE_VK_REPOST, "skipped", "source_unavailable")]
+    async with db.get_session() as session:
+        outcome = (
+            await session.execute(
+                text(
+                    "SELECT status,reason_code,event_id FROM promo_activity_outcome "
+                    "WHERE activity_id=:id"
+                ),
+                {"id": int(activity.id)},
+            )
+        ).one()
+    assert tuple(outcome) == ("skipped", "source_unavailable", None)
     await db.close()
 
 

@@ -15,7 +15,7 @@ from typing import Any, Collection, Iterable
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 
 from db import Database
 from models import (
@@ -67,6 +67,7 @@ PROMO_VK_ACTIVE_END_HOUR = 21
 PROMO_VK_80_PUBLICATION_PROFILE = "klgdevents"
 PROMO_VK_80_CHANNEL_PROFILE = "klgdevents:vk_channel"
 PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
+PARTNER_PROMO_VK_REPOST_TARGET_GROUP = "kenigeventsofficial"
 PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
 PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
 PROMO_VK_80_AFISHAENGAGEMENT_PROFILE = "klgdevents:afishaengagement"
@@ -158,6 +159,117 @@ class PromoVkActionResult:
     source_url: str | None = None
     target_url: str | None = None
     reason: str | None = None
+
+
+PROMO_SAFE_ACTIVITY_OUTCOME_STATUSES = frozenset(
+    {"published", "scheduled", "forwarded", "draft_sent", "skipped", "failed"}
+)
+PROMO_SAFE_ACTIVITY_OUTCOME_REASONS = frozenset(
+    {
+        "target_group_missing",
+        "target_goal_reached",
+        "daily_cap_reached",
+        "events_missing",
+        "event_posters_missing",
+        "hook_upload_failed",
+        "target_chat_missing",
+        "bot_missing",
+        "source_or_target_chat_missing",
+        "source_or_target_group_missing",
+        "manual_draft_peer_id_missing",
+        "vk_community_channel_post_api_unsupported",
+        "source_unavailable",
+        "dedup_window",
+        "provider_error",
+        VK_SYNC_MISSING_TG_MEDIA_ERROR,
+    }
+)
+
+
+def partner_safe_promo_reason(reason: str | None) -> str | None:
+    raw = str(reason or "").strip()
+    if not raw:
+        return None
+    if raw in PROMO_SAFE_ACTIVITY_OUTCOME_REASONS:
+        return raw
+    return "provider_error"
+
+
+def _safe_promo_action_result(item: PromoVkActionResult) -> PromoVkActionResult:
+    status = (
+        "scheduled"
+        if item.status == "scheduled_debug"
+        else item.status
+        if item.status in PROMO_SAFE_ACTIVITY_OUTCOME_STATUSES
+        else "unknown"
+    )
+    success = status in {"published", "scheduled", "forwarded", "draft_sent"}
+    reason = None if success else partner_safe_promo_reason(item.reason)
+    if status == "unknown" and reason is None:
+        reason = "provider_error"
+    return PromoVkActionResult(
+        campaign_id=item.campaign_id,
+        activity_id=item.activity_id,
+        surface=item.surface,
+        event_id=item.event_id,
+        status=status,
+        source_url=item.source_url,
+        target_url=item.target_url,
+        reason=reason,
+    )
+
+
+async def record_promo_activity_outcomes(
+    db: Database,
+    results: Iterable[PromoVkActionResult],
+    *,
+    now_utc: datetime | None = None,
+) -> int:
+    """Persist current execution outcome without changing campaign CAS state."""
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    latest: dict[int, PromoVkActionResult] = {}
+    for item in results:
+        if type(item.activity_id) is int and item.activity_id > 0:
+            latest[item.activity_id] = _safe_promo_action_result(item)
+    if not latest:
+        return 0
+
+    written = 0
+    async with db.get_session() as session:
+        for activity_id, item in latest.items():
+            activity = await session.get(PromoActivity, activity_id)
+            if activity is None or int(activity.campaign_id) != int(item.campaign_id):
+                continue
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO promo_activity_outcome(
+                        activity_id,campaign_id,last_attempt_at,status,reason_code,event_id
+                    ) VALUES(
+                        :activity_id,:campaign_id,:last_attempt_at,:status,:reason_code,:event_id
+                    )
+                    ON CONFLICT(activity_id) DO UPDATE SET
+                        campaign_id=excluded.campaign_id,
+                        last_attempt_at=excluded.last_attempt_at,
+                        status=excluded.status,
+                        reason_code=excluded.reason_code,
+                        event_id=excluded.event_id
+                    """
+                ),
+                {
+                    "activity_id": activity_id,
+                    "campaign_id": int(item.campaign_id),
+                    "last_attempt_at": now_utc,
+                    "status": item.status,
+                    "reason_code": item.reason,
+                    "event_id": int(item.event_id) if int(item.event_id or 0) > 0 else None,
+                },
+            )
+            written += 1
+        if written:
+            await session.commit()
+    return written
 
 
 @dataclass(frozen=True)
@@ -1202,6 +1314,21 @@ def _initial_80_vk_channel_publish_activity(campaign_id: int) -> PromoActivity:
     )
 
 
+def partner_vk_repost_config(source_group: str | int) -> dict[str, Any]:
+    source = str(source_group).strip()
+    if not source:
+        raise ValueError("source_group is required")
+    return {
+        "source_group": source,
+        "target_group": PARTNER_PROMO_VK_REPOST_TARGET_GROUP,
+        "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
+        "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
+        "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
+        "dedup_hours": PROMO_VK_REPOST_DEDUP_HOURS,
+        "caption": "short_rewrite_text",
+    }
+
+
 def _initial_80_vk_repost_activity(campaign_id: int) -> PromoActivity:
     return PromoActivity(
         campaign_id=campaign_id,
@@ -1211,15 +1338,7 @@ def _initial_80_vk_repost_activity(campaign_id: int) -> PromoActivity:
         daily_cap=1,
         selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
         enabled=True,
-        config_json={
-            "source_group": "klgdevents",
-            "target_group": "kenigeventsofficial",
-            "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
-            "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
-            "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
-            "dedup_hours": PROMO_VK_REPOST_DEDUP_HOURS,
-            "caption": "short_rewrite_text",
-        },
+        config_json=partner_vk_repost_config("klgdevents"),
     )
 
 
@@ -2355,6 +2474,7 @@ async def record_video_promo_exposures(
     public_target_count: int = 0,
     public_targets: list[dict] | None = None,
 ) -> int:
+    outcomes: list[PromoVkActionResult] = []
     async with db.get_session() as session:
         res = await session.execute(
             select(VideoAnnounceItem)
@@ -2390,9 +2510,32 @@ async def record_video_promo_exposures(
                 )
             )
             added += 1
+            if item.promo_activity_id:
+                outcomes.append(
+                    PromoVkActionResult(
+                        campaign_id=int(item.promo_campaign_id),
+                        activity_id=int(item.promo_activity_id),
+                        surface=PROMO_SURFACE_VIDEO_GENERAL,
+                        event_id=int(item.event_id),
+                        status=(
+                            "published"
+                            if publish_status in PUBLIC_PROMO_EXPOSURE_STATUSES
+                            else "scheduled"
+                        ),
+                    )
+                )
         if added:
             await session.commit()
-        return added
+    if outcomes:
+        try:
+            await record_promo_activity_outcomes(db, outcomes, now_utc=published_at)
+        except Exception:
+            logger.warning(
+                "promo.video activity outcome persistence failed session_id=%s",
+                session_id,
+                exc_info=True,
+            )
+    return added
 
 
 def _vk_owner_post_from_url(url: str | None) -> tuple[int, int] | None:
@@ -6243,6 +6386,17 @@ async def run_promo_vk_activities(
                     picked = candidate
                     break
             if picked is None:
+                reason = "source_unavailable" if not source_candidates else "dedup_window"
+                results.append(
+                    PromoVkActionResult(
+                        campaign_id,
+                        activity_id,
+                        activity.surface,
+                        0,
+                        "skipped",
+                        reason=reason,
+                    )
+                )
                 continue
             ev, source_url, source_at = picked
             try:
@@ -6376,4 +6530,8 @@ async def run_promo_vk_activities(
                 results.append(
                     PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", source_url=source_url, reason=str(exc) or type(exc).__name__)
                 )
+    try:
+        await record_promo_activity_outcomes(db, results, now_utc=now_utc)
+    except Exception:
+        logger.warning("promo activity outcome persistence failed", exc_info=True)
     return results

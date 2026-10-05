@@ -68,8 +68,9 @@ as an activity of `promo.py`, not as a second campaign or MCP server.
 ## Endpoints and OAuth
 
 ```text
-https://<origin>/_private/<secret>/mcp        # ChatGPT + OpenCode resource
-https://<origin>/_private/<secret>/codex/mcp  # Codex resource
+https://<origin>/_private/<secret>/mcp                 # ChatGPT + OpenCode owner resource
+https://<origin>/_private/<secret>/events-partner/mcp  # Partner resource
+https://<origin>/_private/<secret>/codex/mcp           # Codex read-only resource
 ```
 
 The high-entropy path is confidential defense in depth, not authentication.
@@ -81,6 +82,11 @@ Data tools require OAuth authorization-code + PKCE S256. The server provides:
   an exact `http://127.0.0.1:<unprivileged-port>/mcp/oauth/callback` loopback
   path; the requested port may vary, while the code remains bound to the exact
   redirect URI;
+- owner-provisioned partner public clients on the separate `events-partner`
+  resource. `partner_create` persists principal/tenant/organization/portfolio,
+  returns a one-time `login_secret` for private delivery, and the OAuth client
+  itself uses `none` plus mandatory PKCE S256. Telegram registration is not
+  required and there is no public dynamic client registration;
 - exact client/resource/audience binding;
 - exact ChatGPT callback validation and literal Codex loopback callbacks only;
 - 15-minute signed access tokens;
@@ -88,8 +94,14 @@ Data tools require OAuth authorization-code + PKCE S256. The server provides:
 - path-scoped protected-resource and authorization-server metadata;
 - no dynamic client registration.
 
-Omitted scopes default to only `events:read incidents:read operations:read`.
-Codex can receive those scopes plus `offline_access`, and nothing social.
+Omitted owner-resource scopes default to only
+`events:read incidents:read operations:read`. Codex can receive those scopes
+plus `offline_access`, and nothing social. The partner resource has its own
+allowlisted partner scopes/actions and current server-side grant; an owner or
+Codex token is rejected cross-audience. The canonical partner workflow,
+feature-gate order and SOURCE_READY/live/deploy boundaries are documented in
+[Partner event operations](partner-event-operations.md).
+
 ChatGPT/OpenCode social scopes are granular by provider and action class:
 
 ```text

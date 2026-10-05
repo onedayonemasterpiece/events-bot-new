@@ -3403,6 +3403,24 @@ class Database:
                 """
             )
             await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS promo_activity_outcome(
+                    activity_id INTEGER PRIMARY KEY,
+                    campaign_id INTEGER NOT NULL,
+                    last_attempt_at TIMESTAMP NOT NULL,
+                    status TEXT NOT NULL,
+                    reason_code TEXT,
+                    event_id INTEGER,
+                    FOREIGN KEY(activity_id) REFERENCES promo_activity(id) ON DELETE CASCADE,
+                    FOREIGN KEY(campaign_id) REFERENCES promo_campaign(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_promo_activity_outcome_campaign "
+                "ON promo_activity_outcome(campaign_id, last_attempt_at)"
+            )
+            await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_promo_campaign_status_dates ON promo_campaign(status, starts_at, ends_at)"
             )
             await _add_column(

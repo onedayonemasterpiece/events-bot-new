@@ -5492,7 +5492,7 @@ def startup(
             *,
             run_id: str | None = None,
         ) -> None:
-            from promo import run_promo_vk_activities
+            from promo import partner_safe_promo_reason, run_promo_vk_activities
 
             results = await run_promo_vk_activities(db_obj, bot_obj)
             if results:
@@ -5506,7 +5506,7 @@ def startup(
                             "event_id": item.event_id,
                             "status": item.status,
                             "target_url": item.target_url,
-                            "reason": item.reason,
+                            "reason": partner_safe_promo_reason(item.reason),
                         }
                         for item in results
                     ],

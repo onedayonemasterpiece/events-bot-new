@@ -70,6 +70,8 @@ async def test_two_partner_oauth_commands_and_catalog(config, tmp_path):
             "event_cancel_prepare",
             "event_reschedule_commit",
             "promo_campaign_state_prepare",
+            "promo_campaign_update_prepare",
+            "promo_campaign_update_commit",
             "event_publication_status",
         } <= names
         assert not names & {
@@ -78,6 +80,15 @@ async def test_two_partner_oauth_commands_and_catalog(config, tmp_path):
             "promo_operation_decide",
             "operations_snapshot",
         }
+        _, owner_catalog = await rpc(
+            client, c.mcp_path, ot, "", method="tools/list"
+        )
+        owner_names = {tool["name"] for tool in owner_catalog["result"]["tools"]}
+        assert {
+            "promo_campaign_update_prepare",
+            "promo_campaign_update_commit",
+        } <= owner_names
+
         _, r = await rpc(client, c.partner_mcp_path, at, "partner_workspace_get")
         assert (
             data(r)["capabilities"]["event_operations"]

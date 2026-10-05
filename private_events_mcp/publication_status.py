@@ -3,8 +3,8 @@
 from contextvars import ContextVar
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from sqlalchemy import text
-from models import Event
+from sqlalchemy import text, select
+from models import Event, JobOutbox, JobTask
 from static_site_release import event_public_revision
 from .actors import ActorContext
 from .event_commands import one, fail
@@ -82,6 +82,136 @@ async def record_worker_receipt(database, job, *, changed, url, had_publication=
         await session.commit()
 
 
+async def _static_site_surface(session, event_id: int, current_revision: str) -> dict:
+    jobs = list(
+        (
+            await session.execute(
+                select(JobOutbox)
+                .where(JobOutbox.task == JobTask.static_site_build)
+                .order_by(JobOutbox.id.desc())
+                .limit(64)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    job = None
+    target_revision = None
+    payload = {}
+    for candidate in jobs:
+        packet = candidate.payload if isinstance(candidate.payload, dict) else {}
+        revisions = packet.get("event_revisions")
+        revisions = revisions if isinstance(revisions, dict) else {}
+        snapshot = packet.get("snapshot")
+        snapshot = snapshot if isinstance(snapshot, dict) else {}
+        manifest = snapshot.get("manifest")
+        manifest = manifest if isinstance(manifest, dict) else {}
+        snapshot_revisions = manifest.get("event_revisions")
+        snapshot_revisions = (
+            snapshot_revisions if isinstance(snapshot_revisions, dict) else {}
+        )
+        revision = snapshot_revisions.get(str(event_id)) or revisions.get(str(event_id))
+        if revision:
+            job = candidate
+            payload = packet
+            target_revision = str(revision)
+            break
+
+    if job is None:
+        return {
+            "surface": "static_site",
+            "transport": "not_planned",
+            "revision": "unknown",
+            "public_url": None,
+            "applied_revision": None,
+            "target_revision": None,
+            "first_published_at": None,
+            "last_published_at": None,
+            "job_ref": None,
+            "operation_ref": None,
+            "attempts": 0,
+            "next_retry": None,
+            "error": None,
+            "candidate_state": "not_built",
+            "deployment_state": "not_deployed",
+            "build_id": None,
+            "root_build_id": None,
+        }
+
+    status = job.status.value if hasattr(job.status, "value") else str(job.status)
+    transport = {
+        "pending": "queued",
+        "running": "running",
+        "error": "retry_wait",
+        "paused": "paused",
+    }.get(status, "outcome_unknown")
+    if job.terminal_reason == "failed":
+        transport = "failed"
+    if job.terminal_reason == "outcome_unknown":
+        transport = "outcome_unknown"
+    revision_state = (
+        "up_to_date" if target_revision == current_revision else "stale"
+    )
+
+    build = payload.get("build_receipt")
+    build = build if isinstance(build, dict) else {}
+    build_id = build.get("build_id")
+    publication = build.get("publication")
+    publication = publication if isinstance(publication, dict) else {}
+    root = build.get("root_promotion")
+    root = root if isinstance(root, dict) else {}
+    root_current = root.get("current")
+    root_current = root_current if isinstance(root_current, dict) else {}
+    root_status = str(root.get("status") or "disabled")
+    root_build_id = root_current.get("build_id")
+    candidate_state = "not_built"
+    deployment_state = "not_deployed"
+
+    if status == "done" and build_id:
+        transport = "built"
+        candidate_state = (
+            "published"
+            if publication.get("status") == "published"
+            else "built"
+        )
+        if (
+            root_status in {"promoted", "noop"}
+            and root_build_id
+            and str(root_build_id) == str(build_id)
+        ):
+            transport = "published"
+            deployment_state = (
+                "current" if target_revision == current_revision else "stale"
+            )
+        elif root_status == "rolled_back":
+            deployment_state = "rolled_back"
+        elif root_status not in {"disabled", ""}:
+            deployment_state = "not_deployed"
+
+    return {
+        "surface": "static_site",
+        "transport": transport,
+        "revision": revision_state,
+        # Never expose the bearer secret candidate URL through partner readback.
+        "public_url": None,
+        "applied_revision": (
+            target_revision if deployment_state in {"current", "stale"} else None
+        ),
+        "target_revision": target_revision,
+        "first_published_at": None,
+        "last_published_at": build.get("finished_at"),
+        "job_ref": "job:" + str(job.id),
+        "operation_ref": job.event_operation_ref,
+        "attempts": job.attempts,
+        "next_retry": job.next_run_at if status == "error" else None,
+        "error": "PUBLICATION_RETRY_REQUIRED" if job.last_error else None,
+        "candidate_state": candidate_state,
+        "deployment_state": deployment_state,
+        "build_id": build_id,
+        "root_build_id": root_build_id,
+    }
+
+
 class PublicationReadService:
     def __init__(self, database, policy):
         self.database, self.policy = database, policy
@@ -97,6 +227,11 @@ class PublicationReadService:
             current = event_public_revision(event)
             result = []
             for surface, (task, field) in SURFACES.items():
+                if surface == "static_site":
+                    result.append(
+                        await _static_site_surface(session, event_id, current)
+                    )
+                    continue
                 job = await one(
                     session,
                     "SELECT * FROM joboutbox WHERE event_id=:id AND task=:task AND (coalesce_key IS NULL OR coalesce_key NOT LIKE 'notice:%') ORDER BY id DESC LIMIT 1",

@@ -4,16 +4,32 @@ from datetime import date, datetime, timezone, timedelta
 import json
 import secrets
 import time
-from sqlalchemy import text, select
-from models import Event, PromoCampaign, PromoTarget
+from sqlalchemy import text, select, func
+from models import (
+    Event,
+    Organization,
+    PromoActivity,
+    PromoCampaign,
+    PromoTarget,
+    PromoExposure,
+)
 from promo import (
     PartnerPromoSpec,
     PartnerActivitySpec,
     create_partner_event_promo_campaign,
     add_partner_activity_to_campaign,
+    PUBLIC_PROMO_EXPOSURE_STATUSES,
+    PROMO_SAFE_ACTIVITY_OUTCOME_STATUSES,
     PARTNER_PROMO_VIDEO_PROFILES,
     PARTNER_PROMO_SLOT_POLICIES,
     _event_is_promo_eligible,
+    _event_has_stored_poster,
+    _promo_day_bounds,
+    _vk_owner_post_from_url,
+    partner_safe_promo_reason,
+    partner_vk_repost_config,
+    clamp_campaign_end_to_event,
+    normalize_promo_priority,
 )
 from static_site_release import event_public_revision
 from .actors import ActorContext
@@ -75,6 +91,77 @@ class PromoCommandService:
                 fail("NOT_FOUND")
         return grant
 
+    async def _placement_context(self, session, event, grant):
+        organization = (
+            await session.get(Organization, grant.organization_id)
+            if grant is not None
+            else None
+        )
+        profiles = dict(PARTNER_PROMO_VIDEO_PROFILES)
+        if grant is not None and (
+            organization is None
+            or str(organization.video_profile_key or "").strip() != "konb"
+        ):
+            profiles.pop("konb", None)
+
+        video_available = _event_has_stored_poster(event)
+        source_packet = _vk_owner_post_from_url(
+            str(getattr(event, "source_vk_post_url", None) or "")
+        )
+        source_group_id = abs(int(source_packet[0])) if source_packet else None
+        vk_available = source_group_id is not None
+        vk_reason = None if vk_available else "source_unavailable"
+        if grant is not None and source_group_id is not None:
+            allowed: set[int] = set()
+            if organization is not None:
+                for value in organization.vk_source_group_ids or []:
+                    try:
+                        allowed.add(abs(int(value)))
+                    except (TypeError, ValueError):
+                        continue
+            if source_group_id not in allowed:
+                vk_available = False
+                vk_reason = "vk_source_not_allowed"
+
+        verdicts = {
+            "video_general": {
+                "available": video_available,
+                "reason": None if video_available else "event_posters_missing",
+            },
+            "vk_repost": {
+                "available": vk_available,
+                "reason": vk_reason,
+            },
+        }
+        return verdicts, profiles, source_group_id
+
+    async def _configure_server_activity(
+        self, session, *, campaign_id, surface, event, grant
+    ):
+        if surface != "vk_repost":
+            return
+        verdicts, _profiles, source_group_id = await self._placement_context(
+            session, event, grant
+        )
+        if not verdicts["vk_repost"]["available"] or source_group_id is None:
+            fail("PROMO_SURFACE_UNAVAILABLE")
+        activity = (
+            await session.execute(
+                select(PromoActivity)
+                .where(
+                    PromoActivity.campaign_id == campaign_id,
+                    PromoActivity.surface == "vk_repost",
+                )
+                .order_by(PromoActivity.id.desc())
+                .limit(1)
+            )
+        ).scalars().first()
+        if activity is None:
+            fail("PROMO_OPERATION_CONFLICT")
+        activity.config_json = partner_vk_repost_config(source_group_id)
+        session.add(activity)
+        await session.flush()
+
     async def capabilities(self, actor, event_id):
         async with self.database.get_session() as session:
             grant = await self._check(
@@ -83,11 +170,20 @@ class PromoCommandService:
             event = await session.get(Event, event_id)
             if event is None:
                 fail("NOT_FOUND")
+            verdicts, profiles, _source_group_id = await self._placement_context(
+                session, event, grant
+            )
             return {
                 "event_id": event_id,
                 "event_revision": event_public_revision(event),
                 "supported_surfaces": list(PARTNER_SURFACES),
-                "video_profiles": dict(PARTNER_PROMO_VIDEO_PROFILES),
+                "available_surfaces": [
+                    surface
+                    for surface in PARTNER_SURFACES
+                    if verdicts[surface]["available"]
+                ],
+                "surface_verdicts": verdicts,
+                "video_profiles": profiles,
                 "slot_policies": dict(PARTNER_PROMO_SLOT_POLICIES),
                 "limits": dict(grant.limits) if grant else None,
                 "lifecycle_status": event.lifecycle_status,
@@ -136,26 +232,43 @@ class PromoCommandService:
             await self._check(
                 session, actor, "promo_read", {"campaign_id": campaign_id}
             )
-            (
-                campaign,
-                targets,
-                activities,
-                rev,
-            ) = await self.snapshots._campaign_snapshot(session, campaign_id)
-            rows = (
+            campaign, targets, activities, rev = await self.snapshots._campaign_snapshot(
+                session, campaign_id
+            )
+            recorded = list(
                 (
                     await session.execute(
-                        text(
-                            "SELECT event_id,surface,publish_status,published_at,public_target_count FROM promo_exposure WHERE campaign_id=:id ORDER BY id DESC LIMIT 17"
-                        ),
-                        {"id": campaign_id},
+                        select(PromoExposure)
+                        .where(PromoExposure.campaign_id == campaign_id)
+                        .order_by(
+                            PromoExposure.published_at.desc(),
+                            PromoExposure.id.desc(),
+                        )
+                        .limit(17)
                     )
                 )
-                .mappings()
+                .scalars()
                 .all()
             )
-            reasons = []
             model = await session.get(PromoCampaign, campaign_id)
+            if model is None:
+                fail("NOT_FOUND")
+
+            now = datetime.now(timezone.utc)
+            reasons: list[str] = []
+            starts_at = model.starts_at
+            ends_at = model.ends_at
+            if starts_at and starts_at.tzinfo is None:
+                starts_at = starts_at.replace(tzinfo=timezone.utc)
+            if ends_at and ends_at.tzinfo is None:
+                ends_at = ends_at.replace(tzinfo=timezone.utc)
+            if starts_at and starts_at > now:
+                reasons.append("campaign_not_started")
+            if ends_at and ends_at < now:
+                reasons.append("campaign_window_closed")
+            if campaign["status"] != "active":
+                reasons.append("campaign_" + campaign["status"])
+
             for target in targets:
                 event = (
                     await session.get(Event, target["event_id"])
@@ -163,11 +276,167 @@ class PromoCommandService:
                     else None
                 )
                 if event is None or not _event_is_promo_eligible(
-                    event, today=datetime.now(timezone.utc).date(), campaign=model
+                    event, today=now.date(), campaign=model
                 ):
                     reasons.append("target_ineligible")
-            if campaign["status"] != "active":
-                reasons.append("campaign_" + campaign["status"])
+
+            day_start, day_end = _promo_day_bounds(now)
+            public_statuses = tuple(PUBLIC_PROMO_EXPOSURE_STATUSES)
+            all_counts = dict(
+                (
+                    await session.execute(
+                        select(PromoExposure.activity_id, func.count(PromoExposure.id))
+                        .where(PromoExposure.campaign_id == campaign_id)
+                        .where(PromoExposure.publish_status.in_(public_statuses))
+                        .group_by(PromoExposure.activity_id)
+                    )
+                ).all()
+            )
+            day_counts = dict(
+                (
+                    await session.execute(
+                        select(PromoExposure.activity_id, func.count(PromoExposure.id))
+                        .where(PromoExposure.campaign_id == campaign_id)
+                        .where(PromoExposure.publish_status.in_(public_statuses))
+                        .where(PromoExposure.published_at >= day_start)
+                        .where(PromoExposure.published_at < day_end)
+                        .group_by(PromoExposure.activity_id)
+                    )
+                ).all()
+            )
+            outcome_rows = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT activity_id,last_attempt_at,status,reason_code,event_id "
+                            "FROM promo_activity_outcome WHERE campaign_id=:id"
+                        ),
+                        {"id": campaign_id},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            outcomes = {}
+            outcome_reasons: list[str] = []
+            for row in outcome_rows:
+                status = str(row["status"] or "")
+                if status not in PROMO_SAFE_ACTIVITY_OUTCOME_STATUSES:
+                    status = "unknown"
+                reason = partner_safe_promo_reason(row["reason_code"])
+                normalized = {
+                    "last_attempt_at": row["last_attempt_at"],
+                    "status": status,
+                    "reason_code": reason,
+                    "event_id": row["event_id"],
+                }
+                outcomes[int(row["activity_id"])] = normalized
+                if status in {"failed", "skipped", "unknown"}:
+                    outcome_reasons.append(reason or "provider_error")
+
+            total_count = sum(int(value or 0) for value in all_counts.values())
+            daily_count = sum(int(value or 0) for value in day_counts.values())
+            if (
+                model.total_exposure_goal is not None
+                and total_count >= max(0, int(model.total_exposure_goal))
+            ):
+                reasons.append("campaign_total_goal_reached")
+            if (
+                model.daily_exposure_cap is not None
+                and daily_count >= max(0, int(model.daily_exposure_cap))
+            ):
+                reasons.append("campaign_daily_cap_reached")
+            for activity in activities:
+                activity_id = int(activity["id"])
+                if not bool(activity["enabled"]):
+                    reasons.append("activity_disabled")
+                if (
+                    activity["target_exposure_goal"] is not None
+                    and int(all_counts.get(activity_id, 0) or 0)
+                    >= max(0, int(activity["target_exposure_goal"]))
+                ):
+                    reasons.append("activity_goal_reached")
+                if (
+                    activity["daily_cap"] is not None
+                    and int(day_counts.get(activity_id, 0) or 0)
+                    >= max(0, int(activity["daily_cap"]))
+                ):
+                    reasons.append("activity_daily_cap_reached")
+
+            exposure_rows = []
+            recorded_failure_reasons: list[str] = []
+            for exposure in recorded[:16]:
+                details = (
+                    exposure.details_json
+                    if isinstance(exposure.details_json, dict)
+                    else {}
+                )
+                raw_reason = details.get("reason")
+                reason = (
+                    partner_safe_promo_reason(raw_reason)
+                    if isinstance(raw_reason, str)
+                    else None
+                )
+                if exposure.publish_status not in PUBLIC_PROMO_EXPOSURE_STATUSES:
+                    reason = reason or "recorded_non_public_outcome"
+                    recorded_failure_reasons.append(reason)
+                else:
+                    reason = None
+                exposure_rows.append(
+                    {
+                        "exposure_id": exposure.id,
+                        "event_id": exposure.event_id,
+                        "activity_id": exposure.activity_id,
+                        "surface": exposure.surface,
+                        "placement_kind": exposure.placement_kind,
+                        "recorded_publish_status": exposure.publish_status,
+                        "recorded_public_target_count": exposure.public_target_count,
+                        "recorded_published_at": exposure.published_at,
+                        "delivery_reason": reason,
+                    }
+                )
+
+            activity_rows = []
+            for row in activities[:16]:
+                item = {
+                    key: row[key]
+                    for key in (
+                        "id",
+                        "surface",
+                        "profile_key",
+                        "enabled",
+                        "target_exposure_goal",
+                        "daily_cap",
+                    )
+                }
+                outcome = outcomes.get(int(row["id"]))
+                item.update(
+                    {
+                        "last_attempt_at": outcome["last_attempt_at"] if outcome else None,
+                        "last_outcome_status": outcome["status"] if outcome else None,
+                        "last_outcome_reason": (
+                            outcome["reason_code"] if outcome else None
+                        ),
+                        "last_outcome_event_id": outcome["event_id"] if outcome else None,
+                    }
+                )
+                activity_rows.append(item)
+
+            non_delivery_reasons = sorted(
+                set([*reasons, *recorded_failure_reasons, *outcome_reasons])
+            )
+            public_recorded = any(
+                exposure.publish_status in PUBLIC_PROMO_EXPOSURE_STATUSES
+                for exposure in recorded
+            )
+            delivery_state = (
+                "recorded_publication"
+                if public_recorded
+                else "non_delivery_recorded"
+                if non_delivery_reasons
+                else "not_observed"
+            )
+
             return {
                 "campaign": self.snapshots._campaign_summary(campaign),
                 "campaign_revision": rev,
@@ -175,26 +444,18 @@ class PromoCommandService:
                     {"event_id": r["event_id"], "target_type": r["target_type"]}
                     for r in targets[:16]
                 ],
-                "activities": [
-                    {
-                        k: r[k]
-                        for k in (
-                            "id",
-                            "surface",
-                            "profile_key",
-                            "enabled",
-                            "target_exposure_goal",
-                            "daily_cap",
-                        )
-                    }
-                    for r in activities[:16]
-                ],
+                "activities": activity_rows,
                 "recorded_exposures": {
-                    "rows": [dict(r) for r in rows[:16]],
-                    "has_more": len(rows) > 16,
+                    "rows": exposure_rows,
+                    "has_more": len(recorded) > 16,
                     "accounting": "recorded_publication_units_not_browser_impressions",
                 },
                 "ineligibility_reasons": sorted(set(reasons)),
+                "non_delivery_reasons": non_delivery_reasons,
+                "delivery_state": delivery_state,
+                "delivery_evidence": (
+                    "durable_recorded_rows_current_activity_outcome_and_server_state"
+                ),
                 "publication_state": "not_observed",
             }
 
@@ -225,6 +486,46 @@ class PromoCommandService:
             ]
         if replay:
             return
+        if kind == "promo_update":
+            mutable = {
+                key
+                for key in (
+                    "title",
+                    "ends_at",
+                    "total_exposure_goal",
+                    "daily_exposure_cap",
+                    "priority",
+                )
+                if key in request
+            }
+            if not mutable or any(request[key] is None for key in mutable):
+                fail("INVALID_ARGUMENTS")
+            if "title" in request and not str(request["title"]).strip():
+                fail("INVALID_ARGUMENTS")
+            if grant and "priority" in request:
+                fail("PROMO_PARAMETER_DENIED")
+            if "ends_at" in request:
+                effective_end = date.fromisoformat(request["ends_at"])
+                for event in events:
+                    if event is not None:
+                        effective_end = clamp_campaign_end_to_event(effective_end, event)
+                if effective_end < date.today():
+                    fail("PROMO_EVENT_INELIGIBLE")
+                if grant and effective_end > date.today() + timedelta(
+                    days=grant.limits["campaign_days"]
+                ):
+                    fail("PROMO_LIMIT_EXCEEDED")
+            if grant:
+                if (
+                    "total_exposure_goal" in request
+                    and request["total_exposure_goal"] > grant.limits["campaign_exposures"]
+                ):
+                    fail("PROMO_LIMIT_EXCEEDED")
+                if (
+                    "daily_exposure_cap" in request
+                    and request["daily_exposure_cap"] > grant.limits["daily_exposures"]
+                ):
+                    fail("PROMO_LIMIT_EXCEEDED")
         if kind in {"promo_create", "promo_activity_add", "promo_resume"}:
             if not events or any(
                 e is None
@@ -234,6 +535,19 @@ class PromoCommandService:
                 for e in events
             ):
                 fail("PROMO_EVENT_INELIGIBLE")
+        if kind in {"promo_create", "promo_activity_add"}:
+            surface = request["surface"]
+            for event in events:
+                verdicts, profiles, _source_group_id = await self._placement_context(
+                    session, event, grant
+                )
+                if not verdicts[surface]["available"]:
+                    fail("PROMO_SURFACE_UNAVAILABLE")
+                if (
+                    surface == "video_general"
+                    and request.get("profile_key") not in profiles
+                ):
+                    fail("PROMO_PROFILE_DENIED")
         if grant:
             limits = grant.limits
             if kind in {"promo_create", "promo_resume"}:
@@ -296,9 +610,15 @@ class PromoCommandService:
             "promo_pause",
             "promo_resume",
             "promo_archive",
+            "promo_update",
         }:
             fail("INVALID_ARGUMENTS")
-        from .promo_command_tools import CreateRequest, ActivityRequest, StateRequest
+        from .promo_command_tools import (
+            CreateRequest,
+            ActivityRequest,
+            StateRequest,
+            UpdateRequest,
+        )
         from pydantic import ValidationError
 
         try:
@@ -306,6 +626,12 @@ class PromoCommandService:
                 request = CreateRequest.model_validate(request).model_dump()
             elif kind == "promo_activity_add":
                 request = ActivityRequest.model_validate(request).model_dump()
+            elif kind == "promo_update":
+                request = UpdateRequest.model_validate(request).model_dump(
+                    exclude_unset=True
+                )
+                if request.get("title") is not None:
+                    request["title"] = request["title"].strip()
             else:
                 request = StateRequest.model_validate(
                     {**request, "action": kind.removeprefix("promo_")}
@@ -482,6 +808,16 @@ class PromoCommandService:
                     if made.campaign is None:
                         fail("PROMO_EVENT_INELIGIBLE")
                     campaign_id = made.campaign.id
+                    target_event = await session.get(Event, request["event_id"])
+                    if target_event is None:
+                        fail("PROMO_EVENT_INELIGIBLE")
+                    await self._configure_server_activity(
+                        session,
+                        campaign_id=campaign_id,
+                        surface=request["surface"],
+                        event=target_event,
+                        grant=grant,
+                    )
                     if grant:
                         made.campaign.daily_exposure_cap = grant.limits[
                             "daily_exposures"
@@ -512,6 +848,83 @@ class PromoCommandService:
                     if made.campaign is None:
                         fail("PROMO_EVENT_INELIGIBLE")
                     campaign_id = request["campaign_id"]
+                    target_id = (
+                        await session.execute(
+                            select(PromoTarget.event_id)
+                            .where(
+                                PromoTarget.campaign_id == campaign_id,
+                                PromoTarget.target_type == "event",
+                            )
+                            .order_by(PromoTarget.id.asc())
+                            .limit(1)
+                        )
+                    ).scalar()
+                    target_event = (
+                        await session.get(Event, target_id) if target_id else None
+                    )
+                    if target_event is None:
+                        fail("PROMO_EVENT_INELIGIBLE")
+                    await self._configure_server_activity(
+                        session,
+                        campaign_id=campaign_id,
+                        surface=request["surface"],
+                        event=target_event,
+                        grant=grant,
+                    )
+                elif kind == "promo_update":
+                    campaign_id = request["campaign_id"]
+                    campaign = await session.get(PromoCampaign, campaign_id)
+                    if campaign is None:
+                        fail("NOT_FOUND")
+                    updated_fields = []
+                    effective_ends_at = None
+                    if "title" in request:
+                        campaign.title = request["title"]
+                        updated_fields.append("title")
+                    if "ends_at" in request:
+                        effective_end = date.fromisoformat(request["ends_at"])
+                        target_ids = list(
+                            (
+                                await session.execute(
+                                    select(PromoTarget.event_id).where(
+                                        PromoTarget.campaign_id == campaign_id,
+                                        PromoTarget.target_type == "event",
+                                    )
+                                )
+                            ).scalars()
+                        )
+                        for target_id in target_ids:
+                            event = await session.get(Event, target_id)
+                            if event is not None:
+                                effective_end = clamp_campaign_end_to_event(
+                                    effective_end, event
+                                )
+                        campaign.ends_at = datetime(
+                            effective_end.year,
+                            effective_end.month,
+                            effective_end.day,
+                            23,
+                            59,
+                            59,
+                            tzinfo=timezone.utc,
+                        )
+                        effective_ends_at = effective_end.isoformat()
+                        updated_fields.append("ends_at")
+                    if "total_exposure_goal" in request:
+                        campaign.total_exposure_goal = request["total_exposure_goal"]
+                        updated_fields.append("total_exposure_goal")
+                    if "daily_exposure_cap" in request:
+                        campaign.daily_exposure_cap = request["daily_exposure_cap"]
+                        updated_fields.append("daily_exposure_cap")
+                    if "priority" in request:
+                        campaign.priority = normalize_promo_priority(request["priority"])
+                        updated_fields.append("priority")
+                    campaign.updated_at = datetime.now(timezone.utc)
+                    session.add(campaign)
+                    await session.flush()
+                    _, _, _, updated_revision = await self.snapshots._campaign_snapshot(
+                        session, campaign_id
+                    )
                 else:
                     campaign_id = request["campaign_id"]
                     campaign = await session.get(PromoCampaign, campaign_id)
@@ -527,6 +940,14 @@ class PromoCommandService:
                     "publication_state": "not_observed",
                     "reviewed_by": actor.subject if decision else None,
                 }
+                if kind == "promo_update":
+                    result.update(
+                        {
+                            "updated_fields": sorted(updated_fields),
+                            "campaign_revision": updated_revision,
+                            "effective_ends_at": effective_ends_at,
+                        }
+                    )
             await session.execute(
                 text(
                     "UPDATE event_change_log SET status=:status,result_json=:result,updated_at=CURRENT_TIMESTAMP WHERE operation_ref=:ref"

@@ -1,8 +1,8 @@
 # Партнёрское промо
 
-> Статус: phase A shipped (2026-05-18). Канонический ledger требований и
-> поведения для партнёрского сценария промо. Любые уточнения в чате должны
-> приземляться сюда в тот же ход. Базовая модель промо-кампаний и контракт
+> Статус: Telegram/UI phase A shipped (2026-05-18); partner MCP event/promo
+> core SOURCE_READY (2026-10-05), default-off. Канонический ledger требований
+> и поведения для партнёрского сценария промо. Базовая модель промо-кампаний и контракт
 > CherryFlash описаны в соседнем
 > [`docs/features/promo-campaigns/README.md`](README.md); этот файл —
 > расширение для партнёрского UX и нового правила KONB.
@@ -14,9 +14,9 @@
 
 - видеоанонсы — профили `default` (завтра), `popular_review` (популярное),
   `konb` (партнёрский трек КОНБ);
-- репост ВК-исходника события в общий партнёрский паблик
-  `vk.com/club231828790` (тип активности заложен в схему, исполнение в
-  фазе B);
+- репост ВК-исходника события через существующий `vk_repost` runner,
+  dedup и `promo_exposure` ledger; source проверяется против организации,
+  а target/config задаются сервером и не принимаются из partner tool arguments;
 - (заложено) контекстные подъёмы — например, событие научной библиотеки с
   «просто попасть в видео» промо автоматически поднимается на слот 1–2
   в видеоанонсе KONB при отсутствии более приоритетной конкуренции.
@@ -29,7 +29,9 @@
 
 Phase A (готово):
 
-- модели `Organization`, `PromoVkRepostJob`; миграции;
+- модель `Organization` и общая `promo_campaign / promo_target /
+  promo_activity / promo_exposure` схема; отдельный partner promo engine не
+  вводится;
 - idempotent seed `Научная библиотека` →
   `vk_source_group_ids=[30777579]`, `video_profile_key='konb'`,
   `sponsorship_default='Партнёрский материал · Научная библиотека'`;
@@ -63,15 +65,22 @@ Phase A (готово):
   лейблами (artifacts/test-results/multi_activity_live.txt и
   two_activity_card.txt).
 
-Phase B (открыто, см. §10):
+Phase B / runtime status (частично закрыто):
 
-- ВК-репост активности — расписание, runner, дедуп, уведомления;
-- KONB auto-promote-to-slot-1-2 правило (см. §7);
-- `selection_policy=first_two_slots` интеграция в видеоотборщик;
-- DM-уведомления партнёру и суперадмину о публичных показах и пропусках;
-- расширенная статистика с misses (`slot conflict`, `source_unavailable`,
-  `dedup window`, `vk_rate_limited`, `window closed`);
-- кнопка `🌐 Сайт` — пока plain alert.
+- **готово:** `vk_repost` выполняется существующим
+  `run_promo_vk_activities`; scheduler, dedup и публичные exposure receipts
+  работают без отдельного partner scheduler;
+- **готово для MCP readback:** current campaign/caps/window/eligibility,
+  последняя durable activity outcome и безопасные причины
+  `source_unavailable` / `dedup_window` / `provider_error`; это publication
+  accounting, а не browser impressions;
+- **открыто:** KONB auto-promote-to-slot-1-2 правило (см. §7);
+- **открыто:** полная `selection_policy=first_two_slots` интеграция в
+  video selector;
+- **открыто:** DM-уведомления партнёру/суперадмину и исторический miss-ledger
+  всех попыток;
+- кнопка `🌐 Сайт` в Telegram UI остаётся plain alert; partner MCP не
+  рекламирует site placement как capability.
 
 ## 3. Роли и доступ
 
@@ -588,7 +597,11 @@ Feature: Стартовая устойчивость (регрессия INC-202
   `scripts/partner_promo_interface_dry_run.py` — рендер 15 кадров
   всего флоу без отправки в Telegram (используется как ручная
   визуальная проверка перед деплоем).
-- Существующий `tests/test_promo.py` (9 кейсов) — продолжает зелёным.
+- Source regression 2026-10-05:
+  `tests/test_promo.py` — 91 passed;
+  `tests/test_partner_promo.py tests/test_partner_promo_menu.py` — 34 passed.
+  Partner MCP application/security suite проверяется отдельно в
+  [Partner operations](../../operations/partner-event-operations.md).
 - Стартовый smoke из `INC-2026-05-18`:
   `TELEGRAM_BOT_TOKEN=<fake> python -c "from main import create_app;
   create_app()"`.
@@ -596,7 +609,11 @@ Feature: Стартовая устойчивость (регрессия INC-202
 ## Independent OAuth projection
 
 Default-off partner MCP uses the same campaign/activity/exposure services with
-NULL Telegram creator and explicit durable principal/tenant attribution. See
-[Partner operations](../../operations/partner-event-operations.md) for scopes,
-limits, owner review, state CAS, isolated tests and activation gates. No new
-promo engine or browser impression accounting is introduced.
+NULL Telegram creator and explicit durable principal/tenant attribution. It
+supports create, add-activity, allowed campaign update, pause/resume/archive,
+owner review and bounded readback for the executable `video_general` and
+`vk_repost` surfaces. Current non-delivery evidence is stored separately from
+campaign CAS state so scheduler telemetry cannot invalidate a prepared campaign
+revision. See [Partner operations](../../operations/partner-event-operations.md)
+for scopes, limits, rollout and acceptance gates. No new promo engine or browser
+impression accounting is introduced.

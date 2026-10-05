@@ -31,6 +31,15 @@ class StateRequest(CampaignInput):
     action: Literal["pause", "resume", "archive"]
 
 
+class UpdateRequest(CampaignInput):
+    campaign_revision: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+    title: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    ends_at: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] | None = None
+    total_exposure_goal: Annotated[int, Field(ge=1, le=10000)] | None = None
+    daily_exposure_cap: Annotated[int, Field(ge=1, le=10000)] | None = None
+    priority: Annotated[int, Field(ge=0, le=3)] | None = None
+
+
 class CreateInput(StrictInput):
     request: CreateRequest
     idempotency_key: Annotated[str, Field(min_length=8, max_length=160)]
@@ -42,6 +51,10 @@ class ActivityInput(CreateInput):
 
 class StateInput(CreateInput):
     request: StateRequest
+
+
+class UpdateInput(CreateInput):
+    request: UpdateRequest
 
 
 def build_promo_command_tools(service, *, partner=False, state_only=False):
@@ -74,16 +87,19 @@ def build_promo_command_tools(service, *, partner=False, state_only=False):
     for name, model, kind in [
         ("promo_campaign_create", CreateInput, "promo_create"),
         ("promo_activity_add", ActivityInput, "promo_activity_add"),
+        ("promo_campaign_update", UpdateInput, "promo_update"),
         ("promo_campaign_state", StateInput, None),
     ]:
-        if state_only and kind is not None:
+        if state_only and kind not in {None, "promo_update"}:
             continue
 
         async def prepare(args, context, model=model, kind=kind):
             parsed = _parse(model, args)
-            if kind is not None:
+            if kind in {"promo_create", "promo_activity_add"}:
                 _profile(parsed.request)
-            request = parsed.request.model_dump()
+            request = parsed.request.model_dump(
+                exclude_unset=(kind == "promo_update")
+            )
             actual_kind = kind or "promo_" + request.pop("action")
             return await service.prepare(
                 ActorContext.from_mcp(context),
