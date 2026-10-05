@@ -9,6 +9,8 @@ sections:
   architecture:
     overview: docs/architecture/overview.md
   operations:
+    partner_event_operations: docs/operations/partner-event-operations.md
+    partner_function_calls: docs/operations/partner-events-conversational-function-call.md
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
     cron: docs/operations/cron.md

@@ -1,7 +1,7 @@
 # EventsBot MCP: операции над событиями — TO-BE
 
 > **Статус:** owner-confirmed TO-BE, revision 3, аудит завершён; готово к поэтапной реализации.  
-> **Runtime status:** новые event/promo/lifecycle write tools ещё не реализованы и не опубликованы.  
+> **Source status (2026-09-26):** partner access/create/media/review, typed event commands, publication readback и promo реализованы под default-off flags; production activation не выполнялась. См. [текущий профиль](partner-event-operations.md) и scoped dispositions в registry.
 > **Дата:** 2 сентября 2026 года.  
 > **Канонический владелец:** `events-bot-new`.  
 > **AS-IS MCP:** [`private-events-mcp.md`](private-events-mcp.md).  

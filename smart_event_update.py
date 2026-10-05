@@ -24,6 +24,12 @@ from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from db import Database
+from event_operation_receipts import (
+    EventOperationReceiptError,
+    guard_event_operation_context,
+    record_event_operation_receipt,
+    validate_event_operation_context,
+)
 from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
 from event_age_rating import (
     AGE_DECISION_JSON_SCHEMA,
@@ -609,6 +615,9 @@ class EventCandidate:
     # Append-only attempt number used to correlate identity-decision payloads
     # with the existing SmartUpdateAttempt ledger; it is not a new DB field.
     smart_update_attempt_no: int | None = None
+    # Internal operation provenance only; identity/fingerprint/prompt serializers
+    # use explicit fields and never consume this context. Persisted for attempts.
+    event_operation_context: dict[str, Any] | None = field(default=None, repr=False)
     # Internal retry-state instruction. It is set only after an existing
     # identity decision classified the candidate as distinct or uncertainty
     # exhausted its bounded attempts.
@@ -620,6 +629,8 @@ class EventCandidate:
     replay_check_source_url: bool = True
     replay_schedule_tasks: bool = True
     replay_schedule_kwargs: dict[str, Any] | None = None
+    # Queue-owned callers may suppress legacy direct festival/page rebuilds.
+    defer_external_projections: bool = False
     # Only identity-bearing sources may participate in event matching. Linked
     # roundups/program pages are provenance context and must use context_only.
     source_role: str = "identity_bearing"
@@ -17188,6 +17199,7 @@ async def smart_event_update(
     schedule_kwargs: dict[str, Any] | None = None,
     _lease_owner: str | None = None,
 ) -> SmartUpdateResult:
+    candidate.event_operation_context = validate_event_operation_context(candidate.event_operation_context)
     try:
         intent = (
             candidate.intent
@@ -17269,6 +17281,10 @@ async def smart_event_update(
                     schedule_tasks=schedule_tasks,
                     schedule_kwargs=schedule_kwargs,
                 )
+        except EventOperationReceiptError:
+            # The domain transaction has been rolled back. Do not turn a
+            # provenance failure into a semantic result or retry another actor.
+            raise
         except SourceBindingConflict as exc:
             result = SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
@@ -17391,7 +17407,12 @@ async def _attach_context_source(db: Database, candidate: EventCandidate) -> Sma
                 diagnostic_event_id=target_event_id,
                 reason="attach_context_target_missing", retry_reason=RetryReason.ATTACH_CONTEXT_TARGET_MISSING,
             )
+        await guard_event_operation_context(session, candidate, event_id=target_event_id, effect="merged")
         added, same_source = await _ensure_event_source(session, target_event_id, candidate)
+        await record_event_operation_receipt(
+            session, candidate, event_id=target_event_id,
+            effect="noop_exact_replay" if same_source and not added else "merged",
+        )
         await session.commit()
     return SmartUpdateResult(
         outcome=(
@@ -17451,6 +17472,7 @@ async def _accept_final_probe_match(
         # insert the distinct Event; no retry or identity veto is needed.
         return None
 
+    await guard_event_operation_context(session, candidate, event_id=event_id, effect="merged")
     added_posters, _urls, _preview, _pruned, _photos_changed = await _apply_posters(
         session,
         event_id,
@@ -17469,6 +17491,7 @@ async def _accept_final_probe_match(
         candidate,
         [("Матчинг: authoritative final duplicate probe", "note")],
     )
+    await record_event_operation_receipt(session, candidate, event_id=event_id, effect="merged")
     await session.commit()
 
     canonical_changed = bool(added_posters or (added_sources and not same_source))
@@ -17490,7 +17513,9 @@ async def _accept_final_probe_match(
             if refreshed is not None:
                 task_kwargs = dict(schedule_kwargs or {})
                 task_kwargs["refresh_existing_vk"] = True
-                await schedule_event_update_tasks(db, refreshed, **task_kwargs)
+                from private_events_mcp.publication_status import bind_event_operation
+                with bind_event_operation(refreshed, candidate):
+                    await schedule_event_update_tasks(db, refreshed, **task_kwargs)
         except Exception:
             logger.warning(
                 "smart_update: final probe scheduling failed event_id=%s",
@@ -17704,7 +17729,9 @@ async def _accepted_occurrence_anchor_event_id(
     return int(row[0]) if row[0] is not None else None
 
 
-async def _apply_holiday_festival_mapping(db: Database, event_id: int) -> bool:
+async def _apply_holiday_festival_mapping(
+    db: Database, event_id: int, *, rebuild_navigation: bool = True
+) -> bool:
     """Ensure pseudo-festivals from docs/reference/holidays.md are applied universally.
 
     This runs as part of Smart Update so that holiday grouping does not depend on
@@ -17767,6 +17794,8 @@ async def _apply_holiday_festival_mapping(db: Database, event_id: int) -> bool:
     if aliases_payload:
         ensure_kwargs["aliases"] = aliases_payload
 
+    if not rebuild_navigation:
+        ensure_kwargs["rebuild_navigation"] = False
     fest_obj, fest_created, fest_updated = await ensure_festival(
         db,
         canonical_name,
@@ -17989,6 +18018,12 @@ async def _smart_event_update_impl(
             reason="source_binding_conflict", retry_reason=RetryReason.SOURCE_BINDING_CONFLICT,
         )
     if noop_event_id is not None:
+        if candidate.event_operation_context is not None:
+            async with db.get_session() as receipt_session:
+                await record_event_operation_receipt(
+                    receipt_session, candidate, event_id=noop_event_id, effect="noop_exact_replay",
+                )
+                await receipt_session.commit()
         logger.info(
             "smart_update.noop event_id=%s source_role=%s source_alias=%s fingerprint=%s",
             noop_event_id,
@@ -20750,6 +20785,7 @@ async def _smart_event_update_impl(
             new_event.source_vk_post_url = candidate.source_url
 
         async with db.get_session() as session:
+            await guard_event_operation_context(session, candidate, event_id=None, effect="created")
             canonical_binding_url = canonicalize_identity_url(candidate.source_url)
             if canonical_binding_url:
                 conflicting_binding = await _source_identity_binding_conflict(
@@ -20878,11 +20914,21 @@ async def _smart_event_update_impl(
                 initial_records.append(("3D-превью сброшено: изменились иллюстрации", "note"))
             if initial_records:
                 await _record_source_facts(session, new_event.id, candidate, initial_records)
+            await record_event_operation_receipt(session, candidate, event_id=new_event.id, effect="created")
             await session.commit()
 
         await _persist_pending_festival_queue()
         try:
-            await _apply_holiday_festival_mapping(db, new_event.id)
+            holiday_kwargs = (
+                {"rebuild_navigation": False}
+                if candidate.defer_external_projections
+                else {}
+            )
+            await _apply_holiday_festival_mapping(
+                db,
+                new_event.id,
+                **holiday_kwargs,
+            )
         except Exception:
             logger.warning(
                 "smart_update: holiday mapping failed for event %s",
@@ -20942,7 +20988,9 @@ async def _smart_event_update_impl(
                 async with db.get_session() as session:
                     refreshed = await session.get(Event, new_event.id)
                 if refreshed:
-                    await schedule_event_update_tasks(db, refreshed, **(schedule_kwargs or {}))
+                    from private_events_mcp.publication_status import bind_event_operation
+                    with bind_event_operation(refreshed, candidate):
+                        await schedule_event_update_tasks(db, refreshed, **(schedule_kwargs or {}))
             except Exception:
                 logger.warning("smart_update: schedule/update failed for event %s", new_event.id, exc_info=True)
 
@@ -21193,6 +21241,7 @@ async def _smart_event_update_impl(
     merge_fact_first_used = False
 
     async with db.get_session() as session:
+        await guard_event_operation_context(session, candidate, event_id=existing.id, effect="merged")
         event_db = await session.get(Event, existing.id)
         if not event_db:
             return SmartUpdateResult(
@@ -22546,6 +22595,7 @@ async def _smart_event_update_impl(
 
         if updated_fields:
             session.add(event_db)
+        await record_event_operation_receipt(session, candidate, event_id=event_db.id, effect="merged")
         await session.commit()
 
     await _persist_pending_festival_queue()
@@ -22563,7 +22613,16 @@ async def _smart_event_update_impl(
 
     holiday_changed = False
     try:
-        holiday_changed = await _apply_holiday_festival_mapping(db, existing.id)
+        holiday_kwargs = (
+            {"rebuild_navigation": False}
+            if candidate.defer_external_projections
+            else {}
+        )
+        holiday_changed = await _apply_holiday_festival_mapping(
+            db,
+            existing.id,
+            **holiday_kwargs,
+        )
     except Exception:
         logger.warning(
             "smart_update: holiday mapping failed for event %s",
@@ -22620,7 +22679,9 @@ async def _smart_event_update_impl(
                 # publication.  Re-arm its idempotent sync whenever Smart Update
                 # actually changed the canonical event.
                 task_kwargs["refresh_existing_vk"] = True
-                await schedule_event_update_tasks(db, refreshed, **task_kwargs)
+                from private_events_mcp.publication_status import bind_event_operation
+                with bind_event_operation(refreshed, candidate):
+                    await schedule_event_update_tasks(db, refreshed, **task_kwargs)
         except Exception:
             logger.warning("smart_update: schedule/update failed for event %s", existing.id, exc_info=True)
 

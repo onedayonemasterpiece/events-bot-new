@@ -258,6 +258,9 @@ _JOB_COLUMNS = (
     "next_run_at",
     "payload",
     "error_class",
+    "target_event_revision",
+    "event_operation_ref",
+    "terminal_reason",
 )
 _RUN_COLUMNS = (
     "id",

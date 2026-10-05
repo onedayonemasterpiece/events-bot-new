@@ -11,6 +11,10 @@
 релиз. Для критической production-системы «вся архитектура описана» не означает
 «всё нужно внедрить одновременно».
 
+## Source checkpoint 2026-09-26
+
+По отдельному owner-заданию интегрирован source checkpoint на свежем main, без production activation. [Partner operations guide](partner-event-operations.md) описывает доступные команды и flags. Исторический staged-rollout gate ниже остаётся правилом отдельной доставки; source integration не означает live acceptance. Проверки используют SQLite, настоящий HTTP/OAuth и fake provider boundaries.
+
 ## 1. Вердикт аудита
 
 Полный TO-BE остаётся продуктовой целью, но реализовывать Slices A–D одним

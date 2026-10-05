@@ -2260,6 +2260,9 @@ class JobOutbox(SQLModel, table=True):
     next_run_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
+    target_event_revision: Optional[str] = None
+    event_operation_ref: Optional[str] = None
+    terminal_reason: Optional[str] = None
     coalesce_key: Optional[str] = None
     depends_on: Optional[str] = None
 

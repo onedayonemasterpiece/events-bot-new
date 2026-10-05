@@ -592,3 +592,11 @@ Feature: Стартовая устойчивость (регрессия INC-202
 - Стартовый smoke из `INC-2026-05-18`:
   `TELEGRAM_BOT_TOKEN=<fake> python -c "from main import create_app;
   create_app()"`.
+
+## Independent OAuth projection
+
+Default-off partner MCP uses the same campaign/activity/exposure services with
+NULL Telegram creator and explicit durable principal/tenant attribution. See
+[Partner operations](../../operations/partner-event-operations.md) for scopes,
+limits, owner review, state CAS, isolated tests and activation gates. No new
+promo engine or browser impression accounting is introduced.

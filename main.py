@@ -1037,6 +1037,24 @@ if "add_event_sessions" not in globals():
 
 class FestivalRequiredError(RuntimeError):
     """Raised when festival mode requires an explicit festival but none was found."""
+
+
+class MultiEventSourceRequiresSeparateRequests(RuntimeError):
+    """R1 owner-create accepts exactly one event per committed request."""
+
+
+class FestivalSourceRequiresDedicatedIntake(RuntimeError):
+    """Festival-level sources need the existing reviewed festival intake path."""
+
+
+class EventSourceRequiresExactlyOneEvent(RuntimeError):
+    """R1 cannot commit a source that did not resolve to exactly one event."""
+
+
+class LifecycleSourceRequiresDedicatedChange(RuntimeError):
+    """Lifecycle facts must use an explicit event-change operation."""
+
+
 # waiting for a date for events listing
 if "events_date_sessions" not in globals():
     events_date_sessions: TTLCache[int, bool] = TTLCache(maxsize=64, ttl=3600)
@@ -4756,6 +4774,7 @@ async def ensure_festival(
     source_chat_id: int | None = None,
     source_message_id: int | None = None,
     aliases: Sequence[str] | None = None,
+    rebuild_navigation: bool = True,
 ) -> tuple[Festival, bool, bool]:
     """Return festival and flags (created, updated)."""
     async with db.get_session() as session:
@@ -4840,7 +4859,8 @@ async def ensure_festival(
             if updated:
                 session.add(fest)
                 await session.commit()
-                await rebuild_fest_nav_if_changed(db)
+                if rebuild_navigation:
+                    await rebuild_fest_nav_if_changed(db)
             return fest, False, updated
         fest = Festival(
             name=name,
@@ -4868,7 +4888,8 @@ async def ensure_festival(
         session.add(fest)
         await session.commit()
         logging.info("created festival %s", name)
-        await rebuild_fest_nav_if_changed(db)
+        if rebuild_navigation:
+            await rebuild_fest_nav_if_changed(db)
         return fest, True, True
 
 
@@ -8720,7 +8741,7 @@ def _ics_build_error_is_permanent(exc: Exception) -> bool:
 
 
 def _calendar_schedule_is_supported(ev: Event) -> bool:
-    return bool(parse_time_range(ev.time) and parse_iso_date(ev.date))
+    return bool(ev.lifecycle_status == "active" and parse_time_range(ev.time) and parse_iso_date(ev.date))
 
 
 def _event_has_ics_storage_projection(ev: Event) -> bool:
@@ -15554,6 +15575,9 @@ async def enqueue_job(
     next_run_at: datetime | None = None,
     requeue_done: bool = False,
 ) -> str:
+    from private_events_mcp.publication_status import revision_binding, BOUND_TASKS
+    binding = revision_binding.get() if task.value in BOUND_TASKS else None
+    binding_fields = {"target_event_revision": binding[0], "event_operation_ref": binding[1], "terminal_reason": None} if binding else {"target_event_revision": None, "event_operation_ref": None, "terminal_reason": None}
     if (
         task == JobTask.static_site_build
         and coalesce_key
@@ -15619,6 +15643,7 @@ async def enqueue_job(
             stmt = (
                 select(JobOutbox)
                 .where(JobOutbox.event_id == event_id, JobOutbox.task == task)
+                .where(or_(JobOutbox.coalesce_key.is_(None), ~JobOutbox.coalesce_key.like("notice:%")))
                 .order_by(JobOutbox.id.desc())
                 .limit(1)
             )
@@ -15658,6 +15683,8 @@ async def enqueue_job(
                     job = None
         if job:
             if job.status == JobStatus.pending:
+                for field, value in binding_fields.items():
+                    setattr(job, field, value)
                 if payload is not None:
                     # ADD-BUILD-01: a static build is the union of all effects
                     # observed during the debounce window, not the last writer.
@@ -15837,6 +15864,7 @@ async def enqueue_job(
                     else:
                         session.add(
                             JobOutbox(
+                **binding_fields,
                                 event_id=event_id,
                                 task=task,
                                 payload=payload,
@@ -15871,6 +15899,8 @@ async def enqueue_job(
                 return "merged"
 
             # requeue for existing (possibly coalesced) task
+            for field, value in binding_fields.items():
+                setattr(job, field, value)
             job.status = JobStatus.pending
             job.payload = payload
             job.attempts = 0
@@ -15900,6 +15930,7 @@ async def enqueue_job(
             return "requeued"
         session.add(
             JobOutbox(
+                **binding_fields,
                 event_id=event_id,
                 task=task,
                 payload=payload,
@@ -17129,14 +17160,14 @@ async def schedule_event_update_tasks(
     drain_nav: bool = False,
     skip_vk_sync: bool = False,
     refresh_existing_vk: bool = False,
+    defer_external_projections: bool = False,
 ) -> dict[JobTask, str]:
     eid = ev.id
     results: dict[JobTask, str] = {}
     ics_dep: str | None = None
     disable_ics_jobs = (os.getenv("DISABLE_ICS_JOBS") or "").strip().lower() in ("1", "true", "yes", "on")
     if getattr(ev, "lifecycle_status", "active") != "active":
-        # Cancelled/postponed events must not be announced or published as ICS.
-        disable_ics_jobs = True
+        # Calendar handlers remove existing projections for hidden lifecycle states.
         skip_vk_sync = True
     if getattr(ev, "silent", False):
         # Silent events are hidden from digests/announcements. Do not publish ICS or post
@@ -17263,7 +17294,11 @@ async def schedule_event_update_tasks(
 
         # month_pages — отложенный запуск
         month = ev.date.split("..", 1)[0][:7]
-        event_update_sync = (os.getenv("EVENT_UPDATE_SYNC") or "").strip().lower() in {"1", "true", "yes"}
+        event_update_sync = (
+            not defer_external_projections
+            and (os.getenv("EVENT_UPDATE_SYNC") or "").strip().lower()
+            in {"1", "true", "yes"}
+        )
         if event_update_sync:
             logging.info("EVENT_UPDATE_SYNC set, triggering sync_month_page immediately")
             await sync_month_page(db, month)
@@ -17331,7 +17366,9 @@ async def schedule_event_update_tasks(
             # weekend/month rebuilds, so we no longer enqueue this task.
             w_start = weekend_start_for_date(d)
             if w_start:
-                if os.getenv("EVENT_UPDATE_SYNC"):
+                # Preserve the historical truthy-string behavior for existing
+                # callers; the MCP enqueue-only path suppresses it explicitly.
+                if not defer_external_projections and os.getenv("EVENT_UPDATE_SYNC"):
                     logging.info(
                         "EVENT_UPDATE_SYNC set, triggering sync_weekend_page immediately"
                     )
@@ -17716,8 +17753,18 @@ async def add_events_from_text(
 
 
     bot: Bot | None = None,
+    defer_external_projections: bool = False,
+    require_single_event: bool = False,
+    allow_festival_queue: bool = True,
+    allow_lifecycle_actions: bool = True,
+    event_operation_context: dict[str, Any] | None = None,
 
 ) -> AddEventsResult:
+    from event_operation_receipts import validate_event_operation_context
+
+    event_operation_context = validate_event_operation_context(event_operation_context)
+    if event_operation_context is not None and not require_single_event:
+        raise ValueError("event_operation_context_requires_single_event")
     logging.info(
         "add_events_from_text start: len=%d source=%s", len(text), source_link
     )
@@ -17978,6 +18025,18 @@ async def add_events_from_text(
                 limit_notice=ocr_limit_notice,
                 source_decision=parsed,
             )
+        if not allow_lifecycle_actions and parsed.lifecycle_actions:
+            raise LifecycleSourceRequiresDedicatedChange(
+                "lifecycle source requires an explicit event-change operation"
+            )
+    if require_single_event and len(parsed_events) != 1:
+        if len(parsed_events) > 1:
+            raise MultiEventSourceRequiresSeparateRequests(
+                "R1 owner event creation accepts exactly one parsed event"
+            )
+        raise EventSourceRequiresExactlyOneEvent(
+            "R1 owner event creation requires exactly one parsed event"
+        )
     links_iter = iter(extract_links_from_html(html_text) if html_text else [])
     source_text_clean = html_text or text
     program_url: str | None = None
@@ -18092,6 +18151,11 @@ async def add_events_from_text(
         if festival_decision.context and not (festival_info.get("festival_context") or "").strip():
             festival_info["festival_context"] = festival_decision.context
 
+    if festival_decision.context == "festival_post":
+        if not allow_festival_queue:
+            raise FestivalSourceRequiresDedicatedIntake(
+                "festival-level source requires reviewed festival intake"
+            )
     if (
         festival_decision.context == "festival_post"
         and source_kind_for_queue in {"vk", "tg", "url"}
@@ -18163,6 +18227,9 @@ async def add_events_from_text(
         city = festival_info.get("city")
         loc_addr = strip_city_from_address(loc_addr, city)
         photo_u = catbox_urls[0] if catbox_urls else None
+        festival_write_kwargs: dict[str, Any] = {}
+        if defer_external_projections:
+            festival_write_kwargs["rebuild_navigation"] = False
         fest_obj, created, updated = await ensure_festival(
             db,
             fest_name,
@@ -18181,6 +18248,7 @@ async def add_events_from_text(
             source_post_url=source_link,
             source_chat_id=source_chat_id,
             source_message_id=source_message_id,
+            **festival_write_kwargs,
         )
         festival_obj = fest_obj
         fest_created = created
@@ -18206,14 +18274,14 @@ async def add_events_from_text(
                     except Exception:
                         logging.exception("notify_superadmin failed for %s", name)
 
-        if created or fest_updated:
+        if (created or fest_updated) and not defer_external_projections:
             await _safe_sync_fest(fest_obj.name)
             async with db.get_session() as session:
                 res = await session.execute(
                     select(Festival).where(Festival.name == fest_obj.name)
                 )
                 festival_obj = res.scalar_one_or_none()
-        if festival_obj:
+        if festival_obj and not defer_external_projections:
             await try_set_fest_cover_from_program(db, festival_obj)
     elif force_festival:
         raise FestivalRequiredError("festival name missing")
@@ -18324,6 +18392,9 @@ async def add_events_from_text(
 
         if base_event.festival:
             photo_u = catbox_urls[0] if catbox_urls else None
+            festival_event_kwargs: dict[str, Any] = {}
+            if defer_external_projections:
+                festival_event_kwargs["rebuild_navigation"] = False
             await ensure_festival(
                 db,
                 base_event.festival,
@@ -18332,6 +18403,7 @@ async def add_events_from_text(
                 photo_urls=catbox_urls,
                 start_date=base_event.date or None,
                 end_date=base_event.end_date or base_event.date or None,
+                **festival_event_kwargs,
             )
 
         if base_event.event_type == "выставка" and not base_event.end_date:
@@ -18391,6 +18463,7 @@ async def add_events_from_text(
                 else ("vk" if is_vk_wall_url(source_link) else "manual")
             )
             candidate = EventCandidate(
+                event_operation_context=event_operation_context,
                 source_type=source_type_override or computed_source_type,
                 source_url=source_url_override or source_link or source_marker,
                 source_text=source_text_clean,
@@ -18426,6 +18499,7 @@ async def add_events_from_text(
                 source_chat_username=source_channel,
                 creator_id=creator_id,
                 producer_ordinal=producer_ordinal,
+                defer_external_projections=defer_external_projections,
                 source_native_occurrence_id=(
                     str(
                         data.get("source_native_occurrence_id")
@@ -18459,10 +18533,16 @@ async def add_events_from_text(
                         )
                     ],
             )
+            smart_update_schedule_kwargs = (
+                {"defer_external_projections": True}
+                if defer_external_projections
+                else None
+            )
             update_result = await smart_event_update(
                 db,
                 candidate,
                 check_source_url=False,
+                schedule_kwargs=smart_update_schedule_kwargs,
             )
             saved: Event | None = None
             if update_result.is_accepted:
@@ -19783,6 +19863,15 @@ async def _run_due_jobs_once_locked(
             obj = _normalize_job(await session.get(JobOutbox, job.id))
             if not obj or obj.status not in (JobStatus.pending, JobStatus.error):
                 continue
+            if obj.target_event_revision:
+                from static_site_release import event_public_revision
+                current_event = await session.get(Event, obj.event_id)
+                if current_event is None or event_public_revision(current_event) != obj.target_event_revision:
+                    obj.status = JobStatus.done
+                    obj.terminal_reason = "superseded"
+                    session.add(obj)
+                    await session.commit()
+                    continue
             ttl = JOB_TTL.get(obj.task, DEFAULT_JOB_TTL)
             # For deferred tasks, calculate age from when the task was due to run,
             # not from when it was created. This prevents deferred tasks from
@@ -20174,8 +20263,19 @@ async def _run_due_jobs_once_locked(
         else:
             try:
                 runtime_limit = float(JOB_MAX_RUNTIME.get(obj.task, DEFAULT_JOB_MAX_RUNTIME))
+                from private_events_mcp.publication_status import SURFACES
+                receipt_field = next((field for task, field in SURFACES.values() if task == obj.task.value), None)
+                async with db.get_session() as receipt_session:
+                    receipt_event = await receipt_session.get(Event, obj.event_id)
+                    receipt_had_publication = bool(receipt_field and receipt_event and getattr(receipt_event, receipt_field, None))
 
                 async def _call_handler() -> object:
+                    from private_events_mcp.publication_status import publication_job_is_current
+                    if not await publication_job_is_current(db, obj):
+                        return False
+                    if isinstance(obj.payload, dict) and obj.payload.get('publication_kind') in {'lifecycle_notice','lifecycle_reconcile'}:
+                        from private_events_mcp.lifecycle_publication import run_lifecycle_publication
+                        return await run_lifecycle_publication(db, obj, bot)
                     if obj.task == JobTask.ics_publish:
                         prog = (
                             ics_progress.get(job.event_id)
@@ -20199,6 +20299,10 @@ async def _run_due_jobs_once_locked(
                         _call_handler(),
                         timeout=max(0.1, runtime_limit),
                     )
+                from private_events_mcp.publication_status import record_worker_receipt
+                receipt_link = await _job_result_link(obj.task, obj.event_id, db)
+                if not (isinstance(obj.payload, dict) and obj.payload.get('publication_kind')):
+                    await record_worker_receipt(db, obj, changed=res is not False, url=receipt_link, had_publication=receipt_had_publication)
                 rebuild = isinstance(res, str) and res == "rebuild"
                 changed = res if isinstance(res, bool) else True
                 link = await _job_result_link(obj.task, obj.event_id, db)
@@ -20379,6 +20483,10 @@ async def _run_due_jobs_once_locked(
             send = True
             if obj:
                 prev = obj.last_result
+                if obj.terminal_reason == 'outcome_unknown':
+                    status = JobStatus.paused
+                    pause = False
+                    retry = False
                 obj.status = status
                 obj.last_error = err
                 obj.updated_at = datetime.now(timezone.utc)
@@ -20443,6 +20551,8 @@ async def _run_due_jobs_once_locked(
                             ]
                             obj.next_run_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
                     else:
+                        if obj.terminal_reason != "outcome_unknown":
+                            obj.terminal_reason = "failed"
                         obj.next_run_at = datetime.now(timezone.utc) + timedelta(days=3650)
                 session.add(obj)
                 await session.commit()
@@ -23507,8 +23617,6 @@ async def _filter_vk_event_gallery_against_ledger(db: Database, event: Event) ->
 
 
 async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) -> None:
-    if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
-        raise VKPermissionError(None, "permission error")
     async with db.get_session() as session:
         ev = await session.get(Event, event_id)
     logging.info(
@@ -23519,6 +23627,13 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     )
     if not ev:
         return False
+    # Recheck current canonical state: queued jobs can outlive cancellation or
+    # hiding. Match the TG publisher; explicit lower-level repair stays separate.
+    if getattr(ev, "lifecycle_status", "active") != "active" or getattr(ev, "silent", False):
+        logging.info("job_sync_vk_source_post: skip hidden event_id=%s", event_id)
+        return False
+    if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
+        raise VKPermissionError(None, "permission error")
     if _event_has_ended_before_today(ev):
         logging.info(
             "job_sync_vk_source_post: skip past event_id=%s date=%s end_date=%s",

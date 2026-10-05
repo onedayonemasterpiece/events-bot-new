@@ -7,6 +7,16 @@ requires exact-main deployment, capability probes, independent review, and the
 live acceptance gate below. Video remains unsupported until a separately
 verified validator and both provider implementations are merged and accepted.
 
+## Partner event operations source integration
+
+The default-off partner/access/create/edit/lifecycle/promo implementation is
+specified in [Partner operations](partner-event-operations.md), including the
+current tool/capability matrix, review, recovery and rollout flags. The
+[function-call boundary](partner-events-conversational-function-call.md) is
+provider-neutral; a web/live product is not implemented. Existing R0 queue and
+Codex catalogs retain their contracts. Source integration is not deployment.
+
+
 ## Purpose and client boundary
 
 The service attaches to the existing events-bot `aiohttp` application. It does

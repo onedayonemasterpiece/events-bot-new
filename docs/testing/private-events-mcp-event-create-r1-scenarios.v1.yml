@@ -1,0 +1,11 @@
+schema_version: 1
+contract_id: private-events-mcp-event-create-r1
+status: implementation_release_gate
+canonical_registry: docs/testing/private-events-mcp-event-operations-scenarios.v2.yml
+scope: owner-only single-event smart-rewrite creation
+scenarios:
+  CRT-001: tests/test_private_events_mcp_event_create.py::test_prepare_is_stateless_and_mutates_no_canonical_table
+  CRT-002: tests/test_private_events_mcp_event_create.py::test_main_executor_uses_full_smart_update_and_standard_joboutbox
+  CRT-003: tests/test_private_events_mcp_event_create.py::test_full_mcp_prepare_commit_status_uses_real_smart_update_executor
+  CRT-004: tests/test_private_events_mcp_event_create.py::test_main_executor_returns_existing_canonical_event_for_merge
+  CRT-005: tests/test_private_events_mcp_event_create.py::test_parser_retry_creates_no_event_or_downstream_jobs
