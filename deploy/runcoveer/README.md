@@ -9,10 +9,13 @@ CDN, Supabase, Kaggle and other managed dependencies stay external.
 
 ## Build and restore
 
-Events source baseline is `8105d069f2d91306c13db02b976e5fa2921226f6`.
-Copy its archive to `/opt/runcoveer/events/source`, supply the preserved
+Current Events release is `e679853bc328aece113163e30667cfd4bbeab70a`,
+deployed as immutable image `runcoveer/events:e679853bc`. For an Events
+rebuild, materialize that exact archive into an isolated build context (do not
+overwrite `/opt/runcoveer/events/source`: Kotopogoda mounts its
+`runtime_logging.py`), supply exact
 `ai_resource_control-0.1.4-py3-none-any.whl` in `vendor-private`, then build:
-`sudo docker build --build-arg STATIC_SITE_IMAGE_REPO_SHA=8105d069f2d91306c13db02b976e5fa2921226f6 -t runcoveer/events:8105d069f .`.
+`sudo docker build --build-arg STATIC_SITE_IMAGE_REPO_SHA=e679853bc328aece113163e30667cfd4bbeab70a -t runcoveer/events:e679853bc .`.
 Kotopogoda rebuilds its preserved deployed snapshot `951065bf` with
 `Dockerfile.runtime-snapshot` and `requirements.runtime.lock`; current repository
 HEAD is not substituted for deployed source. Build image
