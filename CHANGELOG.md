@@ -24,6 +24,11 @@
   consistent SQLite backups and rollback instructions.
 
 ### Fixed
+- Authenticated owner MCP discovery now advertises enabled owner event, promo,
+  partner-admin and social tools even when an existing OAuth token predates
+  their scopes. Tool execution still authorizes against the token's actual
+  scopes and returns `insufficient_scope` until OAuth scope upgrade; Codex
+  remains read-only and the separate partner resource remains portfolio-scoped.
 - Telegram Monitoring applies its configured day cutoff even when a source has
   an old cursor, preventing failed all-source runs from repeatedly parsing the
   entire accumulated gap. It routes fallback-model calls to the configured
