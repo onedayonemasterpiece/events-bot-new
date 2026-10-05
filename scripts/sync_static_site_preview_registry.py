@@ -39,7 +39,7 @@ def bucket_inventory(build_id: str | None = None) -> list[dict]:
         endpoint_url=os.getenv("KENIGEVENTS_SITE_YC_ENDPOINT") or OBJECT_ORIGIN,
         region_name=os.getenv("KENIGEVENTS_SITE_YC_REGION") or "ru-central1",
         aws_access_key_id=os.environ["KENIGEVENTS_SITE_YC_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY"],
+        aws_secret_access_key=<redacted>
     )
     if build_id:
         if not re.fullmatch(r"preview-[a-z0-9][a-z0-9._-]*", build_id):
@@ -198,95 +198,3 @@ def repo_catalog_generated_at(sha: str | None) -> str | None:
 
 
 def build_record(raw: dict, old: dict | None) -> dict:
-    build_id = raw["build_id"]
-    key = raw["entry_key"]
-    path = key[len(build_id) + 1 :]
-    entry_route = "/" if path == "index.html" else "/" + path.removesuffix("index.html")
-    site_url = f"{PUBLIC_ORIGIN}/{build_id}{entry_route}"
-    object_url = f"{OBJECT_ORIGIN}/kenigevents.ru/{key}"
-    manifest = raw.get("manifest") or {}
-    sha = manifest.get("repo_sha")
-    record = {
-        "build_id": build_id,
-        "built_at": manifest.get("generatedAt"),
-        "bucket_entry_modified_at": raw["entry_last_modified"],
-        "source_sha": sha,
-        "source_commit": git_subject(sha),
-        "reference_date": manifest.get("currentDate"),
-        "repo_catalog_generated_at": repo_catalog_generated_at(sha),
-        "public_url": site_url,
-        "bucket_url": object_url,
-        "entry_etag": raw["entry_etag"],
-        "entry_bytes": raw["entry_size"],
-        "manifest_url": f"{PUBLIC_ORIGIN}/{build_id}/preview-build.json" if manifest else None,
-        "present_in_bucket": True,
-    }
-    for field in ("changes", "review_url", "catalog_snapshot_at", "notes"):
-        if old and old.get(field):
-            record[field] = old[field]
-    if "changes" not in record:
-        record["changes"] = [record["source_commit"]] if record["source_commit"] else []
-    return record
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fly-app", default="", help="Read bucket using the app's existing credentials")
-    parser.add_argument("--build-id", default="", help="Update only one public preview prefix")
-    parser.add_argument("--check", action="store_true", help="Validate the committed registry without reading the bucket")
-    args = parser.parse_args()
-    if args.check:
-        raw_text = REGISTRY.read_text()
-        assert not re.search(r"/_review/[A-Za-z0-9_-]{20,}", raw_text), "bearer review URL leaked into public registry"
-        data = yaml.safe_load(raw_text)
-        rows = data["builds"]
-        ids = [row["build_id"] for row in rows]
-        assert len(ids) == len(set(ids))
-        assert all(row["changes"] and row["public_url"].startswith(f"{PUBLIC_ORIGIN}/{row['build_id']}/") for row in rows)
-        assert all(row["bucket_url"].startswith(f"{OBJECT_ORIGIN}/{data['bucket']}/{row['build_id']}/") for row in rows)
-        assert all(row["http_status_at_sync"] in (200, 404) for row in rows)
-        assert all(row["bucket_http_status_at_sync"] in (200, 404) for row in rows)
-        assert data["latest_named_preview"] == next(
-            (row["build_id"] for row in rows if row["present_in_bucket"] and row["http_status_at_sync"] == 200 and row["bucket_http_status_at_sync"] == 200), None
-        )
-        print(f"registry valid: {len(rows)} public named previews")
-        return 0
-    existing = yaml.safe_load(REGISTRY.read_text()) if REGISTRY.exists() else {}
-    if args.build_id and not existing:
-        parser.error("--build-id needs an existing registry; run a full bucket inventory first")
-    old = {row["build_id"]: row for row in existing.get("builds", [])}
-    rows = inventory_from_fly(args.fly_app, args.build_id or None) if args.fly_app else bucket_inventory(args.build_id or None)
-    records = {**old, **{raw["build_id"]: build_record(raw, old.get(raw["build_id"])) for raw in rows}}
-    if not args.build_id:
-        found = {raw["build_id"] for raw in rows}
-        for build_name in records.keys() - found:
-            records[build_name]["present_in_bucket"] = False
-    ordered = sorted(records.values(), key=lambda row: (row["bucket_entry_modified_at"], row["build_id"]), reverse=True)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
-        site_statuses = list(pool.map(public_status, [row["public_url"] for row in ordered]))
-        bucket_statuses = list(pool.map(public_status, [row["bucket_url"] for row in ordered]))
-    for row, site_status, bucket_status in zip(ordered, site_statuses, bucket_statuses):
-        row["http_status_at_sync"] = site_status
-        row["bucket_http_status_at_sync"] = bucket_status
-    if args.build_id and (records[args.build_id]["http_status_at_sync"] != 200 or records[args.build_id]["bucket_http_status_at_sync"] != 200):
-        raise RuntimeError(f"Published entry does not return HTTP 200: {args.build_id}")
-    document = {
-        "version": 1,
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "bucket": "kenigevents.ru",
-        "scope": "Observed public named preview-* builds; deleted builds remain as history after their first inventory. Secret _review tokens are excluded.",
-        "latest_named_preview": next(
-            (row["build_id"] for row in ordered if row["present_in_bucket"] and row["http_status_at_sync"] == 200 and row["bucket_http_status_at_sync"] == 200), None
-        ),
-        "canonical_full_candidate_lookup": "python scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review (on Fly)",
-        "canonical_full_candidate": current_candidate_from_fly(args.fly_app) if args.fly_app else existing.get("canonical_full_candidate"),
-        "builds": ordered,
-    }
-    REGISTRY.parent.mkdir(parents=True, exist_ok=True)
-    REGISTRY.write_text(yaml.safe_dump(document, allow_unicode=True, sort_keys=False, width=120), encoding="utf-8")
-    print(f"wrote {REGISTRY}: {len(ordered)} builds, latest {document['latest_named_preview']}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
