@@ -183,7 +183,7 @@ async def publication_queue_page(
         params.append(before_job_id)
 
     selected = ", ".join(
-        repository.db.quote_identifier(column) for column in _CORE_COLUMNS
+        repository.db.quote_identifier(column) for column in (*_CORE_COLUMNS, *(c for c in ("target_event_revision", "event_operation_ref", "terminal_reason") if c in columns))
     )
     table = repository.db.quote_identifier("joboutbox")
     where_sql = " WHERE " + " AND ".join(where) if where else ""

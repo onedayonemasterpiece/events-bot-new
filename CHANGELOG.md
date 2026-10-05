@@ -73,6 +73,16 @@
   authority is unavailable. Direct search remains only an unconfigured
   compatibility adapter. A once-daily real Live function-call canary remains
   the production regression path.
+- Default-off Telegram-independent partner OAuth/access, secure event poster
+  ingress, full Smart Update create/review, exact-ID edit/lifecycle operations,
+  revision-bound event/static-site publication readback and partner promo
+  create/activity/update/state management over the existing canonical runtime.
+  Promo readback now exposes bounded caps/eligibility plus durable sanitized
+  activity outcomes without changing campaign CAS state; existing video/VK
+  runners and exposure accounting are reused. Added transport-neutral
+  application commands and a versioned partner operations skill; source is
+  integrated on current main with additive old-binary-compatible SQLite changes,
+  while production activation and isolated-live acceptance remain separate.
 - A bucket-backed YAML registry of all currently accessible named KenigEvents
   preview builds, including actual HTML links, upload/build dates, source SHA,
   catalog-date evidence and review context. Preview upload now updates its

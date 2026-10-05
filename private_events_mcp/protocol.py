@@ -89,7 +89,9 @@ class MCPProtocol:
         allowed_client_ids: frozenset[str] | None = None,
         policy_fingerprint: str = "read-only-v1",
         instructions: str | None = None,
+        identity_validator=None,
     ) -> None:
+        self.identity_validator = identity_validator
         self.tools = tuple(tools)
         self.by_name = {tool.name: tool for tool in self.tools}
         self.cache = ToolResultCache(cache_ttl_seconds)
@@ -107,6 +109,11 @@ class MCPProtocol:
         )
 
     def _identity_allowed(self, identity: AccessIdentity) -> bool:
+        if self.identity_validator is not None:
+            try:
+                self.identity_validator(identity)
+            except ToolExecutionError:
+                return False
         if self.resource and identity.audience != self.resource:
             return False
         return not (

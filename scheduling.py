@@ -4323,6 +4323,7 @@ def startup(
     partner_notification_scheduler=None,
     nightly_page_sync=None,
     rebuild_fest_nav_if_changed=None,
+    event_create_recovery=None,
 ) -> AsyncIOScheduler:
     global _scheduler
     if _scheduler is None:
@@ -4409,6 +4410,14 @@ def startup(
             "SCHED registered job id=%s next_run=%s", job.id, _job_next_run(job)
         )
         return job
+
+    if event_create_recovery is not None:
+        _register_job(
+            "mcp_event_create_recovery", event_create_recovery, "interval",
+            id="mcp_event_create_recovery", seconds=300,
+            replace_existing=True, max_instances=1, coalesce=True,
+            misfire_grace_time=60,
+        )
 
     # The product pipeline is linear: a Smart Update invocation must finish as
     # accepted, product-rejected or FAILED_TECHNICAL. This switch is now an
@@ -5483,7 +5492,7 @@ def startup(
             *,
             run_id: str | None = None,
         ) -> None:
-            from promo import run_promo_vk_activities
+            from promo import partner_safe_promo_reason, run_promo_vk_activities
 
             results = await run_promo_vk_activities(db_obj, bot_obj)
             if results:
@@ -5497,7 +5506,7 @@ def startup(
                             "event_id": item.event_id,
                             "status": item.status,
                             "target_url": item.target_url,
-                            "reason": item.reason,
+                            "reason": partner_safe_promo_reason(item.reason),
                         }
                         for item in results
                     ],

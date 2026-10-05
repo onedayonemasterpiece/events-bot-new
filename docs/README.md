@@ -40,6 +40,7 @@ Shared Live Search implementation, quota authority and production activation gat
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
+- Partner event/access/promo operations: `docs/operations/partner-event-operations.md`.
 - Private Events MCP / OAuth for ChatGPT, OpenCode and read-only Codex: `docs/operations/private-events-mcp.md`
   - owner-confirmed TO-BE для добавления/редактирования событий, промо и статусов публикаций:
     `docs/operations/private-events-mcp-event-operations-to-be.md`;

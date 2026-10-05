@@ -15,7 +15,7 @@ from typing import Any, Collection, Iterable
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 
 from db import Database
 from models import (
@@ -67,6 +67,7 @@ PROMO_VK_ACTIVE_END_HOUR = 21
 PROMO_VK_80_PUBLICATION_PROFILE = "klgdevents"
 PROMO_VK_80_CHANNEL_PROFILE = "klgdevents:vk_channel"
 PROMO_VK_80_REPOST_PROFILE = "klgdevents->kenigeventsofficial"
+PARTNER_PROMO_VK_REPOST_TARGET_GROUP = "kenigeventsofficial"
 PROMO_VK_80_STORY_KLGD_PROFILE = "klgdevents:story"
 PROMO_VK_80_STORY_MAIN_PROFILE = "klgdevents->kenigeventsofficial:story"
 PROMO_VK_80_AFISHAENGAGEMENT_PROFILE = "klgdevents:afishaengagement"
@@ -158,6 +159,117 @@ class PromoVkActionResult:
     source_url: str | None = None
     target_url: str | None = None
     reason: str | None = None
+
+
+PROMO_SAFE_ACTIVITY_OUTCOME_STATUSES = frozenset(
+    {"published", "scheduled", "forwarded", "draft_sent", "skipped", "failed"}
+)
+PROMO_SAFE_ACTIVITY_OUTCOME_REASONS = frozenset(
+    {
+        "target_group_missing",
+        "target_goal_reached",
+        "daily_cap_reached",
+        "events_missing",
+        "event_posters_missing",
+        "hook_upload_failed",
+        "target_chat_missing",
+        "bot_missing",
+        "source_or_target_chat_missing",
+        "source_or_target_group_missing",
+        "manual_draft_peer_id_missing",
+        "vk_community_channel_post_api_unsupported",
+        "source_unavailable",
+        "dedup_window",
+        "provider_error",
+        VK_SYNC_MISSING_TG_MEDIA_ERROR,
+    }
+)
+
+
+def partner_safe_promo_reason(reason: str | None) -> str | None:
+    raw = str(reason or "").strip()
+    if not raw:
+        return None
+    if raw in PROMO_SAFE_ACTIVITY_OUTCOME_REASONS:
+        return raw
+    return "provider_error"
+
+
+def _safe_promo_action_result(item: PromoVkActionResult) -> PromoVkActionResult:
+    status = (
+        "scheduled"
+        if item.status == "scheduled_debug"
+        else item.status
+        if item.status in PROMO_SAFE_ACTIVITY_OUTCOME_STATUSES
+        else "unknown"
+    )
+    success = status in {"published", "scheduled", "forwarded", "draft_sent"}
+    reason = None if success else partner_safe_promo_reason(item.reason)
+    if status == "unknown" and reason is None:
+        reason = "provider_error"
+    return PromoVkActionResult(
+        campaign_id=item.campaign_id,
+        activity_id=item.activity_id,
+        surface=item.surface,
+        event_id=item.event_id,
+        status=status,
+        source_url=item.source_url,
+        target_url=item.target_url,
+        reason=reason,
+    )
+
+
+async def record_promo_activity_outcomes(
+    db: Database,
+    results: Iterable[PromoVkActionResult],
+    *,
+    now_utc: datetime | None = None,
+) -> int:
+    """Persist current execution outcome without changing campaign CAS state."""
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    latest: dict[int, PromoVkActionResult] = {}
+    for item in results:
+        if type(item.activity_id) is int and item.activity_id > 0:
+            latest[item.activity_id] = _safe_promo_action_result(item)
+    if not latest:
+        return 0
+
+    written = 0
+    async with db.get_session() as session:
+        for activity_id, item in latest.items():
+            activity = await session.get(PromoActivity, activity_id)
+            if activity is None or int(activity.campaign_id) != int(item.campaign_id):
+                continue
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO promo_activity_outcome(
+                        activity_id,campaign_id,last_attempt_at,status,reason_code,event_id
+                    ) VALUES(
+                        :activity_id,:campaign_id,:last_attempt_at,:status,:reason_code,:event_id
+                    )
+                    ON CONFLICT(activity_id) DO UPDATE SET
+                        campaign_id=excluded.campaign_id,
+                        last_attempt_at=excluded.last_attempt_at,
+                        status=excluded.status,
+                        reason_code=excluded.reason_code,
+                        event_id=excluded.event_id
+                    """
+                ),
+                {
+                    "activity_id": activity_id,
+                    "campaign_id": int(item.campaign_id),
+                    "last_attempt_at": now_utc,
+                    "status": item.status,
+                    "reason_code": item.reason,
+                    "event_id": int(item.event_id) if int(item.event_id or 0) > 0 else None,
+                },
+            )
+            written += 1
+        if written:
+            await session.commit()
+    return written
 
 
 @dataclass(frozen=True)
@@ -854,7 +966,7 @@ PARTNER_PROMO_SLOT_POLICIES: dict[str, str] = {
 @dataclass(frozen=True)
 class PartnerPromoSpec:
     event_id: int
-    creator_user_id: int
+    creator_user_id: int | None
     organization_name: str | None
     surface: str
     profile_key: str | None
@@ -896,12 +1008,18 @@ async def create_partner_event_promo_campaign(
     spec: PartnerPromoSpec,
     *,
     now_utc: datetime | None = None,
+    session: Any | None = None,
 ) -> PromoCreateResult:
     """Create an event-targeted partner promo campaign from a confirmed FSM spec.
 
-    The caller (FSM step 6) is responsible for authorization. This function
+    The caller (FSM or validated OAuth host) is responsible for authorization.
+    A None creator preserves SQL NULL, never invents a Telegram User, and grants
+    no privileges; OAuth attribution belongs to the caller operation ledger. This function
     only validates business rules: event must exist, be future and active,
     ``ends_at`` is clamped to the event end date, count is positive.
+    Campaign, target and activities commit atomically. An explicit caller-owned
+    session is flushed but never committed, allowing the same transaction to
+    carry current authorization and an operation receipt without another engine.
     """
 
     now_utc = now_utc or datetime.now(timezone.utc)
@@ -918,33 +1036,42 @@ async def create_partner_event_promo_campaign(
     }:
         return PromoCreateResult(None, "invalid", f"Неизвестная политика слота: {spec.slot_policy!r}.")
 
-    async with db.get_session() as session:
-        from models import User  # local import to avoid cycle at import-time
-
-        event = await session.get(Event, int(spec.event_id))
-        if event is None:
-            return PromoCreateResult(None, "not_found", "Событие не найдено.")
-        if not _event_is_promo_eligible(
-            event,
-            today=today,
-            campaign=PromoCampaign(
-                title="_probe_",
-                status="active",
-                starts_at=now_utc,
-                ends_at=_campaign_end_dt(spec.ends_at),
-            ),
-            enforce_event_date_lte_campaign=False,
-        ):
-            return PromoCreateResult(
-                None,
-                "not_eligible",
-                "Событие не подходит под промо: либо прошло, либо закрыто, либо silent.",
+    if session is None:
+        async with db.get_session() as owned_session:
+            result = await create_partner_event_promo_campaign(
+                db, spec, now_utc=now_utc, session=owned_session,
             )
-        partner = await session.get(User, int(spec.creator_user_id))
-        partner_username = partner.username if partner is not None else None
-        is_superadmin = bool(partner.is_superadmin) if partner is not None else False
-        event_title = str(event.title or "")
-        event_id = int(event.id)
+            if result.campaign is not None:
+                await owned_session.commit()
+            return result
+
+    from models import User  # local import to avoid cycle at import-time
+
+    event = await session.get(Event, int(spec.event_id))
+    if event is None:
+        return PromoCreateResult(None, "not_found", "Событие не найдено.")
+    if not _event_is_promo_eligible(
+        event,
+        today=today,
+        campaign=PromoCampaign(
+            title="_probe_",
+            status="active",
+            starts_at=now_utc,
+            ends_at=_campaign_end_dt(spec.ends_at),
+        ),
+        enforce_event_date_lte_campaign=False,
+    ):
+        return PromoCreateResult(
+            None,
+            "not_eligible",
+            "Событие не подходит под промо: либо прошло, либо закрыто, либо silent.",
+        )
+    partner = (await session.get(User, int(spec.creator_user_id))
+               if spec.creator_user_id is not None else None)
+    partner_username = partner.username if partner is not None else None
+    is_superadmin = bool(partner.is_superadmin) if partner is not None else False
+    event_title = str(event.title or "")
+    event_id = int(event.id)
 
     clamped_end = clamp_campaign_end_to_event(spec.ends_at, event)
     if clamped_end < today:
@@ -973,49 +1100,46 @@ async def create_partner_event_promo_campaign(
         total_exposure_goal=int(spec.count),
         priority=normalize_promo_priority(spec.priority),
         sponsorship_disclosure=sponsorship,
-        created_by=int(spec.creator_user_id),
+        created_by=int(spec.creator_user_id) if spec.creator_user_id is not None else None,
     )
 
-    async with db.get_session() as session:
-        session.add(campaign)
-        await session.commit()
-        await session.refresh(campaign)
-        campaign_id = int(campaign.id)
+    session.add(campaign)
+    await session.flush()
+    campaign_id = int(campaign.id)
 
-        target = PromoTarget(
+    target = PromoTarget(
+        campaign_id=campaign_id,
+        target_type="event",
+        event_id=event_id,
+        query_text=event_title,
+    )
+
+    if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
+        activity = PromoActivity(
             campaign_id=campaign_id,
-            target_type="event",
-            event_id=event_id,
-            query_text=event_title,
+            surface=PROMO_SURFACE_VIDEO_GENERAL,
+            profile_key=spec.profile_key,
+            slot=_activity_slot_for_policy(spec.slot_policy),
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=spec.slot_policy,
+            enabled=True,
         )
-
-        if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
-            activity = PromoActivity(
-                campaign_id=campaign_id,
-                surface=PROMO_SURFACE_VIDEO_GENERAL,
-                profile_key=spec.profile_key,
-                slot=_activity_slot_for_policy(spec.slot_policy),
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=spec.slot_policy,
-                enabled=True,
-            )
-        else:
-            activity = PromoActivity(
-                campaign_id=campaign_id,
-                surface=PROMO_SURFACE_VK_REPOST,
-                profile_key=None,
-                slot=None,
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
-                enabled=True,
-            )
-        session.add(target)
-        session.add(activity)
-        session.add(_default_tg_button_highlight_activity(campaign_id))
-        await session.commit()
-        await session.refresh(campaign)
+    else:
+        activity = PromoActivity(
+            campaign_id=campaign_id,
+            surface=PROMO_SURFACE_VK_REPOST,
+            profile_key=None,
+            slot=None,
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+            enabled=True,
+        )
+    session.add(target)
+    session.add(activity)
+    session.add(_default_tg_button_highlight_activity(campaign_id))
+    await session.flush()
 
     return PromoCreateResult(
         campaign,
@@ -1043,14 +1167,16 @@ async def add_partner_activity_to_campaign(
     db: Database,
     spec: PartnerActivitySpec,
     *,
-    actor_user_id: int,
+    actor_user_id: int | None,
     now_utc: datetime | None = None,
+    session: Any | None = None,
 ) -> PromoCreateResult:
     """Append a new PromoActivity to an existing partner campaign.
 
     Authorization: caller must verify the user owns the campaign or is
     superadmin; this function only enforces business rules (campaign
-    exists, not archived, surface/slot_policy known, count positive).
+    exists, not archived, surface/slot_policy known, count positive). A supplied
+    session remains caller-owned: flush only, with no independent commit.
     """
 
     now_utc = now_utc or datetime.now(timezone.utc)
@@ -1065,44 +1191,52 @@ async def add_partner_activity_to_campaign(
     }:
         return PromoCreateResult(None, "invalid", f"Неизвестная политика слота: {spec.slot_policy!r}.")
 
-    async with db.get_session() as session:
-        campaign = await session.get(PromoCampaign, int(spec.campaign_id))
-        if campaign is None:
-            return PromoCreateResult(None, "not_found", "Кампания не найдена.")
-        if campaign.status == "archived":
-            return PromoCreateResult(
-                None,
-                "invalid",
-                "Кампания в архиве — нельзя добавить активность. Восстановите её сначала.",
+    if session is None:
+        async with db.get_session() as owned_session:
+            result = await add_partner_activity_to_campaign(
+                db, spec, actor_user_id=actor_user_id, now_utc=now_utc,
+                session=owned_session,
             )
+            if result.campaign is not None:
+                await owned_session.commit()
+            return result
 
-        if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
-            activity = PromoActivity(
-                campaign_id=int(campaign.id),
-                surface=PROMO_SURFACE_VIDEO_GENERAL,
-                profile_key=spec.profile_key,
-                slot=1 if spec.slot_policy == PROMO_POLICY_FIRST_SLOT else None,
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=spec.slot_policy,
-                enabled=True,
-            )
-        else:
-            activity = PromoActivity(
-                campaign_id=int(campaign.id),
-                surface=PROMO_SURFACE_VK_REPOST,
-                profile_key=None,
-                slot=None,
-                max_per_publish=1,
-                target_exposure_goal=int(spec.count),
-                selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
-                enabled=True,
-            )
-        campaign.updated_at = now_utc
-        session.add(campaign)
-        session.add(activity)
-        await session.commit()
-        await session.refresh(campaign)
+    campaign = await session.get(PromoCampaign, int(spec.campaign_id))
+    if campaign is None:
+        return PromoCreateResult(None, "not_found", "Кампания не найдена.")
+    if campaign.status == "archived":
+        return PromoCreateResult(
+            None,
+            "invalid",
+            "Кампания в архиве — нельзя добавить активность. Восстановите её сначала.",
+        )
+
+    if spec.surface == PROMO_SURFACE_VIDEO_GENERAL:
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VIDEO_GENERAL,
+            profile_key=spec.profile_key,
+            slot=1 if spec.slot_policy == PROMO_POLICY_FIRST_SLOT else None,
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=spec.slot_policy,
+            enabled=True,
+        )
+    else:
+        activity = PromoActivity(
+            campaign_id=int(campaign.id),
+            surface=PROMO_SURFACE_VK_REPOST,
+            profile_key=None,
+            slot=None,
+            max_per_publish=1,
+            target_exposure_goal=int(spec.count),
+            selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
+            enabled=True,
+        )
+    campaign.updated_at = now_utc
+    session.add(campaign)
+    session.add(activity)
+    await session.flush()
 
     return PromoCreateResult(
         campaign,
@@ -1180,6 +1314,21 @@ def _initial_80_vk_channel_publish_activity(campaign_id: int) -> PromoActivity:
     )
 
 
+def partner_vk_repost_config(source_group: str | int) -> dict[str, Any]:
+    source = str(source_group).strip()
+    if not source:
+        raise ValueError("source_group is required")
+    return {
+        "source_group": source,
+        "target_group": PARTNER_PROMO_VK_REPOST_TARGET_GROUP,
+        "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
+        "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
+        "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
+        "dedup_hours": PROMO_VK_REPOST_DEDUP_HOURS,
+        "caption": "short_rewrite_text",
+    }
+
+
 def _initial_80_vk_repost_activity(campaign_id: int) -> PromoActivity:
     return PromoActivity(
         campaign_id=campaign_id,
@@ -1189,15 +1338,7 @@ def _initial_80_vk_repost_activity(campaign_id: int) -> PromoActivity:
         daily_cap=1,
         selection_policy=PROMO_POLICY_DIVERSE_SHUFFLE,
         enabled=True,
-        config_json={
-            "source_group": "klgdevents",
-            "target_group": "kenigeventsofficial",
-            "window_hours": PROMO_VK_DEFAULT_WINDOW_HOURS,
-            "active_start_hour": PROMO_VK_ACTIVE_START_HOUR,
-            "active_end_hour": PROMO_VK_ACTIVE_END_HOUR,
-            "dedup_hours": PROMO_VK_REPOST_DEDUP_HOURS,
-            "caption": "short_rewrite_text",
-        },
+        config_json=partner_vk_repost_config("klgdevents"),
     )
 
 
@@ -2333,6 +2474,7 @@ async def record_video_promo_exposures(
     public_target_count: int = 0,
     public_targets: list[dict] | None = None,
 ) -> int:
+    outcomes: list[PromoVkActionResult] = []
     async with db.get_session() as session:
         res = await session.execute(
             select(VideoAnnounceItem)
@@ -2368,9 +2510,32 @@ async def record_video_promo_exposures(
                 )
             )
             added += 1
+            if item.promo_activity_id:
+                outcomes.append(
+                    PromoVkActionResult(
+                        campaign_id=int(item.promo_campaign_id),
+                        activity_id=int(item.promo_activity_id),
+                        surface=PROMO_SURFACE_VIDEO_GENERAL,
+                        event_id=int(item.event_id),
+                        status=(
+                            "published"
+                            if publish_status in PUBLIC_PROMO_EXPOSURE_STATUSES
+                            else "scheduled"
+                        ),
+                    )
+                )
         if added:
             await session.commit()
-        return added
+    if outcomes:
+        try:
+            await record_promo_activity_outcomes(db, outcomes, now_utc=published_at)
+        except Exception:
+            logger.warning(
+                "promo.video activity outcome persistence failed session_id=%s",
+                session_id,
+                exc_info=True,
+            )
+    return added
 
 
 def _vk_owner_post_from_url(url: str | None) -> tuple[int, int] | None:
@@ -6221,6 +6386,17 @@ async def run_promo_vk_activities(
                     picked = candidate
                     break
             if picked is None:
+                reason = "source_unavailable" if not source_candidates else "dedup_window"
+                results.append(
+                    PromoVkActionResult(
+                        campaign_id,
+                        activity_id,
+                        activity.surface,
+                        0,
+                        "skipped",
+                        reason=reason,
+                    )
+                )
                 continue
             ev, source_url, source_at = picked
             try:
@@ -6354,4 +6530,8 @@ async def run_promo_vk_activities(
                 results.append(
                     PromoVkActionResult(campaign_id, activity_id, activity.surface, int(ev.id), "failed", source_url=source_url, reason=str(exc) or type(exc).__name__)
                 )
+    try:
+        await record_promo_activity_outcomes(db, results, now_utc=now_utc)
+    except Exception:
+        logger.warning("promo activity outcome persistence failed", exc_info=True)
     return results
