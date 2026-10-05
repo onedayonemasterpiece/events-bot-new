@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added isolated Smart Update Ultra research scripts for public Telegram capture, album assembly, saved OpenCode receipt inspection and 21 offline contract tests; no production import or deployment is enabled.
+
 - Added persistent 4 GB RunCoveer swap, bounded system journals/logrotate, a periodic disk/inode guard with safe cache cleanup, and backup free-space preflight plus incomplete snapshot cleanup.
 
 - Increased bounded RunCoveer production log retention to seven days, added persistent Kotopogoda JSON logs, and enlarged compressed Docker log rotation.
