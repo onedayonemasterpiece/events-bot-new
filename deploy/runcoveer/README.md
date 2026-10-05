@@ -9,13 +9,14 @@ CDN, Supabase, Kaggle and other managed dependencies stay external.
 
 ## Build and restore
 
-Current Events release is `e679853bc328aece113163e30667cfd4bbeab70a`,
-deployed as immutable image `runcoveer/events:e679853bc`. For an Events
-rebuild, materialize that exact archive into an isolated build context (do not
-overwrite `/opt/runcoveer/events/source`: Kotopogoda mounts its
-`runtime_logging.py`), supply exact
+Events current production baseline is
+`e679853bc328aece113163e30667cfd4bbeab70a`, packaged as immutable image
+`runcoveer/events:e679853bc`. Build Events upgrades from an exact Git archive
+in an isolated release build context, supply the exact
 `ai_resource_control-0.1.4-py3-none-any.whl` in `vendor-private`, then build:
 `sudo docker build --build-arg STATIC_SITE_IMAGE_REPO_SHA=e679853bc328aece113163e30667cfd4bbeab70a -t runcoveer/events:e679853bc .`.
+Do not overwrite `/opt/runcoveer/events/source` during an Events-only upgrade:
+Kotopogoda mounts `runtime_logging.py` from that preserved source tree.
 Kotopogoda rebuilds its preserved deployed snapshot `951065bf` with
 `Dockerfile.runtime-snapshot` and `requirements.runtime.lock`; current repository
 HEAD is not substituted for deployed source. Build image
@@ -71,8 +72,10 @@ read-only product routes. Check external callers using old Fly URLs separately.
 ## Repeat deploy, persistence and backup
 
 `deploy.sh` copies configuration and runs Compose; it does not restore or replace
-data. Keep images fixed to the verified release; build/tag a new image explicitly
-for an application upgrade. Docker and Caddy start with systemd; containers use
+data. The checked-in Compose file pins the verified Events image
+`runcoveer/events:e679853bc`; an application upgrade must build/tag the next
+immutable image and update that pin before repeat deploy. Docker and Caddy start
+with systemd; containers use
 `unless-stopped`. Docker logs rotate at 50 MB x 10 per container with compression. Persistent
 project logs rotate at 16 MB per file, retain up to 7 days and have a 512 MB
 cap per project with a 1 GB free-space floor. Kotopogoda reuses the existing
@@ -92,6 +95,21 @@ Verified over HTTPS: OAuth metadata, unauthenticated rejection, a complete
 Codex OAuth/PKCE authorization, authenticated initialize (2025-06-18) and
 tools/list (7 tools). No tool calls were issued. This server verification does
 not update an existing client connector configuration.
+
+### Partner MCP rollout, 2026-10-05
+
+Canonical main `e679853bc328aece113163e30667cfd4bbeab70a` was built as
+`runcoveer/events:e679853bc` (image
+`sha256:c2855e5c8015131881843d8f6601db094f441a89873f3e213fb6020b3d2f0612`)
+using exact `ai-resource-control` 0.1.4. A separate preflight container ran
+`Database.init()` with scheduler/webhook disabled; SQLite `quick_check` passed
+and the additive promo outcome table was present. Events-only cutover preserved
+the Kotopogoda container and the old `runcoveer/events:8105d069f` rollback
+image. After cutover, public health, scheduler/tasks, Telegram webhook origin,
+owner/Codex/partner OAuth metadata and unauthenticated rejection were verified.
+Owner event create/assets/typed operations and partner event/promo gates are
+enabled. No real partner grant or public provider mutation was used for
+acceptance, so isolated-provider live verification remains a separate gate.
 
 Install `backup.service`/`backup.timer` to `/etc/systemd/system/runcoveer-backup.*`
 and enable the timer. `sudo python3 /opt/runcoveer/deployment/backup.py` makes
