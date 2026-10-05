@@ -1,9 +1,12 @@
 # Partner EventsBot MCP — release handoff for Codex
 
-Status: **SOURCE_READY only**. ChatGPT implementation is complete on branch
-`chatgpt/partner-mcp-source-ready-20261005`. Do not add missing product slices
-or redesign the architecture on the deployment checkout. Production deployment,
-real partner onboarding and public test posts were intentionally not performed.
+Status: **FULFILLED / DEPLOYED_ACCEPTED on 2026-10-05**. The source-ready
+branch was merged in PR #725 to canonical main
+`e679853bc328aece113163e30667cfd4bbeab70a` and deployed on RunCoveer as
+`runcoveer/events:e679853bc`. This file is retained as the independent release
+review contract; do not reinterpret it as a remaining manual owner step.
+Real partner onboarding and public provider test posts were not used for
+deployment acceptance.
 
 ## Independent review
 
@@ -64,6 +67,11 @@ binary, so rollback is code/flags rather than destructive schema reversal.
 - `ISOLATED_LIVE_VERIFIED`: only after the private provider smoke above.
 - `DEPLOYED_ACCEPTED`: only after canonical-main deploy, health/SQLite/OAuth
   readback and controlled acceptance.
+
+Current result: `SOURCE_READY=PASS`, `DEPLOYED_ACCEPTED=PASS`,
+`ISOLATED_LIVE_VERIFIED=NOT_RUN`. The latter is not a deployment blocker; it
+requires an explicitly private provider destination and must not be simulated
+with a public post.
 
 Lifecycle visual badges/public old→new site history, registrations, NFC/QR
 check-in and NPS are separate roadmap/release scopes and are not to be invented

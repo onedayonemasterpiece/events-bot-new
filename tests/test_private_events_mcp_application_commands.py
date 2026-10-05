@@ -1103,7 +1103,10 @@ async def test_partner_vk_repost_campaign_runs_worker_and_reads_back(
     )
     cid = accepted["result"]["campaign_id"]
 
-    now_utc = datetime.now(timezone.utc).replace(
+    # Use the next day's 14:00 UTC (16:00 Europe/Kaliningrad): this is
+    # always after campaign creation and after the single-placement 15:00
+    # local due slot, independent of the CI runner's wall-clock time.
+    now_utc = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
         hour=14, minute=0, second=0, microsecond=0
     )
     async with db.get_session() as session:

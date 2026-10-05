@@ -1,9 +1,11 @@
 # Partner event operations
 
-Status as of 2026-10-05: the event/promo partner core is **SOURCE_READY**
-and default-off. It is integrated on top of current `main`; no production
-deployment, real partner grant or public test publication was performed in this
-implementation window.
+Status as of 2026-10-05: the event/promo partner core is
+**DEPLOYED_ACCEPTED** on RunCoveer from canonical main
+`e679853bc328aece113163e30667cfd4bbeab70a`. Owner event
+create/assets/typed operations plus partner access/event-create and owner/partner
+promo gates are enabled. No real partner grant or public provider test
+publication was performed during acceptance.
 
 There is one canonical EventsBot database, Smart Update, JobOutbox and promo
 engine. The partner OAuth projection does not create a second backend, scheduler,
@@ -19,8 +21,11 @@ identity prerequisite.
 - **ISOLATED_LIVE_VERIFIED — NOT RUN.** Real provider work must be limited to
   explicitly approved private test destinations after an independent release
   review.
-- **DEPLOYED_ACCEPTED — NOT RUN.** Production rollout is a separate manual
-  release action.
+- **DEPLOYED_ACCEPTED — PASS.** `runcoveer/events:e679853bc` is live from
+  canonical main. SQLite `quick_check`, additive schema, public health,
+  Telegram webhook origin, owner/Codex/partner OAuth metadata and
+  unauthenticated rejection passed after staged gate activation. Kotopogoda was
+  not recreated and the previous Events image remains the rollback.
 - The full v2 TO-BE remains wider than this core. Lifecycle visual badges,
   public old→new history/site lifecycle UX and the isolated-live scenarios stay
   external gates and must not be reported as completed by this source release.
@@ -216,9 +221,17 @@ Every step is reversible by disabling its feature gate. SQLite rollback is
 code-first and non-destructive: additive tables/columns stay in place for
 forward compatibility.
 
+Production completed R0 through the R4 feature-gate activation on 2026-10-05
+without creating partner credentials or issuing a provider mutation.
+`ISOLATED_LIVE_VERIFIED` therefore remains deliberately separate: it requires
+an existing explicitly private test tenant/destination rather than a public
+acceptance post.
+
 ## Source acceptance evidence
 
-Current-main integration baseline is `b8c9e55ee5553d7df84afa927c63075df9b7dafa`.
+The source integration baseline was
+`b8c9e55ee5553d7df84afa927c63075df9b7dafa`; PR #725 merged to canonical
+release main `e679853bc328aece113163e30667cfd4bbeab70a`.
 
 Local Python 3.12 regression on 2026-10-05:
 

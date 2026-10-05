@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Deployed the Partner EventsBot MCP event/promo core on RunCoveer from
+  canonical main `e679853bc328aece113163e30667cfd4bbeab70a` as immutable image
+  `runcoveer/events:e679853bc`; staged owner/partner gates are enabled after
+  SQLite, health, Telegram webhook and OAuth metadata acceptance. The previous
+  Events image remains the rollback and no public provider mutation was used.
+
 - Added persistent 4 GB RunCoveer swap, bounded system journals/logrotate, a periodic disk/inode guard with safe cache cleanup, and backup free-space preflight plus incomplete snapshot cleanup.
 
 - Increased bounded RunCoveer production log retention to seven days, added persistent Kotopogoda JSON logs, and enlarged compressed Docker log rotation.
