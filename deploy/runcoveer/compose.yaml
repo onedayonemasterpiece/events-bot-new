@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:c344d63d
+    image: runcoveer/events:4b23f991-slim
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
