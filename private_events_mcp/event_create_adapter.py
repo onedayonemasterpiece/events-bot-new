@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 
 from .event_create import EventCreateRequest
+from event_operation_receipts import PartnerAuthorityReviewRequired
 
 
 class MainEventCreateExecutor:
@@ -40,6 +41,8 @@ class MainEventCreateExecutor:
                        "actor_audience": request.actor_audience}
             if request.partner_policy_revision is not None:
                 context["partner_policy_revision"] = request.partner_policy_revision
+            if request.partner_authority_kinds:
+                context["partner_authority_kinds"] = list(request.partner_authority_kinds)
             operation_context["event_operation_context"] = context
         try:
             result = await main.add_events_from_text(
@@ -63,6 +66,14 @@ class MainEventCreateExecutor:
                 allow_lifecycle_actions=False,
                 **operation_context,
             )
+        except PartnerAuthorityReviewRequired as exc:
+            return {
+                "status": "review_required",
+                "error_code": "PARTNER_AUTHORITY_REVIEW_REQUIRED",
+                "event_ids": [],
+                "jobs": [],
+                "authority_evaluation": dict(exc.evaluation),
+            }
         except main.MultiEventSourceRequiresSeparateRequests:
             return {
                 "status": "rejected",

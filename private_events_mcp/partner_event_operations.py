@@ -76,7 +76,12 @@ class PartnerEventOperations:
 
     async def prepare(self, arguments, context):
         grant = await self.grant(context)
-        request = replace(self.runtime.request_from_arguments(arguments, context), partner_policy_revision=grant.policy_revision)
+        authority_kinds = await asyncio.to_thread(self.partners.authority_kinds, grant)
+        request = replace(
+            self.runtime.request_from_arguments(arguments, context),
+            partner_policy_revision=grant.policy_revision,
+            partner_authority_kinds=authority_kinds,
+        )
         if request.media:
             if self.assets is None:
                 raise denied()
@@ -84,8 +89,19 @@ class PartnerEventOperations:
                 await self.assets.reverify(image.asset_ref, context, expected_digest=image.content_digest)
         await self.grant(context)
         result = self.runtime.prepare(request)
-        return {**result, 'owner_review_required': 'event_create' not in grant.auto_approve,
-                'policy_revision': grant.policy_revision}
+        authority_can_auto_approve = any(
+            kind != 'programme_operator' for kind in authority_kinds
+        )
+        return {
+            **result,
+            'owner_review_required': (
+                'event_create' not in grant.auto_approve
+                or not authority_can_auto_approve
+            ),
+            'authority_gate_required': True,
+            'authority_kinds': list(authority_kinds),
+            'policy_revision': grant.policy_revision,
+        }
 
     async def visible_operation(self, operation, context, *, scope):
         event_id = operation.get('event_id')
@@ -95,7 +111,7 @@ class PartnerEventOperations:
             # Candidate/attempt diagnostics belong to the global ingestion engine,
             # not the partner status surface, even when a source URL is shared.
             allowed = {'status','event_ids','events','jobs','job_status_counts','error_code',
-                       'domain_recovery','publication_state','jobs_scope'}
+                       'domain_recovery','publication_state','jobs_scope','authority_evaluation'}
             operation = {**operation, 'result': {key:value for key,value in result.items() if key in allowed}}
         return operation
 
@@ -104,10 +120,18 @@ class PartnerEventOperations:
         revision = arguments.get('policy_revision')
         if isinstance(revision, bool) or not isinstance(revision, int) or revision != grant.policy_revision:
             raise ToolExecutionError('PARTNER_POLICY_REVISION_STALE', 'Prepare again under the current partner policy.')
-        request = replace(self.runtime.request_from_arguments(arguments, context), partner_policy_revision=revision)
+        authority_kinds = await asyncio.to_thread(self.partners.authority_kinds, grant)
+        request = replace(
+            self.runtime.request_from_arguments(arguments, context),
+            partner_policy_revision=revision,
+            partner_authority_kinds=authority_kinds,
+        )
         self.runtime.verify_preparation(request, preparation_ref=arguments.get('preparation_ref'),
                                         action_digest=arguments.get('action_digest'))
-        if 'event_create' not in grant.auto_approve:
+        authority_can_auto_approve = any(
+            kind != 'programme_operator' for kind in authority_kinds
+        )
+        if 'event_create' not in grant.auto_approve or not authority_can_auto_approve:
             result = (await self.review.submit(request))['operation']
         else:
             result = await self.runtime.commit(request, preparation_ref=arguments.get('preparation_ref'),
@@ -129,17 +153,26 @@ class PartnerEventOperations:
             raise denied()
         async with self.runtime.store.database.raw_conn() as conn:
             cursor = await conn.execute(
-                "SELECT actor_subject,actor_client_id,actor_audience,request_json,action_digest,status "
+                "SELECT actor_subject,actor_client_id,actor_audience,request_json,action_digest,status,result_json "
                 "FROM event_change_log WHERE operation_ref=? AND operation_kind='create'", (ref,))
             row = await cursor.fetchone()
         if row is None or row[2] != self.partners.resource or not row[0].startswith('partner:'):
             raise denied()
         self.owner(context)
         data = json.loads(row[3])
+        authority_evaluation = None
+        if isinstance(row[6], str) and row[6]:
+            try:
+                result = json.loads(row[6])
+            except (TypeError, ValueError):
+                result = None
+            if isinstance(result, dict) and isinstance(result.get('authority_evaluation'), dict):
+                authority_evaluation = result['authority_evaluation']
         return {'operation_ref': ref, 'status': row[5], 'action_digest': row[4],
                 'untrusted_source': {key: data.get(key) for key in ('raw_text', 'source_url', 'media')},
                 'actor_subject': row[0], 'actor_client_id': row[1],
-                'policy_revision': data.get('partner_policy_revision')}
+                'policy_revision': data.get('partner_policy_revision'),
+                'authority_evaluation': authority_evaluation}
 
     async def review_image(self, arguments, context):
         import base64

@@ -98,7 +98,7 @@ async def test_real_database_init_is_additive_and_repeatable(tmp_path):
     await database.init();await database.init()
     with sqlite3.connect(database.path) as conn:
         assert conn.execute('PRAGMA quick_check').fetchone()[0]=='ok'
-        assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'mcp_partner%' AND type='table'").fetchone()[0]==4
+        assert conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'mcp_partner%' AND type='table'").fetchone()[0]==5
 
 
 def test_durable_actor_policy_does_not_fabricate_token_and_tracks_epoch(store):
@@ -129,3 +129,125 @@ def test_durable_actor_rechecks_current_scope_and_live_identity_keeps_token_scop
                  policy={'scopes':['partner:events:read'], 'actions':['event_create']})
     with pytest.raises(ToolExecutionError):
         store.resolve_durable(**args)
+
+
+def authority(kind, subject_type, key, name, *, aliases=None, cities=None):
+    value = {
+        'authority_kind': kind,
+        'subject_type': subject_type,
+        'subject_key': key,
+        'display_name': name,
+    }
+    if aliases is not None:
+        value['aliases'] = aliases
+    if cities is not None:
+        value['cities'] = cities
+    return value
+
+
+def test_authority_bindings_are_server_owned_revisioned_and_exact(store):
+    created = create(store, authorities=[
+        authority('venue_operator', 'venue', 'amber-hall', 'Янтарь-холл',
+                  aliases=['Янтарь холл'], cities=['Светлогорск']),
+        authority('festival_operator', 'festival', 'kantata', 'Кантата'),
+    ])
+    grant = store.get(created['principal_id'])
+    assert [item['authority_kind'] for item in store.authorities(grant)] == [
+        'festival_operator', 'venue_operator'
+    ]
+    first_revision = grant.policy_revision
+    changed = store.change(
+        grant.principal_id,
+        action='authorities',
+        expected_revision=first_revision,
+        authorities=[authority('organizer', 'organization', 'dramtheatre', 'Драмтеатр')],
+    )
+    assert changed['policy_revision'] == first_revision + 1
+    assert changed['authorities'][0]['authority_kind'] == 'organizer'
+    with pytest.raises(ToolExecutionError):
+        store.change(
+            grant.principal_id,
+            action='authorities',
+            expected_revision=changed['policy_revision'],
+        )
+
+
+@pytest.mark.parametrize('bad', [
+    [authority('venue_operator', 'festival', 'bad', 'Bad')],
+    [authority('unknown', 'venue', 'bad', 'Bad')],
+    [{'authority_kind':'venue_operator','subject_type':'venue','subject_key':'bad','display_name':'Bad','unknown':True}],
+])
+def test_invalid_authority_shape_fails_closed(store, bad):
+    with pytest.raises(ToolExecutionError):
+        create(store, authorities=bad)
+
+
+def test_authority_candidate_matching_is_exact_and_role_specific(store):
+    from types import SimpleNamespace
+
+    created = create(store, authorities=[
+        authority('venue_operator', 'venue', 'amber-hall', 'Янтарь-холл',
+                  aliases=['Янтарь холл'], cities=['Светлогорск']),
+        authority('organizer', 'organization', 'dramtheatre', 'Драмтеатр'),
+        authority('festival_operator', 'festival', 'kantata', 'Кантата'),
+        authority('represented_person', 'person', 'ivanov', 'Иван Иванов'),
+        authority('represented_collective', 'collective', 'choir', 'Камерный хор'),
+        authority('series_operator', 'series', 'city-lectures', 'Городские лекции'),
+        authority('programme_operator', 'programme', 'kantata-education', 'Кантата: образование'),
+    ])
+    grant = store.get(created['principal_id'])
+
+    def candidate(**values):
+        base = dict(
+            location_name='Чужой зал', city='Калининград',
+            organizer_names=[], festival=None, festival_full=None,
+            festival_series=None, collection_semantic_decisions=None,
+        )
+        base.update(values)
+        return SimpleNamespace(**base)
+
+    assert store.evaluate_create_candidate(
+        grant, candidate(location_name='ЯНТАРЬ ХОЛЛ', city='Светлогорск')
+    )['matched_authority']['authority_kind'] == 'venue_operator'
+    assert store.evaluate_create_candidate(
+        grant, candidate(organizer_names=['Драмтеатр'])
+    )['matched_authority']['authority_kind'] == 'organizer'
+    assert store.evaluate_create_candidate(
+        grant, candidate(festival='Кантата')
+    )['matched_authority']['authority_kind'] == 'festival_operator'
+    assert store.evaluate_create_candidate(
+        grant, candidate(festival_series='Городские лекции')
+    )['matched_authority']['authority_kind'] == 'series_operator'
+    people = {'people_appearances': [
+        {'name':'Иван Иванов','role':'speaker','appearance':'confirmed'},
+    ]}
+    assert store.evaluate_create_candidate(
+        grant, candidate(collection_semantic_decisions=people)
+    )['matched_authority']['authority_kind'] == 'represented_person'
+    collective = {'people_appearances': [
+        {'name':'Камерный хор','role':'performer','appearance':'confirmed'},
+    ]}
+    assert store.evaluate_create_candidate(
+        grant, candidate(collection_semantic_decisions=collective)
+    )['matched_authority']['authority_kind'] == 'represented_collective'
+
+    # No substring/fuzzy authority, wrong city, or unconfirmed person matching.
+    assert store.evaluate_create_candidate(
+        grant, candidate(location_name='Большой зал Янтарь-холла', city='Светлогорск')
+    )['status'] == 'review_required'
+    assert store.evaluate_create_candidate(
+        grant, candidate(location_name='Янтарь-холл', city='Калининград')
+    )['status'] == 'review_required'
+    assert store.evaluate_create_candidate(
+        grant, candidate(collection_semantic_decisions={'people_appearances':[
+            {'name':'Иван Иванов','role':'speaker','appearance':'mentioned_only'},
+        ]})
+    )['status'] == 'review_required'
+    # Programme authority is deliberately review-only until programme evidence is structured.
+    only_programme = create(store, org='programme', authorities=[
+        authority('programme_operator', 'programme', 'edu', 'Образовательная программа'),
+    ])
+    programme_grant = store.get(only_programme['principal_id'])
+    result = store.evaluate_create_candidate(programme_grant, candidate())
+    assert result['status'] == 'review_required'
+    assert result['reason'] == 'programme_scope_requires_structured_evidence'

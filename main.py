@@ -17806,6 +17806,10 @@ async def add_events_from_text(
     from event_operation_receipts import validate_event_operation_context
 
     event_operation_context = validate_event_operation_context(event_operation_context)
+    partner_event_operation = bool(
+        event_operation_context
+        and str(event_operation_context.get("actor_subject") or "").startswith("partner:")
+    )
     if event_operation_context is not None and not require_single_event:
         raise ValueError("event_operation_context_requires_single_event")
     logging.info(
@@ -18255,7 +18259,10 @@ async def add_events_from_text(
     festival_obj: Festival | None = None
     fest_created = False
     fest_updated = False
-    if festival_info:
+    if festival_info and not partner_event_operation:
+        # Partner Event create must pass the transactional authority gate before
+        # it can create/update auxiliary Festival rows. The grounded festival
+        # identity remains on the EventCandidate for festival_operator matching.
         fest_name = (
             festival_info.get("name")
             or festival_info.get("festival")
@@ -18433,7 +18440,10 @@ async def add_events_from_text(
             base_event.title, base_event.description, base_event.event_type
         )
 
-        if base_event.festival:
+        if base_event.festival and not partner_event_operation:
+            # Partner create must cross its authority gate before any auxiliary
+            # festival registry write. The accepted Event still carries the
+            # grounded festival string for ordinary downstream reconciliation.
             photo_u = catbox_urls[0] if catbox_urls else None
             festival_event_kwargs: dict[str, Any] = {}
             if defer_external_projections:
@@ -18604,6 +18614,43 @@ async def add_events_from_text(
                 )
                 results.append((None, False, result_lines, result_status))
                 continue
+            if partner_event_operation and saved.festival:
+                # Partner intake deliberately suppresses Festival writes before
+                # the Smart Update authority gate. Reconcile the ordinary
+                # Festival registry only after the canonical Event/receipt is
+                # accepted so downstream festival jobs resolve a real Festival
+                # id without granting an unauthorized pre-gate side effect.
+                try:
+                    await ensure_festival(
+                        db,
+                        saved.festival,
+                        full_name=(
+                            data.get("festival_full")
+                            or festival_decision.festival_full
+                        ),
+                        photo_url=catbox_urls[0] if catbox_urls else None,
+                        photo_urls=catbox_urls,
+                        start_date=saved.date or None,
+                        end_date=saved.end_date or saved.date or None,
+                        location_name=saved.location_name,
+                        location_address=saved.location_address,
+                        city=saved.city,
+                        source_text=source_text_clean,
+                        source_post_url=source_link,
+                        source_chat_id=source_chat_id,
+                        source_message_id=source_message_id,
+                        rebuild_navigation=False,
+                    )
+                except Exception:
+                    # Event acceptance is already durable. The existing
+                    # festival_pages JobOutbox path remains the observable
+                    # reconciliation surface; do not downgrade the Event to an
+                    # ambiguous failed create after the canonical boundary.
+                    logging.exception(
+                        "partner post-accept festival registry reconciliation failed event_id=%s festival=%s",
+                        saved.id,
+                        saved.festival,
+                    )
             if rejected_links:
                 for url in rejected_links:
                     pattern = (

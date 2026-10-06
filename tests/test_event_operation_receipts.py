@@ -51,7 +51,10 @@ async def prepare(db, ctx=None):
         candidate_payload=asdict(candidate), lease_owner='test-receipt')
     candidate.smart_update_candidate_id = attempt.candidate_state_id
     candidate.smart_update_attempt_no = attempt.attempt_no
-    stored_request = {'partner_policy_revision': ctx.get('partner_policy_revision')}
+    stored_request = {
+        'partner_policy_revision': ctx.get('partner_policy_revision'),
+        'partner_authority_kinds': ctx.get('partner_authority_kinds', []),
+    }
     async with db.raw_conn() as conn:
         await conn.execute('INSERT INTO event_change_log(operation_ref,operation_kind,actor_subject,actor_client_id,actor_audience,idempotency_hash,action_digest,source_type,source_url,request_json,status,organizer_comment,result_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
             (ctx['operation_ref'], 'create', ctx['actor_subject'], ctx['actor_client_id'], ctx['actor_audience'],
@@ -193,21 +196,35 @@ def test_context_excluded_from_identity_fingerprint_and_candidate_repr():
     assert calls[0].lineno > 17000
 
 
-async def partner_context(db):
+async def partner_context(db, *, authorities=None):
     policy = PartnerAccessStore(db.path, resource='partner-resource', signing_key='local-key')
+    if authorities is None:
+        authorities = [{
+            'authority_kind': 'venue_operator',
+            'subject_type': 'venue',
+            'subject_key': 'test-hall',
+            'display_name': 'Test Hall',
+        }]
     created = policy.create(tenant_id='tenant', organization_id='org', display_name='Partner',
         policy={'scopes': ['partner:events:propose'], 'actions': ['event_create']},
+        authorities=authorities,
         redirect_uris=['http://127.0.0.1:8421/callback'], expires_at=int(time.time()) + 3600)
     grant = policy.get(created['principal_id'])
     return policy, grant, {**context(), 'actor_subject': grant.subject,
                           'actor_client_id': grant.client_id, 'actor_audience': policy.resource,
-                          'partner_policy_revision': grant.policy_revision}
+                          'partner_policy_revision': grant.policy_revision,
+                          'partner_authority_kinds': list(policy.authority_kinds(grant))}
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('effect', ['merged', 'noop_exact_replay'])
 async def test_partner_foreign_merge_never_commits_event_or_source(db, effect):
-    _, grant, ctx = await partner_context(db)
+    _, grant, ctx = await partner_context(db, authorities=[{
+        'authority_kind': 'venue_operator',
+        'subject_type': 'venue',
+        'subject_key': 'other-hall',
+        'display_name': 'Other Hall',
+    }])
     candidate = await prepare(db, ctx)
     async with db.get_session() as session:
         session.add(event())
@@ -294,7 +311,12 @@ async def test_database_upgrade_adds_nullable_receipt_and_repeated_init_preserve
 async def test_alternate_accepted_paths_reject_foreign_partner_before_mutation(db, monkeypatch, path):
     import smart_event_update as su
 
-    _, _, ctx = await partner_context(db)
+    _, _, ctx = await partner_context(db, authorities=[{
+        'authority_kind': 'venue_operator',
+        'subject_type': 'venue',
+        'subject_key': 'other-hall',
+        'display_name': 'Other Hall',
+    }])
     candidate = await prepare(db, ctx)
     async with db.get_session() as session:
         session.add(event())
@@ -404,7 +426,12 @@ async def test_real_normal_foreign_merge_rolls_back_all_domain_changes(db, monke
     import smart_event_update as su
 
     disable_models_and_observers(monkeypatch)
-    _, _, ctx = await partner_context(db)
+    _, _, ctx = await partner_context(db, authorities=[{
+        'authority_kind': 'venue_operator',
+        'subject_type': 'venue',
+        'subject_key': 'other-hall',
+        'display_name': 'Other Hall',
+    }])
     candidate = await prepare(db, ctx)
     await update_test_packet(db, candidate)
     # Existing canonical event belongs to no partner portfolio. The same source
@@ -480,3 +507,87 @@ async def test_revoke_after_early_guard_cannot_cross_final_commit(db):
     async with db.get_session() as session:
         assert (await session.get(Event, 42)).title == 'Canonical original'
     assert await receipt(db) is None
+
+
+@pytest.mark.asyncio
+async def test_partner_authority_no_match_rolls_back_before_event_write(db):
+    policy, grant, ctx = await partner_context(db, authorities=[{
+        'authority_kind':'venue_operator','subject_type':'venue',
+        'subject_key':'other-hall','display_name':'Other Hall',
+    }])
+    candidate = await prepare(db, ctx)
+    async with db.get_session() as session:
+        session.add(event())
+        with pytest.raises(EventOperationReceiptError, match='partner_authority_review_required'):
+            await record_event_operation_receipt(session, candidate, event_id=42, effect='created')
+        await session.commit()
+    async with db.get_session() as session:
+        assert await session.get(Event, 42) is None
+    assert await receipt(db) is None
+
+
+@pytest.mark.asyncio
+async def test_matching_authority_is_recorded_in_durable_receipt(db):
+    _, _, ctx = await partner_context(db)
+    candidate = await prepare(db, ctx)
+    async with db.get_session() as session:
+        session.add(event())
+        proof = await record_event_operation_receipt(session, candidate, event_id=42, effect='created')
+        await session.commit()
+    assert proof['partner_authority_status'] == 'matched'
+    assert proof['partner_authority_kind'] == 'venue_operator'
+    assert proof['partner_authority_id'].startswith('auth_')
+
+
+@pytest.mark.asyncio
+async def test_authority_change_invalidates_frozen_create(db):
+    policy, grant, ctx = await partner_context(db)
+    candidate = await prepare(db, ctx)
+    policy.change(
+        grant.principal_id,
+        action='authorities',
+        expected_revision=grant.policy_revision,
+        authorities=[{
+            'authority_kind':'venue_operator','subject_type':'venue',
+            'subject_key':'other-hall','display_name':'Other Hall',
+        }],
+    )
+    async with db.get_session() as session:
+        session.add(event())
+        with pytest.raises(EventOperationReceiptError):
+            await record_event_operation_receipt(session, candidate, event_id=42, effect='created')
+        await session.commit()
+    async with db.get_session() as session:
+        assert await session.get(Event, 42) is None
+
+
+@pytest.mark.asyncio
+async def test_owner_review_is_explicit_authority_override(db):
+    _, _, ctx = await partner_context(db, authorities=[{
+        'authority_kind':'venue_operator','subject_type':'venue',
+        'subject_key':'other-hall','display_name':'Other Hall',
+    }])
+    candidate = await prepare(db, ctx)
+    audit = {
+        'schema':'partner-event-review-v1',
+        'decision':'approve',
+        'action_digest':ctx['action_digest'],
+        'reviewed_by':{'subject':'owner','client_id':'owner-client','audience':'owner-resource'},
+        'reviewed_at':'2026-10-06T00:00:00+00:00',
+    }
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            'UPDATE event_change_log SET organizer_comment=? WHERE operation_ref=?',
+            (json.dumps(audit, sort_keys=True), ctx['operation_ref']),
+        )
+        await conn.commit()
+    async with db.get_session() as session:
+        session.add(event())
+        proof = await record_event_operation_receipt(
+            session, candidate, event_id=42, effect='created'
+        )
+        await session.commit()
+    assert proof['partner_authority_status'] == 'owner_override'
+    assert 'partner_authority_id' not in proof
+    async with db.get_session() as session:
+        assert await session.get(Event, 42) is not None

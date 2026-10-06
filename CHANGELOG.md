@@ -25,6 +25,13 @@
 - Recorded verified RunCoveer production cutover, persistence/reboot checks and closure of the legacy Fly autostart incident.
 
 ### Added
+- Added server-owned partner event-create authority bindings for venue
+  operators, organizers, festival operators, represented people/collectives and
+  series. Smart Update now proves partner scope inside the canonical transaction
+  before Event/domain writes; no-match routes to owner review, authority changes
+  invalidate frozen intents, programme authority stays review-only, and
+  independently proven partners may share one canonical event in separate
+  portfolios.
 - Reproducible RunCoveer Docker Compose runtime deployment for Events Bot and
   the preserved Kotopogoda runtime, with isolated preflight, persistent state,
   consistent SQLite backups and rollback instructions.

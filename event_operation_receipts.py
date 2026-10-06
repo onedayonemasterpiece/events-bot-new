@@ -14,6 +14,11 @@ from sqlalchemy import text
 
 _CONTEXT_KEYS = frozenset({'operation_ref', 'action_digest', 'actor_subject',
                            'actor_client_id', 'actor_audience'})
+_CONTEXT_OPTIONAL_KEYS = frozenset({'partner_policy_revision', 'partner_authority_kinds'})
+_PARTNER_AUTHORITY_KINDS = frozenset({
+    'venue_operator', 'organizer', 'festival_operator', 'represented_person',
+    'represented_collective', 'series_operator', 'programme_operator',
+})
 _SCHEMA = 'event-operation-domain-receipt-v1'
 
 
@@ -21,11 +26,19 @@ class EventOperationReceiptError(RuntimeError):
     """Fail closed and roll back the containing domain mutation."""
 
 
+class PartnerAuthorityReviewRequired(EventOperationReceiptError):
+    """Parsed candidate is safe to review but cannot cross the canonical write gate."""
+
+    def __init__(self, evaluation: Mapping[str, Any]) -> None:
+        super().__init__('partner_authority_review_required')
+        self.evaluation = dict(evaluation)
+
+
 def validate_event_operation_context(context: Any) -> dict[str, Any] | None:
     if context is None:
         return None
     if (not isinstance(context, Mapping) or not _CONTEXT_KEYS <= set(context)
-            or set(context) - _CONTEXT_KEYS - {'partner_policy_revision'}
+            or set(context) - _CONTEXT_KEYS - _CONTEXT_OPTIONAL_KEYS
             or any(not isinstance(context[key], str) or not 1 <= len(context[key]) <= 2048
                    for key in _CONTEXT_KEYS)
             or not re.fullmatch(r'evt_op_[A-Za-z0-9_-]{20,120}', context['operation_ref'])
@@ -35,6 +48,12 @@ def validate_event_operation_context(context: Any) -> dict[str, Any] | None:
     if ((revision is not None and not _positive(revision))
             or (context['actor_subject'].startswith('partner:') and not _positive(revision))):
         raise EventOperationReceiptError('event_operation_policy_revision_invalid')
+    kinds = context.get('partner_authority_kinds')
+    if kinds is not None:
+        if (not isinstance(kinds, list) or len(kinds) > len(_PARTNER_AUTHORITY_KINDS)
+                or any(not isinstance(value, str) or value not in _PARTNER_AUTHORITY_KINDS for value in kinds)
+                or kinds != sorted(set(kinds))):
+            raise EventOperationReceiptError('event_operation_authority_context_invalid')
     return dict(context)
 
 
@@ -50,6 +69,9 @@ class _PolicyRows:
         row = self.result.fetchone()
         return row._mapping if row is not None else None
 
+    def fetchall(self) -> list[Any]:
+        return [row._mapping for row in self.result.fetchall()]
+
 
 class _PolicyConnection:
     """Adapt the existing policy's read-only DBAPI calls to this exact session."""
@@ -58,6 +80,21 @@ class _PolicyConnection:
 
     def execute(self, sql: str, params: tuple = ()) -> _PolicyRows:
         return _PolicyRows(self.connection.exec_driver_sql(sql, params))
+
+
+def _owner_review_approved(raw: Any, context: Mapping[str, Any]) -> bool:
+    if not isinstance(raw, str) or not raw:
+        return False
+    try:
+        audit = json.loads(raw)
+    except (TypeError, ValueError):
+        return False
+    return bool(
+        isinstance(audit, dict)
+        and audit.get('schema') == 'partner-event-review-v1'
+        and audit.get('decision') == 'approve'
+        and audit.get('action_digest') == context.get('action_digest')
+    )
 
 
 async def guard_event_operation_context(
@@ -82,7 +119,10 @@ async def guard_event_operation_context(
             ), context)
             if updated.rowcount != 1:
                 raise EventOperationReceiptError('event_operation_binding_or_state_conflict')
-        ledger = await session.execute(text('SELECT request_json FROM event_change_log WHERE ' + where), context)
+        ledger = await session.execute(
+            text('SELECT request_json,organizer_comment FROM event_change_log WHERE ' + where),
+            context,
+        )
         row = ledger.first()
         if row is None:
             raise EventOperationReceiptError('event_operation_binding_or_state_conflict')
@@ -91,29 +131,58 @@ async def guard_event_operation_context(
                 stored = json.loads(row[0])
             except (TypeError, ValueError):
                 stored = None
+            stored_kinds = (
+                stored.get('partner_authority_kinds', [])
+                if isinstance(stored, dict)
+                else None
+            )
             if (not isinstance(stored, dict) or not _positive(stored.get('partner_policy_revision'))
-                    or stored.get('partner_policy_revision') != context['partner_policy_revision']):
+                    or stored.get('partner_policy_revision') != context['partner_policy_revision']
+                    or stored_kinds != context.get('partner_authority_kinds', [])):
                 raise EventOperationReceiptError('event_operation_policy_revision_conflict')
+            owner_override = _owner_review_approved(row[1], context)
 
-            def resolve(sync_session: Any) -> None:
-                # Reuse current epoch/scopes/actions/portfolio policy, not a new
-                # OAuth identity or duplicate SQL policy implementation. Explicit
-                # conn means this store never opens another connection.
+            def resolve(sync_session: Any) -> dict[str, Any]:
+                # Reuse current epoch/scopes/actions/portfolio policy on the exact
+                # canonical transaction. Authority aliases are server-owned rows;
+                # candidate fields are already parsed/grounded by Smart Update.
                 from private_events_mcp.partner_access import PartnerAccessStore
 
+                connection = _PolicyConnection(sync_session.connection())
                 policy = PartnerAccessStore(
                     sync_session.bind.url.database, resource=context['actor_audience'], signing_key='',
                 )
                 grant = policy.resolve_durable(
                     actor_subject=context['actor_subject'], actor_client_id=context['actor_client_id'],
                     actor_audience=context['actor_audience'], scope='partner:events:propose',
-                    action='event_create', event_id=event_id if effect != 'created' else None,
-                    conn=_PolicyConnection(sync_session.connection()),
+                    action='event_create', conn=connection,
                 )
                 if grant.policy_revision != context['partner_policy_revision']:
                     raise EventOperationReceiptError('event_operation_policy_revision_conflict')
+                current_kinds = list(policy.authority_kinds(grant, conn=connection))
+                if current_kinds != context.get('partner_authority_kinds', []):
+                    raise EventOperationReceiptError('event_operation_authority_revision_conflict')
+                if owner_override:
+                    return {
+                        'status': 'owner_override',
+                        'reason': 'owner_review_approved',
+                        'matched_authority': None,
+                    }
+                if effect != 'created' and policy.owns(grant, int(event_id), conn=connection):
+                    return {
+                        'status': 'portfolio_owned',
+                        'reason': 'existing_portfolio_assignment',
+                        'matched_authority': None,
+                    }
+                evaluation = policy.evaluate_create_candidate(grant, candidate, conn=connection)
+                if evaluation.get('status') != 'matched':
+                    raise PartnerAuthorityReviewRequired(evaluation)
+                return evaluation
             try:
-                await session.run_sync(resolve)
+                evaluation = await session.run_sync(resolve)
+                setattr(candidate, 'partner_authority_evaluation', evaluation)
+            except PartnerAuthorityReviewRequired:
+                raise
             except EventOperationReceiptError:
                 raise
             except Exception:
@@ -155,6 +224,17 @@ async def record_event_operation_receipt(
                    'source_fingerprint': fingerprint}
         await session.flush()
         await guard_event_operation_context(session, candidate, event_id=event_id, effect=effect, lock=True)
+        evaluation = getattr(candidate, 'partner_authority_evaluation', None)
+        if context['actor_subject'].startswith('partner:') and isinstance(evaluation, Mapping):
+            receipt['partner_authority_status'] = str(evaluation.get('status') or '')[:40]
+            matched = evaluation.get('matched_authority')
+            if isinstance(matched, Mapping):
+                authority_id = matched.get('authority_id')
+                authority_kind = matched.get('authority_kind')
+                if isinstance(authority_id, str) and re.fullmatch(r'auth_[a-f0-9]{24}', authority_id):
+                    receipt['partner_authority_id'] = authority_id
+                if isinstance(authority_kind, str) and authority_kind in _PARTNER_AUTHORITY_KINDS:
+                    receipt['partner_authority_kind'] = authority_kind
         exists = await session.execute(text('SELECT 1 FROM event WHERE id=:event_id'), {'event_id': event_id})
         if exists.first() is None:
             raise EventOperationReceiptError('event_operation_event_missing')

@@ -146,6 +146,7 @@ class EventCreateRequest:
     _persisted_idempotency_hash: str | None = None
     media: tuple[EventImageRef, ...] = ()
     partner_policy_revision: int | None = None
+    partner_authority_kinds: tuple[str, ...] = ()
     _operation_ref: str | None = None
 
     def canonical_action(self) -> dict[str, Any]:
@@ -163,6 +164,8 @@ class EventCreateRequest:
                                for item in self.media]
         if self.partner_policy_revision is not None:
             action["partner_policy_revision"] = self.partner_policy_revision
+        if self.partner_authority_kinds:
+            action["partner_authority_kinds"] = list(self.partner_authority_kinds)
         return action
 
     @property
@@ -378,6 +381,32 @@ class EventCreateOperationStore:
             )
             await conn.commit()
             return int(cursor.rowcount or 0) == 1
+
+    async def request_review(
+        self,
+        operation_ref: str,
+        *,
+        result: Mapping[str, Any] | None,
+        error_code: str = "PARTNER_AUTHORITY_REVIEW_REQUIRED",
+    ) -> None:
+        safe_result = redact_and_clip_untrusted(dict(result or {}), limit=12_000)
+        async with self.database.raw_conn() as conn:
+            cursor = await conn.execute(
+                """
+                UPDATE event_change_log
+                SET status='review_required',result_json=?,error_code=?,
+                    started_at=NULL,updated_at=CURRENT_TIMESTAMP,completed_at=NULL
+                WHERE operation_ref=? AND status='processing'
+                """,
+                (_canonical_json(safe_result), error_code[:120], operation_ref),
+            )
+            await conn.commit()
+            if int(cursor.rowcount or 0) != 1:
+                raise ToolExecutionError(
+                    "EVENT_CREATE_REVIEW_STATE_CONFLICT",
+                    "Event create could not transition to owner review.",
+                    retry_safe=False,
+                )
 
     async def finish(
         self,
@@ -656,6 +685,15 @@ class EventCreateRuntime:
             raw_result = await self.executor.create(request)
             result = redact_and_clip_untrusted(dict(raw_result), limit=12_000)
             raw_status = str(result.get("status") or "failed")
+            if raw_status == "review_required":
+                await self.store.request_review(
+                    operation_ref,
+                    result=result,
+                    error_code=str(
+                        result.get("error_code") or "PARTNER_AUTHORITY_REVIEW_REQUIRED"
+                    ),
+                )
+                return
             status = (
                 raw_status
                 if raw_status in {"accepted", "rejected", "failed"}
@@ -772,6 +810,9 @@ class EventCreateRuntime:
                     _persisted_idempotency_hash=row["idempotency_hash"],
                     media=parse_event_images(stored.get("media")),
                     partner_policy_revision=stored.get("partner_policy_revision"),
+                    partner_authority_kinds=tuple(
+                        stored.get("partner_authority_kinds") or ()
+                    ),
                 )
                 if not constant_time_equal(request.action_digest, row["action_digest"]):
                     raise ValueError("stored request digest mismatch")

@@ -5,6 +5,7 @@ Failures must retain the operation's unknown outcome for canonical reconciliatio
 """
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -21,11 +22,12 @@ def _error(code: str) -> ToolExecutionError:
 def assign_accepted_event(
     partner_store: PartnerAccessStore, request: EventCreateRequest, result: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Synchronous, atomic current-policy/ownership check and idempotent assignment.
+    """Synchronous, atomic current-policy/authority check and idempotent assignment.
 
     Call only with the actual executor result and its original durable request.
-    A first grant requires explicit created provenance. Existing/unknown merges
-    are never a reason to acquire a new portfolio item, even within the same org.
+    Existing events may be shared across independent partner portfolios only
+    when the same operation carries durable authority proof or explicit owner
+    approval; mere merge/replay is never enough.
     """
     if not isinstance(result, Mapping) or result.get('status') != 'accepted':
         raise _error('PARTNER_ACCEPTED_EVENT_RESULT_INVALID')
@@ -55,20 +57,65 @@ def assign_accepted_event(
             raise _error('PARTNER_POLICY_REVISION_STALE')
         if conn.execute('SELECT 1 FROM event WHERE id=?', (event_id,)).fetchone() is None:
             raise _error('PARTNER_ACCEPTED_EVENT_NOT_FOUND')
-        foreign = conn.execute(
-            'SELECT 1 FROM mcp_partner_event WHERE event_id=? AND '
-            '(tenant_id<>? OR organization_id<>?) LIMIT 1',
-            (event_id, grant.tenant_id, grant.organization_id),
-        ).fetchone()
-        if foreign is not None:
-            raise _error('PARTNER_ACCEPTED_EVENT_OWNERSHIP_CONFLICT')
         existing = conn.execute(
             'SELECT 1 FROM mcp_partner_event WHERE principal_id=? AND event_id=? '
             'AND tenant_id=? AND organization_id=?',
             (grant.principal_id, event_id, grant.tenant_id, grant.organization_id),
         ).fetchone()
-        if existing is None and events[0]['result'] != 'created':
-            raise _error('PARTNER_ACCEPTED_EVENT_MERGE_REQUIRES_OWNER')
+        if request._operation_ref is None and existing is None:
+            foreign = conn.execute(
+                'SELECT 1 FROM mcp_partner_event WHERE event_id=? AND '
+                '(tenant_id<>? OR organization_id<>?) LIMIT 1',
+                (event_id, grant.tenant_id, grant.organization_id),
+            ).fetchone()
+            if foreign is not None:
+                raise _error('PARTNER_ACCEPTED_EVENT_OWNERSHIP_CONFLICT')
+
+        authority_status = None
+        if request._operation_ref is not None:
+            row = conn.execute(
+                'SELECT domain_receipt_json,organizer_comment FROM event_change_log '
+                'WHERE operation_ref=? AND action_digest=? AND actor_subject=? '
+                'AND actor_client_id=? AND actor_audience=?',
+                (
+                    request._operation_ref, request.action_digest, request.actor_subject,
+                    request.actor_client_id, request.actor_audience,
+                ),
+            ).fetchone()
+            if row is None:
+                raise _error('PARTNER_ACCEPTED_EVENT_RECEIPT_MISSING')
+            try:
+                domain_receipt = json.loads(row[0]) if row[0] else {}
+            except (TypeError, ValueError):
+                domain_receipt = {}
+            authority_status = (
+                domain_receipt.get('partner_authority_status')
+                if isinstance(domain_receipt, Mapping)
+                else None
+            )
+            if authority_status is None and row[1]:
+                try:
+                    audit = json.loads(row[1])
+                except (TypeError, ValueError):
+                    audit = None
+                if (
+                    isinstance(audit, Mapping)
+                    and audit.get('schema') == 'partner-event-review-v1'
+                    and audit.get('decision') == 'approve'
+                    and audit.get('action_digest') == request.action_digest
+                ):
+                    authority_status = 'owner_override'
+            if authority_status not in {'matched', 'owner_override', 'portfolio_owned', None}:
+                raise _error('PARTNER_ACCEPTED_EVENT_AUTHORITY_INVALID')
+
+        if existing is None:
+            if events[0]['result'] == 'merged_or_replay':
+                if authority_status not in {'matched', 'owner_override'}:
+                    raise _error('PARTNER_ACCEPTED_EVENT_MERGE_REQUIRES_AUTHORITY')
+            elif request.partner_authority_kinds and authority_status not in {'matched', 'owner_override'}:
+                # Legacy pre-authority created receipts remain recoverable when
+                # partner_authority_kinds is absent; new gated requests require proof.
+                raise _error('PARTNER_ACCEPTED_EVENT_AUTHORITY_REQUIRED')
         cursor = conn.execute(
             'INSERT OR IGNORE INTO mcp_partner_event '
             '(principal_id,tenant_id,organization_id,event_id,created_at) VALUES(?,?,?,?,?)',

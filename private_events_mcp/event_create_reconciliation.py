@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 
 _FIELDS = {'schema','operation_ref','action_digest','actor_subject','actor_client_id','actor_audience',
            'event_id','effect','candidate_key','occurrence_key','candidate_state_id','attempt_no','source_fingerprint'}
+_OPTIONAL_FIELDS = {
+    'partner_policy_revision', 'partner_authority_kinds',
+    'partner_authority_status', 'partner_authority_id', 'partner_authority_kind',
+}
 
 
 def restore_request(row):
@@ -24,7 +28,8 @@ def restore_request(row):
         idempotency_key='',text_policy=data['text_policy'],actor_subject=row['actor_subject'],
         actor_client_id=row['actor_client_id'],actor_audience=row['actor_audience'],
         _persisted_idempotency_hash=row['idempotency_hash'],media=parse_event_images(data.get('media')),
-        partner_policy_revision=data.get('partner_policy_revision'))
+        partner_policy_revision=data.get('partner_policy_revision'),
+        partner_authority_kinds=tuple(data.get('partner_authority_kinds') or ()))
     if request.action_digest != row['action_digest']:
         raise ValueError('request digest mismatch')
     return request
@@ -35,7 +40,7 @@ def verified_receipt(row, request):
     if not isinstance(raw,str) or len(raw)>8192:
         raise ValueError('missing bounded domain receipt')
     receipt=json.loads(raw)
-    if not isinstance(receipt,dict) or set(receipt)-(_FIELDS|{'partner_policy_revision'}) or _FIELDS-set(receipt):
+    if not isinstance(receipt,dict) or set(receipt)-(_FIELDS|_OPTIONAL_FIELDS) or _FIELDS-set(receipt):
         raise ValueError('invalid domain receipt schema')
     if receipt['schema']!='event-operation-domain-receipt-v1':
         raise ValueError('unsupported domain receipt')
@@ -47,6 +52,20 @@ def verified_receipt(row, request):
         raise ValueError('missing partner revision')
     if receipt.get('partner_policy_revision') != request.partner_policy_revision:
         raise ValueError('receipt policy mismatch')
+    if tuple(receipt.get('partner_authority_kinds') or ()) != request.partner_authority_kinds:
+        raise ValueError('receipt authority context mismatch')
+    authority_status = receipt.get('partner_authority_status')
+    if authority_status is not None and authority_status not in {'matched', 'owner_override', 'portfolio_owned'}:
+        raise ValueError('invalid authority receipt status')
+    authority_id = receipt.get('partner_authority_id')
+    if authority_id is not None and (not isinstance(authority_id, str) or not re.fullmatch(r'auth_[a-f0-9]{24}', authority_id)):
+        raise ValueError('invalid authority receipt id')
+    authority_kind = receipt.get('partner_authority_kind')
+    if authority_kind is not None and authority_kind not in {
+        'venue_operator','organizer','festival_operator','represented_person',
+        'represented_collective','series_operator','programme_operator',
+    }:
+        raise ValueError('invalid authority receipt kind')
     for key in ('event_id','candidate_state_id','attempt_no'):
         value=receipt[key]
         if isinstance(value,bool) or not isinstance(value,int) or not 1<=value<=2**63-1:

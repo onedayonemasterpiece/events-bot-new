@@ -26,6 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from db import Database
 from event_operation_receipts import (
     EventOperationReceiptError,
+    PartnerAuthorityReviewRequired,
     guard_event_operation_context,
     record_event_operation_receipt,
     validate_event_operation_context,
@@ -624,6 +625,7 @@ class EventCandidate:
     # Internal operation provenance only; identity/fingerprint/prompt serializers
     # use explicit fields and never consume this context. Persisted for attempts.
     event_operation_context: dict[str, Any] | None = field(default=None, repr=False)
+    partner_authority_evaluation: dict[str, Any] | None = field(default=None, repr=False)
     # Internal retry-state instruction. It is set only after an existing
     # identity decision classified the candidate as distinct or uncertainty
     # exhausted its bounded attempts.
@@ -10756,10 +10758,17 @@ async def _llm_extract_candidate_facts(
     - Facts are used for operator source log and for global de-duplication between sources.
     - Do not include anchor fields (date/time/location) here: they are logged deterministically.
     """
+    operation_context = candidate.event_operation_context or {}
+    authority_kinds = operation_context.get('partner_authority_kinds') or []
+    partner_organizer_evidence = bool(
+        str(operation_context.get('actor_subject') or '').startswith('partner:')
+        and 'organizer' in authority_kinds
+    )
     if SMART_UPDATE_LLM_DISABLED:
         return []
-    if candidate.source_type in ("bot", "manual"):
+    if candidate.source_type in ("bot", "manual") and not partner_organizer_evidence:
         return []
+    rich_facts_mode = SMART_UPDATE_G4_SPLIT_CREATE or partner_organizer_evidence
 
     payload = {
         "today": date.today().isoformat(),
@@ -10781,7 +10790,7 @@ async def _llm_extract_candidate_facts(
             (text_for_facts or "").strip()
             or (candidate.occurrence_scope_text or "").strip()
             or (_strip_promo_lines(candidate.source_text) or candidate.source_text),
-            7000 if SMART_UPDATE_G4_SPLIT_CREATE else 2800,
+            7000 if rich_facts_mode else 2800,
         ),
         "raw_excerpt": _clip(_strip_promo_lines(candidate.raw_excerpt) or candidate.raw_excerpt, 800),
         # Poster OCR is first-class evidence for age marks.  Keep both the
@@ -10801,7 +10810,7 @@ async def _llm_extract_candidate_facts(
             if (p.ocr_title or "").strip() or (p.ocr_text or "").strip()
         ][:8],
     }
-    if SMART_UPDATE_G4_SPLIT_CREATE:
+    if rich_facts_mode:
         schema = _g4_rich_facts_schema()
         prompt = (
             "Ты извлекаешь ПОЛНЫЙ набор фактов о КОНКРЕТНОМ событии для Smart Update G4.\n"
@@ -10915,7 +10924,7 @@ async def _llm_extract_candidate_facts(
     if isinstance(data, dict):
         age_payload = data.get("age_decision")
         candidate.age_semantic_decision = age_payload if isinstance(age_payload, dict) else None
-        if SMART_UPDATE_G4_SPLIT_CREATE:
+        if rich_facts_mode:
             source_corpus = "\n\n".join(
                 str(value or "").strip()
                 for value in (
@@ -17294,6 +17303,7 @@ async def smart_event_update(
             outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
             reason="candidate_state_unavailable", retry_reason=RetryReason.CANDIDATE_STATE_UNAVAILABLE,
         )
+    authority_review_error: PartnerAuthorityReviewRequired | None = None
     async with _SMART_UPDATE_LOCK:
         try:
             if intent is SmartUpdateIntent.ATTACH_CONTEXT:
@@ -17306,9 +17316,19 @@ async def smart_event_update(
                     schedule_tasks=schedule_tasks,
                     schedule_kwargs=schedule_kwargs,
                 )
+        except PartnerAuthorityReviewRequired as exc:
+            # This is a proven no-write product-policy outcome. Close the Smart
+            # Update attempt/lease normally, then return control to the partner
+            # operation layer so the same frozen intent can await owner review.
+            authority_review_error = exc
+            result = SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                reason=ProductExclusionReason.PARTNER_AUTHORITY_REVIEW_REQUIRED.value,
+                product_exclusion_reason=ProductExclusionReason.PARTNER_AUTHORITY_REVIEW_REQUIRED,
+            )
         except EventOperationReceiptError:
-            # The domain transaction has been rolled back. Do not turn a
-            # provenance failure into a semantic result or retry another actor.
+            # Other receipt/provenance failures may follow an uncertain domain
+            # boundary, so retain the existing fail-closed behavior.
             raise
         except SourceBindingConflict as exc:
             result = SmartUpdateResult(
@@ -17403,6 +17423,8 @@ async def smart_event_update(
             retry_reason=RetryReason.CANDIDATE_STATE_ACK_FAILED,
             attempt=receipt.attempt,
         )
+    if authority_review_error is not None:
+        raise authority_review_error
     return result
 
 
@@ -20082,6 +20104,15 @@ async def _smart_event_update_impl(
         candidate,
         match_event,
     )
+    operation_context = candidate.event_operation_context or {}
+    authority_kinds = operation_context.get('partner_authority_kinds') or []
+    if (
+        str(operation_context.get('actor_subject') or '').startswith('partner:')
+        and any(kind in {'represented_person', 'represented_collective'} for kind in authority_kinds)
+    ):
+        candidate.collection_adjudication_reasons = sorted(
+            set(candidate.collection_adjudication_reasons) | {'people'}
+        )
     if candidate.collection_adjudication_reasons and candidate.collection_semantic_decisions is None:
         cached_payload = collection_adjudication_cached_payload(
             match_event.collection_decisions if match_event is not None else None,

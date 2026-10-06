@@ -12,6 +12,7 @@ import re
 import secrets
 import sqlite3
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -31,6 +32,18 @@ PARTNER_ACTIONS = frozenset({
     'promo_resume', 'promo_archive', 'promo_update',
 })
 REVIEW_ALWAYS = frozenset({'event_reschedule', 'event_postpone', 'event_cancel'})
+PARTNER_AUTHORITY_KIND_TO_SUBJECT = {
+    'venue_operator': 'venue',
+    'organizer': 'organization',
+    'festival_operator': 'festival',
+    'represented_person': 'person',
+    'represented_collective': 'collective',
+    'series_operator': 'series',
+    'programme_operator': 'programme',
+}
+PARTNER_AUTHORITY_KINDS = frozenset(PARTNER_AUTHORITY_KIND_TO_SUBJECT)
+PARTNER_AUTHORITY_SUBJECT_TYPES = frozenset(PARTNER_AUTHORITY_KIND_TO_SUBJECT.values())
+PARTNER_PEOPLE_AUTHORITY_KINDS = frozenset({'represented_person', 'represented_collective'})
 _ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$')
 _SUBJECT = re.compile(r'^partner:([a-f0-9]{32}):([1-9][0-9]*)$')
 
@@ -71,6 +84,22 @@ CREATE TABLE IF NOT EXISTS mcp_partner_event (
 );
 CREATE INDEX IF NOT EXISTS ix_mcp_partner_event_tenant
     ON mcp_partner_event(tenant_id, event_id);
+CREATE TABLE IF NOT EXISTS mcp_partner_authority (
+    authority_id TEXT PRIMARY KEY,
+    principal_id TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL,
+    authority_kind TEXT NOT NULL,
+    subject_type TEXT NOT NULL,
+    subject_key TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    aliases_json TEXT NOT NULL,
+    constraints_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(principal_id, authority_kind, subject_type, subject_key)
+);
+CREATE INDEX IF NOT EXISTS ix_mcp_partner_authority_owner
+    ON mcp_partner_authority(principal_id, tenant_id, organization_id);
 """
 
 
@@ -98,6 +127,87 @@ def _set(value: Any, allowed: frozenset[str], field: str) -> list[str]:
     if not isinstance(value, list) or any(not isinstance(x, str) or x not in allowed for x in value):
         raise _error('INVALID_ARGUMENTS', f'Invalid {field}')
     return sorted(set(value))
+
+
+def _authority_text(value: Any, field: str, *, maximum: int = 160) -> str:
+    if not isinstance(value, str):
+        raise _error('INVALID_ARGUMENTS', f'Invalid {field}')
+    clean = value.strip()
+    if not 1 <= len(clean) <= maximum or any(ord(ch) < 0x20 for ch in clean):
+        raise _error('INVALID_ARGUMENTS', f'Invalid {field}')
+    return clean
+
+
+def normalize_authority_name(value: Any) -> str:
+    """Conservative exact-name normalization; never fuzzy/substring authority."""
+    if not isinstance(value, str):
+        return ''
+    clean = unicodedata.normalize('NFKC', value).casefold().replace('ё', 'е')
+    clean = re.sub(r'[\W_]+', ' ', clean, flags=re.UNICODE)
+    return re.sub(r'\s+', ' ', clean).strip()
+
+
+def validate_authorities(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > 100:
+        raise _error('INVALID_ARGUMENTS', 'Invalid authorities')
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for raw in value:
+        if not isinstance(raw, Mapping):
+            raise _error('INVALID_ARGUMENTS', 'Invalid authority')
+        allowed = {
+            'authority_kind', 'subject_type', 'subject_key', 'display_name',
+            'aliases', 'cities',
+        }
+        if set(raw) - allowed:
+            raise _error('INVALID_ARGUMENTS', 'Unknown authority field')
+        kind = raw.get('authority_kind')
+        subject_type = raw.get('subject_type')
+        if kind not in PARTNER_AUTHORITY_KINDS:
+            raise _error('INVALID_ARGUMENTS', 'Invalid authority_kind')
+        if subject_type != PARTNER_AUTHORITY_KIND_TO_SUBJECT[kind]:
+            raise _error('INVALID_ARGUMENTS', 'authority subject_type does not match authority_kind')
+        subject_key = _identifier(raw.get('subject_key'), 'subject_key')
+        display_name = _authority_text(raw.get('display_name'), 'display_name')
+        aliases_raw = raw.get('aliases', [])
+        if not isinstance(aliases_raw, list) or len(aliases_raw) > 32:
+            raise _error('INVALID_ARGUMENTS', 'Invalid authority aliases')
+        aliases: list[str] = []
+        normalized_aliases: set[str] = set()
+        for item in [display_name, *aliases_raw]:
+            alias = _authority_text(item, 'authority alias')
+            normalized = normalize_authority_name(alias)
+            if not normalized:
+                raise _error('INVALID_ARGUMENTS', 'Invalid authority alias')
+            if normalized not in normalized_aliases:
+                normalized_aliases.add(normalized)
+                aliases.append(alias)
+        cities_raw = raw.get('cities', [])
+        if not isinstance(cities_raw, list) or len(cities_raw) > 20:
+            raise _error('INVALID_ARGUMENTS', 'Invalid authority cities')
+        cities: list[str] = []
+        normalized_cities: set[str] = set()
+        for item in cities_raw:
+            city = _authority_text(item, 'authority city', maximum=120)
+            normalized = normalize_authority_name(city)
+            if normalized and normalized not in normalized_cities:
+                normalized_cities.add(normalized)
+                cities.append(city)
+        key = (kind, subject_type, subject_key)
+        if key in seen:
+            raise _error('INVALID_ARGUMENTS', 'Duplicate authority binding')
+        seen.add(key)
+        result.append({
+            'authority_kind': kind,
+            'subject_type': subject_type,
+            'subject_key': subject_key,
+            'display_name': display_name,
+            'aliases': aliases,
+            'cities': cities,
+        })
+    return result
 
 
 def validate_policy(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -285,7 +395,141 @@ class PartnerAccessStore:
             if own:
                 conn.close()
 
-    def create(self, *, tenant_id: str, organization_id: str, display_name: str, policy: Mapping[str, Any], redirect_uris: list[str], expires_at: int, event_ids: list[int] | None = None) -> dict[str, Any]:
+    def authorities(self, grant: PartnerGrant, *, conn=None) -> list[dict[str, Any]]:
+        own = conn is None
+        conn = conn or self._connect()
+        try:
+            rows = conn.execute(
+                'SELECT authority_id,authority_kind,subject_type,subject_key,display_name,aliases_json,constraints_json '
+                'FROM mcp_partner_authority WHERE principal_id=? AND tenant_id=? AND organization_id=? '
+                'ORDER BY authority_kind,subject_type,subject_key',
+                (grant.principal_id, grant.tenant_id, grant.organization_id),
+            ).fetchall()
+            result = []
+            for row in rows:
+                aliases = json.loads(row['aliases_json']) if isinstance(row['aliases_json'], str) else []
+                constraints = json.loads(row['constraints_json']) if isinstance(row['constraints_json'], str) else {}
+                result.append({
+                    'authority_id': row['authority_id'],
+                    'authority_kind': row['authority_kind'],
+                    'subject_type': row['subject_type'],
+                    'subject_key': row['subject_key'],
+                    'display_name': row['display_name'],
+                    'aliases': aliases if isinstance(aliases, list) else [],
+                    'cities': constraints.get('cities', []) if isinstance(constraints, dict) else [],
+                })
+            return result
+        finally:
+            if own:
+                conn.close()
+
+    def authority_kinds(self, grant: PartnerGrant, *, conn=None) -> tuple[str, ...]:
+        return tuple(sorted({item['authority_kind'] for item in self.authorities(grant, conn=conn)}))
+
+    def _set_authorities(self, conn, grant: PartnerGrant, authorities: Any) -> None:
+        items = validate_authorities(authorities)
+        conn.execute('DELETE FROM mcp_partner_authority WHERE principal_id=?', (grant.principal_id,))
+        now = int(time.time())
+        for item in items:
+            raw_id = f"{grant.principal_id}:{item['authority_kind']}:{item['subject_type']}:{item['subject_key']}"
+            authority_id = 'auth_' + hashlib.sha256(raw_id.encode('utf-8')).hexdigest()[:24]
+            conn.execute(
+                'INSERT INTO mcp_partner_authority(authority_id,principal_id,tenant_id,organization_id,authority_kind,subject_type,subject_key,display_name,aliases_json,constraints_json,created_at) '
+                'VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                (
+                    authority_id, grant.principal_id, grant.tenant_id, grant.organization_id,
+                    item['authority_kind'], item['subject_type'], item['subject_key'],
+                    item['display_name'], _canonical(item['aliases']),
+                    _canonical({'cities': item['cities']}), now,
+                ),
+            )
+
+    def evaluate_create_candidate(self, grant: PartnerGrant, candidate: Any, *, conn=None) -> dict[str, Any]:
+        authorities = self.authorities(grant, conn=conn)
+        if not authorities:
+            return {'status': 'review_required', 'reason': 'partner_authority_not_configured', 'matched_authority': None}
+
+        venue_name = normalize_authority_name(getattr(candidate, 'location_name', None))
+        city = normalize_authority_name(getattr(candidate, 'city', None))
+        organizers = {
+            normalize_authority_name(value)
+            for value in (getattr(candidate, 'organizer_names', None) or [])
+            if normalize_authority_name(value)
+        }
+        festivals = {
+            normalize_authority_name(value)
+            for value in (
+                getattr(candidate, 'festival', None),
+                getattr(candidate, 'festival_full', None),
+            )
+            if normalize_authority_name(value)
+        }
+        series = normalize_authority_name(getattr(candidate, 'festival_series', None))
+        people: set[str] = set()
+        decisions = getattr(candidate, 'collection_semantic_decisions', None)
+        if isinstance(decisions, Mapping):
+            for item in decisions.get('people_appearances') or []:
+                if not isinstance(item, Mapping) or item.get('appearance') != 'confirmed':
+                    continue
+                if item.get('role') not in {'performer', 'speaker', 'author', 'host'}:
+                    continue
+                name = normalize_authority_name(item.get('name'))
+                if name:
+                    people.add(name)
+
+        reasons: list[str] = []
+        for authority in authorities:
+            aliases = {
+                normalize_authority_name(value)
+                for value in authority.get('aliases', [])
+                if normalize_authority_name(value)
+            }
+            kind = authority['authority_kind']
+            matched = False
+            if kind == 'venue_operator':
+                allowed_cities = {
+                    normalize_authority_name(value)
+                    for value in authority.get('cities', [])
+                    if normalize_authority_name(value)
+                }
+                matched = bool(
+                    venue_name and venue_name in aliases
+                    and (not allowed_cities or city in allowed_cities)
+                )
+            elif kind == 'organizer':
+                matched = bool(aliases & organizers)
+            elif kind == 'festival_operator':
+                matched = bool(aliases & festivals)
+            elif kind in PARTNER_PEOPLE_AUTHORITY_KINDS:
+                matched = bool(aliases & people)
+            elif kind == 'series_operator':
+                matched = bool(series and series in aliases)
+            elif kind == 'programme_operator':
+                reasons.append('programme_scope_requires_structured_evidence')
+            if matched:
+                return {
+                    'status': 'matched',
+                    'reason': 'partner_authority_matched',
+                    'matched_authority': {
+                        'authority_id': authority['authority_id'],
+                        'authority_kind': authority['authority_kind'],
+                        'subject_type': authority['subject_type'],
+                        'subject_key': authority['subject_key'],
+                        'display_name': authority['display_name'],
+                    },
+                }
+
+        if any(a['authority_kind'] == 'organizer' for a in authorities) and not organizers:
+            reasons.append('organizer_evidence_missing')
+        if not people and any(a['authority_kind'] in PARTNER_PEOPLE_AUTHORITY_KINDS for a in authorities):
+            reasons.append('people_evidence_missing')
+        return {
+            'status': 'review_required',
+            'reason': sorted(set(reasons))[0] if reasons else 'partner_authority_no_match',
+            'matched_authority': None,
+        }
+
+    def create(self, *, tenant_id: str, organization_id: str, display_name: str, policy: Mapping[str, Any], redirect_uris: list[str], expires_at: int, event_ids: list[int] | None = None, authorities: list[Mapping[str, Any]] | None = None) -> dict[str, Any]:
         tenant_id = _identifier(tenant_id, 'tenant_id')
         organization_id = _identifier(organization_id, 'organization_id')
         if not isinstance(display_name, str) or not 1 <= len(display_name.strip()) <= 160:
@@ -301,8 +545,11 @@ class PartnerAccessStore:
             conn.execute('BEGIN IMMEDIATE')
             conn.execute('INSERT INTO mcp_partner VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (principal, tenant_id, organization_id, display_name.strip(), 'active', 1, _canonical(policy['scopes']), _canonical(policy['actions']), _canonical(policy['auto_approve']), _canonical(policy['limits']), now, now))
             conn.execute('INSERT INTO mcp_partner_credential VALUES (?,?,?,?,?,?,?)', (client_id, principal, 1, self._hash(secret), _canonical(redirects), expires_at, now))
-            self._set_portfolio(conn, self.get(principal, conn=conn), event_ids or [])
-            result = self.get(principal, conn=conn).public()
+            grant = self.get(principal, conn=conn)
+            self._set_portfolio(conn, grant, event_ids or [])
+            self._set_authorities(conn, grant, authorities or [])
+            result = grant.public()
+            result['authorities'] = self.authorities(grant, conn=conn)
         return {**result, 'login_secret': secret, 'secret_display': 'once', 'resource': self.resource, 'telegram_required': False}
 
     def _set_portfolio(self, conn, grant: PartnerGrant, event_ids: list[int]) -> None:
@@ -315,8 +562,8 @@ class PartnerAccessStore:
         conn.execute('DELETE FROM mcp_partner_event WHERE principal_id=?', (grant.principal_id,))
         conn.executemany('INSERT INTO mcp_partner_event VALUES (?,?,?,?,?)', [(grant.principal_id, grant.tenant_id, grant.organization_id, event_id, int(time.time())) for event_id in sorted(set(event_ids))])
 
-    def change(self, principal_id: str, *, action: str, expected_revision: int, policy=None, event_ids=None, expires_at=None) -> dict[str, Any]:
-        if action not in {'suspend', 'resume', 'revoke', 'rotate', 'policy', 'portfolio'}:
+    def change(self, principal_id: str, *, action: str, expected_revision: int, policy=None, event_ids=None, authorities=None, expires_at=None) -> dict[str, Any]:
+        if action not in {'suspend', 'resume', 'revoke', 'rotate', 'policy', 'portfolio', 'authorities'}:
             raise _error('INVALID_ARGUMENTS', 'Unknown partner action')
         _integer(expected_revision, 1, 2**63 - 1, 'expected_revision')
         secret = None
@@ -332,6 +579,10 @@ class PartnerAccessStore:
                 conn.execute('UPDATE mcp_partner SET scopes_json=?,actions_json=?,auto_approve_json=?,limits_json=? WHERE principal_id=?', (_canonical(p['scopes']), _canonical(p['actions']), _canonical(p['auto_approve']), _canonical(p['limits']), principal_id))
             elif action == 'portfolio':
                 self._set_portfolio(conn, grant, event_ids)
+            elif action == 'authorities':
+                if authorities is None:
+                    raise _error('INVALID_ARGUMENTS', 'authorities are required')
+                self._set_authorities(conn, grant, authorities)
             elif action in {'suspend', 'revoke', 'resume'}:
                 status = {'suspend': 'suspended', 'revoke': 'revoked', 'resume': 'active'}[action]
                 conn.execute('UPDATE mcp_partner SET status=? WHERE principal_id=?', (status, principal_id))
@@ -340,7 +591,9 @@ class PartnerAccessStore:
                 new_expiry = grant.expires_at if expires_at is None else _integer(expires_at, int(time.time()) + 60, int(time.time()) + 366 * 86400, 'expires_at')
                 conn.execute('UPDATE mcp_partner_credential SET credential_epoch=credential_epoch+1,secret_hash=COALESCE(?,secret_hash),expires_at=?,updated_at=? WHERE principal_id=?', (self._hash(secret) if secret else None, new_expiry, int(time.time()), principal_id))
             conn.execute('UPDATE mcp_partner SET policy_revision=policy_revision+1,updated_at=? WHERE principal_id=?', (int(time.time()), principal_id))
-            result = self.get(principal_id, conn=conn).public()
+            current = self.get(principal_id, conn=conn)
+            result = current.public()
+            result['authorities'] = self.authorities(current, conn=conn)
         if secret:
             result.update(login_secret=secret, secret_display='once')
         return result
