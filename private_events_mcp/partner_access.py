@@ -464,7 +464,14 @@ class PartnerAccessStore:
             )
             if normalize_authority_name(value)
         }
-        series = normalize_authority_name(getattr(candidate, 'festival_series', None))
+        series = {
+            normalize_authority_name(value)
+            for value in (
+                getattr(candidate, 'festival_series', None),
+                *(getattr(candidate, 'authority_series_names', None) or []),
+            )
+            if normalize_authority_name(value)
+        }
         people: set[str] = set()
         decisions = getattr(candidate, 'collection_semantic_decisions', None)
         if isinstance(decisions, Mapping):
@@ -503,7 +510,7 @@ class PartnerAccessStore:
             elif kind in PARTNER_PEOPLE_AUTHORITY_KINDS:
                 matched = bool(aliases & people)
             elif kind == 'series_operator':
-                matched = bool(series and series in aliases)
+                matched = bool(aliases & series)
             elif kind == 'programme_operator':
                 reasons.append('programme_scope_requires_structured_evidence')
             if matched:
@@ -523,6 +530,8 @@ class PartnerAccessStore:
             reasons.append('organizer_evidence_missing')
         if not people and any(a['authority_kind'] in PARTNER_PEOPLE_AUTHORITY_KINDS for a in authorities):
             reasons.append('people_evidence_missing')
+        if not series and any(a['authority_kind'] == 'series_operator' for a in authorities):
+            reasons.append('series_evidence_missing')
         return {
             'status': 'review_required',
             'reason': sorted(set(reasons))[0] if reasons else 'partner_authority_no_match',

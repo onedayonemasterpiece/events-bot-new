@@ -703,6 +703,9 @@ class EventCandidate:
     # or an explicit curated source binding; the generic publisher name is not
     # organizer evidence.
     organizer_names: list[str] = field(default_factory=list)
+    # Partner-only grounded evidence for explicit named series/project/cycle
+    # membership. This is never an identity field or a client-supplied grant.
+    authority_series_names: list[str] = field(default_factory=list)
     # Ephemeral result piggybacked on an already-paid facts/create call.
     age_semantic_decision: dict[str, Any] | None = None
     # High-recall routing signals only. They are never accepted as evidence by
@@ -859,6 +862,120 @@ COLLECTION_ADJUDICATION_JSON_SCHEMA: dict[str, Any] = {
     ],
     "additionalProperties": False,
 }
+
+
+PARTNER_SERIES_AUTHORITY_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "series_memberships": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "maxLength": 160},
+                    "evidence_quote": {"type": "string", "maxLength": 500},
+                },
+                "required": ["name", "evidence_quote"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["series_memberships"],
+    "additionalProperties": False,
+}
+
+
+def _normalize_authority_evidence_name(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    clean = unicodedata.normalize("NFKC", value).casefold().replace("ё", "е")
+    clean = re.sub(r"[\W_]+", " ", clean, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", clean).strip()
+
+
+def validate_partner_series_authority_output(
+    payload: Any, *, source_corpus: str
+) -> list[str]:
+    if not isinstance(payload, Mapping) or set(payload) != {"series_memberships"}:
+        return []
+    raw = payload.get("series_memberships")
+    if not isinstance(raw, list) or len(raw) > 8:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, Mapping) or set(item) != {"name", "evidence_quote"}:
+            continue
+        name = str(item.get("name") or "").strip()
+        quote = str(item.get("evidence_quote") or "").strip()
+        if not name or len(name) > 160 or not quote or len(quote) > 500:
+            continue
+        if quote not in source_corpus:
+            continue
+        name_norm = _normalize_authority_evidence_name(name)
+        quote_norm = _normalize_authority_evidence_name(quote)
+        if not name_norm or name_norm not in quote_norm:
+            continue
+        if name_norm in seen:
+            continue
+        seen.add(name_norm)
+        out.append(name)
+    return out
+
+
+async def adjudicate_partner_series_authority(candidate: EventCandidate) -> list[str]:
+    """Extract explicit series/project/cycle membership without seeing grants.
+
+    This is security evidence, not public copy. Provider/schema/grounding failure
+    is an abstention: the authority gate will route the operation to owner review.
+    """
+    if candidate.authority_series_names:
+        return list(candidate.authority_series_names)
+    if SMART_UPDATE_LLM_DISABLED:
+        return []
+    corpus = _collection_source_corpus(candidate)
+    if not corpus:
+        return []
+    request = {
+        "event": {
+            "title": candidate.title,
+            "date": candidate.date,
+            "time": candidate.time,
+            "location_name": candidate.location_name,
+        },
+        "source_corpus": corpus,
+    }
+    prompt = (
+        "Проверь только явную принадлежность КОНКРЕТНОГО события к именованной серии, "
+        "проекту или циклу. Верни JSON строго по схеме. Не получай список разрешённых "
+        "серий и не угадывай его. В series_memberships добавляй только полное название, "
+        "если источник прямо говорит, что это событие проходит 'в рамках проекта', "
+        "'в цикле', 'серия' или эквивалентно явно связывает событие с именованным "
+        "проектом/циклом. evidence_quote должна быть точной непрерывной цитатой из "
+        "source_corpus и содержать полное returned name. Не превращай площадку, "
+        "организатора, фестиваль, бренд или просто тематическое упоминание в series. "
+        "Если явного членства нет — верни пустой список.\n\n"
+        f"Данные:\n{json.dumps(request, ensure_ascii=False)}"
+    )
+    try:
+        raw = await _ask_gemma_json(
+            prompt,
+            PARTNER_SERIES_AUTHORITY_JSON_SCHEMA,
+            max_tokens=450,
+            label="partner_series_authority",
+        )
+    except Exception:
+        logger.warning(
+            "smart_update: partner series authority provider failed source_type=%s source_url=%s",
+            candidate.source_type,
+            candidate.source_url,
+            exc_info=True,
+        )
+        return []
+    names = validate_partner_series_authority_output(raw, source_corpus=corpus)
+    candidate.authority_series_names = names
+    return list(names)
 
 
 def _collection_source_corpus(candidate: EventCandidate) -> str:
@@ -20106,13 +20223,30 @@ async def _smart_event_update_impl(
     )
     operation_context = candidate.event_operation_context or {}
     authority_kinds = operation_context.get('partner_authority_kinds') or []
+    partner_authority_context = str(
+        operation_context.get('actor_subject') or ''
+    ).startswith('partner:')
     if (
-        str(operation_context.get('actor_subject') or '').startswith('partner:')
+        partner_authority_context
         and any(kind in {'represented_person', 'represented_collective'} for kind in authority_kinds)
     ):
         candidate.collection_adjudication_reasons = sorted(
             set(candidate.collection_adjudication_reasons) | {'people'}
         )
+    if (
+        partner_authority_context
+        and 'series_operator' in authority_kinds
+        and not candidate.authority_series_names
+    ):
+        try:
+            await adjudicate_partner_series_authority(candidate)
+        except Exception:
+            logger.warning(
+                "smart_update: partner series authority adjudication failed source_type=%s source_url=%s",
+                candidate.source_type,
+                candidate.source_url,
+                exc_info=True,
+            )
     if candidate.collection_adjudication_reasons and candidate.collection_semantic_decisions is None:
         cached_payload = collection_adjudication_cached_payload(
             match_event.collection_decisions if match_event is not None else None,

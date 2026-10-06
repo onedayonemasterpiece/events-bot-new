@@ -201,7 +201,8 @@ def test_authority_candidate_matching_is_exact_and_role_specific(store):
         base = dict(
             location_name='Чужой зал', city='Калининград',
             organizer_names=[], festival=None, festival_full=None,
-            festival_series=None, collection_semantic_decisions=None,
+            festival_series=None, authority_series_names=[],
+            collection_semantic_decisions=None,
         )
         base.update(values)
         return SimpleNamespace(**base)
@@ -216,7 +217,7 @@ def test_authority_candidate_matching_is_exact_and_role_specific(store):
         grant, candidate(festival='Кантата')
     )['matched_authority']['authority_kind'] == 'festival_operator'
     assert store.evaluate_create_candidate(
-        grant, candidate(festival_series='Городские лекции')
+        grant, candidate(authority_series_names=['Городские лекции'])
     )['matched_authority']['authority_kind'] == 'series_operator'
     people = {'people_appearances': [
         {'name':'Иван Иванов','role':'speaker','appearance':'confirmed'},
@@ -240,7 +241,7 @@ def test_authority_candidate_matching_is_exact_and_role_specific(store):
     )['status'] == 'review_required'
     assert store.evaluate_create_candidate(
         grant, candidate(collection_semantic_decisions={'people_appearances':[
-            {'name':'Иван Иванов','role':'speaker','appearance':'mentioned_only'},
+            {'name':'Иван Иванов','role':'speaker','appearance':'mentioned'},
         ]})
     )['status'] == 'review_required'
     # Programme authority is deliberately review-only until programme evidence is structured.
