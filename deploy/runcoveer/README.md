@@ -10,11 +10,11 @@ CDN, Supabase, Kaggle and other managed dependencies stay external.
 ## Build and restore
 
 Events current production baseline is
-`e679853bc328aece113163e30667cfd4bbeab70a`, packaged as immutable image
-`runcoveer/events:e679853bc`. Build Events upgrades from an exact Git archive
+`c344d63d992b64aa0722230bbf7080d05bc8e43c`, packaged as immutable image
+`runcoveer/events:c344d63d`. Build Events upgrades from an exact Git archive
 in an isolated release build context, supply the exact
 `ai_resource_control-0.1.4-py3-none-any.whl` in `vendor-private`, then build:
-`sudo docker build --build-arg STATIC_SITE_IMAGE_REPO_SHA=e679853bc328aece113163e30667cfd4bbeab70a -t runcoveer/events:e679853bc .`.
+`sudo docker build --build-arg STATIC_SITE_IMAGE_REPO_SHA=c344d63d992b64aa0722230bbf7080d05bc8e43c -t runcoveer/events:c344d63d .`.
 Do not overwrite `/opt/runcoveer/events/source` during an Events-only upgrade:
 Kotopogoda mounts `runtime_logging.py` from that preserved source tree.
 Kotopogoda rebuilds its preserved deployed snapshot `951065bf` with
@@ -73,7 +73,7 @@ read-only product routes. Check external callers using old Fly URLs separately.
 
 `deploy.sh` copies configuration and runs Compose; it does not restore or replace
 data. The checked-in Compose file pins the verified Events image
-`runcoveer/events:e679853bc`; an application upgrade must build/tag the next
+`runcoveer/events:c344d63d`; an application upgrade must build/tag the next
 immutable image and update that pin before repeat deploy. Docker and Caddy start
 with systemd; containers use
 `unless-stopped`. Docker logs rotate at 50 MB x 10 per container with compression. Persistent
@@ -110,6 +110,31 @@ owner/Codex/partner OAuth metadata and unauthenticated rejection were verified.
 Owner event create/assets/typed operations and partner event/promo gates are
 enabled. No real partner grant or public provider mutation was used for
 acceptance, so isolated-provider live verification remains a separate gate.
+
+### Owner MCP scope-upgrade rollout, 2026-10-06
+
+PR #727 merged to canonical main
+`c344d63d992b64aa0722230bbf7080d05bc8e43c` and was deployed as
+`runcoveer/events:c344d63d` (image
+`sha256:0d52ec6b552ff494ffbc1feca5845c099c0c81db7fc2c350bea6a19d8036a7cf`).
+The exact image reported the same source SHA and the bounded owner discovery
+scope set `events:write, partners:manage, promo:read, promo:write`.
+
+Before cutover, production SQLite returned `PRAGMA quick_check=ok`.
+A separate `DEPLOY_PREFLIGHT=1` candidate boot returned HTTP 200 with
+`issues=[]` while webhook registration and schedulers stayed disabled.
+After the Events-only cutover, health returned `ready=true`, `db=ok`, all
+critical scheduler/task checks were `ok`, and the previous
+`runcoveer/events:e679853bc` image remained available for rollback.
+
+A live OAuth check issued a temporary read-only owner token. `tools/list`
+returned 44 tools and included owner event create/edit/reschedule/cancel,
+promo create/update/state and partner administration. Calling
+`event_create_prepare` with that read-only token returned the expected
+OAuth `insufficient_scope` challenge rather than executing a mutation.
+The partner protected-resource metadata also remained available. No event,
+partner grant, promo campaign or provider publication was created by this
+acceptance check.
 
 Install `backup.service`/`backup.timer` to `/etc/systemd/system/runcoveer-backup.*`
 and enable the timer. `sudo python3 /opt/runcoveer/deployment/backup.py` makes

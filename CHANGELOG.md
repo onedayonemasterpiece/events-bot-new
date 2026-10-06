@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Deployed owner MCP scope-upgrade discovery on RunCoveer from canonical main
+  `c344d63d992b64aa0722230bbf7080d05bc8e43c` as
+  `runcoveer/events:c344d63d`. Live OAuth acceptance confirmed 44 owner tools,
+  read-only mutation denial via `insufficient_scope`, preserved partner
+  metadata and healthy scheduler/DB state; `e679853bc` remains the rollback.
+
 - Deployed the Partner EventsBot MCP event/promo core on RunCoveer from
   canonical main `e679853bc328aece113163e30667cfd4bbeab70a` as immutable image
   `runcoveer/events:e679853bc`; staged owner/partner gates are enabled after
@@ -24,8 +30,8 @@
   consistent SQLite backups and rollback instructions.
 
 ### Fixed
-- Authenticated owner MCP discovery now advertises enabled owner event, promo,
-  partner-admin and social tools even when an existing OAuth token predates
+- Authenticated owner MCP discovery now advertises enabled owner event, promo
+  and partner-admin tools even when an existing OAuth token predates
   their scopes. Tool execution still authorizes against the token's actual
   scopes and returns `insufficient_scope` until OAuth scope upgrade; Codex
   remains read-only and the separate partner resource remains portfolio-scoped.

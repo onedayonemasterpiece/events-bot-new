@@ -1,10 +1,12 @@
 # Partner event operations
 
-Status as of 2026-10-05: the event/promo partner core is
+Status as of 2026-10-06: the event/promo partner core is
 **DEPLOYED_ACCEPTED** on RunCoveer from canonical main
-`e679853bc328aece113163e30667cfd4bbeab70a`. Owner event
+`c344d63d992b64aa0722230bbf7080d05bc8e43c`. Owner event
 create/assets/typed operations plus partner access/event-create and owner/partner
-promo gates are enabled. No real partner grant or public provider test
+promo gates are enabled. Owner OAuth discovery can now surface the enabled
+event/promo/partner-admin tools to older read-only owner tokens so the client
+can request a scope upgrade without granting mutation authority implicitly. No real partner grant or public provider test
 publication was performed during acceptance.
 
 There is one canonical EventsBot database, Smart Update, JobOutbox and promo
@@ -21,11 +23,11 @@ identity prerequisite.
 - **ISOLATED_LIVE_VERIFIED — NOT RUN.** Real provider work must be limited to
   explicitly approved private test destinations after an independent release
   review.
-- **DEPLOYED_ACCEPTED — PASS.** `runcoveer/events:e679853bc` is live from
-  canonical main. SQLite `quick_check`, additive schema, public health,
-  Telegram webhook origin, owner/Codex/partner OAuth metadata and
-  unauthenticated rejection passed after staged gate activation. Kotopogoda was
-  not recreated and the previous Events image remains the rollback.
+- **DEPLOYED_ACCEPTED — PASS.** `runcoveer/events:c344d63d` is live from
+  canonical main. SQLite `quick_check`, candidate preflight, production health,
+  owner OAuth discovery/scope-denial behavior and partner resource metadata
+  passed after cutover. Kotopogoda was not recreated and
+  `runcoveer/events:e679853bc` remains the rollback.
 - The full v2 TO-BE remains wider than this core. Lifecycle visual badges,
   public old→new history/site lifecycle UX and the isolated-live scenarios stay
   external gates and must not be reported as completed by this source release.
