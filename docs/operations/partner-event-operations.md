@@ -75,7 +75,9 @@ aliases:
 - `festival_operator` — events structurally bound to the configured festival;
 - `represented_person` — confirmed speaker/author/host/performer appearance;
 - `represented_collective` — confirmed collective appearance;
-- `series_operator` — events structurally bound to the configured series/project;
+- `series_operator` — events whose source explicitly and groundingly states
+  membership in the configured named series/project/cycle; the extractor never
+  receives the configured authority aliases;
 - `programme_operator` — review-only until a durable structured programme
   identity exists; prose alone never auto-approves it.
 
