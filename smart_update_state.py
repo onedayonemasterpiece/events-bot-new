@@ -61,6 +61,7 @@ class ProductExclusionReason(str, Enum):
     COMPLETED_EVENT_REPORT = "completed_event_report"
     OUT_OF_REGION = "out_of_region"
     PROSE_LOCATION = "prose_location"
+    PARTNER_AUTHORITY_REVIEW_REQUIRED = "partner_authority_review_required"
 
 
 class RetryReason(str, Enum):

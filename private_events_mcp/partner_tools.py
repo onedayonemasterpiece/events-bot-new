@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import time
 from .oauth import SUBJECT
-from .partner_access import PARTNER_SCOPES, PARTNER_ACTIONS
+from .partner_access import (
+    PARTNER_SCOPES, PARTNER_ACTIONS, PARTNER_AUTHORITY_KINDS,
+    PARTNER_AUTHORITY_SUBJECT_TYPES,
+)
 from typing import Any, Mapping
 
 from .partner_access import PartnerAccessStore, _integer, _error
@@ -32,6 +35,15 @@ _POLICY_SCHEMA = _schema({
         [('active_campaigns',100),('campaign_exposures',100),('daily_exposures',10),('campaign_days',365),('activities',10)]}),
 })
 
+_AUTHORITY_SCHEMA = _schema({
+    'authority_kind': {'type':'string','enum':sorted(PARTNER_AUTHORITY_KINDS)},
+    'subject_type': {'type':'string','enum':sorted(PARTNER_AUTHORITY_SUBJECT_TYPES)},
+    'subject_key': {'type':'string','pattern':'^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$'},
+    'display_name': {'type':'string','minLength':1,'maxLength':160},
+    'aliases': {'type':'array','maxItems':32,'items':{'type':'string','minLength':1,'maxLength':160}},
+    'cities': {'type':'array','maxItems':20,'items':{'type':'string','minLength':1,'maxLength':120}},
+}, required=('authority_kind','subject_type','subject_key','display_name'))
+
 def build_partner_admin_tools(store: PartnerAccessStore, config):
     def owner(context):
         identity = context.identity
@@ -54,7 +66,8 @@ def build_partner_admin_tools(store: PartnerAccessStore, config):
             grant = await asyncio.to_thread(store.get, args['principal_id'])
             with store._connect() as conn:
                 ids = [row[0] for row in conn.execute('SELECT event_id FROM mcp_partner_event WHERE principal_id=? ORDER BY event_id', (grant.principal_id,))]
-            return dict(grant.public(), event_ids=ids)
+                authorities = store.authorities(grant, conn=conn)
+            return dict(grant.public(), event_ids=ids, authorities=authorities)
         return {'partners': await asyncio.to_thread(store.list, before=args.get('before'), limit=args.get('limit', 25))}
 
     async def change(args, context):
@@ -65,15 +78,19 @@ def build_partner_admin_tools(store: PartnerAccessStore, config):
         _spec('partner_create', 'Create a Telegram-independent partner and return a private login code once', 'partners:manage', {
             'tenant_id': {'type':'string'}, 'organization_id': {'type':'string'}, 'display_name': {'type':'string'},
             'policy': _POLICY_SCHEMA, 'redirect_uris': {'type':'array','items':{'type':'string'}},
-            'event_ids': {'type':'array','items':{'type':'integer'}}, 'expires_at': {'type':'integer'},
+            'event_ids': {'type':'array','items':{'type':'integer'}},
+            'authorities': {'type':'array','maxItems':100,'items':_AUTHORITY_SCHEMA},
+            'expires_at': {'type':'integer'},
         }, create, required=('tenant_id','organization_id','display_name','policy','redirect_uris','expires_at'), read_only=False, idempotent=False),
         _spec('partner_get', 'Read a partner or a bounded partner directory; credentials are never returned', 'partners:manage', {
             'principal_id': {'type':'string'}, 'before':{'type':'string'},'limit':{'type':'integer','minimum':1,'maximum':50},
         }, read),
         _spec('partner_access_change', 'Suspend/resume/revoke/rotate or replace current rights and portfolio with revision checking', 'partners:manage', {
-            'principal_id':{'type':'string'}, 'action':{'type':'string','enum':['suspend','resume','revoke','rotate','policy','portfolio']},
+            'principal_id':{'type':'string'}, 'action':{'type':'string','enum':['suspend','resume','revoke','rotate','policy','portfolio','authorities']},
             'expected_revision':{'type':'integer'}, 'policy':_POLICY_SCHEMA,
-            'event_ids':{'type':'array','items':{'type':'integer'}},'expires_at':{'type':'integer'},
+            'event_ids':{'type':'array','items':{'type':'integer'}},
+            'authorities':{'type':'array','maxItems':100,'items':_AUTHORITY_SCHEMA},
+            'expires_at':{'type':'integer'},
         }, change, required=('principal_id','action','expected_revision'), read_only=False),
     )
 
@@ -81,12 +98,15 @@ def build_partner_admin_tools(store: PartnerAccessStore, config):
 def build_partner_read_tools(store: PartnerAccessStore, *, event_create_enabled=False, config_getter=None):
     async def workspace(args, context):
         grant = await asyncio.to_thread(store.resolve, context.identity, scope='partner:events:read')
-        return dict(grant.public(), telegram_required=False, capabilities={
+        authorities = await asyncio.to_thread(store.authorities, grant)
+        return dict(grant.public(), authorities=authorities, telegram_required=False, capabilities={
             'events_read': True,
             # Do not advertise not-yet-wired mutations or placeholder placements.
             'event_operations': bool(config_getter and config_getter().event_operations_enabled and config_getter().partner_event_create_enabled and 'partner:events:propose' in grant.scopes and grant.actions & {'event_edit','event_reschedule','event_cancel','event_postpone'}),
             'promo_operations': bool(config_getter and config_getter().partner_promo_enabled and 'partner:promo:request' in grant.scopes and grant.actions & {'promo_create','promo_activity_add','promo_pause','promo_resume','promo_archive'}),
             'event_create': bool(event_create_enabled and 'event_create' in grant.actions and 'partner:events:propose' in grant.scopes),
+            'event_create_authority_gate': bool(event_create_enabled),
+            'authority_kinds': sorted({item['authority_kind'] for item in authorities}),
         })
 
     def read_events(args, identity):

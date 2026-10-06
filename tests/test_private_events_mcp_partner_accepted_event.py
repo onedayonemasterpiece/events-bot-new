@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,11 @@ def store(tmp_path):
     with sqlite3.connect(path) as conn:
         conn.executescript(SCHEMA)
         conn.execute('CREATE TABLE event(id INTEGER PRIMARY KEY,title TEXT)')
+        conn.execute(
+            'CREATE TABLE event_change_log('
+            'operation_ref TEXT PRIMARY KEY, action_digest TEXT, actor_subject TEXT, '
+            'actor_client_id TEXT, actor_audience TEXT, domain_receipt_json TEXT, organizer_comment TEXT)'
+        )
         conn.execute("INSERT INTO event VALUES(42,'Canonical actual event')")
     return PartnerAccessStore(path, resource='https://events.test/partner', signing_key='local-test-key')
 
@@ -140,4 +146,80 @@ def test_concurrent_replay_and_cross_tenant_race(store):
     with ThreadPoolExecutor(max_workers=2) as pool:
         outcomes = list(pool.map(assign, [request, foreign_request]))
     assert sum(isinstance(item, ToolExecutionError) for item in outcomes) == 1
+    assert len(rows(store)) == 1
+
+
+def proofed_request(store, *, tenant, org, operation_char):
+    data = store.create(
+        tenant_id=tenant,
+        organization_id=org,
+        display_name='Partner '+org,
+        policy={'scopes':['partner:events:propose'], 'actions':['event_create']},
+        authorities=[{
+            'authority_kind':'venue_operator',
+            'subject_type':'venue',
+            'subject_key':'shared-hall',
+            'display_name':'Shared Hall',
+        }],
+        redirect_uris=['http://127.0.0.1:8421/callback'],
+        expires_at=int(time.time()) + 3600,
+    )
+    grant = store.get(data['principal_id'])
+    operation_ref = 'evt_op_' + operation_char * 24
+    request = EventCreateRequest(
+        raw_text='An actual event text',
+        source_url=None,
+        source_external_id='source-'+operation_char,
+        source_locator='mcp-partner:source-'+operation_char,
+        idempotency_key='idempotency-'+operation_char*8,
+        text_policy='smart_rewrite',
+        actor_subject=grant.subject,
+        actor_client_id=grant.client_id,
+        actor_audience=store.resource,
+        partner_policy_revision=grant.policy_revision,
+        partner_authority_kinds=('venue_operator',),
+        _operation_ref=operation_ref,
+    )
+    proof = json.dumps({
+        'partner_authority_status':'matched',
+        'partner_authority_kind':'venue_operator',
+    })
+    with store._connect() as conn:
+        conn.execute(
+            'INSERT INTO event_change_log VALUES(?,?,?,?,?,?,NULL)',
+            (
+                operation_ref, request.action_digest, request.actor_subject,
+                request.actor_client_id, request.actor_audience, proof,
+            ),
+        )
+    return grant, request
+
+
+def test_durable_authority_allows_shared_cross_tenant_event_portfolios(store):
+    first, first_request = proofed_request(
+        store, tenant='tenant-a', org='org-a', operation_char='a'
+    )
+    second, second_request = proofed_request(
+        store, tenant='tenant-b', org='org-b', operation_char='b'
+    )
+    assert assign_accepted_event(store, first_request, result())['assigned']
+    # The second partner discovers the already-canonical event via Smart Update;
+    # its own durable authority proof allows a separate portfolio assignment.
+    assert assign_accepted_event(
+        store, second_request, result('merged_or_replay')
+    )['assigned']
+    assert sorted(rows(store)) == sorted([
+        (first.principal_id, first.tenant_id, first.organization_id, 42),
+        (second.principal_id, second.tenant_id, second.organization_id, 42),
+    ])
+
+
+def test_shared_merge_without_durable_authority_proof_still_fails(store):
+    first, first_request = proofed_request(
+        store, tenant='tenant-a', org='org-a', operation_char='c'
+    )
+    assert assign_accepted_event(store, first_request, result())['assigned']
+    _, legacy = partner(store, tenant='tenant-b', org='org-b')
+    with pytest.raises(ToolExecutionError):
+        assign_accepted_event(store, legacy, result('merged_or_replay'))
     assert len(rows(store)) == 1

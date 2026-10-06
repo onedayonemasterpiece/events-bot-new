@@ -47,8 +47,11 @@ Owner и партнёр используют одинаковые application co
 
 - OAuth audience/client и scopes;
 - principal, organization и tenant;
-- роль;
-- владение событием/кампанией;
+- scopes/actions для интерфейсной роли;
+- server-owned authority bindings для создания нового события (площадка,
+  организатор, фестиваль, представляемая персона/коллектив, серия; programme
+  остаётся fail-closed до появления structured programme identity);
+- владение уже назначенным событием/кампанией;
 - object state и current event revision;
 - entitlement/лимит;
 - editorial, lifecycle или spend approval.

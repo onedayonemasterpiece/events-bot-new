@@ -48,15 +48,52 @@ Owner access lifecycle:
 
 - `partner_get` reads the current server-side binding;
 - `partner_access_change` supports suspend, resume, credential rotation,
-  policy/portfolio changes and irreversible revoke;
-- a grant or portfolio change after prepare invalidates commit/review when the
-  frozen policy no longer matches;
+  policy/portfolio/authority changes and irreversible revoke;
+- a grant, portfolio or authority change after prepare invalidates commit/review
+  when the frozen policy no longer matches;
 - old access/refresh credentials do not survive rotation or revoke.
 
 Several principals may belong to one organization, but every principal still
-has an explicit portfolio. Rich organization roles such as
-`programme_manager` or `analyst_readonly` remain later roadmap work; this
-release uses scopes/actions/portfolio.
+has an explicit portfolio. UI/permission personas such as `analyst_readonly`
+remain scopes/actions concerns; event-create responsibility is modeled
+separately by the authority bindings below.
+
+
+
+## Partner authority bindings
+
+Event-create responsibility is a server-owned authority binding, separate from
+OAuth scopes/actions and from the portfolio of already assigned events.
+`partner_create` and owner `partner_access_change(action=authorities)` manage
+bounded authority subjects with stable subject keys, display names and exact
+aliases:
+
+- `venue_operator` — events whose grounded `location_name` equals a configured
+  alias; an optional city constraint must also match;
+- `organizer` — events whose source-grounded `organizer_names` explicitly names
+  the organization;
+- `festival_operator` — events structurally bound to the configured festival;
+- `represented_person` — confirmed speaker/author/host/performer appearance;
+- `represented_collective` — confirmed collective appearance;
+- `series_operator` — events structurally bound to the configured series/project;
+- `programme_operator` — review-only until a durable structured programme
+  identity exists; prose alone never auto-approves it.
+
+A theatre, museum or cultural organization may legitimately have more than one
+authority: for example `organizer` for its productions on arbitrary stages and
+`venue_operator` for events at its own building. The same canonical Event may
+therefore belong to several independent partner portfolios (venue + organizer +
+festival + performer), but each new assignment requires its own durable
+authority proof or explicit owner approval.
+
+Matching is conservative: Unicode/case/`ё→е` normalization plus punctuation and
+whitespace folding are allowed; fuzzy and substring matching are not.
+Replacing authority bindings increments `policy_revision`, invalidating frozen
+preparations. The authority gate executes inside the canonical Smart Update
+transaction before Event/source/domain writes. Partner create suppresses
+pre-gate Festival registry writes and reconciles the ordinary Festival row only
+after Event acceptance. No match becomes `review_required` with a bounded
+`authority_evaluation`; explicit owner approval is the only override.
 
 ## Event workflow
 
