@@ -1,13 +1,14 @@
 # Partner event operations
 
-Status as of 2026-10-06: the event/promo partner core is
-**DEPLOYED_ACCEPTED** on RunCoveer from canonical main
-`c344d63d992b64aa0722230bbf7080d05bc8e43c`. Owner event
-create/assets/typed operations plus partner access/event-create and owner/partner
-promo gates are enabled. Owner OAuth discovery can now surface the enabled
-event/promo/partner-admin tools to older read-only owner tokens so the client
-can request a scope upgrade without granting mutation authority implicitly. No real partner grant or public provider test
-publication was performed during acceptance.
+Status as of 2026-10-06: the event/promo partner core plus authority-scoped
+partner event creation is **DEPLOYED_ACCEPTED** on RunCoveer from canonical main
+`4b23f991842abb53c26bb95429444d4e5d741e3a` as
+`runcoveer/events:4b23f991-slim`. Owner event create/assets/typed operations,
+partner authority bindings/event-create and owner/partner promo gates are
+enabled. Owner OAuth discovery can surface the enabled event/promo/partner-admin
+tools to older read-only owner tokens so the client can request a scope upgrade
+without granting mutation authority implicitly. No real partner grant, event or
+public provider test publication was created for authority acceptance.
 
 There is one canonical EventsBot database, Smart Update, JobOutbox and promo
 engine. The partner OAuth projection does not create a second backend, scheduler,
@@ -23,11 +24,12 @@ identity prerequisite.
 - **ISOLATED_LIVE_VERIFIED — NOT RUN.** Real provider work must be limited to
   explicitly approved private test destinations after an independent release
   review.
-- **DEPLOYED_ACCEPTED — PASS.** `runcoveer/events:c344d63d` is live from
-  canonical main. SQLite `quick_check`, candidate preflight, production health,
-  owner OAuth discovery/scope-denial behavior and partner resource metadata
-  passed after cutover. Kotopogoda was not recreated and
-  `runcoveer/events:e679853bc` remains the rollback.
+- **DEPLOYED_ACCEPTED — PASS.** `runcoveer/events:4b23f991-slim` is live
+  from canonical main. Exact-source provenance, isolated-copy SQLite preflight,
+  production `quick_check`, health/readiness and post-cutover error scan passed.
+  No partner/authority rows were created during acceptance. Kotopogoda was not
+  recreated; `runcoveer/events:c344d63d` is the immediate rollback and
+  `runcoveer/events:e679853bc` remains an older retained fallback.
 - The full v2 TO-BE remains wider than this core. Lifecycle visual badges,
   public old→new history/site lifecycle UX and the isolated-live scenarios stay
   external gates and must not be reported as completed by this source release.

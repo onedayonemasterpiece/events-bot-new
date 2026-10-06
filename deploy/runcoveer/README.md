@@ -10,11 +10,17 @@ CDN, Supabase, Kaggle and other managed dependencies stay external.
 ## Build and restore
 
 Events current production baseline is
-`c344d63d992b64aa0722230bbf7080d05bc8e43c`, packaged as immutable image
-`runcoveer/events:c344d63d`. Build Events upgrades from an exact Git archive
-in an isolated release build context, supply the exact
-`ai_resource_control-0.1.4-py3-none-any.whl` in `vendor-private`, then build:
-`sudo docker build --build-arg STATIC_SITE_IMAGE_REPO_SHA=c344d63d992b64aa0722230bbf7080d05bc8e43c -t runcoveer/events:c344d63d .`.
+`4b23f991842abb53c26bb95429444d4e5d741e3a`, packaged as immutable image
+`runcoveer/events:4b23f991-slim`. This rollout reuses the verified runtime and
+dependency layers from `runcoveer/events:c344d63d` and replaces `/app` from an
+exact Git archive. Before using that disk-safe source-layer build, the release
+verified that both `Dockerfile` and `requirements.txt` have zero diff between
+`c344d63d` and `4b23f991`; image provenance then matched the exact source SHA
+and source-file checksums. For ordinary upgrades, keep the full exact-archive
+build path: provide the exact `ai_resource_control-0.1.4-py3-none-any.whl` in
+`vendor-private` and run Dockerfile with the intended 40-character
+`STATIC_SITE_IMAGE_REPO_SHA`. Source-layer reuse is allowed only when dependency
+inputs are unchanged and the resulting image provenance is explicitly checked.
 Do not overwrite `/opt/runcoveer/events/source` during an Events-only upgrade:
 Kotopogoda mounts `runtime_logging.py` from that preserved source tree.
 Kotopogoda rebuilds its preserved deployed snapshot `951065bf` with
@@ -135,6 +141,36 @@ OAuth `insufficient_scope` challenge rather than executing a mutation.
 The partner protected-resource metadata also remained available. No event,
 partner grant, promo campaign or provider publication was created by this
 acceptance check.
+
+
+### Partner authority-scoped create rollout, 2026-10-06
+
+PR #729 introduced server-owned partner event-create authority bindings and PR
+#730 hardened `series_operator` with grounded series/project evidence. Canonical
+main `4b23f991842abb53c26bb95429444d4e5d741e3a` passed all required GitHub CI
+checks. The final source gate covered the entire private-events MCP suite plus
+event-operation receipts; the authority-specific targeted suite passed 94
+tests, and the final series hardening reported 939 private-MCP/receipt tests.
+
+Production uses `runcoveer/events:4b23f991-slim` (image
+`sha256:d835802889fedf6636648c39cb74f6c56b98cb0701a26eb941ad87ba30fc83e8`).
+The image embeds the exact `4b23f991842abb53c26bb95429444d4e5d741e3a` source
+SHA; `private_events_mcp/partner_access.py` and `event_operation_receipts.py`
+matched the exact release context byte-for-byte.
+
+An isolated preflight used a consistent copy of production `db.sqlite`, never
+the live `/data` volume. The candidate returned HTTP 200 with `ok=true` and
+`issues=[]`; `ready=false`/`db=skipped` was the expected preflight state because
+the deployment wrapper intentionally disables scheduler/heartbeat readiness.
+The copied database returned `PRAGMA quick_check=ok`, initialized
+`mcp_partner_authority`, and contained zero authority rows.
+
+After the Events-only cutover, production returned `ready=true`, `ok=true`,
+`db=ok`, `issues=[]` and `PRAGMA quick_check=ok`. No partner or authority grant
+was created for acceptance (`mcp_partner=0`, `mcp_partner_authority=0`), no
+provider/publication mutation was used, and the first five minutes contained no
+`ERROR`, `CRITICAL` or `Traceback` records. `runcoveer/events:c344d63d` and
+`runcoveer/events:e679853bc` remain available as rollback images.
 
 Install `backup.service`/`backup.timer` to `/etc/systemd/system/runcoveer-backup.*`
 and enable the timer. `sudo python3 /opt/runcoveer/deployment/backup.py` makes

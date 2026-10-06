@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Deployed authority-scoped partner event creation on RunCoveer from canonical
+  main `4b23f991842abb53c26bb95429444d4e5d741e3a` as
+  `runcoveer/events:4b23f991-slim`. Venue/organizer/festival/person/collective/
+  series authority gates are live; `programme_operator` remains owner-review
+  only. Exact-source provenance, isolated-copy SQLite preflight, production
+  health/readiness and `quick_check` passed with zero partner/authority rows
+  created; `c344d63d` and `e679853bc` remain rollback images.
+
 - Deployed owner MCP scope-upgrade discovery on RunCoveer from canonical main
   `c344d63d992b64aa0722230bbf7080d05bc8e43c` as
   `runcoveer/events:c344d63d`. Live OAuth acceptance confirmed 44 owner tools,
