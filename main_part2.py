@@ -7249,6 +7249,54 @@ def build_vk_source_message(
         if calendar_url:
             lines.append(VK_BLANK_LINE)
         lines.append(hashtag_line)
+
+    try:
+        from vk_mentions_mcp import build_mentions_for_text, load_or_create_registry
+        import asyncio
+        import concurrent.futures
+
+        guide_names = getattr(event, "guide_names", None) or []
+        organizer_names = getattr(event, "organizer_names", None) or []
+        venue_names = []
+        if getattr(event, "location_name", None):
+            venue_names.append(event.location_name)
+        if getattr(event, "city", None):
+            venue_names.append(event.city)
+
+        author_vk_id = None
+        author_type = "community"
+        if getattr(event, "source_chat_id", None):
+            author_vk_id = str(abs(int(event.source_chat_id)))
+            author_type = "community" if event.source_chat_id < 0 else "user"
+
+        async def _add_mentions() -> str:
+            registry = await load_or_create_registry()
+            enhanced_text, _ = await build_mentions_for_text(
+                "\n".join(lines),
+                guide_names=guide_names,
+                organizer_names=organizer_names,
+                venue_names=venue_names,
+                max_mentions=3,
+                exclude_self_vk_id=author_vk_id,
+                exclude_self_type=author_type,
+                registry=registry,
+            )
+            return enhanced_text
+
+        def _run_async() -> str:
+            new_loop = asyncio.new_event_loop()
+            try:
+                return new_loop.run_until_complete(_add_mentions())
+            finally:
+                new_loop.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_run_async)
+            enhanced = future.result(timeout=30)
+        lines = enhanced.splitlines()
+    except Exception:
+        pass
+
     lines.append(VK_SOURCE_FOOTER)
     return "\n".join(lines)
 
