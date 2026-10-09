@@ -9,7 +9,7 @@ CDN, Supabase, Kaggle and other managed dependencies stay external.
 
 ## Build and restore
 
-Events current production baseline is
+The 2026-10-06 Events production baseline, retained for rollback, was
 `4b23f991842abb53c26bb95429444d4e5d741e3a`, packaged as immutable image
 `runcoveer/events:4b23f991-slim`. This rollout reuses the verified runtime and
 dependency layers from `runcoveer/events:c344d63d` and replaces `/app` from an
@@ -75,11 +75,52 @@ After data and product preflight, set `DEPLOY_PREFLIGHT=0` and recreate containe
 verify Telegram `getWebhookInfo`, real Telegram `/start` and representative
 read-only product routes. Check external callers using old Fly URLs separately.
 
+## CherryFlash scene-selection hotfix (2026-10-09)
+
+Production Events is currently pinned to immutable local image
+`runcoveer/events:cherry9671-a9abd662` (image ID
+`sha256:72c83df980d5c3baaa40445c49516b570616afabfec99e52b06791578c425abd`).
+This is an intentionally **limited source-layer overlay**, not a full-source
+build claiming that all code matches `a9abd662`. It starts from the previously
+qualified `runcoveer/events:4b23f991-slim` and replaces only
+`/app/video_announce/poster_overlay.py` with its exact version from merged
+commit `a9abd662aee20edfc63688921e38ae4cc7c29e09` (PR #733).
+The deployed Python module SHA-256 is
+`46a86e5448184f5ae3c323e0a1bb43671a44f000db49a7e10f6275d210991c06`.
+The Docker labels record the base commit, patch commit, module hash and scope.
+`Dockerfile` and `requirements.txt` did not change from baseline to patch.
+
+This repairs incident `inc_bfc5ed606c0999b7875f35ec`: CherryFlash discarded
+already selected event scenes lacking OCR even when they had canonical
+title/date/location and CDN poster. Acceptance in production used the six
+actual `READY` items from session #1411: six scenes entered the selection
+manifest, including forum event #9671 in second position. That acceptance
+was read-only and did not trigger Kaggle or republish the October 9 video.
+The production health endpoint returned `ok=true`, `ready=true`, `issues=[]`;
+only Events was recreated, with Kotopogoda container identity unchanged.
+
+To rebuild the *same patch image* on this host, obtain that exact Git commit
+and its `video_announce/poster_overlay.py` blob, verify the SHA-256 above, and
+use the already-present `runcoveer/events:4b23f991-slim` image as Docker
+`FROM`. Copy that one file into `/app/video_announce/poster_overlay.py`, apply
+the provenance labels above and tag `runcoveer/events:cherry9671-a9abd662`.
+Never replace the blob with an unverified later working-tree file. The existing
+`docker compose -f /opt/runcoveer/deployment/compose.yaml up -d --no-deps events`
+activates that image without replacing Kotopogoda or persistent `/data`.
+Rollback uses the preserved `runcoveer/events:4b23f991-slim` image and the
+same Events-only Compose command. Production and version-controlled Compose
+must keep the **same** image pin before a repeat `deploy.sh`.
+
+The next full-source upgrade should replace the scoped overlay with a verified
+exact-archive image, preserving the fix and production data. The incident stays
+open until the scheduled October 10 CherryFlash release proves actual external
+video delivery, not only a correct event-selection manifest.
+
 ## Repeat deploy, persistence and backup
 
 `deploy.sh` copies configuration and runs Compose; it does not restore or replace
 data. The checked-in Compose file pins the verified Events image
-`runcoveer/events:c344d63d`; an application upgrade must build/tag the next
+`runcoveer/events:cherry9671-a9abd662`; an application upgrade must build/tag the next
 immutable image and update that pin before repeat deploy. Docker and Caddy start
 with systemd; containers use
 `unless-stopped`. Docker logs rotate at 50 MB x 10 per container with compression. Persistent
