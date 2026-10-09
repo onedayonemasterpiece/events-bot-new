@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+- VK human-readable mentions in outbound publications: native `[club<ID>|Label]` / `[id<ID>|Label]` markup so VK generates real recipient notifications (`notifications.get(filters='mentions')`, `newsfeed.getMentions`), not just clickable links.
+- Canonical shared VK mentions registry (IdeaHub `chatgpt/vk-mentions-20261009` → `main` after merge) with bounded local cache (`/data/vk_mentions_registry_cache.json`), TTL refresh (default 1h, `VK_MENTIONS_TTL_SECONDS`), ETag/If-None-Match polling, SHA-256 content change detection, atomic cache swap. Single authoritative registry shared by events-bot (any host) and VibePublish.
+- Only `verified` registry entries used at publication time; `candidate` entries require manual review. Max 3 relevant mentions per post/digest; self-mention filter by `event.source_chat_id`; bracket-form only (no `@club...`); special chars in visible label escaped.
+- Read-only MCP tools (`vk_mentions_mcp.py`): `search_mentions`, `validate_mention`, `validate_mention_markup`, `get_mention_markup`, `list_verified_mentions`, `refresh_registry` — for LLM-assisted mention insertion from `guide_names`, `organizer_names`, `city`, `location_name`, `meeting_point`.
+- Integration points:
+  - Event posts: `build_vk_source_message` (main_part2.py) appends mentions from event fields before footer.
+  - Guide excursions digest: `build_guide_vk_digest_text_with_mentions` (guide_excursions/service.py) scans all digest cards and appends mentions.
+- Offline provider adapter tests (`tests/test_vk_mentions.py`: 40 tests) covering registry parsing/validation, markup generation/parsing, MCP search/validate, mention injection with dedup/self-filter/max-limit, negative cases (unknown ID, stale cache, injection escaping, max length).
+
+### Changed
+- `build_vk_source_message` now async-invokes `build_mentions_for_text` via thread-pool to avoid event-loop conflicts in sync context; failures are silent (preserve original text).
+- `build_guide_vk_digest_text` calls `build_guide_vk_digest_text_with_mentions` after base text assembly; failures logged and non-blocking.
+
 - Deployed authority-scoped partner event creation on RunCoveer from canonical
   main `4b23f991842abb53c26bb95429444d4e5d741e3a` as
   `runcoveer/events:4b23f991-slim`. Venue/organizer/festival/person/collective/

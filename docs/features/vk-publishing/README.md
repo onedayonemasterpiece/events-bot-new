@@ -110,6 +110,56 @@
 - Feature-owned digest не должен молча наследовать Telegram formatting. Перед вызовом `wall.post` он должен быть plain text, с VK-safe ссылками, без HTML/Markdown и без Telegram-only caption/media mechanics.
 - Guide excursions VK digest должен загружать materialized local media assets в VK через user-token photo upload и передавать полученные `photo...` attachments в тот же `wall.post`, что и текст. Silent text-only fallback запрещён, если у issue есть media items.
 
+## VK Human-Readable Mentions
+
+Начиная с 2026-10-09, исходящие VK-публикации (event-посты через `build_vk_source_message` / `sync_vk_source_post` и guide-дайджесты через `build_guide_vk_digest_text`) могут автоматически включать нативные VK-уоминги (mentions) в формате `[club<ID>|Label]` для сообществ и `[id<ID>|Label]` для профилей. Это генерирует настоящее уведомление получателю (в `notifications.get(filters='mentions')` / `newsfeed.getMentions`), а не просто кликабельную ссылку.
+
+### Источник реестра (Single Source of Truth)
+
+- Канонический реестр хранится в IdeaHub: `https://raw.githubusercontent.com/onedayonemasterpiece/idea-hub/chatgpt/vk-mentions-20261009/registry/vk-mentions/registry-v1.json` (после мержа — в `main`).
+- В реестре только `verified` записи используются для публикаций; `candidate` — только для ручного review.
+- Пример verified: `lovekenig` → `club241261191` → "Полюбить Калининград".
+- Кандидаты (не verified): `popadin`, `udovichenko`, `koihm`, `yantar` — не подставляются автоматически.
+
+### Локальный кэш и обновление
+
+- Модуль `vk_mentions_registry.py` загружает реестр при старте и кэширует в `/data/vk_mentions_registry_cache.json`.
+- TTL обновления: `VK_MENTIONS_TTL_SECONDS` (по умолчанию 3600 сек).
+- Фоновый планировщик (`start_registry_refresh_scheduler`) периодически опрашивает remote с ETag/If-None-Match; при изменении контента (SHA-256) атомарно заменяет кэш и перестраивает индексы.
+- Events-bot на любом хосте и VibePublish делят **один** авторитетный реестр — никаких локальных форков.
+
+### Правила вставки mentions
+
+- Только `verified` записи.
+- Максимум 3 релевантных mention на пост/дайджест.
+- Поиск по: `guide_names`, `organizer_names`, `city`, `location_name`, `meeting_point` из события/карточки дайджеста.
+- Соответствие: точное совпадение `label`, `id`, `vk_id` (с префиксом `club`/`id`), или `aliases` (частичное, case-insensitive).
+- Self-mention filter: если `event.source_chat_id` совпадает с VK ID записи — mention не добавляется.
+- Экранирование: `|`, `[`, `]` в видимом лейбле экранируются обратным слешем.
+- Никаких `@club...` / `@id...` — только каноническая bracket-форма `[club...|...]` / `[id...|...]`, так как VK нормализует `@` к bracket при чтении.
+
+### Интеграция
+
+- **Event posts** (`build_vk_source_message` в `main_part2.py`): после сборки текста, перед добавлением футера, вызывается `build_mentions_for_text` с полями события (`guide_names`, `organizer_names`, `location_name`, `city`). Результат — тот же список строк с добавленными mention-строками.
+- **Guide digest** (`build_guide_vk_digest_text` в `guide_excursions/service.py`): после сборки базового текста дайджеста, вызывается `build_guide_vk_digest_text_with_mentions`, сканирующий все карточки дайджеста на `guide_names`, `organizer_names`, `city`, `meeting_point`.
+
+### Read-only MCP инструменты (для LLM)
+
+Модуль `vk_mentions_mcp.py` предоставляет read-only MCP-методы:
+- `search_mentions(query, limit=3, only_verified=True)` — поиск verified записей.
+- `validate_mention(vk_id, type, label?)` — проверка кандидата и возврат готового markup.
+- `validate_mention_markup(markup)` — валидация готового `[club...|...]`.
+- `get_mention_markup(vk_id, type)` — получить markup для verified записи.
+- `list_verified_mentions(limit=50)` — список для админки.
+- `refresh_registry(force=False)` — форсировать обновление кэша.
+
+LLM должен использовать `search_mentions` / `validate_mention` при генерации текстов для VK, чтобы подставить правильные mention там, где упоминаются гиды/организаторы/веньи.
+
+### Ограничения
+
+- Не перезаписываем уже замороженный/идемпотентный payload: mention добавляется только на этапе сборки текста до `wall.post`/`wall.edit`. Если пост уже опубликован — повторный sync не добавит mention retroactively (хеш идемпотентности включает body).
+- В Telegram/Max/прочих каналах mention-разметка **не** просачивается — только в VK plain-text публикации.
+
 ## Promo VK
 
 - Promo campaign activity `vk_publication` can create additional event posts in

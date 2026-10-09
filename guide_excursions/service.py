@@ -1175,7 +1175,20 @@ async def build_guide_vk_digest_text(
             lines.extend(["", "----------", ""])
 
     lines.extend(["", "#экскурсии #Калининград #УхтыКалининград"])
-    return "\n".join(lines).strip()
+
+    base_text = "\n".join(lines).strip()
+
+    try:
+        from vk_mentions_mcp import build_guide_vk_digest_text_with_mentions
+        base_text = await build_guide_vk_digest_text_with_mentions(
+            base_text,
+            items,
+            max_mentions=3,
+        )
+    except Exception as exc:
+        logger.warning("Failed to add VK mentions to guide digest: %s", exc)
+
+    return base_text
 
 
 def _parse_iso_date(value: str | None) -> date | None:
