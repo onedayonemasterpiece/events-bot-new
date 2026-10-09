@@ -46,6 +46,70 @@ _VERIFIED_STATUSES = {"verified", "candidate"}
 _ENTRY_TYPES = {"community", "user"}
 
 
+
+def _normalize_canonical_registry(data: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Adapt the single IdeaHub registry-v1 wire contract to our internal cache model.
+
+    The wire schema uses snake_case and nullable VK IDs for candidates. The
+    internal representation is retained for compatibility with persisted caches.
+    No unverified or expired candidate may produce VK markup.
+    """
+    if data.get("schema_version") != 1:
+        return data
+    items = data.get("entries")
+    if not isinstance(items, list) or len(items) > VK_MENTIONS_MAX_ENTRIES:
+        raise VKMentionsRegistryError("Invalid canonical registry entries")
+    policy = data.get("policy") or {}
+    if not isinstance(policy, dict):
+        raise VKMentionsRegistryError("Invalid canonical registry policy")
+    age_limit = policy.get("verified_max_age_days", 30)
+    if type(age_limit) is not int or not 1 <= age_limit <= 365:
+        raise VKMentionsRegistryError("Invalid canonical registry verification age")
+    converted = []
+    now = datetime.now(timezone.utc).timestamp()
+    for index, row in enumerate(items):
+        if not isinstance(row, dict):
+            raise VKMentionsRegistryError(f"entries[{index}] must be an object")
+        entity_type = row.get("entity_type")
+        if entity_type not in ("person", "community"):
+            raise VKMentionsRegistryError(f"Invalid entity_type at entries[{index}]")
+        status = row.get("status")
+        if status not in _VERIFIED_STATUSES:
+            raise VKMentionsRegistryError(f"Invalid status at entries[{index}]")
+        vk_id = row.get("vk_id")
+        if vk_id is not None and (type(vk_id) is not int or vk_id <= 0):
+            raise VKMentionsRegistryError(f"Invalid vk_id at entries[{index}]")
+        name = row.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise VKMentionsRegistryError(f"Invalid name at entries[{index}]")
+        aliases = row.get("aliases", [])
+        evidence = row.get("evidence", [])
+        if (not isinstance(aliases, list) or not all(isinstance(a, str) for a in aliases)
+                or not isinstance(evidence, list) or not all(isinstance(e, str) for e in evidence)):
+            raise VKMentionsRegistryError(f"Invalid evidence/aliases at entries[{index}]")
+        verified_at = row.get("verified_at")
+        if status == "verified":
+            if vk_id is None or not evidence or not isinstance(verified_at, str):
+                raise VKMentionsRegistryError(f"Verified entity missing evidence at entries[{index}]")
+            try:
+                timestamp = datetime.fromisoformat(verified_at.replace("Z", "+00:00")).timestamp()
+            except (ValueError, OverflowError):
+                raise VKMentionsRegistryError(f"Invalid verified_at at entries[{index}]") from None
+            if timestamp > now + 300 or now - timestamp > age_limit * 86400:
+                status = "candidate"  # Preserve identity but fail closed on stale proof.
+        converted.append({
+            "id": row.get("key"), "type": "user" if entity_type == "person" else "community",
+            "vkId": str(vk_id) if vk_id is not None else "",
+            "label": name, "status": status,
+            "aliases": aliases, "metadata": {
+                "verified_at": verified_at, "evidence": evidence,
+                "roles": row.get("roles", []), "screen_name": row.get("screen_name"),
+                "canonical_revision": data.get("revision"),
+            },
+        })
+    return {"schemaVersion": "vk_mentions_registry_v1", "registryVersion": 1, "entries": converted}
+
+
 class VKMentionsRegistryError(ValueError):
     """Raised when registry data violates the contract."""
 
@@ -65,7 +129,9 @@ class VKMentionEntry:
     def mention_markup(self) -> str:
         """Return VK raw markup for this entry."""
         prefix = "club" if self.type == "community" else "id"
-        return f"[{prefix}{self.vk_id}|{self.label}]"
+        if self.status != "verified" or not self.vk_id or not self.vk_id.isdigit():
+            raise VKMentionsRegistryError("Unverified mention cannot be rendered")
+        return f"[{prefix}{self.vk_id}|{escape_vk_mention_text(self.label)}]"
 
     def matches_query(self, query: str) -> bool:
         """Check if query matches this entry (case-insensitive partial match)."""
@@ -98,7 +164,7 @@ class VKMentionsRegistry:
 
     def _rebuild_indices(self) -> None:
         self.verified_entries = {
-            e.id: e for e in self.entries.values() if e.status == "verified"
+            e.id: e for e in self.entries.values() if e.status == "verified" and e.vk_id.isdigit() and int(e.vk_id) > 0
         }
 
     def get_verified(self, entry_id: str) -> Optional[VKMentionEntry]:
@@ -136,7 +202,7 @@ class VKMentionsRegistry:
         return {
             "schemaVersion": "vk_mentions_registry_v1",
             "registryVersion": 1,
-            "refreshedAt": datetime.fromtimestamp(self.last_refresh, tz=timezone.utc).isoformat(),
+            "refreshedAt": self.last_refresh,
             "etag": self.etag,
             "contentHash": self.content_hash,
             "entries": [
@@ -155,6 +221,7 @@ class VKMentionsRegistry:
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any]) -> "VKMentionsRegistry":
+        data = _normalize_canonical_registry(data)
         if data.get("schemaVersion") != "vk_mentions_registry_v1":
             raise VKMentionsRegistryError("Invalid schema version")
         entries = {}
@@ -177,12 +244,13 @@ class VKMentionsRegistry:
                 raise VKMentionsRegistryError(f"entries[{idx}].type must be one of {_ENTRY_TYPES}")
 
             vk_id = item.get("vkId")
-            if not isinstance(vk_id, str) or not vk_id.isdigit():
+            if not isinstance(vk_id, str) or (vk_id and not vk_id.isdigit()) or (not vk_id and item.get("status") != "candidate"):
                 raise VKMentionsRegistryError(f"entries[{idx}].vkId must be numeric string")
             vk_key = f"{entry_type}:{vk_id}"
-            if vk_key in seen_vk_ids:
+            if vk_id and vk_key in seen_vk_ids:
                 raise VKMentionsRegistryError(f"Duplicate vkId for type {entry_type}: {vk_id}")
-            seen_vk_ids.add(vk_key)
+            if vk_id:
+                seen_vk_ids.add(vk_key)
 
             label = item.get("label")
             if not isinstance(label, str) or not label.strip():
@@ -212,7 +280,13 @@ class VKMentionsRegistry:
             entries[entry_id] = entry
 
         registry = cls(entries=entries)
-        registry.last_refresh = data.get("refreshedAt", 0.0)
+        refreshed = data.get("refreshedAt", 0.0)
+        if isinstance(refreshed, str):
+            try:
+                refreshed = datetime.fromisoformat(refreshed.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                refreshed = 0.0
+        registry.last_refresh = float(refreshed) if isinstance(refreshed, (int, float)) else 0.0
         registry.etag = data.get("etag", "")
         registry.content_hash = data.get("contentHash", "")
         return registry
@@ -222,6 +296,7 @@ def _parse_remote_registry(data: Mapping[str, Any]) -> VKMentionsRegistry:
     """Parse and validate the remote registry JSON."""
     if not isinstance(data, dict):
         raise VKMentionsRegistryError("Registry root must be an object")
+    data = _normalize_canonical_registry(data)
     if data.get("schemaVersion") != "vk_mentions_registry_v1":
         raise VKMentionsRegistryError(f"Expected schemaVersion 'vk_mentions_registry_v1', got {data.get('schemaVersion')!r}")
 
@@ -245,12 +320,13 @@ def _parse_remote_registry(data: Mapping[str, Any]) -> VKMentionsRegistry:
             raise VKMentionsRegistryError(f"entries[{idx}].type must be one of {_ENTRY_TYPES}")
 
         vk_id = item.get("vkId")
-        if not isinstance(vk_id, str) or not vk_id.isdigit():
+        if not isinstance(vk_id, str) or (vk_id and not vk_id.isdigit()) or (not vk_id and item.get("status") != "candidate"):
             raise VKMentionsRegistryError(f"entries[{idx}].vkId must be numeric string")
         vk_key = f"{entry_type}:{vk_id}"
-        if vk_key in seen_vk_ids:
+        if vk_id and vk_key in seen_vk_ids:
             raise VKMentionsRegistryError(f"Duplicate vkId for type {entry_type}: {vk_id}")
-        seen_vk_ids.add(vk_key)
+        if vk_id:
+            seen_vk_ids.add(vk_key)
 
         label = item.get("label")
         if not isinstance(label, str) or not label.strip():
@@ -370,7 +446,10 @@ async def load_or_create_registry() -> VKMentionsRegistry:
     cached = _load_cache()
     if cached:
         _LOG.info("Loaded VK mentions registry from cache: %d entries (%d verified)", len(cached.entries), len(cached.verified_entries))
-        await refresh_registry(cached)
+        try:
+            await refresh_registry(cached)
+        except Exception:
+            _LOG.warning("Using last verified cached VK mention registry while refresh is unavailable")
         return cached
 
     registry = VKMentionsRegistry()
@@ -407,7 +486,9 @@ def parse_vk_mention_markup(text: str) -> Optional[tuple[str, str, str]]:
 def build_vk_mention_markup(vk_id: str, label: str, type_: Literal["community", "user"] = "community") -> str:
     """Build VK raw mention markup."""
     prefix = "club" if type_ == "community" else "id"
-    return f"[{prefix}{vk_id}|{label}]"
+    if not str(vk_id).isdigit() or int(vk_id) <= 0:
+        raise VKMentionsRegistryError("Invalid VK numeric mention ID")
+    return f"[{prefix}{vk_id}|{escape_vk_mention_text(label)}]"
 
 
 def escape_vk_mention_text(text: str) -> str:
