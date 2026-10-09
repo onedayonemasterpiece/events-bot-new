@@ -307,10 +307,11 @@ def _build_overlay_text(*, missing: tuple[str, ...], title: str, date: str, loca
 
 
 async def enrich_payload_with_poster_overlays(db: Database, payload_json: str) -> str:
-    """Attach per-scene `poster_overlay` and drop scenes with empty OCR text.
+    """Augment selected poster scenes, retaining source-verified OCR-less events.
 
-    The kernel then renders an extra badge onto the poster without covering existing text
-    (best-effort).
+    A stored event image and canonical title/date/location may support an
+    existing selected scene even when poster OCR is empty. Unverifiable inputs
+    remain excluded by the usual fail-closed checks.
     """
 
     try:
@@ -352,23 +353,33 @@ async def enrich_payload_with_poster_overlays(db: Database, payload_json: str) -
         location = _collapse_ws(scene.get("location"))
 
         if not _has_meaningful_ocr_text(ocr_text):
-            if allow_empty_ocr:
-                missing_all = ("title", "date", "time", "location")
-                overlay_text = _build_overlay_text(
-                    missing=missing_all,
-                    title=title,
-                    date=date,
-                    location=location,
-                )
-                if overlay_text:
-                    scene["poster_overlay"] = {
-                        "v": 1,
-                        "missing": list(missing_all),
-                        "text": overlay_text,
-                        "model": "empty_ocr_fallback",
-                    }
-                return True, scene
-            return False, scene
+            # The selected event may have a verified poster and canonical
+            # details, while its EventPoster OCR is still absent. Dropping it
+            # here silently empties the normal CherryFlash scene manifest.
+            images = scene.get("images") or []
+            if isinstance(images, str):
+                images = [images]
+            has_image = isinstance(images, list) and any(
+                isinstance(image, str) and image.strip() for image in images
+            )
+            has_canonical_fields = bool(title and date and location)
+            if not allow_empty_ocr and not (has_image and has_canonical_fields):
+                return False, scene
+            missing_all = ("title", "date", "time", "location")
+            overlay_text = _build_overlay_text(
+                missing=missing_all,
+                title=title,
+                date=date,
+                location=location,
+            )
+            if overlay_text:
+                scene["poster_overlay"] = {
+                    "v": 1,
+                    "missing": list(missing_all),
+                    "text": overlay_text,
+                    "model": "empty_ocr_fallback",
+                }
+            return True, scene
         # Default to "missing everything" if required info isn't even available from event record.
         if not title or not date or not location:
             missing_all = tuple(
