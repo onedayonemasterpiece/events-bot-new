@@ -267,6 +267,20 @@ class VKMentionsRegistry:
             metadata = item.get("metadata", {})
             if not isinstance(metadata, dict):
                 raise VKMentionsRegistryError(f"entries[{idx}].metadata must be an object")
+            # Cached verification expires independently of refresh TTL, including
+            # a prolonged GitHub outage after the last successful update.
+            verified_at = metadata.get("verified_at")
+            if status == "verified" and verified_at is not None:
+                evidence = metadata.get("evidence")
+                if not isinstance(evidence, list) or not evidence or not isinstance(verified_at, str):
+                    status = "candidate"
+                else:
+                    try:
+                        age = time.time() - datetime.fromisoformat(verified_at.replace("Z", "+00:00")).timestamp()
+                        if age < -300 or age > 30 * 86400:
+                            status = "candidate"
+                    except (ValueError, OverflowError):
+                        status = "candidate"
 
             entry = VKMentionEntry(
                 id=entry_id,
