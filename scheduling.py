@@ -352,7 +352,8 @@ async def _run_scheduled_guide_visual_digest(
             vk_delay_seconds=details["vk_delay_seconds"],
         )
         details["result"] = result
-        status = "success" if result.get("published") else "empty" if result.get("reason") == "no_items" else "failed"
+        status = ("success" if result.get("complete", result.get("published")) else
+                  "partial" if result.get("published") else "empty" if result.get("reason") == "no_items" else "failed")
         await finish_ops_run(db, run_id=ops_run_id, status=status, details=details)
         if target_chat_id and bot is not None:
             try:
@@ -396,7 +397,11 @@ async def _run_scheduled_guide_visual_digest_stories_due(
     del run_id
     from guide_excursions.visual_digest import publish_due_visual_digest_vk_stories
 
+    from guide_excursions.max_digest import resume_current_visual_digest
+    # Re-enter the native generator/fan-out on the existing maintenance cadence.
+    max_result = await resume_current_visual_digest(db, bot)
     result = await publish_due_visual_digest_vk_stories(db, bot)
+    result["digest_delivery"] = max_result
     logging.info("SCHED guide_visual_digest_stories_due result=%s", result)
     return result
 
@@ -5353,7 +5358,8 @@ def startup(
             coalesce=True,
             misfire_grace_time=_guide_monitoring_misfire_grace_seconds(),
         )
-        if _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES", default=False):
+        if (_env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_VK_STORIES", default=False)
+                or _env_enabled("ENABLE_GUIDE_VISUAL_DIGEST_MAX", default=False)):
             _register_job(
                 "guide_visual_digest_vk_story_due",
                 _job_wrapper("guide_visual_digest_vk_story_due", _run_scheduled_guide_visual_digest_stories_due, notify_skip=_notify_admin_skip),

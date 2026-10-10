@@ -54,7 +54,7 @@ VISUAL_DIGEST_VK_TARGET = collapse_ws(os.getenv("GUIDE_VISUAL_DIGEST_VK_TARGET")
 VISUAL_DIGEST_TG_MAX_URL = collapse_ws(
     os.getenv("GUIDE_VISUAL_DIGEST_MAX_URL")
     or os.getenv("GUIDE_DIGEST_MAX_URL")
-    or "https://max.ru/join/-aoufdeeRIfMctMnRNYgdTe3CC6tHIqE75xaVYTT7Ec"
+    or "https://max.ru/channel_uh_kaliningrad"
 )
 VISUAL_DIGEST_TG_VK_URL = collapse_ws(
     os.getenv("GUIDE_VISUAL_DIGEST_VK_URL")
@@ -1424,6 +1424,11 @@ async def publish_visual_digest_to_telegram(
 
     targets = list(_parse_target_chats(target_chats if target_chats is not None else VISUAL_DIGEST_TG_TARGET_CHATS))
     card = render_visual_digest_cards(rows, issue_id=int(issue_id))[0]
+    from .max_delivery import run_legacy_delivery
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (int(issue_id),))
+        saved = await cur.fetchone()
+        existing_targets = _json_load(saved[0] if saved else None, {})
     occurrence_ids = [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0]
     published_targets: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
@@ -1432,11 +1437,22 @@ async def publish_visual_digest_to_telegram(
         caption = await build_visual_digest_telegram_text(rows, issue_id=int(issue_id), target_chat=target)
         if not primary_caption:
             primary_caption = caption
+        target_key = _tg_public_target_key(target)
+        if (existing_targets.get(target_key) or {}).get("message_ids"):
+            published_targets[target_key] = existing_targets[target_key]
+            continue
         try:
-            upload = BufferedInputFile(card, filename=f"guide_visual_digest_{int(issue_id)}.jpg")
-            msg = await bot.send_photo(target, upload, caption=caption, parse_mode="HTML")
-            message_id = int(getattr(msg, "message_id", 0) or 0)
-            published_targets[_tg_public_target_key(target)] = {
+            async def send_one():
+                upload = BufferedInputFile(card, filename=f"guide_visual_digest_{int(issue_id)}.jpg")
+                msg = await bot.send_photo(target, upload, caption=caption, parse_mode="HTML")
+                message_id = int(getattr(msg, "message_id", 0) or 0)
+                return {"published": bool(message_id), "message_ids": [message_id] if message_id else []}
+            delivered = await run_legacy_delivery(db, issue_id=int(issue_id), provider="telegram", target_id=target, send=send_one)
+            if not delivered.get("published"):
+                errors[target] = str(delivered.get("reason") or delivered.get("state"))
+                continue
+            message_id = int(delivered["message_ids"][0])
+            published_targets[target_key] = {
                 "message_ids": [message_id] if message_id else [],
                 "text_message_ids": [],
                 "media_message_ids": [message_id] if message_id else [],
@@ -1446,10 +1462,13 @@ async def publish_visual_digest_to_telegram(
                 "attachments_count": 1,
                 "cards_count": 1,
             }
+            await _update_visual_issue_publication_state(db, issue_id=int(issue_id), target_chat=target,
+                text=caption, targets_update={target_key: published_targets[target_key]},
+                occurrence_ids=occurrence_ids, status="partial")
         except Exception as exc:
             logger.exception("guide_visual_digest_tg_publish_failed issue_id=%s target=%s", issue_id, target)
             errors[target] = str(exc) or type(exc).__name__
-    if published_targets:
+    if published_targets and any(existing_targets.get(key) != value for key, value in published_targets.items()):
         await _update_visual_issue_publication_state(
             db,
             issue_id=int(issue_id),
@@ -1753,6 +1772,7 @@ async def build_visual_digest_telegram_text(
     *,
     issue_id: int,
     target_chat: str | int | None = None,
+    include_footer: bool = True,
 ) -> str:
     items = [dict(r) for r in rows]
     period = _period_of(items)
@@ -1780,7 +1800,9 @@ async def build_visual_digest_telegram_text(
         else:
             line = f"{idx}. {html.escape(title, quote=False)}"
         lines.append(line)
-    footer_tail = ["", " ".join(_digest_hashtags(items)), "", _visual_digest_telegram_footer(target_chat)]
+    footer_tail = ["", " ".join(_digest_hashtags(items))]
+    if include_footer:
+        footer_tail.extend(["", _visual_digest_telegram_footer(target_chat)])
     lines.extend(footer_tail)
     text = "\n".join(lines).strip()
     if len(text) <= 1024:
@@ -1901,6 +1923,34 @@ def default_review_publish_date(*, delay_days: int = VISUAL_DIGEST_REVIEW_DELAY_
 
 
 async def publish_visual_digest_to_vk(
+    db: Database, bot: Any | None = None, *, issue_id: int | None = None,
+    max_cards: int = VISUAL_DIGEST_MAX_CARDS_DEFAULT, group_id: str | int | None = None,
+    target: str | None = None, publish_date: int | None = None,
+    vk_api_fn: Callable[..., Awaitable[Any]] | None = None,
+    post_to_vk_fn: Callable[..., Awaitable[str | None]] | None = None,
+    upload_vk_photo_bytes_fn: Callable[..., Awaitable[str | None]] | None = None,
+    publish_stories: bool = False,
+) -> dict[str, Any]:
+    from .max_delivery import run_legacy_delivery
+    if issue_id is None:
+        built = await build_visual_digest_issue(db, max_cards=max_cards)
+        issue_id = int(built["issue_id"])
+    group = await _resolve_vk_group_id(db=db, bot=bot, group_id=group_id, target=target, vk_api_fn=vk_api_fn)
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT published_targets_json FROM guide_digest_issue WHERE id=?", (issue_id,))
+        saved = await cur.fetchone()
+    for key, receipt in _json_load(saved[0] if saved else None, {}).items():
+        if key.startswith("vk:") and int(receipt.get("group_id") or 0) == group and receipt.get("post_urls"):
+            return dict(receipt, published=True, issue_id=issue_id, target=key, url=receipt["post_urls"][0])
+    async def send_one():
+        return await _publish_visual_digest_to_vk_once(
+            db, bot, issue_id=issue_id, max_cards=max_cards, group_id=group, target=target,
+            publish_date=publish_date, vk_api_fn=vk_api_fn, post_to_vk_fn=post_to_vk_fn,
+            upload_vk_photo_bytes_fn=upload_vk_photo_bytes_fn, publish_stories=publish_stories)
+    return await run_legacy_delivery(db, issue_id=issue_id, provider="vk", target_id=str(group), send=send_one)
+
+
+async def _publish_visual_digest_to_vk_once(
     db: Database,
     bot: Any | None = None,
     *,
@@ -2058,43 +2108,46 @@ async def publish_visual_digest_daily(
     vk_target: str | None = None,
     vk_delay_seconds: int = VISUAL_DIGEST_VK_DELAY_SECONDS,
     publish_stories: bool | None = None,
+    resume_issue_id: int | None = None,
 ) -> dict[str, Any]:
-    """Build and publish the one-card daily visual digest to Telegram + VK."""
+    """Resume today's edition and independently fan out provider deliveries."""
+    from .max_digest import existing_daily_issue_id, publish_visual_digest_to_max, max_enabled
 
-    built = await build_visual_digest_issue(db, max_cards=max_cards, card_limit=VISUAL_DIGEST_CARD_LIMIT)
+    existing_id = int(resume_issue_id) if resume_issue_id is not None else await existing_daily_issue_id(db)
+    if existing_id is not None:
+        issue = await load_visual_digest_issue(db, existing_id)
+        built = {"issue_id": existing_id, "items": (issue or {}).get("items", [])}
+    else:
+        built = await build_visual_digest_issue(db, max_cards=max_cards, card_limit=VISUAL_DIGEST_CARD_LIMIT)
     issue_id = int(built["issue_id"])
     rows = list(built.get("items") or [])
     if not rows:
         return {"published": False, "reason": "no_items", "issue_id": issue_id, "family": VISUAL_DIGEST_FAMILY}
-
-    tg_result: dict[str, Any] | None = None
+    results: dict[str, Any] = {}
     if VISUAL_DIGEST_TELEGRAM_ENABLED:
-        tg_result = await publish_visual_digest_to_telegram(
-            db,
-            bot,
-            issue_id=issue_id,
-            max_cards=1,
-            target_chats=target_chats,
-        )
+        try:
+            results["telegram"] = await publish_visual_digest_to_telegram(db, bot, issue_id=issue_id,
+                                                                          max_cards=1, target_chats=target_chats)
+        except Exception:
+            logger.error("guide_visual_provider_failed issue_id=%s provider=telegram", issue_id)
+            results["telegram"] = {"published": False, "reason": "provider_failure"}
     vk_publish_date = default_vk_publish_date(delay_seconds=vk_delay_seconds)
-    vk_result = await publish_visual_digest_to_vk(
-        db,
-        bot,
-        issue_id=issue_id,
-        max_cards=1,
-        group_id=vk_group_id,
-        target=vk_target,
-        publish_date=vk_publish_date,
-        publish_stories=VISUAL_DIGEST_STORIES_ENABLED if publish_stories is None else bool(publish_stories),
-    )
+    try:
+        results["vk"] = await publish_visual_digest_to_vk(
+            db, bot, issue_id=issue_id, max_cards=1, group_id=vk_group_id, target=vk_target,
+            publish_date=vk_publish_date,
+            publish_stories=VISUAL_DIGEST_STORIES_ENABLED if publish_stories is None else bool(publish_stories))
+    except Exception:
+        logger.error("guide_visual_provider_failed issue_id=%s provider=vk", issue_id)
+        results["vk"] = {"published": False, "reason": "provider_failure"}
+    if max_enabled():
+        results["max"] = await publish_visual_digest_to_max(db, issue_id=issue_id)
+    complete = all(result.get("published") and not result.get("errors") for result in results.values())
     return {
-        "published": bool((tg_result or {}).get("published") or vk_result.get("published")),
-        "issue_id": issue_id,
-        "family": VISUAL_DIGEST_FAMILY,
-        "items": len(rows),
-        "telegram": tg_result,
-        "vk": vk_result,
-        "vk_publish_date": vk_publish_date,
+        "published": any(result.get("published") for result in results.values()),
+        "complete": complete, "state": "complete" if complete else "partial",
+        "issue_id": issue_id, "family": VISUAL_DIGEST_FAMILY, "items": len(rows),
+        **results, "vk_publish_date": vk_publish_date,
         "occurrence_ids": [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0],
     }
 
