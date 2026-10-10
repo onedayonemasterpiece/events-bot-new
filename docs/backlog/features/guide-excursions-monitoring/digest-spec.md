@@ -2,6 +2,20 @@
 
 ## Native MAX delivery (2026-10)
 
+An explicit VibePublish owner adjudication is a distinct terminal result:
+`owner_confirmed_present`, never provider-verified `published`. The client
+accepts it only on the original unknown operation with its sole exact
+attempt/destination/native target, required evidence and
+`quarantine_release=done`; pending release remains GET-only. The ledger
+retains the original error, frozen payload, operation and adjudication audit.
+It cannot resend or downgrade this terminal acknowledgment. Legacy TG/VK
+receipts remain unchanged; no fabricated MAX success is written into
+`published_targets_json`. The daily result reports
+`complete_with_owner_confirmation`; older acknowledged editions leave the
+pending scan. Future editions retain independent native generation/delivery.
+This adapter only observes an owner decision; it never invokes adjudication.
+
+
 The authoritative source is the backend edition in `guide_digest_issue` and
 the normal `publish_visual_digest_daily` generator/fan-out. MAX uses the same
 `build_visual_digest_telegram_text` and JPEG renderer, compiled to VibePublish

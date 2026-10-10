@@ -66,7 +66,7 @@ async def _record(db, row, *, state: str, receipt=None, operation_id=None, error
         await conn.execute(
             "UPDATE guide_visual_delivery SET state=?, operation_id=COALESCE(?, operation_id), "
             "receipt_json=COALESCE(?, receipt_json), error_code=?, updated_at=CURRENT_TIMESTAMP "
-            "WHERE request_key=? AND state!='published'",
+            "WHERE request_key=? AND state NOT IN ('published','owner_confirmed_present')",
             (state, operation_id, json.dumps(receipt) if receipt is not None else None,
              error_code, row["request_key"]),
         )
@@ -88,7 +88,7 @@ async def drive_delivery(db, row: Mapping[str, Any], transport) -> dict[str, Any
     zero-dispatch, single-admission recovery key. Unknown effects never resend.
     """
     row = await get_delivery(db, row["request_key"])
-    if row["state"] == "published":
+    if row["state"] in {"published", "owner_confirmed_present"}:
         return row
     claimed = False
     async with db.raw_conn() as conn:
@@ -118,7 +118,15 @@ async def drive_delivery(db, row: Mapping[str, Any], transport) -> dict[str, Any
     receipt = dict(receipt_raw)
     if state == "published" and not receipt.get("post_urls") and not receipt.get("message_ids") and not receipt.get("item_ref"):
         state = "outcome_unknown"
-    if state not in {"published", "accepted", "scheduled", "failed", "outcome_unknown"}:
+    if state == "owner_confirmed_present":
+        adjudication = receipt.get("adjudication")
+        if (not isinstance(adjudication, Mapping)
+                or adjudication.get("disposition") != "owner_confirmed_present"
+                or adjudication.get("quarantine_release") != "done"
+                or adjudication.get("original_outcome") != "outcome_unknown"
+                or adjudication.get("replay_allowed") is not False):
+            state = "outcome_unknown"
+    if state not in {"published", "owner_confirmed_present", "accepted", "scheduled", "failed", "outcome_unknown"}:
         state = "outcome_unknown"
     error_code = result.get("error_code")
     if error_code and (not str(error_code).replace("_", "").isalnum() or len(str(error_code)) > 80):

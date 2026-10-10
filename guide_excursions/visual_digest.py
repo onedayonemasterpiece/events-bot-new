@@ -2142,10 +2142,13 @@ async def publish_visual_digest_daily(
         results["vk"] = {"published": False, "reason": "provider_failure"}
     if max_enabled():
         results["max"] = await publish_visual_digest_to_max(db, issue_id=issue_id)
-    complete = all(result.get("published") and not result.get("errors") for result in results.values())
+    owner_confirmed = any(result.get("state") == "owner_confirmed_present" for result in results.values())
+    complete = all((result.get("published") or result.get("state") == "owner_confirmed_present")
+                   and not result.get("errors") for result in results.values())
+    state = "complete_with_owner_confirmation" if complete and owner_confirmed else ("complete" if complete else "partial")
     return {
         "published": any(result.get("published") for result in results.values()),
-        "complete": complete, "state": "complete" if complete else "partial",
+        "complete": complete, "state": state,
         "issue_id": issue_id, "family": VISUAL_DIGEST_FAMILY, "items": len(rows),
         **results, "vk_publish_date": vk_publish_date,
         "occurrence_ids": [int(row["id"]) for row in rows if int(row.get("id") or 0) > 0],
