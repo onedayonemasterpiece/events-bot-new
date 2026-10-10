@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:maxdigest-6bb8c8bde960
+    image: runcoveer/events:maxrecovery-c4fa01923bd9
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
