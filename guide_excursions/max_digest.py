@@ -166,8 +166,10 @@ async def publish_visual_digest_to_max(db, *, issue_id, client_factory=None):
                 logger.error("guide_visual_max_blocked issue_id=%s target_id=%s reason=%s",
                              issue_id, target["native_id"], reason)
                 results.append({"published": False, "state": "blocked", "target": target["native_id"], "reason": reason})
-        complete = bool(results) and all(r["published"] for r in results)
-        return {"published": complete, "state": "published" if complete else "pending",
+        published = bool(results) and all(r["published"] for r in results)
+        complete = bool(results) and all(r.get("state") in {"published", "owner_confirmed_present"} for r in results)
+        state = "published" if published else ("owner_confirmed_present" if complete else "pending")
+        return {"published": published, "complete": complete, "state": state,
                 "issue_id": issue_id, "deliveries": results}
     except SnapshotUnavailable as exc:
         logger.warning("guide_visual_max_blocked issue_id=%s reason=%s", issue_id, str(exc))
@@ -189,7 +191,7 @@ async def resume_current_visual_digest(db, bot):
     async with db.raw_conn() as conn:
         await ensure_delivery_schema(conn)
         cur = await conn.execute("SELECT DISTINCT issue_id FROM guide_visual_delivery "
-                                 "WHERE provider='max' AND state!='published' ORDER BY issue_id DESC LIMIT 20")
+                                 "WHERE provider='max' AND state NOT IN ('published','owner_confirmed_present') ORDER BY issue_id DESC LIMIT 20")
         pending = [int(row[0]) for row in await cur.fetchall()]
     ids = list(dict.fromkeys(([current] if current else []) + pending))
     if not ids:

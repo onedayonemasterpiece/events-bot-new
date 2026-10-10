@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+from datetime import datetime
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
@@ -112,6 +113,8 @@ class VibePublishClient:
 
     def _recovery_candidate(self, data, operation_id):
         for receipt in _receipts(data):
+            if 'adjudication' in receipt:
+                continue
             deliveries = receipt.get('deliveries') or []
             if (receipt.get('operation_id') != operation_id or receipt.get('action') != 'publish' or receipt.get('operation_complete') is not True
                     or receipt.get('state') not in {'blocked', 'failed'} or len(deliveries) != 1):
@@ -150,6 +153,54 @@ class VibePublishClient:
                 "delivery": {"kind": "now"}, "mode": "execute", "request_key": key}
         return await self._request("POST", "/v1/publications", key=key, body=body)
 
+
+    def _owner_adjudication(self, receipt, operation_id):
+        """A separate owner acknowledgment, never provider publication proof."""
+        value = receipt.get("adjudication")
+        required = {"adjudication_id", "disposition", "original_operation_id", "attempt_id",
+                    "destination", "native_target", "native_id", "item_ref", "url",
+                    "media_sha256", "recorded_at", "quarantine_release", "original_outcome",
+                    "replay_allowed"}
+        if not isinstance(value, dict) or set(value) != required:
+            return None
+        deliveries = receipt.get("deliveries")
+        if (receipt.get("state") != "outcome_unknown" or receipt.get("operation_complete") is not True
+                or receipt.get("action") != "publish" or receipt.get("operation_id") != operation_id
+                or not isinstance(deliveries, list) or len(deliveries) != 1):
+            return None
+        delivery = deliveries[0]
+        if (not isinstance(delivery, dict) or delivery.get("destination") != self.payload.get("alias")
+                or delivery.get("provider") != "max" or delivery.get("state") != "outcome_unknown"
+                or value.get("disposition") != "owner_confirmed_present"
+                or value.get("original_operation_id") != operation_id
+                or value.get("destination") != self.payload.get("alias")
+                or str(value.get("native_target")) != str(self.payload.get("native_id"))
+                or value.get("original_outcome") != "outcome_unknown"
+                or value.get("replay_allowed") is not False
+                or value.get("quarantine_release") not in {"pending", "done"}):
+            return None
+        for field in ("adjudication_id", "attempt_id", "native_id", "item_ref"):
+            if not isinstance(value.get(field), str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", value[field]):
+                return None
+        if delivery.get("attempt_id") != value["attempt_id"]:
+            return None
+        hashes = value.get("media_sha256")
+        if (not isinstance(hashes, list) or len(hashes) != 1
+                or not all(isinstance(h, str) and re.fullmatch(r"[0-9a-f]{64}", h) for h in hashes)):
+            return None
+        try:
+            url = urlsplit(value["url"])
+            port = url.port
+            instant = datetime.fromisoformat(value["recorded_at"].replace("Z", "+00:00"))
+        except (TypeError, ValueError, AttributeError):
+            return None
+        if (url.scheme != "https" or url.hostname != "max.ru" or url.username or url.password
+                or port or url.query or url.fragment or instant.tzinfo is None
+                or not (url.path == f"/c/{self.payload.get('native_id')}/{value['native_id']}"
+                        or re.fullmatch(r"/[A-Za-z0-9_]{1,64}/" + re.escape(value["native_id"]), url.path))):
+            return None
+        return dict(value)
+
     def _publication_result(self, data):
         operation_id = _operation_id(data)
         result = {"state": "accepted" if operation_id else "outcome_unknown", "operation_id": operation_id}
@@ -171,6 +222,16 @@ class VibePublishClient:
                 elif state in {"failed", "blocked", "needs_review", "outcome_unknown"}:
                     result.update(state="outcome_unknown" if state == "outcome_unknown" else "failed",
                                   error_code=_remote_error_code(delivery.get("error"), result.get("error_code") or "provider_" + state))
+        for receipt in _receipts(data):
+            adjudication = self._owner_adjudication(receipt, operation_id)
+            if adjudication is not None:
+                result.update(state="owner_confirmed_present" if adjudication["quarantine_release"] == "done" else "outcome_unknown",
+                              error_code=_remote_error_code(receipt.get("error"), "max_outcome_unknown"),
+                              receipt={"transport": "vibepublish_max", "operation_id": operation_id,
+                                       "verification": "owner_confirmed_present",
+                                       "post_urls": [adjudication["url"]], "item_ref": adjudication["item_ref"],
+                                       "adjudication": adjudication})
+                break
         if self.recovery_record:
             result.setdefault('receipt', {})['recovery'] = dict(self.recovery_record)
             if result.get('state') == 'failed' and self.recovery_record.get('state') == 'rejected':
