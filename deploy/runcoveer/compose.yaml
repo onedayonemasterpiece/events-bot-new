@@ -5,7 +5,13 @@ services:
     env_file:
       - /opt/runcoveer/events/.env.production
     environment:
-      ENABLE_GUIDE_VISUAL_DIGEST_MAX: "0"
+      ENABLE_GUIDE_VISUAL_DIGEST_MAX: "1"
+      GUIDE_VIBEPUBLISH_URL: "https://mcp-vibepublish.kenigevents.ru"
+      GUIDE_VISUAL_DIGEST_MAX_ALIAS: "max_224b98c2579885727f4c"
+      GUIDE_VISUAL_DIGEST_MAX_NATIVE_ID: "-76480585669200"
+      GUIDE_VISUAL_DIGEST_MAX_BINDING_REVISION: "1"
+      GUIDE_VISUAL_DIGEST_MAX_URL: "https://max.ru/channel_uh_kaliningrad"
+      GUIDE_VISUAL_DIGEST_MAX_TARGETS: ""
       DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
       ENABLE_RUNTIME_FILE_LOGGING: "1"
       RUNTIME_LOG_RETENTION_HOURS: "168"
