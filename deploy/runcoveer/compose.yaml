@@ -1,10 +1,11 @@
 services:
   events:
-    image: runcoveer/events:cherry9671-a9abd662
+    image: runcoveer/events:maxdigest-6bb8c8bde960
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
     environment:
+      ENABLE_GUIDE_VISUAL_DIGEST_MAX: "0"
       DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
       ENABLE_RUNTIME_FILE_LOGGING: "1"
       RUNTIME_LOG_RETENTION_HOURS: "168"

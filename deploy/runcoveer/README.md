@@ -75,9 +75,31 @@ After data and product preflight, set `DEPLOY_PREFLIGHT=0` and recreate containe
 verify Telegram `getWebhookInfo`, real Telegram `/start` and representative
 read-only product routes. Check external callers using old Fly URLs separately.
 
+## MAX digest implementation rollout (2026-10-10)
+
+Production Events now uses `runcoveer/events:maxdigest-6bb8c8bde960`, exact full
+source `6bb8c8bde960f3ae0eb0458635ef9ba3f1420a04` (PR #736), image ID
+`sha256:0509c59e6b23bf965a53337def17344f0a0075a92da3467339f1b85a1f6ee264`.
+All four CI jobs passed on final head `be7358845d1c11b0d8432b889dd8f7bc221cf134`.
+The dependency inputs remained unchanged against qualified `4b23f991-slim`;
+the full `/app` exact archive replaced old source and regenerated provenance.
+The CherryFlash module hash below is preserved.
+
+Isolated no-network consistent-DB preflight passed, including both lazy MAX
+ledger/snapshot schemas. Events-only cutover at 2026-10-10 11:42:34 UTC returned
+`ok=true`, `ready=true`, `issues=[]`; new Events container is
+`918a0dd28cc92fdf565491b9f789be7fd50c1e68a0e6c4fb9e321dd7bb9230b5`.
+Kotopogoda container `05f91f1e423b757b6d0e8938b5da19cc6cb4017cda6b5a79c2a5a160b3a20784`
+was unchanged. `ENABLE_GUIDE_VISUAL_DIGEST_MAX=0` remains explicit: this receipt
+proves implementation deployment, not a MAX publication or activated binding.
+Activation requires the verified destination and scoped service configuration.
+The nonsecret cutover receipt and previous Compose are retained under
+`/opt/runcoveer/releases/events-6bb8c8bde960f3ae0eb0458635ef9ba3f1420a04/`.
+Immediate rollback is the CherryFlash image below, never the older plain base.
+
 ## CherryFlash scene-selection hotfix (2026-10-09)
 
-Production Events is currently pinned to immutable local image
+Previous production Events was pinned to immutable local image
 `runcoveer/events:cherry9671-a9abd662` (image ID
 `sha256:72c83df980d5c3baaa40445c49516b570616afabfec99e52b06791578c425abd`).
 This is an intentionally **limited source-layer overlay**, not a full-source
