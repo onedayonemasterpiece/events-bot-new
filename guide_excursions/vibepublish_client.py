@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
@@ -71,9 +72,15 @@ def _operation_id(data):
     return None
 
 
+def _remote_error_code(error, fallback):
+    code = error.get('code') if isinstance(error, dict) else None
+    return code if isinstance(code, str) and re.fullmatch(r'[a-z][a-z0-9_]{0,79}', code) else fallback
+
+
 class VibePublishClient:
     def __init__(self, payload=None, *, base_url=None, token=None):
         self.payload = dict(payload or {})
+        self.recovery_record = {}
         self.base_url = (base_url or os.getenv("GUIDE_VIBEPUBLISH_URL") or "").rstrip("/")
         self.token = token or os.getenv("GUIDE_VIBEPUBLISH_SERVICE_TOKEN") or ""
         if urlsplit(self.base_url).scheme != "https" or not self.token:
@@ -99,6 +106,24 @@ class VibePublishClient:
                         code = "provider_error"
                     raise SnapshotUnavailable(code)
                 return result
+
+    def restore_recovery(self, record):
+        self.recovery_record = dict(record) if isinstance(record, dict) else {}
+
+    def _recovery_candidate(self, data, operation_id):
+        for receipt in _receipts(data):
+            deliveries = receipt.get('deliveries') or []
+            if (receipt.get('operation_id') != operation_id or receipt.get('action') != 'publish' or receipt.get('operation_complete') is not True
+                    or receipt.get('state') not in {'blocked', 'failed'} or len(deliveries) != 1):
+                continue
+            delivery = deliveries[0]
+            publication_id, revision = receipt.get('resource_id'), receipt.get('revision')
+            if (delivery.get('destination') == self.payload.get('alias') and delivery.get('provider') == 'max'
+                    and delivery.get('state') in {'blocked', 'failed'} and delivery.get('observed') == 'not_attempted'
+                    and isinstance(publication_id, str) and re.fullmatch(r'pub_[a-zA-Z0-9]+', publication_id)
+                    and isinstance(revision, int) and not isinstance(revision, bool) and revision > 0):
+                return publication_id, revision
+        return None
 
     async def verify_binding(self, payload):
         bootstrap = await self._request("GET", "/v1/bootstrap")
@@ -130,7 +155,7 @@ class VibePublishClient:
         result = {"state": "accepted" if operation_id else "outcome_unknown", "operation_id": operation_id}
         for receipt in _receipts(data):
             if receipt.get("state") in {"failed", "blocked", "needs_review", "outcome_unknown"}:
-                result.update(state="outcome_unknown" if receipt["state"] == "outcome_unknown" else "failed", error_code="operation_" + receipt["state"])
+                result.update(state="outcome_unknown" if receipt["state"] == "outcome_unknown" else "failed", error_code=_remote_error_code(receipt.get("error"), "operation_" + receipt["state"]))
             for delivery in receipt.get("deliveries") or []:
                 if delivery.get("destination") != self.payload.get("alias") or delivery.get("provider") != "max":
                     continue
@@ -145,7 +170,11 @@ class VibePublishClient:
                     result["state"] = "scheduled"
                 elif state in {"failed", "blocked", "needs_review", "outcome_unknown"}:
                     result.update(state="outcome_unknown" if state == "outcome_unknown" else "failed",
-                                  error_code="provider_" + state)
+                                  error_code=_remote_error_code(delivery.get("error"), result.get("error_code") or "provider_" + state))
+        if self.recovery_record:
+            result.setdefault('receipt', {})['recovery'] = dict(self.recovery_record)
+            if result.get('state') == 'failed' and self.recovery_record.get('state') == 'rejected':
+                result['error_code'] = self.recovery_record.get('error_code') or result.get('error_code')
         return result
 
     async def submit(self, payload, key):
@@ -155,6 +184,39 @@ class VibePublishClient:
     async def observe(self, key, operation_id):
         if operation_id:
             data = await self._request("GET", "/v1/operations/" + operation_id)
+            if _operation_id(data) != operation_id:
+                raise SnapshotUnavailable("operation_identity_mismatch")
+            candidate = self._recovery_candidate(data, operation_id)
+            if candidate and self.recovery_record.get('state') in {None, 'requested'}:
+                # Explicit recovery of the SAME frozen operation, never a new publish.
+                # Server atomically requires dispatched=0 and makes this key a
+                # single admission forever. Lost replies replay that same key.
+                publication_id, revision = candidate
+                if self.recovery_record and (self.recovery_record.get('publication_id'), self.recovery_record.get('revision')) != candidate:
+                    raise SnapshotUnavailable('recovery_identity_changed')
+                await self.verify_binding(self.payload)
+                recovery_key = key + '-recover-v1'
+                self.recovery_record = {'request_key': recovery_key, 'publication_id': publication_id,
+                                        'revision': revision, 'state': 'requested'}
+                try:
+                    recovered = await self._request('POST', '/v1/publications/' + publication_id + '/commands',
+                        key=recovery_key, body={'expected_revision': revision,
+                                               'change': {'kind': 'retry_failed', 'destinations': [self.payload['alias']]}})
+                except SnapshotUnavailable as exc:
+                    code = str(exc)
+                    if code in {'vibepublish_http_408', 'vibepublish_http_429'} or code.startswith('vibepublish_http_5'):
+                        # Ambiguous/transient response: preserve the recovery key;
+                        # next observation may only reconcile that same admission.
+                        raise
+                    # A definite refusal is recorded once; do not loop on denial.
+                    self.recovery_record.update(state='rejected', error_code=code)
+                    return self._publication_result(data)
+                self.recovery_record['state'] = 'acknowledged'
+                if _operation_id(recovered) != operation_id:
+                    result = self._publication_result(data)
+                    result['error_code'] = 'recovery_operation_identity_changed'
+                    return result
+                data = recovered
         else:
             # The server atomically persists principal+key+intent forever. Exact
             # admission replay recovers its operation ID; it cannot dispatch twice.

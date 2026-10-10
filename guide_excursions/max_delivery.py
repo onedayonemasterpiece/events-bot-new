@@ -82,10 +82,10 @@ async def _record(db, row, *, state: str, receipt=None, operation_id=None, error
 async def drive_delivery(db, row: Mapping[str, Any], transport) -> dict[str, Any]:
     """transport.submit(payload,key), observe(key,operation_id) are bounded calls.
 
-    Observe is read-only, including after a process dies before saving a reply.
-    A missing remote operation is not proof of non-delivery. No automatic retry
-    of failed/unknown work is allowed here. A provider-safe retry belongs to the
-    original remote operation's explicit recovery flow, never a fresh request.
+    Observation preserves the original identity after restart or reply loss.
+    A missing remote operation is not proof of non-delivery. A transport may
+    explicitly recover the same frozen operation only through a server-proven
+    zero-dispatch, single-admission recovery key. Unknown effects never resend.
     """
     row = await get_delivery(db, row["request_key"])
     if row["state"] == "published":
@@ -98,6 +98,8 @@ async def drive_delivery(db, row: Mapping[str, Any], transport) -> dict[str, Any
         claimed = cur.rowcount == 1
         await conn.commit()
     row = await get_delivery(db, row["request_key"])
+    if hasattr(transport, "restore_recovery"):
+        transport.restore_recovery(row["receipt"].get("recovery"))
     try:
         result = (await transport.submit(row["payload"], row["request_key"]) if claimed
                   else await transport.observe(row["request_key"], row.get("operation_id")))
