@@ -1,5 +1,7 @@
 # E2E Scenario Index
 
+- Guide visual digest MAX: invoke the standard daily generator/fan-out on the already published current backend edition; verify only missing MAX delivery, full named links and shared card, stable request/operation after restart, unchanged TG/VK receipts and edition count. Offline contracts: `tests/test_guide_max_delivery.py`, `tests/test_guide_max_pipeline.py`; configuration and recovery: [digest delivery spec](../backlog/features/guide-excursions-monitoring/digest-spec.md#native-max-delivery-2026-10). Live publication is an explicit owner acceptance, never a hidden test post.
+
 Канонический реестр E2E/BDD сценариев проекта.
 
 Focus email has two distinct gates. The fixed

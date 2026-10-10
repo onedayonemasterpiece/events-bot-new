@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added native MAX delivery to the existing guide visual-digest generator and scheduler: backend-authoritative editions, Telegram-style named links and shared cards, verified scoped destination bindings, independent durable delivery receipts, exact-key recovery, and safe partial-failure logging. Existing published editions resume only missing targets without repeating Telegram/VK sends; future MAX channels require their own verified binding and grant.
+
 - Deployed authority-scoped partner event creation on RunCoveer from canonical
   main `4b23f991842abb53c26bb95429444d4e5d741e3a` as
   `runcoveer/events:4b23f991-slim`. Venue/organizer/festival/person/collective/

@@ -4,6 +4,23 @@ on:
     branches: [ main ]
 
 jobs:
+  guide-visual-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Verify native guide digest delivery and restart contracts
+        run: >-
+          python -m pytest -q
+          tests/test_guide_max_delivery.py
+          tests/test_guide_max_pipeline.py
+          tests/test_guide_visual_digest.py
+          tests/test_guide_gemma4_prompt_contract.py
+
   smart-update-identity-state-machine:
     runs-on: ubuntu-latest
     timeout-minutes: 20

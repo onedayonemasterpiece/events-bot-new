@@ -1,5 +1,69 @@
 # Guide Excursions Digest Spec
 
+## Native MAX delivery (2026-10)
+
+The authoritative source is the backend edition in `guide_digest_issue` and
+the normal `publish_visual_digest_daily` generator/fan-out. MAX uses the same
+`build_visual_digest_telegram_text` and JPEG renderer, compiled to VibePublish
+structured named links with full URLs; it never copies a Telegram post or
+reuses VK-shortened issue text. The first canonical payload is frozen in
+`guide_visual_snapshot` for exact retry identity.
+
+The existing daily slot remains 10:30 Europe/Kaliningrad. The existing
+five-minute visual-delivery maintenance job re-enters the same native daily
+entrypoint for today's existing edition. It does not create an extra edition
+before the daily slot. Existing Telegram/VK receipts skip their already
+successful targets. Provider errors do not prevent independent siblings.
+The one-time acceptance for edition 289 must invoke that same entrypoint:
+same edition/membership, canonical generation, only missing MAX delivery.
+
+Configuration is fail-closed:
+- `ENABLE_GUIDE_VISUAL_DIGEST_MAX=1`
+- `GUIDE_VIBEPUBLISH_URL=https://mcp-vibepublish.kenigevents.ru`
+- `GUIDE_VIBEPUBLISH_SERVICE_TOKEN` installed by the approved secure service
+  setup, never stored in source, reports or log output
+- `GUIDE_VISUAL_DIGEST_MAX_TARGETS`: JSON list of explicitly enabled verified
+  objects `{alias,native_id,binding_revision}`. The current rollout enables
+  only the owner's verified `https://max.ru/channel_uh_kaliningrad` channel.
+  Future channels require their own verified product binding and grant.
+- A single-target deployment may use `GUIDE_VISUAL_DIGEST_MAX_ALIAS`,
+  `GUIDE_VISUAL_DIGEST_MAX_NATIVE_ID`, and
+  `GUIDE_VISUAL_DIGEST_MAX_BINDING_REVISION` instead.
+
+Before admission the adapter verifies the scoped bootstrap alias, provider,
+native ID and revision. Configuration is not permission; VibePublish grants
+remain authoritative. No TG source-read scope is required. Each MAX channel
+has an independent stable edition/native-ID key in `guide_visual_delivery`.
+One atomic claimant submits; restarts observe the saved operation. If the
+reply was lost before its ID was saved, the client repeats the exact original
+admission key/body: VibePublish's durable principal-scoped idempotency returns
+the original operation rather than dispatching again. Never invent a new key,
+change principal, clear an unknown row, or replay with changed content.
+
+`accepted`, `scheduled`, and `outcome_unknown` are not publication success.
+Completion requires the exact MAX destination's verified published receipt
+and complete operation. TG/VK legacy sends also have per-target durable claims:
+an uncertain legacy send stops for provider investigation because those
+transports lack durable admission replay. Existing successful siblings remain
+unchanged. Aggregate scheduler status is partial until all enabled targets
+have succeeded.
+
+Incident evidence: query the issue's provider receipts and
+`guide_visual_delivery` by issue_id/provider/target_id/request_key/operation_id.
+Logs use `guide_visual_delivery`, `guide_visual_max_blocked`, and
+`guide_visual_provider_failed` with safe machine codes, not bearer tokens,
+private payloads or signed URLs. Preserve the original operation and use
+VibePublish status/reconcile for unknown results; do not blindly republish.
+
+Verification:
+`python -m pytest -q tests/test_guide_max_delivery.py
+tests/test_guide_max_pipeline.py tests/test_guide_visual_digest.py`.
+Fixtures cover lost replies, crashes, concurrent claims, multiple independent
+targets, wrong-binding rejection, full named links, receipt observation and
+the native daily entrypoint resuming an existing edition without TG/VK sends.
+Live acceptance additionally requires the production MAX post/receipt,
+unchanged TG/VK receipts and no second issue for that day.
+
 > **Status:** Implementation-ready digest and delivery spec  
 > **Scope:** UX, versioned component naming, temporary media scheme, Telegram output constraints.
 

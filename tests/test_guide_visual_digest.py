@@ -74,7 +74,7 @@ async def test_visual_digest_telegram_text_uses_title_links_without_shortener():
     assert "#Калининград" in text
     assert "#Амалиенау" in text
     assert '<a href="https://t.me/wheretogo39">Подписаться</a>' in text
-    assert '<a href="https://max.ru/join/-aoufdeeRIfMctMnRNYgdTe3CC6tHIqE75xaVYTT7Ec">Max</a>' in text
+    assert '<a href="https://max.ru/channel_uh_kaliningrad">Max</a>' in text
     assert '<a href="https://vk.ru/uhtykaliningrad">Вконтакте</a>' in text
     assert '#Амалиенау\n\n<a href="https://t.me/wheretogo39">Подписаться</a>' in text
 
