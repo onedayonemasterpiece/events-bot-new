@@ -75,9 +75,42 @@ After data and product preflight, set `DEPLOY_PREFLIGHT=0` and recreate containe
 verify Telegram `getWebhookInfo`, real Telegram `/start` and representative
 read-only product routes. Check external callers using old Fly URLs separately.
 
+## MAX recovery release (2026-10-10 13:12 UTC)
+
+Production Events uses `runcoveer/events:maxrecovery-c4fa01923bd9`, exact source
+`c4fa01923bd9de5a5ba329f9876b7e3a97b2cfce` (PR #740, four CI checks passed),
+image ID `sha256:31442ea2c7da93f7a25e51fd6be440cc6f3d73a339457d4de71a36e9904e76df`.
+The disk-bounded source delta over the qualified full-source image below changed
+seven files with no deletions or renames. All 4,412 tracked file hashes, complete
+tree membership, file types and Git executable bits were verified against the
+exact commit; generated provenance was refreshed. Dependency inputs and the
+CherryFlash module hash were unchanged.
+
+The previously established isolated consistent DB copy from today's initial
+rollout was reused, with its provenance retained. SQLite `quick_check`, both
+lazy MAX schemas, and network-none candidate startup passed. No live DB was
+mounted into that preflight. Events-only cutover completed at 13:12:04 UTC:
+`ok=true`, `ready=true`, `issues=[]`, MAX remained enabled, and the original
+operation/request/payload identity was unchanged. Events container became
+`d3280ff574d8f8d16bb58307bf6ae301663be33d1631f1e77b1942a3f4007a51`;
+Kotopogoda retained its exact container identity recorded below.
+VibePublish prerequisite source `5879a32a7dd3a8b2deff0458c3fe8cdde5f4edd0`
+was already verified live. The ordinary maintenance scheduler owns observation
+and bounded recovery; this release receipt does not claim MAX publication.
+
+Build, preflight and cutover receipts are retained under
+`/opt/runcoveer/releases/events-c4fa01923bd9de5a5ba329f9876b7e3a97b2cfce/`.
+The immediate image rollback is `runcoveer/events:maxdigest-6bb8c8bde960`,
+ID `sha256:0509c59e6b23bf965a53337def17344f0a0075a92da3467339f1b85a1f6ee264`.
+Rollback changes only the Events image pin, preserving enabled binding and all
+current data; use Events-only Compose `up -d --no-deps --no-build --pull never events`
+with `DEPLOY_PREFLIGHT=0`. Do not restore a DB or invoke the two-service deploy
+script for this image-only rollback. Incident `inc_ef32a78d9c053a6dd1fc9a32`
+tracks provider acceptance separately.
+
 ## MAX digest implementation rollout (2026-10-10)
 
-Production Events now uses `runcoveer/events:maxdigest-6bb8c8bde960`, exact full
+The initial MAX implementation rollout used `runcoveer/events:maxdigest-6bb8c8bde960`, exact full
 source `6bb8c8bde960f3ae0eb0458635ef9ba3f1420a04` (PR #736), image ID
 `sha256:0509c59e6b23bf965a53337def17344f0a0075a92da3467339f1b85a1f6ee264`.
 All four CI jobs passed on final head `be7358845d1c11b0d8432b889dd8f7bc221cf134`.
@@ -100,13 +133,14 @@ That disabled rollout was followed by verified activation at 2026-10-10
 passed bootstrap with exactly that sole destination before enabling MAX. The
 service grants only bootstrap, publish and status; no Telegram read grant.
 Events-only recreation passed readiness with Kotopogoda unchanged. The source
-image is unchanged. The canonical Compose now carries the nonsecret binding
+image was unchanged at activation. The canonical Compose now carries the nonsecret binding
 and enabled flag; the credential remains only in protected deployment config.
 Publication acceptance is tracked separately by edition 289 and its stable
 per-target delivery ledger; activation alone is not publication success.
 The nonsecret cutover receipt and previous Compose are retained under
 `/opt/runcoveer/releases/events-6bb8c8bde960f3ae0eb0458635ef9ba3f1420a04/`.
-Immediate rollback is the CherryFlash image below, never the older plain base.
+At that initial checkpoint rollback was the CherryFlash image below. The current
+recovery release above instead rolls back to this full-source MAX image.
 
 ## CherryFlash scene-selection hotfix (2026-10-09)
 
@@ -153,7 +187,7 @@ video delivery, not only a correct event-selection manifest.
 
 `deploy.sh` copies configuration and runs Compose; it does not restore or replace
 data. The checked-in Compose file pins the verified Events image
-`runcoveer/events:cherry9671-a9abd662`; an application upgrade must build/tag the next
+`runcoveer/events:maxrecovery-c4fa01923bd9`; an application upgrade must build/tag the next
 immutable image and update that pin before repeat deploy. Docker and Caddy start
 with systemd; containers use
 `unless-stopped`. Docker logs rotate at 50 MB x 10 per container with compression. Persistent
