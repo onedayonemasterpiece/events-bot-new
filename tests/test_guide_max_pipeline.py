@@ -107,7 +107,7 @@ async def seed(db):
 
 def enable(monkeypatch):
     monkeypatch.setenv("ENABLE_GUIDE_VISUAL_DIGEST_MAX", "1")
-    monkeypatch.setenv("GUIDE_VISUAL_DIGEST_MAX_TARGETS", json.dumps([{"alias": "max_guide", "native_id": "native-123", "binding_revision": 1}]))
+    monkeypatch.setenv("GUIDE_VISUAL_DIGEST_MAX_TARGETS", json.dumps([{"alias": "max_guide", "native_id": "native-123", "binding_revision": 1, "canonical_url": "https://max.ru/channel_uh_kaliningrad"}]))
 
 
 @pytest.mark.asyncio
@@ -154,6 +154,11 @@ async def test_native_daily_entrypoint_resumes_backend_edition_only_missing_max(
     assert payload['image_b64']
     assert any(n.get('url') == 'https://t.me/guide/123' for p in payload['content']['paragraphs'] for n in p)
     assert 'vk.cc' not in json.dumps(payload)
+    links = [n for p in payload['content']['paragraphs'] for n in p if n.get('kind') == 'link']
+    subscribe = [n for n in links if n.get('label') == 'Подписаться']
+    assert subscribe == [{'kind': 'link', 'label': 'Подписаться', 'url': 'https://max.ru/channel_uh_kaliningrad'}]
+    assert [n['label'] for n in payload['content']['paragraphs'][-1] if n.get('kind') == 'link'] == ['Подписаться', 'Telegram', 'Вконтакте']
+    assert not any(n.get('label') == 'Max' for n in links)
     async with db.raw_conn() as conn:
         cur = await conn.execute('SELECT published_targets_json FROM guide_digest_issue WHERE id=289')
         targets = json.loads((await cur.fetchone())[0])
@@ -170,8 +175,8 @@ async def test_independent_max_destinations_preserve_success_on_partial_failure(
     await seed(db)
     enable(monkeypatch)
     monkeypatch.setenv('GUIDE_VISUAL_DIGEST_MAX_TARGETS', json.dumps([
-        {'alias': 'max_a', 'native_id': 'a', 'binding_revision': 1},
-        {'alias': 'max_b', 'native_id': 'b', 'binding_revision': 2}]))
+        {'alias': 'max_a', 'native_id': 'a', 'binding_revision': 1, 'canonical_url': 'https://max.ru/channel_a'},
+        {'alias': 'max_b', 'native_id': 'b', 'binding_revision': 2, 'canonical_url': 'https://max.ru/channel_b'}]))
     await md.freeze_visual_snapshot(db, issue_id=289, caption_html='<b>Дайджест</b>\n<a href="https://t.me/g/1">Экскурсия</a>', card=b'image')
     a, b = Transport(), Transport()
     b.raise_submit = True
@@ -184,6 +189,9 @@ async def test_independent_max_destinations_preserve_success_on_partial_failure(
     assert len(a.submitted) == len(b.submitted) == 1
     assert len(b.observed) == 1
     assert a.submitted[0][1] != b.submitted[0][1]
+    for transport, url in [(a, 'https://max.ru/channel_a'), (b, 'https://max.ru/channel_b')]:
+        footer = transport.submitted[0][0]['content']['paragraphs'][-1]
+        assert footer[0] == {'kind': 'link', 'label': 'Подписаться', 'url': url}
 
 
 @pytest.mark.asyncio

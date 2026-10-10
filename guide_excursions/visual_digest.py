@@ -1772,6 +1772,7 @@ async def build_visual_digest_telegram_text(
     *,
     issue_id: int,
     target_chat: str | int | None = None,
+    include_footer: bool = True,
 ) -> str:
     items = [dict(r) for r in rows]
     period = _period_of(items)
@@ -1799,7 +1800,9 @@ async def build_visual_digest_telegram_text(
         else:
             line = f"{idx}. {html.escape(title, quote=False)}"
         lines.append(line)
-    footer_tail = ["", " ".join(_digest_hashtags(items)), "", _visual_digest_telegram_footer(target_chat)]
+    footer_tail = ["", " ".join(_digest_hashtags(items))]
+    if include_footer:
+        footer_tail.extend(["", _visual_digest_telegram_footer(target_chat)])
     lines.extend(footer_tail)
     text = "\n".join(lines).strip()
     if len(text) <= 1024:

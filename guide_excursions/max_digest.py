@@ -8,6 +8,7 @@ import logging
 import os
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
+from urllib.parse import urlsplit
 
 from .max_delivery import ensure_delivery_schema, prepare_delivery, drive_delivery
 from .vibepublish_client import VibePublishClient, SnapshotUnavailable, html_content
@@ -25,6 +26,7 @@ def max_targets():
         "alias": (os.getenv("GUIDE_VISUAL_DIGEST_MAX_ALIAS") or "").strip(),
         "native_id": (os.getenv("GUIDE_VISUAL_DIGEST_MAX_NATIVE_ID") or "").strip(),
         "binding_revision": int(os.getenv("GUIDE_VISUAL_DIGEST_MAX_BINDING_REVISION") or "0"),
+        "canonical_url": os.getenv("GUIDE_VISUAL_DIGEST_MAX_URL") or "https://max.ru/channel_uh_kaliningrad",
     }]
     if not isinstance(targets, list) or not targets or len(targets) > 20:
         raise SnapshotUnavailable("max_verified_binding_missing")
@@ -33,8 +35,12 @@ def max_targets():
         if not isinstance(target, dict) or not target.get("alias") or not target.get("native_id") or int(target.get("binding_revision") or 0) < 1:
             raise SnapshotUnavailable("max_verified_binding_missing")
         native_id = str(target["native_id"])
+        canonical_url = str(target.get("canonical_url") or "").strip()
+        parsed = urlsplit(canonical_url)
+        if parsed.scheme != "https" or parsed.hostname != "max.ru" or not parsed.path.strip("/") or parsed.query or parsed.fragment:
+            raise SnapshotUnavailable("max_canonical_url_missing")
         if native_id not in seen:
-            result.append({"alias": str(target["alias"]), "native_id": native_id, "binding_revision": int(target["binding_revision"])})
+            result.append({"alias": str(target["alias"]), "native_id": native_id, "binding_revision": int(target["binding_revision"]), "canonical_url": canonical_url})
             seen.add(native_id)
     return result
 
@@ -102,7 +108,14 @@ async def existing_daily_issue_id(db, *, now=None):
 
 async def _publish_max_target(db, *, issue_id, target, snapshot, client_factory):
     alias, native_id = target["alias"], target["native_id"]
-    payload = dict(snapshot, alias=alias, native_id=native_id, binding_revision=target["binding_revision"])
+    from .visual_digest import (_tg_link, _telegram_target_public_url, VISUAL_DIGEST_TG_TARGET_CHATS,
+                                VISUAL_DIGEST_TG_VK_URL)
+    telegram_url = (_telegram_target_public_url(VISUAL_DIGEST_TG_TARGET_CHATS[0] if VISUAL_DIGEST_TG_TARGET_CHATS else None)
+                    or "https://t.me/wheretogo39")
+    footer = " · ".join([_tg_link("Подписаться", target["canonical_url"]),
+                         _tg_link("Telegram", telegram_url), _tg_link("Вконтакте", VISUAL_DIGEST_TG_VK_URL)])
+    content = {"paragraphs": list(snapshot["content"]["paragraphs"]) + html_content(footer)["paragraphs"]}
+    payload = dict(snapshot, content=content, alias=alias, native_id=native_id, binding_revision=target["binding_revision"])
     row = await prepare_delivery(db, issue_id=issue_id, provider="max", target_id=native_id, payload=payload)
     client = client_factory(row["payload"])
     result = await drive_delivery(db, row, client)
@@ -140,7 +153,7 @@ async def publish_visual_digest_to_max(db, *, issue_id, client_factory=None):
             rows = list((issue or {}).get("items") or [])[:VISUAL_DIGEST_CARD_LIMIT]
             if not rows:
                 raise SnapshotUnavailable("backend_edition_items_missing")
-            caption = await build_visual_digest_telegram_text(rows, issue_id=issue_id)
+            caption = await build_visual_digest_telegram_text(rows, issue_id=issue_id, include_footer=False)
             snapshot = await freeze_visual_snapshot(db, issue_id=issue_id, caption_html=caption,
                                                      card=render_visual_digest_cards(rows, issue_id=issue_id)[0])
         results = []

@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Pinned the deterministic static browser CI clock to its checked-in July corpus (with a fixture-metadata regression test), preventing wall-clock expiry from removing required related cards while preserving current-time production previews. Added bounded static browser-gate specimen diagnostics (source/target gallery ownership, slide counts and CTA links) to explain CI setup failures without weakening the real gallery journey assertions.
+- Added a per-destination MAX footer with exactly one named `Подписаться` link to the current MAX channel, followed by Telegram and VK links; canonical backend body generation and Telegram footers remain unchanged. Pinned the deterministic static browser CI clock to its checked-in July corpus (with a fixture-metadata regression test), preventing wall-clock expiry from removing required related cards while preserving current-time production previews. Added bounded static browser-gate specimen diagnostics (source/target gallery ownership, slide counts and CTA links) to explain CI setup failures without weakening the real gallery journey assertions.
 
 - Added native MAX delivery to the existing guide visual-digest generator and scheduler: backend-authoritative editions, Telegram-style named links and shared cards, verified scoped destination bindings, independent durable delivery receipts, exact-key recovery, and safe partial-failure logging. Existing published editions resume only missing targets without repeating Telegram/VK sends; future MAX channels require their own verified binding and grant.
 

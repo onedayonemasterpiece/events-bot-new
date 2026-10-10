@@ -23,12 +23,20 @@ Configuration is fail-closed:
 - `GUIDE_VIBEPUBLISH_SERVICE_TOKEN` installed by the approved secure service
   setup, never stored in source, reports or log output
 - `GUIDE_VISUAL_DIGEST_MAX_TARGETS`: JSON list of explicitly enabled verified
-  objects `{alias,native_id,binding_revision}`. The current rollout enables
+  objects `{alias,native_id,binding_revision,canonical_url}`. The current rollout enables
   only the owner's verified `https://max.ru/channel_uh_kaliningrad` channel.
   Future channels require their own verified product binding and grant.
 - A single-target deployment may use `GUIDE_VISUAL_DIGEST_MAX_ALIAS`,
   `GUIDE_VISUAL_DIGEST_MAX_NATIVE_ID`, and
-  `GUIDE_VISUAL_DIGEST_MAX_BINDING_REVISION` instead.
+  `GUIDE_VISUAL_DIGEST_MAX_BINDING_REVISION` instead. Its
+  `GUIDE_VISUAL_DIGEST_MAX_URL` defaults to the current owner's canonical URL.
+
+The shared backend body excludes the Telegram-specific footer for MAX. Before
+per-target payload freezing, MAX adds exactly one footer: `Подписаться` links
+to that target's configured canonical MAX URL, then `Telegram` and `Вконтакте`
+links separated by ` · `. This new destination is not in VibePublish's automatic
+footer allowlist, so Events owns its footer; do not enable a second footer policy
+for this binding. Telegram's existing target-specific footer is unchanged.
 
 Before admission the adapter verifies the scoped bootstrap alias, provider,
 native ID and revision. Configuration is not permission; VibePublish grants
