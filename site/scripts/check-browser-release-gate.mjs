@@ -291,6 +291,19 @@ async function chooseSpecimen(browser, origin, candidates) {
     for (const candidate of candidates.slice(0, 12)) {
       const { route, targetPath } = candidate;
       await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
+      const diagnostic = await page.evaluate(() => {
+        const main = document.querySelector('[data-desktop-clean-event]');
+        const galleryId = main?.querySelector('[data-hero-gallery-open]')?.getAttribute('data-hero-gallery-open');
+        const gallery = galleryId ? document.getElementById(galleryId) : null;
+        return {
+          mainCount: document.querySelectorAll('[data-desktop-clean-event]').length,
+          relatedCount: document.querySelectorAll('[data-related-start] [data-event-card]').length,
+          galleryId,
+          imageSlides: gallery?.querySelectorAll('[data-hero-gallery-slide][data-gallery-slide-kind="image"]').length || 0,
+          links: [...(gallery?.querySelectorAll('[data-hero-gallery-slide][data-gallery-slide-kind="cta"] a[href]') || [])].map(a => a.getAttribute('href')),
+        };
+      });
+      console.log('[browser-release-gate] specimen diagnostic', JSON.stringify({ route, targetPath, ...diagnostic }));
       if (await page.locator('[data-desktop-clean-event]').count() !== 1) continue;
       const relatedCount = await page.locator('[data-related-start] [data-event-card]').count();
       const opener = page.locator('[data-desktop-clean-event] [data-hero-gallery-open]').first();
@@ -306,6 +319,16 @@ async function chooseSpecimen(browser, origin, candidates) {
       const probe = configureGatePage(await browser.newPage({ viewport: { width: 1536, height: 864 } }));
       try {
         await probe.goto(targetUrl.href, { waitUntil: 'domcontentloaded' });
+        console.log('[browser-release-gate] specimen target diagnostic', JSON.stringify({
+          route: targetUrl.pathname,
+          ...await probe.evaluate(() => ({
+            heroCount: document.querySelectorAll('[data-clean-hero-image]').length,
+            galleries: [...document.querySelectorAll('[data-hero-gallery]')].map(gallery => ({
+              id: gallery.id,
+              imageSlides: gallery.querySelectorAll('[data-hero-gallery-slide][data-gallery-slide-kind="image"]').length,
+            })),
+          })),
+        }));
         const targetSlides = await probe.locator('[data-hero-gallery]').first().locator('[data-hero-gallery-slide][data-gallery-slide-kind="image"]').count();
         if (targetSlides >= 2 && await probe.locator('[data-clean-hero-image]').count() === 1) return { route, targetPath: targetUrl.pathname };
       } finally {

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Added bounded static browser-gate specimen diagnostics (source/target gallery ownership, slide counts and CTA links) to explain CI setup failures without weakening the real gallery journey assertions.
+
 - Added native MAX delivery to the existing guide visual-digest generator and scheduler: backend-authoritative editions, Telegram-style named links and shared cards, verified scoped destination bindings, independent durable delivery receipts, exact-key recovery, and safe partial-failure logging. Existing published editions resume only missing targets without repeating Telegram/VK sends; future MAX channels require their own verified binding and grant.
 
 - Deployed authority-scoped partner event creation on RunCoveer from canonical

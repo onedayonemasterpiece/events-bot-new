@@ -1,5 +1,7 @@
 # E2E Scenario Index
 
+The static browser release gate logs bounded source/target specimen diagnostics (gallery ownership, image-slide counts and CTA paths) when selecting the real gallery journey. These diagnostics do not replace or relax any journey assertion; a missing qualifying pair remains a failing gate.
+
 - Guide visual digest MAX: invoke the standard daily generator/fan-out on the already published current backend edition; verify only missing MAX delivery, full named links and shared card, stable request/operation after restart, unchanged TG/VK receipts and edition count. Offline contracts: `tests/test_guide_max_delivery.py`, `tests/test_guide_max_pipeline.py`; configuration and recovery: [digest delivery spec](../backlog/features/guide-excursions-monitoring/digest-spec.md#native-max-delivery-2026-10). Live publication is an explicit owner acceptance, never a hidden test post.
 
 Канонический реестр E2E/BDD сценариев проекта.
