@@ -222,6 +222,18 @@ def test_top_level_failure_is_not_reported_as_accepted():
     assert result['state'] == 'failed' and result['error_code'] == 'operation_blocked'
 
 
+def test_exact_remote_error_code_retained_without_raw_error_details():
+    client = VibePublishClient({'alias': 'max_guide'}, base_url='https://vibe.example', token='fixture-only')
+    receipt = {'operation_id': 'op_1', 'state': 'blocked', 'operation_complete': True,
+               'error': {'code': 'max_preflight_needs_review', 'message': 'private provider details'},
+               'deliveries': [{'destination': 'max_guide', 'provider': 'max', 'state': 'blocked', 'observed': 'not_attempted'}]}
+    result = client._publication_result(receipt)
+    assert result['state'] == 'failed' and result['error_code'] == 'max_preflight_needs_review'
+    assert 'private provider details' not in json.dumps(result)
+    receipt['error']['code'] = 'https://private.example/?token=secret'
+    assert client._publication_result(receipt)['error_code'] == 'operation_blocked'
+
+
 def test_publish_requires_complete_exact_destination_receipt():
     client = VibePublishClient({'alias': 'max_guide'}, base_url='https://vibe.example', token='fixture')
     receipt = {'operation_id': 'op_1', 'operation_complete': False,
@@ -229,3 +241,154 @@ def test_publish_requires_complete_exact_destination_receipt():
     assert client._publication_result({'receipts': [receipt]})['state'] == 'accepted'
     receipt['operation_complete'] = True
     assert client._publication_result({'receipts': [receipt]})['state'] == 'published'
+
+
+def recovery_fixture():
+    return {'operation_id': 'op_same', 'resource_id': 'pub_original', 'revision': 1,
+            'action': 'publish', 'state': 'blocked', 'operation_complete': True,
+            'error': {'code': 'max_preflight_needs_review'},
+            'deliveries': [{'destination': 'max_guide', 'provider': 'max', 'state': 'blocked',
+                            'observed': 'not_attempted', 'retry_safe': False}]}
+
+
+@pytest.mark.asyncio
+async def test_native_recovery_is_one_admission_and_restart_observes_only(tmp_path):
+    from guide_excursions.max_delivery import prepare_delivery, drive_delivery, _record
+    db = DB(tmp_path / 'recovery.sqlite')
+    payload = {'alias': 'max_guide', 'native_id': '123', 'binding_revision': 1}
+    row = await prepare_delivery(db, issue_id=289, provider='max', target_id='123', payload=payload)
+    await _record(db, row, state='accepted', operation_id='op_same')
+    calls = []
+    async def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if path == '/v1/bootstrap':
+            return {'destinations': [dict(alias='max_guide', kind='destination', provider='max', native_id='123', revision=1)]}
+        if path.endswith('/commands'):
+            return {'operation_id': 'op_same', 'action': 'publish', 'state': 'accepted'}
+        return recovery_fixture()
+    def client():
+        value = VibePublishClient(payload, base_url='https://vibe.example', token='fixture-only')
+        value._request = request
+        return value
+    first = await drive_delivery(db, row, client())
+    assert first['state'] == 'accepted'
+    assert first['receipt']['recovery']['state'] == 'acknowledged'
+    second = await drive_delivery(db, row, client())
+    assert second['state'] == 'failed'
+    assert second['error_code'] == 'max_preflight_needs_review'
+    commands = [call for call in calls if call[0] == 'POST']
+    assert len(commands) == 1
+    assert commands[0] == ('POST', '/v1/publications/pub_original/commands', {
+        'key': row['request_key'] + '-recover-v1',
+        'body': {'expected_revision': 1, 'change': {'kind': 'retry_failed', 'destinations': ['max_guide']}}})
+    assert calls[-1] == ('GET', '/v1/operations/op_same', {})
+    assert second['operation_id'] == 'op_same'
+
+
+@pytest.mark.asyncio
+async def test_recovery_lost_reply_replays_same_single_admission_key():
+    payload = {'alias': 'max_guide', 'native_id': '123', 'binding_revision': 1}
+    admitted, calls = {}, []
+    async def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if path == '/v1/bootstrap':
+            return {'destinations': [dict(alias='max_guide', kind='destination', provider='max', native_id='123', revision=1)]}
+        if path.endswith('/commands'):
+            key = kwargs['key']
+            if key not in admitted:
+                admitted[key] = kwargs['body']
+                raise TimeoutError('fixture reply lost after durable admission')
+            assert admitted[key] == kwargs['body']
+            return recovery_fixture()  # Same operation failed again; replay never rearms it.
+        return recovery_fixture()
+    def client():
+        value = VibePublishClient(payload, base_url='https://vibe.example', token='fixture-only')
+        value._request = request
+        return value
+    with pytest.raises(TimeoutError):
+        await client().observe('original-key', 'op_same')
+    recovered = await client().observe('original-key', 'op_same')
+    assert len(admitted) == 1 and set(admitted) == {'original-key-recover-v1'}
+    final_client = client()
+    final_client.restore_recovery(recovered['receipt']['recovery'])
+    before = len(calls)
+    await final_client.observe('original-key', 'op_same')
+    assert calls[before:] == [('GET', '/v1/operations/op_same', {})]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state,observed', [('outcome_unknown', 'unknown'), ('blocked', 'published')])
+async def test_recovery_never_rearms_unknown_or_possible_effect(state, observed):
+    client = VibePublishClient({'alias': 'max_guide'}, base_url='https://vibe.example', token='fixture-only')
+    calls = []
+    receipt = recovery_fixture()
+    receipt['state'] = state
+    receipt['deliveries'][0]['observed'] = observed
+    async def request(method, path, **kwargs):
+        calls.append((method, path))
+        return receipt
+    client._request = request
+    await client.observe('key', 'op_same')
+    assert calls == [('GET', '/v1/operations/op_same')]
+
+
+@pytest.mark.asyncio
+async def test_recovery_refusal_is_recorded_and_not_repeated():
+    payload = {'alias': 'max_guide', 'native_id': '123', 'binding_revision': 1}
+    client = VibePublishClient(payload, base_url='https://vibe.example', token='fixture-only')
+    posts = []
+    async def request(method, path, **kwargs):
+        if path == '/v1/bootstrap':
+            return {'destinations': [dict(alias='max_guide', kind='destination', provider='max', native_id='123', revision=1)]}
+        if method == 'POST':
+            posts.append(path)
+            raise SnapshotUnavailable('no_safe_retry_targets')
+        return recovery_fixture()
+    client._request = request
+    result = await client.observe('key', 'op_same')
+    assert result['error_code'] == 'no_safe_retry_targets'
+    assert result['receipt']['recovery']['state'] == 'rejected'
+    again = await client.observe('key', 'op_same')
+    assert again['error_code'] == 'no_safe_retry_targets'
+    assert len(posts) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('code', ['vibepublish_http_429', 'vibepublish_http_502', 'vibepublish_http_503'])
+async def test_transient_recovery_response_keeps_same_key_reconcilable(code):
+    payload = {'alias': 'max_guide', 'native_id': '123', 'binding_revision': 1}
+    calls = []
+    async def request(method, path, **kwargs):
+        if path == '/v1/bootstrap':
+            return {'destinations': [dict(alias='max_guide', kind='destination', provider='max', native_id='123', revision=1)]}
+        if method == 'POST':
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise SnapshotUnavailable(code)
+            return {'operation_id': 'op_same', 'action': 'publish', 'state': 'accepted'}
+        return recovery_fixture()
+    def client():
+        value = VibePublishClient(payload, base_url='https://vibe.example', token='fixture-only')
+        value._request = request
+        return value
+    same_client = client()
+    with pytest.raises(SnapshotUnavailable, match=code):
+        await same_client.observe('same-key', 'op_same')
+    result = await same_client.observe('same-key', 'op_same')
+    assert calls[0] == calls[1]
+    assert result['receipt']['recovery']['state'] == 'acknowledged'
+
+
+@pytest.mark.asyncio
+async def test_mismatched_status_identity_cannot_initiate_recovery():
+    client = VibePublishClient({'alias': 'max_guide'}, base_url='https://vibe.example', token='fixture-only')
+    calls = []
+    async def request(method, path, **kwargs):
+        calls.append((method, path))
+        result = recovery_fixture()
+        result['operation_id'] = 'op_other'
+        return result
+    client._request = request
+    with pytest.raises(SnapshotUnavailable, match='operation_identity_mismatch'):
+        await client.observe('key', 'op_same')
+    assert calls == [('GET', '/v1/operations/op_same')]

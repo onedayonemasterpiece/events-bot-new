@@ -62,6 +62,21 @@ Logs use `guide_visual_delivery`, `guide_visual_max_blocked`, and
 `guide_visual_provider_failed` with safe machine codes, not bearer tokens,
 private payloads or signed URLs. Preserve the original operation and use
 VibePublish status/reconcile for unknown results; do not blindly republish.
+Safe remote machine error codes (for example `max_preflight_needs_review`) are
+retained in the local ledger rather than reduced to a generic provider state;
+raw remote messages, payloads and credentials are never included.
+
+For a complete original publish failure whose sole exact MAX delivery is
+`not_attempted`, the native adapter may issue one explicit `retry_failed`
+command on that same publication/revision after re-verifying the binding.
+The key is the original delivery key plus `-recover-v1`; no new publish,
+edition, operation or frozen payload is created. This requires VibePublish's
+publish-scoped own-publication authorization and server-enforced `dispatched=0`
+and single-admission recovery-key semantics. Deploy that server contract first.
+The ledger retains recovery acknowledgement/refusal so subsequent ticks only
+observe. A lost reply replays the same key; VibePublish must return the original
+receipt without rearming a second failed attempt. Unknown effects, other
+principals' publications and mixed/changed destinations are never recovered.
 
 Verification:
 `python -m pytest -q tests/test_guide_max_delivery.py
