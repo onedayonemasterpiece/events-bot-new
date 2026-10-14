@@ -8337,55 +8337,59 @@ async def daily_scheduler(db: Database, bot: Bot):
 
     log = logging.getLogger(__name__)
     while True:
-        log.info("daily_scheduler: start")
-        offset = await get_tz_offset(db)
-        tz = offset_to_timezone(offset)
-        now = dt.datetime.now(tz)
-        day_key = now.date().isoformat()
-        now_time = now.time().replace(second=0, microsecond=0)
-        async with db.raw_conn() as conn:
-            conn.row_factory = __import__("sqlite3").Row
-            rows = await conn.execute_fetchall(
-                """
-                SELECT channel_id, daily_time, last_daily
-                FROM channel
-                WHERE daily_time IS NOT NULL
-                """
-            )
-        for r in rows:
-            if not r["daily_time"]:
-                continue
-            try:
-                target_time = dt.datetime.strptime(r["daily_time"], "%H:%M").time()
-            except ValueError:
-                continue
-            due = (r["last_daily"] or "") != now.date().isoformat() and now_time >= target_time
-            logging.info(
-                "daily_scheduler: channel=%s due=%s last_daily=%s now=%s target=%s",
-                r["channel_id"], due, r["last_daily"], now_time, target_time
-            )
-            if due:
+        try:
+            log.info("daily_scheduler: start")
+            offset = await get_tz_offset(db)
+            tz = offset_to_timezone(offset)
+            now = dt.datetime.now(tz)
+            day_key = now.date().isoformat()
+            now_time = now.time().replace(second=0, microsecond=0)
+            async with db.raw_conn() as conn:
+                conn.row_factory = __import__("sqlite3").Row
+                rows = await conn.execute_fetchall(
+                    """
+                    SELECT channel_id, daily_time, last_daily
+                    FROM channel
+                    WHERE daily_time IS NOT NULL
+                    """
+                )
+            for r in rows:
+                if not r["daily_time"]:
+                    continue
                 try:
-                    channel_id = int(r["channel_id"])
-                    claimed = await _daily_try_claim(db, channel_id, day_key)
-                    if not claimed:
-                        logging.info(
-                            "daily_scheduler: channel=%s skipped (already inflight/sent)",
-                            channel_id,
+                    target_time = dt.datetime.strptime(r["daily_time"], "%H:%M").time()
+                except ValueError:
+                    continue
+                due = (r["last_daily"] or "") != now.date().isoformat() and now_time >= target_time
+                logging.info(
+                    "daily_scheduler: channel=%s due=%s last_daily=%s now=%s target=%s",
+                    r["channel_id"], due, r["last_daily"], now_time, target_time
+                )
+                if due:
+                    try:
+                        channel_id = int(r["channel_id"])
+                        claimed = await _daily_try_claim(db, channel_id, day_key)
+                        if not claimed:
+                            logging.info(
+                                "daily_scheduler: channel=%s skipped (already inflight/sent)",
+                                channel_id,
+                            )
+                            continue
+                        # не блокируем цикл планировщика — отправляем в фоне
+                        asyncio.create_task(
+                            _run_daily_scheduler_send(db, bot, channel_id, tz, day_key)
                         )
-                        continue
-                    # не блокируем цикл планировщика — отправляем в фоне
-                    asyncio.create_task(
-                        _run_daily_scheduler_send(db, bot, channel_id, tz, day_key)
-                    )
-                except Exception as e:
-                    log.exception(
-                        "daily_scheduler: channel %s failed: %s",
-                        r["channel_id"],
-                        e,
-                    )
-        log.info("daily_scheduler: done")
-        await asyncio.sleep(seconds_to_next_minute(dt.datetime.now(tz)))
+                    except Exception as e:
+                        log.exception(
+                            "daily_scheduler: channel %s failed: %s",
+                            r["channel_id"],
+                            e,
+                        )
+            log.info("daily_scheduler: done")
+        except Exception:
+            # A transient storage failure must not permanently kill the daily loop.
+            log.exception("daily_scheduler: tick failed; retrying next minute")
+        await asyncio.sleep(seconds_to_next_minute(dt.datetime.now(timezone.utc)))
 
 
 async def vk_scheduler(db: Database, bot: Bot, run_id: str | None = None):
