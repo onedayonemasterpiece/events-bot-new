@@ -186,8 +186,8 @@ video delivery, not only a correct event-selection manifest.
 ## Repeat deploy, persistence and backup
 
 `deploy.sh` copies configuration and runs Compose; it does not restore or replace
-data. The checked-in Compose file pins the verified Events image
-`runcoveer/events:maxrecovery-c4fa01923bd9`; an application upgrade must build/tag the next
+data. The checked-in Compose file pins Events image
+`runcoveer/events:scheduler-recovery-20261014`; an application upgrade must build/tag the next
 immutable image and update that pin before repeat deploy. Docker and Caddy start
 with systemd; containers use
 `unless-stopped`. Docker logs rotate at 50 MB x 10 per container with compression. Persistent
@@ -425,3 +425,7 @@ image only when Dockerfile/dependency inputs are unchanged, verifies all tracked
 files and refreshes immutable source provenance. Deploy from a clean merged main
 worktree using Events-only Compose, then update the Kotopogoda adapter separately.
 Do not invoke the historical Fly deploy path after this single-writer migration.
+
+The scheduler recovery release pin is `runcoveer/events:scheduler-recovery-20261014`.
+Rollback remains `runcoveer/events:maxrecovery-c4fa01923bd9`; the image label and
+retained build/cutover receipts carry the exact merged-main source SHA.

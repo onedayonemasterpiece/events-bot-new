@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Pinned the RunCoveer scheduler/storage recovery image for repeat deployment, preserving c4fa01923bd9 as the immediate Events rollback.
+
 - Fixed RunCoveer disk exhaustion and missed daily announcements: recover daily scheduler ticks after storage errors, filter video downloads before fetching intermediate PNG trees, bound successful terminal heartbeat history, and separate Kotopogoda scheduled publishing from cache refresh with a read-only collection deadline. Preserve failed/unknown receipts, source packets, current images and publication guards.
 
 - Added distinct terminal MAX owner acknowledgment with strict original operation/attempt/target evidence checks, preserved historical uncertainty, no replay, and explicit native fan-out status. Provider-verified publication and legacy TG/VK receipts remain separate.
