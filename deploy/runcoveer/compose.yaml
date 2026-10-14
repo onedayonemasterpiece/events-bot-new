@@ -52,6 +52,7 @@ services:
       - /var/lib/runcoveer/kotopogoda/data:/data
       - /var/lib/runcoveer/kotopogoda/app-data:/app/data
       - ./launch-kotopogoda.py:/deployment/launch.py:ro
+      - ./weather_scheduler.py:/deployment/weather_scheduler.py:ro
       - /opt/runcoveer/events/source/runtime_logging.py:/deployment/runtime_logging.py:ro
     ports: ["127.0.0.1:8082:8080"]
     logging:

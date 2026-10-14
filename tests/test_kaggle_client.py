@@ -841,3 +841,20 @@ def test_deploy_kernel_update_prunes_stale_crumple_publish_only_session_sources(
         "zigomaro/crumple-video-story-secrets-cipher",
         "zigomaro/crumple-story-publish-session-677-1777298000",
     ]
+
+
+def test_output_filter_is_forwarded_before_provider_download(monkeypatch, tmp_path):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module('video_announce.kaggle_client')
+    calls = []
+    class API:
+        def kernels_output(self, kernel, **kwargs):
+            calls.append(kwargs)
+            return ['cherryflash_full_final.mp4'], None
+    client = module.KaggleClient()
+    monkeypatch.setattr(client, '_get_api', lambda: API())
+    pattern = r'(?i)\.(?:mp4|webm|mov|json|log|txt)$'
+    assert client.download_kernel_output('owner/kernel', path=tmp_path, file_pattern=pattern) == ['cherryflash_full_final.mp4']
+    assert calls[0]['file_pattern'] == pattern
+    client.download_kernel_output('owner/kernel', path=tmp_path)
+    assert 'file_pattern' not in calls[1]

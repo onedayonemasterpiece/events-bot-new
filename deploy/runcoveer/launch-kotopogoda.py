@@ -3,6 +3,8 @@ import os
 import sys
 sys.path.insert(0, "/app")
 import main
+from weather_scheduler import install as install_weather_scheduler
+install_weather_scheduler(main)
 # Reuse the existing bounded stdlib handler, preserving Kotopogoda JSON/redaction.
 from runtime_logging import install_runtime_file_logging
 

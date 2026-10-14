@@ -438,3 +438,21 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `RUNTIME_HEALTH_STARTUP_GRACE_SEC` – startup grace window before “not ready yet” becomes a failing `/healthz` condition (default: `120` seconds). Fly service-level check grace is `60s` in production because Fly caps longer service check grace periods to one minute; if cold boot grows beyond that, treat it as a startup-performance/serving-readiness incident instead of hiding it behind a longer Fly grace.
 
 To monitor real job durations, use the daily `/general_stats` report: it prints per-run `took=...` for `vk_auto_import` and `tg_monitoring` (and other ops-run instrumented jobs).
+
+
+## Daily/storage recovery (2026-10-14)
+
+The daily loop logs and retries a failed tick on the next minute. Durable
+channel/day claims and successful `last_daily` remain authoritative across
+restarts; catch-up publishes the current day only. `terminal_heartbeat_cleanup`
+runs hourly with at most 1,000 rows per transaction: only redundant alive or
+heartbeat events older than 30 days from successfully terminal Kaggle runs
+are eligible. Terminal reports, failed/partial/unknown/active runs and all
+canonical source/publication records are preserved. This bounds diagnostic
+history; canonical event/source history is not disposable telemetry.
+
+Video output downloads filter at the provider before transfer: videos and
+JSON/log/text reports are retained, inherited source PNG/frame trees are not
+fetched. A failed/blocked session retains its recovery output and is not
+reclassified as published by cleanup. See
+`INC-2026-10-14-scheduler-disk-exhaustion.md` for the capacity recovery.

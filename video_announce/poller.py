@@ -1118,6 +1118,11 @@ def _find_session_video(
     return _find_video(materialized)
 
 
+# Download delivery outputs and diagnostic reports, excluding source trees and
+# intermediate PNG frames inherited from input datasets (multiple GiB per run).
+VIDEO_OUTPUT_FILE_PATTERN = r"(?i)\.(?:mp4|webm|mov|json|log|txt)$"
+
+
 def _find_logs(files: Iterable[Path]) -> list[Path]:
     return [
         f
@@ -1601,6 +1606,7 @@ async def run_story_publish_only_recovery(
                 path=source_output_dir,
                 force=True,
                 quiet=True,
+                file_pattern=VIDEO_OUTPUT_FILE_PATTERN,
             )
             output_files = _expand_output_paths([source_output_dir / item for item in files])
             source_video = _find_video(output_files)
@@ -1667,6 +1673,7 @@ async def run_story_publish_only_recovery(
             path=recovery_output_dir,
             force=True,
             quiet=True,
+            file_pattern=VIDEO_OUTPUT_FILE_PATTERN,
         )
         output_files = _expand_output_paths([recovery_output_dir / item for item in files])
         recovery_report = _load_story_report(_find_story_report(output_files))
@@ -1920,6 +1927,7 @@ async def _download_and_send_logs(
             path=output_dir,
             force=True,
             quiet=True,
+            file_pattern=VIDEO_OUTPUT_FILE_PATTERN,
         )
         # files is a list of relative paths as strings
         # Create full paths without flattening directories
@@ -2669,6 +2677,7 @@ async def run_kernel_poller(
                     path=output_dir,
                     force=True,
                     quiet=True,
+                    file_pattern=VIDEO_OUTPUT_FILE_PATTERN,
                 )
                 break
             except Exception:

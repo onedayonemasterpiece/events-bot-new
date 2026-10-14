@@ -394,3 +394,34 @@ complete backup. A failed snapshot removes only its own incomplete directory.
 Encrypted staging uses one fixed filename and pending uploads are reconciled
 before creating another archive. Persistent data growth requires capacity
 planning; the guard does not delete database rows or user assets.
+
+
+## Disk/scheduler incident recovery, 2026-10-14
+
+The disk became full on October 11 while failed/blocked Kaggle output downloads
+retained inherited PNG frame trees. Image history, materialized source releases
+and an 871 MiB isolated preflight database also consumed the small root volume.
+Application file logs correctly paused at their 1 GiB free-space floor; Docker
+stdout remained available but did not retain the whole missing period. Do not
+reduce the log floor or delete failed output as though it were published.
+
+Keep the active Events/Kotopogoda image pins and one qualified Events rollback.
+Review superseded image tags explicitly with `docker ps -a --filter ancestor=`
+and `docker system df -v`; no blanket image/volume prune. Offline preflight DB
+copies can be moved to private retained DevCoveer storage only after archive
+checksum verification and proving they are not active mounts. Restore the exact
+copy before reusing that old preflight. Failed output requires the same
+verified off-host preservation before deletion from production.
+
+Kotopogoda's deployment adapter installs `weather_scheduler.py`. Cache collection
+runs in an owned background task with a 120-second read-only deadline; publication
+checks keep the existing 30-second cadence and existing delivery bookkeeping.
+Shutdown cancels and joins the collector. Publication calls are not cancelled
+on a new timeout, avoiding unknown-effect retries. No source snapshot or weather
+text semantics are substituted.
+
+The Events image release uses an exact Git-tree delta over the current qualified
+image only when Dockerfile/dependency inputs are unchanged, verifies all tracked
+files and refreshes immutable source provenance. Deploy from a clean merged main
+worktree using Events-only Compose, then update the Kotopogoda adapter separately.
+Do not invoke the historical Fly deploy path after this single-writer migration.

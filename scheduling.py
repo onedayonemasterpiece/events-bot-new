@@ -6002,6 +6002,19 @@ def startup(
             logging.warning("db_maintenance %s failed", name, exc_info=True)
 
     if db is not None:
+        from operational_retention import cleanup_terminal_heartbeats
+        _register_job(
+            "terminal_heartbeat_cleanup",
+            _job_wrapper("terminal_heartbeat_cleanup", _run_maintenance, notify_skip=_notify_admin_skip),
+            "interval",
+            id="terminal_heartbeat_cleanup",
+            hours=1,
+            args=[partial(cleanup_terminal_heartbeats, db), "terminal_heartbeat_cleanup", 20.0],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=30,
+        )
         try:
             from source_parsing.post_metrics import cleanup_post_metrics
         except Exception:

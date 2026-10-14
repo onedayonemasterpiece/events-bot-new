@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-10-14-scheduler-disk-exhaustion.md`
+  - Scope: production disk capacity, daily tick recovery, video output downloads, terminal heartbeat retention and Kotopogoda scheduler isolation.
+
 - `INC-2026-10-03-fly-autostart-migration.md`
   - Scope: Fly proxy autostart, single-writer host cutover, final-state snapshots
     and rollback. Stopping a machine alone is insufficient; cordon and verify.
