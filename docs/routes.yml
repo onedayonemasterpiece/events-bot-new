@@ -8,6 +8,8 @@ entrypoints:
 sections:
   architecture:
     overview: docs/architecture/overview.md
+    smart_update_ultra_targeted: docs/architecture/smart-update-ultra-targeted-implementation.md
+    astro_generation_optimization: docs/architecture/astro-static-generation-optimization.md
   operations:
     partner_event_operations: docs/operations/partner-event-operations.md
     partner_function_calls: docs/operations/partner-events-conversational-function-call.md
@@ -96,6 +98,8 @@ sections:
       - docs/backlog/linear/EVE-55-gemma-integration.md
   reports:
     index: docs/reports/README.md
+    smart_update_ultra_design_20261018: docs/reports/smart-update-ultra-design-review-2026-10-18.md
+    astro_generation_design_20261018: docs/reports/astro-static-generation-design-review-2026-10-18.md
     incidents: docs/reports/incidents/README.md
     incident_guide_vk_monitoring_user_token_flood_2026_09_13: docs/reports/incidents/INC-2026-09-13-guide-vk-monitoring-user-token-flood.md
     incident_template: docs/reports/incidents/TEMPLATE.md
@@ -153,6 +157,11 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  smart_update_ultra:
+    status: design
+    docs: docs/features/smart-update-ultra/README.md
+    implementation_project: docs/architecture/smart-update-ultra-targeted-implementation.md
+    research_report: docs/reports/smart-update-ultra-design-review-2026-10-18.md
   digests:
     status: implemented
     docs: docs/features/digests/README.md
@@ -284,6 +293,8 @@ features:
     planned_pipeline: region_talk_discovery
 
   static_site_pages:
+    generation_optimization_project: docs/architecture/astro-static-generation-optimization.md
+    generation_optimization_report: docs/reports/astro-static-generation-design-review-2026-10-18.md
     status: preview
     docs: docs/features/static-site-pages/README.md
     legacy_requirements: docs/features/static-site-pages/requitements.md
@@ -553,3 +564,4 @@ artifacts:
   test_results: artifacts/test-results/
   e2e: artifacts/e2e/
   parser_output: artifacts/parser-output/
+
