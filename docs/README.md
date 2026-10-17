@@ -26,6 +26,8 @@ Shared Live Search implementation, quota authority and production activation gat
 - Архитектура: `docs/architecture/overview.md`
 - Events-bot 2.0 — предложение целевой архитектуры, состава и безопасной миграции:
   [events-bot-2.0-to-be.md](architecture/events-bot-2.0-to-be.md).
+- Events-bot 2.0 — единый Kaggle, BGE, быстрые страницы и экскурсионные дайджесты:
+  [events-bot-2.0-unified-kaggle-pipeline.md](architecture/events-bot-2.0-unified-kaggle-pipeline.md).
 - Personalization data ownership (Fly/Supabase/YDB/Object Storage): `docs/architecture/personalization-data-ownership.md`
 - Сквозная аналитика и продуктовая статистика статического сайта:
   `docs/features/static-site-pages/analytics/README.md`
