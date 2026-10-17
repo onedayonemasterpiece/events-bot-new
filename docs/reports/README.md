@@ -16,3 +16,11 @@
 - Event age-rating Gemini Pro architecture consultation (2026-07-15): `event-age-rating-gemini-consultation-2026-07-15.md`
 - Interest-clubs read-only catalog audit (2026-07-17): `interest-clubs-catalog-audit-2026-07-17.md`
 - Static event-medallion production usage audit (2026-07-23): `static-medallion-usage-audit-2026-07-23.md`
+
+## Самостоятельные проекты 18 октября 2026
+
+- [Smart Update Ultra: исследование, опыт Street Story, модели и граница внедрения](smart-update-ultra-design-review-2026-10-18.md).
+- [Astro: сохранённые измерения, повторная работа и проект оптимизации](astro-static-generation-design-review-2026-10-18.md).
+
+Оба отчёта сопровождают проекты; новые runtime trials в этой исследовательской работе не выполнялись.
+
