@@ -9,6 +9,7 @@ sections:
   architecture:
     overview: docs/architecture/overview.md
     events_bot_2_to_be: docs/architecture/events-bot-2.0-to-be.md
+    events_bot_2_unified_kaggle: docs/architecture/events-bot-2.0-unified-kaggle-pipeline.md
   operations:
     partner_event_operations: docs/operations/partner-event-operations.md
     partner_function_calls: docs/operations/partner-events-conversational-function-call.md
