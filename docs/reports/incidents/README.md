@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-10-18-guide-digest-link-complaint.md`
+  - Scope: visual digest title links and booking provenance; reported newspaper
+    destination remains unreproduced, exact current URLs resolve to the guide.
+
 - `INC-2026-10-14-scheduler-disk-exhaustion.md`
   - Scope: production disk capacity, daily tick recovery, video output downloads, terminal heartbeat retention and Kotopogoda scheduler isolation.
 
