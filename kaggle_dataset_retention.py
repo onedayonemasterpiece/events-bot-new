@@ -61,7 +61,8 @@ class KaggleRetentionStore:
         for prefix in PREFIXES:
             seen = set()
             for page in range(1, 1001):
-                items = self._call(self.api.dataset_list, mine=True, search=prefix, page=page) or []
+                items = self._call(self.api.dataset_list, mine=True, search=prefix, page=page,
+                                   sort_by="updated") or []
                 if not items:
                     break
                 refs = set()

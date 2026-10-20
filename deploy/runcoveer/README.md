@@ -431,7 +431,7 @@ with `runcoveer/events:maxrecovery-c4fa01923bd9` as its rollback.
 
 ## Disposable Kaggle input retention release, 2026-10-20
 
-The Events release pin is `runcoveer/events:kaggle-retention-20261020`; the
+The Events release pin is `runcoveer/events:kaggle-retention-20261020-v2`; the
 immediate rollback is `runcoveer/events:scheduler-recovery-20261014`. Build from
 clean merged main, verify the complete tracked tree and immutable source SHA,
 then use the Events-only Compose cutover. Keep Kotopogoda's qualified image and
