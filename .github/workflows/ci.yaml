@@ -181,6 +181,10 @@ jobs:
         run: |
           python -m py_compile deploy/runcoveer/backup.py deploy/runcoveer/backup-kaggle.py deploy/runcoveer/kaggle-backup.py deploy/runcoveer/disk-maintenance.py
           python -m pytest --noconftest -q tests/test_runcoveer_kaggle_backup.py tests/test_runcoveer_disk_maintenance.py
+      - name: Verify disposable Kaggle input retention
+        run: |
+          python -m py_compile kaggle_dataset_retention.py scripts/cleanup_kaggle_inputs.py scheduling.py
+          python -m pytest -q tests/test_kaggle_dataset_retention.py
       - name: Run private-events MCP release gate
         run: |
           PYTHONPATH=. python -m compileall -q \

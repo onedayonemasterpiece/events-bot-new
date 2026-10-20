@@ -6003,6 +6003,19 @@ def startup(
 
     if db is not None:
         from operational_retention import cleanup_terminal_heartbeats
+        from kaggle_dataset_retention import cleanup_kaggle_inputs
+        _register_job(
+            "kaggle_input_retention",
+            _job_wrapper("kaggle_input_retention", _run_maintenance, notify_skip=_notify_admin_skip),
+            "interval",
+            id="kaggle_input_retention",
+            hours=6,
+            args=[partial(cleanup_kaggle_inputs, db), "kaggle_input_retention", 900.0],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=300,
+        )
         _register_job(
             "terminal_heartbeat_cleanup",
             _job_wrapper("terminal_heartbeat_cleanup", _run_maintenance, notify_skip=_notify_admin_skip),

@@ -632,6 +632,44 @@ The separate two-bucket/ALB state machine is default-off and remains `NO-GO`
 until its live inventory, SWS, retained previous tree and rollback drill pass
 the [atomic-root runbook](static-site-atomic-root.md).
 
+## Disposable Kaggle input retention
+
+`kaggle_input_retention` runs in the existing application scheduler every six
+hours, with one instance and a bounded API budget. It considers only private,
+single-version datasets owned by `KAGGLE_USERNAME` whose names begin with
+`static-site-builder-input-` or `cherryflash-session-`. Inputs stay at least
+24 hours. The pass preserves every current notebook dataset source, active or
+unknown Kaggle ledger, resource lease, recoverable static-site handoff, and
+unfinished/blocked video session. Unreadable ownership state or incomplete
+provider metadata aborts cleanup before deletion. Kaggle's recognized opaque
+`[Private Notebook]` placeholders have no usable ref: a scan containing them
+requires the canonical project database and records their count in the report;
+it never claims to have inspected those notebooks. Backups, checkpoints,
+status/secret datasets and other families are outside this policy.
+
+This handles inputs left by a killed process or a failed deletion without
+depending on a launcher `finally` block. Failed/unknown deletes remain in the
+provider catalog for the next pass; a catalog readback verifies absence before
+reporting cleanup. The worker does not resubmit notebooks, modify publication
+receipts or interpret `created` as proof of an unsent operation. Recovery inputs
+are retained even when the kernel is terminal: remote completion alone does
+not prove that the host committed the build/publication receipt.
+
+Operator entrypoint (dry run by default):
+
+```bash
+python3 scripts/cleanup_kaggle_inputs.py --owner "$KAGGLE_USERNAME" \
+  --database /data/db.sqlite --report /path/to/managed-artifact/cleanup.json
+```
+
+Use `--apply` only for authorized cleanup after inspecting the plan. `--limit`
+bounds the mutation batch (100 by default); `--approved-refs` can restrict a
+one-time operation to a JSON array of reviewed exact refs. The report's `.jsonl`
+sibling is flushed before every mutation and records provider acknowledgments
+and final readback. `catalog_bytes` is the download/catalog size, not the quota
+or uncompressed size. An old ledger or blocked session that cannot yet be
+classified remains explicitly protected rather than silently aged out.
+
 ## Static-site Gemma/related secrets
 
 For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secrets for Gemma verification. The documented project pattern is encrypted split datasets. `scripts/run_static_site_builder_kaggle.py` now creates two short-lived private datasets when `--gemma-related-verify` is enabled:
