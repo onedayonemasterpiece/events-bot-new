@@ -80,7 +80,7 @@ class KaggleRetentionStore:
 
     def protected_notebook_inputs(self) -> set[str]:
         """Inspect metadata without materializing notebook code or credentials."""
-        from kaggle.api.kaggle_api_extended import ApiGetKernelRequest
+        from kagglesdk.kernels.types.kernels_api_service import ApiGetKernelRequest
 
         refs = set()
         for page in range(1, 1001):
