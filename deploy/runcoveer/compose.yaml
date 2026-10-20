@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:scheduler-recovery-20261014
+    image: runcoveer/events:kaggle-retention-20261020
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

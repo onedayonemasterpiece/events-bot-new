@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Added bounded six-hour retention for private disposable static-site and
+  CherryFlash Kaggle inputs, preserving current notebook sources and durable
+  live/recovery ownership. Added a dry-run cleanup CLI with a reviewed exact-ref
+  allowlist, mutation journal and provider readback; failed deletions retry on
+  subsequent passes without replaying notebooks or touching backups.
+
 - Pinned the RunCoveer scheduler/storage recovery image for repeat deployment, preserving c4fa01923bd9 as the immediate Events rollback.
 
 - Fixed RunCoveer disk exhaustion and missed daily announcements: recover daily scheduler ticks after storage errors, filter video downloads before fetching intermediate PNG trees, bound successful terminal heartbeat history, and separate Kotopogoda scheduled publishing from cache refresh with a read-only collection deadline. Preserve failed/unknown receipts, source packets, current images and publication guards.
