@@ -426,6 +426,17 @@ files and refreshes immutable source provenance. Deploy from a clean merged main
 worktree using Events-only Compose, then update the Kotopogoda adapter separately.
 Do not invoke the historical Fly deploy path after this single-writer migration.
 
-The scheduler recovery release pin is `runcoveer/events:scheduler-recovery-20261014`.
-Rollback remains `runcoveer/events:maxrecovery-c4fa01923bd9`; the image label and
-retained build/cutover receipts carry the exact merged-main source SHA.
+The scheduler recovery release used `runcoveer/events:scheduler-recovery-20261014`,
+with `runcoveer/events:maxrecovery-c4fa01923bd9` as its rollback.
+
+## Disposable Kaggle input retention release, 2026-10-20
+
+The Events release pin is `runcoveer/events:kaggle-retention-20261020`; the
+immediate rollback is `runcoveer/events:scheduler-recovery-20261014`. Build from
+clean merged main, verify the complete tracked tree and immutable source SHA,
+then use the Events-only Compose cutover. Keep Kotopogoda's qualified image and
+container. Retention runs in the existing Events scheduler; its exact scope,
+ownership guards and operator CLI are documented in
+[`kaggle-static-site-builder.md`](../../docs/operations/kaggle-static-site-builder.md#disposable-kaggle-input-retention).
+Verify job registration, readiness and SQLite integrity after rollout; retain
+the provider deletion/readback and source/build/cutover receipts separately.
