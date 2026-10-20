@@ -149,6 +149,25 @@ def test_unknown_active_static_identity_and_missing_db_fail_closed(tmp_path):
     assert not (tmp_path / "not-created.sqlite").exists()
 
 
+def test_readonly_ownership_connection_is_closed(tmp_path, monkeypatch):
+    path = tmp_path / "state.sqlite"
+    with ledger(path):
+        pass
+    original = sqlite3.connect
+    closed = []
+    class Connection:
+        def __init__(self, *args, **kwargs):
+            self.inner = original(*args, **kwargs)
+        def execute(self, *args, **kwargs):
+            return self.inner.execute(*args, **kwargs)
+        def close(self):
+            self.inner.close()
+            closed.append(True)
+    monkeypatch.setattr("kaggle_dataset_retention.sqlite3.connect", Connection)
+    assert protected_local_inputs(path) == set()
+    assert closed == [True]
+
+
 def test_sdk_false_delete_response_is_not_success(monkeypatch):
     from types import SimpleNamespace
     store = KaggleRetentionStore(SimpleNamespace(dataset_delete=lambda *a, **kw: False))

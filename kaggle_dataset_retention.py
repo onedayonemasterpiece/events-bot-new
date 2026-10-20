@@ -12,12 +12,12 @@ import os
 import re
 import sqlite3
 import time
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 PREFIXES = ("static-site-builder-input-", "cherryflash-session-")
-TERMINAL = {"done", "complete", "failed", "error", "cancelled", "canceled"}
 
 
 def dataset_ref(value: str) -> str:
@@ -75,10 +75,11 @@ class KaggleRetentionStore:
                 seen.update(refs)
             else:
                 raise RuntimeError("Kaggle dataset pagination was truncated")
+            logger.info("kaggle_retention catalog_scanned family=%s rows=%s", prefix, len(records))
         return list(records.values())
 
     def protected_notebook_inputs(self) -> set[str]:
-        """Read metadata only; never download notebook code or credential files."""
+        """Inspect metadata without materializing notebook code or credentials."""
         from kaggle.api.kaggle_api_extended import ApiGetKernelRequest
 
         refs = set()
@@ -104,8 +105,9 @@ class KaggleRetentionStore:
             refs.update(next_refs)
         else:
             raise RuntimeError("Kaggle notebook pagination was truncated")
+        logger.info("kaggle_retention notebook_inventory refs=%s opaque_rows=%s", len(refs), self.redacted_notebook_rows)
         protected = set()
-        for ref in sorted(refs):
+        for index, ref in enumerate(sorted(refs), 1):
             request = ApiGetKernelRequest()
             request.user_name, request.kernel_slug = ref.split("/", 1)
             with self.api.build_kaggle_client() as client:
@@ -117,6 +119,9 @@ class KaggleRetentionStore:
                 dataset_ref(item) for item in metadata.get("datasetDataSources") or []
                 if dataset_ref(item)
             )
+            if index % 25 == 0 or index == len(refs):
+                logger.info("kaggle_retention notebook_scan_progress checked=%s total=%s pinned_inputs=%s",
+                            index, len(refs), len(protected))
         return protected
 
     def delete(self, ref: str) -> None:
@@ -131,7 +136,7 @@ def protected_local_inputs(database_path: str | Path | None) -> set[str]:
         return set()
     # Never create an empty database and mistake it for an idle production DB.
     uri = Path(database_path).resolve().as_uri() + "?mode=ro"
-    with sqlite3.connect(uri, uri=True, timeout=10) as conn:
+    with closing(sqlite3.connect(uri, uri=True, timeout=10)) as conn:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if "kaggle_run_ledger" not in tables:
             raise RuntimeError("Kaggle ledger unavailable; retention fails closed")
@@ -227,6 +232,7 @@ def plan_cleanup(records: list[dict], *, owner: str, protected: set[str],
 def cleanup_inputs(store, *, owner: str, database_path=None, apply: bool = False,
                    min_age_hours: int = 24, limit: int = 100, record=None,
                    approved_refs: set[str] | None = None) -> dict:
+    logger.info("kaggle_retention started owner=%s apply=%s min_age_hours=%s limit=%s", owner, apply, min_age_hours, limit)
     protected = store.protected_notebook_inputs() | protected_local_inputs(database_path)
     redacted_rows = getattr(store, "redacted_notebook_rows", 0)
     if redacted_rows and database_path is None:
@@ -237,6 +243,8 @@ def cleanup_inputs(store, *, owner: str, database_path=None, apply: bool = False
         plan["candidates"] = [row for row in plan["candidates"] if row["ref"] in approved_refs]
     result = {**plan, "apply": apply, "redacted_notebook_rows": redacted_rows,
               "deleted": [], "failed": [], "remaining": []}
+    logger.info("kaggle_retention plan_ready candidates=%s kept=%s opaque_rows=%s",
+                len(plan["candidates"]), len(plan["kept"]), redacted_rows)
     if record:
         record({"event": "plan", **plan})
     if not apply:
