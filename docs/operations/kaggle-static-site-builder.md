@@ -646,6 +646,8 @@ provider metadata aborts cleanup before deletion. Kaggle's recognized opaque
 requires the canonical project database and records their count in the report;
 it never claims to have inspected those notebooks. Backups, checkpoints,
 status/secret datasets and other families are outside this policy.
+Catalog pagination uses update-time ordering to keep the input inventory
+consistent while traversing provider pages.
 
 This handles inputs left by a killed process or a failed deletion without
 depending on a launcher `finally` block. Failed/unknown deletes remain in the
