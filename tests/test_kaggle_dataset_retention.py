@@ -184,6 +184,21 @@ def test_repeated_provider_page_is_not_a_complete_inventory(monkeypatch):
         store.list_inputs()
 
 
+def test_catalog_does_not_lose_inputs_to_changing_hotness_pages(monkeypatch):
+    from types import SimpleNamespace
+    rows = [row("static-site-builder-input-" + name) for name in "abcde"]
+    def dataset_list(**kwargs):
+        if kwargs["search"].startswith("cherryflash"):
+            return []
+        if kwargs.get("sort_by") == "updated":
+            return rows[(kwargs["page"] - 1) * 2:kwargs["page"] * 2]
+        # A moving score between page reads can skip c without repeating a page.
+        return {1: rows[:2], 2: rows[3:]}.get(kwargs["page"], [])
+    store = KaggleRetentionStore(SimpleNamespace(dataset_list=dataset_list))
+    monkeypatch.setattr("kaggle_dataset_retention.time.sleep", lambda _: None)
+    assert {item["ref"] for item in store.list_inputs()} == {item["ref"] for item in rows}
+
+
 def test_reviewed_allowlist_cannot_expand_to_other_inputs():
     store = Store()
     result = cleanup_inputs(store, owner="owner", apply=True,

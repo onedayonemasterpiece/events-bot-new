@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Enumerate disposable Kaggle inputs by update time so the maintenance pass
+  does not lose eligible rows when relevance/hotness ordering changes between pages.
+
 - Added bounded six-hour retention for private disposable static-site and
   CherryFlash Kaggle inputs, preserving current notebook sources and durable
   live/recovery ownership. Added a dry-run cleanup CLI with a reviewed exact-ref
