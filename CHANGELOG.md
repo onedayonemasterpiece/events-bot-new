@@ -2,10 +2,6 @@
 
 ## [Unreleased]
 
-- Restore automatic processing of recent future Smart Update identity retries:
-  one candidate per 15 minutes, within the existing attempt budget and shared
-  heavy-operation gate. Historical retries remain an explicit operator drain.
-
 - Enumerate disposable Kaggle inputs by update time so the maintenance pass
   does not lose eligible rows when relevance/hotness ordering changes between pages.
 

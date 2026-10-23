@@ -132,26 +132,3 @@ open for a bounded follow-up; no unrestricted worker enablement or model switch
 was attempted.
 
 Final runtime readback after runner exit: HTTP200, ready=true, issues=[], tick age 4.9s; no restart required. Event9803 existing VK/TG refresh jobs are fenced to October24 08:05+02; no new event IDs above10070 were created. Candidate23648 remains retryable after its second attempt.
-
-## Corrective release: bounded recent identity retry worker
-
-The scheduler now automatically services the typed durable identity outcomes
-already emitted by Smart Update, instead of silently leaving them without a
-consumer. The automatic query requires a supported identity reason, creation in
-the last three days, a valid active occurrence/end date and remaining retry budget.
-It never selects accepted/product-rejected rows, malformed packets, context-only
-intents, active leases or the older historical backlog. Claims retain the existing
-transaction/lease protocol; replay uses the same Smart Update facade and semantic
-identity gates. No forced-distinct creation or provider/model substitution was added.
-
-Automatic work is capped at one candidate per 15 minutes and joins the existing
-heavy-operation gate. The explicit unrestricted legacy drain remains default off.
-For this rollout the first automatic run is delayed to October24 06:00+02 by the
-non-secret SMART_UPDATE_IDENTITY_RETRY_START_AT setting. Future ordinary restarts
-retain the existing scheduler behavior after that initial floor has passed.
-
-Mandatory regression evidence adds recent/future/ongoing positive controls and
-old/past/invalid/budget/accepted/rejected/context/active-lease negative controls,
-plus default scheduler registration and timezone-aware first-run floor. An old
-scope-review test fixture used August2026 and now hit the past-event gate before
-its intended missing-date check; only that fixture's dates were advanced to2099.

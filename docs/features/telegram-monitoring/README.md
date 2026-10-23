@@ -10,16 +10,6 @@ receipt cannot gain a positive verdict. Supported durable identity retries are
 reported as `retry_scheduled:<reason>` and keep the carrier partial; they are
 not an unknown enum and do not rearm historical publication queues.
 
-Supported identity retries are serviced by the existing scheduler at most once
-per 15 minutes, one candidate at a time. Automatic claims require creation within
-the last three days, an active structured occurrence date, a known identity retry
-reason and remaining attempt budget. Semantic/duplicate gates run again normally.
-`SMART_UPDATE_IDENTITY_RETRY_ENABLED=0` disables this bounded lane;
-`SMART_UPDATE_RETRY_WORKER_ENABLED=1` remains the explicit unrestricted legacy drain.
-An optional timezone-aware `SMART_UPDATE_IDENTITY_RETRY_START_AT` delays the first
-automatic run during a controlled recovery. Claims are committed before inference,
-and the worker shares the existing heavy-operations gate with imports.
-
 Канонический producer сохраняет для каждого message/album один
 `source_parse_decision` (`source-parse-v1`) с closed disposition, всеми event
 children, lifecycle actions и `evidence_manifest`. No-keyword/no-date/historical
