@@ -1,6 +1,6 @@
 # INC-2026-10-23 VK legacy backlog recovery
 
-Status: mitigated; residual backlog open
+Status: mitigated; monitoring first scheduled automatic run and residual backlog
 Severity: sev3
 Service: events-bot VK Afisha / Announcements, RunCoveer
 Opened: 2026-10-23
@@ -14,7 +14,7 @@ Owner reported another publication stop and supplied the local replacement crede
 name VK_USER_TOKEN7 if needed. Current outage was not reproduced: the existing
 publisher token reads both communities and the native postponed queue successfully.
 Afisha post 12702 was live at 17:03 UTC on October 23; Announcements evening daily
-2208 was live at 18:12 UTC. No token rotation, application change or deploy was needed.
+2208 was live at 18:12 UTC. Token rotation was not needed. The later volume investigation below identified a separate missing retry consumer and delivered a code release.
 
 The bounded production audit found 75 active canonical event rows ending October 24
 or later without a managed Afisha URL: 23 September containment rows, 49 missing-media
@@ -72,7 +72,7 @@ release or regression test run was necessary for this data-only recovery.
 
 ## Follow-ups
 
-- Review the remaining 20 September-contained future rows only with source/media and duplicate evidence.
+- Review the remaining 17 September-contained future rows only with source/media and duplicate evidence.
 - Investigate missing-media rows separately; do not bypass the media guard or replay duplicate sessions.
 - Owner confirmed Afisha and clarified low volume, rather than total outage; see follow-up below.
 
@@ -155,3 +155,60 @@ old/past/invalid/budget/accepted/rejected/context/active-lease negative controls
 plus default scheduler registration and timezone-aware first-run floor. An old
 scope-review test fixture used August2026 and now hit the past-event gate before
 its intended missing-date check; only that fixture's dates were advanced to2099.
+
+## Delivered release and final verification
+
+PR #750 merged with all four primary CI jobs green (run40007309816), plus the
+additional contract gates. The deployed source is exact merged-main
+102c12b89e02026f3a27941af81110821dbf8578. Its former running source8a971582 is a
+proven ancestor. Immutable image runcoveer/events:identity-retry-20261023 has ID
+sha256:ed3656c7e4e72a127cc3e80031f797eb52c454551ebeaf06d65441d2ee396ad6.
+All4422 tracked files, hashes and executable bits were verified with explicit
+runtime checks. Dockerfile/dependencies were unchanged. Local focused regression
+suite:120 passed; final scope/scheduler checks:4 passed; network-disabled image
+preflight:4 passed. Production Python optimization disables assert statements, so
+release and final provider verification use explicit raising checks instead.
+
+Events-only cutover waited until no outbox effect was running, then recreated
+only Events. Kotopogoda retained containerbc2f7488d7e1a59201869be0af0f59841accdabd2ece24c4ad74479fc0e5e15a.
+New Events container0cc2fc4a34bc196e3ff01b623fdd79c70439eb1b0319add34c4a49be5c4cc3d2
+reported HTTP200, ok=true, ready=true, issues=[]. SQLite quick_check returned ok
+in19.39s. Live startup logs prove scope=recent_future_identity, batch=1,
+interval=900, registered next_run=2026-10-24 06:00:00+02:00. The unrestricted legacy
+worker is explicitly off. No token/model routing change was made.
+
+Three additional Telegram/photo/date-verified events were recovered through the
+same deployed VK publisher, after wall-search duplicate checks:9142 «Люблюнемогу»
+(native12706, October24 08:15+02),9084 masterclass «Под каблуком» (12707,12:05),
+and9086 The Fazbear Night (12708,15:05). Independent strict native queue and DB
+readback after restart verified all six task recoveries, each with one photo,
+exact requested date/time, managed Event URL and done JobOutbox receipt. Native
+queue total is9: three pre-existing items and six recoveries.
+
+Retained final evidence: live-verification.json, retry-registration.log,
+sqlite-check.json, cutover.log, image-build.log, image-preflight.log,
+release-source-receipt.json and recovery-more-receipts.json under the incident
+artifact directory. Automatic processing is now deployed and scheduled; its
+first actual invocation is intentionally tomorrow and is not yet claimed as
+observed. Google provider availability and the residual media/identity backlog
+remain monitoring limitations; no background agent monitoring is promised.
+
+
+## Owner-directed rollback of unsolicited automation
+
+The owner requested removing the newly introduced identity retry consumer and
+using VK's native postponed posts only. Implementation commit 63d52f56a is
+reverted, including scheduler registration, candidate-selection additions, new
+tests and configuration examples. The unrelated future-date test fixture repair
+is retained. Diagnostic history above records a superseded release, not a plan
+to re-enable it. The unrestricted legacy drain remains default off.
+
+Deploy a new descendant of 102c12b89 from merged main as
+`runcoveer/events:revert-identity-retry-20261023`, removing the three runtime keys
+SMART_UPDATE_RETRY_WORKER_ENABLED, SMART_UPDATE_IDENTITY_RETRY_ENABLED and
+SMART_UPDATE_IDENTITY_RETRY_START_AT added by this task. Verify no retry consumer
+is registered, readiness, unchanged Kotopogoda and all six native VK postponed
+post IDs 12703–12708. Do not delete or replay those provider-owned posts. The
+processor has not run; its first invocation was scheduled for October 24.
+The upstream throughput diagnosis remains separate and does not authorize more
+recovery automation.

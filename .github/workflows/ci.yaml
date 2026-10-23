@@ -110,7 +110,6 @@ jobs:
           tests/test_ticket_sites_queue.py
           tests/test_smart_update_terminal_contract.py
           tests/test_smart_update_candidate_state_db.py
-          tests/test_smart_update_recent_identity_retry.py
           tests/test_smart_update_candidate_state_keys.py
           tests/test_smart_update_automatic_identity_resolution.py
           tests/test_smart_update_caller_typed_contract.py

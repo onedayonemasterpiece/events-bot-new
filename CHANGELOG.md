@@ -2,9 +2,8 @@
 
 ## [Unreleased]
 
-- Restore automatic processing of recent future Smart Update identity retries:
-  one candidate per 15 minutes, within the existing attempt budget and shared
-  heavy-operation gate. Historical retries remain an explicit operator drain.
+- Reverted the unsolicited automatic identity retry consumer. Afisha recovery
+  remains in VK native postponed posts; remove the three task-added retry settings.
 
 - Enumerate disposable Kaggle inputs by update time so the maintenance pass
   does not lose eligible rows when relevance/hotness ordering changes between pages.

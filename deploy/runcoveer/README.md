@@ -442,13 +442,13 @@ Verify job registration, readiness and SQLite integrity after rollout; retain
 the provider deletion/readback and source/build/cutover receipts separately.
 
 
-## Recent identity retry recovery, 2026-10-23
+## Owner-requested identity retry rollback, 2026-10-23
 
-The Events-only release uses `runcoveer/events:identity-retry-20261023`, built from
-merged main with unchanged dependencies and complete tracked-source verification.
-Its rollback is `runcoveer/events:kaggle-retention-20261020-v2`. Keep the unrelated
-Kotopogoda service/container unchanged. The bounded identity lane is enabled by
-default; the unrestricted legacy drain remains off. This rollout sets the nonsecret
-`SMART_UPDATE_IDENTITY_RETRY_START_AT=2026-10-24T06:00:00+02:00` in the existing
-production environment before Events-only recreation. First-run readiness and
-native scheduled catch-up receipts are recorded in INC-2026-10-23-vk-legacy-backlog-recovery.
+Use `runcoveer/events:revert-identity-retry-20261023`, built from merged main as a
+new descendant release. The unsolicited identity retry consumer is removed.
+Remove the three task-added production keys `SMART_UPDATE_RETRY_WORKER_ENABLED`,
+`SMART_UPDATE_IDENTITY_RETRY_ENABLED` and `SMART_UPDATE_IDENTITY_RETRY_START_AT`.
+Keep the Events-only cutover, complete tracked-source verification and unchanged
+Kotopogoda container. Verify readiness, no identity retry worker registration and
+preservation of native VK postponed recovery posts12703–12708. These posts are
+published by VK itself and require no local recovery processor.
