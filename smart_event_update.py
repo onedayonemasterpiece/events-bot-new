@@ -17701,13 +17701,14 @@ async def retry_due_smart_update_candidates(
     *,
     limit: int = 25,
     lease_seconds: int = 300,
+    identity_created_since: str | None = None,
+    identity_active_on: str | None = None,
     on_accepted: Callable[[EventCandidate, SmartUpdateResult], Awaitable[None]] | None = None,
 ) -> dict[str, int]:
-    """One-time compatibility drain for legacy durable candidates.
+    """Replay durable candidates through the normal identity and semantic gates.
 
-    New invocations never enqueue rows. The drain invokes the same linear
-    facade once for each old RETRY_SCHEDULED payload and every branch closes as
-    accepted, product rejection or visible technical failure.
+    The automatic worker supplies a recent/future identity scope; omitting it
+    retains the explicit operator-only legacy drain.
     """
 
     owner = f"smart-update:{os.getpid()}:{id(asyncio.current_task())}"
@@ -17716,6 +17717,8 @@ async def retry_due_smart_update_candidates(
         lease_owner=owner,
         limit=limit,
         lease_seconds=lease_seconds,
+        identity_created_since=identity_created_since,
+        identity_active_on=identity_active_on,
     )
     result_counts = {item.value: 0 for item in SmartUpdateTerminalOutcome}
     result_counts["claimed"] = len(claimed)

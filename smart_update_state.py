@@ -19,9 +19,8 @@ class SmartUpdateTerminalOutcome(str, Enum):
     NOOP_EXACT_REPLAY = "NOOP_EXACT_REPLAY"
     REJECTED_PRODUCT_POLICY = "REJECTED_PRODUCT_POLICY"
     FAILED_TECHNICAL = "FAILED_TECHNICAL"
-    # Legacy/transitional value only. New Smart Update invocations must close
-    # in the same call and ``finish_candidate_attempt`` converts this value to
-    # FAILED_TECHNICAL rather than scheduling background work.
+    # Only the closed identity retry reasons remain durable; other unresolved
+    # invocations become FAILED_TECHNICAL in finish_candidate_attempt.
     RETRY_SCHEDULED = "RETRY_SCHEDULED"
 
 
@@ -535,6 +534,8 @@ async def claim_due_candidates(
     lease_owner: str,
     limit: int = 25,
     lease_seconds: int = 300,
+    identity_created_since: str | None = None,
+    identity_active_on: str | None = None,
 ) -> list[ClaimedCandidate]:
     """Claim due retry candidates once across concurrent processes."""
 
@@ -543,20 +544,39 @@ async def claim_due_candidates(
         raise ValueError("lease_owner_required")
     limit = max(1, min(int(limit), 200))
     lease_seconds = max(30, min(int(lease_seconds), 3600))
+    if bool(identity_created_since) != bool(identity_active_on):
+        raise ValueError("identity_retry_scope_incomplete")
+    scope_sql = ""
+    scope_params: tuple[Any, ...] = ()
+    if identity_created_since:
+        # Current identity retries have an explicit typed reason and a structured
+        # occurrence date. Never turn the historical legacy drain on implicitly.
+        scope_sql = """
+          AND reason IN ('identity_final_retry','identity_technical_failure',
+                         'identity_semantic_unknown','dedup_adjudicator_technical_failure')
+          AND datetime(created_at) >= datetime(?)
+          AND retry_exhausted=0 AND retry_attempts < max_attempts
+          AND intent='UPSERT_EVENT'
+          AND CASE WHEN json_valid(candidate_payload) THEN
+            date(substr(COALESCE(NULLIF(json_extract(candidate_payload,'$.end_date'),''),
+                     json_extract(candidate_payload,'$.date')),1,10)) >= date(?) ELSE 0 END
+        """
+        scope_params = (identity_created_since, identity_active_on)
     async with db.raw_conn() as conn:
         await conn.execute("BEGIN IMMEDIATE")
         try:
             cursor = await conn.execute(
-                """
+                f"""
                 SELECT id, candidate_key, candidate_payload, retry_attempts, max_attempts, reason
                 FROM smart_update_candidate_state
                 WHERE current_outcome='RETRY_SCHEDULED'
                   AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP)
                   AND (claim_expires_at IS NULL OR claim_expires_at <= CURRENT_TIMESTAMP)
+                  {scope_sql}
                 ORDER BY COALESCE(next_retry_at, created_at), id
                 LIMIT ?
                 """,
-                (limit,),
+                (*scope_params, limit),
             )
             rows = await cursor.fetchall()
             await cursor.close()

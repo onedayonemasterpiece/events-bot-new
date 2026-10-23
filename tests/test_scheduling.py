@@ -183,6 +183,9 @@ async def test_poll_to_forward_debug_tick_accepts_scheduler_run_id(monkeypatch):
 def test_scheduler_and_extract_do_not_import_main(monkeypatch):
     original_main = sys.modules.pop("main", None)
     monkeypatch.delenv("ENABLE_NIGHTLY_PAGE_SYNC", raising=False)
+    monkeypatch.setenv("SMART_UPDATE_RETRY_WORKER_ENABLED", "0")
+    monkeypatch.setenv("SMART_UPDATE_IDENTITY_RETRY_ENABLED", "1")
+    monkeypatch.setenv("SMART_UPDATE_IDENTITY_RETRY_START_AT", "2099-10-24T06:00:00+02:00")
 
     class DummyExecutor:
         pass
@@ -248,6 +251,11 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         assert scheduler.jobs["vk_crawl_continuation_worker"].trigger == "interval"
         assert scheduler.jobs["vk_crawl_continuation_worker"].kwargs["seconds"] == 60
         assert scheduler.jobs["vk_crawl_continuation_worker"].kwargs["max_instances"] == 1
+        retry_job = scheduler.jobs["smart_update_retry_worker"]
+        assert retry_job.kwargs["seconds"] == 900
+        assert retry_job.kwargs["max_instances"] == 1
+        assert retry_job.kwargs["next_run_time"].isoformat() == "2099-10-24T06:00:00+02:00"
+        assert "smart_update_retry_worker" in scheduling._HEAVY_JOB_IDS
         assert {"region_talk_0", "region_talk_1", "region_talk_2", "region_talk_3", "region_talk_4"} <= set(scheduler.jobs)
         assert "region_talk_watchdog" in scheduler.jobs
         assert scheduler.jobs["region_talk_0"].kwargs["hour"] == "4"
