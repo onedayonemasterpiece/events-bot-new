@@ -507,3 +507,5 @@
   - Scope: interactive owner MCP snapshot and queue/count readback.
   - Must not regress: no full-database integrity scan in the interactive tool;
     explicit not-run integrity status is not an integrity PASS.
+
+- `INC-2026-10-23-vk-legacy-backlog-recovery.md`: working live VK publishing; three source-verified legacy future events recovered into native October 24 queue; residual containment/media backlog remains open.
