@@ -440,3 +440,15 @@ ownership guards and operator CLI are documented in
 [`kaggle-static-site-builder.md`](../../docs/operations/kaggle-static-site-builder.md#disposable-kaggle-input-retention).
 Verify job registration, readiness and SQLite integrity after rollout; retain
 the provider deletion/readback and source/build/cutover receipts separately.
+
+
+## Owner-requested identity retry rollback, 2026-10-23
+
+Use `runcoveer/events:revert-identity-retry-20261023`, built from merged main as a
+new descendant release. The unsolicited identity retry consumer is removed.
+Remove the three task-added production keys `SMART_UPDATE_RETRY_WORKER_ENABLED`,
+`SMART_UPDATE_IDENTITY_RETRY_ENABLED` and `SMART_UPDATE_IDENTITY_RETRY_START_AT`.
+Keep the Events-only cutover, complete tracked-source verification and unchanged
+Kotopogoda container. Verify readiness, no identity retry worker registration and
+preservation of native VK postponed recovery posts12703–12708. These posts are
+published by VK itself and require no local recovery processor.

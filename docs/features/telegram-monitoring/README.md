@@ -755,3 +755,9 @@ recipient/payment page) must remain ordinary source links unless the same source
 labels that exact URL as attendee payment. The server import repeats this fail-closed check so
 a producer mistake cannot turn organizer donations into “registration”. The generated Kaggle
 notebook must remain synchronized with `telegram_monitor.py` after this contract changes.
+
+
+The automatic recent-identity retry consumer introduced on 2026-10-23 was reverted
+at the owner's request. The legacy retry worker remains opt-in/default off.
+Native VK postponed recovery posts are already provider-owned and independent
+of any Smart Update retry worker. See INC-2026-10-23-vk-legacy-backlog-recovery.

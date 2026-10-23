@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Reverted the unsolicited automatic identity retry consumer. Afisha recovery
+  remains in VK native postponed posts; remove the three task-added retry settings.
+
 - Enumerate disposable Kaggle inputs by update time so the maintenance pass
   does not lose eligible rows when relevance/hotness ordering changes between pages.
 
