@@ -4086,6 +4086,7 @@ _VIDEO_TOMORROW_EXISTING_SESSION_STATUSES: set[str] = {
 # `/3di` is intentionally excluded from the shared guard: the preview pipeline already
 # serializes itself with its own internal lock and may run alongside unrelated heavy jobs.
 _HEAVY_JOB_IDS: set[str] = {
+    "smart_update_retry_worker",
     "tg_monitoring",
     "vk_auto_import",
     "guide_excursions_light",
@@ -4424,31 +4425,34 @@ def startup(
             misfire_grace_time=60,
         )
 
-    # The product pipeline is linear: a Smart Update invocation must finish as
-    # accepted, product-rejected or FAILED_TECHNICAL. This switch is now an
-    # explicit one-time legacy-drain override, never a default background
-    # product queue.
-    if _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=False):
+    # Supported identity failures are persisted as RETRY_SCHEDULED. Service only
+    # recent future occurrences automatically; the old unrestricted drain stays
+    # an explicit operator override.
+    legacy_retry_drain = _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=False)
+    if legacy_retry_drain or _env_enabled("SMART_UPDATE_IDENTITY_RETRY_ENABLED", default=True):
         try:
             smart_update_retry_interval = max(
                 15,
                 min(
                     3600,
-                    int(os.getenv("SMART_UPDATE_RETRY_INTERVAL_SECONDS", "60") or "60"),
+                    int(os.getenv("SMART_UPDATE_RETRY_INTERVAL_SECONDS", "60" if legacy_retry_drain else "900") or "900"),
                 ),
             )
         except ValueError:
-            smart_update_retry_interval = 60
+            smart_update_retry_interval = 900
         try:
             smart_update_retry_batch = max(
                 1,
                 min(
                     100,
-                    int(os.getenv("SMART_UPDATE_RETRY_BATCH_SIZE", "25") or "25"),
+                    int(os.getenv("SMART_UPDATE_RETRY_BATCH_SIZE", "25" if legacy_retry_drain else "1") or "1"),
                 ),
             )
         except ValueError:
-            smart_update_retry_batch = 25
+            smart_update_retry_batch = 1
+        if not legacy_retry_drain:
+            smart_update_retry_batch = min(smart_update_retry_batch, 1)
+            smart_update_retry_interval = max(smart_update_retry_interval, 900)
 
         async def smart_update_retry_scheduler(
             db_obj,
@@ -4471,7 +4475,12 @@ def startup(
             counters = await retry_due_smart_update_candidates(
                 db_obj,
                 limit=smart_update_retry_batch,
+                lease_seconds=1800,
                 on_accepted=_capture_accepted,
+                **({} if legacy_retry_drain else {
+                    "identity_created_since": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+                    "identity_active_on": datetime.now(ZoneInfo("Europe/Kaliningrad")).date().isoformat(),
+                }),
             )
             await _notify_smart_update_retry_accepts(db_obj, bot_obj, accepted)
             funnel = await smart_update_funnel_counts(db_obj)
@@ -4481,6 +4490,17 @@ def startup(
                 funnel,
             )
 
+        retry_start_kwargs = {}
+        retry_start_raw = os.getenv("SMART_UPDATE_IDENTITY_RETRY_START_AT", "").strip()
+        if retry_start_raw and not legacy_retry_drain:
+            retry_start = datetime.fromisoformat(retry_start_raw)
+            if retry_start.tzinfo is None:
+                raise ValueError("SMART_UPDATE_IDENTITY_RETRY_START_AT requires timezone")
+            if retry_start > datetime.now(timezone.utc):
+                retry_start_kwargs["next_run_time"] = retry_start
+        logging.info("smart_update_retry_worker configured scope=%s batch=%s interval=%s start_at=%s",
+                     "legacy" if legacy_retry_drain else "recent_future_identity", smart_update_retry_batch,
+                     smart_update_retry_interval, retry_start_kwargs.get("next_run_time"))
         _register_job(
             "smart_update_retry_worker",
             _job_wrapper("smart_update_retry_worker", smart_update_retry_scheduler),
@@ -4492,11 +4512,12 @@ def startup(
             max_instances=1,
             coalesce=True,
             misfire_grace_time=smart_update_retry_interval,
+            **retry_start_kwargs,
         )
     else:
         logging.info(
             "SCHED skipping smart_update_retry_worker "
-            "(SMART_UPDATE_RETRY_WORKER_ENABLED!=1)"
+            "(identity retries disabled; legacy drain disabled)"
         )
 
     if _env_enabled("VK_CRAWL_CONTINUATION_WORKER_ENABLED", default=True):
