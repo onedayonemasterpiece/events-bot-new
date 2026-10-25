@@ -5,6 +5,16 @@ Shared Live Search implementation, quota authority and production activation gat
 
 Этот каталог устроен **feature‑ориентированно**: у каждой фичи есть свой “дом” в `docs/features/`.
 
+## Самостоятельные проекты Ultra и Astro — 18 октября 2026
+
+Полная переработка events-bot отложена решением владельца. Новые проекты сохраняют действующий бот и внедряются независимо:
+
+- [Smart Update Ultra](architecture/smart-update-ultra-targeted-implementation.md) и [отчёт по фактам, моделям и интеграции](reports/smart-update-ultra-design-review-2026-10-18.md).
+- [Ускорение Astro: локальная отладка и Kaggle production](architecture/astro-static-generation-optimization.md) и [отчёт исследования](reports/astro-static-generation-design-review-2026-10-18.md).
+- [Вход в фичу Ultra и сохранённые vision/OCR contracts](features/smart-update-ultra/README.md).
+
+Статус: проектирование и исследование; новая реализация и её ускорение ещё не проверены.
+
 ## Быстрый роутинг (для агентов)
 
 - Машиночитаемая карта: `docs/routes.yml`
@@ -118,3 +128,4 @@ Shared Live Search implementation, quota authority and production activation gat
 4. Новый production incident → добавь канонический record в `docs/reports/incidents/` по `TEMPLATE.md`, внеси его в incident index и убедись, что он пригоден для автоматического regression-check по ID.
 5. Принятое TO-BE-решение должно оперативно доехать до канонического документа в `main`, даже если runtime ещё не реализован. Документы в feature-ветке, PR body, комментарии и preview остаются WIP/evidence и не могут быть единственным источником требования.
 6. Общие определения аналитики, пользователей, сессий, consent, хранения, метрик и resource budgets не дублируются по фичам: feature-документы ссылаются на `docs/features/static-site-pages/analytics/README.md` и добавляют только feature-specific контракт.
+
