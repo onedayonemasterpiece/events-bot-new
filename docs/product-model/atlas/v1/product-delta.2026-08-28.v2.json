@@ -1,0 +1,551 @@
+{
+  "schema_version": "lovekgd-product-atlas-delta.v2",
+  "delta_id": "product-atlas-delta-2026-08-28",
+  "base_registry_root": "docs/product-model/atlas/v1",
+  "source_lock": "docs/product-model/atlas/v1/current-source-lock.2026-08-28.v2.json",
+  "applies_after": "source-lock.v1.json and all stable v1 entity registries",
+  "entity_updates": [
+    {
+      "entity_id": "problem.ui-system-not-promoted",
+      "status": "source_proven",
+      "definition_patch": "The 17-archetype AS-IS round-trip baseline is now source-proven, but owner-review deltas, component-family promotion, consumer migration and final visual acceptance remain incomplete.",
+      "source_refs": [
+        "src.as-is-round-trip-baseline-20260825",
+        "src.owner-review-delta-20260828",
+        "src.astro-owner-audit-candidate-20260828"
+      ],
+      "facet_patch": {
+        "definition": "source_proven",
+        "delivery": "partial",
+        "verification": "partial",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "partial"
+      },
+      "unresolved_conflicts_add": [
+        "AS-IS linkage readiness must not be described as component/archetype promotion or owner acceptance."
+      ]
+    },
+    {
+      "entity_id": "ui-gap.penpot-binding-pending",
+      "status": "unresolved",
+      "definition_patch": "Product Atlas will be materialized in a separate Penpot account/file. No target account, file, page, board or object IDs exist yet; design-system Penpot IDs are evidence and must not be reused as target bindings.",
+      "source_refs": [
+        "src.owner-parallel-product-atlas-decision-20260828",
+        "src.as-is-round-trip-baseline-20260825"
+      ],
+      "facet_patch": {
+        "definition": "accepted",
+        "delivery": "not_started",
+        "verification": "not_applicable",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts_add": [
+        "Target bindings remain binding_pending until a later MCP read/write/readback receipt."
+      ]
+    },
+    {
+      "entity_id": "finding.route-specific-product-context",
+      "status": "accepted",
+      "definition_patch": "The deterministic AS-IS handoff now proves 97 route/archetype semantic regions and 180 states, strengthening the rule that product meaning belongs to route, region, configured instance or ProductScreenState context rather than to one generic component master.",
+      "source_refs": [
+        "src.as-is-round-trip-baseline-20260825"
+      ],
+      "facet_patch": {
+        "definition": "accepted",
+        "delivery": "implemented",
+        "verification": "verified",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "partial"
+      },
+      "unresolved_conflicts_add": []
+    },
+    {
+      "entity_id": "decision.product-atlas-penpot-mcp-only",
+      "status": "accepted",
+      "definition_patch": "Product Atlas is projected from reviewed Git SoT through an explicit scoped Penpot MCP session. The next target is a separate account/file, with no plugin and no reuse of design-system Penpot IDs.",
+      "source_refs": [
+        "src.owner-parallel-product-atlas-decision-20260828"
+      ],
+      "facet_patch": {
+        "definition": "accepted",
+        "delivery": "implemented",
+        "verification": "partial",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "partial"
+      },
+      "unresolved_conflicts_add": [
+        "The target Penpot account/file is intentionally unbound in this Git-only stage."
+      ]
+    }
+  ],
+  "new_entities": [
+    {
+      "id": "decision.parallel-product-visualization-separate-account",
+      "kind": "decision",
+      "title": "Run Product Atlas visualization in a separate Penpot account",
+      "definition": "Proceed with product-vision and product-problem visualization in a separate Penpot account/file while design-system materialization continues independently in its existing account.",
+      "stakeholder_lane": "owner_operator",
+      "status": "accepted",
+      "confidence": {
+        "level": "high",
+        "basis": "Explicit owner direction recorded by this recovery."
+      },
+      "source_refs": [
+        "src.owner-parallel-product-atlas-decision-20260828"
+      ],
+      "relations": [
+        {
+          "type": "implements",
+          "target_id": "decision.product-atlas-penpot-mcp-only"
+        },
+        {
+          "type": "constrained_by",
+          "target_id": "ui-gap.penpot-binding-pending"
+        }
+      ],
+      "facets": {
+        "definition": "accepted",
+        "delivery": "not_started",
+        "verification": "not_applicable",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts": [
+        "The actual target account and file must be read through MCP before any binding is committed."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "decision.layered-ui-authority-after-20260825",
+      "kind": "decision",
+      "title": "Use layered UI authority instead of one misleading latest head",
+      "definition": "Product Atlas resolves UI truth as corrected semantic base plus the immutable AS-IS round-trip baseline plus an active owner-review delta plus an active Astro candidate; each layer keeps its own status and evidence strength.",
+      "stakeholder_lane": "owner_operator",
+      "status": "accepted",
+      "confidence": {
+        "level": "high",
+        "basis": "PR #52 and PR #53 are distinct authority facets and PR #596 is a separate unmerged implementation candidate."
+      },
+      "source_refs": [
+        "src.corrected-semantic-ui-base",
+        "src.as-is-round-trip-baseline-20260825",
+        "src.owner-review-delta-20260828",
+        "src.astro-owner-audit-candidate-20260828"
+      ],
+      "relations": [
+        {
+          "type": "supported_by",
+          "target_id": "finding.as-is-baseline-ready-for-product-projection"
+        },
+        {
+          "type": "protects",
+          "target_id": "problem.ui-system-not-promoted"
+        }
+      ],
+      "facets": {
+        "definition": "accepted",
+        "delivery": "implemented",
+        "verification": "verified",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "partial"
+      },
+      "unresolved_conflicts": [],
+      "supersession_history": []
+    },
+    {
+      "id": "finding.as-is-baseline-ready-for-product-projection",
+      "kind": "finding",
+      "title": "The AS-IS UI baseline is sufficient for parallel product projection",
+      "definition": "A deterministic handoff links all 17 archetypes to 34 desktop/mobile boards, 97 regions, 97 patterns, 75 component identities and 180 states with zero orphan design IDs, so Product Atlas can visualize the current product and its gaps without waiting for final UI promotion.",
+      "stakeholder_lane": "owner_operator",
+      "status": "source_proven",
+      "confidence": {
+        "level": "high",
+        "basis": "PR #52 Product Atlas linkage handoff and baseline gates."
+      },
+      "source_refs": [
+        "src.as-is-round-trip-baseline-20260825"
+      ],
+      "relations": [
+        {
+          "type": "supports",
+          "target_id": "decision.parallel-product-visualization-separate-account"
+        },
+        {
+          "type": "does_not_resolve",
+          "target_id": "problem.ui-system-not-promoted"
+        }
+      ],
+      "facets": {
+        "definition": "source_proven",
+        "delivery": "implemented",
+        "verification": "verified",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "partial"
+      },
+      "unresolved_conflicts": [
+        "The baseline remains a source-proven site snapshot, not a final design or owner outcome."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "finding.owner-review-delta-must-remain-visible",
+      "kind": "finding",
+      "title": "Owner-review corrections must remain a visible delta layer",
+      "definition": "Several corrected surfaces are READY_FOR_OWNER_REREVIEW but still processed:NO; Product Atlas must show them separately from both the frozen AS-IS baseline and accepted product meaning.",
+      "stakeholder_lane": "owner_operator",
+      "status": "source_proven",
+      "confidence": {
+        "level": "high",
+        "basis": "Current PR #53 review ledger."
+      },
+      "source_refs": [
+        "src.owner-review-delta-20260828"
+      ],
+      "relations": [
+        {
+          "type": "supports",
+          "target_id": "decision.layered-ui-authority-after-20260825"
+        }
+      ],
+      "facets": {
+        "definition": "source_proven",
+        "delivery": "partial",
+        "verification": "partial",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "partial"
+      },
+      "unresolved_conflicts": [
+        "No READY_FOR_OWNER_REREVIEW item becomes accepted until the owner actually rereviews it."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "problem.product-atlas-source-lock-stale-after-ui-sot-advance",
+      "kind": "product_problem",
+      "title": "Product Atlas source lock lagged behind the UI SoT",
+      "definition": "The first Product Atlas cut still pointed to the corrected semantic PR #50 and the 25 August product head, while the AS-IS baseline, owner-review delta and current Astro candidate had advanced.",
+      "stakeholder_lane": "owner_operator",
+      "status": "source_proven",
+      "confidence": {
+        "level": "high",
+        "basis": "Fresh-read of Product Atlas PR #574, UI PRs #52/#53 and Astro PR #596."
+      },
+      "source_refs": [
+        "src.product-atlas-v1-base",
+        "src.as-is-round-trip-baseline-20260825",
+        "src.owner-review-delta-20260828",
+        "src.astro-owner-audit-candidate-20260828"
+      ],
+      "relations": [
+        {
+          "type": "resolved_by",
+          "target_id": "decision.layered-ui-authority-after-20260825"
+        }
+      ],
+      "facets": {
+        "definition": "source_proven",
+        "delivery": "implemented",
+        "verification": "partial",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "accepted",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "partial"
+      },
+      "unresolved_conflicts": [
+        "The recovery remains Draft until targeted CI proves the exact external refs."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "ui-gap.listing-discovery-rail-v6-owner-rereview",
+      "kind": "ui_gap",
+      "title": "ListingDiscoveryRail v6 awaits owner rereview",
+      "definition": "The shared rail now has explicit plane and floating-island surfaces and Weekend uses the content-sized transparent island, but the owner-review item remains processed:NO and the Astro change is an unmerged Draft candidate.",
+      "stakeholder_lane": "owner_operator",
+      "status": "partial",
+      "confidence": {
+        "level": "high",
+        "basis": "PR #53 readback ledger and PR #596 source contract/tests."
+      },
+      "source_refs": [
+        "src.owner-review-delta-20260828",
+        "src.astro-owner-audit-candidate-20260828"
+      ],
+      "relations": [
+        {
+          "type": "affects",
+          "target_id": "capability.listing-discovery"
+        },
+        {
+          "type": "supports",
+          "target_id": "finding.owner-review-delta-must-remain-visible"
+        }
+      ],
+      "facets": {
+        "definition": "source_proven",
+        "delivery": "implemented_candidate",
+        "verification": "source_proven",
+        "deployment": "not_deployed",
+        "runtime_health": "unknown",
+        "evidence": "accepted",
+        "user_outcome": "not_measured",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts": [
+        "Owner rereview, merge, release and post-release evidence remain separate gates."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "ui-gap.artifact-collection-exact-seven-owner-rereview",
+      "kind": "ui_gap",
+      "title": "Exact seven-artifact Collection 1 awaits owner rereview",
+      "definition": "The stale 1/5, 1/8 and 12-item interpretations were superseded by the exact seven-item owner inventory and complete desktop/mobile state surfaces, but the review item remains processed:NO.",
+      "stakeholder_lane": "owner_operator",
+      "status": "partial",
+      "confidence": {
+        "level": "high",
+        "basis": "PR #53 structural readback and PR #596 exact source inventory."
+      },
+      "source_refs": [
+        "src.owner-review-delta-20260828",
+        "src.astro-owner-audit-candidate-20260828"
+      ],
+      "relations": [
+        {
+          "type": "affects",
+          "target_id": "capability.curated-discovery"
+        },
+        {
+          "type": "supports",
+          "target_id": "finding.owner-review-delta-must-remain-visible"
+        }
+      ],
+      "facets": {
+        "definition": "source_proven",
+        "delivery": "implemented_candidate",
+        "verification": "source_proven",
+        "deployment": "not_deployed",
+        "runtime_health": "unknown",
+        "evidence": "accepted",
+        "user_outcome": "not_measured",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts": [
+        "Historical story copy remains provenance-only pending editorial fact-check."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "ui-gap.home-hero-talk-photo-mosaic-owner-rereview",
+      "kind": "ui_gap",
+      "title": "Home HeroTalk Photo Mosaic awaits owner rereview",
+      "definition": "The Home HeroTalk product mechanism has corrected Astro, Git SoT and linked materialization/readback evidence, but remains an open owner-rereview item rather than an accepted product surface.",
+      "stakeholder_lane": "owner_operator",
+      "status": "partial",
+      "confidence": {
+        "level": "high",
+        "basis": "Current PR #53 ledger and PR #596 candidate."
+      },
+      "source_refs": [
+        "src.owner-review-delta-20260828",
+        "src.astro-owner-audit-candidate-20260828"
+      ],
+      "relations": [
+        {
+          "type": "affects",
+          "target_id": "capability.listing-discovery"
+        },
+        {
+          "type": "supports",
+          "target_id": "finding.owner-review-delta-must-remain-visible"
+        }
+      ],
+      "facets": {
+        "definition": "source_proven",
+        "delivery": "implemented_candidate",
+        "verification": "source_proven",
+        "deployment": "not_deployed",
+        "runtime_health": "unknown",
+        "evidence": "accepted",
+        "user_outcome": "not_measured",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts": [
+        "Owner rereview remains required before acceptance."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "ui-gap.global-component-lineage-owner-review",
+      "kind": "ui_gap",
+      "title": "Global component lineage remains an open review gate",
+      "definition": "Visually similar page instances must prove shared canonical ancestry rather than hide duplicate roots; local fixes do not close the global lineage census.",
+      "stakeholder_lane": "owner_operator",
+      "status": "unresolved",
+      "confidence": {
+        "level": "high",
+        "basis": "Current owner-review worklist and explicit lineage gate."
+      },
+      "source_refs": [
+        "src.owner-review-delta-20260828"
+      ],
+      "relations": [
+        {
+          "type": "affects",
+          "target_id": "problem.ui-system-not-promoted"
+        },
+        {
+          "type": "affects",
+          "target_id": "capability.listing-discovery"
+        }
+      ],
+      "facets": {
+        "definition": "source_proven",
+        "delivery": "partial",
+        "verification": "unresolved",
+        "deployment": "not_applicable",
+        "runtime_health": "not_applicable",
+        "evidence": "partial",
+        "user_outcome": "not_applicable",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts": [
+        "A final page/component lineage census and owner review are still required."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "capability.agent-assisted-event-discovery",
+      "kind": "capability",
+      "title": "Agent-assisted event discovery",
+      "definition": "A rescue-first conversational layer may help recover zero-result, missed-intent or repeated-reformulation Search attempts using typed, server-validated event/location/map blocks and a classic-list fallback.",
+      "stakeholder_lane": "user",
+      "status": "hypothesis",
+      "confidence": {
+        "level": "medium",
+        "basis": "Documented product experiment only; no production implementation or outcome evidence."
+      },
+      "source_refs": [
+        "src.agent-assisted-discovery-hypothesis-20260826"
+      ],
+      "relations": [
+        {
+          "type": "may_extend",
+          "target_id": "capability.smart-search"
+        },
+        {
+          "type": "supports",
+          "target_id": "job.search-by-intent"
+        },
+        {
+          "type": "used_in",
+          "target_id": "journey.search-intent"
+        }
+      ],
+      "facets": {
+        "definition": "hypothesis",
+        "delivery": "not_started",
+        "verification": "not_applicable",
+        "deployment": "not_deployed",
+        "runtime_health": "not_applicable",
+        "evidence": "research_only",
+        "user_outcome": "not_measured",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts": [
+        "Rescue value, factuality, cost, quota, latency and fallback quality require isolated experiments."
+      ],
+      "supersession_history": []
+    },
+    {
+      "id": "capability.canonical-location-directory",
+      "kind": "capability",
+      "title": "Canonical location identity and safe map actions",
+      "definition": "A future canonical location layer may provide stable venue identity, provenance-qualified coordinates, entrance/meeting/boarding points and allowlisted server-generated map actions to Search and event surfaces.",
+      "stakeholder_lane": "owner_operator",
+      "status": "hypothesis",
+      "confidence": {
+        "level": "medium",
+        "basis": "Documented product/data plan without migration, provider readback or production release."
+      },
+      "source_refs": [
+        "src.agent-assisted-discovery-hypothesis-20260826"
+      ],
+      "relations": [
+        {
+          "type": "may_support",
+          "target_id": "capability.event-detail"
+        },
+        {
+          "type": "may_support",
+          "target_id": "capability.intent-actions"
+        },
+        {
+          "type": "may_enable",
+          "target_id": "capability.agent-assisted-event-discovery"
+        }
+      ],
+      "facets": {
+        "definition": "hypothesis",
+        "delivery": "not_started",
+        "verification": "not_applicable",
+        "deployment": "not_deployed",
+        "runtime_health": "not_applicable",
+        "evidence": "research_only",
+        "user_outcome": "not_measured",
+        "owner_outcome": "not_measured"
+      },
+      "unresolved_conflicts": [
+        "Coordinate census, provenance, precision and wrong-place gates are not yet implemented."
+      ],
+      "supersession_history": []
+    }
+  ],
+  "unresolved_updates": [
+    {
+      "item_id": "unresolved.ui-family-promotion",
+      "status": "partial",
+      "definition_patch": "The AS-IS round-trip and product linkage are source-proven, while owner review, component-family promotion and consumer migration remain open.",
+      "source_refs": [
+        "src.as-is-round-trip-baseline-20260825",
+        "src.owner-review-delta-20260828"
+      ]
+    },
+    {
+      "item_id": "unresolved.penpot-bindings",
+      "status": "unresolved",
+      "definition_patch": "The future target is a separate Penpot account/file. Every target binding remains null/binding_pending until an explicit MCP materialization and readback receipt.",
+      "source_refs": [
+        "src.owner-parallel-product-atlas-decision-20260828"
+      ]
+    }
+  ]
+}

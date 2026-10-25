@@ -1,0 +1,141 @@
+name: Product Atlas v1
+
+on:
+  pull_request:
+    paths:
+      - "docs/product-model/**"
+      - "scripts/validate_product_atlas_v1.py"
+      - "scripts/validate_product_atlas_recovery_20260828.py"
+      - "tests/test_product_atlas_v1.py"
+      - "tests/test_product_atlas_recovery_20260828.py"
+      - ".github/workflows/product-atlas-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-product-atlas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Product Atlas candidate
+        uses: actions/checkout@v4
+
+      - name: Check out current product main
+        uses: actions/checkout@v4
+        with:
+          repository: onedayonemasterpiece/events-bot-new
+          ref: 8710e56fa3685f6c30a90cd062d532dce0348cce
+          path: .sources/product-main
+          fetch-depth: 1
+
+      - name: Check out source-proven AS-IS UI baseline
+        uses: actions/checkout@v4
+        with:
+          repository: onedayonemasterpiece/lovekgd-design-system
+          ref: b86bab3e91511b3d4bd7d953b22bceb847f02a51
+          path: .sources/ui-baseline
+          fetch-depth: 1
+
+      - name: Check out active owner-review delta
+        uses: actions/checkout@v4
+        with:
+          repository: onedayonemasterpiece/lovekgd-design-system
+          ref: 47d0fef53c33200492d92f6a086d9b8813fe187e
+          path: .sources/ui-review
+          fetch-depth: 1
+
+      - name: Check out active Astro UI candidate
+        uses: actions/checkout@v4
+        with:
+          repository: onedayonemasterpiece/events-bot-new
+          ref: 49c351873d40a2ea55f0a32837c7376e344d9c17
+          path: .sources/astro-delta
+          fetch-depth: 1
+
+      - name: Check out agent-assisted discovery hypothesis
+        uses: actions/checkout@v4
+        with:
+          repository: onedayonemasterpiece/events-bot-new
+          ref: f78e7c5974b4192bddf9eea901ee6d8b57f51560
+          path: .sources/hypothesis
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate stable semantic model and foreign keys
+        id: semantic
+        shell: bash
+        run: |
+          set +e
+          python scripts/validate_product_atlas_v1.py > product-atlas-semantic.log 2>&1
+          status=$?
+          cat product-atlas-semantic.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Validate current recovery and exact external sources
+        if: always()
+        id: recovery
+        shell: bash
+        run: |
+          set +e
+          python scripts/validate_product_atlas_recovery_20260828.py \
+            --product-main .sources/product-main \
+            --ui-baseline .sources/ui-baseline \
+            --ui-review .sources/ui-review \
+            --astro-delta .sources/astro-delta \
+            --hypothesis .sources/hypothesis \
+            > product-atlas-recovery.log 2>&1
+          status=$?
+          cat product-atlas-recovery.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Run focused repository tests
+        if: always()
+        id: focused
+        shell: bash
+        run: |
+          set +e
+          python -m pip install --disable-pip-version-check pytest > product-atlas-test.log 2>&1
+          install_status=$?
+          if [ "$install_status" -eq 0 ]; then
+            python -m pytest --noconftest -q \
+              tests/test_product_atlas_v1.py \
+              tests/test_product_atlas_recovery_20260828.py \
+              >> product-atlas-test.log 2>&1
+            status=$?
+          else
+            status=$install_status
+          fi
+          cat product-atlas-test.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Publish diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-atlas-v1-validation-${{ github.run_id }}
+          path: |
+            product-atlas-semantic.log
+            product-atlas-recovery.log
+            product-atlas-test.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Write validation summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Product Atlas v1 + 2026-08-28 recovery"
+            echo "- stable semantic exit: ${{ steps.semantic.outputs.exit_code }}"
+            echo "- recovery/external-source exit: ${{ steps.recovery.outputs.exit_code }}"
+            echo "- focused tests exit: ${{ steps.focused.outputs.exit_code }}"
+            echo "- Penpot calls: 0"
+          } >> "$GITHUB_STEP_SUMMARY"
