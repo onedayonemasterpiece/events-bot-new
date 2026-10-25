@@ -1,0 +1,120 @@
++      await driver.url(searchTarget.href);
++      await driver.waitUntil(async () => (await driver.getUrl()).startsWith(searchTarget.origin), {
++        timeout: 30_000, interval: 300, timeoutMsg: 'search_target_origin_not_reached',
++      });
++      pageEntriesSeen = 0; faultPageEventsSeen = 0; transportPageEventsSeen = 0;
++      await driver.pause(400);
++      await driver.execute(networkBootstrap, directHost, relayHost);
++      await syncNetwork();
++    },
++    async verifySearchSurface() {
++      await driver.waitUntil(async () => driver.execute(() => Boolean(document.querySelector('[data-authorized-search]'))), {
++        timeout: 20_000, interval: 250, timeoutMsg: 'search_surface_missing',
++      });
++      const state = await driver.execute(() => {
++        const root = document.querySelector('[data-authorized-search]');
++        const input = root?.querySelector('[data-search-input]');
++        return {
++          enabled: root?.dataset.searchEnabled === 'true', transport: root?.dataset.searchTransport || null,
++          authorized: root?.classList.contains('is-authorized') === true, path: location.pathname,
++          input_tag: input?.tagName?.toLowerCase() || null,
++          enter_key_hint: input?.enterKeyHint || input?.getAttribute('enterkeyhint') || null,
++        };
++      });
++      if (!state.enabled) throw new Error('search_surface_disabled');
++      await driver.waitUntil(async () => driver.execute(() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized') === true), {
++        timeout: 20_000, interval: 250, timeoutMsg: 'search_session_not_restored',
++      });
++      return { ...state, authorized: true };
++    },
++    async focusSearchInput() {
++      const accepted = await focusWithNativeTap(SELECTORS.searchInput, 'Что хочется сделать?', 'search',
++        ['XCUIElementTypeTextView', 'XCUIElementTypeTextField']);
++      keyboardPreflight.product.search = accepted;
++      await writeFile(join(evidenceRoot, 'native-ui', 'keyboard-preflight.json'), `${JSON.stringify(keyboardPreflight, null, 2)}
++`);
++      return accepted;
++    },
++    async enterSearchQuery(value) {
++      await assertNoBlockingSafariModal();
++      await (await driver.$(SELECTORS.searchInput)).setValue(value);
++    },
++    async submitSearchWithKeyboard() {
++      await assertNoBlockingSafariModal();
++      await driver.keys('\uE007');
++    },
++    async waitForSearchCompletion() {
++      let state = null;
++      await driver.waitUntil(async () => {
++        state = await driver.execute(() => {
++          const submit = document.querySelector('[data-search-submit]');
++          const status = document.querySelector('[data-search-status]');
++          const results = document.querySelector('[data-search-results]');
++          const alert = status?.getAttribute('role') === 'alert';
++          return {
++            completed: !alert && submit?.getAttribute('aria-busy') === 'false'
++              && Boolean(results && !results.hidden && results.children.length > 0),
++            error: alert,
++            rendered_card_count: results?.querySelectorAll('[data-event-id], article.event-card, .event-card').length || 0,
++            result_child_count: results?.children.length || 0,
++            card_renderer_unavailable: Boolean(results?.querySelector('[data-search-card-render-unavailable]')),
++          };
++        });
++        return state.error || state.completed;
++      }, { timeout: 60_000, interval: 300, timeoutMsg: 'search_result_timeout' });
++      if (state?.error) throw new Error('search_ui_error');
++      return state;
++    },
++    async clearSearchInput() { await (await driver.$(SELECTORS.searchInput)).setValue(''); },
++    async searchEvidence() {
++      await syncNetwork();
++      const transport = await syncTransportFaultEvidence();
++      const outcomes = transport.transport_outcomes.filter((item) => item.operation === 'functions.event-search'
++        && Number(item.startedAt || 0) >= searchStartedAt);
++      return {
++        responses: [],
++        transport_outcomes: outcomes,
++        physical_request_count: Math.max(recorder.count('POST', '/functions/v1/event-search'), outcomes.length),
++      };
++    },
+     async captureMaskedEvidence(name) {
+       await driver.hideKeyboard().catch(() => undefined);
+       await maskDom();
+--- a/site/e2e/focus-email/adapters/playwright-ui.mjs
++++ b/site/e2e/focus-email/adapters/playwright-ui.mjs
+@@ -2,12 +2,14 @@
+ import { chromium } from 'playwright';
+ 
+ import { observedRepoSha } from '../helpers/release-identity.mjs';
++import { summarizeSearchPayload } from '../helpers/search-acceptance.mjs';
+ import { redactText } from '../helpers/redaction.mjs';
+ import { createSanitizedNetworkRecorder } from '../helpers/sanitized-network-recorder.mjs';
+ 
+ async function maskPage(page) {
+   await page.evaluate(() => {
+-    document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"]').forEach((node) => {
++    document.querySelectorAll('input[type="email"], input[autocomplete="one-time-code"], [data-search-input]').forEach((node) => {
++      if (document.activeElement === node) node.blur();
+       node.value = '';
+       node.setAttribute('data-e2e-masked', 'true');
+     });
+@@ -33,6 +35,12 @@
+   let faultReceipt = null;
+   let faultPageEventsSeen = 0;
+   let transportPageEventsSeen = 0;
++  const transportOutcomes = [];
++  const transportOutcomeIds = new Set();
++  const searchResponses = [];
++  const searchResponseTasks = [];
++  let searchResponseSequence = 0;
++  let searchStartedAt = 0;
+   async function syncTransportFaultEvidence() {
+     const current = await page.evaluate(() => ({
+       receipt: globalThis['KENIGEVENTS_E2E_TRANSPORT_FAULT_INJECTOR_V1:receipt'] || null,
+@@ -44,8 +52,32 @@
+     transportEvents.push(...current.transport.slice(transportPageEventsSeen));
+     faultPageEventsSeen = current.faults.length;
+     transportPageEventsSeen = current.transport.length;
+-    return { receipt: faultReceipt, fault_events: faultEvents, transport_events: transportEvents, transport_outcomes: [] };
++    const outcomes = await page.evaluate(() => {
++      const clients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;

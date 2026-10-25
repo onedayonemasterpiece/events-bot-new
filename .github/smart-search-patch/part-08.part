@@ -1,0 +1,120 @@
++  const target = validateFocusE2eTarget(values.target_url);
++  const searchTarget = scenario.startsWith('search.')
++    ? validateSearchE2eTarget(values.search_target_url || '', target)
++    : null;
++  if (!scenario.startsWith('search.') && values.search_target_url) throw new Error('search_target_url_not_applicable');
++  return {
++    scenario,
++    platform,
++    fault_profile: faultProfile,
++    target_url: target.href,
++    search_target_url: searchTarget?.href || '',
++    expected_repo_sha: values.expected_repo_sha,
++    mode: values.mode,
++    target_origin: target.origin,
++    target_path: target.pathname,
++    search_target_path: searchTarget?.pathname || '',
++  };
+ }
+ 
+ export async function validateIssueEvent(event, { controlIssueNumber }) {
+--- a/site/scripts/static-site-qa-terminal.mjs
++++ b/site/scripts/static-site-qa-terminal.mjs
+@@ -8,6 +8,11 @@
+ };
+ const keyboard = (value) => value == null ? 'n/a' : value.passed === true ? 'pass' : 'fail';
+ const count = (value) => value == null ? 'unknown' : String(Number(value));
++const searchReceipt = (value) => {
++  if (!value) return 'n/a';
++  const route = value.route || {}; const cache = route.cache || {};
++  return `target=${safe(value.target_path, 'unknown')},attempts=${count(value.attempts)},routes=${(route.routes || []).map((item) => safe(item)).join(',') || 'none'},cache=${safe(cache.first, 'n/a')}->${safe(cache.second, 'n/a')}`;
++};
+ 
+ export function formatTerminalReceipt({ scenario, platform, summaries, runUrl }) {
+   const prefix = `TERMINAL · ${safe(scenario)} · ${safe(platform)} ·`;
+@@ -27,7 +32,8 @@
+       + ` counts=${count(counts.issue)}/${count(counts.verify)}/${count(counts.registration)}`
+       + ` registration_status=${count(summary.registration_status)} mail_count=${count(summary.matching_mail_count)}`
+       + ` final=${safe(summary.final_ui_state, 'none')} reload=${safe(summary.reload_state, 'none')}`
+-      + ` keyboards=email:${keyboard(keys.email)},otp:${keyboard(keys.otp)},control-email:${keyboard(keys.control_email)},control-numeric:${keyboard(keys.control_numeric)}`
++      + ` keyboards=email:${keyboard(keys.email)},otp:${keyboard(keys.otp)},search:${keyboard(keys.search)},control-email:${keyboard(keys.control_email)},control-numeric:${keyboard(keys.control_numeric)}`
++      + ` search=${searchReceipt(summary.search)}`
+       + ` warnings=${warningCodes.join(',') || 'none'} redaction=${safe(summary.redaction_status)}`
+       + ` artifact=${safe(sha.artifact_name)}`
+       + ` sha=harness:${safe(sha.harness_repo_sha)},tested:${safe(sha.tested_repo_sha)},observed:${safe(sha.observed_preview_sha)}`;
+--- a/site/src/lib/transportFaultInjector.e2e.ts
++++ b/site/src/lib/transportFaultInjector.e2e.ts
+@@ -78,6 +78,7 @@
+     '/rest/v1/rpc/transport_probe_v1',
+     '/rest/v1/rpc/register_focus_group_participant_v1',
+     '/functions/v1/transport-probe',
++    '/functions/v1/event-search',
+   ];
+   return known.find((value) => pathname.endsWith(value)) || '/other';
+ }
+--- a/site/tests/external-focus-email-otp/evidence.test.mjs
++++ b/site/tests/external-focus-email-otp/evidence.test.mjs
+@@ -9,6 +9,7 @@
+     target_path: '/preview-x/fokus-gruppa/priglashenie/', browser: { name: 'chromium' },
+     otp_issue_request_count: 1, otp_verify_request_count: 1, participant_registration_request_count: 1,
+     mail: { matching_message_count: 1, otp_length: 6, message_id_hash: 'abcd' },
++    search: { query_id: 'synthetic-v1', target_path: '/preview-x/poisk/', responses: [{ result_cache_status: 'hit' }] },
+     redaction_audit_passed: true,
+   });
+   assert.equal(result.schema_version, 3);
+@@ -21,4 +22,6 @@
+   assert.equal(summary.evidence.native_ui, 'native-ui/');
+   assert.equal(summary.schema_version, 2);
+   assert.equal(summary.evidence.diagnostics, 'runtime-diagnostics.json');
++  assert.equal(summary.evidence.search, 'search.sanitized.json');
++  assert.equal(summary.search.query_id, 'synthetic-v1');
+ });
+--- a/site/tests/external-focus-email-otp/journey.test.mjs
++++ b/site/tests/external-focus-email-otp/journey.test.mjs
+@@ -53,3 +53,27 @@
+     waitForSingleOtp: async () => ({ otp: '123456', matchingMessageCount: 1 }) };
+   await assert.rejects(() => runFocusOtpBrowserTab({ ui, mailbox, recipient: 'masked', timeoutMs: 30_000, step: () => {} }), /otp_issue_count:2/u);
+ });
++
++test('authenticated Search journey uses one mobile dispatch and browser cold/cache pair', async () => {
++  const { runAuthenticatedSearchRouteMatrix } = await import('../../e2e/focus-email/journey.mjs');
++  const calls = [];
++  const outcomes = [1, 2].map((index) => ({ operationId: `op-${index}`, operation: 'functions.event-search',
++    policy: 'selected-once', kind: 'definitive', status: 200, initialRoute: 'relay', finalRoute: 'relay' }));
++  const ui = {
++    openSearch: async () => calls.push('open'), verifySearchSurface: async () => ({ enabled: true, authorized: true, transport: 'json', enter_key_hint: 'search', input_tag: 'textarea' }),
++    focusSearchInput: async () => null, enterSearchQuery: async () => calls.push('enter'),
++    submitSearchWithKeyboard: async () => calls.push('submit'),
++    waitForSearchCompletion: async () => ({ completed: true, rendered_card_count: 2 }),
++    captureMaskedEvidence: async () => {}, clearSearchInput: async () => {},
++    searchEvidence: async () => ({ physical_request_count: 2, transport_outcomes: outcomes,
++      responses: [
++        { schema_version: 'event-search-results-v1', result_cache_status: 'stored', served_from_cache: false, item_count: 2, fallback_count: 0 },
++        { schema_version: 'event-search-results-v1', result_cache_status: 'hit', served_from_cache: true, item_count: 2, fallback_count: 0 },
++      ] }),
++  };
++  const result = await runAuthenticatedSearchRouteMatrix({ ui, searchTarget: new URL('https://kenigevents.ru/preview-safe/poisk/'),
++    query: 'synthetic', queryId: 'q1', platform: 'browser', profile: 'client_supabase_direct_unreachable', step: () => {} });
++  assert.equal(result.attempts, 2);
++  assert.equal(calls.filter((item) => item === 'submit').length, 2);
++  assert.equal(result.route.cache.second, 'hit');
++});
+--- a/site/tests/external-focus-email-otp/mobile-adapter-contract.test.mjs
++++ b/site/tests/external-focus-email-otp/mobile-adapter-contract.test.mjs
+@@ -208,3 +208,23 @@
+   assert.match(source, /actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/u);
+   assert.match(source, /static-site-qa-terminal\.mjs/u);
+ });
++
++test('mobile Smart Search reuses Appium browser adapters and native search-key intent', async () => {
++  const source = await readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8');
++  assert.match(source, /async openSearch\(searchTarget\)/u);
++  assert.match(source, /XCUIElementTypeTextView/u);
++  assert.match(source, /nativeTypes\.map\(\(type\) => `type == '\$\{type\}'`\)/u);
++  assert.match(source, /enterKeyHint/u);
++  assert.match(source, /async submitSearchWithKeyboard\(\)[\s\S]*driver\.keys\('\\uE007'\)/u);
++  assert.match(source, /operation === 'functions\.event-search'/u);
++});
++
++test('protected workflow keeps Search on the same sequential real-mail platform chain', async () => {
++  const source = await readFile(new URL('../../../.github/workflows/external-focus-email-otp.yml', import.meta.url), 'utf8');
