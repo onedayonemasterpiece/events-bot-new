@@ -1,0 +1,566 @@
+--- a/linked_events.py
++++ b/linked_events.py
+@@ -131,6 +131,93 @@
+     capped: bool = False
+ 
+ 
++def _link_ids(raw: object, *, self_id: int) -> list[int]:
++    """Normalize only stored IDs; this does not infer event identity."""
++    result: list[int] = []
++    if isinstance(raw, list):
++        for value in raw:
++            # bool and fractional numbers are not canonical IDs.
++            if isinstance(value, bool) or not re.fullmatch(r"[0-9]+", str(value)):
++                continue
++            item = int(value)
++            if item > 0 and item != self_id and item not in result:
++                result.append(item)
++    return result
++
++
++def _is_linkable_occurrence(event: object) -> bool:
++    """Negative rails over canonical fields, not a new eventness classifier.
++
++    A continuous range is never a member of a single-slot occurrence group.
++    Unknown event type cannot prove compatibility with a named activity.
++    """
++    raw_date = str(getattr(event, "date", "") or "").strip()
++    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw_date):
++        return False
++    if _parse_iso_date(raw_date) is None or getattr(event, "end_date", None):
++        return False
++    if not str(getattr(event, "event_type", "") or "").strip():
++        return False
++    if str(getattr(event, "lifecycle_status", None) or "active").casefold() != "active":
++        return False
++    if str(getattr(event, "identity_status", None) or "canonical").casefold() != "canonical":
++        return False
++    return not getattr(event, "silent", False) and not getattr(event, "merged_into_event_id", None)
++
++
++def _canonical_text(event: object, field: str) -> str:
++    return str(getattr(event, field, "") or "").strip().casefold()
++
++
++def _occurrences_compatible(left: object, right: object) -> bool:
++    """Require symmetric typed rails before the existing title matcher runs."""
++    if not _is_linkable_occurrence(left) or not _is_linkable_occurrence(right):
++        return False
++    if _canonical_text(left, "event_type") != _canonical_text(right, "event_type"):
++        return False
++    left_city, right_city = _canonical_text(left, "city"), _canonical_text(right, "city")
++    if left_city and right_city and left_city != right_city:
++        return False
++    # On the same day, only two different known times can prove distinct slots.
++    # A default/unknown time proves neither a duplicate nor another visit.
++    if getattr(left, "date", None) == getattr(right, "date", None):
++        left_time = _time_sort_key(getattr(left, "time", None))
++        right_time = _time_sort_key(getattr(right, "time", None))
++        if (left_time[0] != 0 or right_time[0] != 0
++                or getattr(left, "time_is_default", False)
++                or getattr(right, "time_is_default", False)
++                or left_time == right_time):
++            return False
++    return True
++
++
++async def _detach_base_links(session: object, base: Event) -> LinkedEventsRecomputeResult:
++    """Clear the rejected base's known edges, preserving its neighbours' others.
++
++    This is bounded to stored outgoing IDs. It is not a global legacy-graph
++    repair and intentionally does not scan the database for unknown backlinks.
++    """
++    eid = int(base.id)
++    linked = _link_ids(getattr(base, "linked_event_ids", None), self_id=eid)
++    changed: list[int] = []
++    if linked:
++        result = await session.execute(select(Event).where(Event.id.in_(linked)))
++        for neighbour in result.scalars().all():
++            current = _link_ids(neighbour.linked_event_ids, self_id=int(neighbour.id))
++            desired = [item for item in current if item != eid]
++            if desired != current:
++                neighbour.linked_event_ids = desired
++                session.add(neighbour)
++                changed.append(int(neighbour.id))
++    if base.linked_event_ids:
++        base.linked_event_ids = []
++        session.add(base)
++        changed.append(eid)
++    if changed:
++        await session.commit()
++    return LinkedEventsRecomputeResult(group_event_ids=[], changed_event_ids=sorted(changed))
++
++
+ async def recompute_linked_event_ids(
+     db: Database,
+     event_id: int,
+@@ -144,8 +231,12 @@
+ 
+     The linking rule is deliberately simple and deterministic:
+     - same `location_name`
+-    - title matches by a strict fuzzy matcher (`_titles_match_for_linking`)
+-    - different dates/times are allowed (we link occurrences, not merge them)
++    - symmetric single-slot, lifecycle, identity, type and city rails
++    - title matches by the existing fuzzy matcher (`_titles_match_for_linking`)
++    - distinct dates/times are allowed; exact duplicate slots are not linked
++
++    Compatibility rails reject contradictions; they do not prove programme
++    identity or replace the existing semantic identity gate.
+     """
+     eid = int(event_id)
+     past = past_days if isinstance(past_days, int) else _env_int("LINKED_EVENTS_PAST_DAYS", 120, min_value=0, max_value=3650)
+@@ -168,26 +259,23 @@
+         loc = (getattr(base, "location_name", None) or "").strip()
+         title = (getattr(base, "title", None) or "").strip()
+         date_raw = (getattr(base, "date", None) or "").strip()
+-        end_date_raw = (getattr(base, "end_date", None) or "").strip()
+-        old_links = set(int(x) for x in (getattr(base, "linked_event_ids", None) or []) if str(x).lstrip("-").isdigit())
+-
+-        if not loc or not title:
+-            return LinkedEventsRecomputeResult(group_event_ids=[], changed_event_ids=[])
+-
+-        # Only link single-day events: multi-day entries already represent "many dates" as a range.
+-        if ".." in date_raw or end_date_raw:
+-            return LinkedEventsRecomputeResult(group_event_ids=[], changed_event_ids=[])
++        if not loc or not title or not _is_linkable_occurrence(base):
++            return await _detach_base_links(session, base)
+ 
+         base_day = _parse_iso_date(date_raw)
+-        if not base_day:
+-            return LinkedEventsRecomputeResult(group_event_ids=[], changed_event_ids=[])
++        assert base_day is not None  # checked by the symmetric eligibility rail
+ 
+         start_iso = (base_day - timedelta(days=past)).isoformat()
+         end_iso = (base_day + timedelta(days=future)).isoformat()
+ 
+         rows = (
+             await session.execute(
+-                select(Event.id, Event.title, Event.date, Event.time)
++                select(
++                    Event.id, Event.title, Event.date, Event.time, Event.end_date,
++                    Event.event_type, Event.city, Event.lifecycle_status,
++                    Event.identity_status, Event.merged_into_event_id, Event.silent,
++                    Event.time_is_default, Event.linked_event_ids,
++                )
+                 .where(
+                     Event.location_name == loc,
+                     Event.date >= start_iso,
+@@ -198,38 +286,22 @@
+             )
+         ).all()
+ 
+-        candidates: list[tuple[int, str, str | None, str | None]] = []
+-        seen_ids: set[int] = set()
+-        for rid, rtitle, rdate, rtime in rows:
+-            try:
+-                rid_int = int(rid)
+-            except Exception:
+-                continue
+-            if rid_int in seen_ids:
+-                continue
+-            seen_ids.add(rid_int)
+-            candidates.append(
+-                (
+-                    rid_int,
+-                    str(rtitle or ""),
+-                    str(rdate) if rdate is not None else None,
+-                    str(rtime) if rtime is not None else None,
+-                )
+-            )
+-        if eid not in seen_ids:
+-            # Defensive: ensure the base event participates even if its date is outside the window
+-            # due to malformed date strings.
+-            candidates.append((eid, title, date_raw, getattr(base, "time", None)))
+-
+-        group_rows: list[tuple[int, str | None, str | None]] = []
+-        for rid_int, rtitle, rdate, rtime in candidates:
+-            if not rtitle.strip():
+-                continue
+-            if _titles_match_for_linking(title, rtitle, threshold=0.90):
+-                group_rows.append((rid_int, rdate, rtime))
+-        # Always include self.
+-        if eid not in {rid for rid, _d, _t in group_rows}:
+-            group_rows.append((eid, date_raw, getattr(base, "time", None)))
++        # Base-first and stable query order. Never turn A~B and A~C into a
++        # B~C edge when B and C contradict one another (including exact slots).
++        members: list[object] = [base]
++        seen_ids = {eid}
++        for other in rows:
++            rid = int(other.id)
++            if rid in seen_ids:
++                continue
++            seen_ids.add(rid)
++            if all(
++                _occurrences_compatible(member, other)
++                and _titles_match_for_linking(member.title, other.title, threshold=0.90)
++                for member in members
++            ):
++                members.append(other)
++        group_rows = [(int(member.id), member.date, member.time) for member in members]
+ 
+         group_rows.sort(key=lambda it: _event_sort_key(it[1], it[2], it[0]))
+         ordered_group_ids = [rid for rid, _d, _t in group_rows]
+@@ -252,8 +324,17 @@
+             rid: [x for x in ordered_group_ids if x != rid] for rid in ordered_group_ids
+         }
+ 
+-        to_remove_from_others = old_links - group_set
+-        touched_ids = set(ordered_group_ids) | set(to_remove_from_others) | {eid}
++        # Every overwritten member may have old edges, not only the base.
++        # Remove exactly the dropped backlinks; leave unrelated neighbour edges.
++        removed_backlinks: dict[int, set[int]] = {}
++        for member in members:
++            rid = int(member.id)
++            if rid not in group_set:
++                continue
++            old = set(_link_ids(member.linked_event_ids, self_id=rid))
++            for neighbour_id in old - group_set:
++                removed_backlinks.setdefault(neighbour_id, set()).add(rid)
++        touched_ids = group_set | set(removed_backlinks) | {eid}
+ 
+         if not touched_ids:
+             return LinkedEventsRecomputeResult(group_event_ids=[], changed_event_ids=[])
+@@ -263,26 +344,6 @@
+         by_id = {int(getattr(e, "id") or 0): e for e in touched_events if getattr(e, "id", None) is not None}
+ 
+         changed: list[int] = []
+-
+-        def _clean_ids(raw: object, *, self_id: int) -> list[int]:
+-            out: list[int] = []
+-            seen: set[int] = set()
+-            if isinstance(raw, list):
+-                items = raw
+-            else:
+-                items = []
+-            for it in items:
+-                try:
+-                    v = int(it)
+-                except Exception:
+-                    continue
+-                if v == self_id:
+-                    continue
+-                if v in seen:
+-                    continue
+-                seen.add(v)
+-                out.append(v)
+-            return out
+ 
+         # 1) Update the computed group: every event gets the full group list (minus itself).
+         for rid in ordered_group_ids:
+@@ -290,18 +351,18 @@
+             if not ev:
+                 continue
+             desired = desired_by_id.get(int(rid), [])
+-            cur = _clean_ids(getattr(ev, "linked_event_ids", None), self_id=int(rid))
++            cur = _link_ids(getattr(ev, "linked_event_ids", None), self_id=int(rid))
+             if cur != desired:
+                 ev.linked_event_ids = list(desired)
+                 changed.append(int(rid))
+ 
+-        # 2) Remove backlink from events that were previously linked but are no longer in group.
+-        for rid in to_remove_from_others:
++        # 2) Remove dropped backlinks, preserving unrelated neighbour edges.
++        for rid, removed_ids in removed_backlinks.items():
+             ev = by_id.get(int(rid))
+             if not ev:
+                 continue
+-            cur = _clean_ids(getattr(ev, "linked_event_ids", None), self_id=int(rid))
+-            desired = [x for x in cur if x != eid]
++            cur = _link_ids(getattr(ev, "linked_event_ids", None), self_id=int(rid))
++            desired = [x for x in cur if x not in removed_ids]
+             if cur != desired:
+                 ev.linked_event_ids = list(desired)
+                 changed.append(int(rid))
+--- /dev/null
++++ b/tests/test_linked_occurrence_integrity.py
+@@ -0,0 +1,279 @@
++"""Offline contract regressions for the actual linked_events implementation.
++
++Run focused without the repository's bot-wide conftest:
++  python -m pytest --noconftest -q tests/test_linked_occurrence_integrity.py
++
++Only import dependencies are injected. Function bodies and SELECT statements
++come from the production file; SQL runs against real temporary SQLite using
++SQLAlchemy. This does not exercise production Database/SQLModel initialization,
++async driver concurrency, Smart Update orchestration, providers, or deployment.
++"""
++from __future__ import annotations
++
++import ast
++import asyncio
++from contextlib import asynccontextmanager
++from pathlib import Path
++import sys
++import types
++
++import pytest
++from sqlalchemy import JSON, Boolean, Integer, String, create_engine, select
++from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
++
++
++class Base(DeclarativeBase):
++    pass
++
++
++class Event(Base):
++    __tablename__ = "event"
++    id: Mapped[int] = mapped_column(Integer, primary_key=True)
++    title: Mapped[str] = mapped_column(String)
++    date: Mapped[str] = mapped_column(String)
++    time: Mapped[str] = mapped_column(String, default="16:00")
++    end_date: Mapped[str | None] = mapped_column(String, nullable=True)
++    event_type: Mapped[str | None] = mapped_column(String, nullable=True)
++    location_name: Mapped[str] = mapped_column(String, default="Музей")
++    city: Mapped[str | None] = mapped_column(String, nullable=True)
++    lifecycle_status: Mapped[str | None] = mapped_column(String, nullable=True, default="active")
++    identity_status: Mapped[str | None] = mapped_column(String, nullable=True, default="canonical")
++    merged_into_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
++    silent: Mapped[bool] = mapped_column(Boolean, default=False)
++    time_is_default: Mapped[bool] = mapped_column(Boolean, default=False)
++    linked_event_ids: Mapped[list] = mapped_column(JSON, default=list)
++
++
++class Database:
++    def __init__(self, engine):
++        self.engine = engine
++        self.fail_commit = False
++        self.commit_count = 0
++
++    @asynccontextmanager
++    async def get_session(self):
++        owner = self
++        with Session(self.engine) as real:
++            class AsyncFacade:
++                async def get(self, model, key):
++                    return real.get(model, key)
++
++                async def execute(self, statement):
++                    return real.execute(statement)
++
++                def add(self, row):
++                    real.add(row)
++
++                async def commit(self):
++                    if owner.fail_commit:
++                        raise RuntimeError("injected commit failure")
++                    real.commit()
++                    owner.commit_count += 1
++            try:
++                yield AsyncFacade()
++            finally:
++                real.rollback()
++
++
++@pytest.fixture
++def subject(monkeypatch):
++    source = Path(__file__).resolve().parents[1] / "linked_events.py"
++    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
++    injected = {"sqlmodel", "db", "models"}
++    tree.body = [node for node in tree.body if not (
++        isinstance(node, ast.ImportFrom) and node.module in injected
++    )]
++    module = types.ModuleType("_linked_events_contract_under_test")
++    module.__dict__.update(Event=Event, Database=Database, select=select)
++    monkeypatch.setitem(sys.modules, module.__name__, module)
++    exec(compile(tree, str(source), "exec"), module.__dict__)
++    return module
++
++
++@pytest.fixture
++def db(tmp_path):
++    engine = create_engine(f"sqlite:///{tmp_path / 'events.sqlite'}")
++    Base.metadata.create_all(engine)
++    result = Database(engine)
++    yield result
++    engine.dispose()
++
++
++def row(event_id, **changes):
++    fields = dict(id=event_id, title="Точка и линия", date="2026-09-06",
++                  time="16:00", event_type="экскурсия", city="Калининград",
++                  location_name="Музей", linked_event_ids=[])
++    fields.update(changes)
++    return Event(**fields)
++
++
++def put(db, *events):
++    with Session(db.engine) as session:
++        session.add_all(events)
++        session.commit()
++
++
++def links(db):
++    with Session(db.engine) as session:
++        return {item.id: item.linked_event_ids for item in session.scalars(select(Event))}
++
++
++def recompute(subject, db, event_id, **options):
++    return asyncio.run(subject.recompute_linked_event_ids(db, event_id, **options))
++
++
++@pytest.mark.parametrize("first", [1, 2])
++def test_exhibition_and_tour_do_not_link_in_either_order(subject, db, first):
++    put(db, row(1, event_type="выставка", date="2026-06-12", end_date="2027-03-28"), row(2))
++    recompute(subject, db, first)
++    recompute(subject, db, 3-first)
++    assert links(db) == {1: [], 2: []}
++
++
++@pytest.mark.parametrize("first", [1, 2])
++def test_existing_exhibition_tour_edges_are_removed_symmetrically(subject, db, first):
++    put(db, row(1, event_type="выставка", date="2026-06-12", end_date="2027-03-28", linked_event_ids=[2]),
++        row(2, linked_event_ids=[1]))
++    result = recompute(subject, db, first)
++    assert result.changed_event_ids == [1, 2]
++    assert links(db) == {1: [], 2: []}
++    assert recompute(subject, db, first).changed_event_ids == []
++
++
++@pytest.mark.parametrize("bad", [
++    {"event_type": "выставка"}, {"event_type": None}, {"event_type": ""},
++    {"end_date": "2026-10-01"}, {"lifecycle_status": "cancelled"},
++    {"identity_status": "merged"}, {"merged_into_event_id": 99}, {"silent": True},
++    {"city": "Светлогорск"}, {"date": "2026-09-07..2026-09-08"},
++    {"date": "2026-09-31"},
++])
++def test_ineligible_or_contradictory_candidate_cannot_join(subject, db, bad):
++    put(db, row(1), row(2, **(dict(date="2026-09-07") | bad)))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [], 2: []}
++
++
++@pytest.mark.parametrize("bad", [
++    {"title": ""}, {"location_name": ""}, {"date": "invalid"},
++    {"end_date": "2026-10-01"}, {"event_type": ""},
++    {"lifecycle_status": "cancelled"}, {"silent": True},
++])
++def test_rejected_base_clears_known_edges_without_deleting_other_relations(subject, db, bad):
++    put(db, row(1, **(dict(linked_event_ids=[2]) | bad)),
++        row(2, date="2026-09-07", linked_event_ids=[1, 3]),
++        row(3, date="2026-09-08", linked_event_ids=[2]))
++    result = recompute(subject, db, 1)
++    assert links(db) == {1: [], 2: [3], 3: [2]}
++    assert result.changed_event_ids == [1, 2]
++
++
++def test_real_tour_repeats_are_kept_ordered_and_idempotent(subject, db):
++    put(db, row(3, date="2026-09-08"), row(1), row(2, date="2026-09-07"))
++    result = recompute(subject, db, 2)
++    assert result.group_event_ids == [1, 2, 3]
++    assert links(db) == {1: [2, 3], 2: [1, 3], 3: [1, 2]}
++    assert recompute(subject, db, 3).changed_event_ids == []
++
++
++def test_same_day_distinct_verified_times_are_valid(subject, db):
++    put(db, row(1, time="13:00"), row(2, time="16:00"))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [2], 2: [1]}
++
++
++def test_exact_same_slot_is_not_another_date(subject, db):
++    put(db, row(1), row(2))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [], 2: []}
++
++
++def test_two_same_slot_siblings_cannot_be_joined_via_a_third_date(subject, db):
++    put(db, row(1), row(2, date="2026-09-07"), row(3, date="2026-09-07"))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [2], 2: [1], 3: []}
++
++
++def test_unknown_city_does_not_bridge_two_conflicting_cities(subject, db):
++    put(db, row(1, city=None), row(2, date="2026-09-07"),
++        row(3, date="2026-09-08", city="Светлогорск"))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [2], 2: [1], 3: []}
++
++
++def test_removing_a_members_old_edge_also_removes_its_backlink(subject, db):
++    put(db, row(1), row(2, date="2026-09-07", linked_event_ids=[3]),
++        row(3, event_type="выставка", end_date="2027-03-28", linked_event_ids=[2, 4]),
++        row(4, title="Другая программа", linked_event_ids=[3]))
++    result = recompute(subject, db, 1)
++    assert links(db) == {1: [2], 2: [1], 3: [4], 4: [3]}
++    assert result.changed_event_ids == [1, 2, 3]
++
++
++def test_title_difference_not_replaced_by_shared_venue(subject, db):
++    put(db, row(1, title="Упрямая любовь и Королевская хитрость", event_type="кинопоказ"),
++        row(2, title="Щенок-талисман и Одна неделя", event_type="кинопоказ", date="2026-09-07"))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [], 2: []}
++
++
++@pytest.mark.parametrize("unknown", [
++    {"time": "19:09", "time_is_default": True}, {"time": ""}, {"time": "00:00"},
++])
++def test_unverified_same_day_time_does_not_prove_another_visit(subject, db, unknown):
++    put(db, row(1, **unknown), row(2, time="19:09"))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [], 2: []}
++
++
++def test_unusual_but_explicit_time_is_not_rounded_or_banned(subject, db):
++    put(db, row(1, time="19:09"), row(2, time="20:00"))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [2], 2: [1]}
++    with Session(db.engine) as session:
++        assert session.get(Event, 1).time == "19:09"
++
++
++def test_different_dates_do_not_require_inventing_a_time(subject, db):
++    put(db, row(1, time="", time_is_default=True), row(2, date="2026-09-07"))
++    recompute(subject, db, 1)
++    assert links(db) == {1: [2], 2: [1]}
++
++
++def test_failure_rolls_back_links_as_a_unit(subject, db):
++    put(db, row(1), row(2, date="2026-09-07"))
++    db.fail_commit = True
++    with pytest.raises(RuntimeError, match="commit failure"):
++        recompute(subject, db, 1)
++    assert links(db) == {1: [], 2: []}
++
++
++def test_detach_failure_preserves_previous_state(subject, db):
++    put(db, row(1, end_date="2027-03-28", linked_event_ids=[2]), row(2, linked_event_ids=[1]))
++    db.fail_commit = True
++    with pytest.raises(RuntimeError, match="commit failure"):
++        recompute(subject, db, 1)
++    assert links(db) == {1: [2], 2: [1]}
++
++
++def test_missing_event_does_not_write(subject, db):
++    result = recompute(subject, db, 123)
++    assert result.changed_event_ids == []
++    assert result.group_event_ids == []
++    assert db.commit_count == 0
++
++
++def test_group_limit_keeps_the_base_and_no_self_links(subject, db):
++    put(db, *(row(i, date=f"2026-09-{i+5:02d}") for i in range(1, 7)))
++    result = recompute(subject, db, 4, max_group_size=3)
++    assert result.capped is True
++    assert 4 in result.group_event_ids
++    assert len(result.group_event_ids) == 3
++    assert all(k not in v for k, v in links(db).items())
++
++
++def test_malformed_stored_ids_do_not_crash_detaching(subject, db):
++    put(db, row(1, event_type="", linked_event_ids=[True, "²", -2, "bad", 1, "2", 2]),
++        row(2, linked_event_ids=[1]))
++    result = recompute(subject, db, 1)
++    assert result.changed_event_ids == [1, 2]
++    assert links(db) == {1: [], 2: []}
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -2,6 +2,8 @@
+ 
+ ## [Unreleased]
+ 
++- Fixed: linked-event recomputation now rejects contradictory occurrence types, ranges, lifecycle/identity/city and duplicate or unverified same-day slots symmetrically; cleans known backlinks of all changed members in one transaction. Adds 39 offline SQLite regressions. Preparation and integration limits: `docs/features/smart-event-update/audit-20260905/README.md`.
++
+ - Changed: KenigEvents prelaunch date moved from 5 to 20 September 2026 across the root page, SEO metadata and subscription confirmations; release checks updated.
+ 
+ ### Fixed
