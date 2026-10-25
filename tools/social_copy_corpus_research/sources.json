@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "target_posts_per_source": 100,
+  "telegram": [
+    {"id": "dbeskromny", "title": "Бескромный", "handle": "dbeskromny"},
+    {"id": "setters", "title": "SETTERS Media", "handle": "setters"},
+    {"id": "dnative", "title": "DNative", "handle": "dnative"},
+    {"id": "techno_yandex", "title": "ТЕХНО: Яндекс про технологии", "handle": "techno_yandex"},
+    {"id": "glvrdru", "title": "Главред", "handle": "glvrdru"},
+    {"id": "dukaliti", "title": "не тереби дао", "handle": "dukaliti"},
+    {"id": "sale_caviar", "title": "кабачковая икра по акции", "handle": "sale_caviar"},
+    {"id": "prbezposhady", "title": "Беспощадный пиарщик", "handle": "prbezposhady"}
+  ],
+  "vk": [
+    {"id": "burgerking", "title": "Burger King", "screen_name": "burgerking"},
+    {"id": "yasnotherapy", "title": "Ясно", "screen_name": "yasnotherapy"},
+    {"id": "sooqa_store", "title": "SOOQA.store", "screen_name": "sooqa.store", "group_id_hint": 121587172},
+    {"id": "aviasales", "title": "Авиасейлс", "screen_name": "aviasales", "group_id_hint": 1239834},
+    {"id": "banktochka", "title": "Точка", "screen_name": "banktochka", "group_id_hint": 23770832},
+    {"id": "vkusvill_ru", "title": "ВкусВилл", "screen_name": "vkusvill_ru"}
+  ]
+}
