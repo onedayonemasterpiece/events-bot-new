@@ -1,0 +1,176 @@
+---
+import '../../../styles/design-system.css';
+import '../../../styles/editorial-collections-lab.css';
+import pilot from '../../../data/editorial-collections/unusual-pilot-v1.json';
+
+const concepts = pilot.concepts;
+const conceptById = new Map(concepts.map((concept) => [concept.concept_id, concept]));
+const sections = pilot.sections.map((section) => ({
+  ...section,
+  concepts: section.concept_ids.map((id) => conceptById.get(id)).filter(Boolean),
+}));
+const featuredIds = ['big_kaup', 'theatre_backstage', 'musical_lotto'];
+const featured = featuredIds.map((id) => conceptById.get(id)).filter(Boolean);
+const familyLabels = {
+  participatory: 'Участие', rare_practice: 'Редкая практика', community_exchange: 'Обмен',
+  behind_scenes: 'Изнутри', living_history: 'Живая история', site_specific: 'Особое место', open_dialogue: 'Диалог',
+};
+const familyMarks = {
+  participatory: 'ИГ', rare_practice: 'ПР', community_exchange: 'ОБ',
+  behind_scenes: 'ЗК', living_history: 'ИИ', site_specific: 'МЕ', open_dialogue: 'ДИ',
+};
+---
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Noindex Astro laboratory for editorial event collection layouts." />
+  <title>Редакционные подборки · лаборатория</title>
+</head>
+<body data-variant="editorial-scan" data-density="explained">
+  <a class="skip-link" href="#collection">К подборке</a>
+
+  <header class="lab-toolbar" aria-label="Панель макетной лаборатории">
+    <div class="lab-brand"><span aria-hidden="true"></span><div><strong>Редакционные подборки</strong><small>noindex · один frozen corpus</small></div></div>
+    <nav class="variant-switch" aria-label="Варианты композиции">
+      {pilot.visual_lab.variants.map((variant, index) => (
+        <button type="button" data-variant-button={variant.id} aria-pressed={index === 0 ? 'true' : 'false'} title={variant.hypothesis}>
+          <b>V{index + 1}</b><span>{variant.title}</span>
+        </button>
+      ))}
+    </nav>
+    <div class="density-switch" aria-label="Плотность">
+      <button type="button" data-density-button="explained" aria-pressed="true">С пояснениями</button>
+      <button type="button" data-density-button="compact" aria-pressed="false">Компактно</button>
+    </div>
+  </header>
+
+  <main id="collection">
+    <section class="hero page-shell">
+      <div>
+        <p class="eyebrow">Пилот · август 2026</p>
+        <h1>{pilot.collection.title}</h1>
+        <p class="hero__lead editorial-copy">{pilot.collection.lead}</p>
+        <p class="hero__mobile">9 способов выйти из роли обычного зрителя.</p>
+        <div class="hero__actions"><a href="#full-index">Все 9 вариантов</a><button type="button" data-method-open>Как отбирали</button></div>
+      </div>
+      <aside>
+        <p>Проверено 2 августа 2026</p>
+        <dl><div><dt>концептов</dt><dd>9</dd></div><div><dt>дат</dt><dd>21</dd></div><div><dt>семейств</dt><dd>7</dd></div></dl>
+        <p class="editorial-copy">{pilot.collection.summary}</p>
+      </aside>
+    </section>
+
+    <nav class="intent-rail page-shell" aria-label="Сценарии выбора">
+      {sections.map((section) => <a href={`#${section.id}`}><span>{section.concepts.length}</span>{section.short_label}</a>)}
+    </nav>
+
+    <section class="variant-caption page-shell" aria-live="polite">
+      {pilot.visual_lab.variants.map((variant, index) => (
+        <div data-variant-caption={variant.id} hidden={index !== 0}><strong>V{index + 1} · {variant.title}</strong><span>{variant.hypothesis}</span></div>
+      ))}
+    </section>
+
+    <section class="featured-deck page-shell" aria-label="Редакционный shortlist">
+      <header><p class="eyebrow">Выбор редакции</p><h2>Три разных способа удивиться</h2></header>
+      <div>
+        {featured.map((concept, index) => (
+          <article class={`featured-card family-${concept.primary_family}`} data-concept-id={concept.concept_id}>
+            <div class="featured-card__visual"><span>{index + 1}/3</span><b>{familyMarks[concept.primary_family]}</b></div>
+            <div><p>{concept.display_date} · {concept.city}</p><h3>{concept.title}</h3><p class="editorial-copy">{concept.why_selected}</p><button type="button">Открыть</button></div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <div class="collection-canvas page-shell">
+      {sections.map((section, sectionIndex) => (
+        <section class="collection-section" id={section.id} data-section={section.id}>
+          <header>
+            <span>0{sectionIndex + 1}</span>
+            <div><p class="eyebrow">{section.short_label}</p><h2>{section.title}</h2><p class="section-bridge editorial-copy">{section.bridge}</p></div>
+          </header>
+          <div class="cards">
+            {section.concepts.map((concept, conceptIndex) => (
+              <article class:list={['event-card', conceptIndex === 0 && 'event-card--lead', `family-${concept.primary_family}`]} data-concept-id={concept.concept_id}>
+                <div class="event-card__visual"><b>{familyMarks[concept.primary_family]}</b><span>{familyLabels[concept.primary_family]}</span></div>
+                <div class="event-card__body">
+                  <p class="event-meta"><span>{concept.display_date}</span><span>{concept.city}</span></p>
+                  <h3>{concept.title}</h3>
+                  <p class="event-fact">{concept.fact_summary}</p>
+                  <div class="annotation editorial-copy">
+                    <p><strong>Почему здесь</strong>{concept.why_selected}</p>
+                    <p><strong>Кому подойдёт</strong>{concept.best_for}</p>
+                    <p><strong>Учесть</strong>{concept.caveat}</p>
+                  </div>
+                  <footer><button type="button">Открыть событие</button><span>{concept.occurrences.length > 1 ? `${concept.occurrences.length} даты` : concept.venues[0]}</span></footer>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <section class="full-index page-shell" id="full-index">
+      <header><div><p class="eyebrow">Не потерять каталог</p><h2>Полный компактный индекс</h2></div><p>Один и тот же для всех вариантов. Повторные даты объединены в концепты.</p></header>
+      <div>
+        {concepts.map((concept) => (
+          <article data-concept-id={concept.concept_id}>
+            <i class={`family-${concept.primary_family}`}>{familyMarks[concept.primary_family]}</i>
+            <div><small>{familyLabels[concept.primary_family]}</small><h3>{concept.title}</h3></div>
+            <p><strong>{concept.display_date}</strong><span>{concept.city}</span></p>
+            <p>{concept.occurrences.length > 1 ? `${concept.occurrences.length} даты` : concept.venues[0]}</p>
+            <button type="button" aria-label={`Открыть ${concept.title}`}>Открыть</button>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="boundary page-shell">
+      <header><p class="eyebrow">Граница подборки</p><h2>Почему похожие записи не попали</h2></header>
+      <div>{pilot.controls.map((control) => <article><span>{control.kind === 'hard_negative' ? 'Не необычное' : 'Не событие'}</span><h3>{control.title}</h3><p>{control.reason}</p></article>)}</div>
+    </section>
+
+    <dialog class="method-dialog" data-method-dialog>
+      <button type="button" data-method-close aria-label="Закрыть">×</button>
+      <p class="eyebrow">Методика</p><h2>Необычное — проверяемый механизм</h2>
+      <p>{pilot.collection.methodology_short}</p>
+      <p>Повторные даты объединяются в концепты. Факты и интерпретация хранятся раздельно. Это noindex-lab, а не публикация августовской афиши.</p>
+    </dialog>
+  </main>
+
+  <footer class="lab-footer page-shell"><span>Fixture: {pilot.collection.id}</span><a href="#collection">Наверх ↑</a></footer>
+
+  <script is:inline>
+    (() => {
+      const variantIds = [...document.querySelectorAll('[data-variant-button]')].map((button) => button.dataset.variantButton);
+      const requested = new URLSearchParams(location.search).get('variant');
+      const initialVariant = variantIds.includes(requested) ? requested : variantIds[0];
+      const setVariant = (id, replace = false) => {
+        document.body.dataset.variant = id;
+        document.querySelectorAll('[data-variant-button]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.variantButton === id)));
+        document.querySelectorAll('[data-variant-caption]').forEach((caption) => caption.hidden = caption.dataset.variantCaption !== id);
+        const url = new URL(location.href); url.searchParams.set('variant', id); history[replace ? 'replaceState' : 'pushState']({}, '', url);
+      };
+      document.querySelectorAll('[data-variant-button]').forEach((button) => button.addEventListener('click', () => setVariant(button.dataset.variantButton)));
+      setVariant(initialVariant, true);
+
+      let stored = null; try { stored = localStorage.getItem('editorial-collections-density'); } catch {}
+      const setDensity = (density) => {
+        document.body.dataset.density = density;
+        document.querySelectorAll('[data-density-button]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.densityButton === density)));
+        try { localStorage.setItem('editorial-collections-density', density); } catch {}
+      };
+      document.querySelectorAll('[data-density-button]').forEach((button) => button.addEventListener('click', () => setDensity(button.dataset.densityButton)));
+      setDensity(stored === 'compact' ? 'compact' : 'explained');
+
+      const dialog = document.querySelector('[data-method-dialog]');
+      document.querySelector('[data-method-open]')?.addEventListener('click', () => dialog.showModal());
+      document.querySelector('[data-method-close]')?.addEventListener('click', () => dialog.close());
+    })();
+  </script>
+</body>
+</html>
