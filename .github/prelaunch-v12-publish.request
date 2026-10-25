@@ -1,0 +1,5 @@
+request_id=prelaunch-v12-publish-20260805T121000Z-r1
+target_branch=agent/prelaunch-landing-20260803
+target_sha=8070a8176cc9fae80f667803e791923c700c8c42
+visual_run_id=31004147253
+visual_artifact_digest=sha256:fce45caa30b35aa90ca586fe646d47a8a4e0259a8d1536df4a9973c2f288b5ac
