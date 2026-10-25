@@ -1,0 +1,264 @@
+schema: keyboard_event_navigation_scenarios.v2
+status: owner_corrected_evidence_seed
+updated_at: '2026-08-04'
+product_model: docs/features/static-site-pages/keyboard-event-navigation-v8-product-model.md
+baseline_sha: 0d1848bc324ef8c44df146ec2a7126a116a94bf4
+
+policy:
+  current_v7_regression: blocking
+  v8_gap_during_evidence_phase: advisory
+  exact_sha: required
+  browser_artifacts: always
+  external_side_effects: forbidden
+
+metric:
+  id: keyboard_start_reliability
+  target: 1.0
+  definition: >-
+    Share of tested visible non-editor states where one documented key restores
+    a visible logical owner or performs exactly one deterministic action.
+
+page_families:
+  editorial_horizontal:
+    selector: '[data-desktop-clean-event][data-desktop-family="editorial"]'
+    required: true
+  split_vertical:
+    selector: '[data-desktop-clean-event][data-desktop-family="split"]'
+    prefer: portrait_or_square_primary
+    required: true
+
+states:
+  - cold_body
+  - event_surface
+  - hero_opener
+  - description_top
+  - description_middle
+  - practical
+  - transport_present
+  - transport_absent
+  - related_heading
+  - related_card_root
+  - related_nested_action
+  - continuation_loading
+  - continuation_card
+  - gallery_open
+  - consent_open
+  - footer_visible
+  - body_after_pointer
+  - body_after_blur
+  - body_after_reload
+  - body_after_history_back
+  - body_after_bfcache
+  - body_after_dom_reorder
+  - body_after_dynamic_replacement
+  - resized_1024x768
+  - resized_1536x864
+
+commands:
+  help: { code: Slash, key: '?', modifiers: [Shift] }
+  previous: { code: ArrowLeft }
+  next: { code: ArrowRight }
+  up: { code: ArrowUp }
+  down: { code: ArrowDown }
+  activate: { code: Enter }
+  like: { code: KeyL }
+  calendar: { code: KeyK }
+  copy_link: { code: KeyS }
+  copy_description: { code: KeyC }
+  copy_poster: { code: KeyP }
+  escape: { code: Escape }
+
+scenarios:
+  KN-001:
+    title: Both desktop page families are present and keyboard-enabled
+    families: [editorial_horizontal, split_vertical]
+    assertions: [fixture_selected, router_mounted, owner_visible, no_autofocus]
+    current: PASS
+    target: PASS
+    blocking: true
+
+  KN-002:
+    title: Navigation starts from every visible state
+    families: [editorial_horizontal, split_vertical]
+    states:
+      - cold_body
+      - description_top
+      - description_middle
+      - practical
+      - transport_present
+      - related_heading
+      - body_after_pointer
+      - body_after_blur
+      - body_after_reload
+      - body_after_history_back
+      - body_after_dom_reorder
+      - resized_1024x768
+      - resized_1536x864
+    assertions:
+      - one_key_maximum
+      - visible_owner_after
+      - nearest_context_or_previous_owner
+      - exactly_one_step
+      - no_duplicate_effect
+      - no_console_error
+    current: characterize
+    target: PASS
+    blocking: advisory_until_K1
+
+  KN-003:
+    title: Editorial and Split use the same command grammar
+    families: [editorial_horizontal, split_vertical]
+    assertions:
+      - same_meaning_for_same_key
+      - unavailable_command_disabled_with_reason
+      - geometry_does_not_change_command_semantics
+    current: partial
+    target: PASS
+    blocking: advisory_until_K2
+
+  KN-004:
+    title: Reading route reaches description, practical, transport and related
+    families: [editorial_horizontal, split_vertical]
+    route: [event, description, practical, transport_if_present, related]
+    assertions:
+      - no_section_skipped
+      - long_description_has_multiple_read_stops
+      - each_step_reveals_new_text
+      - up_reverses_route
+      - page_keys_remain_available
+    current: GAP_TARGET_NOT_IMPLEMENTED
+    target: PASS
+    blocking: advisory_until_K1
+
+  KN-005:
+    title: Visual card graph remains deterministic
+    families: [editorial_horizontal, split_vertical]
+    states: [related_card_root, continuation_card]
+    assertions:
+      - arrows_choose_visual_neighbor
+      - ragged_row_deterministic
+      - related_continuation_bridge_deterministic
+      - visible_focus
+    current: PASS
+    target: PASS
+    blocking: true
+
+  KN-006:
+    title: Enter opens the selected card and starts the next event route
+    families: [editorial_horizontal, split_vertical]
+    assertions:
+      - destination_matches_selected_card
+      - one_navigation_only
+      - destination_router_ready
+      - one_arrow_restarts_navigation
+    current: PASS
+    target: PASS
+    blocking: true
+
+  KN-007:
+    title: Browser Back restores the source card owner
+    families: [editorial_horizontal, split_vertical]
+    variants: [page_go_back, alt_arrow_left, backspace_observation, bfcache]
+    assertions:
+      - source_route_restored
+      - same_card_or_nearest_fallback
+      - owner_visible
+      - next_arrow_continues_route
+      - held_state_cleared
+    current: characterize
+    target: PASS_OR_PLATFORM_VARIANCE
+    blocking: advisory_until_K1
+
+  KN-008:
+    title: Gallery owns keys and restores the event owner
+    families: [editorial_horizontal, split_vertical]
+    assertions:
+      - focus_inside_overlay
+      - arrows_move_media_when_available
+      - single_image_safe_noop
+      - escape_restores_owner
+      - no_repeat_leak
+      - background_does_not_scroll
+    current: PASS
+    target: PASS
+    blocking: true
+
+  KN-009:
+    title: Contextual help reflects the current command availability
+    families: [editorial_horizontal, split_vertical]
+    states: [event_surface, description_middle, related_card_root, gallery_open]
+    assertions:
+      - key_and_click_open_same_help
+      - all_commands_listed
+      - active_and_disabled_states_correct
+      - disabled_reason_visible
+      - escape_restores_owner
+    current: GAP_TARGET_NOT_IMPLEMENTED
+    target: PASS
+    blocking: advisory_until_K2
+
+  KN-010:
+    title: Letter actions require a confirmed owner and execute once
+    families: [editorial_horizontal, split_vertical]
+    states: [event_surface, related_card_root, body_after_blur, description_middle]
+    assertions:
+      - confirmed_owner_delegates_existing_control
+      - arbitrary_body_has_no_side_effect
+      - disabled_command_reports_reason
+      - repeat_does_not_duplicate
+      - editor_and_composition_excluded
+    current: characterize
+    target: PASS
+    blocking: advisory_until_K1
+
+  KN-011:
+    title: Dynamic rerender preserves logical card ownership
+    families: [editorial_horizontal, split_vertical]
+    assertions:
+      - same_event_restored_when_present
+      - nearest_visual_fallback_when_removed
+      - intentional_external_focus_not_stolen
+      - one_shortcut_hint_owner
+    current: PASS
+    target: PASS
+    blocking: true
+
+  KN-012:
+    title: Keyboard artifact is a stable optional collection find
+    artifact:
+      collection_id: signs-of-kaliningrad-001
+      artifact_id: migratory-bird-ring
+      placement: related_to_continuation_bridge
+    route: [last_related_row, artifact_bridge, find, continuation, reload]
+    assertions:
+      - not_pointer_discoverable
+      - separate_from_event_card
+      - accessible_keyboard_activation
+      - idempotent_find
+      - found_marker_persists
+      - no_taste_signal
+      - non_keyboard_user_can_still_reach_collection_threshold
+    current: GAP_TARGET_NOT_IMPLEMENTED
+    target: PASS
+    blocking: advisory_until_K3
+
+  KN-013:
+    title: Daily analytics contains successful coarse facts only
+    assertions:
+      - one_subject_day_set_semantics
+      - no_key_stream
+      - no_event_identity_or_content
+      - no_precise_timing
+      - daily_distinct_user_graph_possible
+    current: partial_local_ledger
+    target: PASS
+    blocking: advisory_until_K4
+
+artifacts:
+  required:
+    - keyboard-navigation-evidence.json
+    - keyboard-navigation-summary.md
+    - fixture-selection.json
+    - console-errors.json
+    - screenshots
+    - traces
