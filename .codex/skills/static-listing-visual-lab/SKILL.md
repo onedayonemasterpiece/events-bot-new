@@ -21,6 +21,10 @@ Build product decisions from production media evidence and inspectable real-imag
 10. **Synthesize explicitly.** Compare concepts by new-user orientation, 20–30-card personalized hit rate, media selling power, scan density, rank integrity, OCR safety, harmony, responsive behavior, data readiness, and MVP cost.
 11. **Run a fresh-context validation pass.** Give the validator screenshots/contact sheet, statistics, and decision matrix—not the desired verdict. Require pixel-level inspection and a fail/conditional/pass result. See [references/consultant-and-acceptance.md](references/consultant-and-acceptance.md).
 12. **Publish only after authorization.** Use `telegram-human-session` for Telegram. Send the visual artifact before/with concise analysis, then read the topic back and retain a receipt. Do not claim publication from a send return alone.
+13. **Hand off final parity.** Once one exact Git SoT/Penpot/Astro tuple exists,
+    stop treating the visual lab as acceptance authority and invoke canonical
+    `ui-three-way-conformance` for final affected-scope comparison. The lab may
+    explore variants; it cannot replace exact conformance or owner acceptance.
 
 ## Required gates
 

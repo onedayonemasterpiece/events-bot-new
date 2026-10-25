@@ -23,6 +23,7 @@
 7. Если пользователь даёт ссылку на Telegram-пост/канал (`t.me/...`, `https://t.me/...`) и нужно прочитать фактическое содержимое сообщения, по умолчанию используй Telethon human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`) через project skill `telegram-link-inspection`; публичный HTML `t.me/s/...` допустим только как fallback/быстрая эвристика и должен быть явно назван fallback.
 8. Для любого production incident, user-visible regression, missed/failed publication, wrong/duplicate event data или сообщения, начинающегося с `Инцидент`, сначала используй project skill `events-bot-incident-response`; затем подключай более узкие skills (`events-bot-runtime-logs`, `fly-prod-db-access`, `telegram-link-inspection`, VK/Kaggle skills) по evidence surface.
 9. Для любого изменения интерфейса статического сайта используй project skill `static-site-design-system` и канонический каталог `/lab/design-system/`.
+10. Любое material visual change promoted/candidate component, foundation или archetype также обязано пройти канонический `ui-three-way-conformance` из `lovekgd-design-system`; изменение не завершено без exact conformance case либо machine-readable `not_applicable` с причиной. Не копируй полный skill сюда.
 
 ## Static-site design system (critical)
 
@@ -30,6 +31,7 @@
 - Материальная переработка утверждённого компонента создаёт следующую явную версию (`vN+1`) в реестре и каталоге. Старая и новая версии показываются рядом до sign-off; старая получает `deprecated` и ссылку на замену.
 - Изменение не завершено, пока все production consumers не переведены на новую версию, либо временное сосуществование не оформлено feature flag, списком consumers, owner и сроком удаления. Тихая смесь версий блокирует release.
 - В том же commit обновляются runtime-компонент, `/lab/design-system/`, version/migration contract checks, каноническая документация, test scenarios, release evidence и `CHANGELOG.md`.
+- После material visual change перед sign-off выполни affected-scope Git SoT ↔ bounded Penpot export ↔ isolated Astro conformance. Agent verdict и Telegram review не означают owner acceptance или production permission.
 
 ## Incident Mode (critical)
 

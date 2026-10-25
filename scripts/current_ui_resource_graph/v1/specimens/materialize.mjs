@@ -13,7 +13,7 @@ function componentImport(renderer) {
     amber: 'components/listings/AmberRailArtifact.astro', 'artifact-collection': 'components/artifacts/ArtifactCollection.astro',
     rail: 'components/EventTransportSchedule.astro', kaup: 'components/KaupTransportSchedule.astro',
     medallions: 'components/EventTokenMedallions.astro', 'event-hero': 'components/EventHero.astro',
-    'event-media-rail': 'components/EventMediaRail.astro',
+    'event-media-rail': 'components/EventMediaRail.astro', 'event-card': 'components/EventCard.astro',
   })[renderer];
 }
 function renderExpression(row) {
@@ -25,6 +25,7 @@ function renderExpression(row) {
   if (row.renderer === 'kaup') return `<Component event={event} compact={${Boolean(props.compact)}} />`;
   if (row.renderer === 'medallions') return `<Component event={event} layout=${safeJson(props.layout)} allowTopSlot={${Boolean(props.allowTopSlot)}} />`;
   if (row.renderer === 'event-media-rail') return `<Component assets={event.image_assets || []} galleryId="controlled-event-media" eventTitle={event.title} maxVisible={${Number(props.maxVisible)}} />`;
+  if (row.renderer === 'event-card') return `<Component event={event} variant=${safeJson(props.variant || 'split-actions')} desktopRelatedCrop={${Boolean(props.desktopRelatedCrop)}} mobileFlowMedia={${Boolean(props.mobileFlowMedia)}} />`;
   return '<Component event={event} />';
 }
 
@@ -32,6 +33,19 @@ export function renderSpecimenPage(row, fixture = null) {
   const source = componentImport(row.renderer);
   if (!source) throw new Error(`Unsupported specimen renderer: ${row.renderer}`);
   const eventLine = fixture ? `const event = ${safeJson(fixture.event)};` : '';
+  if (row.renderer === 'event-card') return `---
+import Layout from '../../../upstream/layouts/EventLayout.astro';
+import Component from '../../../upstream/${source}';
+${eventLine}
+const trace = ${safeJson({ plan_id: row.id, source_paths: row.source_paths, fixture_trace: fixture?.trace || null })};
+---
+<Layout title=${safeJson(row.id)} description="Isolated UI conformance specimen" canonicalUrl=${safeJson(`https://example.invalid/specimens/${row.id}/`)} noindex={true} mobileBottomMode="none" mobileSection={null}>
+  <main data-specimen-root data-specimen-trace={JSON.stringify(trace)} class="related-events" style=${safeJson(`width:${row.container.width}px;max-width:100%;min-height:1px;margin:24px auto`)}>
+    ${renderExpression(row)}
+  </main>
+</Layout>
+<style is:global>*{animation:none!important;transition:none!important;caret-color:transparent!important}html{scroll-behavior:auto!important}</style>
+`;
   return `---
 import '../../../upstream/styles/design-system.css';
 import Component from '../../../upstream/${source}';
