@@ -1,4 +1,6 @@
 import json
+import tomllib
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -109,6 +111,28 @@ async def test_caller_scoped_4o_parse_route_leaves_global_default_unchanged(monk
     await main.parse_event_via_llm("Лекция 25 октября")
 
     assert called == ["4o", "gemma"]
+
+
+@pytest.mark.asyncio
+async def test_production_vk_schedule_uses_google_parse_route(monkeypatch):
+    config = tomllib.loads((Path(__file__).resolve().parents[1] / "fly.toml").read_text())
+    model = config["env"]["VK_AUTO_IMPORT_PARSE_GEMMA_MODEL"]
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    calls = []
+
+    async def fake_google(*args, **kwargs):
+        calls.append(kwargs["gemma_model"])
+        return _decision([{"title": "Лекция", "date": "2026-10-28"}])
+
+    async def fail_openai(*args, **kwargs):
+        pytest.fail("scheduled VK parser reached OpenAI")
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_google)
+    monkeypatch.setattr(main, "_parse_event_via_4o", fail_openai)
+
+    await main.parse_event_via_llm("Лекция 28 октября", gemma_model=model)
+    assert calls and set(calls) == {"gemini-3.1-flash-lite"}
 
 
 @pytest.mark.parametrize(

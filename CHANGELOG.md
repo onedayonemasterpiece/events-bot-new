@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Removed the September emergency `gpt-4o` pin from scheduled VK source parsing. Bounded batches now use the Google text route; an explicit production-config regression check prevents the expensive route from returning unnoticed. Incident `INC-2026-10-27-vk-import-4o-spend`.
+
 - Reverted the unsolicited automatic identity retry consumer. Afisha recovery
   remains in VK native postponed posts; remove the three task-added retry settings.
 

@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-10-27-vk-import-4o-spend.md`
+  - Scope: scheduled VK source-parse model routing and OpenAI spend. The September emergency `4o` pin must not remain the production default; verify the live model after release.
+
 - `INC-2026-10-14-scheduler-disk-exhaustion.md`
   - Scope: production disk capacity, daily tick recovery, video output downloads, terminal heartbeat retention and Kotopogoda scheduler isolation.
 
