@@ -796,10 +796,11 @@ def _vk_api(
     *,
     auth: dict[str, Any],
     config: dict[str, Any],
+    token: str | None = None,
     **params: Any,
 ) -> Any:
     data = dict(params)
-    data["access_token"] = _vk_token(auth)
+    data["access_token"] = token or _vk_token(auth)
     data["v"] = str(config.get("vk_api_version") or "5.199")
     response = requests.post(
         f"https://api.vk.com/method/{method}",
@@ -912,6 +913,7 @@ def _publish_vk_wall_video(
         "wall.post",
         auth=auth,
         config=config,
+        token=(auth.get("vk_wall_tokens") or {}).get(str(group_id)),
         owner_id=f"-{group_id}",
         from_group="1",
         signed="0",

@@ -1534,7 +1534,7 @@ class KaggleClient:
     ) -> list[str]:
         api = self._get_api()
         logger.info("kaggle: downloading kernel output kernel=%s path=%s", kernel_ref, path)
-        options = {"path": str(path), "force": force, "quiet": quiet}
+        options = {"path": str(path), "force": force, "quiet": quiet, "page_size": 500}
         if file_pattern is not None:
             options["file_pattern"] = file_pattern
         files, _ = api.kernels_output(kernel_ref, **options)

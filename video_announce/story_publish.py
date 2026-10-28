@@ -285,6 +285,9 @@ def build_story_secrets_payload(
     vk_access_token = _get_env_value("VK_ACCESS_TOKEN5")
     if vk_access_token:
         payload["vk_access_token"] = vk_access_token
+    vk_group_token = _get_env_value("VK_TOKEN")
+    if vk_group_token:
+        payload["vk_wall_tokens"] = {"231828790": vk_group_token}
     business_targets = _load_business_story_targets(selector_raw="all")
     if business_targets:
         bot_token = _require_env_any("TELEGRAM_BOT_TOKEN")

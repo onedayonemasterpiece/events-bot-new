@@ -856,5 +856,7 @@ def test_output_filter_is_forwarded_before_provider_download(monkeypatch, tmp_pa
     pattern = r'(?i)\.(?:mp4|webm|mov|json|log|txt)$'
     assert client.download_kernel_output('owner/kernel', path=tmp_path, file_pattern=pattern) == ['cherryflash_full_final.mp4']
     assert calls[0]['file_pattern'] == pattern
+    assert calls[0]['page_size'] == 500
     client.download_kernel_output('owner/kernel', path=tmp_path)
     assert 'file_pattern' not in calls[1]
+    assert calls[1]['page_size'] == 500
