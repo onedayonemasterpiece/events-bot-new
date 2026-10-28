@@ -38,6 +38,14 @@ separate lane and is not changed by this incident fix.
   was rejected before mutation: `We require your billing information` (Fly
   request `01M5YT0HVT05MJTAEA822826PF-yyz`). Readback confirmed the machine
   stayed started on the same image and `4o` setting.
+- 2026-10-28: the production host was identified as RunCoveer; the Fly machine
+  is not the active production runtime. Its running Events container used
+  release `e64e89ee703ee19d011c07be0a1dc0d7009cca38` and still had
+  `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL=4o` in its production env file. At 16:58 UTC
+  that one setting was changed to `gemini-3.1-flash-lite`, and only the Events
+  container was recreated with its existing image and release. The new container
+  reports the Lite route and is healthy; `/healthz` reports `ready=true`,
+  `db=ok`, and `scheduler.vk_auto_import=ok`.
 
 Google availability was degraded, but not wholly absent. The shared Google
 ledger recorded 3.1 Lite physical attempts with 1,135 successes / 370 provider
@@ -48,12 +56,12 @@ monitoring reserve chain also prefers compatible Flash models before Lite.
 
 ## Root cause and contributing factors
 
-1. The temporary `4o` setting was committed to `fly.toml` and not removed when
-   the emergency ended.
+1. The temporary `4o` setting remained in RunCoveer's production env file after
+   the emergency ended. It had also been committed to `fly.toml`.
 2. The model override name says `GEMMA_MODEL`, while deployed `main.py` also
    interprets the value `4o` as an OpenAI backend selector.
-3. The production config had no regression guard against keeping that costly
-   route. Per-source verification/adjudication multiplies physical calls.
+3. The RunCoveer env file was not covered by the `fly.toml` regression guard.
+   Per-source verification/adjudication multiplies physical calls.
 4. Untagged parse `token_usage` rows lack a consumer label, making the source
    of spend harder to identify. Add explicit route metadata in a later change.
 
@@ -66,8 +74,8 @@ Google monitoring route, or OpenAI budget enforcement.
 
 ### Affected surfaces
 
-`fly.toml`, `main.py` source parser, `vk_auto_queue.py`, Google model availability,
-Fly release config, OpenAI `token_usage`, and scheduled VK import receipts.
+RunCoveer production env, `fly.toml`, `main.py` source parser, `vk_auto_queue.py`,
+Google model availability, OpenAI `token_usage`, and scheduled VK import receipts.
 
 ### Mandatory checks before closure or deploy
 
@@ -76,36 +84,43 @@ Fly release config, OpenAI `token_usage`, and scheduled VK import receipts.
 - Existing caller-scoped 4o test and bounded Google model-chain tests pass.
 - Candidate release is clean exact `origin/main`; current running SHA is its
   ancestor. Verify no unrelated production code is silently dropped.
-- Live Fly config and `/healthz` show the new release and Google route.
+- Live RunCoveer env and `/healthz` show the Google route and healthy runtime.
 - One bounded scheduled or explicitly authorized VK import uses Google model
   receipts and creates no untagged GPT-4o parse usage; reconcile technical
   terminals without turning them into product exclusions.
 
 ### Required evidence
 
-PR/merge SHA, targeted test result, Fly deployment/image and runtime SHA,
-live model setting, post-release import `ops_run` and provider-model receipts,
-OpenAI usage delta, and any billing blocker resolution.
+PR/merge SHA, targeted test result, RunCoveer image and runtime SHA,
+live model setting, post-change import `ops_run` and provider-model receipts,
+and OpenAI usage delta.
 
 ## Immediate mitigation and corrective action
 
-Prepared a narrow production-config change from `4o` to
-`gemini-3.1-flash-lite` for the 12-post scheduled VK batches. The existing
-monitoring text chain still admits at most two compatible Google sends. The
-attempted direct Fly config mitigation was denied by Fly billing and did not
-alter production.
+Changed the RunCoveer production route from `4o` to `gemini-3.1-flash-lite`
+for scheduled VK batches, without changing the running source release. The
+merged PR #752 had corrected `fly.toml`, but that file did not control the
+active RunCoveer container. The Fly billing denial did not block this fix.
 
 ## Follow-up actions
 
-- [ ] Restore Fly billing eligibility, deploy the merged exact-main change,
-  and verify the next VK batch against Google and OpenAI ledgers.
+- [ ] Verify the next RunCoveer VK batch (scheduled 2026-10-29 04:15 UTC)
+  against Google provider receipts and OpenAI usage.
+- [ ] Keep the RunCoveer env route aligned with the repository's release
+  configuration in the next normal deployment process.
 - [ ] Add `consumer=event_parse` and import correlation to OpenAI usage records
   in a separately reviewed observability change.
 - [ ] Review the distinct high-volume `gpt-4o-mini` poster OCR lane.
 
 ## Release and closure evidence
 
-- Deployed SHA: pending.
-- Deploy path: `scripts/deploy_fly_main.sh` after Fly billing is restored.
-- Regression checks: pending.
-- Post-deploy verification: pending.
+- Running SHA: `e64e89ee703ee19d011c07be0a1dc0d7009cca38` (unchanged).
+- Mitigation: RunCoveer env update and single Events container recreation at
+  2026-10-28 16:58 UTC; image unchanged.
+- Regression checks: PR #752 passed 30 event-parse tests, eight focused tests,
+  and all four CI jobs before merge. Its Fly config change did not reach
+  RunCoveer production.
+- Post-change verification: new container `healthy`; `/healthz` HTTP 200 with
+  `ready=true`, `db=ok`, `scheduler.vk_auto_import=ok`; env reads Lite route and
+  `EVENT_PARSE_ENABLE_4O_FALLBACK=0`. Provider receipt remains pending until
+  the next scheduled batch.
