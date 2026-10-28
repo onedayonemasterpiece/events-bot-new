@@ -50,6 +50,18 @@ def test_story_remote_auth_scope_prefers_bundle_env(monkeypatch):
     assert story_publish.story_remote_auth_scope() == "TELEGRAM_AUTH_BUNDLE_STORY"
 
 
+def test_story_secrets_keep_vk_wall_group_token_separate(monkeypatch):
+    monkeypatch.setattr(story_publish, "_story_session_payload", lambda **_kwargs: {})
+    monkeypatch.setattr(story_publish, "_load_business_story_targets", lambda **_kwargs: [])
+    monkeypatch.setenv("VK_ACCESS_TOKEN5", "video-user-token")
+    monkeypatch.setenv("VK_TOKEN", "wall-group-token")
+
+    payload = json.loads(story_publish.build_story_secrets_payload())
+
+    assert payload["vk_access_token"] == "video-user-token"
+    assert payload["vk_wall_tokens"] == {"231828790": "wall-group-token"}
+
+
 def test_story_remote_auth_scope_prefers_lane_selection_params(monkeypatch):
     monkeypatch.setenv("VIDEO_ANNOUNCE_STORY_AUTH_BUNDLE_ENV", "TELEGRAM_AUTH_BUNDLE_STORY")
 

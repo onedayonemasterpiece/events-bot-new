@@ -711,12 +711,14 @@ async def test_vk_wall_story_uploads_video_with_previous_wall_post_link(
     def fake_vk_api(method: str, *, auth, config, **params):  # noqa: ANN001,ANN003
         api_calls.append((method, dict(params)))
         if method == "video.save":
+            assert params.get("token") is None
             return {
                 "upload_url": "https://upload.example/video",
                 "owner_id": -231828790,
                 "video_id": 77,
             }
         if method == "wall.post":
+            assert params["token"] == "group-wall-token"
             return {"post_id": 123}
         if method == "stories.getPhotoUploadServer":
             raise AssertionError("vk_wall_story must upload the mp4 as a video story")
@@ -751,7 +753,7 @@ async def test_vk_wall_story_uploads_video_with_previous_wall_post_link(
 
     report = await helper._story_targets_report(
         client,
-        auth={"vk_access_token": "tok"},
+        auth={"vk_access_token": "tok", "vk_wall_tokens": {"231828790": "group-wall-token"}},
         config={
             "targets": [
                 {

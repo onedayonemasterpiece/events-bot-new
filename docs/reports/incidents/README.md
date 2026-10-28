@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-10-28-cherryflash-vk-wall-flood.md`
+  - Scope: CherryFlash video announcements in `club231828790`, VK actor selection and Kaggle output pagination. Verify a fresh wall post and downloaded output before closure.
+
 - `INC-2026-10-27-vk-import-4o-spend.md`
   - Scope: scheduled VK source-parse model routing and OpenAI spend. The September emergency `4o` pin must not remain the production default; verify the live model after release.
 

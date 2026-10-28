@@ -1485,7 +1485,11 @@ async def _create_story_publish_only_dataset(
     vk_access_token = str(os.getenv("VK_ACCESS_TOKEN5") or "").strip()
     if not vk_access_token:
         raise RuntimeError("publish-only recovery requires VK_ACCESS_TOKEN5")
-    auth_payload = json.dumps({"vk_access_token": vk_access_token}, ensure_ascii=False)
+    auth = {"vk_access_token": vk_access_token}
+    vk_group_token = str(os.getenv("VK_TOKEN") or "").strip()
+    if vk_group_token:
+        auth["vk_wall_tokens"] = {"231828790": vk_group_token}
+    auth_payload = json.dumps(auth, ensure_ascii=False)
     encrypted_auth, auth_key = encrypt_secret(auth_payload)
     if not encrypted_auth or not auth_key:
         raise RuntimeError("publish-only recovery could not encrypt VK auth")
