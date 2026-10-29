@@ -740,7 +740,6 @@ def test_scheduler_registers_one_batch_job_not_one_job_per_publication(monkeypat
         vk_poll_scheduler=lambda *_args, **_kwargs: None,
         vk_crawl_cron=lambda *_args, **_kwargs: None,
         cleanup_scheduler=lambda *_args, **_kwargs: None,
-        partner_notification_scheduler=lambda *_args, **_kwargs: None,
         nightly_page_sync=lambda *_args, **_kwargs: None,
         rebuild_fest_nav_if_changed=lambda *_args, **_kwargs: None,
     )

@@ -238,11 +238,11 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
             vk_poll_scheduler=lambda *a, **k: None,
             vk_crawl_cron=lambda *a, **k: None,
             cleanup_scheduler=lambda *a, **k: None,
-            partner_notification_scheduler=lambda *a, **k: None,
             nightly_page_sync=lambda *a, **k: None,
             rebuild_fest_nav_if_changed=lambda *a, **k: None,
         )
         assert isinstance(scheduler, DummyScheduler)
+        assert "partner_notification_scheduler" not in scheduler.jobs
         assert "main" not in sys.modules
         assert "vk_crawl_continuation_worker" in scheduler.jobs
         assert scheduler.jobs["vk_crawl_continuation_worker"].trigger == "interval"

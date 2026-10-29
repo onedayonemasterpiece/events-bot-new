@@ -307,7 +307,6 @@ def test_startup_registers_exhibition_duplicate_audit(monkeypatch):
             vk_poll_scheduler=lambda *a, **k: None,
             vk_crawl_cron=lambda *a, **k: None,
             cleanup_scheduler=lambda *a, **k: None,
-            partner_notification_scheduler=lambda *a, **k: None,
             nightly_page_sync=lambda *a, **k: None,
             rebuild_fest_nav_if_changed=lambda *a, **k: None,
         )

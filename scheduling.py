@@ -4325,7 +4325,6 @@ def startup(
     vk_poll_scheduler=None,
     vk_crawl_cron=None,
     cleanup_scheduler=None,
-    partner_notification_scheduler=None,
     nightly_page_sync=None,
     rebuild_fest_nav_if_changed=None,
     event_create_recovery=None,
@@ -4393,9 +4392,6 @@ def startup(
     vk_poll_scheduler = resolve("vk_poll_scheduler", vk_poll_scheduler)
     vk_crawl_cron = resolve("vk_crawl_cron", vk_crawl_cron)
     cleanup_scheduler = resolve("cleanup_scheduler", cleanup_scheduler)
-    partner_notification_scheduler = resolve(
-        "partner_notification_scheduler", partner_notification_scheduler
-    )
     rebuild_fest_nav_if_changed = resolve(
         "rebuild_fest_nav_if_changed", rebuild_fest_nav_if_changed
     )
@@ -4593,22 +4589,6 @@ def startup(
             id="cleanup_scheduler",
             hour="2",
             minute="7",
-            args=[db, bot],
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-            misfire_grace_time=30,
-        )
-        _register_job(
-            "partner_notification_scheduler",
-            _job_wrapper(
-                "partner_notification_scheduler",
-                partner_notification_scheduler,
-                notify_skip=_notify_admin_skip,
-            ),
-            "cron",
-            id="partner_notification_scheduler",
-            minute="5",
             args=[db, bot],
             replace_existing=True,
             max_instances=1,
