@@ -9187,50 +9187,6 @@ async def nightly_page_sync(db: Database, run_id: str | None = None) -> None:
     logging.info("nightly_page_sync finish")
 
 
-async def partner_notification_scheduler(db: Database, bot: Bot, run_id: str | None = None):
-    """Remind partners who haven't added events for a week."""
-    async with span("db"):
-        offset = await get_tz_offset(db)
-        tz = offset_to_timezone(offset)
-        now = datetime.now(tz)
-        last_run = await get_partner_last_run(db)
-    if now.time() >= time(9, 0) and (last_run is None or last_run != now.date()):
-        try:
-            async with span("db-query"):
-                async with db.get_session() as session:
-                    stream = await session.stream(
-                        text(
-                            "SELECT id, title FROM event "
-                            "WHERE festival IS NOT NULL "
-                            "AND date BETWEEN :start AND :end "
-                            "ORDER BY date"
-                        ),
-                        {
-                            "start": now.date().isoformat(),
-                            "end": (now.date() + timedelta(days=30)).isoformat(),
-                        },
-                    )
-                    async for _ in stream:
-                        pass
-            await asyncio.sleep(0)
-            notified = await notify_inactive_partners(db, bot, tz)
-            if notified:
-                names = ", ".join(
-                    f"@{u.username}" if u.username else str(u.user_id)
-                    for u in notified
-                )
-                async with span("tg-send"):
-                    await notify_superadmin(
-                        db, bot, f"Partner reminders sent to: {names}"
-                    )
-            else:
-                logging.info("Partner reminders: none")
-            await set_partner_last_run(db, now.date())
-        except Exception as e:
-            logging.error("partner reminder failed: %s", e)
-            await notify_superadmin(db, bot, f"Partner reminder failed: {e}")
-
-
 async def vk_poll_scheduler(db: Database, bot: Bot, run_id: str | None = None):
     if not (VK_TOKEN or os.getenv("VK_USER_TOKEN")):
         return

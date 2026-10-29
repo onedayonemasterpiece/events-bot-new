@@ -61,7 +61,6 @@ from main import (
     festival_edit_sessions,
     festival_dates,
     send_festival_poll,
-    notify_inactive_partners,
     show_edit_menu,
     BOT_CODE,
 )
@@ -11053,122 +11052,6 @@ async def test_edit_vk_post_edit_window_expired(monkeypatch, caplog):
 
     assert updated is False
     assert any("edit unavailable" in r.getMessage() for r in caplog.records)
-
-
-@pytest.mark.asyncio
-async def test_partner_notification_scheduler(tmp_path: Path, monkeypatch):
-    db = Database(str(tmp_path / "db.sqlite"))
-    await db.init()
-    bot = DummyBot("123:abc")
-
-    start_msg = types.Message.model_validate(
-        {
-            "message_id": 1,
-            "date": 0,
-            "chat": {"id": 1, "type": "private"},
-            "from": {"id": 1, "is_bot": False, "first_name": "S"},
-            "text": "/start",
-        }
-    )
-    await handle_start(start_msg, db, bot)
-
-    async with db.get_session() as session:
-        session.add(User(user_id=2, username="p", is_partner=True))
-        await session.commit()
-
-    class FakeDatetime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime.combine(date.today(), time(9, 5), tzinfo=tz)
-
-    monkeypatch.setattr(main, "datetime", FakeDatetime)
-    main._partner_last_run = None
-    await main.partner_notification_scheduler(db, bot)
-
-    assert any("неделе" in m[1] for m in bot.messages if m[0] == 2)
-    assert any("p" in m[1] for m in bot.messages if m[0] == 1)
-
-
-@pytest.mark.asyncio
-async def test_partner_reminder_weekly(tmp_path: Path):
-    db = Database(str(tmp_path / "db.sqlite"))
-    await db.init()
-    bot = DummyBot("123:abc")
-
-    async with db.get_session() as session:
-        session.add(User(user_id=1, username="p", is_partner=True))
-        await session.commit()
-
-    tz = timezone.utc
-    notified = await notify_inactive_partners(db, bot, tz)
-    assert [u.user_id for u in notified] == [1]
-    assert len(bot.messages) == 1
-
-    notified = await notify_inactive_partners(db, bot, tz)
-    assert notified == []
-    assert len(bot.messages) == 1
-
-    async with db.get_session() as session:
-        user = await session.get(User, 1)
-        user.last_partner_reminder = datetime.now(timezone.utc) - timedelta(days=8)
-        await session.commit()
-
-    notified = await notify_inactive_partners(db, bot, tz)
-    assert [u.user_id for u in notified] == [1]
-    assert len(bot.messages) == 2
-
-
-@pytest.mark.asyncio
-async def test_partner_reminder_handles_naive_timestamps(tmp_path: Path):
-    db = Database(str(tmp_path / "db.sqlite"))
-    await db.init()
-    bot = DummyBot("123:abc")
-
-    stale_naive = datetime.now() - timedelta(days=8)
-    recent_naive = datetime.now()
-
-    async with db.get_session() as session:
-        user_without_events = User(
-            user_id=1,
-            username="partner1",
-            is_partner=True,
-            last_partner_reminder=stale_naive,
-        )
-        user_with_recent_event = User(
-            user_id=2,
-            username="partner2",
-            is_partner=True,
-        )
-        session.add(user_without_events)
-        session.add(user_with_recent_event)
-
-        event = Event(
-            title="Event",
-            description="desc",
-            source_text="src",
-            date=FUTURE_DATE,
-            time="18:00",
-            location_name="Hall",
-            creator_id=2,
-            added_at=recent_naive,
-        )
-        session.add(event)
-        await session.commit()
-
-    tz = timezone.utc
-    notified = await notify_inactive_partners(db, bot, tz)
-
-    assert [u.user_id for u in notified] == [1]
-    assert len(bot.messages) == 1
-    assert bot.messages[0][0] == 1
-    assert not any(message[0] == 2 for message in bot.messages)
-
-    async with db.get_session() as session:
-        refreshed = await session.get(User, 1)
-        assert refreshed
-        normalized = main._ensure_utc(refreshed.last_partner_reminder)
-        assert normalized is not None
-        assert normalized.tzinfo is not None
 
 
 @pytest.mark.asyncio

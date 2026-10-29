@@ -195,7 +195,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
   warning/alarm codes to the Telegram superadmin. Enabled by
   `ENABLE_EMAIL_OUTBOX_MONITOR`.
 
-- **partner reminders** – reminds inactive partners after 09:00 local time.
+- Weekly inactivity reminders to partners were removed on 2026-10-29; no partner reminder job is scheduled.
 - **cleanup old events** – removes past events after 03:00 local time and notifies the superadmin.
 - **general stats** – daily operational system report (`/general_stats`) for the previous 24 hours.
 - **Telegram daily announcements** – posts `/daily` channel announcements after configured `daily_time`; scheduler has per-channel durable DB claims (`daily_announcement_guard`) plus an in-process guard to prevent repeated sends while one run is still in progress and to survive releases/restarts after the slot has already been claimed/sent.

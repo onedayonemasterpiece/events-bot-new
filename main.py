@@ -384,7 +384,6 @@ page_lock = _page_locks
 _month_next_run: dict[str, float] = defaultdict(float)
 _week_next_run: dict[str, float] = defaultdict(float)
 _weekend_next_run: dict[str, float] = defaultdict(float)
-_partner_last_run: date | None = None
 
 _startup_handler_registered = False
 
@@ -3499,15 +3498,6 @@ async def mark_pages_reminded(db: Database) -> None:
         settings_cache.pop(PAGES_DIRTY_KEY, None)
 
 
-async def get_partner_last_run(db: Database) -> date | None:
-    val = await get_setting_value(db, "partner_last_run")
-    return date.fromisoformat(val) if val else None
-
-
-async def set_partner_last_run(db: Database, d: date) -> None:
-    await set_setting_value(db, "partner_last_run", d.isoformat())
-
-
 async def get_vk_group_id(db: Database) -> str | None:
     return await get_setting_value(db, "vk_group_id")
 
@@ -5828,50 +5818,6 @@ async def notify_event_added(
     await notify_superadmin(db, bot, text)
     if user.is_partner:
         await _send_or_update_partner_admin_notice(db, bot, event, user=user)
-
-
-async def notify_inactive_partners(
-    db: Database, bot: Bot, tz: timezone
-) -> list[User]:
-    """Send reminders to partners without events in the last week."""
-    cutoff = week_cutoff(tz)
-    now = datetime.now(timezone.utc)
-    notified: list[User] = []
-    async with db.get_session() as session:
-        stream = await session.stream_scalars(
-            select(User)
-            .where(User.is_partner.is_(True), User.blocked.is_(False))
-            .execution_options(yield_per=100)
-        )
-        count = 0
-        async for p in stream:
-            last = _ensure_utc(
-                (
-                    await session.execute(
-                        select(Event.added_at)
-                        .where(Event.creator_id == p.user_id)
-                        .order_by(Event.added_at.desc())
-                        .limit(1)
-                    )
-                ).scalars().first()
-            )
-            last_reminder = _ensure_utc(p.last_partner_reminder)
-            if (not last or last < cutoff) and (
-                not last_reminder or last_reminder < cutoff
-            ):
-                async with span("tg-send"):
-                    await bot.send_message(
-                        p.user_id,
-                        "\u26a0\ufe0f Вы не добавляли мероприятия на прошлой неделе",
-                    )
-                p.last_partner_reminder = now
-                notified.append(p)
-            count += 1
-            if count % 100 == 0:
-                await asyncio.sleep(0)
-        await session.commit()
-    await asyncio.sleep(0)
-    return notified
 
 
 async def dump_database(db: Database) -> bytes:
@@ -26839,15 +26785,6 @@ def recent_cutoff(tz: timezone, now: datetime | None = None) -> datetime:
         tz,
     )
     return start_local.astimezone(timezone.utc)
-
-
-def week_cutoff(tz: timezone, now: datetime | None = None) -> datetime:
-    """Return UTC datetime for 7 days ago."""
-    if now is None:
-        now_utc = datetime.now(tz).astimezone(timezone.utc)
-    else:
-        now_utc = _ensure_utc(now)
-    return now_utc - timedelta(days=7)
 
 
 def split_text(text: str, limit: int = 4096) -> list[str]:
