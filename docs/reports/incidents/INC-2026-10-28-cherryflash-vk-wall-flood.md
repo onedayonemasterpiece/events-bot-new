@@ -1,6 +1,6 @@
 # INC-2026-10-28 CherryFlash VK wall publication stopped
 
-Status: open — daily publication blocked on an active VK user identity
+Status: open — credential rotation deployed; awaiting fresh daily public wall acceptance
 Severity: sev2
 Service: CherryFlash publication to `vk.com/club231828790` on RunCoveer
 Opened: 2026-10-28
@@ -13,7 +13,7 @@ Related docs: `docs/features/cherryflash/README.md`, `docs/operations/runtime-lo
 
 CherryFlash videos continued to upload to VK, but video announcements stopped appearing on the `Полюбить Калининград Анонсы` wall after 4 October. The Kaggle per-target report exposes VK `wall.post` code 9 (`Flood control`); the target is optional for overall Telegram delivery, so the enclosing report still says `ok=true`. Separately, RunCoveer fails to download recent Kaggle output after excessive output-list pagination reaches HTTP 429.
 
-The transport fix is deployed, but the incident is not resolved. On 29 October both the existing upload token and newly supplied `VK_USER_TOKEN8` fail `video.save` with code 18 (`User was deleted or banned`). The saved owner browser session also redirects to VK's blocked-account page. A new token for the same restricted account does not restore daily uploads.
+The transport fix and replacement credentials are deployed. Earlier credentials failed `video.save` with code 18 (`User was deleted or banned`); the owner subsequently replaced the shared user credentials. The new production upload identity now passes `video.save` from RunCoveer. A fresh daily public wall video and per-target report remain required before closure.
 
 ## User / Business Impact
 
@@ -72,7 +72,7 @@ The transport fix is deployed, but the incident is not resolved. On 29 October b
 
 ## Immediate Mitigation
 
-- Deployed group-token wall routing and larger output-list pages in PR #753. The live community-token `wall.post` boundary succeeds. Daily publication still requires an unblocked user identity for `video.save`; token 8 was not installed because its exact upload method fails.
+- Deployed group-token wall routing and larger output-list pages in PR #753. The live community-token `wall.post` boundary succeeds. The initial replacement token 8 was not installed because its exact upload method failed. After the owner replaced the shared credentials again, tested active identities were installed and the exact upload boundary succeeded.
 
 ## Corrective Actions
 
@@ -81,8 +81,8 @@ The transport fix is deployed, but the incident is not resolved. On 29 October b
 
 ## Follow-up Actions
 
-- [ ] Unblock the upload account or configure a tested token from another active community administrator; verify `video.save` before changing production credentials.
-- [ ] Remove postponed diagnostic post `-231828790_2255` before approximately 31 October 11:05 UTC. It is not a public repair post. User API auth and the saved owner browser session are currently blocked.
+- [x] Configure tested replacement identities; verify `video.save` from the restarted production container.
+- [x] Confirm diagnostic post `-231828790_2255` is absent: authenticated `wall.getById` returned no item and the postponed queue was empty after credential replacement.
 - [ ] Verify a fresh daily run, its public wall post/video attachment and per-target report. A one-off repair or old in-flight run is not daily automation acceptance.
 - [ ] Review whether optional VK fanout needs a delivery alert; do not change Telegram success semantics as part of this transport repair.
 
@@ -91,10 +91,61 @@ The transport fix is deployed, but the incident is not resolved. On 29 October b
 - deployed SHA: `b156fc067749e920383e7559e9e7efca804a1461`, merged in PR #753 and contained in `origin/main`; prior running release was its ancestor.
 - deploy path: RunCoveer `deployment-events-1`, image `runcoveer/events:cherryflash-wall-b156fc067`, image ID `sha256:c32cb3516741094bcbe54d9fbfb8c30ea7d65f442a596ad3079a80726e4ad44b`.
 - regression checks: all four PR CI jobs passed; focused checks covered 21 Kaggle client/notebook tests, 17 helper tests and one story bundle test. Full tracked-source verification covered 4,423 files.
-- post-deploy verification: process healthy, `/healthz` ready and DB OK; generated group token map and actual postponed wall video post verified. Daily public video remains unverified because upload auth is now blocked.
+- post-deploy verification: process healthy, `/healthz` ready and DB OK; generated group token map and actual postponed wall video post verified. Daily public video remains unverified; the replacement upload identity now passes the exact provider method.
 - parallel work: production env was preserved during deploy; live `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL=gemini-3.1-flash-lite` and `EVENT_PARSE_ENABLE_4O_FALLBACK=0` remain effective.
 - retained evidence: `/home/dev/artifacts/events-bot/20261028T063100Z-cherryflash-vk-20261028/`, including `release/source-receipt.json`, `wall-token-live-check-20261029.jsonl` and `user-token-capability-check-20261029.jsonl`.
 
 ## Prevention
 
 - The group-token route and focused pagination/token-routing tests guard this failure mode.
+
+## Replacement credential rollout — 2026-10-29
+
+The owner replaced `/home/dev/.env:VK_USER_TOKEN` through `VK_USER_TOKEN8`
+and explicitly requested propagation to every active consumer. Inventory covered
+24 unique repositories, active local unit environment files and RunCoveer
+containers. Active consumers were Events and VibePublish; the env-recovery utility
+is not a publishing consumer and was not run to recover older secrets.
+
+Both hosts rejected new tokens 2, 6 and 7 with the provider's other-IP binding
+error. Token 4 had no photo/video/wall/group permissions. Production uses tested
+identities through its existing aliases:
+
+| Events destination | Shared credential source |
+| --- | --- |
+| `VK_USER_TOKEN` | `VK_USER_TOKEN` |
+| `VK_ACCESS_TOKEN4`, `VK_ACCESS_TOKEN6` | `VK_USER_TOKEN3` |
+| `VK_ACCESS_TOKEN5` | `VK_USER_TOKEN5` |
+| `VK_ACCESS_TOKEN7` | `VK_USER_TOKEN8` |
+| Private MCP messenger and dialog reader | `VK_USER_TOKEN1` |
+| Private MCP notification, analytics, community, story reader/editor | `VK_USER_TOKEN3` |
+| Private MCP media editor | `VK_USER_TOKEN8` |
+
+All 13 consumed assignments were updated in the canonical RunCoveer env file;
+community/service credentials and unrelated configuration were preserved. The
+Events container was recreated at 12:56:46 UTC with the same image ID listed
+above. It is healthy, ready and DB OK. In-container checks passed wall read,
+photo upload-server discovery, `video.save`, message conversations, notifications,
+statistics, stories and video-story upload-server discovery. No video bytes were
+uploaded and no public diagnostic post was created during this rotation.
+Future CherryFlash bundles use the refreshed upload token and existing community
+wall token. The parallel Gemini Flash Lite/4o fallback settings remain unchanged.
+
+The restart interrupted scheduled source-parser run 11225 while processing
+Qtickets; six source summaries were already committed. The retained per-run log
+identifies Qtickets as the unfinished source (Philharmonia had failed earlier,
+before the restart). The existing durable recovery helper queued Qtickets as
+pending at 13:09 UTC with reason `credential_reload_interrupted_ops_run_11225`.
+No full catalog replay or CherryFlash rerender was started.
+
+VibePublish's owner explicitly selected `VK_USER_TOKEN3` instead of IP-bound
+token 2. Only its existing worker credential-key argument changed; the server and
+worker source release `c1053811c2c46c2e56633b8b4fec040f03cfdb78` and other provider
+identities were preserved. Worker PID 64689 started at 12:50:05 UTC; actual bound
+Afisha feed read completed as verified operation
+`op_2c17be263e0d45b5a510c0f8233789c4`.
+
+Retained redacted rollout evidence:
+`/home/dev/artifacts/shared-services/20261029T123537Z-vk-token-rollout-20261029/`.
+The incident remains open until a fresh scheduled daily public wall video and its
+per-target report are verified.
