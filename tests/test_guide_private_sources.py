@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from telethon.utils import parse_username
 
 @pytest.mark.parametrize('path', [
     'guide_excursions/scanner.py',
@@ -38,4 +39,7 @@ def test_scanners_preserve_public_links_and_use_private_post_links(path, usernam
     exec(compile(ast.Module(body=[function], type_ignores=[]), path, 'exec'), namespace)
     _, posts = asyncio.run(namespace['scan_source_posts'](client, username=username, limit=20, days_back=5))
     assert posts[0].source_url == expected
-    client.get_entity.assert_awaited_once_with(username)
+    client.get_entity.assert_awaited_once_with(f"https://t.me/{username}" if username.startswith("+") else username)
+    resolved, is_invite = parse_username(client.get_entity.await_args.args[0])
+    assert resolved is not None
+    assert is_invite == username.startswith('+')

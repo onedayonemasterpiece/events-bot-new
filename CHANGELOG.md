@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Guide excursions: preserve private-group post links for sources configured through Telegram invitations.
+- Guide excursions: preserve private-group post links and resolve invitations for both posts and media.
 
 
 - Removed weekly Telegram inactivity reminders to partners and their scheduled job.
