@@ -137,7 +137,7 @@ async def scan_source_posts(
     limit: int,
     days_back: int,
 ) -> tuple[GuideScannedSourceMeta, list[GuideScannedPost]]:
-    entity = await client.get_entity(username)
+    entity = await client.get_entity(f"https://t.me/{username}" if username.startswith("+") else username)
     source_title = str(getattr(entity, "title", None) or getattr(entity, "first_name", None) or "").strip() or None
     about_text = ""
     about_links: list[str] = []

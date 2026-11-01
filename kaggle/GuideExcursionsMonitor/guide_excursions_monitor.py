@@ -656,7 +656,7 @@ async def materialize_post_media_assets(
 ) -> list[dict[str, Any]]:
     if not post.media_refs:
         return []
-    entity = await client.get_entity(username)
+    entity = await client.get_entity(f"https://t.me/{username}" if username.startswith("+") else username)
     MEDIA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out: list[dict[str, Any]] = []
     for idx, media_ref in enumerate(post.media_refs[:GUIDE_MEDIA_OUTPUT_LIMIT_PER_POST]):
@@ -747,7 +747,7 @@ def _collapse_group(messages: list[Any], *, username: str) -> ScannedPost | None
 
 
 async def scan_source_posts(client: TelegramClient, *, username: str, limit: int, days_back: int) -> tuple[dict[str, Any], list[ScannedPost]]:
-    entity = await client.get_entity(username)
+    entity = await client.get_entity(f"https://t.me/{username}" if username.startswith("+") else username)
     source_title = str(getattr(entity, "title", None) or getattr(entity, "first_name", None) or "").strip() or None
     about_text = ""
     about_links: list[str] = []
@@ -1187,7 +1187,7 @@ async def _collect_post_ocr_inputs(
 ) -> list[dict[str, Any]]:
     if not _post_has_photo_media(post):
         return []
-    entity = await client.get_entity(username)
+    entity = await client.get_entity(f"https://t.me/{username}" if username.startswith("+") else username)
     out: list[dict[str, Any]] = []
     for media_ref in post.media_refs:
         if len(out) >= GUIDE_OCR_IMAGE_LIMIT_PER_POST:
