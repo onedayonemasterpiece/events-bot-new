@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Guide excursions: preserve private-group post links for sources configured through Telegram invitations.
+
+
 - Removed weekly Telegram inactivity reminders to partners and their scheduled job.
 
 - Removed the September emergency `gpt-4o` pin from scheduled VK source parsing. Bounded batches now use the Google text route; an explicit production-config regression check prevents the expensive route from returning unnoticed. Incident `INC-2026-10-27-vk-import-4o-spend`.

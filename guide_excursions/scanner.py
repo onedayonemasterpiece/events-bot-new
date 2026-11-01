@@ -190,4 +190,7 @@ async def scan_source_posts(
             out.append(collapsed)
 
     out.sort(key=lambda item: (item.post_date, item.message_id), reverse=True)
+    if username.startswith("+"):
+        for post in out:
+            post.source_url = f"https://t.me/c/{entity.id}/{post.message_id}"
     return GuideScannedSourceMeta(source_title=source_title, about_text=about_text or None, about_links=about_links), out

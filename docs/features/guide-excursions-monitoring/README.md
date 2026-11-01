@@ -542,6 +542,10 @@ Guide digest не должен произвольно смешивать `про
 - если catch-up `full` run снова завершается `status='skipped'` только из-за занятого shared remote Telegram/Kaggle session (`remote_telegram_session_busy`), watchdog не должен считать такой dispatch завершением суточного слота, но и не должен стучаться каждую минуту: тот же scheduled `full` path откладывается до `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `3600`) и пробуется снова только после cooldown, пока не materialize-ится не-skipped `full` run или не истечёт lookback окно.
 - `/healthz` обязан раскрывать статусы `guide_excursions_light` и `guide_excursions_full` вместе с generic scheduler status; green health without guide job visibility is insufficient evidence for this feature. Production closure after a missed daily guide slot requires deploy evidence plus same-day catch-up/digest evidence, not just a code fix.
 
+## Закрытые Telegram-группы
+
+Закрытые группы добавляются в рабочую таблицу `guide_source`, без публикации приглашения в seed-коде. Поле `username` хранит регистрозависимый `+invite_hash`; Telethon читает его через существующее членство учётной записи S22. Автоматическое вступление не выполняется. Ссылки на найденные посты строятся как `https://t.me/c/<chat_id>/<message_id>`, ссылка на группу остаётся приглашением.
+
 ## Основные entrypoints
 
 - [guide_excursions/commands.py](/workspaces/events-bot-new/guide_excursions/commands.py)
