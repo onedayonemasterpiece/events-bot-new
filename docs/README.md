@@ -1,5 +1,12 @@
 # Документация
 
+**Production runtime:** Events Bot работает на **RunCoveer**, SSH
+`runcoveer-production`, container `deployment-events-1`.
+[Deployment runbook](../deploy/runcoveer/README.md) ·
+[Release policy](operations/release-governance.md).
+Fly — legacy после миграции 2026-10-03; его billing/DB/deploy не относятся к текущему production.
+
+
 Shared Live Search implementation, quota authority and production activation gate:
 `docs/features/llm-gateway/live-resources.md`.
 

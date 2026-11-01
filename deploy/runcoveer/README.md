@@ -1,5 +1,11 @@
 # RunCoveer deployment
 
+**Current production authority:** Events Bot runs here. Read the actual container
+image/revision and `/app/.static-site-repo-sha` before any change. Dated releases
+below are history, not a substitute for runtime readback. Legacy Fly is not the
+active runtime; its billing does not block a RunCoveer release.
+
+
 Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 1 CPU / 3 GB RAM / 25 GB boot volume. SSH alias `runcoveer-production` uses
 `deploy` and DevCoveer-only `~/.ssh/prod_78_111_91_149_ed25519`.

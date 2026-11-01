@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Corrected production routing to RunCoveer in agent instructions, release policy, runtime logs and the documentation index; retired the conflicting Fly-only guidance.
+
 - Guide excursions: preserve private-group post links and resolve invitations for both posts and media.
 
 

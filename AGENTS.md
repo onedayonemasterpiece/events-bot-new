@@ -2,6 +2,14 @@
 
 Цель: чтобы **агент** и **человек** быстро находили единственный актуальный документ по фиче/задаче и не плодили дубли.
 
+## Production runtime — RunCoveer (critical)
+
+- С 2026-10-03 Events Bot работает на **RunCoveer**, SSH alias `runcoveer-production` (`78.111.90.203`), Docker Compose service `events`, container `deployment-events-1`.
+- Канонический runbook: `deploy/runcoveer/README.md`; release policy: `docs/operations/release-governance.md`.
+- Перед production-действием проверь живой контейнер, image/revision, mounts и `/healthz` на `127.0.0.1:8081`. База внутри контейнера — `/data/db.sqlite`, host mount — `/var/lib/runcoveer/events/data`.
+- Fly — выведенный из эксплуатации legacy runtime. `fly.toml`, Fly DB, `flyctl` и `scripts/deploy_fly_main.sh` не определяют текущий production. Fly billing не блокирует RunCoveer. Не запускай старый Fly writer и не меняй его БД для текущих product-задач.
+- Production env: `/opt/runcoveer/events/.env.production` (0600) плюс environment активного `/opt/runcoveer/deployment/compose.yaml`. Не печатай секреты.
+
 ## Старт
 
 1. Открой `docs/README.md` (человеческий индекс).
@@ -21,7 +29,7 @@
 5. Для задач про фестивальный мониторинг, фестивальную очередь, `/start` → «Добавить событие» в связке с публикациями, или VK-посты фестивалей сразу открывай `docs/backlog/features/festival-monitoring-debt/README.md` и regression record `docs/reports/incidents/INC-2026-06-08-festival-vk-aggregate-regression.md`.
 6. Для production Telegram UI E2E (`@events_love39_bot`, `/tg`, `/vk_auto_import`, `/fest_queue`, live button checks) используй project skill `prod-telegram-e2e` и секцию `Production Telegram UI E2E` в `docs/operations/e2e-testing.md`.
 7. Если пользователь даёт ссылку на Telegram-пост/канал (`t.me/...`, `https://t.me/...`) и нужно прочитать фактическое содержимое сообщения, по умолчанию используй Telethon human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`) через project skill `telegram-link-inspection`; публичный HTML `t.me/s/...` допустим только как fallback/быстрая эвристика и должен быть явно назван fallback.
-8. Для любого production incident, user-visible regression, missed/failed publication, wrong/duplicate event data или сообщения, начинающегося с `Инцидент`, сначала используй project skill `events-bot-incident-response`; затем подключай более узкие skills (`events-bot-runtime-logs`, `fly-prod-db-access`, `telegram-link-inspection`, VK/Kaggle skills) по evidence surface.
+8. Для любого production incident, user-visible regression, missed/failed publication, wrong/duplicate event data или сообщения, начинающегося с `Инцидент`, сначала используй project skill `events-bot-incident-response`; затем подключай более узкие skills (`events-bot-runtime-logs`, `telegram-link-inspection`, VK/Kaggle skills) по evidence surface.
 9. Для любого изменения интерфейса статического сайта используй project skill `static-site-design-system` и канонический каталог `/lab/design-system/`.
 
 ## Static-site design system (critical)
@@ -34,7 +42,7 @@
 ## Incident Mode (critical)
 
 - Упоминание конкретного incident ID (`INC-*`) само по себе достаточно, чтобы агент перешёл в incident workflow.
-- Production недоступность или user-visible деградация тоже автоматически включает incident workflow даже без готового `INC-*`: `/healthz` timeout/not ready, Fly proxy `/webhook` errors, бот не отвечает на `/start` или другие базовые команды, critical scheduled slot сорван/завис.
+- Production недоступность или user-visible деградация тоже автоматически включает incident workflow даже без готового `INC-*`: `/healthz` timeout/not ready, production `/webhook` errors, бот не отвечает на `/start` или другие базовые команды, critical scheduled slot сорван/завис.
 - В incident workflow агент обязан:
   - открыть канонический incident record;
   - трактовать его как regression contract;
@@ -174,28 +182,13 @@
 
 ## Release / Deploy Governance
 
-- `origin/main` — единственный steady-state source of truth для production. Каноника: `docs/operations/release-governance.md`.
-- `release/*` и `hotfix/*` допустимы только как короткоживущие ветки; prod-fix не считается доставленным, пока commit не достижим из `origin/main`.
-- Не оставляй production-значимые фиксы только в side-ветках и не закрывай инцидент до back-merge в `main`.
-- Для prod-bound задач агент обязан сам привести deploy/tooling в рабочее состояние:
-  - сначала проверить стандартные локальные пути и user-level install locations для нужных CLI (`flyctl`, `gh`, и т.п.), а не только текущий `PATH`;
-  - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` в текущем процессе;
-  - для Fly auth сначала подгрузить общий devserver token, если он есть: `set -a; . /home/dev/.config/fly/release.env; set +a`; файл должен быть `0600`, значение токена не печатать;
-  - для Fly auth нельзя останавливаться на `flyctl auth whoami` / `no access token available`: обязательно проверить `~/.fly/config.yml` на `access_token` и попробовать process-local `FLY_ACCESS_TOKEN=<redacted>` или `FLY_API_TOKEN=<redacted>`; токен не печатать, в отчёте писать только факт наличия/отсутствия и результат `whoami`;
-  - отсутствие именно `FLY_API_TOKEN` в `.env` не означает отсутствие release auth, если есть user-level Fly config;
-  - если `/home/dev/.config/fly/release.env` отсутствует, а `~/.fly/config.yml` внезапно не содержит `access_token`, проверить, не был ли файл перезаписан WireGuard-only состоянием: `stat ~/.fly/config.yml`, `~/.fly/agent-logs/`, `~/.fly/logs/`; затем искать сохранённый токен в Codex/Claude session history без вывода секрета (`~/.codex/sessions/`, `~/.codex/logs_2.sqlite*`, `~/.claude/projects/-home-dev-projects-events-bot-new/`, `~/.claude/file-history/`) и проверять кандидатов только через process-local `FLY_ACCESS_TOKEN`/`FLY_API_TOKEN` + `flyctl auth whoami`;
-  - перед процедурными вопросами пользователю по Fly auth агент обязан исчерпать user-level config/env/session-history recovery; для этого репозитория уже известен прецедент: 2026-06-06 утренний deploy читал Fly token из local config/session path, а позже `~/.fly/config.yml` был перезаписан без usable auth;
-  - если после проверки user-level config/env Fly auth действительно отсутствует, следующий bootstrap — интерактивный `flyctl auth login`; не переключайся на GitHub Actions и не называй production fix доставленным до успешного manual `flyctl deploy`;
-  - если CLI действительно отсутствует, агент должен установить его или предложить минимальный reproducible bootstrap, а не объявлять отсутствие инструмента достаточным оправданием остановки;
-  - фразы вида "локально нет `flyctl`" не считаются допустимым closure/release explanation, если агент ещё не попытался self-bootstrap tooling.
-- Перед deploy обязательно:
-  - `git fetch origin --prune`
-  - проверить branch, чистоту worktree и связь с `origin/main`
-  - сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
-  - проверить, нет ли `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
-- Production deploy выполняется только вручную через `flyctl deploy` из clean worktree; GitHub Actions deploy для этого репозитория не используется и не является допустимым release path.
-- Ручной `flyctl deploy` допустим только из clean worktree; если deploy emergency и идёт не из `main`, branch должен быть запушен, SHA зафиксирован, а тот же fix обязан вернуться в `main` в рамках того же инцидента.
-- Для daily/scheduled prod-задач (`cron`, ежедневные публикации, daily import/rebuild jobs) deploy не считается closure сам по себе: если из-за бага сегодняшний слот уже был пропущен или завершился аварийно, после доставки фикса нужно выполнить compensating rerun/catch-up и проверить, что текущий день больше не потерян.
+- `origin/main` — источник production-кода. Перед выпуском: fetch, clean checkout exact main, зелёные обязательные CI-проверки.
+- Прочитай `deploy/runcoveer/README.md` и `docs/operations/release-governance.md`; используй **RunCoveer Events-only Compose cutover**. Исторический Fly deploy не используется.
+- Прочитай текущий SHA из реального контейнера (`docker inspect`, `/app/.static-site-repo-sha`) и докажи `git merge-base --is-ancestor <running> <candidate>` до переключения. Не теряй чужой работающий код.
+- Образ собирается из exact Git archive; source-layer delta допустима только при неизменных Dockerfile/dependency inputs, с полной проверкой tracked tree и обновлённой immutable provenance.
+- Сохрани текущий образ для rollback, текущие данные и env; обнови только service `events`. Не меняй Kotopogoda и `/opt/runcoveer/events/source`, который она использует.
+- Проверь live readiness, scheduler и затронутый product effect. Изменение исходников, зелёный CI или запись в неактивной Fly DB не означают доставку.
+- Если баг сорвал сегодняшний scheduled slot, заверши compensating catch-up и проверь данные/публикацию за день. Не закрывай инцидент одной доставкой кода.
 
 ## Избегаем дубликатов
 
