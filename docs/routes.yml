@@ -16,6 +16,7 @@ sections:
     cron: docs/operations/cron.md
     repository_workflow: docs/operations/repository-workflow.md
     release_governance: docs/operations/release-governance.md
+    production_runtime: deploy/runcoveer/README.md
     runtime_logs: docs/operations/runtime-logs.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     scheduler_routing:

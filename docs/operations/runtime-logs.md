@@ -4,7 +4,7 @@
 
 ## Purpose
 
-- сохранять scheduler/import/Smart Update evidence на Fly volume после того, как короткий буфер `fly logs` уже исчез;
+- сохранять scheduler/import/Smart Update evidence на persistent RunCoveer mount после ротации Docker stdout;
 - обеспечивать ежедневный incident monitoring и пошаговую проверку live E2E;
 - не допускать повторения `INC-2026-04-16-prod-disk-pressure-runtime-logs`: логирование не может бесконтрольно занять volume с SQLite.
 
@@ -17,15 +17,15 @@ Production file mirror **включён постоянно** и пишет root 
 
 - `ENABLE_RUNTIME_FILE_LOGGING=1`;
 - active file: `/data/runtime_logs/events-bot.log`;
-- size rotation: `RUNTIME_LOG_MAX_FILE_MB=8`;
-- hard budget active + rotated: `RUNTIME_LOG_MAX_TOTAL_MB=64`;
-- rotated retention ceiling: `RUNTIME_LOG_RETENTION_HOURS=48`;
-- volume free-space floor: `RUNTIME_LOG_MIN_FREE_MB=256`;
+- size rotation: `RUNTIME_LOG_MAX_FILE_MB=16`;
+- hard budget active + rotated: `RUNTIME_LOG_MAX_TOTAL_MB=512`;
+- rotated retention ceiling: `RUNTIME_LOG_RETENTION_HOURS=168`;
+- volume free-space floor: `RUNTIME_LOG_MIN_FREE_MB=1024`;
 - level: `RUNTIME_LOG_LEVEL=INFO`.
 - `/healthz` disk telemetry: warning below `768 MiB` (before the `512 MiB` VK admission floor), critical/HTTP 503 below `256 MiB` (`RUNTIME_DISK_WARN_FREE_MB`, `RUNTIME_DISK_CRITICAL_FREE_MB`).
-- Fly volume capacity: `/data` is back at `3 GiB` after the controlled new-volume migration in `INC-2026-09-26-vk-auto-storage-notice-storm`. The old `4 GiB` volume, extended before the operator prohibited expansion, was destroyed after integrity checks. `fly.toml` retains the `3 GiB` automatic extension cap. Packet compaction, reviewed retention and early warning control disk pressure.
+- Runtime: SSH `runcoveer-production`, container `deployment-events-1`. `/data` смонтирован из `/var/lib/runcoveer/events/data`; текущий host filesystem проверяется через `df`, legacy Fly volume не определяет его размер. См. [RunCoveer runbook](../../deploy/runcoveer/README.md).
 
-При обычном потоке это даёт до двух суток evidence. При log storm размер, а не время, является приоритетным guard: старейшие rotated files удаляются, active file ротируется, а при достижении free-space floor file mirror временно пропускает записи. Console/stdout/Fly logs при этом продолжают работать. Неизвестные файлы и SQLite handler никогда не удаляет.
+При обычном потоке это даёт до семи суток evidence. При log storm размер, а не время, является приоритетным guard: старейшие rotated files удаляются, active file ротируется, а при достижении free-space floor file mirror временно пропускает записи. Console/stdout/Docker logs при этом продолжают работать. Неизвестные файлы и SQLite handler никогда не удаляет.
 
 ## Scope
 
@@ -44,7 +44,7 @@ Production file mirror **включён постоянно** и пишет root 
 
 ## Environment
 
-- `ENABLE_RUNTIME_FILE_LOGGING` — включает mirror; production source of truth — `fly.toml`.
+- `ENABLE_RUNTIME_FILE_LOGGING` — включает mirror; production source of truth — RunCoveer `/opt/runcoveer/events/.env.production` и environment активного Compose.
 - `RUNTIME_LOG_DIR`, `RUNTIME_LOG_BASENAME` — volume directory и active filename.
 - `RUNTIME_LOG_RETENTION_HOURS` — возрастной потолок rotated files.
 - `RUNTIME_LOG_MAX_FILE_MB` — размер одного active/rotated файла.
@@ -54,7 +54,7 @@ Production file mirror **включён постоянно** и пишет root 
 
 Нельзя повышать budget/retention или снижать free-space floor без фактического `df`/`du` и regression-check инцидента `INC-2026-04-16`.
 
-Нельзя без отдельного разрешения владельца повышать `auto_extend_size_limit` выше `3 GiB` или вручную расширять том. После любого ручного или автоматического resize обязательны `df -h /data`, `PRAGMA quick_check`, `/healthz`, Fly health checks и проверка свежих логов на `Errno 28` / `database or disk is full`.
+Не расширяй production storage без отдельного разрешения владельца. После storage changes обязательны фактический `df`, SQLite integrity, readiness и проверка свежих логов на `Errno 28` / `database or disk is full`. Ограничение legacy Fly volume в `fly.toml` не является RunCoveer storage policy.
 
 ## Investigation Workflow
 
@@ -64,8 +64,8 @@ Production file mirror **включён постоянно** и пишет root 
 2. Проверить `df -h /data`, `du -x` и файлы `events-bot.log*` с sizes/mtimes.
 3. Искать по нескольким ключам: `run_id`, `ops_run_id`, `batch_id`, inbox/source/event id, job kind, UTC window, error class.
 4. Сверить log terminal line с `ops_run.details_json`/`metrics_json`, DB rows и Telegram UI/VK response.
-5. Сохранить только минимальные non-secret excerpts в `artifacts/codex/<incident>/`.
-6. Если mirror реально был paused/disabled или окно уже вытеснено budget/retention, явно зафиксировать это и перейти к `fly logs`, DB/`ops_run`, Kaggle outputs и публичным API.
+5. Сохранить только минимальные non-secret excerpts в retained managed directory под `/home/dev/artifacts`.
+6. Если mirror реально был paused/disabled или окно уже вытеснено budget/retention, явно зафиксировать это и перейти к `docker logs deployment-events-1`, DB/`ops_run`, Kaggle outputs и публичным API.
 
 ## Disk Hygiene Runbook
 

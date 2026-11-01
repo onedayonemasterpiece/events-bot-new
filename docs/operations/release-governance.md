@@ -9,23 +9,36 @@
 - Prod-fix не считается доставленным, пока его commit не достижим из `origin/main`.
 - Запись в `CHANGELOG.md` не заменяет back-merge: если пункт changelog есть, а commit не достижим из `origin/main`, это release drift и инцидент процесса.
 
-## Allowed Deploy Paths
+## Active runtime and deploy path
 
-- Единственный штатный production deploy path для этого репозитория —
-  `scripts/deploy_fly_main.sh` из clean checkout exact `origin/main`. Скрипт
-  сам выполняет fetch/clean/SHA gates и передаёт этот SHA в Docker build;
-  прямой `flyctl deploy` запрещён, потому что он может собрать актуальный код
-  с устаревшей mutable-меткой версии для StaticSiteBuilder.
-- Search validation marker у этого скрипта по умолчанию `none`. Только явные
-  `--search-validation-profile standard|full` после успешного Fly deploy
-  отправляют один `search-runtime-deployed` payload с exact site SHA, bounded
-  backend revision, deployment id и telemetry-only changed surfaces. Эти
-  аргументы не передаются `flyctl`; static/data/Kaggle publication marker не
-  создаёт. `full` дополнительно может запросить одну selective qualification.
-  `search_backend_revision` — точный `sha256:<64>` digest deployable
-  `supabase/functions/event-search/` source tree, а не contract version, git SHA
-  или придуманный provider deploy SHA.
-- Изменения `supabase/functions/event-search/` не доставляются Fly deploy. Их
+Production с 2026-10-03 — **RunCoveer**, SSH `runcoveer-production`, Compose
+`/opt/runcoveer/deployment/compose.yaml`, service `events` / container
+`deployment-events-1`. Канонический runbook: [RunCoveer deployment](../../deploy/runcoveer/README.md).
+Fly — legacy/rollback-only после миграции; `scripts/deploy_fly_main.sh`,
+`fly.toml`, старая Fly DB и Fly billing не относятся к текущему выпуску.
+Возврат на Fly требует отдельного согласованного single-writer rollback.
+
+1. Проверь живой контейнер: image ID, command, mounts, image revision и
+   `/app/.static-site-repo-sha`; readiness — `http://127.0.0.1:8081/healthz`.
+2. Собирай clean exact `origin/main`; текущий runtime SHA обязан быть его
+   предком. Сохрани текущий immutable image для rollback.
+3. Используй exact Git archive и `STATIC_SITE_IMAGE_REPO_SHA`. Source-layer
+   reuse разрешена при неизменных Dockerfile и dependency inputs, с полной
+   проверкой tracked tree и обновлением immutable provenance.
+4. Сохрани live env и `/data`; согласуй image pin в repository Compose и
+   активном Compose. Переключай только Events:
+   `sudo docker compose -f /opt/runcoveer/deployment/compose.yaml up -d --no-deps --no-build --pull never events`.
+   Сохрани production `DEPLOY_PREFLIGHT=0`; не запускай общий двухсервисный
+   `deploy.sh` для Events-only обновления. Kotopogoda и её source mount не меняются.
+5. Проверь readiness, scheduler и реальный product effect. Политика логов —
+   [runtime-logs.md](runtime-logs.md). Исходный runbook содержит preflight,
+   single-writer и rollback contracts; не подменяй их Fly-командами.
+
+Search validation markers остаются отдельной явной операцией после успешной
+доставки exact runtime SHA. Само обновление контейнера не означает Search
+qualification и не публикует такой marker.
+
+- Изменения `supabase/functions/event-search/` не доставляются обновлением Events runtime. Их
   governed release выполняется отдельно из того же clean exact `origin/main`
   через pinned local Supabase CLI и project ref:
   `supabase functions deploy event-search --project-ref <ref> --no-verify-jwt --use-api`.
@@ -42,7 +55,7 @@
   marker. Только другой валидный digest после ранее успешного HEAD блокирует
   qualification без повторного Search и без product incident; missing/malformed
   revision в error response остаётся Search failure. Edge failure не
-  компенсируется повторным Fly deploy.
+  компенсируется повторным Events deploy.
 - Перед активацией Search production-health broker policy должна одновременно
   разрешать exact main refs legacy/health/qualification workflows и event
   classes `workflow_dispatch,schedule,repository_dispatch`. После двух manual
@@ -55,18 +68,11 @@
   `20260809143602_static_site_auth_broker_platform_claims.sql`, follow-up
   `20260809191607_static_site_auth_broker_short_active_claim.sql` shortens only
   a successfully completed claim to the two-minute replay TTL; applying it
-  needs no Fly restart because the deployed broker calls the same v2 RPC.
+  needs no Events restart because the deployed broker calls the same v2 RPC.
   Verify `persona_busy` before expiry and `new` after expiry in the ephemeral
   SQL contract before production apply.
-- GitHub Actions deploy не используется и не является допустимым release path. Если в репозитории появляется workflow, который деплоит Fly app на push/workflow_dispatch, это process drift: его нужно удалить или отключить до следующего production-bound task.
-- Emergency deploy из отдельной ветки допустим только для быстрого восстановления production, если одновременно выполняются все условия:
-  - ветка создана от актуального `origin/main`;
-  - в ветке только релевантные fix-коммиты;
-  - branch уже запушен в `origin`;
-  - зафиксирован точный deployed SHA;
-  - сразу после восстановления prod тот же SHA возвращается в `main` через PR / merge.
-- Нельзя деплоить из грязного worktree.
-- Нельзя держать прод-значимые фиксы только в `release/*` или `hotfix/*` без обратного возврата в `main`.
+- GitHub Actions выполняет CI; production cutover выполняется вручную на RunCoveer.
+- Не деплой грязный worktree или код, отсутствующий в `origin/main`.
 
 ## Pull Request CI Gate
 
@@ -81,23 +87,12 @@
 1. `git fetch origin --prune`
 2. Убедиться, что рабочая ветка понятна и ожидаема: `git branch --show-current`
 3. Проверить чистоту дерева: `git status --short`
-4. Проверить локальный deploy-tooling:
-   - искать нужные CLI не только в текущем `PATH`, но и в стандартных user-level install locations (`~/.fly/bin/flyctl`, `~/.local/bin`, и т.п.);
-   - если CLI найден вне `PATH`, использовать абсолютный путь или экспортировать корректный `PATH` до начала deploy;
-   - для Fly auth сначала подгрузить общий devserver token, если он есть: `set -a; . /home/dev/.config/fly/release.env; set +a`. Файл должен быть доступен user-level агентам на этом devserver, иметь права `0600`, а значение токена нельзя печатать в логах/ответах;
-   - для Fly сначала проверить `flyctl auth whoami`; если он отвечает `no access token available`, это **не** blocker само по себе: проверить `~/.fly/config.yml` на наличие `access_token` и повторить команду с process-local export `FLY_ACCESS_TOKEN=<redacted-token>` (или `FLY_API_TOKEN=<redacted-token>`). Значение токена не печатать и не коммитить; в отчёте указывать только факт `~/.fly/config.yml access_token present` и результат `whoami`;
-   - также проверить `.env` / shell env на альтернативные service-token имена, но не считать отсутствие именно `FLY_API_TOKEN` доказательством отсутствия Fly release auth;
-   - если `/home/dev/.config/fly/release.env` отсутствует, а `~/.fly/config.yml` есть, но `access_token` исчез, считать это release-auth recovery case, а не поводом задавать пользователю процедурный вопрос. Сначала проверить `stat ~/.fly/config.yml` и Fly agent/client логи (`~/.fly/agent-logs/`, `~/.fly/logs/`) на момент перезаписи. Затем искать сохранённый Fly token в local session history без вывода значения: `~/.codex/sessions/`, `~/.codex/logs_2.sqlite*`, `~/.claude/projects/-home-dev-projects-events-bot-new/`, `~/.claude/file-history/`. Кандидаты проверять только process-local переменными (`FLY_ACCESS_TOKEN` / `FLY_API_TOKEN`) через `flyctl auth whoami`, в evidence писать только fingerprint/источник и `whoami`;
-   - известный прецедент: 2026-06-06 утренний manual Fly deploy успешно использовал local Fly token, но позже `~/.fly/config.yml` был перезаписан WireGuard-only состоянием без usable auth. Поэтому для этого devserver `/home/dev/.config/fly/release.env` и session-history recovery являются обязательными шагами перед любым запросом к пользователю о Fly token;
-   - если user-level config/env действительно не содержат Fly auth, выполнить интерактивный bootstrap `flyctl auth login` и только после успешного `flyctl auth whoami` продолжать manual deploy; GitHub Actions не является fallback для отсутствующей локальной Fly auth;
-   - отсутствие CLI или auth не считается достаточным оправданием остановки, пока не проверены user-level install/config paths и не предпринят self-bootstrap/install или не подготовлен минимальный reproducible bootstrap.
+4. Проверить SSH `runcoveer-production`, текущий контейнер/image/SHA/mounts и место на диске; production env читается только в редактированном виде. Fly auth для этого не нужен.
 5. Проверить, что deploy-ветка не потеряла связь с `origin/main`
 6. Сверить релевантные пункты `CHANGELOG.md` с реальными commit/SHA
 7. Поднять релевантные incident records из `docs/reports/incidents/README.md` для всех затронутых prod-поверхностей и выполнить их mandatory regression checks
 8. Проверить, нет ли удалённых `release/*` / `hotfix/*`, которые всё ещё ahead of `origin/main`
-9. Запускать release только через `scripts/deploy_fly_main.sh`; Dockerfile
-   fail-closed без `STATIC_SITE_IMAGE_REPO_SHA`, а runtime читает SHA из
-   immutable файла образа и игнорирует отличающийся legacy secret.
+9. Выполнить RunCoveer release по active-runtime процедуре выше. Runtime SHA берётся из immutable файла образа, а не mutable env или remembered SHA.
 
 ## Emergency Hotfix Flow
 
@@ -106,7 +101,7 @@
 3. Прогнать таргетные тесты и smoke checks
 4. Запушить ветку в `origin`
 5. После merge/back-merge и зелёного CI задеплоить exact `origin/main` через
-   `scripts/deploy_fly_main.sh`; штатный скрипт намеренно отвергает не-main SHA
+   RunCoveer Events-only Compose
 6. Если инцидент затронул daily/scheduled prod-задачу за текущий день, сразу после deploy выполнить compensating rerun/catch-up и убедиться, что сегодняшние данные/публикация восстановлены
 7. Открыть или обновить PR в `main`
 8. Не закрывать инцидент, пока deployed SHA не достижим из `origin/main`
@@ -124,7 +119,7 @@
 - incident ID(s), если deploy связан с инцидентом или затрагивает известный incident surface
 - deployed SHA
 - branch name
-- способ deploy: `flyctl` (manual)
+- способ deploy: RunCoveer Events-only Compose, image tag и image ID
 - ссылка на PR / merge commit, который вернул fix в `main`
 - краткий список выполненных incident regression checks и где лежит их evidence
 - краткая заметка, если deploy был emergency и почему нельзя было ждать обычного merge
