@@ -556,6 +556,27 @@ async def test_vk_linear_parse_retries_rate_limit_within_bounded_provider_budget
 
 
 @pytest.mark.asyncio
+async def test_daily_quota_without_retry_after_does_not_sleep_or_reinvoke(monkeypatch):
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    calls = []
+
+    async def exhausted(*args, **kwargs):
+        calls.append(kwargs)
+        raise RateLimitError(blocked_reason="rpd", model="gemini-3.1-flash-lite")
+
+    async def no_sleep(_seconds):
+        pytest.fail("A daily quota cannot recover through short inline sleeps")
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", exhausted)
+    monkeypatch.setattr(main.asyncio, "sleep", no_sleep)
+    result = await main.parse_event_via_llm("source", rate_limit_max_wait_sec="60")
+    assert len(calls) == 1
+    assert result.retry_reason is SourceParseRetryReason.TECHNICAL_ERROR
+    assert result.provider_attempts[-1]["quota_reason"] == "rpd"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('configured', ['gemma-4-31b-it', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'])
 async def test_emergency_reserve_routes_real_parser_boundary_with_two_send_cap(monkeypatch, configured):
     monkeypatch.setenv('MONITORING_TEXT_RESERVE_MODELS', 'gemini-2.5-flash,gemini-3.6-flash')

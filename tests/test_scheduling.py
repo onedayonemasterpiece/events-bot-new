@@ -2399,6 +2399,49 @@ async def test_vk_auto_import_watchdog_paces_terminal_failures_across_restarts(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status,metrics,dispatch", [
+    ("failed", {"inbox_processed": 12, "terminal_rows": 12, "unresolved_rows": 0, "cancelled": 0}, 0),
+    ("failed", {"inbox_processed": 12, "terminal_rows": 11, "unresolved_rows": 1, "cancelled": 0}, 1),
+    ("failed", {"inbox_processed": 12, "terminal_rows": 12, "unresolved_rows": 0, "cancelled": 1}, 1),
+    ("failed", {}, 1),
+    ("crashed", {}, 1),
+])
+async def test_vk_watchdog_distinguishes_terminal_failed_batch_from_missing_work(
+    tmp_path, monkeypatch, status, metrics, dispatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_VK_AUTO_IMPORT", "1")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TIMES_LOCAL", "23:40")
+    monkeypatch.setenv("VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", lambda _db: None)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    calls = []
+
+    async def fake_scheduler(*args, **kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(sys.modules, "vk_auto_queue", SimpleNamespace(vk_auto_import_scheduler=fake_scheduler))
+    try:
+        run_id = await start_ops_run(
+            db, kind="vk_auto_import", trigger="scheduled", operator_id=0,
+            started_at=datetime(2026, 6, 12, 21, 45, tzinfo=timezone.utc),
+        )
+        await finish_ops_run(
+            db, run_id=run_id, status=status, metrics=metrics,
+            finished_at=datetime(2026, 6, 12, 21, 50, tzinfo=timezone.utc),
+        )
+        assert await scheduling._maybe_dispatch_vk_auto_import_watchdog(db, object()) == dispatch
+        assert len(calls) == dispatch
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_critical_scheduler_watchdog_skips_guide_when_full_run_exists(
     tmp_path, monkeypatch
 ):

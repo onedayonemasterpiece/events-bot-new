@@ -43,6 +43,7 @@ def test_event_topic_prompt_mentions_topics():
 
 @pytest.mark.asyncio
 async def test_classify_event_topics_gemma_uses_native_schema(monkeypatch):
+    monkeypatch.delenv("MONITORING_TEXT_RESERVE_MODELS", raising=False)
     client = _FakeGemmaTopicsClient(['{"topics":["CONCERTS"]}'])
     monkeypatch.setattr(main, "_get_event_topics_gemma_client", lambda: client)
     monkeypatch.setattr(main, "EVENT_TOPICS_GEMMA_NATIVE_SCHEMA", True)
@@ -52,6 +53,7 @@ async def test_classify_event_topics_gemma_uses_native_schema(monkeypatch):
     assert topics == ["CONCERTS"]
     assert len(client.calls) == 1
     call = client.calls[0]
+    assert call["max_provider_attempts"] == 2
     assert call["generation_config"]["response_mime_type"] == "application/json"
     schema = call["generation_config"]["response_schema"]
     assert schema["type"] == "OBJECT"

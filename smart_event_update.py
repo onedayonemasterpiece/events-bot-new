@@ -296,7 +296,7 @@ def _is_smart_update_facts_stage(label: str | None) -> bool:
     } or label_l.endswith(":fact_first_cov")
 
 
-def _resolve_smart_update_base_model(label: str | None) -> str:
+def _resolve_smart_update_model(label: str | None) -> str:
     label_l = (label or "").strip().lower()
     if label_l == "collection_candidate_adjudication":
         return SMART_UPDATE_MODEL
@@ -330,20 +330,16 @@ def _resolve_smart_update_base_model(label: str | None) -> str:
     return SMART_UPDATE_MODEL
 
 
-def _resolve_smart_update_model(label: str | None) -> str:
-    from google_ai.client import monitoring_text_primary
-    return monitoring_text_primary(_resolve_smart_update_base_model(label))
-
-
-def _smart_update_fallback_models(label: str | None, model: str) -> list[str] | None:
-    """Try both Lite text lanes, retaining the stage's existing fallback tail."""
+def _smart_update_model_chain(label: str | None) -> list[str]:
+    """Resolve the stage and its fallback tail once, before emergency routing."""
     from google_ai.client import monitoring_text_model_chain
 
+    model = _resolve_smart_update_model(label)
     if model == SMART_UPDATE_FACTS_MODEL and _is_smart_update_facts_stage(label):
         fallbacks = SMART_UPDATE_FACTS_FALLBACK_MODELS
     else:
         fallbacks = (os.getenv("GOOGLE_AI_FALLBACK_MODELS") or "").split(",")
-    return monitoring_text_model_chain(model, fallbacks)[1:]
+    return monitoring_text_model_chain(model, fallbacks)
 SMART_UPDATE_GEMMA_NATIVE_SCHEMA = (
     os.getenv("SMART_UPDATE_GEMMA_NATIVE_SCHEMA", "0") or ""
 ).strip().lower() in {"1", "true", "yes", "on"}
@@ -9681,8 +9677,8 @@ async def _ask_gemma_json_unbounded(
         max_tries = 1
     base_sleep = max(0.1, min(base_sleep, 10.0))
     client = _get_gemma_client()
-    from google_ai.client import monitoring_attempt_cap
-    model = _resolve_smart_update_model(label)
+    model_chain = _smart_update_model_chain(label)
+    model = model_chain[0]
     schema_text = json.dumps(schema, ensure_ascii=False)
     full_prompt = (
         f"{prompt}\n\n"
@@ -9798,8 +9794,8 @@ async def _ask_gemma_json_unbounded(
                             prompt=native_prompt,
                             generation_config=native_gen_cfg,
                             max_output_tokens=max_tokens,
-                            fallback_models=_smart_update_fallback_models(label, model),
-                            max_provider_attempts=monitoring_attempt_cap(),
+                            fallback_models=model_chain[1:],
+                            max_provider_attempts=2,
                         )
                         record_physical_send({"requested_model": model})
                         record_usage(_usage)
@@ -9842,9 +9838,9 @@ async def _ask_gemma_json_unbounded(
                             prompt=full_prompt,
                             generation_config=json_gen_cfg,
                             max_output_tokens=max_tokens,
-                            fallback_models=_smart_update_fallback_models(label, model),
+                            fallback_models=model_chain[1:],
                             allow_model_fallback=not single_primary_send,
-                            max_provider_attempts=1 if single_primary_send else monitoring_attempt_cap(),
+                            max_provider_attempts=1 if single_primary_send else 2,
                         )
                         record_physical_send({"requested_model": model})
                         record_usage(_usage)
@@ -9918,8 +9914,8 @@ async def _ask_gemma_json_unbounded(
                             prompt=fix_prompt,
                             generation_config=json_gen_cfg,
                             max_output_tokens=max_tokens,
-                            fallback_models=_smart_update_fallback_models(label, model),
-                            max_provider_attempts=monitoring_attempt_cap(),
+                            fallback_models=model_chain[1:],
+                            max_provider_attempts=2,
                         )
                         break
                     except Exception as exc:
@@ -10104,8 +10100,8 @@ async def _ask_gemma_text_unbounded(
     max_tries = max(1, min(max_tries, 5))
     base_sleep = max(0.1, min(base_sleep, 10.0))
     client = _get_gemma_client()
-    from google_ai.client import monitoring_attempt_cap
-    model = _resolve_smart_update_model(label)
+    model_chain = _smart_update_model_chain(label)
+    model = model_chain[0]
     last_exc: Exception | None = None
     trace_record = _start_llm_trace_record(
         "text",
@@ -10142,8 +10138,8 @@ async def _ask_gemma_text_unbounded(
                                 temperature=temperature
                             ),
                             max_output_tokens=max_tokens,
-                            fallback_models=_smart_update_fallback_models(label, model),
-                            max_provider_attempts=monitoring_attempt_cap(),
+                            fallback_models=model_chain[1:],
+                            max_provider_attempts=2,
                         )
                         break
                     except Exception as exc:
@@ -10482,7 +10478,7 @@ async def _ask_gemma_json_direct_native(
     max_tokens: int,
     timeout_sec: float | None = None,
 ) -> dict[str, Any]:
-    from google_ai.client import monitoring_attempt_cap
+    model_chain = _smart_update_model_chain(label)
     client = _get_gemma_client()
     if client is None:
         raise RuntimeError("GoogleAIClient is unavailable")
@@ -10505,9 +10501,9 @@ async def _ask_gemma_json_direct_native(
                 trace_record["attempts"] = attempt
             try:
                 raw, _usage = await client.generate_content_async(
-                    model=_resolve_smart_update_model(label),
-                    fallback_models=_smart_update_fallback_models(label, _resolve_smart_update_model(label)),
-                    max_provider_attempts=monitoring_attempt_cap(),
+                    model=model_chain[0],
+                    fallback_models=model_chain[1:],
+                    max_provider_attempts=2,
                     prompt=json.dumps(user_payload, ensure_ascii=False, indent=2),
                     generation_config={
                         **_smart_update_gemma_generation_config(temperature=0),

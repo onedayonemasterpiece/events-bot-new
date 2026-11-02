@@ -1315,7 +1315,7 @@ async def _ops_run_delivery_exists(
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT status, trigger
+            SELECT status, trigger, metrics_json
             FROM ops_run
             WHERE kind = ?
               AND started_at >= ?
@@ -1326,11 +1326,25 @@ async def _ops_run_delivery_exists(
         )
         rows = await cur.fetchall()
     ok_statuses = {"running", "success", "partial", "empty"}
-    for status, trigger in rows:
+    for status, trigger, metrics_raw in rows:
         if str(trigger or "").strip() not in triggers:
             continue
         if str(status or "").strip() in ok_statuses:
             return True
+        if kind == "vk_auto_import" and status == "failed":
+            try:
+                metrics = json.loads(metrics_raw) if isinstance(metrics_raw, str) else metrics_raw
+                processed = metrics["inbox_processed"]
+                if (
+                    processed > 0
+                    and metrics["terminal_rows"] == processed
+                    and metrics["unresolved_rows"] == 0
+                    and metrics["cancelled"] == 0
+                ):
+                    logging.info("SCHED vk_auto_import slot attempted: fully terminal failed batch")
+                    return True
+            except (TypeError, ValueError, KeyError):
+                pass
     return False
 
 

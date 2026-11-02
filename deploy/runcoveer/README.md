@@ -13,6 +13,18 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Intake regularity release, 2026-11-03
+
+Events image: `runcoveer/events:intake-regularity-20261103`; rollback image:
+`runcoveer/events:intake-lite-20261102`. Merge the narrow Smart Update routing,
+bounded-send, daily-quota wait and VK slot-delivery changes before building exact
+main. The Events Compose environment clears `MONITORING_TEXT_RESERVE_MODELS`:
+normal facts/writer Lite calls retain their explicit two-send ceiling, while
+single-send adjudication remains one send. Other stages keep their configured
+model; no background identity retry worker is restored. Wait for active ingress
+to finish before an Events-only cutover, then verify source-to-event receipts
+and perform only exact-ID bounded recovery. Keep Kotopogoda unchanged.
+
 ## Intake Lite routing release, 2026-11-02
 
 The Events-only release tag is `runcoveer/events:intake-lite-20261102`.
