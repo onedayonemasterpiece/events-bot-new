@@ -595,3 +595,193 @@ AI Studio явно подписывает таблицу **Peak usage per model 
 ## Короткий prompt для Pro
 
 > Разбери этот production incident и предложи минимальное исправление без переделки системы. Проверь double model-chain transform и различия между local limiter denial, provider 429 и provider 503. Учитывай обе Lite, physical-send budget, project pools и owner-directed отказ от background identity retries. Сравни code fix с удалением emergency env; выбери узкий вариант, один regression test, safe live canary и bounded catch-up. Не добавляй очереди/watchdogs/repair-workers без доказанной необходимости. Не выдавай failed carriers за количество потерянных событий. Назови неподтверждённые допущения и только действительно необходимые следующие проверки.
+
+
+---
+
+<a id="critical-analysis-20261103"></a>
+
+## Критический анализ: регулярный импорт без новых слоёв — 3 ноября 2026
+
+**Автор: ChatGPT, по прямому поручению владельца. Статус: анализ исходников и предложений; этот раздел не является отчётом о восстановлении production.**
+
+Прочитаны исходный пакет на `da5dcbbf5440db8add5738f33453cff462599336`, последующее дополнение и код актуального на момент проверки `main` — `cdd56170713448258d81d4e05c9a2d5d3f85a70a`. [PR #761](https://github.com/onedayonemasterpiece/events-bot-new/pull/761) уже merged 2 ноября в 22:56:35 Europe/Kaliningrad. Поэтому исходное предложение исправить double transform в source parser **уже реализовано в проверенном коде**; предлагать его как ещё не сделанную работу нельзя.
+
+Числа production ниже относятся к снимкам 2 ноября из этого отчёта. В рамках настоящего анализа первичные runtime-журналы, SQLite и общий Google ledger заново не выгружались; исполняемый SHA после merge не проверялся. Прочитанные тесты и результаты автора PR отделены от собственных проверок: новых model calls, replay, нагрузочных прогонов или изменений production здесь не выполнялось. Исторические описания Fly/default limits в документации не принимаются за текущую конфигурацию RunCoveer.
+
+### 1. Главный вывод и предлагаемое решение
+
+**Проблема шире выбора модели, но решается в существующей конструкции.** Проверенный parser-fix устраняет конкретную потерю маршрута. Для надёжного регулярного импорта остаются три обязанности, которые сейчас смешиваются:
+
+1. Выбрать пригодную модель в пределах разрешённых попыток и сохранить исходный выбор конкретной стадии.
+2. Довести уже принятый источник до содержательного результата, сохранив успешные части при частичном отказе.
+3. Восстановить действительно пропущенный запуск по расписанию, не превращая это восстановление в повторную обработку следующих источников при той же аварии.
+
+В проекте уже есть владельцы этих обязанностей: shared Google client, существующий import/Smart Update и существующий scheduler. Нужны исправление их композиции и удаление лишних повторов. Оснований создавать ещё одну очередь, общий router, контроллер восстановления, постоянного проверяющего агента или дополнительный ledger не найдено.
+
+**Предпочтительный путь:** сохранить PR761; закончить то же исправление потери исходной модели в Smart Update; вернуть обычной Lite-паре первые полезные попытки после проверки затронутых consumers; убрать короткое ожидание явного дневного quota-denial; исправить трактовку полностью завершённого неудачного VK batch существующим watchdog. После проверки нормального source→event пути выполнить адресный ограниченный catch-up. Судьбу будущих временных технических отказов явно согласовать с продуктовым контрактом: разовый catch-up не обеспечивает постоянную автоматическую восстанавливаемость.
+
+### 2. Что исходный отчёт доказывает, а чего из него не следует
+
+| Утверждение | Критическая оценка |
+|---|---|
+| Исходная Lite терялась при двойном преобразовании | Причинный механизм подтверждён сохранённым reproduction и diff PR761. В текущем source parser он исправлен. |
+| 106 из 132 позиций завершились технически | Арифметика верна: 80,3%. Это исходы обработанных позиций за неполные сутки, не количество уникальных потерянных событий. |
+| 302 из 307 tracebacks заканчиваются RPD | Это сильное свидетельство неудачно выбранного маршрута. Делить эти tracebacks на carriers или приписывать столько же потерянных событий нельзя: отличаются единицы, стадии и окна наблюдения. |
+| Возврат Lite полностью восстановит импорт | Не доказано. Даже 25–27 октября technical rate составлял 50/180 = 27,8%; причины этого предшествующего уровня не разобраны. Текущая доля каждого остаточного механизма неизвестна. |
+| 3.5 Lite лучше 3.1 Lite | Общие rates этого не доказывают. Из 85 сегодняшних 3.5-запросов 76 относятся к `kaggle`; сравнение с другим набором consumers и ролью primary не является A/B для VK extraction. |
+| 226 raw packets против 132 processed означает отставание на 94 события | Неверная единица сравнения: между raw collection и inbox есть admission; revision, carrier, попытка и событие имеют разную кратность. |
+| Healthy scheduler и уменьшение pending означают исправление | Нет: pending может просто переходить в `failed_technical`. Требуются содержательные исходы и возраст действительно ожидающей работы. |
+| 67 media-blocked jobs объясняют малое число новых событий | По представленным данным это разные множества. Media-проблему нужно сохранять отдельной, без отключения её gate. |
+
+Оговорки исходного отчёта о квотах и оплате правильны: unused registered budget не гарантирует доступность провайдера, request row не равна физической отправке, null usage не равен нулевому расходу. [Официальная документация Google](https://ai.google.dev/gemini-api/docs/rate-limits), повторно прочитанная при этом анализе, подтверждает project-level quotas, Pacific reset RPD и отсутствие гарантии advertised capacity. Число ключей не следует превращать в множитель мощности без проверки project identities.
+
+### 3. Новая существенная находка: тот же дефект остаётся в Smart Update
+
+**Уровень доказательства: механизм в текущем коде; частота в production не измерена.**
+
+В [smart_event_update.py:299–346](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/smart_event_update.py#L299-L346) `_resolve_smart_update_model(label)` сначала вычисляет исходную модель стадии, затем возвращает только `monitoring_text_primary(...)`. `_smart_update_fallback_models(label, model)` получает уже заменённую модель и строит chain повторно.
+
+При включённом emergency override это приводит к двум потерям сразу:
+
+- вместо исходной stage Lite в builder приходит effective Flash;
+- проверка `model == SMART_UPDATE_FACTS_MODEL` может перестать выполняться, поэтому facts-specific fallback заменяется глобальным `GOOGLE_AI_FALLBACK_MODELS`.
+
+Так составлены реальные callers: [JSON/native-schema](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/smart_event_update.py#L9681-L9803), [обычный JSON](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/smart_event_update.py#L9838-L9847), [text](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/smart_event_update.py#L10101-L10147) и [direct native JSON](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/smart_event_update.py#L10476-L10517). Успешный parser может передать результат на следующую стадию с той же ошибкой выбора маршрута.
+
+**Сильное ограничение вывода:** глобальный fallback может содержать Lite и случайно возвращать их в цепочку. Актуальный runtime env этой стадии здесь не установлен. Поэтому нельзя утверждать, что весь Smart Update сейчас лишён Lite или что этим объясняются все его ошибки. Доказана потеря исходной stage policy и зависимость результата от постороннего глобального хвоста.
+
+**Минимальное исправление:** у существующего caller один раз получить исходную модель стадии и её fallback; передать их существующему `monitoring_text_model_chain`; из одной полученной цепочки взять primary и tail. Удалить повторную интерпретацию уже выбранной primary. Сохранить специальный контракт `single_primary_send`: отключённый fallback и cap=1 не превращать в дополнительные попытки. Защитная обязанность stage selection остаётся, удаляется только потеря информации между двумя helpers.
+
+[Существующие helper tests](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/tests/test_smart_update_provider_fallback_safety.py#L35-L52) передают в fallback helper исходную модель; production caller передаёт преобразованную. Нужен один различающий caller-level сценарий: facts Lite + emergency env + пустой глобальный fallback сохраняют исходную Lite, sibling и stage tail. Отдельная проверка новой библиотеки маршрутизации не нужна.
+
+### 4. Модель в списке ещё не означает доступную попытку
+
+PR761 сохраняет цепочку `3.6 Flash → 2.5 Flash → configured Lite → sibling Lite`, но [cap остаётся равным двум физическим отправкам на один вызов генерации](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/main.py#L10315-L10326).
+
+| Ситуация | Фактическое следствие |
+|---|---|
+| Обе Flash отвергнуты локальным limiter до send | Уже существующий `quota_admission_blocks` позволяет дойти до Lite. Этот механизм исправлять повторно не нужно. |
+| Обе Flash получили реальные sends и не дали результата | Двух попыток уже нет; Lite остаётся недостижимой, хотя есть в chain. |
+| Реальный provider 429 вызвал разрешённую rotation project | Rotation тоже расходует физическую отправку; два sends могут уйти до следующей модели. |
+| Первыми стоят обычная Lite и её sibling | Обе попытки доступны штатному маршруту, но общей недоступности Google это не устраняет. |
+
+Источники: [admission и cap](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/google_ai/client.py#L1634-L1723), [provider rotation](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/google_ai/client.py#L1775-L1832). В source parser [same-model и скрытые SDK retries отключены](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/main.py#L10016-L10052): нельзя объяснять этот путь обычным автоматическим двойным retry первой Flash.
+
+**Рекомендация по порядку:** сохранить `3.1 Lite → 3.5 Lite` как исходный intended normal path. Свидетельств для срочной смены на 3.5-first недостаточно. Не увеличивать cap до четырёх только ради прохождения двух аварийных моделей перед штатными: это компенсирует неверный приоритет дополнительными sends и задержкой.
+
+Снятие `MONITORING_TEXT_RESERVE_MODELS` убирает постоянный аварийный приоритет без нового флага. Но это **общее изменение конфигурации, связанное также с бюджетом попыток**, а не отдельная кнопка VK:
+
+| Consumer | Что нужно проверить перед снятием override |
+|---|---|
+| Source parser, включая сайты | VK вернётся к configured Lite; сайт с default Gemma вернётся к Gemma. У последней в отчёте есть собственные provider failures. |
+| Smart Update | Помимо выбора facts/writer/other stage и fallback проверить cap: `monitoring_attempt_cap()` после очистки env возвращает `None`. Прежний предел двух sends автоматически не сохраняется; single-send opt-out должен остаться cap=1. |
+| Topics | Chain строится из оригинала правильно, но явные fallback/cap=2 передаются только при включённом override. После очистки действуют обычные defaults клиента; их бюджет требуется проверить. [Код](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/main.py#L11905-L11921). |
+| Telegram public-copy writer | Уже использует обычную Lite-пару отдельно от monitoring reserves. Не переносить на него изменение по одному только сходству слова Telegram. [Код](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/main_part2.py#L6412-L6443). |
+
+**Существенная связность настройки:** [monitoring_attempt_cap](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/google_ai/client.py#L86-L87) возвращает `None` без emergency env, а [client трактует `None` как отсутствие этого physical-send cap](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/google_ai/client.py#L1638-L1642). Поэтому конфигурационное снятие override нельзя назвать нейтральным по расходу. В затронутых callers нужно сохранить принятый конечный бюджет через уже существующие аргументы, отдельно от выбора порядка моделей; нового budget-controller или флага для этого не требуется. У parser собственный `min(2, len(model_chain))` сохраняется независимо от env.
+
+У аварийного маршрута была реальная защитная функция: [сентябрьский инцидент](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/docs/reports/incidents/INC-2026-09-28-lite-fallback-overload.md) описывает недоступность Lite. Поэтому предпочтение снимается после короткой проверки normal path затронутых consumers. Если конкретная стадия всё ещё требует Flash, это должно выражаться её существующим выбором модели, а не неявной заменой всех consumers. Не нужны динамический рейтинг моделей, автоматический circuit breaker или новая таблица маршрутов.
+
+### 5. Дневную квоту код ошибочно превращает в короткое ожидание
+
+**Уровень доказательства: механизм в исходниках подтверждён; потерянное wall time не измерено.**
+
+Для RPD [лимитер возвращает `retry_after_ms=NULL`](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/supabase/migrations/20260803074500_google_ai_rolling_windows_pacific_rpd.sql#L248-L250). [Client передаёт причину и значение в RateLimitError](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/google_ai/client.py#L2098-L2111). Внешний [bounded-wait wrapper](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/main.py#L10860-L10927) принимает любой RateLimitError за повод ждать, при отсутствии Retry-After подставляет одну секунду и повторяет весь primary. [VK по умолчанию предоставляет этому ожиданию 60 секунд](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/vk_auto_queue.py#L101-L109).
+
+Если допустимые модели уже отказали по дневному бюджету, короткое повторение не делает квоту доступной. Счётчик wrapper ограничивает сумму sleeps, а не всю длительность повторных вызовов; называть его точным полным wall-clock budget также нельзя.
+
+**Минимальное удаление:** явный RPD без известного скорого reset не должен запускать короткое sleep/reinvoke. Existing chain сначала исчерпывает допустимые альтернативы; после этого сохраняется честный technical outcome. Для RPM/TPM с осмысленным коротким Retry-After полезное ожидание сохраняется. Не нужны новый cooldown ledger или таймер до следующего quota day в открытом carrier claim.
+
+Различающий пример: RPD без Retry-After не вызывает sleep и повтор primary; TPM с кратким Retry-After по-прежнему может закончиться успехом. Уже существующий [TPM test](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/tests/test_event_parse_llm_first_contract.py#L514-L555) защищает вторую половину. Умножать все 106 технических исходов на 60 секунд и объявлять полученное число измеренной потерей нельзя.
+
+### 6. Новая существенная находка: watchdog может усугублять отказ
+
+**Уровень доказательства: связный механизм в коде; происхождение конкретных дополнительных runs 2 ноября не установлено.**
+
+[VK importer](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/vk_auto_queue.py#L2159-L2198) записывает `failed`, если весь пакет неудачен, и `partial` при смеси технических и иных завершённых исходов, когда нет cancel/незавершённого остатка. Scheduler считает доставленными [только `running/success/partial/empty`](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/scheduling.py#L1305-L1334). Его существующий [15-минутный hold](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/scheduling.py#L2832-L2862) знает `error/crashed/skipped`, но не `failed`.
+
+Конкретный контрпример для следующей проверки:
+
+- Scheduled batch обработал 12 строк: `status=failed`, `inbox_processed=12`, `terminal_rows=12`, `unresolved_rows=0`.
+- После grace, в допустимом catch-up окне [watchdog не находит delivery или retry hold и запускает importer снова](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/scheduling.py#L2865-L2935).
+- Первые 12 уже находятся в `failed_technical`; [selector берёт следующие pending](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/vk_review.py#L486-L521). При прежнем outage они также могут стать terminal.
+- Если в исходном пакете было 11 technical и одно корректное содержательное отклонение, статус был бы `partial`, и этот же watchdog остановился бы.
+
+Это расхождение между **запуск состоялся** и **результат успешен**. Нельзя лечить его увеличением числа catch-up slots или выдавать такую обработку следующих строк за восстановление старых ошибок.
+
+**Минимальное упрощение:** в VK-specific predicate существующего watchdog признать полностью законченный batch доставкой scheduled slot по уже записанному terminal balance. Для рассматриваемого случая доказательство завершения — terminal, не canceled, `inbox_processed > 0`, `terminal_rows == inbox_processed`, `unresolved_rows == 0`; отсутствующие исторические metrics не дают такого доказательства через подстановку нулей. При этом оставить честный `failed` для продуктовых метрик и ошибок. Удаляется скрытый повтор пакета после завершённой попытки; сохраняется восстановление настоящего пропуска/crash/незакрытых строк. Не добавлять `failed` безусловно в общий `ok_statuses`: это затронет других consumers и скроет незавершённые batches.
+
+Один различающий тест должен сопоставить полностью завершённый failed batch и реальный crash с незавершённой работой: первый не вызывает новый claim следующих источников, второй сохраняет существующий catch-up. Нынешний [тест pacing](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/tests/test_scheduling.py#L2354-L2398) создаёт `status="error"` и этот случай не покрывает. Добавление только `failed` в 15-минутный hold лишь замедлит ошибочное повторение; оно не устраняет смешение обязанностей.
+
+### 7. Продуктовый выбор: что означает «надёжно» после временного отказа
+
+Текущий [контракт VK](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/docs/features/vk-auto-queue/README.md#L77-L119) намеренно завершает выбранный carrier как `FAILED_TECHNICAL` и разрешает только явное re-drive. [Запись outcome очищает due/lease](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/vk_review.py#L1118-L1172). [Повторное получение неизменной revision сохраняет этот terminal](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/vk_intake.py#L5399-L5421); обычный следующий crawl его не возвращает.
+
+Таким образом, raw-first обеспечивает сохранность источника, но сам по себе не обеспечивает его будущий импорт. Конечный набор inline-попыток иногда будет исчерпан даже при хорошем маршруте. Нельзя одновременно сохранить окончательный technical terminal после такого отказа и обещать автоматическое восстановление каждой актуальной записи после временного сбоя.
+
+| Возможный контракт | Польза и цена |
+|---|---|
+| Сохранить действующий terminal + явный ограниченный catch-up | Максимально узкая текущая правка, соблюдение прежнего решения владельца. Некоторые временные ошибки остаются долгом до отдельного восстановления. |
+| Разрешить конечное автоматическое продолжение временного технического отказа существующим importer | Уменьшает потребность в регулярном ручном восстановлении. Требует явного изменения контракта, конечного ресурса/горизонта и сохранения уже принятых результатов. |
+
+**Рекомендация для постоянного режима:** если цель — регулярная работа без оператора после кратковременных provider failures, выбрать второй контракт для ограниченного класса временных транспортных/квотных отказов. Использовать существующие inbox, due, claims и расписание; не возвращать отдельный identity retry consumer и бесконечный semantic retry. Детерминированная ошибка схемы/grounding или подтверждённое отсутствие события не становятся автоматически retryable лишь потому, что попали в техническую категорию.
+
+Этот выбор не реализован и не объявляется уже разрешённым прежней политикой. Значения горизонта и общего бюджета нельзя назначать произвольными «тремя попытками» без требования к свежести и наблюдений. При сохранении первого контракта нужно честно измерять технический долг, даже если batch формально полностью terminal. Разовый catch-up остаётся устранением накопленного ущерба, а не постоянной моделью надёжности.
+
+### 8. Адресное восстановление: сохранить полезное и не выдать старый CLI за готовое решение
+
+В §8.3 исходного отчёта правильное направление, но готовность конкретного entrypoint требует уточнения. [Существующий `recover_smart_update_identity_losses.py`](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/scripts/ops/recover_smart_update_identity_losses.py#L678-L765) выбирает только `failed` и due `deferred`; guard записи повторяет эти статусы. Текущие `failed_technical` он **не выбирает**. Обычный `/vk_auto_import --limit=N` также не является адресным восстановлением этих terminal rows.
+
+Минимальный план одного catch-up после подтверждения normal path:
+
+1. Зафиксировать конечное окно инцидента, точные inbox/packet revisions и ресурсный бюджет. Future date hint влияет на порядок, но его отсутствие не исключает source: иначе за пределами восстановления останутся photo-only и неизвестные даты. Это соответствует [действующему priority contract](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/docs/features/vk-auto-queue/README.md#L199-L210).
+2. Использовать существующий import boundary и актуальный claim. Selector должен явно понимать `failed_technical`; уже изменившиеся, активные или содержательно закрытые записи не перезаписываются старым снимком. Если existing operator entrypoint не умеет этого, нужна его узкая доработка, а не новый repair service. Готовность такой команды этим анализом не подтверждена.
+3. Переиспользовать [успешный immutable parse receipt](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/vk_review.py#L617-L694) по exact packet и той же `prompt_version`, как проверяет текущий loader. Смена requested/provider model уже не делает receipt непригодным. Не менять prompt version и не стирать receipt только ради повторного вызова модели.
+4. Оставить обычный Smart Update и source→event mapping. [Успешные children связываются до финального technical outcome carrier](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/vk_auto_queue.py#L3130-L3184). Следовательно, technical carrier может уже содержать созданные события: весь пакет нельзя объявлять «не применённым» и вставлять заново.
+5. Для публичного эффекта сначала разрешить неопределённость по существующим IDs/receipts/readback; не повторять уже `done` публикации вслепую. Media backlog восстанавливается отдельно с сохранением его проверки.
+6. В результате показать exact processed revisions, new/merged/exact-noop, подтверждённые exclusions и оставшиеся technical. Сравнить их с исходным выбранным набором, а не со всеми 1 973 историческими terminal rows.
+
+Исторический [сентябрьский exact-ID replay](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/docs/reports/incidents/INC-2026-09-28-lite-fallback-overload.md) полезен как существующий операционный образец. Он не доказывает совместимость нынешнего legacy selector с новым статусом.
+
+### 9. Как измерять регулярность без нового мониторинга
+
+Существующих `ops_run`, inbox, packet/attempt receipts и source→event mappings достаточно для первого сопоставимого среза. Нужны следующие показатели из одного окна и одной cohort принятой работы:
+
+| Показатель | Что он разрешает утверждать |
+|---|---|
+| Новые admitted carrier revisions | Реальный приток в дорогой импорт; raw packets учитываются отдельно. |
+| Уникальные содержательно завершённые revisions | Полностью разрешённые revisions: imported/merged/exact-noop и подтверждённые product exclusions. Частично успешные carriers и их accepted children показываются отдельно; вся revision не объявляется завершённой. |
+| Возраст свежих неразобранных и oldest due pending | Получает ли новый актуальный источник результат вовремя, не маскируется ли голодание истории. |
+| Технический долг в выбранной cohort | Pending/незавершённые revisions и failed_technical с неразрешённым остатком, в том числе при уже принятых children. Принятые части учитываются отдельно и не считаются потерянными. |
+| Время admitted→содержательный результат и длительность batch | Отличает задержку очереди от model/provider/Smart Update времени. Незавершённые записи не превращаются в нулевую задержку. |
+| Actual sends и причина отказа | Physical sends считать по mark_sent/attempt rows общего Google ledger, связанным с логическими вызовами; parser/receipt attempts не заменяют этот счётчик. Отдельно показывать local RPD/RPM/TPM denial, provider 429/503, timeout/truncation и semantic failure. |
+
+Устойчивость требует, чтобы содержательное обслуживание успевало за admitted-притоком и возраст актуальной работы не рос. Здесь нет данных для численного SLA или нового batch size. В существующем selector уже есть fresh/history interleave; создавать ещё одну priority queue преждевременно. Старые документированные лимиты и defaults не заменяют readback actual runtime configuration.
+
+Отдельное ограничение оценки расхода: «две отправки» — предел одной `generate_content_async`, **не всего исходного поста**. [Malformed JSON repair](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/main.py#L10466-L10488), conditional verifier и typed adjudication могут создать другие вызовы. При этом [thrown provider exception/timeout возвращает technical outcome сразу](https://github.com/onedayonemasterpiece/events-bot-new/blob/cdd56170713448258d81d4e05c9a2d5d3f85a70a/main.py#L11009-L11049): не всякая ошибка запускает adjudicator. Эти различия нужно сохранить в анализе, не вводя ещё один общий budget-controller без измеренного основания.
+
+Две Lite — полезный existing fallback, но общий провайдер не даёт доказанной независимости отказов. Из их смешанных rates нельзя вычислить обещание 99,9% доступности или гарантированный процент восстановленных событий.
+
+### 10. Минимальная последовательность работ и различающие проверки
+
+Это предложения для последующей реализации, не выполненные в этой задаче действия. Независимые маленькие правки не должны превращаться в один большой gate, задерживающий полезное исправление.
+
+| Участок | Что изменить/удалить | Минимальное доказательство результата |
+|---|---|---|
+| Source parser | Сохранить уже merged PR761; повторную реализацию не делать | Существующий caller regression и readback фактической модели при разрешённой проверке source→event. |
+| Smart Update routing | Убрать повторное построение policy из effective primary во всех перечисленных callers | Caller с facts Lite и пустым global fallback сохраняет stage chain; single-primary control не получает лишних sends. |
+| Normal model order | После проверки consumers снять постоянный emergency preference и сохранить принятые caps через существующие аргументы; 3.1-first оставить исходным выбором | Normal pair получает реальные допустимые sends; source→event outcome проверен; clearing env не снимает утверждённый cap, single-send остаётся single-send. |
+| RPD wait | Убрать короткий sleep/reinvoke явного дневного отказа без скорого reset | RPD не вызывает повтор; краткий TPM/RPM wait остаётся работоспособным. |
+| VK watchdog | Отделить законченный неудачный batch от отсутствовавшего slot в существующем VK predicate | All-technical, all-terminal batch не забирает следующий carrier; реальный crash сохраняет catch-up. |
+| Ограниченный catch-up | Использовать exact revisions, исправный selector и existing import/receipt/mapping | Повтор не создаёт дубль; mixed carrier сохраняет accepted child; unknown-date/photo-only источник не теряется из-за отсутствия hint. |
+
+Для live-подтверждения нужен небольшой разрешённый набор retained sources с заранее проверяемым смыслом: валидное будущее событие, настоящий non-event/прошедший анонс, дубль или update, неоднозначная дата/афиша. Затем нужен **следующий штатный batch**, чтобы отличить разовый ручной успех от работающего расписания. Canary не должен публиковать контент за пределами полномочий; проверка импорта и проверка разрешённого публичного эффекта имеют разные границы.
+
+Сохраняются shared reserve→mark_sent→provider→finalize, project/model quotas, raw-first, semantic grounding, receipt compatibility, Smart Update, ID-based reconciliation и media gate. Не требуется переписывание `main.py`, новая модель, migration API, новая очередь или постоянный оператор. Для предложенных механических исправлений новые persisted states, flags, workers и зависимости не обоснованы. Устаревший `schedule_retry` с формулировкой «forever» нужно разбирать по reachable callers отдельно; его наличие не является разрешением вернуть бесконечный контракт в current importer.
+
+### 11. Критерий результата и статус инцидента
+
+Практический результат для владельца: новые актуальные источники регулярно получают проверяемый содержательный исход; сбой одной записи сохраняет независимые готовые результаты; повтор не создаёт дублей; полная авария провайдера не заставляет watchdog переводить всё новые записи в постоянный technical backlog.
+
+**В этом дополнении исследованы и предложены изменения.** Исходный отчёт сохранён. Подтверждены merged parser-fix и перечисленные оставшиеся механизмы в source `cdd56170713448258d81d4e05c9a2d5d3f85a70a`. Наличие merge не объявляется доказательством его deployment или восстановления импорта. Инцидент `inc_3d23e0008f860b634306a59b` / `INC-2026-11-02-intake-quota-vk-media` не закрывается этим анализом: для closure остаются фактический source→event outcome, ограниченное восстановление выбранного долга и соответствующее release/publication evidence из его существующего контракта.
