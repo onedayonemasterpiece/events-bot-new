@@ -556,7 +556,8 @@ async def test_vk_linear_parse_retries_rate_limit_within_bounded_provider_budget
 
 
 @pytest.mark.asyncio
-async def test_emergency_reserve_routes_real_parser_boundary_with_two_send_cap(monkeypatch):
+@pytest.mark.parametrize('configured', ['gemma-4-31b-it', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'])
+async def test_emergency_reserve_routes_real_parser_boundary_with_two_send_cap(monkeypatch, configured):
     monkeypatch.setenv('MONITORING_TEXT_RESERVE_MODELS', 'gemini-2.5-flash,gemini-3.6-flash')
     calls = []
     class Client:
@@ -567,8 +568,9 @@ async def test_emergency_reserve_routes_real_parser_boundary_with_two_send_cap(m
         pass
     monkeypatch.setattr(main, '_get_event_parse_gemma_client', lambda: Client())
     monkeypatch.setattr(main, 'log_token_usage', noop)
-    result = await main._parse_event_via_gemma('source')
+    result = await main._parse_event_via_gemma('source', gemma_model=configured)
     assert calls[0]['model'] == 'gemini-2.5-flash'
-    assert calls[0]['fallback_models'][0] == 'gemini-3.6-flash'
+    from google_ai.client import lite_text_model_chain
+    assert calls[0]['fallback_models'] == ['gemini-3.6-flash', *lite_text_model_chain(configured)]
     assert calls[0]['max_provider_attempts'] == 2
     assert result.disposition is SourceDisposition.RETRY_REQUIRED

@@ -229,3 +229,13 @@ request. If that would exceed the cap, the request is sent to
 `FOUR_O_GPT4O_FALLBACK_MODEL` (`gpt-4o-mini` by default) and logs
 `four_o.budget_fallback`. The fallback model is not counted against this
 model-specific `gpt-4o` cap.
+
+### Source parser emergency routing
+
+`_parse_event_via_gemma` builds `monitoring_text_model_chain` once from the
+original caller model. It uses the first entry as the effective model and
+passes the remaining entries to the shared client. Do not rebuild the chain
+from `monitoring_text_primary`: that loses the original model and Lite sibling.
+Emergency pre-send quota denials fall through under the existing limiter; the
+physical-send cap remains two. No background technical-terminal retry is added.
+See [November intake incident](../reports/incidents/INC-2026-11-02-intake-quota-vk-media.md).

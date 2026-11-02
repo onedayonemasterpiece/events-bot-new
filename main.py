@@ -10312,10 +10312,7 @@ async def _parse_event_via_gemma(
             model,
             str(getattr(client, "consumer", "event_parse") or "event_parse"),
         )
-        from google_ai.client import monitoring_text_model_chain
-
         # Emergency text reserves stay within two sends; normal Gemma stays one.
-        model_chain = monitoring_text_model_chain(model)
         return await client.generate_content_async(
             model=model,
             prompt=prompt_text,
@@ -10399,8 +10396,12 @@ async def _parse_event_via_gemma(
         or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it") or "").strip()
         or "gemma-4-31b-it"
     )
-    from google_ai.client import monitoring_text_primary
-    model = monitoring_text_primary(model)
+    from google_ai.client import monitoring_text_model_chain
+
+    # Build once from the caller model: rebuilding from the emergency primary
+    # drops the configured model and its Lite sibling from the fallback chain.
+    model_chain = monitoring_text_model_chain(model)
+    model = model_chain[0]
     # Gemma 4 spends a non-trivial token budget on its internal thought channel
     # before emitting JSON. With 2200 the digest-detection / multi-rule cases
     # truncate before the final JSON. Keep headroom for Gemma 4 reasoning while

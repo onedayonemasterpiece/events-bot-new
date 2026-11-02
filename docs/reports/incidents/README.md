@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-11-02-intake-quota-vk-media.md`
+  - Scope: source-parser double model-chain transform, quota admission and degraded VK intake; preserve caller model and verify real catch-up before closure.
+
 - `INC-2026-10-28-cherryflash-vk-wall-flood.md`
   - Scope: CherryFlash video announcements in `club231828790`, VK actor selection and Kaggle output pagination. Verify a fresh wall post and downloaded output before closure.
 
