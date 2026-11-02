@@ -131,3 +131,48 @@ None: read-only production audit. Incident remains open. No restart or deploy.
 No release performed. Retained local evidence:
  /home/dev/artifacts/events-bot-new/20261102T195715Z-prod-intake-audit-20261102/
 Audit is complete; production recovery is not complete.
+
+## Follow-up: quota and routing clarification, 2026-11-02 20:08 UTC
+
+The initial audit's quota explanation was too broad: the keys are NOT all
+exhausted. Read-only canonical limiter metadata for Pacific day 2026-11-02 shows:
+
+| Key env | 3.1 Lite used | Registered RPD | Remaining |
+| --- | ---: | ---: | ---: |
+| GOOGLE_API_KEY | 234 | 500 | 266 |
+| GOOGLE_API_KEY2 | 73 | 500 | 427 |
+| GOOGLE_API_KEY3 | 16 | 500 | 484 |
+| GOOGLE_API_KEY4 | 16 | 500 | 484 |
+| GOOGLE_API_KEY5 | 84 | 500 | 416 |
+| GOOGLE_API_KEY6 | 80 | 500 | 420 |
+
+These counters are a snapshot, not promises of Google availability. Recent
+canonical ledger requests since 18:00 UTC confirm successful 3.1 Lite calls on
+keys 1, 2, 5 and 6. Keys 3 and 4 had failed-provider attempts in that window;
+their unused registered quota alone must not be described as confirmed health.
+No Google diagnostic generation calls were made.
+
+The 302 rpd tracebacks are shared-reservation denials before Google, not 302
+provider quota violations. The limiter is blocking exhausted selected routes.
+Five other parser tracebacks were provider_429; the exact accounting difference
+behind those sparse provider denials is not established.
+
+The central routing defect is now reproduced using pure functions imported
+from the actual production container:
+- main.py line 10403 replaces the configured Lite model with
+  monitoring_text_primary(model), yielding gemini-3.6-flash.
+- _generate_once at lines 10315–10329 calls monitoring_text_model_chain again
+  with the already replaced model.
+- With MONITORING_TEXT_RESERVE_MODELS=gemini-3.6-flash,gemini-2.5-flash,
+  the actual chain becomes only [gemini-3.6-flash,gemini-2.5-flash].
+- Passing the original configured Lite model would instead preserve
+  [gemini-3.6-flash,gemini-2.5-flash,gemini-3.1-flash-lite,gemini-3.5-flash-lite].
+- Both selected Flash models have registered RPD 20, while 3.1 Lite has 500.
+  The parser loses the configured models with available quota.
+- This is not the previously fixed admission/send-budget bug: the deployed
+  client already subtracts quota_admission_blocks when enforcing the send cap.
+
+Production still unchanged. Correct the chain construction at its existing
+boundary, replay source packets, and recover the affected import backlog under
+the existing shared limiter. Never bypass the limiter or raise quota counters
+without provider evidence.
