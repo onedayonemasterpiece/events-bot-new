@@ -2,11 +2,46 @@ from __future__ import annotations
 
 import inspect
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
 
 import smart_event_update as su
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["prompt", "native", "text", "direct"])
+@pytest.mark.parametrize("emergency", ["", "gemini-3.6-flash,gemini-2.5-flash"])
+async def test_stage_callers_preserve_facts_chain_and_send_cap(monkeypatch, mode, emergency):
+    monkeypatch.setenv("MONITORING_TEXT_RESERVE_MODELS", emergency)
+    monkeypatch.setenv("GOOGLE_AI_FALLBACK_MODELS", "")
+    monkeypatch.setattr(su, "SMART_UPDATE_FACTS_MODEL", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(su, "SMART_UPDATE_FACTS_FALLBACK_MODELS", ("gemma-4-31b-it",))
+    monkeypatch.setattr(su, "_smart_update_native_schema_enabled", lambda _: mode == "native")
+    calls = []
+
+    class Client:
+        async def generate_content_async(self, **kwargs):
+            calls.append(kwargs)
+            return '{"ok": true}', SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2)
+
+    monkeypatch.setattr(su, "_get_gemma_client", lambda: Client())
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
+    if mode == "text":
+        await su._ask_gemma_text_unbounded("source", max_tokens=100, label="facts_extract")
+    elif mode == "direct":
+        await su._ask_gemma_json_direct_native(
+            label="facts_extract", system_prompt="extract", user_payload={},
+            response_schema=schema, max_tokens=100,
+        )
+    else:
+        await su._ask_gemma_json_unbounded("source", schema, max_tokens=100, label="facts_extract")
+    expected = [*filter(None, emergency.split(",")),
+                "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemma-4-31b-it"]
+    assert len(calls) == 1
+    assert [calls[0]["model"], *calls[0]["fallback_models"]] == expected
+    assert calls[0]["max_provider_attempts"] == 2
 
 
 def _poster(text: str) -> su.PosterCandidate:
@@ -34,21 +69,24 @@ def test_legacy_create_bundle_has_no_unreviewed_4o_fallback() -> None:
 
 def test_facts_stages_use_bounded_lite_then_gemma_model_fallback(monkeypatch) -> None:
     monkeypatch.delenv("GOOGLE_AI_FALLBACK_MODELS", raising=False)
-    assert su._smart_update_fallback_models(
-        "create_bundle_grounding", su.SMART_UPDATE_FACTS_MODEL
-    ) == ["gemini-3.5-flash-lite", "gemma-4-31b-it"]
-    assert su._smart_update_fallback_models(
-        "split_description_writer", su.SMART_UPDATE_WRITER_MODEL
-    ) == ["gemini-3.5-flash-lite"]
+    monkeypatch.delenv("MONITORING_TEXT_RESERVE_MODELS", raising=False)
+    assert su._smart_update_model_chain("create_bundle_grounding") == [
+        "gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemma-4-31b-it"
+    ]
+    assert su._smart_update_model_chain("split_description_writer") == [
+        "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"
+    ]
 
 
 def test_smart_update_reverse_lite_and_legacy_gemma_chain(monkeypatch):
+    monkeypatch.delenv("MONITORING_TEXT_RESERVE_MODELS", raising=False)
     monkeypatch.setenv("GOOGLE_AI_FALLBACK_MODELS", "gemini-3.1-flash-lite,gemma-4-31b-it")
-    assert su._smart_update_fallback_models("match", "gemma-4-31b-it") == [
-        "gemini-3.1-flash-lite", "gemini-3.5-flash-lite",
+    monkeypatch.setattr(su, "SMART_UPDATE_WRITER_MODEL", "gemini-3.5-flash-lite")
+    assert su._smart_update_model_chain("match") == [
+        "gemma-4-31b-it", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite",
     ]
-    assert su._smart_update_fallback_models("split_description_writer", "gemini-3.5-flash-lite") == [
-        "gemini-3.1-flash-lite", "gemma-4-31b-it",
+    assert su._smart_update_model_chain("split_description_writer") == [
+        "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemma-4-31b-it",
     ]
 
 

@@ -10885,6 +10885,9 @@ async def parse_event_via_llm(
             except Exception as exc:
                 retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
                 status_code = int(getattr(exc, "status_code", 0) or 0)
+                if getattr(exc, "blocked_reason", None) == "rpd" and not retry_after_ms:
+                    logging.info("event_parse: daily quota exhausted; no short inline wait")
+                    raise
                 is_rate_limit = (
                     retry_after_ms > 0
                     or status_code == 429
@@ -11914,11 +11917,9 @@ async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
         "Верни только JSON без markdown и комментариев.\n"
         f"JSON schema:\n{schema_text}"
     )
-    from google_ai.client import monitoring_text_model_chain, monitoring_attempt_cap
+    from google_ai.client import monitoring_text_model_chain
     chain = monitoring_text_model_chain(EVENT_TOPICS_MODEL)
-    route = {"model": chain[0]}
-    if monitoring_attempt_cap():
-        route.update(fallback_models=chain[1:], max_provider_attempts=2)
+    route = {"model": chain[0], "fallback_models": chain[1:], "max_provider_attempts": 2}
     raw = ""
     if EVENT_TOPICS_GEMMA_NATIVE_SCHEMA:
         native_prompt = (

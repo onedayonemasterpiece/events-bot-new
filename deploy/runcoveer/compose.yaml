@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:intake-lite-20261102
+    image: runcoveer/events:intake-regularity-20261103
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
@@ -14,6 +14,7 @@ services:
       GUIDE_VISUAL_DIGEST_MAX_TARGETS: ""
       DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
       ENABLE_RUNTIME_FILE_LOGGING: "1"
+      MONITORING_TEXT_RESERVE_MODELS: ""
       RUNTIME_LOG_RETENTION_HOURS: "168"
       RUNTIME_LOG_MAX_FILE_MB: "16"
       RUNTIME_LOG_MAX_TOTAL_MB: "512"

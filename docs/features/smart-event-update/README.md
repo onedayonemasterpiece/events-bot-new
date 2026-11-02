@@ -1,5 +1,17 @@
 # Smart Event Update (Интеллектуальный импорт)
 
+## Stage model routing and send budgets
+
+Each JSON, native-schema and text caller builds one model chain from the original
+stage model and its existing stage-specific fallback tail. Emergency routing must
+not discard the facts model or substitute a global tail after selecting primary.
+Each ordinary gateway call has at most two physical sends, including after
+`MONITORING_TEXT_RESERVE_MODELS` is cleared; collection adjudication remains one
+send with fallback disabled. These are per-call bounds, not a whole-carrier budget.
+RunCoveer clears the September emergency preference so facts/writer calls start
+with the configured 3.1 Lite and its existing 3.5 Lite sibling. Gemma-only stages
+retain their stage policy. No identity retry worker is enabled.
+
 ## P0 automatic identity and source-decision contract
 
 For multi-child Telegram carriers the existing LLM scope review runs even when

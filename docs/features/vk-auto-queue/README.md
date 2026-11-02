@@ -1,5 +1,19 @@
 # VK Auto Queue Import
 
+## Scheduled delivery and quota waits
+
+A completed failed batch is an attempted scheduled slot when its existing metrics
+prove `inbox_processed > 0`, `terminal_rows == inbox_processed`,
+`unresolved_rows == 0` and `cancelled == 0`. The watchdog preserves the failed
+product outcome but does not claim the next pending batch as though the slot
+were missed. Incomplete, crashed and missing-metrics runs retain normal catch-up.
+This rule is VK-specific; it does not redefine other scheduler consumers.
+
+After the existing model chain is exhausted, RPD without Retry-After is returned
+without a short inline sleep/reinvoke. Short RPM/TPM Retry-After handling remains.
+Already-terminal technical carriers still require explicit bounded re-drive;
+this change does not restore infinite background retries or weaken semantic gates.
+
 Канонический контракт автоматического VK ingestion после
 `INC-2026-08-10-smart-update-identity-terminal-loss`: максимальная полнота,
 raw-first durability и строгая LLM-first семантика. Очередь не требует

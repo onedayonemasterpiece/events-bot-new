@@ -196,3 +196,27 @@ path audit: unapproved=0, allowlisted_debt=0. Registry readback already matches
 all finite positive owner-snapshot quotas; numerical quota mutation unnecessary.
 The owner's 40/20 is a 28-day peak against current limit, not a verified current
 quota-day bypass. Production remains unchanged at this source checkpoint.
+
+## Continuation: regular intake recovery, 2026-11-03
+
+The Pro critique identifies remaining mechanical defects after parser PR #761.
+Smart Update now builds each stage's complete model chain before choosing the
+effective primary, preserving its configured facts fallback. Smart Update and
+topic classification retain a two-provider-send cap independently of emergency
+routing configuration; collection adjudication retains its one-send policy.
+RunCoveer Compose clears the emergency Flash-first override, restoring Lite-first
+routing without changing quota counters or the shared limiter contract.
+
+Explicit RPD denial without Retry-After exits the short inline wait immediately.
+The VK slot watchdog recognizes a failed batch as attempted only when its existing
+metrics prove every processed row terminal, no unresolved rows and no cancellation.
+Crashes, missing metrics and incomplete batches remain eligible for catch-up.
+This does not recover failed posts automatically or relax identity decisions.
+
+Distinguishing regressions on the previous source: 10 failed, 4 passed. The
+fix introduces no worker, queue, persisted status, identity retry or quota bypass.
+Offline Google provider audit: unapproved=0, allowlisted_debt=0; prompt audit passes.
+Deployment and finite source-packet catch-up remain pending at this source checkpoint.
+The active scheduled Telegram import (ops run 11549) continues on the previous
+qualified image and must finish before the Events-only cutover. Follow-up checks
+use native Codex wake after 3 hours, then 3 hours, then 5 hours, as requested.
