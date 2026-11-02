@@ -13,6 +13,18 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Intake Lite routing release, 2026-11-02
+
+The Events-only release tag is `runcoveer/events:intake-lite-20261102`.
+Build it from the exact merged main commit containing the single-chain parser
+fix; preserve `runcoveer/events:guide-private-f9b50fbb9` for rollback. Dockerfile
+and dependency inputs are unchanged, permitting a source-layer delta with full
+tracked-tree verification and refreshed immutable provenance. Activate only
+Events with `DEPLOY_PREFLIGHT=0`; leave Kotopogoda and its source mount intact.
+Read back the running source SHA, readiness and actual import receipts. The
+[incident record](../../docs/reports/incidents/INC-2026-11-02-intake-quota-vk-media.md)
+tracks live verification; the image pin itself is not proof of recovery.
+
 ## Build and restore
 
 The 2026-10-06 Events production baseline, retained for rollback, was
