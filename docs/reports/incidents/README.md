@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-11-02-intake-quota-vk-media.md`
+  - Scope: RunCoveer ingestion quota exhaustion, technical terminals and media-blocked VK projections. Read-only audit; recovery remains open.
+
 - `INC-2026-10-28-cherryflash-vk-wall-flood.md`
   - Scope: CherryFlash video announcements in `club231828790`, VK actor selection and Kaggle output pagination. Verify a fresh wall post and downloaded output before closure.
 
