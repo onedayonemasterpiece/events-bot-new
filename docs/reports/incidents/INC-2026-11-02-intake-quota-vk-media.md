@@ -176,3 +176,9 @@ Production still unchanged. Correct the chain construction at its existing
 boundary, replay source packets, and recover the affected import backlog under
 the existing shared limiter. Never bypass the limiter or raise quota counters
 without provider evidence.
+
+## Expanded owner-requested model review packet
+
+[Google catalog, usage, competing hypotheses and minimal recovery choices](../2026-11-02-events-ingestion-model-review.md).
+
+Prepared for external ChatGPT Pro analysis only; no Pro task or production change was launched.
