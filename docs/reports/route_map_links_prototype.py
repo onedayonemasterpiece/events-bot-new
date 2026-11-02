@@ -6,6 +6,7 @@ No provider calls, secrets, DB, or publishing. A route is in (lon, lat) order.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import math
 from decimal import Decimal
@@ -156,6 +157,12 @@ def vk_short_from_api(response: dict) -> str:
     return value
 
 
+async def vk_shorten_with_existing_adapter(long_url: str, vk_api_fn, db=None, bot=None) -> str:
+    """Reuse events-bot's existing vk_api_fn contract; no Event or database mutation."""
+    result = await vk_api_fn("utils.getShortLink", {"url": long_url}, db, bot)
+    return vk_short_from_api(result)
+
+
 def self_test():
     pts = read_rl(EXAMPLE_RL)
     assert len(pts) == 17 and pts[0] == (20478906, 54720380)
@@ -170,6 +177,11 @@ def self_test():
     assert "rtt=bc" in navigation_url([pts[0], pts[-1]], "bike")
     assert "rtt=auto" in navigation_url([pts[0], pts[-1]], "car")
     assert vk_short_from_api({"response": {"key": "abc123"}}) == "https://vk.cc/abc123"
+    async def fake_vk_call(method, params, db, bot):
+        assert method == "utils.getShortLink" and params == {"url": "https://yandex.ru/maps/"}
+        assert db is None and bot is None
+        return {"response": {"key": "abc123"}}
+    assert asyncio.run(vk_shorten_with_existing_adapter("https://yandex.ru/maps/", fake_vk_call)) == "https://vk.cc/abc123"
     assert "tab/bicycle/points/" in gis2_url([(pts[0][0], pts[0][1], "123"),
                                                (pts[-1][0], pts[-1][1], "456")], "bike")
     print("PASS: rl roundtrip, 17 points, approx 599 m, 14-point RDP, 3 modes, VK/2GIS adapters")
