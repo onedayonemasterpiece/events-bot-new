@@ -129,15 +129,18 @@ def navigation_url(points: list[tuple[int, int]], mode: str = "walk",
         {"rtext": route, "rtt": MODE[mode][0]}, safe="~,.-")
 
 
-def gis2_url(pois: list[tuple[int, int, str]], mode: str = "walk") -> str:
-    """Only use verified 2GIS object IDs, never invent them."""
+def gis2_url(pois: list[tuple[int, int, str | None]], mode: str = "walk") -> str:
+    """Use provider-observed POI IDs when given; allow explicit coordinate-only points."""
     if mode not in MODE or not 2 <= len(pois) <= 10:
         raise ValueError("unknown mode or wrong number of POIs")
     parts = []
     for lon, lat, object_id in pois:
-        if not object_id.isdigit():
-            raise ValueError("2GIS object ID required from a verified provider link")
-        parts.append(f"{fmt(lon)},{fmt(lat)};{object_id}")
+        if object_id and not object_id.isdigit():
+            raise ValueError("2GIS object ID must be a provider-supplied decimal ID")
+        item = f"{fmt(lon)},{fmt(lat)}"
+        if object_id:
+            item += f";{object_id}"
+        parts.append(item)
     return "https://2gis.ru/kaliningrad/directions/tab/" + MODE[mode][1] + "/points/" + "%7C".join(
         p.replace(";", "%3B").replace(",", "%2C") for p in parts)
 
@@ -184,6 +187,8 @@ def self_test():
     assert asyncio.run(vk_shorten_with_existing_adapter("https://yandex.ru/maps/", fake_vk_call)) == "https://vk.cc/abc123"
     assert "tab/bicycle/points/" in gis2_url([(pts[0][0], pts[0][1], "123"),
                                                (pts[-1][0], pts[-1][1], "456")], "bike")
+    assert "%7C" in gis2_url([(pts[0][0], pts[0][1], "123"),
+                                  (pts[-1][0], pts[-1][1], None)], "walk")
     print("PASS: rl roundtrip, 17 points, approx 599 m, 14-point RDP, 3 modes, VK/2GIS adapters")
 
 
