@@ -1,7 +1,8 @@
 # Events Bot: модели Google, расход и деградация импорта — пакет для ChatGPT Pro
 
 Подготовлено 2 ноября 2026, Europe/Kaliningrad. Автор: Codex, по запросу владельца.
-**Статус: только анализ. Прод не изменён, ChatGPT Pro не запущен.**
+**Актуальный статус: узкая routing-правка доставлена в RunCoveer из main; live catch-up частичный (1/2). Полный инцидент открыт. ChatGPT Pro не запущен.**
+Сначала прочитайте раздел «После выпуска»: он дополняет исходное исследование и меняет приоритет оставшихся вопросов.
 Инцидент inc_3d23e0008f860b634306a59b / [основная запись](incidents/INC-2026-11-02-intake-quota-vk-media.md).
 
 ## Краткий вывод
@@ -372,7 +373,7 @@ Telegram scan ledger за local day: 13 terminal_error, шесть partial_termi
 
 ## 8. Как уменьшить пропуски оперативно
 
-Это **варианты для анализа, не выполненные изменения**.
+Это первоначальные варианты для анализа. Впоследствии вариант A доставлен; актуальная проверка и ограничения — в разделе «После выпуска». Другие варианты не применялись.
 
 ### 8.1. Восстановить Lite в existing normal path
 
@@ -526,6 +527,123 @@ Negative controls: past/non-event не становится Event; повтор�
 - Retained evidence и аналитические скрипты на devserver: /home/dev/artifacts/events-bot-new/20261102T195715Z-prod-intake-audit-20261102/. Pro не нужен доступ к этому пути: существенные числа/код/контекст включены в файл.
 - Credentials в evidence/Markdown не копировались.
 
+## Продолжение: скриншот владельца и проверка исправления
+
+Сессия-продолжение прочитала результат codex://threads/01a19dd4-8b21-7a33-82f2-c7e7ae2bd411 и сохранила предыдущие evidence. Около 20:44 UTC runtime по-прежнему f9b50fbb9066e1f85d96d56529a1990256bf2844; ready=true.
+
+### Что означает 40 / 20
+
+AI Studio явно подписывает таблицу **Peak usage per model compared to its limit over the last 28 days**. Числители ниже — пики соответствующих метрик в этом окне, не единый текущий день и не объём Events Bot. Точный Cloud project скриншота не указан. 40 при текущем limit 20 требует проверки: лимит мог измениться, в том же проекте могли быть сторонние consumers, либо есть проблема учёта/обход. Скриншот не позволяет выбрать одну из этих причин. Не делить 40 на число наших ключей и не обнулять counters.
+
+Свежий readback из canonical registry через production environment: HTTP 200 около 20:47 UTC. Все представленные конечные положительные лимиты совпадают с присланным владельцем снимком: обе Lite 15/250000/500; 2.5 Flash и 3.6 Flash 5/250000/20; 3.8 Flash 5/250000/20; 2.5 Lite 10/250000/20; Gemma 4 30/16000/14400; Embedding 2 100/30000/1000. TTS/transcribe/robotics и Antigravity также совпадают. **Изменение численных лимитов не требуется: они уже актуальны.** Zero/Unlimited не подменены выдуманным конечным бюджетом. Старые alias rows не доказывают дополнительную независимую квоту.
+
+| Модель из AI Studio | Peak RPM / limit | Peak TPM / limit | Peak RPD / limit |
+|---|---|---|---|
+| Gemini 2.5 Flash | 5 / 5 | 34.79K / 250K | 40 / 20 |
+| Gemini 3.1 Flash Lite | 13 / 15 | 58.36K / 250K | 499 / 500 |
+| Gemini 3.6 Flash | 3 / 5 | 30.71K / 250K | 20 / 20 |
+| Gemini 3.5 Flash Lite | 4 / 15 | 65.94K / 250K | 64 / 500 |
+| Gemini 3.8 Flash | 1 / 5 | 83.03K / 250K | 10 / 20 |
+| Gemma 4 31B | 4 / 30 | 5.2K / 16K | 126 / 14.4K |
+| Gemini Embedding 2 | 4 / 100 | 452 / 30K | 80 / 1K |
+| Antigravity | 0 / 60 | 0 / 100K | 0 / 100 |
+| Deep Research Pro Preview | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini 2 Flash | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini 2 Flash Lite | 0 / 0 | 0 / 0 | 0 / 0 |
+| Computer Use Preview | 0 / 0 | 0 / 0 | 0 / 0 |
+| Nano Banana (Gemini 2.5 Flash Preview Image) | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini 2.5 Flash Lite | 0 / 10 | 0 / 250K | 0 / 20 |
+| Gemini 2.5 Flash TTS | 0 / 3 | 0 / 10K | 0 / 10 |
+| Gemini 2.5 Pro | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini 2.5 Pro TTS | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini 3 Flash | 0 / 5 | 0 / 250K | 0 / 20 |
+| Nano Banana Pro (Gemini 3 Pro Image) | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini 3.1 Pro | 0 / 0 | 0 / 0 | 0 / 0 |
+| Nano Banana 2 (Gemini 3.1 Flash Image) | 0 / 0 | 0 / 0 | 0 / 0 |
+| Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image) | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini 3.1 Flash TTS | 0 / 3 | 0 / 10K | 0 / 10 |
+| Gemini 3.5 Transcribe | 0 / 3 | 0 / 10K | 0 / 25 |
+| Gemini 3.8 Flash Lite TTS | 0 / 3 | 0 / 10K | 0 / 10 |
+| Gemini 3.8 Flash TTS | 0 / 3 | 0 / 10K | 0 / 10 |
+| Gemini 4 Argon | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini Embedding 1 | 0 / 100 | 0 / 30K | 0 / 1K |
+| Gemini Nano Banana 2.1 | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini Omni 1.1 Flash | 0 / 0 | 0 / 0 | 0 / 0 |
+| Gemini Robotics ER 2 Preview | 0 / 5 | 0 / 250K | 0 / 20 |
+| Gemma 4 26B | 0 / 30 | 0 / 16K | 0 / 14.4K |
+| Lyria 3 Clip | 0 / 0 | 0 / 0 | 0 / 0 |
+| Lyria 3 Pro | 0 / 0 | 0 / 0 | 0 / 0 |
+| Veo 3 Fast Generate | 0 / 0 | - | 0 / 0 |
+| Veo 3 Generate | 0 / 0 | - | 0 / 0 |
+| Veo 3 Lite Generate | 0 / 0 | - | 0 / 0 |
+| Gemini 2.5 Flash Native Audio Dialog | 0 / Unlimited | 0 / 1M | 0 / Unlimited |
+| Gemini 3 Flash Live | 0 / Unlimited | 0 / 65K | 0 / Unlimited |
+| Gemini 3.5 Live Translate | 0 / Unlimited | 0 / 20K | 0 / Unlimited |
+| Gemini 3.5 Transcribe Live | 2 / Unlimited | 997 / 20K | 16 / Unlimited |
+| Gemini 3.8 Live | 3 / Unlimited | 12.14K / 65K | 42 / Unlimited |
+| Gemini 3.8 Live Extended Thinking | 0 / Unlimited | 0 / 65K | 0 / Unlimited |
+
+### Узкая правка normal path
+
+В main._parse_event_via_gemma цепочка строится один раз из исходной caller model; первый элемент становится effective model, остальные передаются existing GoogleAIClient как fallback_models. Не меняются порядок emergency models и предел двух физических sends. Преждевременный monitoring_text_primary и повторный transform удалены. Net production diff: +6/−5 строк. Новых состояний, флагов, retries, очередей, workers и repair paths нет. Это механическая routing-ошибка; prompts и event semantics не менялись.
+
+До правки caller-level test падает на всех трёх configured models (Gemma, 3.1 Lite, 3.5 Lite); после правки parser/client/quota suite: 110 passed. Существующий client test подтверждает: RPD denials обеих Flash не тратят physical-send cap и достигают Lite. Офлайн provider path audit: unapproved=0, allowlisted_debt=0. Это source verification, ещё не доказательство восстановления импорта в production.
+
+Риск сохраняется: две настоящие неудачные отправки на emergency Flash могут исчерпать cap до Lite. Изменять общий emergency order без необходимости в этом патче не требуется. После доставки нужны реальные retained-source controls и bounded same-day catch-up через обычный Smart Update; не новый background retry consumer. Инцидент остаётся открытым до live-проверки.
+
+Для Pro: оцени также этот конкретный diff и остаточный риск порядка моделей. Не предлагай заново уже работающий quota_admission_blocks и не приравнивай healthy scheduler к успешному ingestion.
+
+## После выпуска: live outcomes, 2 ноября 2026
+
+### Что действительно доставлено
+
+- [PR #761](https://github.com/onedayonemasterpiece/events-bot-new/pull/761) merged; exact main SHA **cdd56170713448258d81d4e05c9a2d5d3f85a70a**. Все обязательные CI checks passed на финальном PR head.
+- Image `runcoveer/events:intake-lite-20261102`, ID `sha256:aba9c71e887cfce663413cbe9bcbef61f1e6b3396f29d2ac5916cd270b3a6f75`. Actual prior runtime f9b50fbb9 — ancestor кандидата. Dockerfile/dependency inputs неизменны; verified все **4 427 tracked files**.
+- Изолированный preflight: отдельная пустая SQLite, production volume не подключался, webhook и scheduler не запускались. Затем Events-only cutover с DEPLOY_PREFLIGHT=0; Kotopogoda сохранила прежний container ID.
+- Production readback: source SHA совпадает; ready=true, db=ok, scheduler/tasks healthy. Старый образ и Compose сохранены для rollback.
+- Негативный контроль через настоящий parser и atomic limiter: recap-only → CONFIRMED_NO_EVENT, 0 events. Обе Flash получили pre-send RPD denial, затем 3.1 Lite успешно ответила (6 158 actual tokens).
+- Исправление сохраняет original caller model; новых recovery workers/queues/retries/flags нет. Порядок emergency Flash и send cap не менялись.
+
+### Разовый catch-up через normal path — **частичный**
+
+Run ID `INC-2026-11-02-lite-chain-catchup`, ops_run **11548**, original batch `auto:1793638966`. Выбраны только два сохранённых failed_technical carrier с полным source envelope; атомарные state/batch guards исключали изменённые и ранее успешные строки. Обычные run_vk_auto_import → parse → Smart Update → outbox; существующая terminal policy не менялась. Operator notifications подавлены в отдельном diagnostic process; никаких новых фоновых consumers.
+
+| Inbox | Source | Outcome | Подтверждение |
+|---|---|---|---|
+| 86966 | [Онегин](https://vk.com/wall-100137391_167662) | imported / EVENTS_RESOLVED | Связан с существующим Event **7234**, обновление без создания дубля; 251,495 s |
+| 86977 | [Третьяковская галерея](https://vk.com/wall-212760444_6357) | failed_technical | Parser завершён, затем SMART_UPDATE_UNRESOLVED:identity_final_retry:match_rejected:time_conflict_veto; 26,620 s |
+
+Итого 279,89 s, processed=2, imported=1, failed_technical=1, new events=0, updated events=1. Обе leases освобождены, незавершённых rows этого прогона нет. Нулевое число новых events здесь не означает неработающий parser: первый carrier обновил уже существующее событие, второй остановился на identity. Массовый historical catch-up не выполнялся.
+
+**Фактическое использование обеих Lite:** в этом run event_parse получил два успешных ответа 3.1 Lite. Smart Update получил семь успешных 3.1 и четыре 3.5 Lite; четыре 3.1 вызова вернули provider **503**, а existing sibling fallback успешно ответил через 3.5. Теперь обе модели достижимы и работают в обычном импортном пути.
+
+### Оставшийся семантический конфликт — материал для Pro
+
+Источник Третьяковской галереи объявляет общую «Ночь искусств» 3 ноября: концерт, квиз/кинопоказ, мастер-классы с 18:00, единый билет vk.cc/d39xyT. Parser выдал один umbrella event на 2026-11-03 18:00, evidence_complete=true, STOP, 8 186 actual tokens. Source packet **26015** сохраняет typed receipt; не был помечен как no-event.
+
+Existing deterministic identity gate выдал veto_create `deterministic_same_ticket_slot`, matched Event **10060**: отдельный мастер-класс «Катающаяся живопись», та же площадка, дата, 18:00 и общий ticket URL. Код `smart_update_identity.py:394` допускает veto по related title **ИЛИ location**. Для shared programme ticket совпадение venue/time не доказывает идентичность umbrella и дочернего события. В соседнем same-source guard уже требуется related title; ticket guard пока слабее. Это конкретный кандидат на узкое исправление, которое возвращает решение existing LLM adjudication вместо детерминированного заключения по площадке.
+
+Затем final identity adjudication вернула `match_rejected:time_conflict_veto`. Точный выбранный ею target и происхождение time conflict ещё не реконструированы: нельзя утверждать, что финальный target обязательно тот же 10060 (у него в DB тоже 18:00). **Не отключать time-conflict veto и не принудительно объединять umbrella с мастер-классом.** Нужен source-bound LLM-first replay с shared-ticket sibling и настоящим same-event positive control. Новой retry-очереди это не требует.
+
+### Отдельная цена enrichment и пределы проверки
+
+Для первого carrier provider parse занял 13,017 s, persist/Smart Update — 235,667 s. Во время enrichment event_topics Gemma вернула **три provider 500**, затем один успешный ответ. Не объявлять все 235 s временем именно Gemma: другие Smart Update стадии также входят в эту длительность.
+
+| Consumer/model | Successful physical calls | Errors | Known total tokens |
+|---|---:|---:|---:|
+| event_parse / 3.1 Lite | 2 | 0 | 16 467 |
+| smart_update / 3.1 Lite | 7 | 4 × 503 | 9 238 |
+| smart_update / 3.5 Lite | 4 | 0 | 14 591 |
+| event_topics / Gemma 4 31B | 1 | 3 × 500 | 1 466 |
+
+Итого log sample: **21 физических generation calls**, 41 762 известных tokens; плюс отдельный negative control 6 158 tokens. У failed calls usage отсутствует: это не доказанная нулевая стоимость. Pre-send quota denials сюда не включены. Это только explicit catch-up, не общий расход продакшена.
+
+Event 7234 имеет vk_sync=done и сохранённый managed VK URL; при проверке telegraph_build=done, tg_event_publish pending и static_site_build pending. Существуют старые media materialization errors и известный vector barrier backlog. Authenticated wall readback в этой сессии не выполнялся; новая публикация всех восстановленных данных не заявляется. **Инцидент остаётся открытым**: normal routing исправлен, полная semantic/publication recovery не доказана.
+
+Retained evidence: `/home/dev/artifacts/events-bot-new/20261102T204526Z-intake-lite-fix-20261102/`; catchup.log SHA-256 `15e0734d9f86e0a45145ad25d182fac3214d1e6c76b42d4a23099ffebd95c7a1`, совпадает с production operation log. Secret values не сохранялись.
+
+Для Pro приоритет теперь: (1) shared-ticket umbrella/sibling identity и точный final target; (2) стоимость/latency enrichment и безопасное сокращение лишней работы существующего пути; (3) bounded reconciliation после исправления semantics. Не предлагать заново уже deployed single-chain fix. Не расширять бюджет или снимать safeguards ради зелёной метрики.
+
 ## Короткий prompt для Pro
 
-> Разбери этот production incident и предложи минимальное исправление без переделки системы. Проверь double model-chain transform и различия между local limiter denial, provider 429 и provider 503. Учитывай обе Lite, physical-send budget, project pools и owner-directed отказ от background identity retries. Сравни code fix с удалением emergency env; выбери узкий вариант, один regression test, safe live canary и bounded catch-up. Не добавляй очереди/watchdogs/repair-workers без доказанной необходимости. Не выдавай failed carriers за количество потерянных событий. Назови неподтверждённые допущения и только действительно необходимые следующие проверки.
+> Прочитай пакет целиком, начни с live-раздела «После выпуска». Потеря Lite в parser chain уже исправлена и deployed в main cdd561707, обе Lite live-verified. Разбери оставшийся отказ Третьяковской галереи: shared programme ticket, umbrella vs workshop Event10060, deterministic_same_ticket_slot и последующий time_conflict_veto (его точный final target пока неизвестен). Предложи узкую source-bound LLM-first правку существующего identity path с sibling negative control и same-event positive control; не отключай конфликт времени и не добавляй retry worker. Отдельно оцени 251s на первый carrier, provider503/500, enrichment и bounded catch-up. Дай минимальный diff/порядок проверки без переписывания системы, новых очередей/watchdogs/repair-paths. Отдели подтверждённое от гипотез и actual import от публикации.

@@ -182,3 +182,49 @@ without provider evidence.
 [Google catalog, usage, competing hypotheses and minimal recovery choices](../2026-11-02-events-ingestion-model-review.md).
 
 Prepared for external ChatGPT Pro analysis only; no Pro task or production change was launched.
+
+## Continuation, 2026-11-02 20:48 UTC
+
+Owner explicitly requested correction as well as the Pro packet. Root classified
+as mechanical model routing. Main parser now constructs the chain once from
+the configured caller model, then selects its effective primary. No additional
+fallback, worker or queue. Net production lines +6/-5.
+
+Distinguishing caller regression: all three configured models failed before
+the fix and pass after. Parser/client/Lite quota suite: 110 passed. Provider
+path audit: unapproved=0, allowlisted_debt=0. Registry readback already matches
+all finite positive owner-snapshot quotas; numerical quota mutation unnecessary.
+The owner's 40/20 is a 28-day peak against current limit, not a verified current
+quota-day bypass. Production remains unchanged at this source checkpoint.
+
+## Release and bounded live verification, 2026-11-02 21:07 UTC
+
+PR #761 merged after all required CI passed; deployed exact main
+cdd56170713448258d81d4e05c9a2d5d3f85a70a as
+runcoveer/events:intake-lite-20261102, image
+sha256:aba9c71e887cfce663413cbe9bcbef61f1e6b3396f29d2ac5916cd270b3a6f75.
+Verified prior-runtime ancestry, unchanged dependency inputs and all 4427 tracked
+files. Isolated empty-DB preflight did not register webhook/scheduler. Events-only
+cutover preserved Kotopogoda. Actual source readback matched; ready=true, db=ok.
+
+Live negative control reached 3.1 Lite through exhausted Flash admission and
+returned confirmed_no_event without creating events. Catch-up ops_run11548
+completed partial in279.89s: inbox86966 imported into existing Event7234, no
+duplicate; inbox86977 parsed successfully but failed identity_final_retry:
+match_rejected:time_conflict_veto. Both locks released; no blind re-drive.
+Both Lite models live-verified: Smart Update4 provider503 responses on3.1
+recovered with4 successful3.5 calls. Event topics had3 Gemma provider500s and
+1 success; first row took251.495s. Normal-chain fix is delivered; semantic and
+publication recovery remains incomplete.
+
+Concrete remaining case: shared programme ticket and venue/time caused
+deterministic_same_ticket_slot against workshop Event10060 for an umbrella
+Night-of-Arts source. The final adjudicator's exact time-conflict target remains
+unproven. Do not force merge, weaken time veto or add a recovery worker.
+The expanded Pro packet contains exact source/receipt IDs, code references,
+physical-call counts and controls for a narrow LLM-first investigation.
+Existing media/vector/publication backlog also remains; no fresh authenticated
+VK wall readback was performed. Incident remains OPEN.
+
+Retained evidence:
+/home/dev/artifacts/events-bot-new/20261102T204526Z-intake-lite-fix-20261102/
