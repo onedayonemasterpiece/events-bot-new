@@ -15,6 +15,11 @@ CDN, Supabase, Kaggle and other managed dependencies stay external.
 
 ## Intake regularity release, 2026-11-03
 
+The subsequent `runcoveer/events:intake-adjudication-20261103` release clarifies
+only the existing adjudicator's keep/uncertainty reason-code instructions.
+Rollback: `runcoveer/events:intake-regularity-20261103`. The empty reserve override,
+all identity/grounding guards and owner-selected terminal retry policy remain.
+
 Events image: `runcoveer/events:intake-regularity-20261103`; rollback image:
 `runcoveer/events:intake-lite-20261102`. Merge the narrow Smart Update routing,
 bounded-send, daily-quota wait and VK slot-delivery changes before building exact
