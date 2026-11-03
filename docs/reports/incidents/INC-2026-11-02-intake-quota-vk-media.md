@@ -220,3 +220,52 @@ Deployment and finite source-packet catch-up remain pending at this source check
 The active scheduled Telegram import (ops run 11549) continues on the previous
 qualified image and must finish before the Events-only cutover. Follow-up checks
 use native Codex wake after 3 hours, then 3 hours, then 5 hours, as requested.
+
+## RunCoveer delivery, 2026-11-03 01:57 UTC
+
+PR [#763](https://github.com/onedayonemasterpiece/events-bot-new/pull/763)
+merged with all CI checks green; local affected suites: 284 passed. Production
+now runs exact merged main `c6d12178c2eabdb6906c3c239e47c12230632ca4`, image
+`runcoveer/events:intake-regularity-20261103`, image ID
+`sha256:c2089696d6165bf798271c89fabb7e308836abd5f881848c60a68ddd0e1c56d1`.
+All 4,427 tracked source files verified. Isolated preflight HTTP 200; real
+negative parser canary through the shared limiter fell back from 3.1 Lite to
+3.5 Lite and returned CONFIRMED_NO_EVENT with zero events.
+
+Cutover waited for normal Telegram run 11549 to finish at 01:47:39 UTC:
+82 messages, 44 created and 22 merged events, 32 terminal-message errors, partial.
+These are previous-release baseline results, not evidence of the new release's
+normal intake performance. Events-only Compose preserved Kotopogoda container
+`bc2f7488d7e1a59201869be0af0f59841accdabd2ece24c4ad74479fc0e5e15a`.
+Actual running SHA, empty emergency reserve override, DEPLOY_PREFLIGHT=0,
+SQLite quick_check=ok, readiness and scheduler all verified after cutover.
+Previous Events image and original Compose are retained for rollback.
+
+Retained delivery evidence:
+`/home/dev/artifacts/events-bot-new/20261102T233947Z-intake-recovery-20261103/`.
+Guarded finite replay of inbox IDs 86941, 86953, 86986 and 87005 uses the existing
+source-packet parser, Smart Update and outbox boundary; recovery receipt and
+normal scheduled-slot checks remain pending. Incident stays open.
+
+### Finite replay 11553: routing repaired, semantic terminals remain
+
+Replay completed at 02:05:30 UTC: four processed, four technical terminals,
+zero created/updated events and zero import links. Positive source parses now
+succeeded on 3.1 Lite; there were provider 500/503 errors, not just quota issues.
+IDs 86941 and 86953 stopped at `distinct_not_grounded`; 86986 stopped at
+`shared_long_event_anchor_requires_retry`; negative-control 87005 remained
+`VERIFICATION_TECHNICAL_ERROR`. No negative-control event was created, but this
+is not a successful typed no-event decision. Failed recovery is not closure.
+
+The existing `event_identity_decision_log` proves a specific prompt/contract
+defect: decisions 18882 and 18886 have confidence 1.0, relation `distinct_event`,
+grounded quotes and concrete differences, but raw reason `no_candidate_match`.
+The unchanged guard reserves that code for uncertainty. For 86941 the model
+correctly distinguished a concert from exhibition 10271, yet selected the
+uncertainty code. A six-line clarification in the existing prompt maps proven
+different programmes to `distinct_show_keep`, sessions to the existing session
+codes and genuine uncertainty to `unknown/no_candidate_match`. No acceptance
+guard, threshold, matching algorithm, queue state or retry policy changes.
+Read-only live decision replay of the concert now returns FINAL_DISTINCT with
+the same evidence and correct code. Identity regression suites: 85 passed.
+This prompt correction still requires release and source-to-event acceptance.

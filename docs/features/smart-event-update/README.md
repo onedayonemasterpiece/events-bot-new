@@ -1,5 +1,15 @@
 # Smart Event Update (Интеллектуальный импорт)
 
+## Dedup adjudicator reason codes
+
+Proven different programmes use `distinct_show_keep`, separate sessions use
+`session_split_keep` / `matinee_evening_keep`, and parallel events use
+`parallel_venue_keep`. `no_candidate_match` means `relation=unknown`, not a
+grounded distinct event. The prompt states this existing final-result contract
+explicitly; confidence, exact citation grounding and conflict requirements remain
+unchanged. Production replay on 2026-11-03 exposed confident distinct decisions
+incorrectly using the uncertainty code.
+
 ## Stage model routing and send budgets
 
 Each JSON, native-schema and text caller builds one model chain from the original
