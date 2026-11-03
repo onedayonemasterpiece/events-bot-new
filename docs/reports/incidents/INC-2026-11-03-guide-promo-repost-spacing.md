@@ -91,3 +91,22 @@ Inspect normal VK13:30 UTC source/child receipts, original14:30 and TG21:40 UTC
 checks alongside this fix. Next ordinary two-destination eligibility is November6
 if today's successful Анонсы repost is the cadence anchor. Extend verification
 rather than sending unauthorized duplicate public canaries.
+
+
+## Combined release delivered, 2026-11-03 13:58 UTC
+
+Actual RunCoveer Events runtime is now `7d03b15853d3548299aa334418a9a907ae415312`,
+image `intake-guide-promo-spacing-20261103`, immutable
+`sha256:96896a2b00717740524948c4b49caedc4b6f2a96e6dba4bf23c5482789ade566`.
+PRs #777 and #778 passed all required CI before merge. Source parser completed
+261/261 before cutover; the final guard found no active ops. Events alone was
+recreated. Kotopogoda container ID remained unchanged. Explicit runtime/model
+settings checks, SQLite quick_check, effective cinema reference and identity
+function hash passed. Live health reports ready=true, database/scheduler ok,
+no issues. The existing promo interval is five minutes.
+
+Evidence is retained in the intake recovery directory under
+`promo-spacing-cutover.log`, `promo-spacing-live-verification.log`,
+`promo-spacing-live-health.json` and `promo-spacing-startup.log`.
+This supersedes earlier not-deployed candidate status; it does not close the
+incident or substitute for actual scheduled source receipts.

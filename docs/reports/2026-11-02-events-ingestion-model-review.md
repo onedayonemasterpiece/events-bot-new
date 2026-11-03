@@ -964,3 +964,31 @@ importer → Smart Update replay после этого даёт один MERGED,
 после активного парсинга. Не считать это уже доставленным prevention. Подробные
 квитанции и незавершённая приёмка: [запись инцидента](incidents/INC-2026-11-03-cinema-europe-address-duplicate.md).
 Основной контроль регулярных импортов продолжается.
+
+
+## Combined release delivered, 2026-11-03 13:58 UTC
+
+Actual RunCoveer Events runtime is now `7d03b15853d3548299aa334418a9a907ae415312`,
+image `intake-guide-promo-spacing-20261103`, immutable
+`sha256:96896a2b00717740524948c4b49caedc4b6f2a96e6dba4bf23c5482789ade566`.
+PRs #777 and #778 passed all required CI before merge. Source parser completed
+261/261 before cutover; the final guard found no active ops. Events alone was
+recreated. Kotopogoda container ID remained unchanged. Explicit runtime/model
+settings checks, SQLite quick_check, effective cinema reference and identity
+function hash passed. Live health reports ready=true, database/scheduler ok,
+no issues. The existing promo interval is five minutes.
+
+Evidence is retained in the intake recovery directory under
+`promo-spacing-cutover.log`, `promo-spacing-live-verification.log`,
+`promo-spacing-live-health.json` and `promo-spacing-startup.log`.
+This supersedes earlier not-deployed candidate status; it does not close the
+incident or substitute for actual scheduled source receipts.
+
+Remaining acceptance: automatic VK recovery of the skipped 13:30 UTC slot,
+14:30 UTC verification and ordinary Telegram import at 21:40 UTC. Programme
+87457 has never replayed; the guarded candidate interval is 16:35–18:10 UTC,
+after terminal normal 16:30 VK, with no concurrent heavy work. Today's two
+promo posts remain valid content receipts but failed timing acceptance. Preserve
+them without duplicates. Check normal promo dispatch after delivery, daily
+Афиша on November 4, and the next eligible two-destination pair on November 6
+using actual provider timestamps. All three owner objectives remain active.
