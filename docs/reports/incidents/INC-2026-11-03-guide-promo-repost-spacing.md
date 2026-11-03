@@ -110,3 +110,15 @@ Evidence is retained in the intake recovery directory under
 `promo-spacing-live-health.json` and `promo-spacing-startup.log`.
 This supersedes earlier not-deployed candidate status; it does not close the
 incident or substitute for actual scheduled source receipts.
+
+
+## Preserved through receipt-codec release, 2026-11-03 16:24 UTC
+
+Actual runtime215c6a219edec24551e2d38215cda8ccc396091c, immutable
+sha256:fa97c6e09aa6634ceda9575569abd9a6568802f7ab73e7bdaf3d1b40a0f03a72.
+PR783 passed all required CI; exact source and isolated initialized preflight
+passed before safe Events-only cutover. Live model settings, cinema reference
+and qualified identity/adjudicator hashes are unchanged; promo interval5,
+readiness/database/scheduler ok and Kotopogoda unchanged. Existing public
+receipts remain authoritative. Future normal promo timing on November4/6 and
+normal scheduled imports still need acceptance; incident remains open.
