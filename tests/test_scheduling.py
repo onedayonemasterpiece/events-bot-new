@@ -370,6 +370,8 @@ async def test_source_parser_yields_to_waiting_vk_between_events(monkeypatch, jo
     monkeypatch.setattr(handlers, "find_existing_event", find_existing)
     monkeypatch.setattr(handlers, "find_exact_parser_ticket_slot", no_exact)
     monkeypatch.setattr(handlers, "add_new_event_via_queue", add)
+    monkeypatch.setattr(handlers, "reconcile_existing_event_lifecycle", AsyncMock())
+    monkeypatch.setattr(handlers, "EVENT_ADD_DELAY_SECONDS", 0)
     events = [TheatreEvent(title=title, date_raw="", parsed_date="2099-11-04",
                           parsed_time="12:00", ticket_status="available", location="Кафедральный собор",
                           source_type="sobor", url=f"https://sobor39.ru/{title}")
