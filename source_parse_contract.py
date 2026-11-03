@@ -871,7 +871,10 @@ def build_verification_request(
         "task": "conditionally_verify_source_parse",
         "rules": [
             "Use all source text and every OCR block; deterministic hints are evidence, never a verdict.",
-            "Confirm or correct events and lifecycle actions, split missing siblings/sessions, or return RETRY_REQUIRED.",
+            'Confirm or correct events and lifecycle actions; contradiction counts are hypotheses, never a required child count. '
+            'Address numbers are not schedule dates. '
+            'Doors/admission and performance start belong to one occurrence: use the explicit performance start and retain doors as context. '
+            'Split only genuinely separately attendable dates or sessions; otherwise preserve one event or return RETRY_REQUIRED for real uncertainty.',
             "Return the same typed SourceParseDecision JSON schema and no prose.",
         ],
         "today": today,

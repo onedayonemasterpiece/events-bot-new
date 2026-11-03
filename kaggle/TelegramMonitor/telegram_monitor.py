@@ -2565,7 +2565,10 @@ def _source_parse_prompt(
             )
         else:
             request['rules'].append(
-                'Confirm or correct the primary result; verification uncertainty requires RETRY_REQUIRED.'
+                'Confirm or correct events and lifecycle actions; contradiction counts are hypotheses, never a required child count. '
+                'Address numbers are not schedule dates. '
+                'Doors/admission and performance start belong to one occurrence: use the explicit performance start and retain doors as context. '
+                'Split only genuinely separately attendable dates or sessions; otherwise preserve one event or return RETRY_REQUIRED for real uncertainty.'
             )
     return json.dumps(request, ensure_ascii=False)
 

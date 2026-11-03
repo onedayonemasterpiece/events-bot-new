@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:intake-receipt-media-20261103
+    image: runcoveer/events:intake-occurrence-verifier-20261103
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
