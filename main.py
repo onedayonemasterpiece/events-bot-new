@@ -11840,12 +11840,14 @@ def _get_event_topics_gemma_client():
     supabase = build_google_ai_limiter_supabase_client(
         fallback_factory=get_supabase_client
     )
-    return GoogleAIClient(
+    client = GoogleAIClient(
         supabase_client=supabase,
         secrets_provider=SecretsProvider(),
         consumer="event_topics",
         incident_notifier=notify_llm_incident,
     )
+    client.max_retries = 1
+    return client
 
 
 def _event_topics_strip_code_fences(text: str) -> str:

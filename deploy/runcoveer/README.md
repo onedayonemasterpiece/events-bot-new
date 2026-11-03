@@ -13,6 +13,14 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Topic retry budget follow-up, 2026-11-03
+
+Image: `runcoveer/events:intake-topics-retry-20261103`; rollback:
+`runcoveer/events:intake-topics-20261103`. The existing topic client now permits
+one attempt per model, ensuring its two-send ceiling includes the configured
+reserve after a retryable 503. Keep all other routing settings. Build exact
+merged main; switch Events only after active normal imports finish.
+
 ## Topic fallback release, 2026-11-03
 
 Events image: `runcoveer/events:intake-topics-20261103`; rollback:

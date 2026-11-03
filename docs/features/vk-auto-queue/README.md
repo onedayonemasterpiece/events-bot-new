@@ -524,6 +524,9 @@ Topic classification uses the existing `GOOGLE_AI_FALLBACK_MODELS` list when
 building its shared-limiter model chain. An explicit empty fallback list had
 hidden the production Lite reserve and repeated Gemma failures. The same chain
 is used for native schema, prompt schema and JSON repair; each call retains its
-existing two-send cap. No prompt, topic schema, global row deadline or terminal
+existing two-send cap. The topic client uses one attempt per model, matching
+the Smart Update client: a retryable 503 moves to the configured next model
+instead of spending both sends on the same unavailable primary. No prompt, topic
+schema, global row deadline or terminal
 retry policy changes. Large programmes can still reach the row deadline, so
 compare the candidate ledger and canonical sources with carrier-level receipts.
