@@ -437,9 +437,11 @@ async def test_database_init_creates_event_operation_ledger_idempotently(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("source_url", [None, "https://vk.com/wall-194927034_5002"])
 async def test_main_executor_uses_full_smart_update_and_standard_joboutbox(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    source_url: str | None,
 ) -> None:
     database = Database(str(tmp_path / "real-executor.sqlite"))
     await database.init()
@@ -467,6 +469,9 @@ async def test_main_executor_uses_full_smart_update_and_standard_joboutbox(
     monkeypatch.setattr(smart_update_module, "SMART_UPDATE_LLM_DISABLED", True)
 
     request = _request()
+    if source_url:
+        request.pop("source_external_id")
+        request["source_url"] = source_url
     context = SimpleNamespace(
         identity=SimpleNamespace(
             subject="operator",

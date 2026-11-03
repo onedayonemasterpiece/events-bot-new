@@ -241,3 +241,8 @@ from `monitoring_text_primary`: that loses the original model and Lite sibling.
 Emergency pre-send quota denials fall through under the existing limiter; the
 physical-send cap remains two. No background technical-terminal retry is added.
 See [November intake incident](../reports/incidents/INC-2026-11-02-intake-quota-vk-media.md).
+
+Direct event intake also reads the existing VK source's festival context before
+Smart Update. Its SQL expression uses the module's `sql_text` alias because
+`text` in that function is the original source string. This changes no source
+classification or identity rule.
