@@ -234,7 +234,9 @@ model-specific `gpt-4o` cap.
 
 `_parse_event_via_gemma` builds `monitoring_text_model_chain` once from the
 original caller model. It uses the first entry as the effective model and
-passes the remaining entries to the shared client. Do not rebuild the chain
+includes the existing `GOOGLE_AI_FALLBACK_MODELS`, then passes the remaining
+entries to the shared client. A retryable Gemma failure can therefore reach the
+configured Lite reserve within the same two-send ceiling. Do not rebuild the chain
 from `monitoring_text_primary`: that loses the original model and Lite sibling.
 Emergency pre-send quota denials fall through under the existing limiter; the
 physical-send cap remains two. No background technical-terminal retry is added.
