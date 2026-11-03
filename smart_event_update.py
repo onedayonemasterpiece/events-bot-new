@@ -44,6 +44,7 @@ from event_age_rating import (
 from festival_grounding import ground_kgd80_festival
 from location_reference import (
     find_known_venue_in_text,
+    match_known_venue_via_alias,
     normalise_event_location_from_reference,
     normalize_venue_key,
 )
@@ -14263,6 +14264,10 @@ async def _llm_merge_identity_gate(
         },
         "conflicting_anchor_fields": conflicting_anchor_fields or {},
     }
+    for role, item in (("candidate", candidate), ("event_before", event)):
+        reference = match_known_venue_via_alias(item.location_name)
+        if reference is not None:
+            payload[role]["curated_venue_reference"] = reference.canonical_line
     prompt = (
         "Ты — LLM-first identity gate для Smart Update. Уже выбран `event_before` как возможный match "
         "для `candidate`. Реши только одно: можно ли безопасно применять merge side effects к существующему "
@@ -14272,6 +14277,12 @@ async def _llm_merge_identity_gate(
         "НЕ доказывают same_event. Нужен конкретный общий identity anchor: тот же показ/лекция/выставка, "
         "та же программа/название/персона в той же роли, та же билетная ссылка, та же афиша или явный текст "
         "источника, что это обновление уже существующего события.\n\n"
+        "`curated_venue_reference`, если присутствует, — проверенная запись справочника площадок, "
+        "а не утверждение источника. Для одной конкретной площадки используй адрес из этого справочника; "
+        "ошибочный адрес в source_text сохраняется как исходное свидетельство, но сам по себе не доказывает "
+        "отдельное событие и не является blocking_conflict после разрешения по справочнику. "
+        "Общая справочная площадка не доказывает same_event: по-прежнему проверь название/программу, "
+        "дату, время, тип и другие identity anchors; разные сеансы и филиалы не объединяй.\n\n"
         "Когда выбрать skip_merge_side_effects:\n"
         "- candidate описывает выставку/длинный диапазон, а event_before — отдельную лекцию/встречу/показ, "
         "даже если дата открытия и музей совпадают;\n"

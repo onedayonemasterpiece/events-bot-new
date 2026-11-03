@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 import smart_event_update as su
 from location_reference import (
     canonicalize_known_place_name,
@@ -352,3 +354,38 @@ def test_cinema_europe_source_address_typo_uses_verified_venue() -> None:
         location_address="Московское шоссе 2",
         city="Калининград",
     ) == ("Синема Парк Сити Молл", "Московское шоссе 2", "Калининград")
+
+
+@pytest.mark.asyncio
+async def test_identity_gate_receives_curated_venue_separately_from_source(monkeypatch):
+    from models import Event
+
+    captured = []
+
+    async def capture(prompt, *_args, **_kwargs):
+        captured.append(json.loads(prompt.rsplit("Данные:\n", 1)[1]))
+        return {"source_grounded_evidence": []}
+
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(su, "_ask_gemma_json", capture)
+    candidate = su.EventCandidate(
+        source_type="telegram", source_url="https://t.me/meowafisha/9050",
+        source_text="Плетёный муж. Синема Парк Европа, Театральная 30. 3 ноября 19:30",
+        title="Плетёный муж", date="2026-11-03", time="19:30",
+        location_name="Синема Парк Европа", location_address="Гвардейский проспект 3",
+        city="Калининград", posters=[],
+    )
+    event = Event(id=10242, title=candidate.title, description="Показ фильма",
+                  source_text="Синема Парк Европа, Гвардейский проспект 3",
+                  date=candidate.date, time=candidate.time,
+                  location_name=candidate.location_name,
+                  location_address=candidate.location_address, city=candidate.city)
+    await su._llm_merge_identity_gate(candidate, event, conflicting_anchor_fields={})
+    reference = "Синема Парк Европа, Гвардейский проспект 3, Калининград"
+    assert captured[-1]["candidate"]["curated_venue_reference"] == reference
+    assert captured[-1]["event_before"]["curated_venue_reference"] == reference
+    assert "Театральная 30" in captured[-1]["candidate"]["source_text"]
+    candidate.location_name = "Синема Парк Сити Молл"
+    candidate.location_address = "Московское шоссе 2"
+    await su._llm_merge_identity_gate(candidate, event, conflicting_anchor_fields={})
+    assert "curated_venue_reference" not in captured[-1]["candidate"]
