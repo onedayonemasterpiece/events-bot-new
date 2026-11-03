@@ -182,3 +182,8 @@ The ordinary VK batch finished before Events-only cutover. Live cinema alias,
 qualified identity/adjudicator hashes, model settings, SQLite and readiness
 passed; Kotopogoda unchanged. The original public correction remains valid.
 Ordinary Telegram at 21:40 UTC still needs live acceptance; incident stays open.
+
+
+## Preserved through parser-reserve release, 2026-11-03 17:55 UTC
+
+Actual runtime 292334719d86fe14a06ce3a6cc8cb8fc970e81c4, immutable sha256:6a0555e01949e189278ce0b8d285512495099eeaca6f3771b732f60ac6ea109e. Required CI, full source and isolated preflight passed; Events-only delivery preserved cinema/identity rules, model settings, promo interval five, healthy DB/scheduler and unchanged Kotopogoda. Existing public corrections and today's two reposts remain intact. Ordinary TG and actual future promo timing still require observation; incident remains open.

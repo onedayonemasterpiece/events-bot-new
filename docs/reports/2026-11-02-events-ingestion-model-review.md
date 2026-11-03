@@ -1157,6 +1157,12 @@ PR [#785](https://github.com/onedayonemasterpiece/events-bot-new/pull/785) сл�
 Подготовлена такая же минимальная передача существующего списка, net Python +2 строки. Сохраняется предел двух физических отправок и запрет скрытых повторов, новый механизм восстановления не добавляется. Регрессия с настоящей фабрикой и shared client: Gemma 500 → Lite 3.5, ровно две отправки; если Lite тоже недоступна, остановка после второй без третьей модели. Обе проверки падают на прежнем caller; 104 связанных теста и аудит provider paths проходят после исправления. Это механическая правка маршрута, промпты и semantic guards не меняются. Пока НЕ ДОСТАВЛЕНО, прод остаётся на 78282649624fdcea714c75d2b89ec915ea235fb5.
 
 
+### 3 ноября, 19:55 по Калининграду — резерв основного парсера доставлен
+
+PR #787 прошёл обязательные CI и contract tests. Прод действительно на 292334719d86fe14a06ce3a6cc8cb8fc970e81c4, immutable sha256:6a0555e01949e189278ce0b8d285512495099eeaca6f3771b732f60ac6ea109e. Проверены все 4433 файла, изолированные SQLite/HTTP, отрицательный SHA и живые БД, readiness и scheduler. Настройки моделей, кинотеатр, прежние identity-проверки и соседний сервис сохранены. Новых очередей, повторных workers и обхода квот нет.
+
+Для «Мелодий любви» подготовлен отдельный текст одного события по визуально сверенной афише организатора, передан через обычный typed create и полный Smart Update. Общая афиша на двенадцать событий будет добавлена штатным media edit после принятия карточки. Это отдельный запрос с новым ключом после доказанного нулевого результата старого; старый пакет не повторялся. На момент записи новый запрос ещё обрабатывается, восстановление и публикация не заявлены. Обычный Telegram, последующий VK, сброс media budget и реальные будущие репосты остаются обязательными проверками.
+
 ### 2026-11-03 18:00 UTC — VK source query shadows SQL constructor
 
 The live post-release request proves configured failover works: Gemma HTTP 500 at 17:55:09 was followed by successful Lite 3.5 response at 17:55:25, within two sends. Conditional verification also completed and the parser returned one event. Execution then failed before Smart Update at main.add_events_from_text line 18109: the source-string parameter `text` shadows the imported SQLAlchemy constructor `text()`. This affects direct VK-source intake, not the separately implemented normal VK inbox path.
