@@ -380,6 +380,19 @@ model)` receipt повторно используется.
 ```
 
 Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
+The registered normal slot explicitly uses the existing shared-heavy-gate `wait`
+mode. If a source-parser event is in flight, VK waits for that event to finish
+and then takes its turn; it must not terminalize the normal slot as `skipped`
+merely because the gate was busy at the cron instant. Source parsing already
+releases the gate between events. Other jobs retain their configured guard mode;
+no new retry timer, queue or catch-up mechanism is added. The existing watchdog
+still covers genuinely missed/restarted slots.
+
+Regression: `tests/test_scheduling_vk_wait.py` boots the real registration and
+checks two independent tasks against the actual heavy semaphore. Its baseline
+fails with `job_skip_heavy_busy`; the fixed job stays pending and runs after the
+parser event releases the gate. Existing parser interleaving/watchdog contracts
+remain required.
 Основные ENV:
 
 - `ENABLE_VK_AUTO_IMPORT=1`; production scheduler **default-on** в `fly.toml`

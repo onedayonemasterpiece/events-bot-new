@@ -479,3 +479,25 @@ No new render session exists yet. KONB 11572 ended selection_empty; this is a
 separate partner selection result, not VK intake. Runtime remains fd4da1b8 and
 health is ready. Evidence: retained phase2/partner-resume-1105.log and
 phase2/health-1105.json. Programme recovery is still not launched.
+
+
+### Normal13:30 UTC slot still skipped at per-event gate, November3
+
+Actual ops11591 is `vk_auto_import / scheduled / skipped` at13:30:00 UTC.
+Runtime logs show `job_skip_heavy_busy` against a just-started source-parser
+event; parser11581 then progressed from index202 to203. The whole-catalogue gate
+fix allows fairness between events, but normal scheduler registration still
+used the wrapper's non-blocking skip default. It never entered the waiting
+pipeline. Existing watchdog can retry only after the30-minute misfire grace
+plus120 seconds, around14:02 UTC; skipped is not normal import acceptance.
+
+Use the already-supported `heavy_guard_mode="wait"` for this registration only.
+No new retry, queue or global heavy-mode change. The distinguishing test boots
+actual registration with two independent tasks and the real semaphore: baseline
+skips, fix waits then runs after event release. Initial test creation accidentally
+inherited the parent's reentrant context and is invalid evidence; use retained
+vk-slot-wait-before-corrected.log / after-corrected.log. All initial files remain
+retained. Production stillfd4da1b8; fix is not deployed, and healthy parsing is
+not interrupted. Verify actual watchdog import and source/child receipts rather
+than counting the skipped slot as successful. Other owner tasks, spacing fix
+and cinema prevention remain active.
