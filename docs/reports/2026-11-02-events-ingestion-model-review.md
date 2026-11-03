@@ -839,27 +839,29 @@ anchor, 87005 — на незавершённом typed negative verdict. Эти
 [канонической записи](incidents/INC-2026-11-02-intake-quota-vk-media.md).
 
 
-## Live correction, 2026-11-03 08:15 UTC
+## Live findings, 2026-11-03 08:15 UTC
 
-Confirmed two additional mechanical causes after the earlier review:
+The official parser run 11555 held the shared resource for 5 hours 19 minutes
+across 262 events. It created 89 events but postponed VK claims until 07:49 UTC.
+PR #766 is deployed from merged main 14d38eaf: the existing gate now releases
+between source events, and parser producers share the existing PARSE_LOCK.
+The image passed verification of 4,427 files; 179 import/scheduler tests and
+20 OCR tests passed. Production readiness, database and scheduler are healthy.
 
-1. Official parser11555 held the shared heavy gate for5h19 (262events,89created),
-   postponing VK claims until07:49. PR766 is deployed from merged main14d38eaf:
-   the same gate now releases between source events and all parser producers
-   share the existingPARSE_LOCK. Full4427-file image qualification,179 import/
-   scheduler tests and20OCR tests passed. Productionready/DB/scheduler healthy.
-2. Normal VK11557 then ended12carriers:5rejected,7technical,0imported. OCR
-   primary reportsinsufficient_quota; its single-call Google fallback3.1Lite
-   had19x503. Existing OCR fallback is now3.5Lite after a real successful OCR
-   canary. Gemma-primary Smart Update additionally spent its2send budget on
-   Gemma+3.1Lite before reaching the sibling3.5. Reordering the existing fallback
-   list to3.5first passed three real decision-only controls (distinct,distinct,
-   match) without Event/queue changes or larger budgets. This configuration
-   follow-up is separate from the already deployed fairness/OCR release.
+Normal VK run 11557 then finished with 12 carriers: 5 rejected, 7 technical
+failures, and no imports. Primary OCR reported insufficient_quota; its Google
+fallback on 3.1 Lite had 19 responses with status 503. The existing OCR fallback
+now uses 3.5 Lite after a successful real OCR canary through the shared limiter.
 
-The process boot completed at08:15:00, crossing the08:15cron boundary during
-cutover. The existing5-minute critical scheduler watchdog is expected to cover
-that slot; actual watchdog import receipts must be checked, not inferred from
-health or running status. No manual batch is counted as normal-slot acceptance.
-Incident remains open; provider degradation and finite technical backlog remain
-under investigation. See the canonical incident record for verified outcomes.
+Gemma stages also exhausted their two-send budget on Gemma and 3.1 Lite before
+reaching the healthy sibling 3.5 Lite. Reordering the existing fallback list
+passed three real decision-only controls: two distinct events and one duplicate.
+No event or queue records were changed. This configuration follow-up is separate
+from the fairness and OCR release already deployed; call budgets stay unchanged.
+
+Boot completed at 08:15:00 UTC, crossing the 08:15 cron boundary during cutover.
+The existing five-minute critical scheduler watchdog should cover that slot.
+Its actual import receipts still need verification; health and a running job
+are not acceptance. The incident remains open, including provider degradation,
+technical backlog and the scheduled VK/TG checks. See the canonical incident
+record for confirmed subsequent outcomes.
