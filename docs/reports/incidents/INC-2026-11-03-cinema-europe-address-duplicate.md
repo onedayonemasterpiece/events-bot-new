@@ -173,3 +173,12 @@ and qualified identity/adjudicator hashes are unchanged; promo interval5,
 readiness/database/scheduler ok and Kotopogoda unchanged. Existing public
 receipts remain authoritative. Future normal promo timing on November4/6 and
 normal scheduled imports still need acceptance; incident remains open.
+
+## Preserved through verifier release, 2026-11-03 17:33 UTC
+
+Actual runtime is 78282649624fdcea714c75d2b89ec915ea235fb5, immutable
+sha256:d3ec7e74bd1480a23853342e039e1c92373e92338d0a34e551abcd35acb90415.
+The ordinary VK batch finished before Events-only cutover. Live cinema alias,
+qualified identity/adjudicator hashes, model settings, SQLite and readiness
+passed; Kotopogoda unchanged. The original public correction remains valid.
+Ordinary Telegram at 21:40 UTC still needs live acceptance; incident stays open.
