@@ -30,6 +30,13 @@ Callers must never treat it as persisted success. Free-form
 `review_required`, `skipped_identity_gate`, `skipped_context_only`, or terminal
 generic `failed` are not public outcomes.
 
+The adjudicator distinguishes proven differences from insufficient evidence.
+An explicit source-backed date/session or programme difference uses the existing
+`distinct_occurrence`/`distinct_event` relation and concrete keep code, even when
+none of the recall candidates matches. Absence of a match alone is not distinct
+proof. `unknown`/`no_candidate_match` continues to fail closed; the prompt does
+not turn missing comparison data into permission to create.
+
 The normal path invokes the existing adjudicator at most once. A retry adds no
 Event/domain/publication side effect and retains its replayable packet, owner
 diagnostic and next retry time in SQLite. The worker is bounded and
