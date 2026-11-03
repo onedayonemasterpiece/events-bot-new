@@ -516,3 +516,14 @@ blockers остаются все четыре независимых доказ�
 дополнительно проверять описанную выше state machine: due claim, running lease,
 raw-persist-before-advance, done, typed retry и stale-lease recovery — без
 привязки документации к временному имени helper-функции.
+
+
+### Topic classification and long programmes
+
+Topic classification uses the existing `GOOGLE_AI_FALLBACK_MODELS` list when
+building its shared-limiter model chain. An explicit empty fallback list had
+hidden the production Lite reserve and repeated Gemma failures. The same chain
+is used for native schema, prompt schema and JSON repair; each call retains its
+existing two-send cap. No prompt, topic schema, global row deadline or terminal
+retry policy changes. Large programmes can still reach the row deadline, so
+compare the candidate ledger and canonical sources with carrier-level receipts.

@@ -11918,7 +11918,9 @@ async def _classify_event_topics_gemma(prompt_text: str) -> list[str]:
         f"JSON schema:\n{schema_text}"
     )
     from google_ai.client import monitoring_text_model_chain
-    chain = monitoring_text_model_chain(EVENT_TOPICS_MODEL)
+    chain = monitoring_text_model_chain(
+        EVENT_TOPICS_MODEL, (os.getenv("GOOGLE_AI_FALLBACK_MODELS") or "").split(",")
+    )
     route = {"model": chain[0], "fallback_models": chain[1:], "max_provider_attempts": 2}
     raw = ""
     if EVENT_TOPICS_GEMMA_NATIVE_SCHEMA:

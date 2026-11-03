@@ -371,3 +371,47 @@ Boot completed at 08:15:00 UTC, crossing the 08:15 cron boundary. Check the
 existing watchdog for actual recovery of that slot. Its configured 30-minute
 misfire grace plus 120 seconds makes this slot eligible around 08:47 UTC.
 Health alone is not proof of normal import acceptance. The incident stays open.
+
+
+### Normal watchdog run 11565 and remaining latency
+
+The watchdog automatically dispatched run 11565 at 08:47:41 UTC. Actual claims
+started immediately. By 09:27, carrier 87068 had imported and several other
+carriers had confirmed no-event decisions. Carrier 87482 failed two children
+with merge_identity_blocking_conflict; its semantic correctness still needs
+source-level analysis and is not counted as a valid exclusion.
+
+Carrier 87457 verified a programme with 12 children, then reached the existing
+1,800-second ROW_TIMEOUT. Before cancellation the candidate ledger accepted six
+children: one CREATED as Event 10433 and five MERGED as Events 9757, 9758, 9759,
+9760 and 9762. All six have canonical event_source links to the actual VK URL.
+Carrier-level import links are absent after timeout, so aggregate carrier metrics
+understate these durable writes; the remaining children are not recovered yet.
+
+A separate mechanical defect was found in topic classification: it constructed
+the shared model chain without the configured fallback list, then explicitly
+passed the resulting empty tail to the Google client. Production logs show only
+Gemma topic calls despite an available 3.5 Lite reserve. Restore the existing
+list at that call site, preserving the two-send limit and unchanged prompts.
+The distinguishing native-schema regression fails before and passes after.
+The topic, fallback safety and VK suite passed 98 tests.
+
+Captured provider time across the observed runtime window, including background
+work, was about 400 seconds for topics and 620 seconds for image geometry on
+Gemma. These totals must not all be attributed to the timed-out carrier. A real
+3.5 Lite geometry canary passed, but its model is not changed here: geometry
+cache identity includes the model, so a global switch would invalidate cached
+results and cause additional reclassification. No timeout increase or new retry
+worker is introduced. Further recovery and final normal-batch receipts remain
+outstanding.
+
+
+Run 11565 finished partial at 09:29:17 UTC: 12 carriers, 1 imported, 8 confirmed
+no-event, 3 technical failures. Its normal completed import created Event 10434
+from carrier 87068. The other two failed carriers, 87482 and 87120, have identity
+blocking conflicts; 87457 has ROW_TIMEOUT. Six accepted children of 87457 are
+additional durable writes outside the final carrier metrics and must remain
+separate from the reported one completed import. Two real topic controls on
+3.5 Lite returned CONCERTS and LECTURES/SCIENCE_POP correctly through the shared
+limiter. This confirms normal automatic delivery is active, with residual
+failures still open; it is not full recovery acceptance.

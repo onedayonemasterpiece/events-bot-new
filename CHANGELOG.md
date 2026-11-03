@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Restore the configured Google fallback list in topic classification; Gemma failures can reach the configured Lite reserve within the existing two-send budget.
+
 - Put the currently successful Gemini 3.5 Lite first in the existing production fallback list, so Gemma failures can recover within the unchanged two-send budget.
 
 - Switch the existing production OCR fallback to Gemini 3.5 Lite after repeated 3.1 Lite 503 errors; preserve the one-send shared-limiter OCR contract.
