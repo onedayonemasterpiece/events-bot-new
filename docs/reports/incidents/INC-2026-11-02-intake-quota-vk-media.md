@@ -549,3 +549,34 @@ Runtime7d03b158 and health remain healthy; no restart. Keep normal VK16:30 UTC,
 programme's guarded16:35–18:10 candidate interval and normal TG21:40 UTC.
 All three incidents stay open. Retained evidence: vk-11596-terminal-1455.json,
 vk-11596-finish-runtime.log and identity-87615-decisions.json.
+
+
+### Residual workshop identity failure: focused prompt qualification
+
+Production decision19054 and a model-only replay both returned
+create/no_candidate_match/relation unknown at confidence1.0 despite citing an
+explicit November5 workshop against different programmes on September5 and
+November4. The final contract correctly kept candidate25953 unaccepted.
+The prompt's instruction to return create whenever no recalled event fits was
+ambiguous alongside the uncertainty rule. Replace that instruction with the
+explicit existing relation/keep-code contract; do not change schema, grounding,
+thresholds, model routing or add a worker. Qualification requires the actual
+LLM incident replay and a same-event control, plus existing identity regressions.
+This is not deployed and the source has not been recovered by this diagnostic.
+
+Project-required Opus consultation was attempted through the installed gateway,
+request events-adjudicator-87615-prompt-review-20261103, task
+ dvt_f6cf2d950c764178a2272eafd04d4c94. It failed provider_error / INVALID_ARGUMENT;
+there is no completed external review. Retained diagnostic uses production
+models only as supplementary probes, never as a replacement consultant review.
+
+
+The real model-only replay now returns FINAL_DISTINCT / distinct_show_keep with
+source-grounded date and programme differences. The same-event control returns
+FINAL_MATCH to10343, so the change does not make existing events distinct.
+The unchanged production prompt reproduced FINAL_RETRY before the edit.
+Fifty-nine existing dedup/identity incident regressions pass. Evidence:
+`diagnose-identity-87615.log`, `diagnose-identity-87615-after.log` and
+`adjudicator-87615-regressions.log`. These are actual LLM decisions, not event
+persistence or recovery of carrier87615. Release qualification and delivery
+remain outstanding.
