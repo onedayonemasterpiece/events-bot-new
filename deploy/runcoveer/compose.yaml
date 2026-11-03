@@ -16,6 +16,7 @@ services:
       ENABLE_RUNTIME_FILE_LOGGING: "1"
       MONITORING_TEXT_RESERVE_MODELS: ""
       POSTER_OCR_GOOGLE_FALLBACK_MODEL: "gemini-3.5-flash-lite"
+      GOOGLE_AI_FALLBACK_MODELS: "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemma-4-31b-it"
       RUNTIME_LOG_RETENTION_HOURS: "168"
       RUNTIME_LOG_MAX_FILE_MB: "16"
       RUNTIME_LOG_MAX_TOTAL_MB: "512"

@@ -837,3 +837,29 @@ anchor, 87005 — на незавершённом typed negative verdict. Эти
 затем через пять; для обычного Telegram-прогона 21:40 UTC может потребоваться
 продление. Инцидент открыт. Подробные release/recovery receipts — в
 [канонической записи](incidents/INC-2026-11-02-intake-quota-vk-media.md).
+
+
+## Live correction, 2026-11-03 08:15 UTC
+
+Confirmed two additional mechanical causes after the earlier review:
+
+1. Official parser11555 held the shared heavy gate for5h19 (262events,89created),
+   postponing VK claims until07:49. PR766 is deployed from merged main14d38eaf:
+   the same gate now releases between source events and all parser producers
+   share the existingPARSE_LOCK. Full4427-file image qualification,179 import/
+   scheduler tests and20OCR tests passed. Productionready/DB/scheduler healthy.
+2. Normal VK11557 then ended12carriers:5rejected,7technical,0imported. OCR
+   primary reportsinsufficient_quota; its single-call Google fallback3.1Lite
+   had19x503. Existing OCR fallback is now3.5Lite after a real successful OCR
+   canary. Gemma-primary Smart Update additionally spent its2send budget on
+   Gemma+3.1Lite before reaching the sibling3.5. Reordering the existing fallback
+   list to3.5first passed three real decision-only controls (distinct,distinct,
+   match) without Event/queue changes or larger budgets. This configuration
+   follow-up is separate from the already deployed fairness/OCR release.
+
+The process boot completed at08:15:00, crossing the08:15cron boundary during
+cutover. The existing5-minute critical scheduler watchdog is expected to cover
+that slot; actual watchdog import receipts must be checked, not inferred from
+health or running status. No manual batch is counted as normal-slot acceptance.
+Incident remains open; provider degradation and finite technical backlog remain
+under investigation. See the canonical incident record for verified outcomes.

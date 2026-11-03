@@ -21,6 +21,13 @@ Production OCR fallback использует существующий `POSTER_OC
 на3.5 прошёл через общий limiter. Один provider send и существующие OCR guards
 сохранены; primary OCR всё ещё может отдельно отказать по insufficient_quota.
 
+Production `GOOGLE_AI_FALLBACK_MODELS` ставит3.5Lite перед3.1Lite и Gemma.
+В наблюдавшемся окне Gemma давала500/503,3.1Lite —503, а3.5Lite отвечала.
+Gemma остаётся primary своих стадий; первый резерв теперь3.5, чтобы не потратить
+оба разрешённых send на недоступные Gemma+3.1. Факты/writer сохраняют свои
+существующие цепочки; лимиты, схема, guards и число send не меняются. Реальный
+decision-only replay дал дваFINAL_DISTINCT и одинFINAL_MATCH через3.5Lite.
+
 ## Координация с VK/TG
 
 Ручной и оба плановых запуска source parser используют один существующий

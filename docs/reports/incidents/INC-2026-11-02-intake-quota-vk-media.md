@@ -344,3 +344,20 @@ normal VK packet, while3.5Lite text parsing succeeded14times. Existing
 POSTER_OCR_GOOGLE_FALLBACK_MODEL set to3.5Lite in the qualified release; actual
 synthetic poster OCR canary read CONCERT/15 NOVEMBER2026/15:00 correctly through
 the atomic limiter at08:04UTC. No new fallback/retry/send; one-call OCR retained.
+
+
+### Fairness release delivered and remaining fallback-order defect
+
+PR766 merged14d38eaf3ae7902e56f019af009fb988326ea0cc with allCIgreen.
+Full4427-file image verification and isolated startup/SQLitecheck passed.
+Events-only cutover08:14UTC after all ops terminal; source ancestor proven.
+Image intake-fairness-20261103 sha256:97db700993faf6e5d7d84bb650b8b10ac9c3c1ad1b8923aea65e39dc453ca80b.
+Existing empty reserve retained, OCR fallback3.5Lite; rollback intake-adjudication.
+
+Actual old production GOOGLE_AI_FALLBACK_MODELS was3.1Lite,Gemma. The sibling
+chain includes3.5, but Gemma-primary stages exhaust their two-send budget on
+Gemma+3.1 during the observed outage, before reaching healthy3.5. Reorder the
+existing configuration to3.5Lite,3.1Lite,Gemma; no larger send budget or new path.
+Real decision-only controls08:13–08:14: concert/exhibitionFINAL_DISTINCT,
+networking/workshopFINAL_DISTINCT, exact same-eventFINAL_MATCH;3.5Lite answered
+as the second send after Gemma failures. No Event/queue effects.

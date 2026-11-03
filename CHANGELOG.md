@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Put the currently successful Gemini 3.5 Lite first in the existing production fallback list, so Gemma failures can recover within the unchanged two-send budget.
+
 - Switch the existing production OCR fallback to Gemini 3.5 Lite after repeated 3.1 Lite 503 errors; preserve the one-send shared-limiter OCR contract.
 
 - Fixed VK starvation behind whole-catalogue source parsing: release the shared heavy-operation gate between source events and serialize parser producers with the existing parse lock.
