@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-11-03-guide-promo-repost-spacing.md`
+  - Scope: independently delayed digest reposts, overdue dispatch spacing and lost-reply timestamps.
+
 - `INC-2026-11-03-cinema-europe-address-duplicate.md`
   - Scope: curated cinema venue grounding, source-address conflicts, Smart Update identity and daily duplicate repair.
 

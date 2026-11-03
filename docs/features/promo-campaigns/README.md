@@ -209,7 +209,11 @@ The existing `promo_vk` runner executes these activities. Production uses its
 existing `PROMO_VK_INTERVAL_MINUTES=5` setting. Each edition/destination freezes
 one random delay of 30–175 minutes in the existing `guide_visual_delivery`
 payload, leaving a five-minute tick allowance inside the requested 30–180 minute
-window. Busy/unavailable runtime can deliver late; it does not restart the delay.
+window. Sibling destinations choose moments at least35 minutes apart, reserving
+one tick for30 minutes of actual separation. An actual-send guard also preserves
+that30-minute gap when both schedules are overdue. Lost replies retain an attempt
+timestamp in the same receipt; observation uses the actual VK post date.
+Busy/unavailable runtime can deliver late; it does not restart the delay.
 A campaign activated after today's delay elapsed catches up today's edition.
 No separate scheduler, queue, table, fake event or extra LLM call is introduced.
 
@@ -245,7 +249,11 @@ by the new campaign adapter in the qualified immutable release image:
 Both ledger rows are `published`. Actual VK readback confirms community authors,
 exact source `copy_history`, and one repost per destination's recent wall. A
 repeat of the same adapter returned the original URLs without another send.
-This is today's compensated delivery, not a claim that a normal scheduler tick
+Owner correction: these two actual reposts were sent together after both frozen
+delays had expired. Content delivery/idempotency passed, but timing acceptance
+failed; see [spacing incident](../../reports/incidents/INC-2026-11-03-guide-promo-repost-spacing.md).
+The135540579 candidate is superseded by that narrow timing fix.
+This is today's compensated content delivery, not a claim that a normal scheduler tick
 already ran the new release. Regular runtime delivery is still pending safe
 Events cutover after active parser11581 finishes.
 
