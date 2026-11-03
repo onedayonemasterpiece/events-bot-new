@@ -89,6 +89,10 @@ Collector возвращает только факты и не исправля�
 удаляет positive children и не является вторым semantic classifier. Verifier
 может дополнить/исправить typed decision, но uncertainty/technical failure
 остаётся retry; incomplete evidence с positive children требует enrichment.
+Число contradiction anchors не задаёт обязательное число children: адресные
+числа не являются датами, а вход/сбор гостей и начало выступления относятся
+к одному occurrence. LLM сохраняет отдельными действительно самостоятельные
+сеансы и даты. Это правило применяется и к Telegram verifier.
 Тексты live prompts и provider examples не дублируются здесь — каноника:
 [`../../llm/prompts.md`](../../llm/prompts.md). Static prompt audit проверяет
 обязательный reason, enum parity, live-surface coverage и недоступность legacy
