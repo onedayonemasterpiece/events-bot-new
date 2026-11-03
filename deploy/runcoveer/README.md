@@ -13,6 +13,14 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Topic fallback release, 2026-11-03
+
+Events image: `runcoveer/events:intake-topics-20261103`; rollback:
+`runcoveer/events:intake-fairness-20261103`. Restore the existing general model
+fallback list for topic classification; preserve the live Lite ordering and OCR
+setting. Build merged main, wait for active imports to finish and switch Events
+only. Verify actual import receipts, not just container readiness.
+
 ## Source parser fairness release, 2026-11-03
 
 Events image: `runcoveer/events:intake-fairness-20261103`; rollback:

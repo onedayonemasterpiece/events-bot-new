@@ -866,3 +866,24 @@ Its actual import receipts still need verification; health and a running job
 are not acceptance. The incident remains open, including provider degradation,
 technical backlog and the scheduled VK/TG checks. See the canonical incident
 record for confirmed subsequent outcomes.
+
+
+## Normal VK result and remaining latency, 2026-11-03 09:29 UTC
+
+The existing watchdog automatically processed the missed slot: run 11565 finished
+with 12 posts, 1 imported, 8 confirmed no-event and 3 technical failures. The
+completed import created Event 10434. A separate programme post verified 12
+children but hit the 30-minute row deadline after creating Event 10433 and
+merging five existing events. Those six writes have canonical source links but
+are absent from final carrier-level metrics, so the two counts must not be mixed.
+Two other posts failed identity conflict checks and require source-level review.
+
+Another narrow routing defect was confirmed: topic classification discarded the
+configured fallback list and repeated Gemma calls without reaching healthy Lite.
+Its fix passes the existing configuration into the existing chain builder, with
+the same two-send cap and unchanged prompts. The baseline regression fails; 98
+related tests pass after correction. Two real Lite topic controls pass. Image
+geometry on Gemma also costs time, but a global model switch would invalidate
+model-keyed caches; no such migration or extra recovery worker is added here.
+The normal import is active, but residual failures and programme recovery remain
+open. See the canonical incident for release and subsequent verification.
