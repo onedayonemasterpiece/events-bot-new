@@ -368,5 +368,6 @@ returned FINAL_DISTINCT; the same-event control returned FINAL_MATCH.
 Gemini 3.5 Lite answered after Gemma failures. No events or queues were changed.
 
 Boot completed at 08:15:00 UTC, crossing the 08:15 cron boundary. Check the
-existing five-minute scheduler watchdog for actual recovery of that slot.
+existing watchdog for actual recovery of that slot. Its configured 30-minute
+misfire grace plus 120 seconds makes this slot eligible around 08:47 UTC.
 Health alone is not proof of normal import acceptance. The incident stays open.

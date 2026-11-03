@@ -860,7 +860,8 @@ No event or queue records were changed. This configuration follow-up is separate
 from the fairness and OCR release already deployed; call budgets stay unchanged.
 
 Boot completed at 08:15:00 UTC, crossing the 08:15 cron boundary during cutover.
-The existing five-minute critical scheduler watchdog should cover that slot.
+The watchdog waits for the configured 30-minute misfire grace plus 120 seconds,
+so this slot becomes eligible around 08:47 UTC.
 Its actual import receipts still need verification; health and a running job
 are not acceptance. The incident remains open, including provider degradation,
 technical backlog and the scheduled VK/TG checks. See the canonical incident
