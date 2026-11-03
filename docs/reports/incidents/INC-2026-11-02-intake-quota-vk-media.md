@@ -269,3 +269,49 @@ guard, threshold, matching algorithm, queue state or retry policy changes.
 Read-only live decision replay of the concert now returns FINAL_DISTINCT with
 the same evidence and correct code. Identity regression suites: 85 passed.
 This prompt correction still requires release and source-to-event acceptance.
+
+### Prompt follow-up delivered and accepted, 2026-11-03 02:28 UTC
+
+PR [#764](https://github.com/onedayonemasterpiece/events-bot-new/pull/764)
+passed all CI checks and merged as `343826c80998e84c6c20adda3d57ddd47c6008dd`.
+RunCoveer now runs that exact source with image
+`runcoveer/events:intake-adjudication-20261103`, image ID
+`sha256:3e4b90c13338b348cc453cf4663c81556a68928f06e89b1b680584449bf87cc1`.
+Complete source verification, isolated startup/SQLite check, actual runtime SHA,
+readiness, database and scheduler passed; Kotopogoda was preserved.
+
+Three real decision-only controls passed through the shared limiter: concert vs
+exhibition and networking vs workshop both FINAL_DISTINCT; actual same-event
+control FINAL_MATCH. All existing final-result/grounding guards remained active.
+
+Guarded recovery 11554 completed at 02:27:45 UTC with success: both exact carrier
+rows imported, no technical failures, new Events 10342 (concert, November 15,
+15:00) and 10343 (scrapbooking workshop, November 4, 12:00). Inbox import links
+and canonical event_source links match both original VK URLs. Exact stored parse
+replay preserved the successful earlier source parses. Child outcomes balance:
+CREATED for 86941, CREATED plus CONFIRMED_PRODUCT_EXCLUSION for 86953.
+
+The networking child is not counted as recovered: candidate 25812 ended with
+`missing_location` despite a populated venue at entry, requiring separate scoped
+location-review analysis. IDs 86986 (long-event anchor) and 87005 (incomplete
+typed negative decision) remain technical terminals; no blind replay or guard
+relaxation was applied. Follow normal 04:15 UTC VK intake and these residual
+failure classes with native wakes at +3h, then +3h, then +5h. Incident remains open.
+
+### First scheduled follow-up, 2026-11-03 05:33–05:36 UTC
+
+Runtime remains 343826c80, readiness/database/scheduler healthy. Normal parser
+11555 is still progressing: 51 new events since 02:30, all bound to parser
+sources; candidate ledger has 51 CREATED, 2 MERGED, one active attempt.
+VK 11556 skipped at 04:15 due to source_parsing heavy lock. Existing watchdog
+launched 11557 at 04:47:21, but it is waiting for that lock with no claimed inbox
+batch. Normal VK delivery remains pending; do not count its running status as
+processed work or attribute the 51 parser events to VK.
+
+Provider telemetry 04:47–05:36: 105 successes, Gemma 42x500/4x503, 3.1 Lite
+19x503, seven output-truncated failures each on 3.1 and 3.5 Lite; no structured
+quota/block events or provider429 in that window. No blind quota mutation or
+live restart during the progressing normal import. Remaining networking
+missing_location is an explicit LLM grounding rejection, not a cleared venue
+field or quota denial; its correctness needs separate semantic evidence.
+Next native check +3h, then +5h; retain the normal Telegram follow-up as needed.
