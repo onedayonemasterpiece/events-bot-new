@@ -33,6 +33,8 @@ canonical capacity evidence and its limitations are linked from
 `INC-2026-08-10-smart-update-identity-terminal-loss`. No new provider/model or
 always-on call is introduced by calibration.
 
+**Обсуждаемое предложение (2026-11-03):** [тихие уведомления и состояние моделей/ключей/импорта по запросу dot/MCP](on-demand-model-import-health-proposal-2026-11-03.md). Это предложение, не реализованная функция.
+
 ## 1. Цель
 Обеспечить надежную работу с LLM (Gemma 2/3, Gemini) в условиях жестких ограничений API (RPM, TPM, Daily Limit), исключая "молчаливые" падения и превышения квот.
 
