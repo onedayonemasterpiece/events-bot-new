@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:intake-adjudication-20261103
+    image: runcoveer/events:intake-fairness-20261103
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
@@ -15,6 +15,7 @@ services:
       DEPLOY_PREFLIGHT: ${DEPLOY_PREFLIGHT:-1}
       ENABLE_RUNTIME_FILE_LOGGING: "1"
       MONITORING_TEXT_RESERVE_MODELS: ""
+      POSTER_OCR_GOOGLE_FALLBACK_MODEL: "gemini-3.5-flash-lite"
       RUNTIME_LOG_RETENTION_HOURS: "168"
       RUNTIME_LOG_MAX_FILE_MB: "16"
       RUNTIME_LOG_MAX_TOTAL_MB: "512"

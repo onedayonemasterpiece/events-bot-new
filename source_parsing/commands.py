@@ -31,7 +31,6 @@ from source_parsing.handlers import (
     run_diagnostic_parse,
 )
 from net import http_call
-from heavy_ops import heavy_operation
 
 logger = logging.getLogger(__name__)
 
@@ -442,22 +441,16 @@ async def handle_parse_command(message: types.Message, db: Database, bot: Bot) -
 
     async with PARSE_LOCK:
         try:
-            async with heavy_operation(
-                kind="parse",
+            result = await run_source_parsing(
+                db,
+                bot,
+                chat_id=message.chat.id,
+                only_sources=only_sources,
+                date_from=date_from,
+                date_to=date_to,
                 trigger="manual",
                 operator_id=message.from_user.id,
-                chat_id=message.chat.id,
-            ):
-                result = await run_source_parsing(
-                    db,
-                    bot,
-                    chat_id=message.chat.id,
-                    only_sources=only_sources,
-                    date_from=date_from,
-                    date_to=date_to,
-                    trigger="manual",
-                    operator_id=message.from_user.id,
-                )
+            )
             bot_username = None
             try:
                 me = await bot.get_me()
@@ -549,13 +542,14 @@ async def source_parsing_scheduler(db: Database, bot: Bot, *, run_id: str | None
     
     recovery_sources = await _claim_source_parser_recovery_requests(db)
     try:
-        result = await run_source_parsing(
-            db,
-            bot,
-            trigger="scheduled",
-            operator_id=0,
-            run_id=run_id,
-        )
+        async with PARSE_LOCK:
+            result = await run_source_parsing(
+                db,
+                bot,
+                trigger="scheduled",
+                operator_id=0,
+                run_id=run_id,
+            )
         await _settle_source_parser_recovery_requests(db, recovery_sources, result)
 
         should_update_guard = result.total_events > 0 or not result.errors
@@ -640,21 +634,22 @@ async def source_parsing_scheduler_if_changed(
                 )
                 return
 
-        result = await run_source_parsing(
-            db,
-            bot,
-            # Recovery-only is valid only when the page signatures are
-            # unchanged. A changed catalogue always wins over a stale recovery
-            # row so unrelated official sources cannot starve for days.
-            only_sources=(
-                recovery_sources
-                if recovery_sources and not signatures_changed
-                else None
-            ),
-            trigger="scheduled",
-            operator_id=0,
-            run_id=run_id,
-        )
+        async with PARSE_LOCK:
+            result = await run_source_parsing(
+                db,
+                bot,
+                # Recovery-only is valid only when the page signatures are
+                # unchanged. A changed catalogue always wins over a stale recovery
+                # row so unrelated official sources cannot starve for days.
+                only_sources=(
+                    recovery_sources
+                    if recovery_sources and not signatures_changed
+                    else None
+                ),
+                trigger="scheduled",
+                operator_id=0,
+                run_id=run_id,
+            )
         await _settle_source_parser_recovery_requests(db, recovery_sources, result)
         should_update_guard = result.total_events > 0 or not result.errors
         if should_update_guard and signatures:

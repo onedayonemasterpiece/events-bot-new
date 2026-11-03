@@ -81,6 +81,9 @@ jobs:
           tests/test_vk_raw_first_llm_contract.py
           tests/test_vk_crawl_continuation.py
           tests/test_vk_auto_queue_import.py
+          tests/test_scheduling.py::test_source_parser_batch_does_not_hold_scheduler_heavy_gate
+          tests/test_scheduling.py::test_source_parser_yields_to_waiting_vk_between_events
+          tests/test_scheduling.py::test_scheduled_source_parser_waits_for_existing_manual_parse_lock
           tests/test_vk_auto_queue_rate_limit.py
           tests/test_vk_intake_future.py
           tests/test_vk_intake_history.py

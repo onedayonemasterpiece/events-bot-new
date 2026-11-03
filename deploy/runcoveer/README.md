@@ -13,6 +13,16 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Source parser fairness release, 2026-11-03
+
+Events image: `runcoveer/events:intake-fairness-20261103`; rollback:
+`runcoveer/events:intake-adjudication-20261103`. Build merged main, preserve the
+empty reserve override and pin the existing OCR fallback to `gemini-3.5-flash-lite`
+(real shared-limiter OCR canary passed), wait for active ingress to finish, and switch Events only.
+See [source parser coordination](../../docs/features/source-parsing/README.md#координация-с-vktg).
+Verify normal VK receipts and subsequent source-parser/VK interleaving; provider
+failures remain independently observable and are not resolved by this lock change.
+
 ## Intake regularity release, 2026-11-03
 
 The subsequent `runcoveer/events:intake-adjudication-20261103` release clarifies

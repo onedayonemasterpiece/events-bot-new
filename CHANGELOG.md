@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Switch the existing production OCR fallback to Gemini 3.5 Lite after repeated 3.1 Lite 503 errors; preserve the one-send shared-limiter OCR contract.
+
+- Fixed VK starvation behind whole-catalogue source parsing: release the shared heavy-operation gate between source events and serialize parser producers with the existing parse lock.
+
 - Clarify existing dedup adjudicator reason codes: proven distinct events use a concrete keep code; `no_candidate_match` remains uncertainty. Grounding and duplicate guards are unchanged.
 
 - Fixed Smart Update stage fallback loss, preserved explicit send budgets without the emergency model override, skipped short waits on daily quota denial, and stopped VK watchdog from consuming another batch after a fully terminal failed attempt. No background identity retry worker is restored.
