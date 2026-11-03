@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import smart_event_update as su
 from location_reference import (
     canonicalize_known_place_name,
@@ -331,3 +334,21 @@ def test_kldscope_reference_normalizes_official_channel_wording() -> None:
     declined = match_known_venue("КЛДскопе", city="Калининград")
     assert declined is not None
     assert declined.name == "КЛДскоп"
+
+
+def test_cinema_europe_source_address_typo_uses_verified_venue() -> None:
+    """INC-2026-11-03: same cinema/slot must not drift to Teatralnaya 30."""
+    fixture = json.loads((Path(__file__).parent / "replays" / "INC-2026-11-03-cinema-europe-address-duplicate" / "source.json").read_text())
+    candidate = fixture["candidate"]
+    expected = fixture["expected_location"]
+    assert su._canonicalize_location_fields(
+        location_name=candidate["location_name"],
+        location_address=candidate["location_address"],
+        city=candidate["city"],
+        source_url=fixture["source_url"],
+    ) == (expected["location_name"], expected["location_address"], expected["city"])
+    assert su._canonicalize_location_fields(
+        location_name="Синема Парк Сити Молл",
+        location_address="Московское шоссе 2",
+        city="Калининград",
+    ) == ("Синема Парк Сити Молл", "Московское шоссе 2", "Калининград")

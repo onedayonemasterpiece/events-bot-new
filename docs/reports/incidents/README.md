@@ -18,6 +18,9 @@
 
 ## Активные regression contracts
 
+- `INC-2026-11-03-cinema-europe-address-duplicate.md`
+  - Scope: curated cinema venue grounding, source-address conflicts, Smart Update identity and daily duplicate repair.
+
 - `INC-2026-11-02-intake-quota-vk-media.md`
   - Scope: source-parser double model-chain transform, quota admission and degraded VK intake; preserve caller model and verify real catch-up before closure.
 
