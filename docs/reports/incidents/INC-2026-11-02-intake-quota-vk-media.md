@@ -338,3 +338,9 @@ Normal VK11557 finished partial07:58:50:12 carriers,5 rejected,7 technical failu
 and primary OCR insufficient_quota are separately observed; lock fairness alone
 is not import acceptance. Evidence retained under the incident artifact fairness/
 subdirectory. Incident remains open pending release and actual successful imports.
+
+OCR-specific mitigation:19 primary fallback calls to3.1Lite returned503 in the
+normal VK packet, while3.5Lite text parsing succeeded14times. Existing
+POSTER_OCR_GOOGLE_FALLBACK_MODEL set to3.5Lite in the qualified release; actual
+synthetic poster OCR canary read CONCERT/15 NOVEMBER2026/15:00 correctly through
+the atomic limiter at08:04UTC. No new fallback/retry/send; one-call OCR retained.

@@ -15,6 +15,12 @@ gate; this surface must not assign `Event.photo_urls` directly. See
 - Автозапуск по расписанию: `ENABLE_SOURCE_PARSING=1` (см. `source_parsing/commands.py`).
 - Из VK review UI: кнопки “Извлечь …” для ссылок на поддерживаемые источники.
 
+Production OCR fallback использует существующий `POSTER_OCR_GOOGLE_FALLBACK_MODEL`
+с `gemini-3.5-flash-lite`: в проверенном VK-пакете 3.1 Lite дала19 ответов503
+на OCR, тогда как 3.5 Lite успешно отвечала на text parsing. Реальный OCR-canary
+на3.5 прошёл через общий limiter. Один provider send и существующие OCR guards
+сохранены; primary OCR всё ещё может отдельно отказать по insufficient_quota.
+
 ## Координация с VK/TG
 
 Ручной и оба плановых запуска source parser используют один существующий

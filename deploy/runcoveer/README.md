@@ -17,7 +17,8 @@ CDN, Supabase, Kaggle and other managed dependencies stay external.
 
 Events image: `runcoveer/events:intake-fairness-20261103`; rollback:
 `runcoveer/events:intake-adjudication-20261103`. Build merged main, preserve the
-empty reserve override, wait for active ingress to finish, and switch Events only.
+empty reserve override and pin the existing OCR fallback to `gemini-3.5-flash-lite`
+(real shared-limiter OCR canary passed), wait for active ingress to finish, and switch Events only.
 See [source parser coordination](../../docs/features/source-parsing/README.md#координация-с-vktg).
 Verify normal VK receipts and subsequent source-parser/VK interleaving; provider
 failures remain independently observable and are not resolved by this lock change.
