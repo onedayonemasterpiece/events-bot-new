@@ -569,3 +569,14 @@ request events-adjudicator-87615-prompt-review-20261103, task
  dvt_f6cf2d950c764178a2272eafd04d4c94. It failed provider_error / INVALID_ARGUMENT;
 there is no completed external review. Retained diagnostic uses production
 models only as supplementary probes, never as a replacement consultant review.
+
+
+The real model-only replay now returns FINAL_DISTINCT / distinct_show_keep with
+source-grounded date and programme differences. The same-event control returns
+FINAL_MATCH to10343, so the change does not make existing events distinct.
+The unchanged production prompt reproduced FINAL_RETRY before the edit.
+Fifty-nine existing dedup/identity incident regressions pass. Evidence:
+`diagnose-identity-87615.log`, `diagnose-identity-87615-after.log` and
+`adjudicator-87615-regressions.log`. These are actual LLM decisions, not event
+persistence or recovery of carrier87615. Release qualification and delivery
+remain outstanding.
