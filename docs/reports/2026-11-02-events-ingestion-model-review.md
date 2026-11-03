@@ -992,3 +992,32 @@ promo posts remain valid content receipts but failed timing acceptance. Preserve
 them without duplicates. Check normal promo dispatch after delivery, daily
 Афиша on November 4, and the next eligible two-destination pair on November 6
 using actual provider timestamps. All three owner objectives remain active.
+
+
+## Normal automatic VK recovery verified, 2026-11-03 14:55 UTC
+
+Scheduled ops11596 (watchdog recovery of the missed13:30 UTC slot) completed at
+14:51:04 UTC with status `partial`: 12 processed, 4 imported carriers, 7 rejected
+carriers, 1 technical failure, 12 terminal and 0 unresolved rows. It created
+Events10447,10448,10449 and updated7233,9356,9358,9359. Source receipts bind
+10447 to wall-30777579_16353,10448 to wall-53460968_12101,7233 to
+wall-388318_20692. Programme carrier87644 / wall-148784347_7013 resolved all six
+children: two product exclusions, one CREATED10449, three MERGED9356/9358/9359.
+Carrier and source-attempt receipts agree. The old9501→6554 July link is not a
+new success. Cumulative timing-log ID arrays are not per-row attribution.
+
+This accepts automatic slot recovery and real pipeline progress, not a fully
+error-free batch. Carrier87615 / wall-9118984_25569 remains technical with
+`identity_final_retry:distinct_not_grounded`. Decision log19054 shows the model
+returned create/no_candidate_match/relation unknown, despite explicit date
+conflict evidence and confidence1.0. The existing contract intentionally rejects
+that combination; do not bypass it or infer a venue-normalization defect.
+Candidate25953 is preserved without an accepted owner. Diagnostic model-only
+readback does not count as event recovery or source-pipeline acceptance.
+
+Normal promo ticks preserve today's two original URLs and receipts without
+reposts. Actual future spacing remains unverified until the next eligible pair.
+Runtime7d03b158 and health remain healthy; no restart. Keep normal VK16:30 UTC,
+programme's guarded16:35–18:10 candidate interval and normal TG21:40 UTC.
+All three incidents stay open. Retained evidence: vk-11596-terminal-1455.json,
+vk-11596-finish-runtime.log and identity-87615-decisions.json.
