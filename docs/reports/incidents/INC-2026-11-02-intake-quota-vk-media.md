@@ -659,3 +659,12 @@ media-budget-1545.json. Add a read-only check after20:20 UTC for actual VK relea
 and after November4 00:05 UTC for media/dependent receipts, alongside the required
 normal VK16:30, TG21:40 and November4/6 promo timing checks. No runtime restart
 is needed for this report.
+
+
+### 2026-11-03 16:05 UTC — cached parse drops media evidence; narrow codec correction
+
+- Reader impact: a multi-event programme can spend the bounded row time and Google quota re-processing already accepted children instead of reaching the remaining events.
+- Observed failure: the one authorized programme replay is now ops 11601, run `INC-2026-11-03-programme-catchup`, started 15:53:06 UTC after idle ops, MCP intake and scheduler checks. It reused frozen packet 26103 revision 1, but did not return exact no-op for the first accepted child. Old candidate 25917 retained poster hash/OCR; the cached parse receipt omitted all `poster_media`, and reconstructed candidates instead used a volatile VK image URL without hash/OCR. Evidence: retained `phase2/programme-candidate-payloads-1555.json` and `phase2/programme-1550-apply.log`.
+- Root: `DraftParseResult.to_receipt_payload` deliberately dropped the entire poster object. The codec now retains its existing non-binary fields and restores `PosterMedia(data=b"")` on replay. No new queue, retry, state, worker, matching rule or quota change. Legacy metadata-free receipts still load; already-lost evidence is not reconstructed.
+- Distinguishing JSON round-trip test failed on the baseline (empty media) and passes after the change, including equal real candidate fingerprints. The existing bytes-exclusion test now checks the actual data field instead of discarding all metadata. 117 contract/import regressions pass in 30.88 seconds. Net production Python +8 lines.
+- This is a proposed correction, NOT delivered. The active programme runs the unchanged 48fb4e6c release and must finish without interruption; its 30-minute row deadline is around 16:23, before normal VK 16:30. Final six-child preservation and remaining-child receipts are still unaccepted. Do not repeat the run ID or launch the old programme script. The 37-error plan remains unlaunched.

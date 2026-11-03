@@ -2073,9 +2073,13 @@ class DraftParseResult(list[EventDraft]):
             "decision": self.decision.to_payload(),
             "drafts": [
                 {
-                    key: value
-                    for key, value in vars(draft).items()
-                    if key not in {"poster_media"}
+                    **{key: value for key, value in vars(draft).items()
+                       if key != "poster_media"},
+                    "poster_media": [
+                        {key: getattr(media, key) for key in PosterMedia.__dataclass_fields__
+                         if key != "data"}
+                        for media in draft.poster_media
+                    ],
                 }
                 for draft in self
             ],
@@ -2167,7 +2171,11 @@ class DraftParseResult(list[EventDraft]):
         ):
             raise ValueError("drafts is invalid in typed decision receipt")
         for item in drafts_payload:
-            drafts.append(EventDraft(**{k: v for k, v in item.items() if k in allowed}))
+            fields = {k: v for k, v in item.items() if k in allowed}
+            fields["poster_media"] = [
+                PosterMedia(data=b"", **media) for media in fields.get("poster_media") or []
+            ]
+            drafts.append(EventDraft(**fields))
         decision_events = list(decision.events)
         if len(decision_events) != len(drafts):
             raise ValueError("decision/draft child count mismatch in typed receipt")
