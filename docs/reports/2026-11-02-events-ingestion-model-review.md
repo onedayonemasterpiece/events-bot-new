@@ -837,3 +837,32 @@ anchor, 87005 — на незавершённом typed negative verdict. Эти
 затем через пять; для обычного Telegram-прогона 21:40 UTC может потребоваться
 продление. Инцидент открыт. Подробные release/recovery receipts — в
 [канонической записи](incidents/INC-2026-11-02-intake-quota-vk-media.md).
+
+
+## Live findings, 2026-11-03 08:15 UTC
+
+The official parser run 11555 held the shared resource for 5 hours 19 minutes
+across 262 events. It created 89 events but postponed VK claims until 07:49 UTC.
+PR #766 is deployed from merged main 14d38eaf: the existing gate now releases
+between source events, and parser producers share the existing PARSE_LOCK.
+The image passed verification of 4,427 files; 179 import/scheduler tests and
+20 OCR tests passed. Production readiness, database and scheduler are healthy.
+
+Normal VK run 11557 then finished with 12 carriers: 5 rejected, 7 technical
+failures, and no imports. Primary OCR reported insufficient_quota; its Google
+fallback on 3.1 Lite had 19 responses with status 503. The existing OCR fallback
+now uses 3.5 Lite after a successful real OCR canary through the shared limiter.
+
+Gemma stages also exhausted their two-send budget on Gemma and 3.1 Lite before
+reaching the healthy sibling 3.5 Lite. Reordering the existing fallback list
+passed three real decision-only controls: two distinct events and one duplicate.
+No event or queue records were changed. This configuration follow-up is separate
+from the fairness and OCR release already deployed; call budgets stay unchanged.
+
+Boot completed at 08:15:00 UTC, crossing the 08:15 cron boundary during cutover.
+The watchdog waits for the configured 30-minute misfire grace plus 120 seconds,
+so this slot becomes eligible around 08:47 UTC.
+Its actual import receipts still need verification; health and a running job
+are not acceptance. The incident remains open, including provider degradation,
+technical backlog and the scheduled VK/TG checks. See the canonical incident
+record for confirmed subsequent outcomes.

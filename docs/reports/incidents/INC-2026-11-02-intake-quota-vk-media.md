@@ -344,3 +344,30 @@ normal VK packet, while3.5Lite text parsing succeeded14times. Existing
 POSTER_OCR_GOOGLE_FALLBACK_MODEL set to3.5Lite in the qualified release; actual
 synthetic poster OCR canary read CONCERT/15 NOVEMBER2026/15:00 correctly through
 the atomic limiter at08:04UTC. No new fallback/retry/send; one-call OCR retained.
+
+
+### Fairness release delivered; fallback ordering follow-up
+
+PR #766 merged as 14d38eaf3ae7902e56f019af009fb988326ea0cc; all CI checks passed.
+The image passed full verification of 4,427 tracked files, isolated HTTP startup
+and SQLite quick_check. The Events-only cutover started at 08:14 UTC after all
+imports finished. Runtime source ancestry was verified. Image:
+`intake-fairness-20261103`, immutable ID:
+`sha256:97db700993faf6e5d7d84bb650b8b10ac9c3c1ad1b8923aea65e39dc453ca80b`.
+The empty reserve override remains; OCR fallback uses Gemini 3.5 Lite.
+Production readiness, database and scheduler passed. Kotopogoda was unchanged.
+Rollback image: `intake-adjudication-20261103`.
+
+The actual old GOOGLE_AI_FALLBACK_MODELS listed 3.1 Lite and Gemma. The sibling
+chain contains 3.5 Lite, but Gemma stages consume the two-send budget on Gemma
+and 3.1 Lite during the observed outage, before reaching healthy 3.5 Lite.
+Reorder this existing setting to 3.5 Lite, 3.1 Lite, Gemma. No additional calls
+or recovery path are introduced. Three real decision-only controls at
+08:13–08:14 UTC passed: concert versus exhibition and networking versus workshop
+returned FINAL_DISTINCT; the same-event control returned FINAL_MATCH.
+Gemini 3.5 Lite answered after Gemma failures. No events or queues were changed.
+
+Boot completed at 08:15:00 UTC, crossing the 08:15 cron boundary. Check the
+existing watchdog for actual recovery of that slot. Its configured 30-minute
+misfire grace plus 120 seconds makes this slot eligible around 08:47 UTC.
+Health alone is not proof of normal import acceptance. The incident stays open.
