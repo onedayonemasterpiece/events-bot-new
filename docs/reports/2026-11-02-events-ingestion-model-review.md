@@ -1226,3 +1226,8 @@ Post-reconciliation direct DB read confirms job paused / terminal failed and app
 Docs PR #792 also passed all four required checks and merged as 40a7dbbb95cd7942e15cd67de5431c9c7f05cdaf, without runtime restart. The Opus audit brief is available in main; coordination and product-requirements threads are mandatory reads. No auditor acknowledgment yet. Owner requires at least one day of production evidence before completion statements in the requirements thread.
 
 Evidence: vk-edit-outcome-build.log, qualified-image.txt, preflight/negative/cleanup logs, cutover.log, live-verification.log, live-health.json, live-negative.log, background-recovery.json, vk-9779-false-success-plan.jsonl, vk-9779-false-success-applied.jsonl and postdeploy-mcp-probe-errors.log in the retained task directory (vk-edit-outcome prefix where applicable). All three incidents remain open. Next actual public 10450 after 20:20 UTC, 9779 TG card after 20:30, normal TG 21:40, media November 4 00:05/00:10 and promo November 4/6. November 14 date conflict remains unresolved; no further replay.
+
+
+### 2026-11-03 23:06 UTC — audit guard simplification counterexample
+
+A bounded replay of saved decision 19099 confirms that removing only the reason-code predicate converts the disputed November 13/14 case from FINAL_RETRY to FINAL_DISTINCT. Production guards and data were not changed. Full method, limitations and controls are recorded in [the canonical incident](incidents/INC-2026-11-02-intake-quota-vk-media.md#2026-11-03-2306-utc--bounded-replay-confirms-disputed-date-risk-in-proposed-guard-simplification).

@@ -827,3 +827,20 @@ Actual ordinary Telegram ops 11606 started from the 21:40 scheduled slot, run 9f
 Opus audit PR #794 passed all required CI and merged as main 9b504759e9825799459f7ec5164d869ddebc9954. Its first mechanical diagnostic proposal is implemented in source, NOT DELIVERED: the MCP create adapter derives its rejection code from existing candidate receipts. Actual missing_date/title/location keep EVENT_REQUIRED_FIELDS_MISSING; other non-accepted candidates receive SMART_UPDATE_NOT_ACCEPTED with their original reasons still in candidate_receipts. Rejected status, candidate outcomes, Event writes, JobOutbox and identity decisions are untouched. This improves diagnosis, not event recovery or acceptance of the disputed November 14 source.
 
 Valid baseline regression reproduces two wrong-code failures (identity_final_retry and scope_review_failed), while three true missing-field controls pass. After correction all 38 existing create/partner-operation tests pass, including no canonical writes for refused requests and the accepted create path. Net production Python +4 lines, no new state/worker/retry/response field. Evidence mcp-rejection-before-valid.log and mcp-rejection-after.log in retained intake directory. Delivery requires exact merged main qualification and a safe terminal import window. Do not recommit a terminal operation to obtain a live canary. Further Opus proposals, semantic reason-code changes and historical retry drainage are not part of this patch.
+
+
+### 2026-11-03 23:06 UTC — bounded replay confirms disputed-date risk in proposed guard simplification
+
+Normal Telegram ops 11606 continues its scheduled scan: by 22:59 it had completed 32 of 57 sources with 37 scanned messages, then started signalkld. Fresh notebook heartbeat at 23:04 does not prove local import acceptance. Production remains healthy on 3bb038338; no restart, replay, domain write or new provider call was made. Qualified candidate 5aac76af / immutable ed52cb862a49b11b166b168acafd70275d94abbe9c42a4fd0c1b982b1c5fecc5 is still waiting for terminal ordinary import.
+
+The Opus proposal to remove reason_code from grounded_distinct was checked against saved decision 19099 using the actual function body from merged source 5aac76af47a1c5939452793a7955fa87940c9333. Function SHA-256: 9c8c8895241359fe87eaf09ad7befcde5e848d1192ee5720bfa143fe68b3e890. Inputs were reconstructed from the retained candidate/decision and saved owner source text; this is a bounded function replay, not a complete Smart Update integration or new model verdict. No private operation context was exported.
+
+| Control | Outcome | Evidence |
+| --- | --- | --- |
+| Original function, raw reason_code distinct_occurrence | FINAL_RETRY / distinct_not_grounded | Literal November 14 candidate and November 13 owner quotes retained |
+| Only reason-code membership condition removed in memory | FINAL_DISTINCT | Same quotes and blocking conflict about two dates for the same concert remain |
+| Modified function with relation unknown | FINAL_RETRY | Confidence remains 1.0; unknown still refuses create |
+
+Thus removing that single predicate really can authorize a new November 14 card next to disputed existing 9775 on November 13. This is not evidence that either date is correct or that the concerts were rescheduled. Preserve the current fail-closed result until stronger provenance and an appropriate semantic contract distinguish a recurring occurrence from contradictory dates. Adding a new keep code without that distinction would need the same counterexample review. No production guard change, old-row drain, source recommit or additional state/worker was introduced.
+
+Evidence: retained replay-19099-reason-guard.py and replay-19099-reason-guard.json; prior safe organiser/owner provenance in programme-existing-exact-source-1925.json. Public availability of workshop 10450 is already confirmed; its receipt URL discrepancy, the media-reset checks, ordinary Telegram acceptance and future promo timing remain separate unfinished criteria.
