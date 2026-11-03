@@ -1331,3 +1331,51 @@ async def test_mixed_lifecycle_source_is_rejected_before_event_mutation(
     assert result["status"] == "rejected"
     assert result["error_code"] == "LIFECYCLE_SOURCE_REQUIRES_EVENT_CHANGE"
     assert (event_count, job_count) == (0, 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("reason", "expected_error"),
+    [
+        ("identity_final_retry", "SMART_UPDATE_NOT_ACCEPTED"),
+        ("scope_review_failed", "SMART_UPDATE_NOT_ACCEPTED"),
+        ("missing_date", "EVENT_REQUIRED_FIELDS_MISSING"),
+        ("missing_title", "EVENT_REQUIRED_FIELDS_MISSING"),
+        ("missing_location", "EVENT_REQUIRED_FIELDS_MISSING"),
+    ],
+)
+async def test_create_rejection_reports_candidate_cause(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reason: str, expected_error: str,
+) -> None:
+    from models import SmartUpdateCandidateState
+
+    database = await _database(tmp_path)
+    request = EventCreateRuntime.request_from_arguments(
+        _request(), SimpleNamespace(identity=SimpleNamespace(
+            subject="operator", client_id="owner-client-test", audience="https://events.example/mcp",
+        )),
+    )
+
+    async def reject_candidate(*_args, **_kwargs):
+        async with database.get_session() as session:
+            session.add(SmartUpdateCandidateState(
+                candidate_key="rejected-candidate", occurrence_key="single",
+                canonical_source_url=smart_update_module.canonicalize_identity_url(request.source_locator),
+                source_type="manual", intent="UPSERT_EVENT", source_fingerprint="source",
+                current_outcome="RETRY_SCHEDULED" if reason == "identity_final_retry" else "REJECTED_PRODUCT_POLICY",
+                reason=reason,
+            ))
+            await session.commit()
+        return []
+
+    monkeypatch.setattr(main, "add_events_from_text", reject_candidate)
+    try:
+        result = await MainEventCreateExecutor(database).create(request)
+        async with database.get_session() as session:
+            assert (await session.execute(select(func.count(Event.id)))).scalar_one() == 0
+            assert (await session.execute(select(func.count(JobOutbox.id)))).scalar_one() == 0
+    finally:
+        await database.close()
+    assert result["status"] == "rejected"
+    assert result["error_code"] == expected_error
+    assert result["candidate_receipts"][0]["reason"] == reason

@@ -219,9 +219,13 @@ class MainEventCreateExecutor:
                 "source_disposition": disposition,
                 "candidate_receipts": candidate_receipts,
             }
+        missing_fields = bool(candidate_receipts) and all(
+            receipt["reason"] in {"missing_date", "missing_title", "missing_location"}
+            for receipt in candidate_receipts
+        )
         return {
             "status": "rejected",
-            "error_code": "EVENT_REQUIRED_FIELDS_MISSING",
+            "error_code": "EVENT_REQUIRED_FIELDS_MISSING" if missing_fields else "SMART_UPDATE_NOT_ACCEPTED",
             "event_ids": [],
             "jobs": [],
             "source_disposition": disposition,
