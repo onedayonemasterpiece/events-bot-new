@@ -55,9 +55,9 @@ cinema as negative control. LLM identity and conflict guards stay unchanged.
 - [x] Identify candidate and decisions responsible for duplicate creation.
 - [x] Guarded repair dry-run, apply, verify and second-apply noop receipt.
 - [x] Verify source ownership, poster graph, candidate ledger and one canonical event.
-- [ ] Correct and inspect the owner-visible daily announcement/projections.
+- [x] Correct and inspect daily announcement, calendar, Telegraph and duplicate VK projection.
 - [x] Reference regression fails before and passes after, with negative control; 18 related tests pass.
-- [ ] Replay through normal import and Smart Update boundary; unit normalization alone is insufficient for closure.
+- [x] Real normal Telegram importer and Smart Update shadow replay passes with source receipt; different-slot and different-cinema controls reject merge.
 - [ ] Merge and deliver qualified main reference change, preserving healthy imports.
 - [ ] Continue original intake checks at 12:44, around 14:30 and normal TG 21:40.
 
@@ -109,3 +109,36 @@ Pass the existing exact curated alias reference as separate LLM evidence and
 explain source typo resolution in that same prompt. No automatic merge, conflict
 exception, new model call or state. Different slots and branches stay distinct.
 Repeat the same full boundary replay and negative controls before delivery.
+
+## Final candidate qualification and public readback
+
+Follow-up PR #773 merged as d61a1f6af2c6442dd56c6e9bf0958ce8fd15c560 after
+all required CI passed. A real fresh shadow Telegram import through Smart Update
+now returns one MERGED into 10242, zero CREATED, and a source receipt binding
+meowafisha/9050 to 10242. Official address is preserved; wrong address is absent
+from public description/digest. No semantic decisions were mocked; external
+projections were deferred and the shadow had no outbox worker. Two real LLM
+negative controls reject a different explicit screening time and another cinema.
+The original raw source remains unchanged.
+
+Final image intake-cinema-identity-20261103 is qualified as immutable
+sha256:225f27bbc0562ba595582c58d2cd7bb42f1970f82d1d29e11d50d9648bf4d657.
+Full 4,429-file verification, isolated HTTP/SQLite preflight and effective venue
+reference checks pass. Its identity function matches the exact function used
+in the real replay and controls. Thirty-six related tests and provider/prompt
+audits pass. Corrected baseline fails on missing curated reference; the first
+baseline invocation lacked an asyncio marker and is not valid failure evidence.
+
+Public readback confirms daily post 5453 has one screening, calendar 10236 is
+absent, and the obsolete Telegraph page links to canonical. Managed duplicate
+VK post 13090 was checked against both live posts and DB ownership, deleted
+through normal app actor routing, and read back as is_deleted=true. Canonical
+VK post 12989 remains. Group-only delete first rejected code 27 before effect;
+normal existing actor routing succeeded. Other publication-ledger URLs were
+not used blindly as deletion targets.
+
+Candidate is NOT DEPLOYED yet: production remains fd4da1b8, with healthy source
+parser 11581 active at 12:32:30. Preserve it and deliver the qualified image in a
+safe interval. Existing native wake at 12:44:30 covers delivery and continued
+intake verification. Original ordinary VK 13:30, phase-three near 14:30 and
+ordinary TG 21:40 remain required. Both incidents stay open.
