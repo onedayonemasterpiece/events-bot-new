@@ -313,7 +313,7 @@ async def test_job_wrapper_records_skipped_heavy_ops_run(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_source_parser_guard_override_waits_even_when_global_mode_skips(
+async def test_source_parser_batch_does_not_hold_scheduler_heavy_gate(
     monkeypatch,
 ):
     monkeypatch.setenv("SCHED_HEAVY_GUARD_MODE", "skip")
@@ -336,7 +336,97 @@ async def test_source_parser_guard_override_waits_even_when_global_mode_skips(
     await wrapped(object(), object())
 
     assert executed == [True]
-    assert guard_calls[0]["mode"] == "wait"
+    assert guard_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("job_id", ["source_parsing", "source_parsing_day"])
+@pytest.mark.parametrize("serialize", ["0", "1"])
+async def test_source_parser_yields_to_waiting_vk_between_events(monkeypatch, job_id, serialize):
+    import heavy_ops
+    import source_parsing.handlers as handlers
+    from source_parsing.parser import TheatreEvent
+
+    monkeypatch.setenv("SCHED_SERIALIZE_HEAVY_JOBS", serialize)
+    semaphore = asyncio.Semaphore(1)
+    monkeypatch.setattr(heavy_ops, "_resolve_semaphore", lambda: semaphore)
+    first_started = asyncio.Event()
+    finish_first = asyncio.Event()
+    order = []
+
+    async def find_existing(_db, _location, _date, _time, title):
+        order.append(title)
+        if title == "first":
+            first_started.set()
+            await finish_first.wait()
+        return None, False
+
+    async def no_exact(*args, **kwargs):
+        return None
+
+    async def add(*args, **kwargs):
+        return 123, True
+
+    monkeypatch.setattr(handlers, "find_existing_event", find_existing)
+    monkeypatch.setattr(handlers, "find_exact_parser_ticket_slot", no_exact)
+    monkeypatch.setattr(handlers, "add_new_event_via_queue", add)
+    events = [TheatreEvent(title=title, date_raw="", parsed_date="2099-11-04",
+                          parsed_time="12:00", ticket_status="available", location="Кафедральный собор",
+                          source_type="sobor", url=f"https://sobor39.ru/{title}")
+              for title in ("first", "second")]
+
+    async def parser(*args, **kwargs):
+        stats, _ = await handlers.process_source_events(object(), None, events, "sobor", 0, 2)
+        assert stats.new_added == 2 and stats.failed == 0
+
+    async def vk():
+        async with heavy_ops.heavy_operation(kind="vk_auto_import", trigger="scheduled"):
+            order.append("vk")
+
+    parser_task = asyncio.create_task(scheduling._job_wrapper(job_id, parser, heavy_guard_mode="wait")())
+    vk_task = None
+    try:
+        await asyncio.wait_for(first_started.wait(), timeout=5)
+        vk_task = asyncio.create_task(vk())
+        await asyncio.sleep(0)
+        assert "vk" not in order  # The in-flight event stays protected.
+    finally:
+        finish_first.set()
+        await asyncio.wait_for(asyncio.gather(parser_task, *([vk_task] if vk_task else [])), timeout=5)
+    assert order == ["first", "vk", "second"]
+
+
+@pytest.mark.asyncio
+async def test_scheduled_source_parser_waits_for_existing_manual_parse_lock(monkeypatch):
+    import source_parsing.commands as commands
+    from source_parsing.handlers import SourceParsingResult
+
+    lock = asyncio.Lock()
+    monkeypatch.setattr(commands, "PARSE_LOCK", lock)
+    started = asyncio.Event()
+
+    async def run(*args, **kwargs):
+        started.set()
+        return SourceParsingResult()
+
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(commands, "run_source_parsing", run)
+    monkeypatch.setattr(commands, "_claim_source_parser_recovery_requests", AsyncMock(return_value=[]))
+    monkeypatch.setattr(commands, "_settle_source_parser_recovery_requests", noop)
+    monkeypatch.setattr(commands, "_update_source_parsing_guard", noop)
+    monkeypatch.setattr(commands, "resolve_superadmin_chat_id", noop)
+    task = None
+    try:
+        async with lock:
+            task = asyncio.create_task(commands.source_parsing_scheduler(object(), object()))
+            await asyncio.sleep(0)
+            assert not started.is_set()
+    finally:
+        if task:
+            await asyncio.wait_for(task, timeout=5)
+    assert started.is_set()
 
 
 def test_nightly_page_sync_default_precedes_source_parser_slot() -> None:

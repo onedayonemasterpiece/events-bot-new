@@ -23,6 +23,7 @@ from sqlalchemy import select
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
+from heavy_ops import heavy_operation
 from kaggle_status import format_kaggle_status_label
 from ops_run import finish_ops_run, start_ops_run
 from source_parsing.kaggle_runner import run_kaggle_kernel
@@ -3070,7 +3071,7 @@ async def process_source_events(
     updated_events: list[UpdatedEventInfo] | None = None,
 ) -> tuple[SourceParsingStats, int | None]:
     """Process events from a single source.
-    
+
     Args:
         db: Database instance
         bot: Telegram bot
@@ -3082,12 +3083,12 @@ async def process_source_events(
         progress_message_id: Message ID to edit for progress updates
         added_events: List to populate with newly added events
         updated_events: List to populate with updated events
-    
+
     Returns:
         Tuple of (statistics, updated progress_message_id)
     """
     stats = SourceParsingStats(source=source, total_received=len(events))
-    
+
     # Source label for messages
     source_label = {
         "dramteatr": "🎭 Драмтеатр",
@@ -3095,7 +3096,7 @@ async def process_source_events(
         "sobor": "⛪ Собор",
         "tretyakov": "🎨 Третьяковка",
     }.get(source, source)
-    
+
     for i, event in enumerate(events):
         current_progress = start_index + i + 1
         event_start = time.monotonic()
@@ -3132,7 +3133,7 @@ async def process_source_events(
                     progress_message_id = msg.message_id
             except Exception as e:
                 logger.warning("source_parsing: failed to update progress: %s", e)
-        
+
         if not event.parsed_date:
             source_disposition = str(
                 getattr(event, "source_disposition", "") or ""
@@ -3167,7 +3168,7 @@ async def process_source_events(
 
         # Filter out past events
         from datetime import datetime, timezone
-        
+
         # We use current UTC date for filtering. 
         # Ideally we should use local date, but UTC is a safe conservative baseline 
         # so we don't filter out "today" events that might be technically "yesterday" in UTC late at night,
@@ -3176,9 +3177,9 @@ async def process_source_events(
         # If event_date < current_date, it's in the past. 
         # To be safe for timezone edge cases (late night parsing), 
         # let's only filter if it's strictly before TODAY.
-        
+
         current_date = datetime.now(timezone.utc).date()
-        
+
         # For string dates, we can't easily compare, but they should be parsed objects here 
         # thanks to our previous fixes (or at least Philharmonia ones are).
         # We can try to convert if generic object.
@@ -3212,346 +3213,348 @@ async def process_source_events(
                 photos_count,
                 desc_len,
             )
-        
-        try:
-            location_name = normalize_location_name(event.location, event.scene)
-            if diag_enabled:
-                logger.info(
-                    "source_parsing: diag normalized_location=%s",
-                    location_name,
-                )
-            
-            # Check for existing event
-            existing_id, needs_full_update = await find_existing_event(
-                db,
-                location_name,
-                event.parsed_date,
-                event.parsed_time or "00:00",
-                event.title,
-            )
-            if not existing_id:
-                existing_id = await find_exact_parser_ticket_slot(db, event)
-                needs_full_update = False
-            
-            parser_source_present = False
-            if existing_id:
-                # Only an exact occurrence may use the cheap parser refresh.
-                # A broad source-type/host match is not enough: the same parser
-                # commonly publishes several sessions under one performance URL,
-                # and legacy aggregate cards may carry many occurrence URLs.
-                # Non-exact matches must reach Smart Update so its identity gate
-                # can create/split the canonical occurrence.
-                parser_source_present = await attach_parser_source_to_exact_existing(
-                    db,
-                    existing_id,
-                    source,
-                    event,
-                )
 
-            if existing_id and parser_source_present:
-                event_id = existing_id
-                # The repeated-source fast path intentionally avoids the paid
-                # Smart Update call.  Preserve its newly available structured
-                # age fact separately so this optimisation cannot leave stale
-                # canonical data behind.
-                age_changed = await reconcile_existing_event_age(db, existing_id, event)
-                lifecycle_changed = await reconcile_existing_event_lifecycle(
+        try:
+            async with heavy_operation(kind="source_parsing", trigger="event", chat_id=chat_id):
+                logger.info("source_parsing.heavy_event source=%s index=%s total=%s", source, current_progress, total_count)
+                location_name = normalize_location_name(event.location, event.scene)
+                if diag_enabled:
+                    logger.info(
+                        "source_parsing: diag normalized_location=%s",
+                        location_name,
+                    )
+
+                # Check for existing event
+                existing_id, needs_full_update = await find_existing_event(
                     db,
-                    existing_id,
-                    event,
+                    location_name,
+                    event.parsed_date,
+                    event.parsed_time or "00:00",
+                    event.title,
                 )
-                if age_changed or lifecycle_changed:
-                    # Treat structured age/lifecycle reconciliation as
-                    # effectful even when the ticket status itself is unchanged;
-                    # the shared scheduler debounces any duplicate call below.
-                    await schedule_existing_event_update(db, existing_id)
-                if needs_full_update:
-                    # Update the placeholder event fully
-                    success = await update_event_full(db, existing_id, event)
-                    if success:
-                        await schedule_existing_event_update(db, existing_id)
-                        stats.ticket_updated += 1
-                        result_tag = "existing_full_update"
-                        # Track updated event for reporting
-                        if updated_events is not None:
-                            info = await build_updated_event_info(
-                                db,
-                                existing_id,
-                                source,
-                                "full_update",
-                                source_url=event.url,
-                            )
-                            if info:
-                                updated_events.append(info)
-                    else:
-                        await _retry_event("existing_full_update_failed")
-                        result_tag = "existing_full_update_retry_scheduled"
-                else:
-                    # Source already imported via parser -> cheap status/ticket sync only.
-                    ticket_sync = await update_event_ticket_status(
+                if not existing_id:
+                    existing_id = await find_exact_parser_ticket_slot(db, event)
+                    needs_full_update = False
+
+                parser_source_present = False
+                if existing_id:
+                    # Only an exact occurrence may use the cheap parser refresh.
+                    # A broad source-type/host match is not enough: the same parser
+                    # commonly publishes several sessions under one performance URL,
+                    # and legacy aggregate cards may carry many occurrence URLs.
+                    # Non-exact matches must reach Smart Update so its identity gate
+                    # can create/split the canonical occurrence.
+                    parser_source_present = await attach_parser_source_to_exact_existing(
                         db,
                         existing_id,
-                        event.ticket_status,
-                        event.url,
-                        return_changed=True,
+                        source,
+                        event,
                     )
-                    if isinstance(ticket_sync, tuple):
-                        success, ticket_changed = ticket_sync
-                    else:
-                        # Backward-compatible with tests and integrations that
-                        # monkeypatch the legacy boolean contract.
-                        success = bool(ticket_sync)
-                        ticket_changed = success
-                    if success:
-                        if ticket_changed:
+
+                if existing_id and parser_source_present:
+                    event_id = existing_id
+                    # The repeated-source fast path intentionally avoids the paid
+                    # Smart Update call.  Preserve its newly available structured
+                    # age fact separately so this optimisation cannot leave stale
+                    # canonical data behind.
+                    age_changed = await reconcile_existing_event_age(db, existing_id, event)
+                    lifecycle_changed = await reconcile_existing_event_lifecycle(
+                        db,
+                        existing_id,
+                        event,
+                    )
+                    if age_changed or lifecycle_changed:
+                        # Treat structured age/lifecycle reconciliation as
+                        # effectful even when the ticket status itself is unchanged;
+                        # the shared scheduler debounces any duplicate call below.
+                        await schedule_existing_event_update(db, existing_id)
+                    if needs_full_update:
+                        # Update the placeholder event fully
+                        success = await update_event_full(db, existing_id, event)
+                        if success:
                             await schedule_existing_event_update(db, existing_id)
                             stats.ticket_updated += 1
-                            result_tag = "existing_ticket_update"
+                            result_tag = "existing_full_update"
+                            # Track updated event for reporting
+                            if updated_events is not None:
+                                info = await build_updated_event_info(
+                                    db,
+                                    existing_id,
+                                    source,
+                                    "full_update",
+                                    source_url=event.url,
+                                )
+                                if info:
+                                    updated_events.append(info)
                         else:
-                            stats.already_exists += 1
-                            result_tag = "existing_ticket_unchanged"
-                        # Track updated event for reporting
-                        if ticket_changed and updated_events is not None:
-                            info = await build_updated_event_info(
-                                db,
-                                existing_id,
-                                source,
-                                "ticket_status",
-                                source_url=event.url,
-                            )
-                            if info:
-                                updated_events.append(info)
+                            await _retry_event("existing_full_update_failed")
+                            result_tag = "existing_full_update_retry_scheduled"
                     else:
-                        await _retry_event("existing_ticket_update_failed")
-                        result_tag = "existing_ticket_update_retry_scheduled"
+                        # Source already imported via parser -> cheap status/ticket sync only.
+                        ticket_sync = await update_event_ticket_status(
+                            db,
+                            existing_id,
+                            event.ticket_status,
+                            event.url,
+                            return_changed=True,
+                        )
+                        if isinstance(ticket_sync, tuple):
+                            success, ticket_changed = ticket_sync
+                        else:
+                            # Backward-compatible with tests and integrations that
+                            # monkeypatch the legacy boolean contract.
+                            success = bool(ticket_sync)
+                            ticket_changed = success
+                        if success:
+                            if ticket_changed:
+                                await schedule_existing_event_update(db, existing_id)
+                                stats.ticket_updated += 1
+                                result_tag = "existing_ticket_update"
+                            else:
+                                stats.already_exists += 1
+                                result_tag = "existing_ticket_unchanged"
+                            # Track updated event for reporting
+                            if ticket_changed and updated_events is not None:
+                                info = await build_updated_event_info(
+                                    db,
+                                    existing_id,
+                                    source,
+                                    "ticket_status",
+                                    source_url=event.url,
+                                )
+                                if info:
+                                    updated_events.append(info)
+                        else:
+                            await _retry_event("existing_ticket_update_failed")
+                            result_tag = "existing_ticket_update_retry_scheduled"
 
-                # Always update linked events
-                await update_linked_events(db, existing_id, location_name, event.title)
-                # Ticket-status idempotency must not bypass media repair. Route
-                # the parser's current source images through the same Smart
-                # Update event-media gate used for new events.
-                existing_media_urls = limit_photos_for_source(
-                    event.photos,
-                    event.source_type,
-                )
-                if (
-                    not existing_media_urls
-                    and event.url
-                    and event.source_type == "dramteatr"
-                ):
-                    cover = await _fetch_og_image_for_dramteatr(event.url)
-                    if cover:
-                        existing_media_urls = [cover]
-                if existing_media_urls:
-                    try:
-                        from event_media import ingest_event_media_urls
+                    # Always update linked events
+                    await update_linked_events(db, existing_id, location_name, event.title)
+                    # Ticket-status idempotency must not bypass media repair. Route
+                    # the parser's current source images through the same Smart
+                    # Update event-media gate used for new events.
+                    existing_media_urls = limit_photos_for_source(
+                        event.photos,
+                        event.source_type,
+                    )
+                    if (
+                        not existing_media_urls
+                        and event.url
+                        and event.source_type == "dramteatr"
+                    ):
+                        cover = await _fetch_og_image_for_dramteatr(event.url)
+                        if cover:
+                            existing_media_urls = [cover]
+                    if existing_media_urls:
+                        try:
+                            from event_media import ingest_event_media_urls
 
-                        async with db.get_session() as media_session:
-                            _added, media_changed = await ingest_event_media_urls(
-                                media_session,
-                                int(existing_id),
-                                existing_media_urls,
-                                source=f"source_parser:{event.source_type}:existing",
+                            async with db.get_session() as media_session:
+                                _added, media_changed = await ingest_event_media_urls(
+                                    media_session,
+                                    int(existing_id),
+                                    existing_media_urls,
+                                    source=f"source_parser:{event.source_type}:existing",
+                                )
+                                await media_session.commit()
+                            if media_changed:
+                                await schedule_existing_event_update(db, existing_id)
+                        except Exception:
+                            await _retry_event("existing_media_reconcile_failed")
+                            logger.warning(
+                                "source_parsing: existing media reconcile failed source=%s event_id=%s",
+                                event.source_type,
+                                existing_id,
+                                exc_info=True,
                             )
-                            await media_session.commit()
-                        if media_changed:
-                            await schedule_existing_event_update(db, existing_id)
-                    except Exception:
-                        await _retry_event("existing_media_reconcile_failed")
-                        logger.warning(
-                            "source_parsing: existing media reconcile failed source=%s event_id=%s",
+                else:
+                    mode_prefix = "existing_source_missing" if existing_id else "new"
+                    if existing_id and diag_enabled:
+                        logger.info(
+                            "source_parsing: diag parser_source_missing source=%s event_id=%s title=%s",
                             event.source_type,
                             existing_id,
-                            exc_info=True,
+                            event.title[:120],
                         )
-            else:
-                mode_prefix = "existing_source_missing" if existing_id else "new"
-                if existing_id and diag_enabled:
-                    logger.info(
-                        "source_parsing: diag parser_source_missing source=%s event_id=%s title=%s",
-                        event.source_type,
-                        existing_id,
-                        event.title[:120],
-                    )
-                if diag_enabled and not existing_id:
-                    logger.info(
-                        "source_parsing: diag no existing match title=%s",
-                        event.title[:120],
-                    )
-                # Prepare images for OCR if any
-                poster_media_list = []
-                
-                # Filter photos first
-                target_photos = limit_photos_for_source(
-                    event.photos,
-                    event.source_type,
-                )
-                if (not target_photos) and event.url and event.source_type == "dramteatr":
-                    # Kaggle output for dramteatr can miss `photos`. Pull at least one
-                    # gallery/cover image so Smart Update can log/apply posters.
-                    cover = await _fetch_og_image_for_dramteatr(event.url)
-                    if cover:
-                        target_photos = [cover]
-
-                if event.source_type in SOURCE_PARSING_DISABLE_OCR_SOURCES:
-                    if diag_enabled:
+                    if diag_enabled and not existing_id:
                         logger.info(
-                            "source_parsing: diag ocr skipped source=%s",
-                            event.source_type,
+                            "source_parsing: diag no existing match title=%s",
+                            event.title[:120],
                         )
-                
-                if target_photos:
+                    # Prepare images for OCR if any
+                    poster_media_list = []
+
+                    # Filter photos first
+                    target_photos = limit_photos_for_source(
+                        event.photos,
+                        event.source_type,
+                    )
+                    if (not target_photos) and event.url and event.source_type == "dramteatr":
+                        # Kaggle output for dramteatr can miss `photos`. Pull at least one
+                        # gallery/cover image so Smart Update can log/apply posters.
+                        cover = await _fetch_og_image_for_dramteatr(event.url)
+                        if cover:
+                            target_photos = [cover]
+
+                    if event.source_type in SOURCE_PARSING_DISABLE_OCR_SOURCES:
+                        if diag_enabled:
+                            logger.info(
+                                "source_parsing: diag ocr skipped source=%s",
+                                event.source_type,
+                            )
+
+                    if target_photos:
+                        try:
+                            if diag_enabled:
+                                logger.info(
+                                    "source_parsing: diag ocr start title=%s photos=%d",
+                                    event.title[:120],
+                                    len(target_photos),
+                                )
+                            if event.source_type == "dramteatr" and len(target_photos) > 3:
+                                # Dramteatr pages can have large galleries; we only need a few
+                                # posters for Smart Update and operator logs.
+                                target_photos = target_photos[:3]
+                            raw_images = await asyncio.wait_for(
+                                download_images(target_photos),
+                                timeout=SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
+                            )
+
+                            if raw_images:
+                                # ``need_catbox`` now means materialize through the
+                                # managed uploader (Yandex CDN first), not "Catbox only".
+                                # Every source therefore follows one Smart Update media path.
+                                need_catbox = True
+                                # OCR is optional for source-parsed galleries; we must not drop posters
+                                # just because OCR timed out or a provider was unavailable.
+                                need_ocr = bool(need_catbox) and (event.source_type not in SOURCE_PARSING_DISABLE_OCR_SOURCES)
+                                try:
+                                    poster_media_list, _ = await asyncio.wait_for(
+                                        process_media(
+                                            raw_images,
+                                            need_catbox=need_catbox,
+                                            need_ocr=need_ocr,
+                                        ),
+                                        timeout=SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
+                                    )
+                                except asyncio.TimeoutError:
+                                    # Preserve poster hashes/URLs even if OCR is too slow.
+                                    await _retry_event("ocr_timeout")
+                                    poster_media_list, _ = await asyncio.wait_for(
+                                        process_media(
+                                            raw_images,
+                                            need_catbox=need_catbox,
+                                            need_ocr=False,
+                                        ),
+                                        timeout=SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
+                                    )
+                                if not need_catbox:
+                                    for poster, url in zip(poster_media_list, target_photos):
+                                        if not poster.catbox_url:
+                                            poster.catbox_url = url
+                            if diag_enabled:
+                                logger.info(
+                                    "source_parsing: diag ocr done title=%s raw=%d posters=%d",
+                                    event.title[:120],
+                                    len(raw_images),
+                                    len(poster_media_list),
+                                )
+                        except asyncio.TimeoutError:
+                            await _retry_event("ocr_timeout")
+                            logger.warning(
+                                "source_parsing: ocr timeout title=%s after %ss",
+                                event.title,
+                                SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
+                            )
+                        except Exception as e:
+                            await _retry_event(f"ocr_failed:{type(e).__name__}")
+                            logger.warning("source_parsing: ocr failed event=%s error=%s", event.title, e)
+
+                    # Add/merge event through Smart Update.
+                    llm_used = True
                     try:
-                        if diag_enabled:
-                            logger.info(
-                                "source_parsing: diag ocr start title=%s photos=%d",
-                                event.title[:120],
-                                len(target_photos),
-                            )
-                        if event.source_type == "dramteatr" and len(target_photos) > 3:
-                            # Dramteatr pages can have large galleries; we only need a few
-                            # posters for Smart Update and operator logs.
-                            target_photos = target_photos[:3]
-                        raw_images = await asyncio.wait_for(
-                            download_images(target_photos),
-                            timeout=SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
+                        raw_add_result = await add_new_event_via_queue(
+                            db,
+                            bot,
+                            event,
+                            current_progress,
+                            total_count,
+                            poster_media=poster_media_list,
+                            producer_ordinal=i,
                         )
-                        
-                        if raw_images:
-                            # ``need_catbox`` now means materialize through the
-                            # managed uploader (Yandex CDN first), not "Catbox only".
-                            # Every source therefore follows one Smart Update media path.
-                            need_catbox = True
-                            # OCR is optional for source-parsed galleries; we must not drop posters
-                            # just because OCR timed out or a provider was unavailable.
-                            need_ocr = bool(need_catbox) and (event.source_type not in SOURCE_PARSING_DISABLE_OCR_SOURCES)
-                            try:
-                                poster_media_list, _ = await asyncio.wait_for(
-                                    process_media(
-                                        raw_images,
-                                        need_catbox=need_catbox,
-                                        need_ocr=need_ocr,
-                                    ),
-                                    timeout=SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
-                                )
-                            except asyncio.TimeoutError:
-                                # Preserve poster hashes/URLs even if OCR is too slow.
-                                await _retry_event("ocr_timeout")
-                                poster_media_list, _ = await asyncio.wait_for(
-                                    process_media(
-                                        raw_images,
-                                        need_catbox=need_catbox,
-                                        need_ocr=False,
-                                    ),
-                                    timeout=SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
-                                )
-                            if not need_catbox:
-                                for poster, url in zip(poster_media_list, target_photos):
-                                    if not poster.catbox_url:
-                                        poster.catbox_url = url
-                        if diag_enabled:
-                            logger.info(
-                                "source_parsing: diag ocr done title=%s raw=%d posters=%d",
-                                event.title[:120],
-                                len(raw_images),
-                                len(poster_media_list),
-                            )
-                    except asyncio.TimeoutError:
-                        await _retry_event("ocr_timeout")
-                        logger.warning(
-                            "source_parsing: ocr timeout title=%s after %ss",
-                            event.title,
-                            SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
+                        new_id, was_added, status = unpack_add_event_result(raw_add_result)
+                    except Exception as exc:
+                        # Smart Update is an inline decision boundary. Do not turn
+                        # a provider/identity failure into a durable parser recovery
+                        # loop; close visibly for operator action.
+                        stats.failed += 1
+                        result_tag = f"{mode_prefix}_smart_update_terminal_error"
+                        stats.terminal_errors.append(
+                            f"{event.title[:80]}:exception:{type(exc).__name__}"
                         )
-                    except Exception as e:
-                        await _retry_event(f"ocr_failed:{type(e).__name__}")
-                        logger.warning("source_parsing: ocr failed event=%s error=%s", event.title, e)
-
-                # Add/merge event through Smart Update.
-                llm_used = True
-                try:
-                    raw_add_result = await add_new_event_via_queue(
-                        db,
-                        bot,
-                        event,
-                        current_progress,
-                        total_count,
-                        poster_media=poster_media_list,
-                        producer_ordinal=i,
-                    )
-                    new_id, was_added, status = unpack_add_event_result(raw_add_result)
-                except Exception as exc:
-                    # Smart Update is an inline decision boundary. Do not turn
-                    # a provider/identity failure into a durable parser recovery
-                    # loop; close visibly for operator action.
-                    stats.failed += 1
-                    result_tag = f"{mode_prefix}_smart_update_terminal_error"
-                    stats.terminal_errors.append(
-                        f"{event.title[:80]}:exception:{type(exc).__name__}"
-                    )
-                    logger.exception(
-                        "source_parsing: smart_update terminal error source=%s title=%s error=%s",
-                        source,
-                        event.title[:80],
-                        exc,
-                    )
-                    continue
-                if new_id:
-                    event_id = new_id
-
-                outcome = classify_add_event_outcome(new_id, was_added, status)
-                if outcome == "added":
+                        logger.exception(
+                            "source_parsing: smart_update terminal error source=%s title=%s error=%s",
+                            source,
+                            event.title[:80],
+                            exc,
+                        )
+                        continue
                     if new_id:
-                        stats.new_added += 1
-                        if added_events is not None:
-                            info = await build_added_event_info(
-                                db,
-                                new_id,
-                                source,
-                                source_url=event.url,
-                            )
-                            if info:
-                                added_events.append(info)
-                    result_tag = f"{mode_prefix}_added"
-                elif outcome == "updated":
-                    if new_id:
-                        stats.ticket_updated += 1
-                        if updated_events is not None:
-                            info = await build_updated_event_info(
-                                db,
-                                new_id,
-                                source,
-                                "smart_merge",
-                                source_url=event.url,
-                            )
-                            if info:
-                                updated_events.append(info)
-                    result_tag = f"{mode_prefix}_updated"
-                elif outcome == "skipped":
-                    stats.skipped += 1
-                    result_tag = f"{mode_prefix}_skipped"
-                elif outcome == "terminal_error":
-                    stats.failed += 1
-                    result_tag = f"{mode_prefix}_smart_update_terminal_error"
-                    stats.terminal_errors.append(
-                        f"{event.title[:80]}:{status.value}"
-                    )
-                else:
-                    stats.failed += 1
-                    result_tag = f"{mode_prefix}_untyped_terminal_error"
-                    stats.terminal_errors.append(
-                        f"{event.title[:80]}:UNTYPED_TERMINAL"
-                    )
+                        event_id = new_id
 
-                if new_id and outcome in {"added", "updated"}:
-                    await reconcile_existing_event_lifecycle(db, new_id, event)
-                    # Delay between smart-update writes to reduce rebuild pressure.
-                    await asyncio.sleep(EVENT_ADD_DELAY_SECONDS)
+                    outcome = classify_add_event_outcome(new_id, was_added, status)
+                    if outcome == "added":
+                        if new_id:
+                            stats.new_added += 1
+                            if added_events is not None:
+                                info = await build_added_event_info(
+                                    db,
+                                    new_id,
+                                    source,
+                                    source_url=event.url,
+                                )
+                                if info:
+                                    added_events.append(info)
+                        result_tag = f"{mode_prefix}_added"
+                    elif outcome == "updated":
+                        if new_id:
+                            stats.ticket_updated += 1
+                            if updated_events is not None:
+                                info = await build_updated_event_info(
+                                    db,
+                                    new_id,
+                                    source,
+                                    "smart_merge",
+                                    source_url=event.url,
+                                )
+                                if info:
+                                    updated_events.append(info)
+                        result_tag = f"{mode_prefix}_updated"
+                    elif outcome == "skipped":
+                        stats.skipped += 1
+                        result_tag = f"{mode_prefix}_skipped"
+                    elif outcome == "terminal_error":
+                        stats.failed += 1
+                        result_tag = f"{mode_prefix}_smart_update_terminal_error"
+                        stats.terminal_errors.append(
+                            f"{event.title[:80]}:{status.value}"
+                        )
+                    else:
+                        stats.failed += 1
+                        result_tag = f"{mode_prefix}_untyped_terminal_error"
+                        stats.terminal_errors.append(
+                            f"{event.title[:80]}:UNTYPED_TERMINAL"
+                        )
 
-                    # DEBUG: Stop after max events
-                    if DEBUG_MAX_EVENTS and stats.new_added >= DEBUG_MAX_EVENTS:
-                        logger.info("source_parsing: DEBUG limit reached (%d events)", DEBUG_MAX_EVENTS)
-                        break
+                    if new_id and outcome in {"added", "updated"}:
+                        await reconcile_existing_event_lifecycle(db, new_id, event)
+                        # Delay between smart-update writes to reduce rebuild pressure.
+                        await asyncio.sleep(EVENT_ADD_DELAY_SECONDS)
+
+                        # DEBUG: Stop after max events
+                        if DEBUG_MAX_EVENTS and stats.new_added >= DEBUG_MAX_EVENTS:
+                            logger.info("source_parsing: DEBUG limit reached (%d events)", DEBUG_MAX_EVENTS)
+                            break
         except Exception as exc:
             await _retry_event(f"exception:{type(exc).__name__}")
             result_tag = "exception_retry_scheduled"
@@ -3572,7 +3575,7 @@ async def process_source_events(
             int(llm_used),
             time.monotonic() - event_start,
         )
-    
+
     return stats, progress_message_id
 async def run_diagnostic_parse(
     bot: Bot,
@@ -3580,19 +3583,19 @@ async def run_diagnostic_parse(
     source: str,
 ) -> None:
     """Run diagnostic parse for a specific source and send result JSON.
-    
+
     Args:
         bot: Bot instance
         chat_id: Chat ID to send results to
         source: Source identifier (dramteatr, muzteatr, sobor, tretyakov, or all)
     """
     from aiogram.types import FSInputFile
-    
+
     await bot.send_message(
         chat_id,
         f"🔍 Запуск диагностического парсинга: {source}...\nПожалуйста, подождите (около 2-5 минут)."
     )
-    
+
     start_time = time.time()
     kaggle_status_message_id: int | None = None
     kaggle_kernel_ref = ""
@@ -3604,7 +3607,7 @@ async def run_diagnostic_parse(
     ) -> None:
         nonlocal kaggle_status_message_id, kaggle_kernel_ref
         kaggle_kernel_ref = kernel_ref or kaggle_kernel_ref
-        
+
         text = _format_kaggle_status_message(phase, kernel_ref, status)
         try:
             if kaggle_status_message_id is None:
@@ -3632,7 +3635,7 @@ async def run_diagnostic_parse(
             run_config={"target_source": source},
             db=db,
         )
-    
+
     if status != "complete":
         await bot.send_message(chat_id, f"❌ Ошибка запуска: статус {status}")
         return
@@ -3641,21 +3644,21 @@ async def run_diagnostic_parse(
     target_filename = f"{source}.json"
     if source == "philharmonia":
         target_filename = "philharmonia_results.json"
-        
+
     target_path = None
-    
+
     # If source is 'tretyakov', look for 'tretyakov.json' etc.
     # Note: notebook saves lowercase filenames
-    
+
     found_files = []
-    
+
     for fpath in output_files:
         path = Path(fpath)
         if path.name == target_filename:
             target_path = fpath
         if path.suffix == ".json":
             found_files.append(path)
-            
+
     if target_path and Path(target_path).exists():
         await bot.send_document(
             chat_id,

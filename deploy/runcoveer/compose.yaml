@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:intake-adjudication-20261103
+    image: runcoveer/events:intake-fairness-20261103
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

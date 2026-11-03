@@ -315,3 +315,26 @@ live restart during the progressing normal import. Remaining networking
 missing_location is an explicit LLM grounding rejection, not a cleared venue
 field or quota denial; its correctness needs separate semantic evidence.
 Next native check +3h, then +5h; retain the normal Telegram follow-up as needed.
+
+
+### 2026-11-03: confirmed whole-catalogue starvation
+
+Normal source parser ops11555 held the job-wide shared heavy gate from 02:30
+to 07:49:11 UTC (262 events, 89 created, 2 updated, 15 failed). Scheduled VK
+04:15 skipped; watchdog11557 waited from04:47 until the parser finished. Actual
+VK post claims began07:49, ruling out a permanent deadlock. This is an independent
+coordination defect: one catalogue reserves the shared resource for5h19.
+
+The correction moves the existing heavy gate to each source event and uses the
+existing PARSE_LOCK for all parser producers. Remove source jobs from the
+scheduler whole-job heavy set, including its optional serialization mutex. No
+new queue, worker, retry policy, semantic override or concurrency increase.
+Regression proves a queued VK operation cannot enter during a source event but
+runs before the next event, with either scheduler serialization setting. All six
+new/updated regression cases fail against the old production code and pass after.
+
+Normal VK11557 finished partial07:58:50:12 carriers,5 rejected,7 technical failures,
+0 created/updated. Provider503, an actual3.1Lite RPD429, unavailable adjudication,
+and primary OCR insufficient_quota are separately observed; lock fairness alone
+is not import acceptance. Evidence retained under the incident artifact fairness/
+subdirectory. Incident remains open pending release and actual successful imports.
