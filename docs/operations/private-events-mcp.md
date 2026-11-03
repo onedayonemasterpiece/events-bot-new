@@ -1363,3 +1363,16 @@ after the feature is off; do not manually reuse its refs or copy it into the
 event database.
 
 Scheduled-queue edit/delete is direct only for an exact principal-bound scheduled/postponed item; published/live content still requires external approval.
+
+
+### Create rejection diagnostics
+
+A terminal create rejection with Smart Update candidate receipts reports
+`SMART_UPDATE_NOT_ACCEPTED` unless every candidate reason is an actual
+`missing_date`, `missing_title` or `missing_location`. Those missing-field
+rejections retain `EVENT_REQUIRED_FIELDS_MISSING`. Existing owner candidate
+receipts preserve each exact reason, including `identity_final_retry`; an
+identity refusal must not be described as absent input fields. Partner
+projection keeps its existing receipt redaction. Source-parse retry and
+confirmed no-event responses retain their separate existing codes. This does
+not retry intake, change identity decisions or alter event/publication writes.
