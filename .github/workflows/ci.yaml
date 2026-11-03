@@ -16,6 +16,7 @@ jobs:
       - name: Verify native guide digest delivery and restart contracts
         run: >-
           python -m pytest -q
+          tests/test_promo_guide_digest.py
           tests/test_guide_max_delivery.py
           tests/test_guide_max_pipeline.py
           tests/test_guide_max_owner_ack.py

@@ -5528,6 +5528,18 @@ async def run_promo_vk_activities(
             continue
         campaign_id = int(campaign.id)
         activity_id = int(activity.id)
+        if target.target_type == "guide_digest":
+            if activity.surface == PROMO_SURFACE_VK_REPOST:
+                from promo_guide_digest import run_digest_repost
+
+                try:
+                    results.append(await run_digest_repost(
+                        db, bot, campaign=campaign, activity=activity, target=target, now_utc=now_utc))
+                except Exception:
+                    logger.exception("promo.digest_repost failed campaign_id=%s activity_id=%s", campaign_id, activity_id)
+                    results.append(PromoVkActionResult(campaign_id, activity_id, activity.surface, 0,
+                                                       "failed", reason="provider_error"))
+            continue
         if activity.surface == PROMO_SURFACE_VK_FESTIVAL_CAROUSEL:
             key = (campaign_id, activity_id)
             if key in processed_carousels:
