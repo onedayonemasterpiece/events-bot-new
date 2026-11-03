@@ -195,6 +195,38 @@ public exposure. The scheduled `@keniggpt` CherryFlash target is an exception to
 the old status wording: it is viewer-facing production output even when the row
 status is `PUBLISHED_TEST`, so it is reported and recorded as a promo show.
 
+## Guide-digest repost campaigns
+
+A campaign can target `target_type='guide_digest'`, `query_text='visual_schedule'`
+without inventing an Event for a digest. Its existing `vk_repost` activities use
+`source_group`, `target_group` and `every_days` (1 for each day, 3 for every third
+local calendar day after a successful repost). Campaign status/window/caps and
+activity daily caps remain effective. Only today's latest published edition is
+selected; preview, empty, other-family and future postponed posts are excluded.
+The source is the published VK receipt, reconciled to its actual public wall ID.
+
+The existing `promo_vk` runner executes these activities. Production uses its
+existing `PROMO_VK_INTERVAL_MINUTES=5` setting. Each edition/destination freezes
+one random delay of 30–175 minutes in the existing `guide_visual_delivery`
+payload, leaving a five-minute tick allowance inside the requested 30–180 minute
+window. Busy/unavailable runtime can deliver late; it does not restart the delay.
+A campaign activated after today's delay elapsed catches up today's edition.
+No separate scheduler, queue, table, fake event or extra LLM call is introduced.
+
+Campaign/activity provenance and successful public URLs live in the per-edition
+ledger (`provider='promo_vk_repost'`); the current result also goes through
+`promo_activity_outcome`. Event-only `promo_exposure` is not charged to an
+unrelated excursion. The ledger's existing atomic claim prevents concurrent
+sends. On reply loss/restart, the adapter observes actual VK `copy_history` for
+the frozen source instead of resending it. An unconfirmed external outcome is
+retained by the existing delivery contract and observed on later ticks.
+
+Regression: `tests/test_promo_guide_digest.py` runs actual campaign selection,
+scheduling, cadence, pause, caps and reply-loss reconciliation with fake provider
+boundaries. Live acceptance requires the actual source and both target repost
+URLs, correct copy history and durable published receipts; tests alone do not
+prove public delivery.
+
 ## VK Activities
 
 `vk_publication` keeps a rolling-window minimum of event posts in a configured

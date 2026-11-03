@@ -132,3 +132,5 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 ## Partner event operations source checkpoint (2026-09-26)
 
 See [operations guide](partner-event-operations.md) and [scoped v2 registry](../testing/private-events-mcp-event-operations-scenarios.v2.yml). Local suites exercise actual owner/partner PKCE HTTP sessions, two tenants, canonical SQLite, current-policy review, staged media, exact-ID changes, publication receipts and existing promo services. Provider adapters and the model gateway are faked; this is not isolated-live provider acceptance. No production grants, campaigns or public posts are created.
+
+Guide-digest promo reposts: `tests/test_promo_guide_digest.py` covers the normal promo runner, frozen delay, 1/3-day cadence, pause and reply-loss reconciliation. Live acceptance uses the actual daily guide source post, two VK repost URLs and `guide_visual_delivery` receipts; see [promo contract](../features/promo-campaigns/README.md#guide-digest-repost-campaigns).

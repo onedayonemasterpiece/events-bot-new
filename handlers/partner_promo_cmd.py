@@ -1562,6 +1562,8 @@ async def _campaign_card_text(db: Database, campaign: PromoCampaign) -> str:
     for t in targets:
         if t.target_type == "event" and t.event_id:
             target_lines.append(f"Событие #{t.event_id}: {html.escape(t.query_text or '')}")
+        elif t.target_type == "guide_digest":
+            target_lines.append("Ежедневный VK-дайджест экскурсий")
         elif t.target_type == "festival":
             target_lines.append(f"Фестиваль: {html.escape(t.festival_name or '')}")
         elif t.target_type == "tg_chat_author":

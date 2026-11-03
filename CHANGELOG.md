@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
+
 ### Fixed
 - Pass existing curated venue evidence to the merge identity LLM so a source address typo can be resolved without dropping the source or creating a duplicate; retain different-slot and different-venue guards.
 - Add the officially verified Cinema Park Europe venue and name alias so a source typo at Театральная 30 resolves to Гвардейский проспект 3 before Smart Update identity checks.
