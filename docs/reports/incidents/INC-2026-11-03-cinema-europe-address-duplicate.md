@@ -91,3 +91,21 @@ the official address. Canonical public rows are retained. The cleanup emitted
 an existing source-keyboard validation warning; it did not block calendar
 removal or Telegraph correction. Direct public readback of those two cleanup
 results and the obsolete VK projection still needs verification.
+
+## Full boundary replay found missing reference context
+
+PR #772 merged as 167dd9d572033ea7ebe938e9847f2726e0c3ac7e; CI, 18 related
+tests, full 4,429-file image verification and isolated startup passed. It is
+NOT deployed. A fresh shadow DB seeded with before-repair canonical 10242 and
+its original sources ran the actual Telegram results importer and Smart Update,
+with real LLM calls and unchanged semantic gates. Only external projections were
+deferred. Candidate normalization correctly used Гвардейский 3, but the merge
+LLM still read Театральная 30 from raw source text and returned unsafe_to_merge.
+Result: no duplicate, but FINAL_RETRY and no source receipt. This is not passing
+replay or complete prevention. Evidence: retained cinema-shadow-replay.log.
+
+The identity payload omitted the authority behind normalized location fields.
+Pass the existing exact curated alias reference as separate LLM evidence and
+explain source typo resolution in that same prompt. No automatic merge, conflict
+exception, new model call or state. Different slots and branches stay distinct.
+Repeat the same full boundary replay and negative controls before delivery.

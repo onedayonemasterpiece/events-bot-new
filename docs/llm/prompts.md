@@ -553,3 +553,14 @@ Prompt contract:
 The request is hash-bound to source URL/type, event identity fields, exact
 source/OCR corpus and routing signals. It runs on changed/candidate cases, not on
 page views and not as a full-history mass extraction.
+
+
+### Merge identity: curated venue evidence
+
+The merge identity payload supplies `curated_venue_reference` only when the
+exact venue name resolves through the maintained explicit alias table. This
+trusted reference is distinct from raw source text. The LLM may resolve a source
+address typo against that reference without treating the typo as proof of a
+second event. It must still distinguish different programmes, slots and branches.
+Unknown venues receive no reference claim. Raw sources remain unchanged.
+Regression: `INC-2026-11-03-cinema-europe-address-duplicate`.
