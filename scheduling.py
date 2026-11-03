@@ -4975,7 +4975,7 @@ def startup(
             )
             _register_job(
                 f"vk_auto_import_{idx}",
-                _job_wrapper("vk_auto_import", vk_auto_import_scheduler, notify_skip=_notify_admin_skip),
+                _job_wrapper("vk_auto_import", vk_auto_import_scheduler, notify_skip=_notify_admin_skip, heavy_guard_mode="wait"),
                 "cron",
                 id=f"vk_auto_import_{idx}",
                 hour=hour,
