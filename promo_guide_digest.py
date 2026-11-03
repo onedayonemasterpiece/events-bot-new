@@ -7,7 +7,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from guide_excursions.max_delivery import prepare_delivery, drive_delivery
+from guide_excursions.max_delivery import prepare_delivery, drive_delivery, ensure_delivery_schema
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +59,26 @@ async def run_digest_repost(db, bot, *, campaign, activity, target, now_utc):
     source_at = await _vk_post_datetime(source_url)
     if source_at is None or source_at > now_utc:
         return result("skipped", reason="source_unavailable")
+    async with db.raw_conn() as conn:
+        await ensure_delivery_schema(conn)
+        cur = await conn.execute(
+            "SELECT payload_json, receipt_json FROM guide_visual_delivery "
+            "WHERE provider='promo_vk_repost' AND issue_id=? "
+            "AND json_extract(payload_json,'$.campaign_id')=? "
+            "AND json_extract(payload_json,'$.activity_id')<>?",
+            (issue_id, int(campaign.id), int(activity.id)))
+        siblings = [(json.loads(p), json.loads(r or '{}')) for p, r in await cur.fetchall()]
+    # Thirty minutes of actual separation plus one existing five-minute tick.
+    choices = [source_at + timedelta(minutes=m) for m in range(30, 176)
+               if all(abs(source_at + timedelta(minutes=m) - datetime.fromisoformat(p['due_at']))
+                      >= timedelta(minutes=35) for p, _ in siblings)]
     row = await prepare_delivery(
         db, issue_id=issue_id, provider="promo_vk_repost", target_id=target_key,
         payload={"campaign_id": int(campaign.id), "activity_id": int(activity.id),
                  "source_url": source_url, "source_at": source_at.isoformat(),
                  "target_group_id": destination,
                  # Leave one five-minute promo tick inside the owner's 180m bound.
-                 "due_at": (source_at + timedelta(minutes=random.SystemRandom().randint(30, 175))).isoformat()},
+                 "due_at": random.SystemRandom().choice(choices).isoformat()},
     )
     if row["state"] == "published":
         return result("published", source_url=row["payload"]["source_url"],
@@ -98,20 +111,30 @@ async def run_digest_repost(db, bot, *, campaign, activity, target, now_utc):
         return result("skipped", reason="daily_cap_reached")
     if datetime.fromisoformat(row["payload"]["due_at"]) > now_utc:
         return result("scheduled", source_url=source_url)
+    # Overdue schedules must retain spacing too. A lost provider reply retains
+    # its attempt time in the same receipt, without blocking another target forever.
+    for _, receipt in siblings:
+        last_send = receipt.get('published_at') or receipt.get('attempted_at')
+        if last_send and now_utc < datetime.fromisoformat(last_send) + timedelta(minutes=30):
+            return result("scheduled", source_url=source_url)
 
     class Transport:
         async def submit(self, payload, key):
-            url = await _publish_vk_repost(db, bot, source_url=payload["source_url"],
-                                         target_group_id=payload["target_group_id"], message="")
-            if not url:
-                raise RuntimeError("repost_receipt_missing")
+            try:
+                url = await _publish_vk_repost(db, bot, source_url=payload["source_url"],
+                                             target_group_id=payload["target_group_id"], message="")
+                if not url:
+                    raise RuntimeError("repost_receipt_missing")
+            except Exception:
+                return {"state": "outcome_unknown", "error_code": "transport_unavailable",
+                        "receipt": {"attempted_at": now_utc.isoformat()}}
             return self.receipt(payload, url)
 
-        def receipt(self, payload, url):
+        def receipt(self, payload, url, published_at=None):
             return {"state": "published", "receipt": {
                 "post_urls": [url], "source_url": payload["source_url"],
                 "campaign_id": payload["campaign_id"], "activity_id": payload["activity_id"],
-                "published_at": now_utc.isoformat(), "due_at": payload["due_at"]}}
+                "published_at": (published_at or now_utc).isoformat(), "due_at": payload["due_at"]}}
 
         async def observe(self, key, operation_id):
             # Reply loss/restart: inspect VK's actual repost identity, never send
@@ -127,8 +150,9 @@ async def run_digest_repost(db, bot, *, campaign, activity, target, now_utc):
                 if any(int(p.get("owner_id") or 0) == owner_id and int(p.get("id") or 0) == post_id
                        for p in item.get("copy_history", [])):
                     url = f"https://vk.com/wall{-payload['target_group_id']}_{item['id']}"
-                    return self.receipt(payload, url)
-            return {"state": "outcome_unknown", "error_code": "repost_not_observed"}
+                    return self.receipt(payload, url, datetime.fromtimestamp(item['date'], timezone.utc))
+            return {"state": "outcome_unknown", "error_code": "repost_not_observed",
+                    "receipt": row['receipt']}
 
     row = await drive_delivery(db, row, Transport())
     logger.info("promo.digest_repost campaign_id=%s activity_id=%s issue_id=%s state=%s",

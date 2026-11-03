@@ -12,13 +12,20 @@ from guide_excursions.max_delivery import get_delivery, request_key
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("lost_reply", [False, True])
-async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monkeypatch, lost_reply):
+@pytest.mark.parametrize("late_start", [False, True])
+async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monkeypatch, lost_reply, late_start):
     import promo
     import guide_excursions.visual_digest as visual
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     now = datetime(2026, 11, 3, 8, 30, tzinfo=timezone.utc)
     calls = []
+    tick = now
+
+    async def run(at):
+        nonlocal tick
+        tick = at
+        return await run_promo_vk_activities(db, now_utc=at)
 
     async def group(ref):
         return int(ref)
@@ -30,7 +37,7 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
         return now
 
     async def publish(*args, **kwargs):
-        calls.append(kwargs)
+        calls.append(dict(kwargs, sent_at=tick))
         if lost_reply:
             raise TimeoutError("Reply lost after VK accepted the repost")
         return f"https://vk.com/wall-{kwargs['target_group_id']}_{len(calls)}"
@@ -41,7 +48,7 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
         for idx, call in enumerate(calls, 1):
             if -call["target_group_id"] == params["owner_id"]:
                 owner, post = promo._vk_owner_post_from_url(call["source_url"])
-                items.append({"id": idx, "copy_history": [{"owner_id": owner, "id": post}]})
+                items.append({"id": idx, "date": int(call["sent_at"].timestamp()), "copy_history": [{"owner_id": owner, "id": post}]})
         return {"response": {"items": items}}
     monkeypatch.setitem(sys.modules, "main", SimpleNamespace(_vk_api=api, _vk_user_token=lambda: "test"))
     monkeypatch.setattr(promo, "_resolve_vk_group_id", group)
@@ -68,36 +75,51 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
             await conn.commit()
     try:
         await edition(1, now)
-        initial = await run_promo_vk_activities(db, now_utc=now + timedelta(minutes=1))
+        initial = await run(now + timedelta(minutes=1))
         assert [r.status for r in initial] == ["scheduled", "scheduled"]
         assert calls == []
         key = request_key(1, "promo_vk_repost", f"campaign:{cid}:activity:{aids[0]}:group:200")
         frozen = await get_delivery(db, key)
         delay = (datetime.fromisoformat(frozen["payload"]["due_at"]) - now).total_seconds()/60
         assert 30 <= delay <= 175
-        await run_promo_vk_activities(db, now_utc=now + timedelta(minutes=2))
+        await run(now + timedelta(minutes=2))
         assert (await get_delivery(db, key))["payload"] == frozen["payload"]
-        await run_promo_vk_activities(db, now_utc=now + timedelta(hours=3))
+        other_key = request_key(1, "promo_vk_repost", f"campaign:{cid}:activity:{aids[1]}:group:300")
+        other = await get_delivery(db, other_key)
+        dues = [datetime.fromisoformat(r["payload"]["due_at"]) for r in [frozen, other]]
+        assert abs(dues[0] - dues[1]) >= timedelta(minutes=35)
+        first_tick = now + timedelta(hours=3) if late_start else min(dues)
+        second_tick = first_tick + timedelta(minutes=35) if late_start else max(dues)
+        await run(first_tick)
+        assert len(calls) == 1, "Overdue destinations must not be published together"
+        await run(first_tick + timedelta(minutes=5))
+        assert len(calls) == 1
+        await run(second_tick)
         assert len(calls) == 2
-        await run_promo_vk_activities(db, now_utc=now + timedelta(hours=4))
+        await run(now + timedelta(hours=4))
         assert len(calls) == 2
+        assert (calls[1]["sent_at"] - calls[0]["sent_at"]).total_seconds() >= 1800
         assert (await get_delivery(db, key))["state"] == "published"
         # No fake Event or event-level exposure is needed for a digest.
         async with db.raw_conn() as conn:
             assert (await (await conn.execute("SELECT count(*) FROM promo_exposure")).fetchone())[0] == 0
         now += timedelta(days=1)
         await edition(2, now)
-        await run_promo_vk_activities(db, now_utc=now + timedelta(hours=3))
+        await run(now + timedelta(hours=3))
         assert len(calls) == 3 and calls[-1]["target_group_id"] == 200
-        await run_promo_vk_activities(db, now_utc=now + timedelta(hours=4))
+        await run(now + timedelta(hours=4))
         now += timedelta(days=2)
         await edition(3, now)
-        await run_promo_vk_activities(db, now_utc=now + timedelta(hours=3))
+        await run(now + timedelta(hours=3))
+        assert len(calls) == 4
+        await run(now + timedelta(hours=3, minutes=5))
+        assert len(calls) == 4
+        await run(now + timedelta(hours=3, minutes=35))
         assert len(calls) == 5
-        await run_promo_vk_activities(db, now_utc=now + timedelta(hours=4))
+        await run(now + timedelta(hours=4))
         assert len(calls) == 5
         await edition(33, now)
-        capped = await run_promo_vk_activities(db, now_utc=now + timedelta(hours=5))
+        capped = await run(now + timedelta(hours=5))
         assert all(r.reason in {"dedup_window", "daily_cap_reached"} for r in capped)
         assert len(calls) == 5
         async with db.get_session() as session:
@@ -106,7 +128,7 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
             await session.commit()
         now += timedelta(days=3)
         await edition(34, now)
-        assert await run_promo_vk_activities(db, now_utc=now + timedelta(hours=3)) == []
+        assert await run(now + timedelta(hours=3)) == []
         assert len(calls) == 5
     finally:
         await db.close()
