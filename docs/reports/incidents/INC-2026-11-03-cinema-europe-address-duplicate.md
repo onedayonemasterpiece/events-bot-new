@@ -192,3 +192,8 @@ Actual runtime 292334719d86fe14a06ce3a6cc8cb8fc970e81c4, immutable sha256:6a0555
 ## Preserved through SQL alias delivery, 2026-11-03 19:12 UTC
 
 Actual runtime is 9f14c503f977b467ed6ad963e2de59008bc0a435, immutable sha256:8b8875452f667264b279f0a10459b92e3556d57b6ec2a02ccebf72590ef51e24. Events-only delivery followed terminal ordinary guide ops 11605. Explicit runtime/model/promo-five/cinema/hash/SQLite checks and live readiness passed; Kotopogoda unchanged. The ordinary guide digest issue 327 is empty, with no new provider publication or duplicate repost. Existing public corrections and today's two repost URLs remain intact. Ordinary TG and actual November 4/6 promo observations remain outstanding; incident stays open.
+
+
+## Preserved through permanent-edit outcome release, 2026-11-03 20:07 UTC
+
+Production now runs 3bb038338dce53f1e1a74be0441b85fa11dc2be8, immutable sha256:1b9971bb3137fa6053cb8e535861039582278a4a5f01fec80ab69ef30b9c3171. Required CI and full source/isolated/live checks passed; cinema reference, identity/adjudicator hashes, models and promo-five preserved, readiness/DB/scheduler healthy and Kotopogoda unchanged. A background media review crossed the restart and was verified recovered by the existing stale handling; source imports were idle. Existing public corrections and today's promo URLs were not changed. Normal TG and November 4/6 promo timing still require acceptance. All incidents remain open.
