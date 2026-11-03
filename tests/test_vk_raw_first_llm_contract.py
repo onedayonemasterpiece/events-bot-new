@@ -1468,13 +1468,15 @@ def test_vk_queue_legacy_empty_none_and_malformed_results_are_retryable(legacy):
     assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
 
 
-def test_vk_queue_legacy_positive_receipt_strips_poster_objects_and_serializes():
+def test_vk_queue_legacy_positive_receipt_keeps_metadata_without_image_bytes():
     draft = vk_intake.EventDraft(title="Event", date="2026-12-01")
     draft.poster_media = [PosterMedia(data=b"image", name="poster.jpg")]
     result = vk_auto_queue._adapt_vk_draft_result([draft], source_text="source")
     assert result.disposition is SourceDisposition.EVENTS_FOUND
     encoded = json.dumps(result.to_receipt_payload(), ensure_ascii=False)
-    assert "poster_media" not in encoded
+    media = json.loads(encoded)["drafts"][0]["poster_media"][0]
+    assert "data" not in media
+    assert media["digest"] == draft.poster_media[0].digest
     assert "Event" in encoded
 
 
@@ -1632,3 +1634,46 @@ async def test_v10_verifier_timeout_is_recorded_as_durable_retry(tmp_path):
     )
     assert tuple(packet) == ("retry_scheduled", "VERIFICATION_TECHNICAL_ERROR")
     await db.close()
+
+
+def test_parse_receipt_round_trip_preserves_poster_evidence_and_identity():
+    """A cached child must retain the same source input, without image bytes."""
+    from poster_media import PosterMedia
+    from smart_event_update import EventCandidate, PosterCandidate
+    from smart_update_identity import input_packet_fingerprint
+
+    poster = PosterMedia(
+        data=b"original poster bytes", name="programme.jpg",
+        supabase_url="https://static.kenigevents.ru/programme.webp",
+        ocr_text="4 ноября 18:00 Музыкальный спектакль", ocr_title="Афиша",
+    )
+    draft = vk_intake.EventDraft(
+        title="Музыкальный спектакль", date="2026-11-04", time="18:00",
+        poster_media=[poster],
+    )
+    result = vk_intake.DraftParseResult(
+        [draft], decision=SourceParseDecision(
+            [{"title": draft.title}], disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source(
+                "source", [poster.ocr_text], attachment_count=1,
+            ),
+        ),
+    )
+    encoded = json.dumps(result.to_receipt_payload())
+    restored = vk_intake.DraftParseResult.from_receipt_payload(json.loads(encoded))[0]
+    assert len(restored.poster_media) == 1
+    media = restored.poster_media[0]
+    assert media.data == b""
+    assert (media.digest, media.supabase_url, media.ocr_text, media.ocr_title) == (
+        poster.digest, poster.supabase_url, poster.ocr_text, poster.ocr_title,
+    )
+
+    def fingerprint(value):
+        return input_packet_fingerprint(EventCandidate(
+            source_type="vk", source_url="https://vk.com/wall-1_1",
+            source_text="source", title=value.title, date=value.date, time=value.time,
+            posters=[PosterCandidate(sha256=p.digest, supabase_url=p.supabase_url)
+                     for p in value.poster_media],
+        ))
+
+    assert fingerprint(restored) == fingerprint(draft)

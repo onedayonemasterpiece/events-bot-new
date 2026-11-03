@@ -133,6 +133,12 @@ identity/result уже принятого provider parse. Exact replay доба�
 receipt с `parse_key=NULL`, поэтому не конфликтует с единственным physical
 successful-parse key.
 
+Successful parse receipts preserve existing poster hashes, hosted URLs, OCR and
+token metadata. Replay reconstructs `PosterMedia` with empty binary data, so
+Smart Update receives the same identity evidence and input fingerprint. Legacy
+receipts without poster metadata remain readable; this does not reconstruct
+evidence already omitted by older receipts or guarantee exact replay for them.
+
 Idle backfill определяется по `vk_crawl_cursor.checked_at` — времени последнего
 успешного scan, а не по `updated_at` последнего найденного поста. Иначе тихий,
 но регулярно проверяемый источник каждые 24 часа повторно материализует полную

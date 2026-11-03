@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Preserve poster hashes, hosted URLs and OCR in VK parse receipts so cached drafts retain the original identity evidence without storing image bytes.
 - Clarify the dedup adjudicator distinction between explicit source-backed differences and missing comparison evidence; retain existing fail-closed identity checks.
 - Make the normal VK import slot wait on the existing heavy gate instead of skipping when a source-parser event is in flight.
 - Preserve separate actual send times for guide-digest promo destinations, including overdue catch-up and lost provider replies.

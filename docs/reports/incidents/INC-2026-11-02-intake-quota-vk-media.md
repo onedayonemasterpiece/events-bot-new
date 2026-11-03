@@ -617,3 +617,54 @@ Retained evidence: adjudicator-grounding-live-verification.log,
 adjudicator-grounding-live-health.json, workshop-catchup-final.json and
 workshop-official-operation.json. Keep normal VK16:30, guarded programme recovery,
 normal TG21:40 and November4/6 promo checks; all three incidents remain open.
+
+
+## Accepted workshop and publication-budget evidence, 2026-11-03 15:53 UTC
+
+The official-source operation was accepted at15:32:35 UTC as CREATED10450.
+Source13871860 binds the official weekly page; date November5,18:00 and
+Leninsky83 are correct. A date/title duplicate check finds one canonical card.
+Original excluded VK carrier87615 remains unchanged: this is official-source
+recovery, not successful normal VK location-grounding acceptance.
+
+VK initially failed vk_sync_missing_media because the official request had no
+poster. The actual saved image from the original VK announcement was staged and
+added through typed edit, auto_approved operation
+`evt_op_2ANPZa6ApHhjLZw5NrDim3xRRh7455-y`; poster35040 is attached and approved.
+Provider readback proves wall-231920894_13320 exists with one image and
+post_type=postpone, scheduled November3 20:20 UTC (22:20 Kaliningrad). It is NOT
+live yet. Telegraph and calendar had real receipts; newer revisions still need
+reconciliation. A cosmetic full-description edit was rejected by the fact gate;
+it made no change. A safer canonical-facts-only description then passed the
+same typed gate and was accepted as operation
+`evt_op_IswWV5uW8NLo2h1aPWHmuMGHnubrZYJN`, revision
+8056bc75bf25ff2771e72a92e2b25d54af9fb220330d8f9c91f6be99137e46fd.
+Verify that provider projections receive it; accepted is not published.
+
+A separate existing feature budget explains delayed publication: semantic media
+role daily limit150 reserves30 calls for blocked future VK cards, leaving120 for
+ordinary reviews. The ordinary120 were used by08:22 UTC; primary review100 by
+06:25 and image geometry100 by09:13. At15:45,210 posters were pending with
+reason daily_budget_exhausted. Event10450's media follow-up is due November4
+00:05 UTC, deferring dependent Telegraph/calendar/TG reconciliation. This is
+NOT proof all Google project/model RPD keys are exhausted. Media-role routing
+uses3.1 Lite and explicitly forbids fallback under its existing contract.
+Do not reset counters, raise caps or invent a fallback to force publication.
+Investigate prioritization of current publication work versus backlog within
+existing budgets; normal VK grounding false exclusions remain a separate issue.
+
+Retained evidence: workshop10450-acceptance-and-jobs.json,
+workshop10450-media-publication.log, workshop-vk-owner-readback.log and
+media-budget-1545.json. Add a read-only check after20:20 UTC for actual VK release
+and after November4 00:05 UTC for media/dependent receipts, alongside the required
+normal VK16:30, TG21:40 and November4/6 promo timing checks. No runtime restart
+is needed for this report.
+
+
+### 2026-11-03 16:05 UTC — cached parse drops media evidence; narrow codec correction
+
+- Reader impact: a multi-event programme can spend the bounded row time and Google quota re-processing already accepted children instead of reaching the remaining events.
+- Observed failure: the one authorized programme replay is now ops 11601, run `INC-2026-11-03-programme-catchup`, started 15:53:06 UTC after idle ops, MCP intake and scheduler checks. It reused frozen packet 26103 revision 1, but did not return exact no-op for the first accepted child. Old candidate 25917 retained poster hash/OCR; the cached parse receipt omitted all `poster_media`, and reconstructed candidates instead used a volatile VK image URL without hash/OCR. Evidence: retained `phase2/programme-candidate-payloads-1555.json` and `phase2/programme-1550-apply.log`.
+- Root: `DraftParseResult.to_receipt_payload` deliberately dropped the entire poster object. The codec now retains its existing non-binary fields and restores `PosterMedia(data=b"")` on replay. No new queue, retry, state, worker, matching rule or quota change. Legacy metadata-free receipts still load; already-lost evidence is not reconstructed.
+- Distinguishing JSON round-trip test failed on the baseline (empty media) and passes after the change, including equal real candidate fingerprints. The existing bytes-exclusion test now checks the actual data field instead of discarding all metadata. 117 contract/import regressions pass in 30.88 seconds. Net production Python +8 lines.
+- This is a proposed correction, NOT delivered. The active programme runs the unchanged 48fb4e6c release and must finish without interruption; its 30-minute row deadline is around 16:23, before normal VK 16:30. Final six-child preservation and remaining-child receipts are still unaccepted. Do not repeat the run ID or launch the old programme script. The 37-error plan remains unlaunched.
