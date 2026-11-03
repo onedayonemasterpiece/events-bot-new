@@ -187,3 +187,8 @@ Ordinary Telegram at 21:40 UTC still needs live acceptance; incident stays open.
 ## Preserved through parser-reserve release, 2026-11-03 17:55 UTC
 
 Actual runtime 292334719d86fe14a06ce3a6cc8cb8fc970e81c4, immutable sha256:6a0555e01949e189278ce0b8d285512495099eeaca6f3771b732f60ac6ea109e. Required CI, full source and isolated preflight passed; Events-only delivery preserved cinema/identity rules, model settings, promo interval five, healthy DB/scheduler and unchanged Kotopogoda. Existing public corrections and today's two reposts remain intact. Ordinary TG and actual future promo timing still require observation; incident remains open.
+
+
+## Preserved through SQL alias delivery, 2026-11-03 19:12 UTC
+
+Actual runtime is 9f14c503f977b467ed6ad963e2de59008bc0a435, immutable sha256:8b8875452f667264b279f0a10459b92e3556d57b6ec2a02ccebf72590ef51e24. Events-only delivery followed terminal ordinary guide ops 11605. Explicit runtime/model/promo-five/cinema/hash/SQLite checks and live readiness passed; Kotopogoda unchanged. The ordinary guide digest issue 327 is empty, with no new provider publication or duplicate repost. Existing public corrections and today's two repost URLs remain intact. Ordinary TG and actual November 4/6 promo observations remain outstanding; incident stays open.
