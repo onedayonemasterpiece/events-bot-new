@@ -580,3 +580,40 @@ Fifty-nine existing dedup/identity incident regressions pass. Evidence:
 `adjudicator-87615-regressions.log`. These are actual LLM decisions, not event
 persistence or recovery of carrier87615. Release qualification and delivery
 remain outstanding.
+
+
+## Narrow adjudicator release delivered, 2026-11-03 15:20 UTC
+
+PR781 passed every required CI check after the image pin update and merged as
+48fb4e6ca4b8d9246c10fb706809800eece6a424. Actual Events runtime uses image
+intake-adjudicator-grounding-20261103, immutable
+sha256:1ecca1e8c1f9dec7d1233609d50401122b991791b91d138e06c7dfb2ef4d94e4.
+All4433 tracked files, unchanged dependency inputs and running-release ancestry
+passed. Isolated initialized SQLite/HTTP preflight and wrong-SHA negative control
+passed; the isolated container was removed. Events-only cutover found no active
+ops. Live exact SHA, SQLite, model settings, promo interval5, cinema reference,
+qualified identity/adjudicator hashes and readiness passed. Kotopogoda unchanged.
+
+Finite replay of carrier87615 ran once as ops11600,
+INC-2026-11-03-workshop-catchup. It ended with no technical error but ZERO events:
+the earlier location grounding stage returned missing_location, so source and
+carrier became confirmed_product_exclusion, candidate25953 REJECTED_PRODUCT_POLICY.
+This is NOT event recovery despite the ops success status. Do not replay the
+same excluded packet blindly or weaken grounding. The original evidence remains.
+
+The museum's official creativity-center page confirms the Academy of Creativity
+at Leninsky83; its weekly November2–8 page confirms this exact workshop on
+November5. The original VK post supplies18:00, consistent with official Art
+Thursday timing. An explicitly sourced request was queued through the existing
+typed event-create parser and full Smart Update, operation
+`evt_op_akEwvpGMvW1elcEwv81fSjp_qcWVEmII`, idempotency key
+`INC-2026-11-03-workshop-87615-official-source-v2`. Acceptance and publication are
+still pending and require readback. This is an official-source recovery attempt,
+not proof the normal VK location-grounding issue is fixed.
+
+Official evidence: [weekly programme](https://kaliningradartmuseum.ru/visits/creativity-center/news/master-klassy-nedeli-s-02-11-po-08-11/)
+and [venue](https://kaliningradartmuseum.ru/visits/creativity-center/).
+Retained evidence: adjudicator-grounding-live-verification.log,
+adjudicator-grounding-live-health.json, workshop-catchup-final.json and
+workshop-official-operation.json. Keep normal VK16:30, guarded programme recovery,
+normal TG21:40 and November4/6 promo checks; all three incidents remain open.
