@@ -432,3 +432,50 @@ provider 503 fails before and passes after. It asserts exactly two attempts:
 Gemma then 3.5 Lite. All 126 topic, shared-client and fallback-safety tests pass.
 No new retry mechanism, call budget, topic prompt or schema is introduced.
 The actual import continues; no concurrent programme replay has been launched.
+
+
+### PR 769 delivered and verified, November 3 at 10:53 UTC
+
+Normal 10:00 run 11566 finished partial at 10:29:13: two imported carriers,
+seven confirmed no-event and three technical failures. Source-bound receipts
+prove Event 10435 was created and Event 10251 updated. The timed-out programme
+87457 has not been replayed. Its old 11:20 recovery window was missed.
+
+Qualified merged main fd4da1b81550d4a9633a22ba173311a95a7138bc is now running
+as intake-topics-retry-20261103. Actual source, selected model settings and
+SQLite quick_check passed explicit runtime checks; ready=true and scheduler
+healthy. Kotopogoda stayed unchanged. The topic factory now permits one attempt
+per model so retryable 503 can reach Lite within the unchanged two-send cap.
+
+Our initial all-ops deployment guard delayed the release for partner video
+selection. Inspection showed ops 11567/11569 had no session, render or
+publication yet. Existing startup cleanup and same-day partner watchdog support
+a repeat of this pre-session selection. The Events-only switch allowed exactly
+those two operations after checking that no video session had appeared and no
+other operation was active. Startup marked both crashed as expected. Automatic
+selection restart is still to be verified; this deliberately loses the in-memory
+selection pass, without interrupting an active source import or remote render.
+
+Production Python optimization disables assert. An earlier retry-release
+diagnostic and programme read-only plan therefore did not enforce assertions;
+they are retained as invalid acceptance evidence. No programme apply occurred.
+New release verification and programme guards use explicit if/raise checks, and
+a negative source control rejects under the same optimized interpreter.
+Evidence: retained phase2/verification-correction.md,
+phase2/live-release-topics-retry-verified.json,
+phase2/live-health-topics-retry-verified.json and phase2/video-restart-decision.md.
+
+The next proposed finite replay window is after terminal 11:20 guide work and
+the 11:22 promo slot, before the 12:15 source parser. It still requires no active
+ops and 30 minutes plus five minutes available, unchanged frozen source and no
+existing recovery run. If no idle window exists, defer instead of overlapping
+process-local heavy semaphores. Keep the 14:30 verification target, parser/VK
+interleaving coverage and normal TG at 21:40. Incident remains open.
+
+
+At 11:05 UTC, automatic partner restart is verified: watchdog started eco run
+11571 at 11:02:30; fresh heartbeats and provider calls confirm active selection.
+No new render session exists yet. KONB 11572 ended selection_empty; this is a
+separate partner selection result, not VK intake. Runtime remains fd4da1b8 and
+health is ready. Evidence: retained phase2/partner-resume-1105.log and
+phase2/health-1105.json. Programme recovery is still not launched.
