@@ -383,3 +383,37 @@ async def test_topics_use_verified_emergency_reserve(monkeypatch):
     assert client.calls[0]["model"] == "gemini-2.5-flash"
     assert client.calls[0]["fallback_models"][0] == "gemini-3.6-flash"
     assert client.calls[0]["max_provider_attempts"] == 2
+
+
+@pytest.mark.asyncio
+async def test_topics_503_reaches_lite_within_two_sends(monkeypatch):
+    import google_ai.limiter_supabase as limiter
+    from google_ai.client import UsageInfo
+    from google_ai.exceptions import ProviderError
+
+    monkeypatch.setenv("MONITORING_TEXT_RESERVE_MODELS", "")
+    monkeypatch.setenv("GOOGLE_AI_FALLBACK_MODELS", "gemini-3.5-flash-lite")
+    monkeypatch.setenv("GOOGLE_AI_MAX_RETRIES", "3")
+    monkeypatch.setattr(main, "EVENT_TOPICS_MODEL", "gemma-4-31b-it")
+    monkeypatch.setattr(main, "EVENT_TOPICS_GEMMA_NATIVE_SCHEMA", True)
+    monkeypatch.setattr(limiter, "build_google_ai_limiter_supabase_client", lambda **kwargs: None)
+    factory = main._get_event_topics_gemma_client
+    factory.cache_clear()
+    try:
+        client = factory()
+        attempts = []
+
+        async def attempt(*, ctx, **kwargs):
+            attempts.append(ctx.model)
+            if ctx.model.startswith("gemma-"):
+                raise ProviderError(error_type="ServerError", error_message="high demand",
+                                    status_code=503, retryable=True)
+            return '{"topics":["CONCERTS"]}', UsageInfo(input_tokens=10, output_tokens=2, total_tokens=12)
+
+        monkeypatch.setattr(client, "_attempt_generate", attempt)
+        assert await main._classify_event_topics_gemma("Концерт органной музыки") == ["CONCERTS"]
+        assert len(attempts) == 2
+        assert attempts[0].startswith("gemma-")
+        assert attempts[1] == "gemini-3.5-flash-lite"
+    finally:
+        factory.cache_clear()

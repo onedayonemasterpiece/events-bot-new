@@ -415,3 +415,20 @@ separate from the reported one completed import. Two real topic controls on
 3.5 Lite returned CONCERTS and LECTURES/SCIENCE_POP correctly through the shared
 limiter. This confirms normal automatic delivery is active, with residual
 failures still open; it is not full recovery acceptance.
+
+
+### 10:00 normal slot: retryable 503 exposed a second topic budget issue
+
+Run 11566 started on schedule and was still active at 10:27 UTC. Its source-bound
+update to Event 10251 is verified. An actual topic request at 10:22:31 received
+503 on Gemma, then its second attempt at 10:23:12 still called Gemma. PR #768
+restored the configured model list, but the topic client's default per-model
+retry count still consumed both sends before that list could be used.
+
+Set the existing topic client's max_retries to one, matching Smart Update. The
+shared client's fallback loop, atomic limiter and total two-send cap stay intact.
+A regression using the real topic factory and shared fallback loop with a stubbed
+provider 503 fails before and passes after. It asserts exactly two attempts:
+Gemma then 3.5 Lite. All 126 topic, shared-client and fallback-safety tests pass.
+No new retry mechanism, call budget, topic prompt or schema is introduced.
+The actual import continues; no concurrent programme replay has been launched.

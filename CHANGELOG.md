@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Limit topic classification to one attempt per model, so a retryable 503 reaches the configured Lite reserve within the existing two-send ceiling.
+
 - Restore the configured Google fallback list in topic classification; Gemma failures can reach the configured Lite reserve within the existing two-send budget.
 
 - Put the currently successful Gemini 3.5 Lite first in the existing production fallback list, so Gemma failures can recover within the unchanged two-send budget.
