@@ -205,3 +205,8 @@
 ## Rejected media reimports
 
 For linked child events, a pending or unclassified replacement image is not a public gallery image. If the gallery is empty, `vk_sync` clears a prior attachment instead of preserving it or using the Telegraph fallback. A semantic rejection for an immutable hosted image continues to block the same object if a source reimport creates another poster row.
+
+
+### Неизменяемый старый VK-пост
+
+Если `wall.getById` запрещает редактирование или `wall.edit` возвращает постоянный отказ из-за истёкшего окна, `edit_vk_post` передаёт существующий `VKAPIError` вызывающему коду. Такой отказ не является no-op: `vk_source_hash` и успешная квитанция новой ревизии не записываются. Существующий JobOutbox обработчик завершает только эту задачу как постоянный отказ без автоматического повтора и без общей captcha-паузы. Автоматический новый публичный пост взамен старого не создаётся. `False` остаётся результатом только фактически совпадающего содержимого.

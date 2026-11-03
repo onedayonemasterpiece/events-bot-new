@@ -7897,6 +7897,9 @@ async def edit_vk_post(
         current = attachments[:]
     else:
         current = old_attachments.copy()
+    if post_text == message and current == old_attachments and not location_params:
+        logging.info("edit_vk_post: no changes for %s", post_url)
+        return False
     if not edit_allowed:
         logging.warning(
             "edit_vk_post: skipping %s, edit unavailable (%s)",
@@ -7912,10 +7915,7 @@ async def edit_vk_post(
                 )
             except Exception:  # pragma: no cover - best effort
                 logging.exception("edit_vk_post notify_superadmin failed")
-        return False
-    if post_text == message and current == old_attachments and not location_params:
-        logging.info("edit_vk_post: no changes for %s", post_url)
-        return False
+        raise VKAPIError(15, "Access denied: edit time expired", method="wall.edit")
     if attachments is not None:
         params["attachments"] = ",".join(current) if current else ""
     elif current:
@@ -7963,7 +7963,7 @@ async def edit_vk_post(
                 )
             except Exception:  # pragma: no cover - best effort
                 logging.exception("edit_vk_post permanent-error notification failed")
-        return None
+        raise
     logging.info("edit_vk_post done: %s", post_url)
     return True
 

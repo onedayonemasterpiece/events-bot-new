@@ -79,13 +79,29 @@ async def test_edit_vk_post_treats_expired_edit_window_as_terminal(monkeypatch):
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
 
-    result = await main.edit_vk_post(
-        "https://vk.com/wall-231920894_6648",
-        "new",
-    )
+    with pytest.raises(main.VKAPIError, match="edit time expired"):
+        await main.edit_vk_post(
+            "https://vk.com/wall-231920894_6648",
+            "new",
+        )
 
-    assert result is None
     assert calls == ["wall.getById", "wall.edit"]
+
+
+@pytest.mark.asyncio
+async def test_old_vk_post_with_matching_content_remains_a_noop(monkeypatch):
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "token")
+    calls = []
+
+    async def fake_api(method, params, *args, **kwargs):
+        calls.append(method)
+        return {"response": [{"text": "same", "can_edit": 0, "attachments": []}]}
+
+    monkeypatch.setattr(main, "_vk_api", fake_api)
+    assert await main.edit_vk_post("https://vk.com/wall-231920894_12213", "same") is False
+    assert calls == ["wall.getById"]
 
 
 def _expected_vk_source_hash(event, text):
