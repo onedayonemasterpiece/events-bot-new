@@ -227,6 +227,44 @@ boundaries. Live acceptance requires the actual source and both target repost
 URLs, correct copy history and durable published receipts; tests alone do not
 prove public delivery.
 
+### Configured excursion campaign, November 3, 2026
+
+Production campaign **14** is active without an end date, target **21**:
+`guide_digest / visual_schedule`, daily campaign cap 2. Activity **48** reposts
+from `uhtykaliningrad` (238875824) to `klgdevents` (231920894, Афиша), daily cap 1,
+`every_days=1`. Activity **49** reposts the same source to
+`kenigeventsofficial` (231828790, Анонсы), daily cap 1, `every_days=3`.
+There is no dependency on an operator maintaining Event IDs.
+
+Today's edition **326**, source https://vk.com/wall-238875824_376, was delivered
+by the new campaign adapter in the qualified immutable release image:
+
+- Афиша: https://vk.com/wall-231920894_13296
+- Анонсы: https://vk.com/wall-231828790_2304
+
+Both ledger rows are `published`. Actual VK readback confirms community authors,
+exact source `copy_history`, and one repost per destination's recent wall. A
+repeat of the same adapter returned the original URLs without another send.
+This is today's compensated delivery, not a claim that a normal scheduler tick
+already ran the new release. Regular runtime delivery is still pending safe
+Events cutover after active parser11581 finishes.
+
+Qualified runtime source: `13554057902afcce42bae552365f0d86c4d7b48d`, image
+`intake-guide-promo-20261103`, immutable
+`sha256:9e93449b094229f92bede0244a46ae07a78454ef3e8f6da7afa78265ecba61b0`.
+All required CI, full 4,431-file verification, isolated startup/SQLite and the
+unchanged cinema identity replay function check pass. Source belongs to main;
+this follow-up synchronizes the repository Compose pin with that qualified image.
+
+The first isolated callback used Docker's literal env-file parsing, unlike
+Compose's quote handling, and stopped on read-only VK lookup. It sent no repost.
+Corrected invocation forwards the actual container environment in memory without
+printing secrets. One subsequent attempt hit SQLite lock contention before any
+intent/send; no ledger row existed. The successful bounded invocation used the
+same adapter and durable identity. Existing scheduler ticks naturally retry
+pre-send failures; no extra retry queue or mechanism was added. Evidence is
+retained in the active recovery directory under `promo-guide-*`.
+
 ## VK Activities
 
 `vk_publication` keeps a rolling-window minimum of event posts in a configured
