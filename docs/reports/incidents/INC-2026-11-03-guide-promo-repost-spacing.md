@@ -122,3 +122,13 @@ and qualified identity/adjudicator hashes are unchanged; promo interval5,
 readiness/database/scheduler ok and Kotopogoda unchanged. Existing public
 receipts remain authoritative. Future normal promo timing on November4/6 and
 normal scheduled imports still need acceptance; incident remains open.
+
+## Preserved through verifier release, 2026-11-03 17:33 UTC
+
+Actual runtime is 78282649624fdcea714c75d2b89ec915ea235fb5, immutable
+sha256:d3ec7e74bd1480a23853342e039e1c92373e92338d0a34e551abcd35acb90415.
+Events-only delivery preserved the five-minute promo interval and original
+campaign. Normal ticks before delivery returned today's original URLs without
+duplicate sends. Actual future spacing remains unaccepted until the normal
+November 6 pair; November 4 daily Afisha also needs observation. Today's posts
+remain untouched. No public canary, cadence reset or second scheduler was added.
