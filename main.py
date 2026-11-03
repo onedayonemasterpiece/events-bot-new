@@ -18106,7 +18106,7 @@ async def add_events_from_text(
         elif source_kind_for_queue == "vk" and source_group_id:
             vk_row = (
                 await session.execute(
-                    text(
+                    sql_text(
                         "SELECT festival_source, festival_series "
                         "FROM vk_source WHERE group_id=:gid LIMIT 1"
                     ),
