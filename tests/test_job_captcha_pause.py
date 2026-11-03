@@ -356,8 +356,9 @@ async def test_vk_captcha_cohort_auto_recovers_after_harmless_probe(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("preflight_blocked", [True, False])
 async def test_permanent_vk_edit_error_does_not_pause_whole_outbox(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, preflight_blocked
 ):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -376,13 +377,23 @@ async def test_permanent_vk_edit_error_does_not_pause_whole_outbox(
         session.add(JobOutbox(event_id=ev.id, task=JobTask.vk_sync))
         await session.commit()
 
-    async def fake_vk_job(event_id, db, bot):
-        raise main.VKAPIError(
-            15,
-            "Access denied: edit time expired",
-            method="wall.edit",
-        )
+    calls = []
 
+    async def fake_api(method, params, *args, **kwargs):
+        calls.append(method)
+        if method == "wall.getById":
+            return {"response": [{"text": "old", "can_edit": not preflight_blocked,
+                                  "date": int(datetime.now(timezone.utc).timestamp()),
+                                  "attachments": []}]}
+        raise main.VKAPIError(15, "Access denied: edit time expired", method="wall.edit")
+
+    async def fake_vk_job(event_id, db, bot):
+        await main.edit_vk_post("https://vk.com/wall-231920894_12213", "new", db, bot)
+
+    monkeypatch.setattr(main, "_vk_api", fake_api)
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "token")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "231920894")
     monkeypatch.setitem(main.JOB_HANDLERS, "vk_sync", fake_vk_job)
     monkeypatch.setattr(main, "_vk_captcha_needed", False)
     monkeypatch.setattr(main, "_vk_captcha_resume", None)
@@ -395,3 +406,5 @@ async def test_permanent_vk_edit_error_does_not_pause_whole_outbox(
     assert job.attempts == 0
     assert job.last_error.startswith("permanent VK publication error:")
     assert main._vk_captcha_resume is None
+    assert calls == (["wall.getById"] if preflight_blocked else ["wall.getById", "wall.edit"])
+    assert job.terminal_reason != "applied"
