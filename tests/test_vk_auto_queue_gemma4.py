@@ -400,7 +400,7 @@ async def test_event_parse_gemma_model_extra_overrides_global_env(monkeypatch):
     )
 
     assert list(parsed) == []
-    assert captured["model"] == "models/gemma-4-31b-it"
+    assert captured["model"] == "gemma-4-31b-it"
     assert captured["generation_config"] == {
         "temperature": 1.0,
         "top_p": 0.95,
@@ -470,7 +470,7 @@ async def test_event_parse_gemma4_keeps_semantic_output_and_uses_calibrated_admi
     )
 
     assert list(parsed) == []
-    assert captured["model"] == "models/gemma-4-31b-it"
+    assert captured["model"] == "gemma-4-31b-it"
     assert captured["max_output_tokens"] == 6000
     calibration = captured["calibration"]
     assert calibration.sample_count == 502

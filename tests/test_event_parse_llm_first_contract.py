@@ -245,6 +245,50 @@ async def test_v10_auto_verifier_timeout_preserves_positive_sibling(monkeypatch)
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("reserve_fails", [False, True])
+async def test_default_parser_500_reaches_configured_lite_within_two_sends(monkeypatch, reserve_fails):
+    import google_ai.limiter_supabase as limiter
+    from google_ai.client import UsageInfo
+    from google_ai.exceptions import ProviderError
+
+    monkeypatch.setenv("MONITORING_TEXT_RESERVE_MODELS", "")
+    monkeypatch.setenv("GOOGLE_AI_FALLBACK_MODELS", "gemini-3.5-flash-lite,gemini-3.1-flash-lite")
+    monkeypatch.setenv("GOOGLE_AI_MAX_RETRIES", "3")
+    monkeypatch.setattr(limiter, "build_google_ai_limiter_supabase_client", lambda **kwargs: None)
+    factory = main._get_event_parse_gemma_client
+    factory.cache_clear()
+    try:
+        client = factory()
+        attempts = []
+
+        async def attempt(*, ctx, **kwargs):
+            attempts.append(ctx.model)
+            if ctx.model.startswith("gemma-") or reserve_fails:
+                raise ProviderError(error_type="ServerError", error_message="internal error",
+                                    status_code=500, retryable=True)
+            return json.dumps({"disposition": "CONFIRMED_NO_EVENT", "events": [],
+                               "lifecycle_actions": [], "evidence_complete": True,
+                               "parse_version": "source-parse-v1", "no_event_reason": "RECAP_ONLY"}), UsageInfo(input_tokens=10, output_tokens=2, total_tokens=12)
+
+        async def noop(*args, **kwargs):
+            pass
+
+        monkeypatch.setattr(client, "_attempt_generate", attempt)
+        monkeypatch.setattr(main, "log_token_usage", noop)
+        if reserve_fails:
+            with pytest.raises(ProviderError):
+                await main._parse_event_via_gemma("Вчера состоялся концерт", gemma_model="gemma-4-31b-it")
+        else:
+            result = await main._parse_event_via_gemma("Вчера состоялся концерт", gemma_model="gemma-4-31b-it")
+            assert result.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+        assert len(attempts) == 2
+        assert attempts[0].startswith("gemma-")
+        assert attempts[1] == "gemini-3.5-flash-lite"
+    finally:
+        factory.cache_clear()
+
+
+@pytest.mark.asyncio
 async def test_generic_title_uses_conditional_verifier_not_deterministic_veto(monkeypatch):
     monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
     monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")

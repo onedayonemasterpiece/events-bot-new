@@ -10312,7 +10312,7 @@ async def _parse_event_via_gemma(
             model,
             str(getattr(client, "consumer", "event_parse") or "event_parse"),
         )
-        # Emergency text reserves stay within two sends; normal Gemma stays one.
+        # The caller's configured model chain stays within two physical sends.
         return await client.generate_content_async(
             model=model,
             prompt=prompt_text,
@@ -10400,7 +10400,9 @@ async def _parse_event_via_gemma(
 
     # Build once from the caller model: rebuilding from the emergency primary
     # drops the configured model and its Lite sibling from the fallback chain.
-    model_chain = monitoring_text_model_chain(model)
+    model_chain = monitoring_text_model_chain(
+        model, (os.getenv("GOOGLE_AI_FALLBACK_MODELS") or "").split(",")
+    )
     model = model_chain[0]
     # Gemma 4 spends a non-trivial token budget on its internal thought channel
     # before emitting JSON. With 2200 the digest-detection / multi-rule cases

@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Preserve the configured Google fallback list in the source parser, so a retryable Gemma failure reaches Lite within the existing two-send ceiling.
 - Keep doors/admission and performance start as one occurrence during conditional source verification, while preserving separate attendable sessions and dates.
 - Preserve poster hashes, hosted URLs and OCR in VK parse receipts so cached drafts retain the original identity evidence without storing image bytes.
 - Clarify the dedup adjudicator distinction between explicit source-backed differences and missing comparison evidence; retain existing fail-closed identity checks.
