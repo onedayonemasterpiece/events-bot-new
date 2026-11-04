@@ -1084,3 +1084,23 @@ guard or worker pause. Live media work after boot has fresh post-start claims.
 Qualification and real model controls remain as recorded above; no rebuild.
 Normal VK 16:30 UTC, guide full 18:10 UTC and TG 21:40 UTC remain required
 with exact terminal source/child receipts. Incident stays open.
+
+
+### 2026-11-04 17:09 UTC — ordinary VK slot accepted without technical refusals
+
+Scheduled VK ops11635 ran16:30:00–16:45:37 UTC, terminal success, run
+`bc4b1635afc548488a3b073753dd6086`, batch`auto:1793809800`.
+All12 carriers terminal, zero unresolved, zero technical errors: one CREATED
+Event10524, ten confirmed_no_event and one product exclusion missing_location.
+Carrier88740/source26756/child12098 reports CREATED and EVENTS_RESOLVED;
+EventSource13970445 anchors the canonical card to wall-9118984_25576.
+No updates or unrelated creations attributed to this run. Retained complete
+source/child/carrier receipts: vk11635-terminal-receipts.json. This accepts this
+normal slot, not elimination of all historical technical failures or separate
+structured parser, guide and TG acceptance. No replay.
+
+Production remains healthy e6bca5539, ready=true, DB ok and no health issues.
+Qualified Cherryflash year-label cutover refused before mutation because fresh
+normal event_media_review145971 was running. No import interrupted or weaker
+guard introduced. Guide18:10 UTC, TG21:40 UTC, November5 media/structured-parser
+and November6 promo-pair checks remain outstanding.
