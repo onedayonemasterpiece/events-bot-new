@@ -1043,3 +1043,44 @@ the false IMPOSSIBLE_SCHEMA_VALUE; existing programme MULTIPLE_OCCURRENCES_COLLA
 remains, preserving conditional verification. No provider or Event/Job writes.
 Retained date-boundary-source-facts-comparison.json contains exact before/after.
 This correction is not yet deployed; production remains healthy 4600e9978.
+
+
+### 2026-11-04 15:43 UTC — date-boundary image qualified, delivery guarded
+
+PR810 merged with all four required CI green. Exact main
+`e6bca5539de7feab4cea2e06c3e980aec0e89502`, image
+`intake-date-boundary-20261104`, immutable
+`sha256:ba65abe3af1c2bd131ef883ff88c01494c78890318ad5dc67a2c465e5c0ef165`
+is fully qualified: all 4441 tracked files, initialized isolated preflight,
+wrong SHA refusal, adapter/scheduler/context and numeric-boundary controls,
+HTTP isolation, cinema and semantic hashes passed. Actual candidate model
+chain retained one January4 2027 11:00 event without end date. Event and
+JobOutbox row counts remained zero; preflight container removed.
+
+NOT DELIVERED. Guarded cutover attempts stopped before mutation because
+normal event_media_review jobs were active. First blocker145343 subsequently
+finished done/nochange; work progressed to145359 with two due media jobs.
+Do not interrupt this ongoing work or bypass guards. Actual production
+remains healthy4600e9978; no new source replay or remote kernel. Video1563
+continues on the same renderer. Normal VK16:30 UTC remains required.
+Evidence retained in date-boundary-release-receipt.json and cutover logs.
+
+
+### 2026-11-04 15:59 UTC — date-boundary correction delivered
+
+After normal media work completed, all ops/MCP/background guards passed.
+Events-only cutover delivered exact main `e6bca5539de7feab4cea2e06c3e980aec0e89502`
+and immutable `sha256:ba65abe3af1c2bd131ef883ff88c01494c78890318ad5dc67a2c465e5c0ef165`
+at 15:57:55 UTC. Fresh live SHA/settings/SQLite/cinema/semantic hashes, scope
+transport and numeric-date controls passed. Health ready=true, DB ok, issues
+empty. Kotopogoda unchanged. The same remote video session 1563 resumed fresh
+RUNNING provider polls and ledger updates without another kernel; rendering
+is not terminal video acceptance. No source replay or accepted operation repeated.
+
+Earlier guarded attempts refused before mutations while short media jobs
+were active. Three activity queries were consolidated into one diagnostic
+invocation with the same refusal conditions; no new state, loop, weaker
+guard or worker pause. Live media work after boot has fresh post-start claims.
+Qualification and real model controls remain as recorded above; no rebuild.
+Normal VK 16:30 UTC, guide full 18:10 UTC and TG 21:40 UTC remain required
+with exact terminal source/child receipts. Incident stays open.

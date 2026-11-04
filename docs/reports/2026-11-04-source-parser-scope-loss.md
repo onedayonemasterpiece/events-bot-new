@@ -79,3 +79,28 @@ Retained каталог на DevCoveer: `/home/dev/artifacts/events-bot-new/2026
 Локально подготовлено минимальное исправление передачи operator_extra через source_context и нормального source_channel. Одного transport forwarding было недостаточно: полный модельный контроль всё ещё возвращал серию с неверными годами. Добавлено явное применение той же области в двух существующих списках rules для verifier и terminal; адаптер структурированного источника задаёт область одной карточки. После этого точная generic-инструкция из кода сохранила один сеанс 2027-01-04 11:00, end_date null.
 
 151 локальный regression test проходит. Два дополнительных модельных контроля (обычный многочастный пост и одна выставка с периодом) ещё выполняются. На прод эта следующая правка пока не доставлена. Неверные date-token facts отдельно не исправлены и guards не сняты.
+
+
+## Delivered corrections and remaining acceptance, 2026-11-04 15:59 UTC
+
+PR #809 preserves the existing operator scope throughout the actual parser,
+verifier and terminal requests. Its actual generic instruction control retained
+one January 4, 2027 11:00 event; an unscoped two-event control and a scoped
+exhibition-period control passed. PR #810 narrows the existing numeric fact
+lexer so short hyphenated phone/duration fragments cannot establish calendar
+contradictions. Full-year hyphenated dates, dot/slash formats, genuine invalid
+dates and OCR/date/identity protections remain intact. Raw source text and OCR
+are unchanged. The source comparison removes only false impossible-date facts,
+retaining programme multiplicity for semantic verification. No new state,
+worker, retry, output allowance or source recovery path.
+
+Both corrections are delivered in exact main `e6bca5539de7feab4cea2e06c3e980aec0e89502`,
+immutable `sha256:ba65abe3af1c2bd131ef883ff88c01494c78890318ad5dc67a2c465e5c0ef165`.
+All required CI passed; PR810's 142 regressions, full 4441-file image proof,
+isolated preflight, wrong-SHA control and actual full model chain passed.
+Zero Event/JobOutbox writes in model controls. Reconstructed neighbouring
+source remains a reconstruction, not an exact replay of missing failed OCR.
+Live source/settings/DB/scheduler and exact numeric controls passed, ready=true.
+No source replay or old accepted request recommit. Next ordinary VK 16:30 UTC,
+guide 18:10 UTC and TG 21:40 UTC require actual terminal source receipts;
+model-only success is not their acceptance. The incident remains open.
