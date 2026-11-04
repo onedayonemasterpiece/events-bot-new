@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:intake-vk-source-query-20261103
+    image: runcoveer/events:guide-vk-png-20261104
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
