@@ -1635,6 +1635,11 @@ async def add_new_event_via_queue(
                 build_event_drafts_from_vk(
                     text=source_text,
                     source_name=f"theatre:{theatre_event.source_type}",
+                    operator_extra=(
+                        "Импортируется одна карточка билетного сеанса. Структурированные дата и время в начале текста "
+                        "задают область этой карточки; общее расписание в описании относится к другим сеансам "
+                        "и не должно создавать дополнительные события или менять дату и время текущего сеанса."
+                    ),
                     location_hint=location_name,
                     default_ticket_link=theatre_event.url,
                     poster_media=poster_media,

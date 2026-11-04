@@ -292,3 +292,7 @@ shortlist: один performance/ticket URL не является доказат�
 ## Задачи
 
 Связанные backlog items/планы/отчёты — в `docs/features/source-parsing/tasks/README.md` (без копирования контента).
+
+### Scope of a structured ticket card
+
+Each structured source row imports its own slot. The adapter uses the existing operator instruction to distinguish the row header from a full programme repeated in its description. The instruction remains in the existing `source_context` during conditional verification and terminal adjudication; raw source and OCR remain intact. Unscoped multi-event posts retain their existing extraction contract. This does not bypass date/identity checks or correct the separately recorded numeric date lexer false positives.

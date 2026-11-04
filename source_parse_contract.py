@@ -871,6 +871,7 @@ def build_verification_request(
         "task": "conditionally_verify_source_parse",
         "rules": [
             "Use all source text and every OCR block; deterministic hints are evidence, never a verdict.",
+            "When source_context.operator_extra is present, apply it as the operator requested import scope at every stage, not as extra source evidence. Check completeness only within that scope; do not add other sessions or change the scoped date/time to satisfy contradiction counts.",
             'Confirm or correct events and lifecycle actions; contradiction counts are hypotheses, never a required child count. '
             'Address numbers are not schedule dates. '
             'Doors/admission and performance start belong to one occurrence: use the explicit performance start and retain doors as context. '
@@ -911,6 +912,7 @@ def build_terminal_adjudication_request(
         "task": "terminal_source_parse_adjudication",
         "rules": [
             "Read all supplied source text and every OCR block again and make one final semantic decision.",
+            "When source_context.operator_extra is present, apply it as the operator requested import scope at every stage, not as extra source evidence. Check completeness only within that scope; do not add other sessions or change the scoped date/time to satisfy contradiction counts.",
             "RETRY_REQUIRED is forbidden in this final stage.",
             "Return EVENTS_FOUND, MIXED or LIFECYCLE_ONLY when any attendable event or lifecycle action is present.",
             "Return CONFIRMED_NO_EVENT with an exact no_event_reason only when complete evidence proves there is no attendable event.",
