@@ -21,7 +21,7 @@
 - live E2E намеренно ставит `GUIDE_EXCURSIONS_LOCAL_FALLBACK_ENABLED=0`, чтобы падение Kaggle/Gemma path не маскировалось `partial`-успехом.
 - daily horizon для уже прогретого guide-track остаётся коротким: `GUIDE_DAYS_BACK_FULL=5`, `GUIDE_DAYS_BACK_LIGHT=3`, но первый `full` run на пустой базе теперь автоматически расширяет post horizon до `GUIDE_DAYS_BACK_BOOTSTRAP=14`, чтобы bootstrap digest не терял будущие экскурсии из постов, опубликованных несколько дней назад;
 
-Для guide-track LLM path должен быть только Gemma-only:
+Guide-track LLM использует общий `GoogleAIClient` с настроенным резервом моделей:
 
 - Kaggle extraction использует `GoogleAIClient` + Supabase-backed limiter с primary secret `GOOGLE_API_KEY2` и guide account label `GOOGLE_API_LOCALNAME2`;
 - generated Guide notebook является самостоятельной import-boundary: server
@@ -37,6 +37,7 @@
   - server-side `guide_occurrence_enrich`, `guide_profile_enrich`, `guide_excursions_dedup` -> `gemma-4-31b`
   - server-side `guide_excursions_digest_batch` (Lollipop Trails writer) -> `gemini-3.1-flash-lite` (writer-twin Smart Update; per-day объём ~1-3 batched calls на digest publish)
   - `GOOGLE_AI_FALLBACK_MODELS` должен включать `gemma-4-31b-it`, чтобы Lite outage прозрачно откатывался на Gemma 4 через канонический `GoogleAIClient` model chain;
+- Kaggle получает существующий `GOOGLE_AI_FALLBACK_MODELS` из серверной конфигурации через зашифрованный payload. В одном вызове общего клиента допускается не больше трёх физических отправок суммарно по всем моделям, по одной попытке на модель; прежние внешние timeout/retry границы не расширяются. Лимиты и выделение ключей остаются в общем framework.
 - для Telegram auth Kaggle guide path по умолчанию использует только `TELEGRAM_AUTH_BUNDLE_S22`; локальная `TELEGRAM_AUTH_BUNDLE_E2E` не считается допустимым автоматическим fallback и может быть использована только через явный аварийный override;
 - VK sources in the same Kaggle guide path use `GUIDE_MONITORING_VK_TOKEN`; server-side encrypted secrets populate it from `GUIDE_MONITORING_VK_TOKEN` or from the env named by `GUIDE_MONITORING_VK_TOKEN_ENV` (default `VK_SERVICE_TOKEN`). Guide VK fetches are public/read-only and must not consume a user/community publication credential or its flood budget. The resolved token is scoped to the encrypted Kaggle secret payload and is not exposed in config datasets.
 - Guide VK calls are serialized with `GUIDE_MONITORING_VK_MIN_INTERVAL_MS=350`. A provider `error_code=9` opens a run-local one-hour circuit (`GUIDE_MONITORING_VK_FLOOD_COOLDOWN_SECONDS`) so the remaining sources fail locally instead of multiplying rejected provider requests.
