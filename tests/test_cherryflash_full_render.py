@@ -587,3 +587,16 @@ def test_encode_video_uses_direct_ffmpeg_hevc_for_final_mode(
     assert "-ar" in commands[0]
     assert "48000" in commands[0]
     assert len(commands) == 1
+
+
+def test_scene_date_retains_year_outside_render_year(monkeypatch):
+    from datetime import date
+
+    class RenderDay(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 11, 4)
+
+    monkeypatch.setattr(full, "date", RenderDay)
+    assert full._format_display_date("2027-05-01", "12:00") == "1 МАЯ 2027 • 12:00"
+    assert full._format_display_date("2026-11-05", "18:00") == "5 НОЯБРЯ • 18:00"

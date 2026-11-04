@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Retain the calendar year in Cherryflash scene date labels for events outside the rendering year, avoiding ambiguous future dates that look stale.
 - Avoid false impossible-calendar facts from short hyphenated phone/duration fragments; full-year numeric dates and actual invalid-date/OCR checks remain intact.
 - Preserve operator import scope through source-parse verification and terminal adjudication; structured ticket cards stay within their own slot instead of expanding the complete programme.
 - Give remote guide classification and multi-excursion extraction enough output room for their existing JSON schemas; avoid Lite MAX_TOKENS rejection at the former 160/520-token ceilings.
