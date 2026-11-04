@@ -107,7 +107,7 @@ incorrectly assumed zero isolated JobOutbox rows despite the existing BGE
 producer; removed that unrelated assertion. No production writes occurred.
 
 Two real model-only controls using saved candidate and original-owner payloads
-both return allow_merge (piano same_event_update and movie source_update).
+both return allow_merge with reason same_ticket_source_update.
 Gemma failure reaches the configured Lite3.5 through the shared limiter and
 existing ceiling; no retry or model-routing override. Controls do not call
 Smart Update intake and write zero Event/Job rows. Disputed actual19099
@@ -120,3 +120,24 @@ Candidate is not merged, built or deployed yet. Ordinary TG11638 remains
 active with real progress, so no cutover or competing CLI intake is permitted.
 Existing duplicate pairs and nine own-digest cards have not been merged,
 deleted, disabled or replayed. Existing public posts remain unchanged.
+
+
+## Regression and release contract
+
+Treat this record as a regression guard when changing parser occurrence keys,
+explicit-key classification, source-anchor recall, shortlist selection or source
+bindings. Root for the ordinal candidate is mechanical identity/recall; it does
+not infer event meaning with title/date regexes. The separate own-digest venue
+problem remains semantic and needs LLM-first source/child correction.
+
+Required checks: original-function distinguishing baseline; ordinal drift full
+SQLite pipeline; different-time, native-id, sector/cross-ticket and ambiguous
+same-slot controls; actual19099 FINAL_RETRY; saved exact-owner model controls;
+merged-main ancestry, full source qualification, initialized isolated preflight,
+wrong-SHA control and safe Events-only release. Confirm normal scheduled parser
+receipts after release, then reconcile old duplicate cards through the existing
+managed merge/projection contract. Preserve legitimate multi-session cards.
+
+Release evidence: not built or deployed. No public or data repair accepted.
+Follow-ups: nine own-digest rows and source prevention, exact old-pair cleanup,
+normal Telegram import acceptance and existing media/promo verification.
