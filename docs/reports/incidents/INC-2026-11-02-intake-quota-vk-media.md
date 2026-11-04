@@ -970,3 +970,22 @@ delivery. No Event/source replay or semantic guard change. Truncation is not
 claimed repaired by model availability. Generated notebook snapshot refreshed
 with the existing factory; previously merged VK pacing is synchronized too,
 already present in the runtime-generated notebook before this fix.
+
+### 2026-11-04 13:07 UTC — remote reserve qualification and bounded live failures
+
+PR 806 merged after all four required CI. Exact source 4fb0cc3614db8c939a91cbab637009b9ea5f4c16 built as immutable c06f6ea53c8f0b616ce20f432484ac0d0da6c930a71b1daf83e9ee8dede8d2b5; 4438 tracked files verified. Initialized isolated SQLite, adapter no-write controls, scheduler submitted-slot control, wrong-SHA refusal and disabled-startup HTTP isolation passed. The existing reserve setting is forwarded by the actual payload builder. Isolated container removed. No production cutover.
+
+Remaining real model-only controls did not pass: profitour 918 screening used Gemini 3.5 Lite, but extraction timed out; the synthetic mixed availability screen returned MAX_TOKENS from Gemini 3.5 Lite and HTTP503 from Gemini 3.1 Lite. No Event or Job writes. This is incomplete semantic qualification, despite the successful process exit. Existing screen output allowance 160 is now a measured truncation observation; no budget or semantic change is claimed. Previously accepted controls were not repeated.
+
+Ordinary parser 11629 continues real source processing: MERGED 10380, later existing ticket receipts 10388/10390/10391/10392 and event 204/271. Transient SQLite locks around 13:00 affected background/on-demand/crawl tasks; health returned ok/ready with DB ok and no issues around 13:04 without a reset or restart. Media 91980 is error/stale under existing recovery, not manually cleared. Terminal import acceptance still pending. Evidence in guide-remote-reserve-preflight.log, guide-remote-remaining-controls.log, parser 11629-source-progress-1306.log and guide-remote-prod-health-1305.json under the retained task directory.
+
+Independent guide-card PR 803 merged as main 79f8b43374dd9b4b531533d7145f4c04974e61b5 and includes PR806. Preserve another operator's eventual newer runtime; never deploy the older 4fb candidate over it. No source replay or identity/date guard weakening.
+
+
+### 2026-11-04 13:28 UTC — measured guide output ceilings
+
+Real model-only comparison reproduced screen MAX_TOKENS on Gemini 3.5 Lite at 160; the same prompt/schema at 420 returned complete JSON. The existing tier1 allowance 520 truncated a three-occurrence synthetic contrast on both Lite 3.1 and3.5. At 2200 (the existing ask_gemma default), real Lite 3.1 returned all three dates and preserved available Lower Pond versus two sold-out walks. This is a synthetic contrast derived from the edited current 5988 source, not original historical bytes or a source replay. The retained on-demand 918 source produced no dated occurrence, so cannot become ready through existing eligibility checks. No canonical writes.
+
+Minimal prevention changes only the two existing max_output_tokens arguments, zero net handwritten production lines, and regenerates the notebook. No prompt, schema, model chain, retry, worker, state or identity/date guard change. The 109 guide/client regression tests pass; remaining changed-budget historical controls are running. Evidence: guide-screen-budget-comparison.log, guide-remaining-screen420-controls.log, guide-multi-budget2200-control.log and guide-output-budget-tests.log. Not delivered.
+
+Ordinary parser 11629 terminal partial at 13:23:01: three created 10521/10522/10523, two updated 10380/10511, 264 unchanged, two technical Tretyakov failures and a separate Philharmonia kernel error. Actual EventSource anchors 13937517/13937519/13937520 and updated 13937518/13926549 checked; unrelated concurrent Events are not attributed to this run. No blind retries.

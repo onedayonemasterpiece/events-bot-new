@@ -2083,7 +2083,7 @@ async def screen_post(
         SCREEN_MODEL,
         prompt,
         consumer="guide_scout_screen",
-        max_output_tokens=160,
+        max_output_tokens=420,
         response_schema=schema,
     )
     if not isinstance(data, dict):
@@ -2220,7 +2220,7 @@ async def _extract_announce_post_tier1(
         EXTRACT_MODEL,
         prompt,
         consumer="guide_scout_announce_tier1_extract",
-        max_output_tokens=520,
+        max_output_tokens=2200,
         response_schema=schema,
         timeout_seconds=timeout_seconds,
         timeout_retries=timeout_retries,

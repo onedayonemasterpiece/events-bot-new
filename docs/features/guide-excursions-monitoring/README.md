@@ -579,3 +579,5 @@ Guide digest не должен произвольно смешивать `про
 Kaggle runtime alignment:
 - `GuideExcursionsMonitor` now uses a Kaggle notebook entrypoint (`guide_excursions_monitor.ipynb`) generated from the canonical Python runner `guide_excursions_monitor.py` at push time.
 - This matches the execution model used by production Telegram Monitoring more closely and improves live log visibility in the Kaggle UI while preserving a single fact-first Python source of truth.
+
+Remote notebook output budgets are 420 tokens for screening and 2200 for Tier-1 multi-occurrence extraction. Live Lite controls showed truncation at the previous 160/520 ceilings. The prompts, schemas, physical-send ceiling, timeouts and occurrence eligibility checks are unchanged.
