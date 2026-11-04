@@ -61,3 +61,39 @@ sequence, not all routing work. No counterfactual claim is made that the
 card would have existed without restored ingestion. Correct source-backed
 2027 extraction and unchanged renderer/selector establish the observed
 mechanical cause without that mistaken chronology.
+
+
+## Qualified exact-main image, 2026-11-04 16:43 UTC
+
+PR811 and PR812 merged after all required CI passed. Exact main
+`d0518b81d92fa3d3f8d8592d930a55f644382c5f`, image
+`intake-cherryflash-year-20261104`, immutable
+`sha256:dfc579095e8a23afc69525c59903afcba092f35f65532aaad01233ce733c6920`
+passed full 4442-file verification, actual runtime ancestry and unchanged
+dependency inputs. Initialized isolated preflight preserved source/date/identity
+contracts, models/cinema and scheduler behaviour; actual shipped formatter
+returned cross-year2027 and unchanged same-year labels. Wrong SHA refused,
+HTTP isolation passed, own preflight container removed. No provider or Event/Job
+writes in the display control. No additional model call is needed for this
+mechanical display-only change.
+
+NOT DELIVERED: ordinary automatic VK11635 is active from16:30 UTC. In the
+16:41 snapshot six posts are confirmed_no_event and carrier88740/source26756
+is processing; parse EVENTS_FOUND is not Smart Update acceptance. Do not
+interrupt healthy intake or run a parallel source CLI. Prepared guarded host
+cutover/verify scripts expect current e6/ba65 and intake-date-boundary tag.
+Current story and valid canonical Event10315 remain unchanged. Detailed
+qualification receipt retained in cherryflash-year-release-receipt.json.
+
+
+## Guarded delivery follow-up, 2026-11-04 17:09 UTC
+
+Ordinary VK11635 is now terminal success with complete source/child/carrier
+receipts, one creation and zero technical refusals. The prepared year-label
+cutover was attempted once and refused BEFORE mutations because normal media
+review145971 was active. Actual runtime remains healthy e6bca5539, ready=true,
+DB ok. Candidate d0518b81 remains fully qualified but NOT DELIVERED; no rebuild
+or repeated successful qualification required. Retained evidence:
+cherryflash-year-cutover-1709.log and cherryflash-year-runtime-health-1710.txt.
+Preserve healthy media work, then use the same guarded release and live verify.
+Current ECO story is unchanged and no new selection horizon was adopted.
