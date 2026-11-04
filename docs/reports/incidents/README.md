@@ -18,6 +18,8 @@
 
 ## Активные regression contracts
 
+- `INC-2026-11-04-guide-vk-card-quality.md`: VK excursion schedule uploads must retain 1080×1350 text legibility; verify actual format, provider photo size and existing publication identity.
+
 - `INC-2026-11-03-guide-promo-repost-spacing.md`
   - Scope: independently delayed digest reposts, overdue dispatch spacing and lost-reply timestamps.
 

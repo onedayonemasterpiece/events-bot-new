@@ -48,6 +48,51 @@ SAMPLE_ROWS = [
 
 
 @pytest.mark.asyncio
+async def test_vk_upload_keeps_full_card_as_png(monkeypatch):
+    import io
+    from PIL import Image
+    from guide_excursions import visual_digest as vd
+
+    rendered = io.BytesIO()
+    Image.new("RGB", (1080, 1350), "white").save(rendered, format="JPEG")
+
+    async def issue(*_args, **_kwargs):
+        return {"items": SAMPLE_ROWS}
+
+    async def group(**_kwargs):
+        return 238875824
+
+    async def caption(*_args, **_kwargs):
+        return "Дайджест экскурсий"
+
+    monkeypatch.setattr(vd, "load_visual_digest_issue", issue)
+    monkeypatch.setattr(vd, "_resolve_vk_group_id", group)
+    monkeypatch.setattr(vd, "build_visual_digest_vk_text", caption)
+    monkeypatch.setattr(vd, "render_visual_digest_cards", lambda *_a, **_kw: [rendered.getvalue()])
+    monkeypatch.setattr(vd, "VISUAL_DIGEST_STORIES_ENABLED", False)
+
+    async def upload(_group, payload, *_args, filename, **_kwargs):
+        with Image.open(io.BytesIO(payload)) as image:
+            assert image.format == "PNG"
+            assert image.size == (1080, 1350)
+        assert filename.endswith(".png")
+        return "photo868977531_457264569"
+
+    class ReachedWallPost(Exception):
+        pass
+
+    async def post(*_args, **kwargs):
+        assert kwargs["attachments"] == ["photo868977531_457264569"]
+        raise ReachedWallPost
+
+    with pytest.raises(ReachedWallPost):
+        await vd._publish_visual_digest_to_vk_once(
+            object(), issue_id=328, vk_api_fn=object(),
+            post_to_vk_fn=post, upload_vk_photo_bytes_fn=upload,
+        )
+
+
+@pytest.mark.asyncio
 async def test_visual_digest_vk_text_uses_vk_clickable_and_shortens_external_links():
     calls = []
 

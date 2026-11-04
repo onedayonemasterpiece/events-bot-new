@@ -105,6 +105,7 @@
   `События на <дата или диапазон>`, followed by selected city hashtags and
   date hashtags in the requested underscore-first order.
 - Guide excursions VK digest принадлежит фиче [Guide Excursions Monitoring](../guide-excursions-monitoring/README.md), но обязан использовать общий VK wall contract из этого документа.
+- Visual excursion schedule cards upload as full-resolution PNG. On 2026-11-04 VK rejected the 1080×1350 JPEG and the 800px retry, accepting only a blurred 320×400 fallback; the identical full-size card succeeded as PNG. The shared bytes uploader sends the MIME type and filename extension matching each attempt's actual format. Telegram/MAX rendering and existing publication receipts stay unchanged.
 - Для `https://vk.com/uhtykaliningrad` нужен отдельный target group id/env, независимый от `VK_EVENTS_GROUP_ID` (`klgdevents`) и `/vkgroup` daily-настройки.
 - Такие дайджесты публикуются через `post_to_vk`, поэтому по умолчанию попадают в отложку: минимум через 10 минут от текущего времени, с теми же `VK_POSTPONED_*` правилами и community-author contract.
 - Feature-owned digest не должен молча наследовать Telegram formatting. Перед вызовом `wall.post` он должен быть plain text, с VK-safe ссылками, без HTML/Markdown и без Telegram-only caption/media mechanics.
