@@ -43,13 +43,13 @@ ECO/base/partner Cherryflash primary event scene date labels; scripts/render_che
 - [x] Causal comparison to pre-recovery code and record chronology.
 - [x] Differentiating next-year case fails before and passes after; same-year unchanged.
 - [x] Existing render/audio suite:23 passed; real text-layout control viewed.
-- [ ] Required CI green, merge exact main, qualify image, safe Events-only delivery.
-- [ ] Verify deployed renderer/bundle and year label; preserve active intake and remote jobs.
+- [x] Required CI green, merge exact main, qualify image, safe Events-only delivery.
+- [x] Verify deployed renderer/bundle and year label; preserve active intake and remote jobs.
 - [ ] Resolve today's public-surface follow-up explicitly. Existing video has not been edited/deleted/reposted; no replacement or canary publication is claimed.
 
 ## Release evidence and follow-ups
 
-NOT DEPLOYED. Current production remains e6bca5539de7feab4cea2e06c3e980aec0e89502. Original normal VK16:30 UTC, guide18:10, TG21:40, media/source-parser checks and promo remain active, with native wake16:35 UTC already pending. Owner horizon preference is optional and separate; keep existing eligibility until a decision arrives. Incident stays open.
+DELIVERED in combined main44d183696 at17:56 UTC, immutable ca0c948dca38. Actual shipped formatter returns 1 МАЯ 2027 • 12:00 and unchanged same-year labels. Current public story remains unchanged; subsequent real render acceptance is separate. Normal guide18:10 UTC, TG21:40 UTC, media/source-parser checks and promo remain active. Owner horizon preference is optional and separate; keep existing eligibility until a decision arrives. Incident stays open.
 
 
 ### Chronology correction
@@ -97,3 +97,19 @@ or repeated successful qualification required. Retained evidence:
 cherryflash-year-cutover-1709.log and cherryflash-year-runtime-health-1710.txt.
 Preserve healthy media work, then use the same guarded release and live verify.
 Current ECO story is unchanged and no new selection horizon was adopted.
+
+
+## Combined delivery verification, 2026-11-04 17:58 UTC
+
+PR812 year-label fix delivered together with PR814 media-producer correction
+from exact main44d183696ff30507b151d59b829f15614256d22a, immutable
+sha256:ca0c948dca380e43f324b017e326a571f086bb5ed2a6d54da4aa772ca6686a25.
+Full4442-file proof, initialized isolated preflight, actual renderer year and
+same-year controls, wrong SHA and HTTP isolation passed. Live formatter and
+runtime checks pass; ready=true, DB ok, models/cinema/identity unchanged,
+Kotopogoda unchanged. No normal source import or MCP intake interrupted.
+One durable media-only claim crosses restart under the existing recovery
+contract and remains tracked by the intake incident. No public canary, story
+replacement, event retiming or new selection horizon. Existing public ECO1562
+story not edited; that follow-up and future actual render observation remain.
+Older d051 candidate was never delivered and is superseded, no rebuild needed.

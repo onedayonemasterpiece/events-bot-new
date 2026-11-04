@@ -1124,3 +1124,35 @@ Retained media-unchanged-followup-control.log and media-followup-before.log.
 Cherryflash candidate d051 remains qualified but undelivered; do not rebuild
 it or confuse current media fix branch with a release. DocsPR813 merged all
 four required green, docs main73522f359 requires no restart.
+
+
+### 2026-11-04 17:58 UTC — combined media and year-label release delivered
+
+PR814 merged after all four required CI passed. Exact main
+`44d183696ff30507b151d59b829f15614256d22a`, immutable
+`sha256:ca0c948dca380e43f324b017e326a571f086bb5ed2a6d54da4aa772ca6686a25`,
+image `intake-media-followup-20261104` delivered Events-only at17:56 UTC.
+All4442 tracked files, initialized isolated preflight, actual unchanged versus
+replaced-image contrast, year labels, wrong-SHA refusal and HTTP isolation
+passed. Own preflight container removed. Live runtime, SQLite, models, promo5,
+cinema and semantic hashes passed; health ready=true, DB ok, issues empty.
+Kotopogoda unchanged. This supersedes undelivered d051 display-only image.
+
+Normal source ops and MCP intake were idle. Two conservative all-background
+guards refused before mutations. The existing media restart contract was then
+reviewed:180-second stale claim detection, independent-pipeline backoff and
+coalesced successors; previously observed recovery143319. One bounded operator
+exception allowed only the four exact nochange-loop event ids and task
+event_media_review, still refusing all other background tasks. Active claim
+was146259/Event10328. No worker pause, queue mutation or new recovery code.
+Immutable media objects and transactional DB inputs remain; source imports
+and external publishing tasks were idle. Decision and exact claims retained.
+
+Initial live acceptance: queued reviews146261/146262/146260 completed normally
+for10428/10431/10432. Their next jobs146263–146265 preserve Nov5 00:05 UTC
+rather than running every seconds. Exact146259 still awaits existing stale
+handling, so its recovery and fourth-card loop elimination are not yet accepted.
+Normal guide18:10 UTC and TG21:40 UTC remain required, along with structured
+parser, budget-reset projections and promo pair. No old source replay.
+Retained media-followup-release-receipt.json, live-verification.log,
+media-followup-live-progress-1757.json and media-followup-restart-contract.md.
