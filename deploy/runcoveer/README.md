@@ -13,6 +13,16 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Guide VK card PNG release, 2026-11-04
+
+Events image: `runcoveer/events:guide-vk-png-20261104`; rollback:
+`runcoveer/events:intake-guide-wait-20261104`. Build exact merged main and
+preserve the live model, source-parser and five-minute promo settings. Only
+the VK visual schedule upload becomes full-resolution PNG; retain existing
+wall post IDs, digest receipts and promo cadence. Verify provider photo size
+1080×1350 after upload. Source registration remains distinct from successful
+guide scanning; the next normal light import is 13:20 Kaliningrad.
+
 ## Topic retry budget follow-up, 2026-11-03
 
 Image: `runcoveer/events:intake-topics-retry-20261103`; rollback:

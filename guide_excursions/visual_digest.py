@@ -1995,7 +1995,14 @@ async def _publish_visual_digest_to_vk_once(
     card_bytes = render_visual_digest_cards(rows, issue_id=int(issue_id))
     attachments: list[str] = []
     for idx, payload in enumerate(card_bytes, start=1):
-        att = await upload_vk_photo_bytes_fn(str(group), payload, db, bot, filename=f"guide_visual_digest_{issue_id}_{idx}.jpg")
+        # VK rejected the full JPEG card but accepted the same pixels as PNG.
+        # Keep the text at its rendered resolution instead of resizing it away.
+        with Image.open(io.BytesIO(payload)) as card:
+            png = io.BytesIO()
+            card.save(png, format="PNG")
+            logger.info("guide_visual_digest_vk_card issue_id=%s card=%s format=PNG width=%s height=%s bytes=%s",
+                        issue_id, idx, card.width, card.height, png.tell())
+        att = await upload_vk_photo_bytes_fn(str(group), png.getvalue(), db, bot, filename=f"guide_visual_digest_{issue_id}_{idx}.png")
         if not att:
             raise RuntimeError(f"Guide visual digest VK upload failed for card {idx}/{len(card_bytes)}")
         attachments.append(att)

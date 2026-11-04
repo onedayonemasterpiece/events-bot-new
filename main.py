@@ -4496,11 +4496,12 @@ async def upload_vk_photo_bytes(
                     )
                     upload_url = data["response"]["upload_url"]
                     form = FormData()
+                    upload_is_png = detect_image_type(upload_bytes) == "png"
                     form.add_field(
                         "photo",
                         upload_bytes,
-                        filename=filename or "image.jpg",
-                        content_type="image/jpeg",
+                        filename=re.sub(r"\.[^.]+$", "", filename or "image") + (".png" if upload_is_png else ".jpg"),
+                        content_type="image/png" if upload_is_png else "image/jpeg",
                     )
 
                     async def _upload():
