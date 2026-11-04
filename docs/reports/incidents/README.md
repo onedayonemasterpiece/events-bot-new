@@ -18,6 +18,8 @@
 
 ## Активные regression contracts
 
+- `INC-2026-11-04-daily-announcement-duplicates.md`: distinguish generated catalogue order from native occurrence identity; preserve real different-time and ticket-sector events and reconcile own-digest reingestion.
+
 - `INC-2026-11-04-cherryflash-cross-year-label.md`: retain the year for cross-year scenes; distinguish fresh-source popularity from event date without inventing selection cutoffs.
 
 - `INC-2026-11-04-guide-vk-card-quality.md`: VK excursion schedule uploads must retain 1080×1350 text legibility; verify actual format, provider photo size and existing publication identity.

@@ -82,3 +82,62 @@ ambiguous catalogue fallback and Telegram disputed-date19099. A producer-only
 new key would not alone repair legacy ordinal bindings. No implementation is
 yet made; do not call the ordinal fix delivered. Existing normal TG11638 is
 healthy and must finish before any cutover or standalone intake.
+
+
+## 2026-11-04 22:32 UTC — narrow prevention candidate, not deployed
+
+Classified as mechanical source/candidate recall: generated parser-slot hashes
+include catalogue order and are not source-native identity. The existing
+is_explicit_occurrence_key classification now treats them as fallback keys,
+like structured/ordinal keys. All four consumers were reviewed (two conflict
+checks, exact source-anchor filter, definition). No producer key, DB schema,
+binding uniqueness rule, native-ticket guard, model prompt or verdict changed.
+Native/vendor/ticket keys retain protection; matching still reaches existing
+identity gates. Net production +1 line (comment), zero net functional lines,
+budget12. No new states, retries, workers, caches or recovery mechanism.
+
+76 parser/source-ownership/identity/occurrence regression tests pass. Current
+fixtures with the original function restored in memory have five failures,
+one passing native-ID control: the isolated full pipeline creates a second
+Event before, but merges the existing Event and preserves source ownership
+after. Different-time and ambiguous same-slot controls pass after. Initial
+fixture omitted the mandatory paired candidate_key and hit the DB invariant;
+it was corrected before valid baseline evidence. An initial pipeline assertion
+incorrectly assumed zero isolated JobOutbox rows despite the existing BGE
+producer; removed that unrelated assertion. No production writes occurred.
+
+Two real model-only controls using saved candidate and original-owner payloads
+both return allow_merge with reason same_ticket_source_update.
+Gemma failure reaches the configured Lite3.5 through the shared limiter and
+existing ceiling; no retry or model-routing override. Controls do not call
+Smart Update intake and write zero Event/Job rows. Disputed actual19099
+consumer replay stays FINAL_RETRY, native ticket cross-binding regression
+passes. Provider path audit PASS, unapproved0 and allowlisted_debt0.
+
+Retained parser-ordinal-final-regression.log, parser-ordinal-final-baseline.log,
+parser-ordinal-model-only-controls.json and parser-ordinal-19099-control.json.
+Candidate is not merged, built or deployed yet. Ordinary TG11638 remains
+active with real progress, so no cutover or competing CLI intake is permitted.
+Existing duplicate pairs and nine own-digest cards have not been merged,
+deleted, disabled or replayed. Existing public posts remain unchanged.
+
+
+## Regression and release contract
+
+Treat this record as a regression guard when changing parser occurrence keys,
+explicit-key classification, source-anchor recall, shortlist selection or source
+bindings. Root for the ordinal candidate is mechanical identity/recall; it does
+not infer event meaning with title/date regexes. The separate own-digest venue
+problem remains semantic and needs LLM-first source/child correction.
+
+Required checks: original-function distinguishing baseline; ordinal drift full
+SQLite pipeline; different-time, native-id, sector/cross-ticket and ambiguous
+same-slot controls; actual19099 FINAL_RETRY; saved exact-owner model controls;
+merged-main ancestry, full source qualification, initialized isolated preflight,
+wrong-SHA control and safe Events-only release. Confirm normal scheduled parser
+receipts after release, then reconcile old duplicate cards through the existing
+managed merge/projection contract. Preserve legitimate multi-session cards.
+
+Release evidence: not built or deployed. No public or data repair accepted.
+Follow-ups: nine own-digest rows and source prevention, exact old-pair cleanup,
+normal Telegram import acceptance and existing media/promo verification.
