@@ -1171,3 +1171,54 @@ media-followup-live-recovery-final.json. This verifies the bounded existing
 recovery contract and immediate four-card loop correction. Longer normal
 media/projection acceptance remains at the budget reset; normal guide18:10
 and TG21:40 must still complete with actual source receipts.
+
+
+### 2026-11-04 19:20 UTC — ordinary guide progressing, separate historical media timeout
+
+Normal full guide11637 advanced to15/30 sources and40 scanned posts. Source16
+valeravezet began19:12:25; earlier ruin_keepers and ruin.keepers both passed.
+Remote/local terminal and source/occurrence acceptance still pending; do not
+attribute Events from unrelated imports. Actual44d runtime remains healthy.
+
+The four corrected nochange-loop jobs146263–146266 still retain their original
+17:56/17:59 timestamps and Nov5 00:05 due at19:18. A different historical
+media job58741/Event7114 is NOT recurrence of that loop: the same ledger job
+reached attempt831, timed out at180 seconds19:19:03 and has existing one-hour
+backoff until20:19:03. Card «Девчата» date2026-10-10, addedJuly25, has175 poster
+rows:5 approved,14 duplicate,152 pending_review,4 rejected. Telegraph/calendar/TG
+dependencies remain deferred behind that timeout. last_result=ok is stale
+history, not a successful current attempt. This proves a separate persistent
+archive-media timeout, not its root cause or a safe replay/retiming decision.
+
+No queue mutation, source replay, budget bypass or worker restart. Preserve
+healthy guide11637. Before any correction, isolate the expensive stage and
+existing past-event/publication contracts; blindly marking media done could
+unblock old publication jobs. Retained media7114-targeted-1919.log and
+media7114-state-1920.json. Existing media/projection reset check remains active.
+
+
+### 2026-11-04 19:56 UTC — normal full guide accepted and audit diagnosis
+
+Ordinary scheduled11637 completed remote scan19:28:34 and local import
+success19:33:02:30 sources,75 scanned posts,35 successful LLM post results,
+zero deferred/errors. Six new guide occurrence rows712–717 and25 update
+operations; these are not25 distinct updated rows (16 distinct updated ids,
+20 distinct occurrence ids overall). All31 source/change receipts resolve to
+stored rows and exact source anchors; final date/time/status matches the last
+change for every row. New715 has no date and is correctly digest-ineligible
+(template only); five other new rows have dates. No unrelated canonical Events
+attributed to this run. Receipt guide11637-terminal-receipts.json and terminal
+summary retained. This accepts the normal full guide slot, not tomorrow's
+visual digest or the separate ordinary TG import21:40 UTC.
+
+Opus evening review received and read from PR816. A diagnostic-only correction
+is prepared: `last_reason` is interpolated into the validation retry prompt,
+so replacing catch-all with a different reason is not behaviour-neutral.
+An extra structured log distinguishes repair quotes absent from child scope,
+including a parent-quote boolean, while preserving the existing reason, prompt,
+rejection and candidate. Valid baseline test fails only on absent diagnostic;
+24 grounding/media-helper tests pass after. Initial harness had a wrong fake
+signature and then a misspelled test path; those are not valid passes or
+production failures. No provider or production writes in controls. Not merged
+or delivered. Recurrence and locked-title semantic changes still require
+real countercontrols; reason/date/identity guards unchanged.

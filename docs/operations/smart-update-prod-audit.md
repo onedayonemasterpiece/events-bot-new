@@ -598,3 +598,16 @@ the Environment secret deleted.
 - [ ] Run ID, full tested SHA, status and artifact SHA-256 were recorded.
 - [ ] Fly token revoked and `FLY_API_TOKEN_SMART_UPDATE_AUDIT` deleted after the
       terminal run, including failure/cancellation paths.
+
+
+### Location grounding diagnostics
+
+`location_grounding.repair_quote_not_grounded` identifies a repair whose quote
+is absent from the authoritative child corpus. It logs public source identity,
+review attempt and `parent_quote` (whether the quote appears in the candidate's
+parent source), without logging quote/source text. The returned
+`llm_response_invalid` and retry prompt remain unchanged: `last_reason` is
+part of the second LLM request, so renaming it would change model input.
+A parent-only quote is diagnostic evidence, not permission to widen child scope
+or accept a venue from a sibling event. Inspect an actual receipt before a
+separate prompt/scope correction.

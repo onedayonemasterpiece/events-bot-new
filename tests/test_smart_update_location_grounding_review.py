@@ -430,3 +430,30 @@ def test_llm_location_review_rejects_ungrounded_repair(monkeypatch) -> None:
     )
     assert (ok, reason) == (False, "llm_repair_value_not_grounded")
     assert candidate.location_name == "Остров Канта"
+
+
+def test_parent_only_repair_quote_logs_without_changing_retry_contract(monkeypatch, caplog):
+    quote = "Последние два события проходят в МВЦ, Светлогорск"
+    candidate = _candidate("Музей Мирового океана", "Лекция. " + quote)
+    candidate.occurrence_scope_text = "Лекция в 19:00"
+    before = (candidate.location_name, candidate.location_address, candidate.city)
+    prompts = []
+
+    async def fake_ask(prompt, *_args, **_kwargs):
+        prompts.append(prompt)
+        return {"decision": "repair", "evidence_quote": quote,
+                "location_name": "МВЦ", "city": "Светлогорск"}
+
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(seu, "_ask_gemma_json", fake_ask)
+    with caplog.at_level("WARNING", logger="smart_event_update"):
+        result = asyncio.run(seu._llm_review_candidate_location_grounding(
+            candidate, trigger_reason="vk_location_not_in_post"))
+    assert result == (False, "llm_response_invalid")
+    assert len(prompts) == 2
+    assert "validation_error=llm_response_invalid" in prompts[1]
+    assert "validation_error=llm_repair_quote_not_grounded" not in prompts[1]
+    assert (candidate.location_name, candidate.location_address, candidate.city) == before
+    assert "location_grounding.repair_quote_not_grounded" in caplog.text
+    assert "parent_quote=True" in caplog.text
+    assert quote not in caplog.text
