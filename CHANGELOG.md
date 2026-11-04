@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Preserve operator import scope through source-parse verification and terminal adjudication; structured ticket cards stay within their own slot instead of expanding the complete programme.
 - Give remote guide classification and multi-excursion extraction enough output room for their existing JSON schemas; avoid Lite MAX_TOKENS rejection at the former 160/520-token ceilings.
 - Preserve full-resolution excursion schedule cards in VK by uploading PNG; send the matching MIME type instead of allowing rejected JPEG cards to shrink to 320×400.
 - Forward the configured Google model reserve into the remote guide notebook; retain its three-send inner ceiling while allowing a failed model to reach Lite.

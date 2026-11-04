@@ -2924,6 +2924,7 @@ async def vk_intake_parse_llm(
     *,
     source_text: str | None = None,
     source_name: str | None = None,
+    operator_extra: str | None = None,
     festival_names: Sequence[str] | None = None,
     festival_alias_pairs: Sequence[tuple[str, int]] | None = None,
     poster_media: Sequence[PosterMedia] | None = None,
@@ -2937,11 +2938,6 @@ async def vk_intake_parse_llm(
     Default backend is Gemma; set `EVENT_PARSE_LLM=4o` to force the legacy OpenAI parser.
     """
     parse_event_via_llm = require_main_attr("parse_event_via_llm")
-
-    extra: dict[str, str] = {}
-    if source_name:
-        # ``parse_event_via_llm`` accepts ``channel_title`` for context.
-        extra["channel_title"] = source_name
 
     parse_kwargs: dict[str, Any] = {}
     poster_items = list(poster_media or [])
@@ -2981,7 +2977,8 @@ async def vk_intake_parse_llm(
     return await parse_event_via_llm(
         prompt_text,
         festival_names=festival_names,
-        **extra,
+        source_channel=source_name,
+        source_context={"operator_extra": operator_extra} if operator_extra else None,
         **parse_kwargs,
     )
 
@@ -3178,6 +3175,7 @@ async def build_event_drafts_from_vk(
         llm_text,
         source_text=text,
         source_name=source_name,
+        operator_extra=operator_extra,
         festival_names=festival_names,
         festival_alias_pairs=festival_alias_pairs,
         poster_media=poster_media,
