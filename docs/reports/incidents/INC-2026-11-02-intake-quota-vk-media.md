@@ -911,3 +911,39 @@ exhaustion. Candidate 26341 / decision 19431 refused distinct creation despite
 recalling unrelated September owners. It needs bounded model-only diagnosis
 while retaining opposite date-conflict control 19099; no forced creation or
 identity/date guard relaxation is authorized by this observation.
+
+
+### 2026-11-04 09:24 UTC — remote continuation accepted, promo delay preserved
+
+After the Events restart, the same video session 1559 resumed polling and reached
+remote COMPLETE and local PUBLISHED_TEST at 09:19:16, without a duplicate remote
+launch or recovery flag/registry edits. Output was received and normal cleanup
+completed; error is null. Polls were already active before the expected 09:20
+watchdog, so that later tick is not claimed as the first-resumption cause. The
+ordinary 09:20 watchdog also completed. Evidence: retained
+video1559-resumption-0922.log and postdeploy-state-0922.jsonl.
+
+Normal campaign ticks retained Afisha due_at 11:26:38 UTC and Anons cadence
+refusal, with no duplicate send. Actual runtime remains healthy 53a779136. Docs
+PR 802 merged after all four required CI; docs main 8e04f5205 requires no restart.
+Next normal VK slot is 10:00 UTC; this verification does not accept it in advance.
+
+
+### 2026-11-04 10:35 UTC — ordinary scheduled VK terminal with eight creations
+
+Ops 11623 ran on time 10:00:00–10:28:26 UTC, terminal partial: twelve terminal
+carriers, zero unresolved, eight CREATED Events 10513–10520, zero updates. One
+carrier fully imported; nine confirmed no-event; two technical carriers retained
+seven accepted children and two refused children. Exact EventSource anchors
+13937509–13937516 and typed child receipts verified. A failed carrier must not
+be interpreted as zero writes or replayed blindly. Watchdog recognized the
+existing submitted slot; no duplicate catch-up dispatch observed.
+
+Two residuals are documented for the existing audit in
+[normal VK residuals](../2026-11-04-smart-update-normal-vk-residuals.md): candidate
+26351 / decision 19442 produces unsupported reason_code distinct_occurrence for
+explicit recurring dates; candidate 26349 has mixed-city venue defaults and an
+invalid grounding response. Preserve counterexample 19099 and identity/date
+guards; no semantic fix or source retry was performed. Actual Gemini Lite OCR
+fallback recovered OpenAI 429s. This accepts normal dispatch and exact partial
+ingestion, not complete elimination of technical failures.
