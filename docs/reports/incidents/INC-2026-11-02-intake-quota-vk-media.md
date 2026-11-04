@@ -1156,3 +1156,18 @@ Normal guide18:10 UTC and TG21:40 UTC remain required, along with structured
 parser, budget-reset projections and promo pair. No old source replay.
 Retained media-followup-release-receipt.json, live-verification.log,
 media-followup-live-progress-1757.json and media-followup-restart-contract.md.
+
+
+### 2026-11-04 18:00 UTC — exact media restart claim recovered normally
+
+Claim146259/Event10328 was marked stale automatically at17:59:04, scheduled
+through existing30-second backoff and finished done/nochange at17:59:42,
+last_error cleared. No manual ledger reset, new request or recommit. Its
+successor146266 preserves Nov5 00:05 UTC. All four known-loop event ids now
+have one future retry each (146263–146266), no active source/MCP/background
+work at17:59:47. Other three future jobs retain their17:56 timestamps across
+three minutes, versus former seconds-apart duplicates. Detailed receipt
+media-followup-live-recovery-final.json. This verifies the bounded existing
+recovery contract and immediate four-card loop correction. Longer normal
+media/projection acceptance remains at the budget reset; normal guide18:10
+and TG21:40 must still complete with actual source receipts.
