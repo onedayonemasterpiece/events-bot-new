@@ -147,3 +147,30 @@ Actual runtime is 9f14c503f977b467ed6ad963e2de59008bc0a435, immutable sha256:8b8
 ## Preserved through permanent-edit outcome release, 2026-11-03 20:07 UTC
 
 Production now runs 3bb038338dce53f1e1a74be0441b85fa11dc2be8, immutable sha256:1b9971bb3137fa6053cb8e535861039582278a4a5f01fec80ab69ef30b9c3171. Required CI and full source/isolated/live checks passed; cinema reference, identity/adjudicator hashes, models and promo-five preserved, readiness/DB/scheduler healthy and Kotopogoda unchanged. A background media review crossed the restart and was verified recovered by the existing stale handling; source imports were idle. Existing public corrections and today's promo URLs were not changed. Normal TG and November 4/6 promo timing still require acceptance. All incidents remain open.
+
+## 2026-11-04 08:40 UTC — source digest skipped behind ordinary VK
+
+The normal 08:30 visual guide slot was submitted, then skipped `heavy_busy`
+while VK11620 was active. VK finished at 08:32:51; the daily slot was already
+lost. Campaign14's normal ticks returned `source_unavailable`, so no November4
+repost is claimed. This is upstream source scheduling, not a failed repost.
+Existing story/delivery ticks service older editions but do not create the
+missing current daily edition. Do not repeat yesterday's successful pair.
+
+Minimal prevention selects the existing `heavy_guard_mode="wait"` for this one
+registered daily digest, as for ordinary VK. No new timer, retry, state or
+queue. A parameterized real scheduler-registration test exercises both VK and
+guide against the actual shared semaphore: before the fix the guide variant
+terminalizes as skipped; VK control passes. Qualification and delivery remain
+required. A bounded same-day recovery must use the original daily entrypoint,
+its current-edition idempotency and existing campaign runner only after active
+heavy imports finish; it is not normal-slot acceptance. Verify actual source
+VK and later campaign receipts/provider timestamps.
+
+Evidence retained in the existing intake recovery directory:
+`vk-and-guide-0840.log`, `normal-slot-0840.json`, `guide-wait-before.log`,
+`guide-wait-after.log` and `guide-wait-plan.md`. Production remains3bb;
+qualified457 is not delivered. Two cutover attempts made no mutations:
+first host Python alias was absent; the explicit python3 guard then found a
+running media-review job. Background review keeps making progress; no claim
+was reset or interrupted.

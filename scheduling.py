@@ -5340,7 +5340,7 @@ def startup(
         )
         _register_job(
             "guide_visual_digest",
-            _job_wrapper("guide_visual_digest", guide_visual_digest_scheduler, notify_skip=_notify_admin_skip),
+            _job_wrapper("guide_visual_digest", guide_visual_digest_scheduler, notify_skip=_notify_admin_skip, heavy_guard_mode="wait"),
             "cron",
             id="guide_visual_digest",
             hour=visual_hour,
