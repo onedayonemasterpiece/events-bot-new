@@ -868,3 +868,46 @@ Event 10450 Telegram job 143014 completed at 08:06:50 and published https://t.me
 For Event 9779, one exact historical title fact 194844 was moved from added to existing conflict, with provenance note 209511 under accepted official source 13915467. The transaction checked the accepted merge, exact old fact, canonical title/date/time/city and all 33 prior fact rows; it preserved every other row and made no Event/outbox/provider/intake write. The unchanged real MCP gate then accepted description preparation under the same stable key, committed once as evt_op_wdKH5AMYswuguIAIsfg80Aye4_lax90C. Revision e82ba58c0d985328e4b8368900be96621410500d57811aece938c9205850dae3; current public projections still require readback. Do not recommit it. Event_get returned a read-budget error, not a global MCP outage; operation and publication-status readbacks succeeded. No identity/date guard was weakened. There was no manual VK requeue or replacement; normal typed-edit reconciliation reached the existing permanent edit-window refusal again.
 
 Opus audit PR #799 passed all required checks and merged as docs main 555c88505; no runtime restart for docs. The auditor withdrew the reason-code relaxation after counterexample #797 and approved #796/#798. A real isolated control found that their suggested note-only use of _record_source_facts replaces the whole source fact batch, losing other facts. This was not applied in production. Full public evidence and prevention limits are in [the bounded reproduction report](../2026-11-04-smart-update-locked-facts-reproduction.md). Generic rename prevention is not claimed by the one-event mitigation. Original normal VK08:15 and guide digest08:30, daily Afisha and November6 paired timing remain open.
+
+
+### 2026-11-04 09:11 UTC — combined scheduling and diagnostic release delivered
+
+Production now runs merged main `53a7791360ca8308458ce11df313d23c5c7bfd03`,
+image `intake-guide-wait-20261104`, immutable
+`sha256:b55e338530de0414ad4e1ab4b20c7710e61a2d25c57008d2e677556ce929b65a`.
+This includes PR #796 rejection diagnostics, #798 submitted-slot accounting and
+#801 daily guide waiting on the existing heavy semaphore. All required CI,
+exact 4,436-file source qualification, initialized isolated adapter/scheduler
+controls and wrong-SHA control passed. Preflight intentionally disables startup;
+its `ready=false` is isolation evidence, not production readiness.
+
+Events-only cutover followed terminal normal imports and idle MCP/background
+work. BGE job 144315 was already done at 08:55:13; its generic ledger remained
+created and must not override the actual job result. Remote video session 1559
+continues rendering `zigomaro/cherryflash` with a durable dataset and notification
+target. Existing enabled popular-review watchdog calls `resume_rendering_sessions`
+every ten minutes, independently of disabled global Kaggle recovery. That resumes
+the same poller without launching another kernel. Release preserved the remote
+run; actual resumption after the 09:20 watchdog still needs verification. No
+registry reset, recovery flag change or duplicate remote launch was performed.
+
+Explicit live source, SQLite, model settings, cinema reference and semantic
+hash checks passed. Health has `ready=true`, DB/scheduler healthy and no issues;
+Kotopogoda container and source mount unchanged. No old source operation,
+programme replay, 37-row plan or exact false-receipt reconciliation was repeated.
+
+Retained evidence: `guide-wait-release-receipt.json`,
+`guide-wait-cutover-0909.log`, `guide-wait-live-verification-0910.log`,
+`guide-wait-health-0911.json`, `guide-wait-video-deploy-decision-0909.md` under
+the existing intake recovery artifact directory. Incidents remain open: actual
+normal import acceptance and residual technical failures are separate criteria.
+
+Ordinary VK 11620 ended partial at 08:32:51: twelve terminal carriers, none
+unresolved, zero created/updated Events, eight product rejections and four
+technical rows. Exact source/child/carrier receipts are in
+`vk11620-terminal-0845.json`. Both Gemini 3.1 Lite and 3.5 Lite returned actual
+HTTP 503 high-demand responses, including OCR; this is not proof of all-key RPD
+exhaustion. Candidate 26341 / decision 19431 refused distinct creation despite
+recalling unrelated September owners. It needs bounded model-only diagnosis
+while retaining opposite date-conflict control 19099; no forced creation or
+identity/date guard relaxation is authorized by this observation.

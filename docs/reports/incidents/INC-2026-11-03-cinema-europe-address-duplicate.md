@@ -197,3 +197,36 @@ Actual runtime is 9f14c503f977b467ed6ad963e2de59008bc0a435, immutable sha256:8b8
 ## Preserved through permanent-edit outcome release, 2026-11-03 20:07 UTC
 
 Production now runs 3bb038338dce53f1e1a74be0441b85fa11dc2be8, immutable sha256:1b9971bb3137fa6053cb8e535861039582278a4a5f01fec80ab69ef30b9c3171. Required CI and full source/isolated/live checks passed; cinema reference, identity/adjudicator hashes, models and promo-five preserved, readiness/DB/scheduler healthy and Kotopogoda unchanged. A background media review crossed the restart and was verified recovered by the existing stale handling; source imports were idle. Existing public corrections and today's promo URLs were not changed. Normal TG and November 4/6 promo timing still require acceptance. All incidents remain open.
+
+
+### 2026-11-04 09:11 UTC — combined scheduling and diagnostic release delivered
+
+Production now runs merged main `53a7791360ca8308458ce11df313d23c5c7bfd03`,
+image `intake-guide-wait-20261104`, immutable
+`sha256:b55e338530de0414ad4e1ab4b20c7710e61a2d25c57008d2e677556ce929b65a`.
+This includes PR #796 rejection diagnostics, #798 submitted-slot accounting and
+#801 daily guide waiting on the existing heavy semaphore. All required CI,
+exact 4,436-file source qualification, initialized isolated adapter/scheduler
+controls and wrong-SHA control passed. Preflight intentionally disables startup;
+its `ready=false` is isolation evidence, not production readiness.
+
+Events-only cutover followed terminal normal imports and idle MCP/background
+work. BGE job 144315 was already done at 08:55:13; its generic ledger remained
+created and must not override the actual job result. Remote video session 1559
+continues rendering `zigomaro/cherryflash` with a durable dataset and notification
+target. Existing enabled popular-review watchdog calls `resume_rendering_sessions`
+every ten minutes, independently of disabled global Kaggle recovery. That resumes
+the same poller without launching another kernel. Release preserved the remote
+run; actual resumption after the 09:20 watchdog still needs verification. No
+registry reset, recovery flag change or duplicate remote launch was performed.
+
+Explicit live source, SQLite, model settings, cinema reference and semantic
+hash checks passed. Health has `ready=true`, DB/scheduler healthy and no issues;
+Kotopogoda container and source mount unchanged. No old source operation,
+programme replay, 37-row plan or exact false-receipt reconciliation was repeated.
+
+Retained evidence: `guide-wait-release-receipt.json`,
+`guide-wait-cutover-0909.log`, `guide-wait-live-verification-0910.log`,
+`guide-wait-health-0911.json`, `guide-wait-video-deploy-decision-0909.md` under
+the existing intake recovery artifact directory. Incidents remain open: actual
+normal import acceptance and residual technical failures are separate criteria.

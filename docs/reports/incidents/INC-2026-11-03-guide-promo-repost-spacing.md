@@ -174,3 +174,54 @@ qualified457 is not delivered. Two cutover attempts made no mutations:
 first host Python alias was absent; the explicit python3 guard then found a
 running media-review job. Background review keeps making progress; no claim
 was reset or interrupted.
+
+
+### 2026-11-04 09:11 UTC — combined scheduling and diagnostic release delivered
+
+Production now runs merged main `53a7791360ca8308458ce11df313d23c5c7bfd03`,
+image `intake-guide-wait-20261104`, immutable
+`sha256:b55e338530de0414ad4e1ab4b20c7710e61a2d25c57008d2e677556ce929b65a`.
+This includes PR #796 rejection diagnostics, #798 submitted-slot accounting and
+#801 daily guide waiting on the existing heavy semaphore. All required CI,
+exact 4,436-file source qualification, initialized isolated adapter/scheduler
+controls and wrong-SHA control passed. Preflight intentionally disables startup;
+its `ready=false` is isolation evidence, not production readiness.
+
+Events-only cutover followed terminal normal imports and idle MCP/background
+work. BGE job 144315 was already done at 08:55:13; its generic ledger remained
+created and must not override the actual job result. Remote video session 1559
+continues rendering `zigomaro/cherryflash` with a durable dataset and notification
+target. Existing enabled popular-review watchdog calls `resume_rendering_sessions`
+every ten minutes, independently of disabled global Kaggle recovery. That resumes
+the same poller without launching another kernel. Release preserved the remote
+run; actual resumption after the 09:20 watchdog still needs verification. No
+registry reset, recovery flag change or duplicate remote launch was performed.
+
+Explicit live source, SQLite, model settings, cinema reference and semantic
+hash checks passed. Health has `ready=true`, DB/scheduler healthy and no issues;
+Kotopogoda container and source mount unchanged. No old source operation,
+programme replay, 37-row plan or exact false-receipt reconciliation was repeated.
+
+Retained evidence: `guide-wait-release-receipt.json`,
+`guide-wait-cutover-0909.log`, `guide-wait-live-verification-0910.log`,
+`guide-wait-health-0911.json`, `guide-wait-video-deploy-decision-0909.md` under
+the existing intake recovery artifact directory. Incidents remain open: actual
+normal import acceptance and residual technical failures are separate criteria.
+
+Today's bounded guide catchup ran exactly once through the original daily
+entrypoint, trigger manual: run `INC-2026-11-04-guide-digest-catchup`, ops 11622,
+terminal partial at 08:51:16, issue 328 with two future excursions. Do not repeat
+it. Live Telegram posts 504 and 523 have the correct body and photo. Actual
+public VK source is https://vk.com/wall-238875824_378, provider timestamp
+09:00:38 UTC, original postponed ID 377. One read-only wall scan verified title,
+two excursions and photo. MAX delivery remains failed `max_prepare_unavailable`;
+that independent surface is not accepted and no replacement was requested.
+
+A normal campaign tick resolved the live source and froze Afisha due_at
+11:26:38 UTC, 146 minutes after actual source publication. The Anons prepared row
+is refused by its existing three-day cadence until November 6. A prepared row
+is not a sent repost. Today's Afisha send and future paired spacing remain
+unverified; yesterday's URLs were preserved without duplicate sends. Manual
+source catchup does not establish acceptance of the next normal daily guide slot.
+Evidence: `guide328-public-0907.json`, `guide328-telegram-live.json`,
+`guide-digest-catchup-apply.log` and `guide-jobs-0906.json`.
