@@ -1222,3 +1222,35 @@ signature and then a misspelled test path; those are not valid passes or
 production failures. No provider or production writes in controls. Not merged
 or delivered. Recurrence and locked-title semantic changes still require
 real countercontrols; reason/date/identity guards unchanged.
+
+
+### 2026-11-04 20:25 UTC — diagnostic-only release delivered
+
+PR 817 merged after all four required CI passed (workflow 41902045872).
+Events-only runtime is d148bd509fa851f01beff9e48e44f8addcb817ed, immutable
+sha256:dc8ca8dfd2351dd51d23e5bcd252c381d3905e6c43349c72b198f21f8c97b0dd.
+Full 4,443-file proof, initialized isolated diagnostic control, unchanged
+rejection/retry-prompt/candidate controls, wrong-SHA refusal, HTTP isolation,
+container cleanup and live runtime/settings/SQLite/health passed. Kotopogoda
+unchanged. Actual container started 20:23:51 UTC. A premature verification
+read correctly rejected old SHA during recreation; final new-container read
+passed. This logging-only change does not restore a rejected source by itself.
+A future natural matching failure is needed to establish the live root cause;
+no source replay or identity/date guard relaxation was performed.
+
+Historical media 58741 was allowed to finish before cutover: attempt 832
+timed out normally at 20:22:05, next existing retry 21:22:05. The previous
+absence of a source_rehydrate completion log does not prove a rehydrate hang:
+read-only state has four sources and 157 approved/pending posters; the existing
+rehydrate count guard returns early. Materialization then iterates these rows.
+Raw-SHA conflicts also occur on the fast exact-v2 path, so 51 conflicts are
+not 51 downloads. Exact costly stage and root cause still need evidence.
+No job was marked done, replayed, deleted or manually reset. Other historical
+media job 67365/Event 6824 was running after normal startup; no claim was
+interrupted at cutover. See media7114-stage-correction-2022.md.
+
+The four fixed jobs 146263–146266 retain their original timestamps and
+November 5 00:05 UTC due time. Normal TG 21:40 UTC and the media reset, parser,
+VK, visual guide and November 6 promo pair checks remain outstanding.
+Receipt grounding-diag-release-receipt.json and verification logs are retained
+in the existing incident artifact directory. Four incidents remain open.
