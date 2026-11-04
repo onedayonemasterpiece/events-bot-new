@@ -2849,3 +2849,36 @@ async def test_critical_scheduler_watchdog_defers_after_crashed_guide_full_run(
         {"kind": "guide_monitoring", "guard": "wait"},
         {"mode": "full"},
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("still_submitted", [True, False])
+async def test_vk_watchdog_respects_submitted_scheduler_slot(tmp_path, monkeypatch, still_submitted):
+    db = Database(str(tmp_path / "submitted-slot.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_VK_AUTO_IMPORT", "1")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("VK_AUTO_IMPORT_TIMES_LOCAL", "23:40")
+    monkeypatch.setenv("VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    monkeypatch.setattr(scheduling, "_scheduler", None)
+    monkeypatch.setattr(scheduling, "_run_meta", {})
+    monkeypatch.setattr(scheduling, "_critical_catchup_inflight", set())
+    monkeypatch.setattr(scheduling, "_critical_catchup_completed", set())
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", lambda _db: None)
+    calls = []
+
+    async def fake_scheduler(*_args, **_kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(sys.modules, "vk_auto_queue", SimpleNamespace(vk_auto_import_scheduler=fake_scheduler))
+    scheduling._on_event(SimpleNamespace(code=scheduling.EVENT_JOB_SUBMITTED, job_id="vk_auto_import_0"))
+    if not still_submitted:
+        scheduling._on_event(SimpleNamespace(code=scheduling.EVENT_JOB_EXECUTED, job_id="vk_auto_import_0"))
+    try:
+        dispatched = await scheduling._maybe_dispatch_vk_auto_import_watchdog(db, object())
+    finally:
+        await db.close()
+    assert dispatched == (0 if still_submitted else 1)
+    assert calls == ([] if still_submitted else [1])
