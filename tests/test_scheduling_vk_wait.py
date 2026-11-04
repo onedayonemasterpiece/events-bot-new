@@ -9,7 +9,8 @@ import scheduling
 
 
 @pytest.mark.asyncio
-async def test_registered_vk_slot_waits_for_active_parser_event(monkeypatch):
+@pytest.mark.parametrize('job_id', ['vk_auto_import_0', 'guide_visual_digest'])
+async def test_registered_vk_slot_waits_for_active_parser_event(monkeypatch, job_id):
     class Scheduler:
         def __init__(self, **kwargs):
             self.jobs = {}
@@ -27,12 +28,14 @@ async def test_registered_vk_slot_waits_for_active_parser_event(monkeypatch):
     async def vk(*args, **kwargs):
         called.append('vk')
     monkeypatch.setitem(sys.modules, 'vk_auto_queue', SimpleNamespace(vk_auto_import_scheduler=vk))
+    monkeypatch.setattr(scheduling, '_run_scheduled_guide_visual_digest', vk)
     monkeypatch.setattr(scheduling, 'AsyncIOScheduler', Scheduler)
     monkeypatch.setattr(scheduling, '_scheduler', None)
     semaphore = asyncio.Semaphore(1)
     monkeypatch.setattr(heavy_ops, '_resolve_semaphore', lambda: semaphore)
     monkeypatch.setenv('DEV_MODE', '1')
     monkeypatch.setenv('ENABLE_VK_AUTO_IMPORT', '1')
+    monkeypatch.setenv('ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED', '1')
     monkeypatch.setenv('SCHED_HEAVY_GUARD_MODE', 'skip')
     monkeypatch.setenv('SCHED_HEAVY_TRY_TIMEOUT_SEC', '0.001')
     monkeypatch.delenv('SCHED_SERIALIZE_HEAVY_JOBS', raising=False)
@@ -49,7 +52,7 @@ async def test_registered_vk_slot_waits_for_active_parser_event(monkeypatch):
     holder = asyncio.create_task(parser_event())
     try:
         scheduler = scheduling.startup(None, None, **callbacks)
-        job = scheduler.get_job('vk_auto_import_0')
+        job = scheduler.get_job(job_id)
         await asyncio.wait_for(started.wait(), timeout=2)
         task = asyncio.create_task(job.func(*job.args))
         await asyncio.sleep(0.03)

@@ -437,13 +437,19 @@ Production contract:
 
 Код: `guide_excursions/visual_digest.py`, ручной CLI
 `scripts/guide_visual_digest.py`, scheduler gate
-`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1`. На Fly отдельный slot:
+`ENABLE_GUIDE_VISUAL_DIGEST_SCHEDULED=1`. В production RunCoveer отдельный slot:
 `GUIDE_VISUAL_DIGEST_TIME_LOCAL=10:30`, `GUIDE_VISUAL_DIGEST_TZ=Europe/Kaliningrad`,
 `GUIDE_VISUAL_DIGEST_MAX_CARDS=1`, VK target `uhtykaliningrad`, Telegram targets
 из `GUIDE_DIGEST_TARGET_CHATS`. Старый Telegram/VK guide digest остаётся
 отдельным и не отменяется. Визуальный QA перед первым тестом был проведён через
 `agy --model "Gemini 3.1 Pro (High)"`; Gemini verdict: `PASS` для contact sheet
 production renderer.
+
+Обычный `guide_visual_digest` ждёт освобождения существующего heavy gate,
+если в момент слота ещё идёт импорт ВК или другой тяжёлый процесс. Он не
+пропускает день из-за занятого ресурса. Используется штатный режим `wait`;
+новых таймеров, очередей и повторов нет. Регрессия регистрации и ожидания:
+`tests/test_scheduling_vk_wait.py` (вариант `guide_visual_digest`).
 
 ### Hook-карточки (engagement cards)
 
