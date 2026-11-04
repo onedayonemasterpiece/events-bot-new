@@ -1104,3 +1104,23 @@ Qualified Cherryflash year-label cutover refused before mutation because fresh
 normal event_media_review145971 was running. No import interrupted or weaker
 guard introduced. Guide18:10 UTC, TG21:40 UTC, November5 media/structured-parser
 and November6 promo-pair checks remain outstanding.
+
+
+### 2026-11-04 17:36 UTC — unchanged media rehydration advances deferred work
+
+After VK11635 terminal, release guards repeatedly found short active media
+reviews. Exact job history shows events10428/10431/10432/10328 re-enqueued
+seconds after nochange. This is observed repeated work, not evidence that
+a finite backlog is simply progressing. Isolated unchanged approved-poster
+control reproduced _apply_posters advancing a six-hour pending geometry job
+to seven seconds (added0, no provider or production writes). Its unconditional
+geometry helper call competes with the existing handler's budget deferral.
+
+Minimal correction arms that helper for new or replaced/reintroduced visual
+inputs. Existing pair reviews and handler retries remain; no quota bypass,
+new queue, worker, retry or persisted state. Four net production lines.
+Regression fails before; 72 media/helper checks passed after, including existing new/reintroduced/replaced-image controls. An additional explicit same-image versus replaced-image due-time contrast passes. Not merged or deployed.
+Retained media-unchanged-followup-control.log and media-followup-before.log.
+Cherryflash candidate d051 remains qualified but undelivered; do not rebuild
+it or confuse current media fix branch with a release. DocsPR813 merged all
+four required green, docs main73522f359 requires no restart.

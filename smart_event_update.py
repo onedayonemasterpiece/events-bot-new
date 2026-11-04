@@ -23184,6 +23184,7 @@ async def _apply_posters(
     had_preview = bool(getattr(event, "preview_3d_url", None)) if event else False
     now = datetime.now(timezone.utc)
     added = 0
+    visual_identity_changed = False
     soft_rejected = 0
     added_urls: list[str] = []
     next_order = max((int(getattr(row, "display_order", 0) or 0) for row in existing_rows), default=-1) + 1
@@ -23323,6 +23324,7 @@ async def _apply_posters(
                 and not same_managed_object
             )
             if display_identity_changed:
+                visual_identity_changed = True
                 # Visual evidence belongs to exact display bytes. A replaced
                 # object must be re-fingerprinted, reclassified and rebound to
                 # geometry before bbox/crop metadata can be trusted again.
@@ -23349,6 +23351,7 @@ async def _apply_posters(
             if getattr(poster, "total_tokens", 0):
                 row.total_tokens = int(poster.total_tokens or 0)
             if row.review_status in {REJECTED, UNAVAILABLE}:
+                visual_identity_changed = True
                 row.review_status = PENDING_REVIEW
                 row.review_reason = "source_candidate_reintroduced"
                 row.reviewed_at = None
@@ -23403,8 +23406,10 @@ async def _apply_posters(
     await session.flush()
     await ensure_event_media_reviews(session, int(event_id))
     # The VLM call is never made inline.  A single already-CDN-ready poster has
-    # no pair review to create, so explicitly arm the durable enrichment job.
-    await _enqueue_geometry_followup_if_needed(session, int(event_id))
+    # no pair review to create. Replayed images preserve the handler's deferred
+    # work; only new/reintroduced visual input needs another enrichment job.
+    if added or visual_identity_changed:
+        await _enqueue_geometry_followup_if_needed(session, int(event_id))
     photo_urls_changed = await sync_event_gallery_projection(session, int(event_id))
     event = await session.get(Event, int(event_id))
     if event is not None:
