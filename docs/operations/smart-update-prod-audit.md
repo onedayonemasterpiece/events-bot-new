@@ -611,3 +611,20 @@ part of the second LLM request, so renaming it would change model input.
 A parent-only quote is diagnostic evidence, not permission to widen child scope
 or accept a venue from a sibling event. Inspect an actual receipt before a
 separate prompt/scope correction.
+
+
+## Parser catalogue ordinal fallback (2026-11-05)
+
+Generated `parser-slot:` hashes include catalogue order, so unequal hashes do
+not prove different source-native occurrences. They retain exact candidate
+replay identity, but must not exclude an old source owner from normal matching
+when the catalogue order changes. Existing date/time/title/venue and native
+ticket/identity gates still evaluate the recalled owner. True source-native,
+vendor and ticket keys retain explicit conflict protection. No key migration
+or new replay path is required for legacy parser-slot bindings.
+
+Regression: production piano ordinal10→15 and movie4→3; isolated full pipeline
+updates one Event and preserves source binding instead of creating a second.
+Different-time, true native-ID and ambiguous same-slot controls must survive.
+The two confirmed old duplicate pairs need separate managed reconciliation;
+this prevention change is not an accepted cleanup or permission to replay.
