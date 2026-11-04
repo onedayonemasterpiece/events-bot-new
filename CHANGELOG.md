@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Forward the configured Google model reserve into the remote guide notebook; retain its three-send inner ceiling while allowing a failed model to reach Lite.
 - Make the daily excursion digest wait for an active heavy import, retaining its normal slot and downstream promo source instead of skipping the day.
 - Keep the VK watchdog from dispatching a second batch while the normal scheduler slot is already submitted and waiting on the shared heavy gate.
 - Report Smart Update non-acceptance accurately from MCP create; reserve the missing-fields error for actual missing date, title or location receipts.

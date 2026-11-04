@@ -465,11 +465,12 @@ def _get_gemma_client(consumer: str) -> Any:
             consumer=consumer,
             account_name=_guide_account_name(),
         )
+        client.max_retries = 1
         _GEMMA_CLIENTS[consumer] = client
         print(
             (
                 f"[gemma:client] consumer={consumer} "
-                f"model_family=gemma-only account={_guide_account_name() or '-'} "
+                f"fallback_models={','.join(client.fallback_models) or '-'} account={_guide_account_name() or '-'} "
                 f"key_env={GOOGLE_KEY_ENV}"
             ),
             flush=True,
@@ -1800,6 +1801,7 @@ async def ask_gemma(
                         ),
                     },
                     max_output_tokens=max_output_tokens,
+                    max_provider_attempts=3,
                 ),
                 timeout=call_timeout,
             )

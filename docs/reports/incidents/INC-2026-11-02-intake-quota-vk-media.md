@@ -947,3 +947,26 @@ invalid grounding response. Preserve counterexample 19099 and identity/date
 guards; no semantic fix or source retry was performed. Actual Gemini Lite OCR
 fallback recovered OpenAI 429s. This accepts normal dispatch and exact partial
 ingestion, not complete elimination of technical failures.
+
+
+### 2026-11-04 12:30 UTC — guide/server parser interleaving and remote reserve loss
+
+Ordinary guide light ops 11627 completed remote scanning at 12:21:15 and local
+import partial at 12:27:02: 30 sources, 49 posts, five existing occurrences
+updated, none created, 17 LLM successes and seven failed posts. Source parser
+11629 started 12:15:41 and remained active concurrently; neither slot was
+skipped behind the other. Exact source/occurrence receipts are retained in
+guide-parser-progress-1230.json; raw errors in guide11627-remote-failures-1224.json
+show six provider 500/503 responses and one MAX_TOKENS truncation.
+
+The normal Kaggle payload omits the host's existing GOOGLE_AI_FALLBACK_MODELS,
+so the remote shared client cannot use the configured Lite reserve. Minimal
+correction forwards that setting, limits each model to one attempt and retains
+a three-physical-send inner ceiling across the shared model chain; existing
+outer bounded timeout/retry loops unchanged. Baseline actual notebook/shared
+client routing controls fail; after the correction 109 guide/client regression
+checks pass. Live historical extraction controls are still required before
+delivery. No Event/source replay or semantic guard change. Truncation is not
+claimed repaired by model availability. Generated notebook snapshot refreshed
+with the existing factory; previously merged VK pacing is synchronized too,
+already present in the runtime-generated notebook before this fix.
