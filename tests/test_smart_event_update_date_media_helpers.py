@@ -180,3 +180,44 @@ async def test_apply_posters_merges_existing_row_by_supabase_path(tmp_path) -> N
     assert rows[0].poster_hash == "old-sha"
     assert rows[0].supabase_url == "https://storage.example/new.webp"
     assert event.photo_urls == ["https://storage.example/new.webp"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replacement", [False, True])
+async def test_poster_geometry_followup_respects_visual_changes(tmp_path, monkeypatch, replacement):
+    from datetime import datetime, timedelta, timezone
+    import event_media
+    from models import JobOutbox, JobStatus, JobTask
+
+    monkeypatch.setattr(event_media, "event_media_require_cdn", lambda: False)
+    db = Database(str(tmp_path / "unchanged-media.sqlite"))
+    await db.init()
+    due = datetime.now(timezone.utc) + timedelta(hours=6)
+    async with db.get_session() as session:
+        event = Event(title="T", description="D", source_text="T",
+                      date="2026-11-20", time="18:00", location_name="Venue")
+        session.add(event)
+        await session.flush()
+        eid = int(event.id)
+        session.add(EventPoster(event_id=eid, poster_hash="a" * 64,
+                               supabase_url="https://static.example/a.jpg",
+                               review_status="approved"))
+        session.add(JobOutbox(event_id=eid, task=JobTask.event_media_review,
+                              status=JobStatus.pending, next_run_at=due,
+                              coalesce_key=f"event_media_review:{eid}"))
+        await session.commit()
+        added, *_ = await _apply_posters(session, eid, [PosterCandidate(
+            sha256="a" * 64, supabase_url=("https://static.example/b.jpg"
+                if replacement else "https://static.example/a.jpg"))])
+        await session.commit()
+        job = (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == eid))).scalar_one()
+        actual = job.next_run_at
+        if actual.tzinfo is None:
+            actual = actual.replace(tzinfo=timezone.utc)
+    await db.engine.dispose()
+    assert added == 0
+    if replacement:
+        assert actual < due
+    else:
+        assert actual == due

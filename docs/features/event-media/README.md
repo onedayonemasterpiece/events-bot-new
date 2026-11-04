@@ -115,6 +115,10 @@ candidate hash, а URL считается weak identity только для lega
 Identity index перестраивается после каждого merge внутри batch, поэтому
 повторный reconcile с теми же кандидатами идемпотентен и не сбрасывает semantic
 role/geometry, не создаёт tight-loop и не повторяет платный VLM-вызов.
+Geometry follow-up из `_apply_posters` ставится для нового изображения, смены
+visual identity или повторного введения отклонённого кандидата. Повтор уже
+принятого изображения сохраняет существующий future retry; обычный media
+handler продолжает текущую проверку и сам ставит следующий шаг.
 
 Новые managed WebP пишутся в immutable path, адресованный точным SHA-256 уже
 закодированных байтов: `p/image/v2/<first2>/<encoded_sha256>.webp`. Старые
