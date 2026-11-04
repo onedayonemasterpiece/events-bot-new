@@ -225,3 +225,30 @@ unverified; yesterday's URLs were preserved without duplicate sends. Manual
 source catchup does not establish acceptance of the next normal daily guide slot.
 Evidence: `guide328-public-0907.json`, `guide328-telegram-live.json`,
 `guide-digest-catchup-apply.log` and `guide-jobs-0906.json`.
+
+
+## 2026-11-04 11:35 UTC — normal campaign repost publicly verified
+
+Today's normal campaign tick published the Afisha repost without an operator
+callback: https://vk.com/wall-231920894_13435. The existing per-edition receipt
+is published, retaining frozen due_at 11:26:38 UTC and source
+https://vk.com/wall-238875824_378. A read-only live wall scan confirms one exact
+matching copy_history/source identity in the latest 100 Afisha posts and none
+in Anons. The public copy includes the two-excursion text and photo. No provider
+write, manual resend, canary or cadence reset was used for verification.
+
+Provider timestamp is 11:30:20 UTC (13:30:20 Kaliningrad), source timestamp
+09:00:38 UTC: actual delay 149 minutes 42 seconds, within the owner's 30–180
+minute requirement. Ledger published_at 11:30:00.635858 is the callback's
+recorded send time, not the later VK provider timestamp; do not conflate them.
+Anons is correctly cadence-skipped after its November 3 send until November 6.
+
+This accepts today's daily Afisha delay and normal campaign execution. It does
+not accept actual separation of the next paired destination sends, which remains
+a November 6 observation, or the next normal daily source digest slot. Existing
+November 3 posts remain unchanged. Incident stays open for those criteria.
+
+Retained evidence: promo-guide-state-1134.jsonl, promo328-live-repost-1136.json
+and promo328-acceptance-receipt.json in the existing intake recovery directory.
+The independent 11:20 ordinary guide monitor ops 11627 is still scanning remote
+source ruin_keepers; its final import result is not accepted from heartbeat alone.
