@@ -583,3 +583,27 @@ def test_v9_collector_deduplicates_in_closed_enum_order():
     reasons = [fact.reason for fact in facts]
     assert reasons == sorted(reasons, key=list(VerificationReason).index)
     assert len(reasons) == len(set(reasons))
+
+
+@pytest.mark.parametrize("source", [
+    "Телефон: +7 (4012) 99-55-55, доб. 50800",
+    "Маршрут занимает 25-30 минут (2.2 км).",
+])
+def test_numeric_phone_and_duration_are_not_impossible_calendar_facts(source):
+    decision = SourceParseDecision(
+        [{"title": "Лекция", "date": "2026-11-20", "time": "18:00"}],
+        evidence_manifest=EvidenceManifest.complete_source(source),
+    )
+    assert VerificationReason.IMPOSSIBLE_SCHEMA_VALUE not in _fact_reasons(source, [], decision)
+
+
+@pytest.mark.parametrize("source", [
+    "Лекция 31.02.2026", "Лекция 31/02/2026", "Лекция 31-02-2026",
+    "Лекция 2026-02-31", "Лекция 31 февраля 2026",
+])
+def test_explicit_impossible_calendar_dates_remain_source_facts(source):
+    decision = SourceParseDecision(
+        [{"title": "Лекция", "date": "2026-11-20"}],
+        evidence_manifest=EvidenceManifest.complete_source(source),
+    )
+    assert VerificationReason.IMPOSSIBLE_SCHEMA_VALUE in _fact_reasons(source, [], decision)
