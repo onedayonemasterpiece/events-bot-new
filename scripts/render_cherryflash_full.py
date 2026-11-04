@@ -234,6 +234,8 @@ def _format_display_date(raw_date: str | None, raw_time: str | None = None) -> s
             dt = None
         if dt is not None:
             date_line = f"{dt.day} {approval.MONTHS_GENITIVE[dt.month]}"
+            if dt.year != date.today().year:
+                date_line += f" {dt.year}"
     time_line = _normalize_text(raw_time)
     if time_line and time_line != "00:00" and time_line not in date_line:
         date_line = f"{date_line} • {time_line}" if date_line else time_line

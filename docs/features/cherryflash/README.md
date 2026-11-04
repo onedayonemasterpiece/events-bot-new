@@ -942,3 +942,12 @@ This section captures the latest intro-direction request as an explicit delta to
   - after the opening beat, the video returns to the improved legacy `VideoAfisha` scene generation path;
   - poster/event scene generation remains non-3D for speed;
   - the 3D block should be built on a fresh Blender branch, not the old `3.6`-locked intro path.
+
+
+### Cross-year scene dates
+
+The primary scene date label retains the calendar year when it differs from
+the rendering year: `1 МАЯ 2027 • 12:00` in a November 2026 issue. Same-year
+labels retain their existing compact appearance. This display correction
+does not change future-event eligibility or rewrite canonical dates.
+Regression: [cross-year incident](../../reports/incidents/INC-2026-11-04-cherryflash-cross-year-label.md).
