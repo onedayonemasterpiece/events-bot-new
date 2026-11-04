@@ -38,7 +38,7 @@ _MONTHS = {
 }
 _MONTH_PATTERN = "|".join(_MONTHS)
 _NUMERIC_DATE_RE = re.compile(
-    r"(?<!\d)(?P<day>\d{1,2})[./-](?P<month>\d{1,2})(?:[./-](?P<year>\d{2,4}))?(?!\d)"
+    r"(?<!\d)(?P<day>\d{1,2})(?:[./]|-(?=\d{1,2}-\d{4}(?!\d)))(?P<month>\d{1,2})(?:[./-](?P<year>\d{2,4}))?(?!\d)"
 )
 _ISO_DATE_RE = re.compile(r"(?<!\d)(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})(?!\d)")
 _WORD_DATE_RE = re.compile(

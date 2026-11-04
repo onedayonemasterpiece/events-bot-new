@@ -296,3 +296,12 @@ shortlist: один performance/ticket URL не является доказат�
 ### Scope of a structured ticket card
 
 Each structured source row imports its own slot. The adapter uses the existing operator instruction to distinguish the row header from a full programme repeated in its description. The instruction remains in the existing `source_context` during conditional verification and terminal adjudication; raw source and OCR remain intact. Unscoped multi-event posts retain their existing extraction contract. This does not bypass date/identity checks or correct the separately recorded numeric date lexer false positives.
+
+
+Числовой collector трактует даты с точкой/косой чертой как прежде, а дату
+с дефисами — только при полном четырёхзначном годе (ISO или ДД-ММ-ГГГГ).
+Короткие цепочки вроде `25-30` и `99-55-55` неоднозначны с диапазонами и
+телефонами и не доказывают календарное противоречие. Исходный текст и OCR
+сохраняются для модели; это лексическая граница объективного факта, а не
+изменение семантического парсинга дат. Невозможные полные даты, например
+`31-02-2026`, по-прежнему отправляют источник на существующую проверку.

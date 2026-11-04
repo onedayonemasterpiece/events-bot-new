@@ -1015,3 +1015,31 @@ A transport-only prototype still failed the full model control: its primary date
 Valid baseline context transport tests fail twice, after correction they pass. Existing source/parser/Telegram contract suite: 151 passed, using cached missing local BeautifulSoup dependencies rather than installing packages. An earlier broad test command named a nonexistent file, then collection found missing bs4; neither is counted as a test pass or production failure.
 
 Full model-only reconstruction after transport plus request rules returns exactly one 2027-01-04 11:00 occurrence with end_date null through the conditional verifier, versus wrong dates/series before. Exact generic instruction from the source adapter was used. Raw failed OCR remains unreconstructed; zero Event/Job writes. Unscoped multi-event and exhibition-period controls are pending. No new production delivery claimed. Existing b565 runtime remains healthy.
+
+
+### 2026-11-04 14:56 UTC — source scope correction delivered
+
+PR #809 merged after all four required CI passed. Exact main `4600e9978a7eb9b22234590bfc76258feba0a905`, image `intake-source-scope-20261104`, immutable `sha256:ae711ef4e2c38b996b81b4efe61970f66d4770dcbabaeda32965d86789ddfb7f` delivered Events-only at 14:54:13 UTC. All 4441 tracked files matched, initialized isolated preflight and wrong-SHA control passed, isolated HTTP confirmed no scheduler activation. Live SQLite/settings/cinema/identity and adjudicator hashes, context transport and health passed (`ready=true`, DB ok, no issues). Kotopogoda unchanged.
+
+Real model-only full chain retained January 4, 2027 at 11:00 with no end date. Unscoped two-lecture control preserved both November 20 and November 25; scoped exhibition retained November 10–December 10. Initial 160-second multi-control timeout was below the existing production provider cap; one bounded 270-second harness rerun succeeded without changing runtime timeouts. Reconstruction uses the accepted neighbouring source header, not original failed OCR. Zero Event/Job writes in these controls; 151 local regression tests passed. Phone/duration false-date facts remain independently unresolved; date/identity protections were not relaxed.
+
+Local scheduled video ops 11633 handed off session 1563 before cutover. Only its remote render remained; existing recovery contract reattached the poller after restart to the same `zigomaro/crumple-video` kernel and `zigomaro/video-afisha-session-1563` dataset. Fresh actual RUNNING poll confirmed; terminal video acceptance remains outstanding. No intake replay or new kernel. Next normal VK 16:30 UTC, guide full 18:10 UTC and TG 21:40 UTC still require actual final receipts. Detailed retained receipt: `source-scope-release-receipt.json`.
+
+
+### 2026-11-04 15:32 UTC — false numeric calendar facts reproduced and corrected
+
+The existing numeric date regex treated telephone `+7 (4012) 99-55-55` as
+(2055,55,99) and route duration `25-30 минут` as (2026,30,25). The shared
+collector now requires a full four-digit year for a hyphenated numeric date;
+dot/slash formats and full ISO/DD-MM-YYYY formats retain existing behaviour.
+Short hyphenated ranges/phone fragments remain in raw/OCR semantic evidence
+but cannot establish an objective calendar contradiction. No value-validity
+filter or semantic verdict bypass. One existing regex changed, zero net
+handwritten production lines; Telegram embedded collector regenerated.
+
+Valid source-only before controls fail twice, while five explicit impossible
+date controls already pass. Reconstructed source fact comparison removes only
+the false IMPOSSIBLE_SCHEMA_VALUE; existing programme MULTIPLE_OCCURRENCES_COLLAPSED
+remains, preserving conditional verification. No provider or Event/Job writes.
+Retained date-boundary-source-facts-comparison.json contains exact before/after.
+This correction is not yet deployed; production remains healthy 4600e9978.
