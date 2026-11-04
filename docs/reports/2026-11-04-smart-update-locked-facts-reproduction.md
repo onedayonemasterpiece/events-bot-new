@@ -27,9 +27,11 @@ The existing typed description preparation was retried with the same stable key 
 - Operation: `evt_op_wdKH5AMYswuguIAIsfg80Aye4_lax90C`.
 - Canonical revision: `e82ba58c0d985328e4b8368900be96621410500d57811aece938c9205850dae3`.
 - Scope: description only, new name and official concert/dinner details; no date, venue, lifecycle or identity change.
-- Public surfaces: reconciliation queued, **not yet accepted as current public content**. Existing uneditable VK post remains failed; no replacement or manual requeue.
+- Public surfaces: reconciliation queued, **not yet accepted as current public content**. Existing uneditable VK post remains failed; no replacement or manual requeue. Normal typed-edit reconciliation reached the existing scoped permanent refusal again.
 
 The Nov14 disputed-date case and decision 19099 were not changed or replayed. This correction of one disproved historical title fact does not authorize accepting ambiguous date conflicts or disabling locked facts.
+
+Readback at 08:14 UTC found Telegraph 100934 and calendar 100935 deferred to November 5 at 00:05:01/02 under the existing media-review feature budget. The actual Telegraph body was still old at 08:15. The new canonical description is accepted, but that budget dependency prevents claiming current public correction; no budget was reset or bypassed. Telegram depends on these jobs.
 
 ## Review correction: the suggested note helper replaces a whole source batch
 
