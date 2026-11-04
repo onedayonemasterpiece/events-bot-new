@@ -50,3 +50,35 @@ All files are retained under /home/dev/artifacts/events-bot-new/20261102T233947Z
 - daily-duplicate-parser-decisions-20261104.json and daily-duplicate-movie-decisions-20261104.json — bounded parser identity evidence.
 
 Typed event_get and broad event search exceeded the existing read budget; narrowed read-only SQLite queries were used rather than changing budgets. Early social tool calls used a string locator or timestamp rather than the required locator object/date format; corrected requests succeeded. No failed diagnostic call is counted as production evidence.
+
+
+## 2026-11-04 21:52 UTC — ordinal drift reconstructed exactly
+
+Read-only EventSource/candidate snapshots and an offline stdlib SHA-256
+reconstruction reproduce both old and new occurrence keys from the current
+_parser_occurrence_key material, changing only producer_ordinal. Piano10442
+key corresponds to ordinal10; candidate26339/new10511 corresponds to ordinal15.
+Movie10393 broad tickets anchor corresponds to ordinal4; candidate26355/new10522
+to ordinal3. Same canonical URL, source type, date, time and empty end_date.
+No model calls, production writes or replay. Evidence:
+daily-duplicate-anchor-keys-2150.json and daily-duplicate-ordinal-reconstruction.json.
+
+The producer includes its catalogue ordinal in parser-slot keys. Consumer
+is_explicit_occurrence_key currently treats parser-slot as source/vendor
+identity, unlike structured/ordinal fallbacks. _explicit_occurrence_conflict_ids
+therefore lists the original owner as conflicting and removes it before fuzzy
+matching. That explains why the proper owner was absent; the later wrong-sector
+LLM decision is downstream. The producer ordinal changed with catalogue order,
+not event identity. This is stronger evidence than the earlier selected-owner
+hypothesis; it does not prove every possible duplicate has the same cause.
+
+Minimal next experiment: distinguish generated parser fallback from true native
+occurrence identity in the existing contract, preserving real source-native,
+vendor and full-ticket conflicts. Do not merely remove the source guard or
+retime/merge same-title cards. Inspect every is_explicit_occurrence_key consumer
+and binding invariant first. Qualify with actual two drifted cases, true
+different-time and same-slot/different-sector events, same-slot unrelated titles,
+ambiguous catalogue fallback and Telegram disputed-date19099. A producer-only
+new key would not alone repair legacy ordinal bindings. No implementation is
+yet made; do not call the ordinal fix delivered. Existing normal TG11638 is
+healthy and must finish before any cutover or standalone intake.
