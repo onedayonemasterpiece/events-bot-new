@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Log child-scope location repair quote failures separately without changing the existing rejection reason or validation retry prompt.
 - Preserve deferred media work when source rehydration repeats an unchanged poster; arm geometry follow-up for new or replaced visual inputs.
 - Retain the calendar year in Cherryflash scene date labels for events outside the rendering year, avoiding ambiguous future dates that look stale.
 - Avoid false impossible-calendar facts from short hyphenated phone/duration fragments; full-year numeric dates and actual invalid-date/OCR checks remain intact.

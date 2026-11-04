@@ -7602,6 +7602,12 @@ async def _llm_review_candidate_location_grounding(
                         candidate.city = proposed_city
                     return True, "llm_repair"
             else:
+                if decision == "repair":
+                    logger.warning(
+                        "location_grounding.repair_quote_not_grounded source=%s attempt=%s parent_quote=%s",
+                        candidate.source_url, review_attempt + 1,
+                        bool(evidence_quote and _norm_text_for_grounding(evidence_quote) in _norm_text_for_grounding(candidate.source_text or "")),
+                    )
                 last_reason = "llm_response_invalid"
 
         if review_attempt == 0:
