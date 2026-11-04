@@ -2879,6 +2879,9 @@ async def _latest_vk_auto_import_retry_hold_started_at(
 async def _maybe_dispatch_vk_auto_import_watchdog(db: Any, bot: Any) -> int:
     if not _env_enabled("ENABLE_VK_AUTO_IMPORT", default=False):
         return 0
+    if any(job_id.startswith("vk_auto_import_") for job_id in _run_meta):
+        logging.info("SCHED vk_auto_import catch-up deferred: scheduled job already submitted")
+        return 0
     now_utc = datetime.now(timezone.utc)
     slot = _last_vk_auto_import_slot(now_utc)
     if slot is None:

@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Keep the VK watchdog from dispatching a second batch while the normal scheduler slot is already submitted and waiting on the shared heavy gate.
 - Report Smart Update non-acceptance accurately from MCP create; reserve the missing-fields error for actual missing date, title or location receipts.
 - Propagate permanent VK edit-window failures to the existing outbox handler instead of recording an unchanged old post as a successfully applied revision.
 - Use the existing SQL alias when reading VK source context during direct event intake, avoiding a collision with the source text parameter.

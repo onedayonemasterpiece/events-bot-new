@@ -394,6 +394,13 @@ releases the gate between events. Other jobs retain their configured guard mode;
 no new retry timer, queue or catch-up mechanism is added. The existing watchdog
 still covers genuinely missed/restarted slots.
 
+The watchdog also checks the existing APScheduler submitted-job accounting.
+A submitted normal VK slot can be waiting on the heavy gate before it creates
+an `ops_run`; absence of that row alone must not dispatch a second batch.
+Executed, failed or missed scheduler events clear the existing accounting and
+leave the normal durable catch-up checks in force. Regression:
+`test_vk_watchdog_respects_submitted_scheduler_slot` in `tests/test_scheduling.py`.
+
 Regression: `tests/test_scheduling_vk_wait.py` boots the real registration and
 checks two independent tasks against the actual heavy semaphore. Its baseline
 fails with `job_skip_heavy_busy`; the fixed job stays pending and runs after the
