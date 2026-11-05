@@ -1564,3 +1564,52 @@ Events cutover must await their safe terminal state. Prepared ready-projections
 scripts expect actual394/539b and the Philharmonia-program tag; read before use.
 No build, preflight or new image yet. Exact evidence in outbox-ready-projection-plan.md,
 outbox-ready-before.log, outbox-ready-focused.log and original-controls.log.
+
+
+### 2026-11-05 05:38 UTC — ready-projection candidate qualified, not delivered
+
+PR826 merged all required CI and contract tests green. Exact main
+`ae5d459ceeab30e86703ac48c63287a7fbdc9b8e` qualified as
+`intake-ready-projections-20261105`, immutable
+`sha256:f023a4e0f27fce2bb52282893fe982e3217bd56412950bb0cfbb6516ca5a9fb9`.
+Full4447 source/actual394 ancestry and unchanged dependency inputs passed.
+Initialized isolated inherited controls and actual ready-projection/blocked-own-media
+SQLite contrasts passed; wrong SHA refused and HTTP isolation verified. Owned
+preflight removed. First probe had an operational NameError from missing main
+import; corrected harness reran completely on fresh isolated databases. Image
+source was unchanged, so no rebuild. This is NOT DELIVERED while11645 processes
+healthy local source data. Do not rebuild or interrupt the import for cutover.
+
+Correction to earlier test characterization: five baseline failures are quiet-time
+spacing expectations, the sixth is absent local Telethon, all reproduced using
+the unchanged original worker.35 focused and39 broad passing cases are valid;
+the six failures are not successful checks. No local package/prod config change.
+
+Exact source181 reconciliation currently finds one active canonical card with
+an exact source URL/date/time anchor for every39 official catalogue occurrences,
+zero ambiguous anchors. Local source pipeline has not reached terminal, so this
+coverage check is not final run acceptance. The exact formerly fatal Bakh/Requiem
+source is now CREATED10565 with EventSource14003531, December6 18:00. Its venue
+name/address agree with the current official homepage; no speculative venue
+profile correction was made. Evidence philharmonia-partial-reconcile-0538.json,
+philharmonia-crash-source-receipt-0536.json and official https://filarmonia39.ru/.
+
+A new substantive audit handoff1793856400.415239 was sent in the existing
+coordination thread with the Markdown report and PR826. No recipient response
+after two bounded reads; status sent_unconfirmed, not accepted. Test limitation
+correction followed without a new audit request. No new chat or auditor schedule.
+Retained ready-projections-qualification-receipt.json records all evidence and
+staged exact host scripts. Actual394 remains healthy; no production switch.
+
+
+### 2026-11-05 05:49 UTC — PR826 delivered; Philharmonia recovery accepted
+
+PR826 is delivered from merged main ae5d459ceeab30e86703ac48c63287a7fbdc9b8e, immutable image sha256:f023a4e0f27fce2bb52282893fe982e3217bd56412950bb0cfbb6516ca5a9fb9. Original Events-only cutover passed idle guards without exceptions; runtime, SQLite, settings and inherited controls pass, ready=true, Kotopogoda unchanged. Full 4447-file qualification and initialized isolated ready/blocked SQLite controls passed. No new state, worker, retry, budget bypass or semantic change.
+
+The actual normal worker completed Event9779 ICS100933 at05:42:19, Telegraph100934 at05:43:00 and calendar post100935 at05:43:07, after its own media had been done since03:18:43. Public Telegraph read confirms the current title «Песни о любви», November27 18:00, Зеленоградск, Железнодорожная1 and updated description. The existing page URL retains its old slug; that does not mean its body is stale. TG100937 remains legitimately due07:50 UTC. Rejected poster35057 remains rejected, with no override. Calendar public read is tracked separately.
+
+Philharmonia existing-pipeline catch-up11645 completed SUCCESS05:36:49:39 rows,19 CREATED10547–10565,20 unchanged, zero failures. Exact official URL/date/time reconciliation proves39 unique active source anchors over39 unique Events, no ambiguous or missing occurrence. The previously fatal programme-only page now anchors Event10565. Do not run the catch-up again. The result's empty added_event_ids arrays are a reporting limitation: the actual event-result log and exact anchors establish the19 creations.
+
+Operator-script correction: catch-up called the existing settlement helper while its request was still pending; the helper only updates running requests, so it silently left this single request pending. After successful ops and39-source reconciliation, a one-time explicit transaction settled only that exact unchanged pending Philharmonia request to done at05:47:59. Request attempt count remains0 because no scheduled claim occurred; no Event or Job row changed. Read-only plan, guarded script and before/after receipt retained. This is correction of the operator driver, not a new product recovery path or another import.
+
+Evidence retained under the existing incident artifact directory: ready-projections-delivery-receipt.json, ready-projections-live-verify.log, ready-projections-cutover.log, philharmonia-final-reconcile.json, philharmonia-terminal-summary.json, philharmonia-settle-exact-plan.json, philharmonia-settle-exact-applied.json, media-ready-postdeploy-0547.json and9779-telegraph-public-0550.html. Old daily duplicate pairs and nine own-digest cards remain untouched. All five incidents stay open for remaining normal-slot, media, duplicate and promo-pair acceptance.
