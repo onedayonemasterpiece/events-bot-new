@@ -2688,6 +2688,8 @@ async def _scan_and_import_source(
         "posts": [],
         "occurrence_changes": [],
     }
+    # External I/O must not retain the preceding source's SQLite writer.
+    await conn.commit()
     source_meta, posts = await scan_source_posts(client, username=username, limit=limit, days_back=days_back)
     enrich_targets: list[dict[str, Any]] = []
     template_ids_seen: set[int] = set()
@@ -2852,6 +2854,8 @@ async def _scan_and_import_source(
             source_report["posts"].append(post_report)
     if enrich_targets:
         try:
+            await conn.commit()
+            logger.info("guide_import.enrich source=%s occurrences=%d profiles=%d transaction=committed", username, len(enrich_targets), len(profile_targets))
             enrichments = await apply_occurrence_enrichment(enrich_targets)
             touched_template_ids = await _apply_occurrence_enrichment_results(
                 conn,
@@ -2867,6 +2871,7 @@ async def _scan_and_import_source(
             source_report["errors"].append(f"enrich_failed: {type(exc).__name__}: {exc}")
     if profile_targets:
         try:
+            await conn.commit()
             profile_enrichments = await apply_profile_enrichment(list(profile_targets.values()))
             metrics["profiles_touched"] += await _apply_profile_enrichment_results(
                 conn,
@@ -3214,6 +3219,8 @@ async def _import_source_payload(
             source_report["posts"].append(post_report)
     if enrich_targets:
         try:
+            await conn.commit()
+            logger.info("guide_import.enrich source=%s occurrences=%d profiles=%d transaction=committed", username, len(enrich_targets), len(profile_targets))
             enrichments = await apply_occurrence_enrichment(enrich_targets)
             touched_template_ids = await _apply_occurrence_enrichment_results(
                 conn,
@@ -3230,6 +3237,7 @@ async def _import_source_payload(
             source_report["source_status"] = "partial"
     if profile_targets:
         try:
+            await conn.commit()
             profile_enrichments = await apply_profile_enrichment(list(profile_targets.values()))
             metrics["profiles_touched"] += await _apply_profile_enrichment_results(
                 conn,
