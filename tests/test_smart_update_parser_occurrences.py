@@ -225,3 +225,113 @@ async def test_smart_update_creates_second_official_session(tmp_path, monkeypatc
         assert created.time == "14:00"
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "old_ordinal,new_ordinal,old_time,new_time,native,ambiguous,expected_match",
+    [
+        (10, 15, "20:00", "20:00", False, False, True),
+        (4, 3, "18:00", "18:00", False, False, True),
+        (0, 1, "12:00", "19:00", False, False, False),
+        (0, 1, "20:00", "20:00", True, False, False),
+        (0, 1, "20:00", "20:00", False, True, False),
+    ],
+)
+async def test_parser_ordinal_drift_recalls_owner_without_conflating_sessions(
+    tmp_path, old_ordinal, new_ordinal, old_time, new_time, native, ambiguous,
+    expected_match,
+):
+    url = "https://kaliningrad.tretyakovgallery.ru/tickets"
+    if old_ordinal == 10:
+        url += "#/buy/event/52226/2026-11-21/20:00:00"
+    date_value = "2026-11-10" if old_ordinal == 4 else "2026-11-21"
+    def key(ordinal, clock):
+        if native:
+            return f"source-native:ticket-{ordinal}"
+        return _parser_occurrence_key(
+            source_type="tretyakov", source_url=url, date_value=date_value,
+            end_date_value=None, time_value=clock, producer_ordinal=ordinal,
+        )
+    db = Database(str(tmp_path / "ordinal.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            owner_ids = []
+            for title in (["Русская фортепианная школа", "Средневековый концерт"]
+                          if ambiguous else ["Русская фортепианная школа"]):
+                event = Event(
+                    title=title, description=title, source_text=title,
+                    date=date_value, time=old_time,
+                    location_name="Филиал Третьяковской галереи", city="Калининград",
+                )
+                session.add(event)
+                await session.flush()
+                owner_ids.append(int(event.id))
+                session.add(EventSource(
+                    event_id=int(event.id), source_type="parser:tretyakov",
+                    source_url=url, canonical_source_url=url,
+                    source_role="identity_bearing",
+                    candidate_key=f"ordinal-fixture-{len(owner_ids)}",
+                    occurrence_key=key(old_ordinal + len(owner_ids) - 1, old_time),
+                ))
+            await session.commit()
+        candidate = EventCandidate(
+            source_type="parser:tretyakov", source_url=url,
+            source_text="21 ноября, " + new_time,
+            title="Концерт" if ambiguous else "Русская фортепианная школа",
+            date=date_value, time=new_time,
+            location_name="Филиал Третьяковской галереи", city="Калининград",
+            occurrence_key=key(new_ordinal, new_time),
+        )
+        conflicts = await su._explicit_occurrence_conflict_ids(db, candidate)
+        candidate.explicit_occurrence_conflict_event_ids = conflicts
+        match = await su._match_existing_event_by_event_source_url(db, candidate)
+        assert bool(conflicts) is native
+        assert (match is not None) is expected_match
+        if match is not None:
+            assert int(match.id) == owner_ids[0]
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_parser_ordinal_drift_updates_existing_event_and_source_binding(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    from sqlalchemy import func, select
+    from smart_update_identity import IdentityGateMode
+
+    db = Database(str(tmp_path / "ordinal-pipeline.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "_classify_topics", AsyncMock(return_value=None))
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", AsyncMock(return_value=("event", 0.99, "fixture")))
+        url = "https://kaliningrad.tretyakovgallery.ru/tickets#/buy/event/52226/2099-11-21/20:00:00"
+        results = []
+        for ordinal in (10, 15):
+            candidate = EventCandidate(
+                source_type="parser:tretyakov", source_url=url, ticket_link=url,
+                title="Русская фортепианная школа", date="2099-11-21", time="20:00",
+                location_name="Филиал Третьяковской галереи", city="Калининград",
+                source_text="Концерт 21 ноября 2099 в 20:00, Филиал Третьяковской галереи.",
+                occurrence_key=_parser_occurrence_key(
+                    source_type="tretyakov", source_url=url, date_value="2099-11-21",
+                    end_date_value=None, time_value="20:00", producer_ordinal=ordinal,
+                ),
+                producer_ordinal=ordinal,
+            )
+            results.append(await su.smart_event_update(
+                db, candidate, check_source_url=False, schedule_tasks=False,
+            ))
+        assert results[0].outcome is su.SmartUpdateTerminalOutcome.CREATED
+        assert results[1].outcome is su.SmartUpdateTerminalOutcome.MERGED
+        assert results[1].event_id == results[0].event_id
+        async with db.get_session() as session:
+            assert (await session.execute(select(func.count(Event.id)))).scalar_one() == 1
+            source_ids = (await session.execute(select(EventSource.event_id))).scalars().all()
+            assert set(source_ids) == {results[0].event_id}
+    finally:
+        await db.close()

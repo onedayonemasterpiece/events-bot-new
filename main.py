@@ -19598,6 +19598,7 @@ async def _run_due_jobs_once(
     fest_progress: dict[int, Any] | Any | None = None,
     allowed_tasks: set[JobTask] | None = None,
     force_notify: bool = False,
+    max_jobs: int | None = None,
 ) -> int:
     async with _get_run_due_jobs_lock():
         return await _run_due_jobs_once_locked(
@@ -19609,6 +19610,7 @@ async def _run_due_jobs_once(
             fest_progress=fest_progress,
             allowed_tasks=allowed_tasks,
             force_notify=force_notify,
+            max_jobs=max_jobs,
         )
 
 
@@ -19621,6 +19623,7 @@ async def _run_due_jobs_once_locked(
     fest_progress: dict[int, Any] | Any | None = None,
     allowed_tasks: set[JobTask] | None = None,
     force_notify: bool = False,
+    max_jobs: int | None = None,
 ) -> int:
     now = datetime.now(timezone.utc)
     vk_captcha_blocked = await _maybe_auto_recover_vk_captcha_outbox(db, bot)
@@ -19797,14 +19800,16 @@ async def _run_due_jobs_once_locked(
         jobs = [
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
+    # Ready public work waits for its own dependencies, not unrelated media.
+    # Missing-media VK retains its existing higher-priority media lane below.
     priority = {
-        JobTask.event_media_review: -1,
+        JobTask.event_media_review: 0,
         JobTask.vk_sync: -2,
-        JobTask.telegraph_build: 0,
-        JobTask.tg_event_publish: 0,
-        JobTask.tg_premium_emoji_edit: 0,
-        JobTask.ics_publish: 0,
-        JobTask.tg_ics_post: 0,
+        JobTask.telegraph_build: -1,
+        JobTask.tg_event_publish: -1,
+        JobTask.tg_premium_emoji_edit: -1,
+        JobTask.ics_publish: -1,
+        JobTask.tg_ics_post: -1,
         JobTask.month_pages: 1,
         JobTask.week_pages: 1,
         JobTask.weekend_pages: 1,
@@ -20680,7 +20685,8 @@ async def _run_due_jobs_once_locked(
         processed += 1
         if pause:
             await vk_captcha_pause_outbox(db, marker=err)
-            continue
+        if max_jobs is not None and processed >= max_jobs:
+            break
     return processed
 
 
@@ -20844,6 +20850,7 @@ async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
                 None,
                 ics_map if ics_map else None,
                 fest_map if fest_map else None,
+                max_jobs=1,  # Refresh priorities after each completed background job.
             )
             await _watch_nav_jobs(db, bot)
             if _time.monotonic() - last_vk_live_reconcile >= 300.0:

@@ -171,6 +171,13 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 
 ## Jobs
 
+The background JobOutbox worker completes one claimed job, then refreshes the
+due-job selection through the existing scheduler. This preserves task priorities,
+dependencies, coalescing and retry policy while preventing an older batch of
+15-minute page rebuilds from hiding newly due media or publication work. Explicit
+per-event/manual drains retain their existing full-batch behaviour. No additional
+worker or concurrency is introduced.
+
 - **Social metrics batch** — один лёгкий interval-job, включаемый
   `ENABLE_SOCIAL_METRICS_KAGGLE=1`, каждые
   `SOCIAL_METRICS_BATCH_INTERVAL_MINUTES` (default `30`) собирает все due

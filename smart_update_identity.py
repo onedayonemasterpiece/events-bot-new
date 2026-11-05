@@ -1314,7 +1314,8 @@ def is_explicit_occurrence_key(value: object) -> bool:
     """Whether a key carries source/vendor identity rather than fallback order."""
 
     key = str(value or "").strip()
-    return bool(key and not key.startswith("structured:") and not key.startswith("ordinal:"))
+    # Parser slots include catalogue order, not a source-native occurrence ID.
+    return bool(key and not key.startswith(("structured:", "ordinal:", "parser-slot:")))
 
 
 def _canonical_query(raw_query: str, *, ignored: set[str] | None = None) -> str:

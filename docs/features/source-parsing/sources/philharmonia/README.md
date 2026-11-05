@@ -23,11 +23,12 @@ Playwright. Он загружает текущий каталог и детал�
 - зал/возраст: `data-venue`, `data-age`;
 - изображение/Пушкинская карта: `.production_image`,
   `.list_logo_pushkin_card`;
-- полное описание: `.production_description .text_container`;
+- исходный текст: `.production_description .text_container`; если этого блока нет,
+  абзацы `.production_performers p` и `.production_program p` (без кнопок/навигации);
 - цена/продажа: `.price_block .value`, live `.session_entry` и buy link.
 
 Если каталог вернул ноль будущих событий или детальная страница не содержит
-описания, kernel должен завершиться ошибкой, а не публиковать пустой или
+ни описания, ни абзацев программы/исполнителей, kernel должен завершиться ошибкой, а не публиковать пустой или
 обрезанный «успешный» результат.
 
 `kernel-metadata.json.code_file` обязан указывать прямо на parser script.

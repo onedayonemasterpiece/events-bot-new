@@ -1171,3 +1171,445 @@ media-followup-live-recovery-final.json. This verifies the bounded existing
 recovery contract and immediate four-card loop correction. Longer normal
 media/projection acceptance remains at the budget reset; normal guide18:10
 and TG21:40 must still complete with actual source receipts.
+
+
+### 2026-11-04 19:20 UTC — ordinary guide progressing, separate historical media timeout
+
+Normal full guide11637 advanced to15/30 sources and40 scanned posts. Source16
+valeravezet began19:12:25; earlier ruin_keepers and ruin.keepers both passed.
+Remote/local terminal and source/occurrence acceptance still pending; do not
+attribute Events from unrelated imports. Actual44d runtime remains healthy.
+
+The four corrected nochange-loop jobs146263–146266 still retain their original
+17:56/17:59 timestamps and Nov5 00:05 due at19:18. A different historical
+media job58741/Event7114 is NOT recurrence of that loop: the same ledger job
+reached attempt831, timed out at180 seconds19:19:03 and has existing one-hour
+backoff until20:19:03. Card «Девчата» date2026-10-10, addedJuly25, has175 poster
+rows:5 approved,14 duplicate,152 pending_review,4 rejected. Telegraph/calendar/TG
+dependencies remain deferred behind that timeout. last_result=ok is stale
+history, not a successful current attempt. This proves a separate persistent
+archive-media timeout, not its root cause or a safe replay/retiming decision.
+
+No queue mutation, source replay, budget bypass or worker restart. Preserve
+healthy guide11637. Before any correction, isolate the expensive stage and
+existing past-event/publication contracts; blindly marking media done could
+unblock old publication jobs. Retained media7114-targeted-1919.log and
+media7114-state-1920.json. Existing media/projection reset check remains active.
+
+
+### 2026-11-04 19:56 UTC — normal full guide accepted and audit diagnosis
+
+Ordinary scheduled11637 completed remote scan19:28:34 and local import
+success19:33:02:30 sources,75 scanned posts,35 successful LLM post results,
+zero deferred/errors. Six new guide occurrence rows712–717 and25 update
+operations; these are not25 distinct updated rows (16 distinct updated ids,
+20 distinct occurrence ids overall). All31 source/change receipts resolve to
+stored rows and exact source anchors; final date/time/status matches the last
+change for every row. New715 has no date and is correctly digest-ineligible
+(template only); five other new rows have dates. No unrelated canonical Events
+attributed to this run. Receipt guide11637-terminal-receipts.json and terminal
+summary retained. This accepts the normal full guide slot, not tomorrow's
+visual digest or the separate ordinary TG import21:40 UTC.
+
+Opus evening review received and read from PR816. A diagnostic-only correction
+is prepared: `last_reason` is interpolated into the validation retry prompt,
+so replacing catch-all with a different reason is not behaviour-neutral.
+An extra structured log distinguishes repair quotes absent from child scope,
+including a parent-quote boolean, while preserving the existing reason, prompt,
+rejection and candidate. Valid baseline test fails only on absent diagnostic;
+24 grounding/media-helper tests pass after. Initial harness had a wrong fake
+signature and then a misspelled test path; those are not valid passes or
+production failures. No provider or production writes in controls. Not merged
+or delivered. Recurrence and locked-title semantic changes still require
+real countercontrols; reason/date/identity guards unchanged.
+
+
+### 2026-11-04 20:25 UTC — diagnostic-only release delivered
+
+PR 817 merged after all four required CI passed (workflow 41902045872).
+Events-only runtime is d148bd509fa851f01beff9e48e44f8addcb817ed, immutable
+sha256:dc8ca8dfd2351dd51d23e5bcd252c381d3905e6c43349c72b198f21f8c97b0dd.
+Full 4,443-file proof, initialized isolated diagnostic control, unchanged
+rejection/retry-prompt/candidate controls, wrong-SHA refusal, HTTP isolation,
+container cleanup and live runtime/settings/SQLite/health passed. Kotopogoda
+unchanged. Actual container started 20:23:51 UTC. A premature verification
+read correctly rejected old SHA during recreation; final new-container read
+passed. This logging-only change does not restore a rejected source by itself.
+A future natural matching failure is needed to establish the live root cause;
+no source replay or identity/date guard relaxation was performed.
+
+Historical media 58741 was allowed to finish before cutover: attempt 832
+timed out normally at 20:22:05, next existing retry 21:22:05. The previous
+absence of a source_rehydrate completion log does not prove a rehydrate hang:
+read-only state has four sources and 157 approved/pending posters; the existing
+rehydrate count guard returns early. Materialization then iterates these rows.
+Raw-SHA conflicts also occur on the fast exact-v2 path, so 51 conflicts are
+not 51 downloads. Exact costly stage and root cause still need evidence.
+No job was marked done, replayed, deleted or manually reset. Other historical
+media job 67365/Event 6824 was running after normal startup; no claim was
+interrupted at cutover. See media7114-stage-correction-2022.md.
+
+The four fixed jobs 146263–146266 retain their original timestamps and
+November 5 00:05 UTC due time. Normal TG 21:40 UTC and the media reset, parser,
+VK, visual guide and November 6 promo pair checks remain outstanding.
+Receipt grounding-diag-release-receipt.json and verification logs are retained
+in the existing incident artifact directory. Four incidents remain open.
+
+
+### 2026-11-04 23:20 UTC — normal TG remote terminal, local import progressing
+
+Normal scheduled TG11638 remote scan finished23:00:49 with57 sources and123
+messages. Local ops is still running; remote completion is not acceptance.
+Source/candidate anchors confirm new10526/10527 and signalkld12400 children
+10528/10529 with EventSource13992397–13992399/13992401. Next message
+locostandup4362 started; this is actual progress, not heartbeat inference.
+One sampled signalkld12399 child is technical distinct_not_grounded; three
+locostandup4361 children are past-event exclusions, not technical failures.
+These are bounded samples, not final totals. Whole-run/own-digest outcomes
+still require terminal receipts. No competing intake or restart.
+
+PR821 prevention image remains fully qualified and undelivered, no rebuild or
+cutover attempt. Actuald148 healthy. Four deferred jobs146263–146266 retain
+original timestamps and Nov5 00:05 due, no seconds-loop recurrence. Keep
+media00:10/parser02:30/VK04:15/guide08:30 and Nov6 pair checks. Evidence:
+tg-normal-progress-2318.json, tg11638-local-2320.json and
+tg11638-early-anchors-2320.json in retained recovery directory.
+
+
+### 2026-11-05 00:15 UTC — media reset observed, targets not yet processed
+
+Budget-reset checkpoint does not accept Event9779 publication: actual media
+successor144431 and dependent100934/100935/100937 remain pending, old done
+143291 and last_result URLs are stale. Exact four146263–146266 retain original
+timestamps and due00:05, no seconds-loop recurrence but no execution receipt.
+Worker is actively completing other media jobs; due queue has303 jobs (not
+303 missing events). Actual500/503 provider failures continue. No queue reset,
+recommit, budget bypass, markdone or public replacement. Repeat exact-target
+checks and read current public outputs after actual terminal.
+
+Normal TG11638 local import continues through kldevents5161/5162/5163 with
+fresh00:11 transitions, no terminal acceptance yet. Qualified PR821 remains
+undelivered to preserve healthy intake. Actuald148 healthy. Retained evidence
+media-reset-check-0015.md and its linked JSON/logs. All later normal parser,
+VK, visual-guide and promo-pair checks preserved.
+
+
+### 2026-11-05 00:55 UTC — stale whole-batch snapshot delays midnight targets
+
+Read-only evidence narrows the queue delay beyond provider failures. At00:45
+festival_pages10382 timed out after900024 ms; the same worker immediately
+picked another old festival_pages10386. Exact media144431 and146263–146266,
+due00:05, still had zero attempts at00:50. _run_due_jobs_once_locked selects
+one due snapshot and drains it entirely; job_outbox_worker cannot reconsider
+newly due jobs until the old batch ends. This is mechanical queue freshness,
+not a semantic model/date problem or proof of a dead worker.
+
+Minimal candidate adds optional private max_jobs to the existing drain and
+sets it to1 only in the background worker. It finishes the existing claim,
+releases the existing lock and reselects by existing priority. Explicit drains
+keep their unlimited default. No new worker, persistent state, retry, timer,
+quota bypass or changed task priority. Six net functional production lines;
+public projection idempotency and all source identity/date rules unchanged.
+
+Real isolated SQLite control enqueues a higher-priority media job during the
+first of two festival handlers. Original code incorrectly runs the second
+festival; explicit-full-drain contrast still passes. Initial fake handler had
+a wrong festival signature and is invalid evidence; corrected baseline has
+one distinguishing failure and one passing full-drain contrast. After-fix
+checks and release qualification remain pending. No provider/production writes
+or import interruption. Actuald148 and qualified-but-undelivered834 candidate
+remain unchanged. Evidence media-reset-exact-0050.json, media-tg-worker-0052.log,
+outbox-selection-valid-before.log, outbox-fresh-selection-plan.md retained.
+
+
+After-fix expanded outbox run:29 passed,3 failed. All three failures reproduce
+with the exact original834d drain functions restored in memory (test_job_expired,
+weekday navigation expectation and running month-page follow-up expectation).
+They are not new passes or corrected by this change. Both distinguishing
+background-refresh and explicit-full-drain controls pass after; current-fixture
+valid baseline has1 failure/1 pass. Provider audit PASS, unapproved0/debt0.
+Existing CI now includes the new two-case queue regression. No model call,
+Event/source replay or production data write in these controls.
+
+
+### 2026-11-05 01:14 UTC — combined queue and ordinal candidate qualified
+
+PR822 merged after all four CI checks and contract-tests passed. Clean exact
+main682e9031d47769cadfe6c42803dab88a8a5c191b built and qualified as
+runcoveer/events:intake-outbox-fresh-20261105, immutable
+sha256:7a7658e1c3b9b871d84212f06f13f33acecaf9268b4b77039e81fa0a9ae479e4.
+Full4,445-file source proof, actual d148 ancestry, initialized isolated actual
+background worker/SQLite refresh control, inherited ordinal/native/date/media
+controls, wrong-SHA refusal and final HTTP isolation passed. Early HTTP reset
+was startup timing; final check passed. Own preflight container removed.
+
+NOT DELIVERED: ordinary TG11638 local import still progresses at01:12 through
+kldevents5178 and ecoklgd3629. Actuald148 remains healthy, no cutover attempt
+or interruption. Host exact cutover/verify scripts staged; old undelivered834d
+ordinal-only candidate is superseded. Target9779 media/projections and exact
+four146263–146266 still pending at01:13; stale URLs not accepted. No queue
+reset, source replay, public replacement or budget bypass. Need safe terminal
+intake release followed by real worker/public receipts. Receipt
+outbox-fresh-qualification-receipt.json and linked logs retained.
+
+
+### 2026-11-05 02:38 UTC — normal parser slot starts alongside TG intake
+
+The normal source parser02:30 slot started ops11643 at02:30:04, run
+`a737808d41d3433193e91ce5ec508d40`. Real Qtickets remote run completed and
+returned two files around02:35; theatres remote run was still RUNNING.
+TG11638 meanwhile completed kldevents5200 as MERGED10313, then5201 rejected
+and meowafisha9088 started. This proves actual source progress and normal
+scheduler submission, not final parser/import acceptance. Both local ops still
+running; no restart, competing CLI intake or duplicate remote kernel.
+
+Combined682e9031d candidate remains fully qualified and undelivered; actuald148
+healthy. At02:36 Event9779 successor144431/projections and exact four
+146263–146266 remain pending, with old receipts explicitly not accepted.
+The safe-release gate preserves active imports. Need both terminal results,
+then Events-only delivery and ordinary worker/publication receipts. Existing
+festival restart contract excludes blind interruption. All pending normal
+VK04:15, visual guide08:30 and November6 promo-pair checks preserved.
+Evidence tg-parser-local-0236.json, parser-slot-0236.log,
+media-reset-exact-0237.json and outbox-await-runtime-0238.txt retained.
+
+
+### 2026-11-05 03:15 UTC — exact Philharmonia source failure identified
+
+Normal parser11643 Philharmonia remote version180 failed before writing any
+catalogue JSON: ValueError detail description missing for the official
+velikie-shedevry-muzyki-bakh-rekviem-motsarta page. Missing optional status client
+was only a warning, not the failure. Live read-only HTTP200 confirms this
+page has programme and performer paragraphs but no prose-description block.
+The collector incorrectly requires optional prose and aborts the whole
+catalogue. This is HTML extraction/coverage, not model/provider or date logic.
+
+Minimal correction reads those existing paragraphs only when prose is absent;
+empty page or heading/buttons-only content still raises. Prose remains primary,
+no invented text, skipped exception or fake-success partial catalogue. Two net
+functional lines, no worker/state/retry/provider change. Distinguishing current
+fixture before1fail/8pass, exact error matches remote; after validation pending.
+No production Event/queue writes, competing kernel or intake. Existing accepted
+source recovery operations remain untouched. Related July27 source-coverage
+record remains a required regression contract. Retained remote log and exact
+HTML plus philharmonia-program-plan.md provide provenance. The first two local
+probe invocations lacked optional bs4 before any HTTP; corrected fetch used
+stdlib inspection, production packages untouched. Test-only existing bs4==4.15.0
+and soupsieve==2.10 installed into retained artifacts, no project dependency
+change or global installation.
+
+
+After-fix9 Philharmonia controls and2 prior queue contrasts pass (11 total).
+A read-only live full catalogue run extracts39/39 listing occurrences, all with
+nonempty official detail text; no Event/Job writes or model calls. This accepts
+HTML extraction only, not source-to-canonical Smart Update or production
+catch-up. Existing fail-closed empty/heading-only page and exact prose-primary
+controls pass. New fixture is minimal real performer/programme sections;
+existing listing date and output ISO string tests remain unchanged. Prior
+local probes lacked test-only bs4; optional package versions from actual
+container were installed only under retained artifacts. Required CI now covers
+the Philharmonia tests. Delivery and real pipeline acceptance remain pending.
+
+
+### 2026-11-05 03:24 UTC — combined programme fix qualified and normal TG terminal
+
+PR824 merged all four CI green. Exact main3948742db73a13e859553529b7fb79a99ec8adb9
+qualified as intake-philharmonia-program-20261105, immutable
+sha256:539b919052c3d2dedd673e7e4ba49ee5ce845d29096dbc61399dcfd0ebfd1356.
+Full4446 source proof, actuald148 ancestry, initialized isolated actual
+programme-only/empty/prose-primary plus inherited queue/ordinal/native/date/media
+controls, wrong-SHA refusal and HTTP isolation passed. Preflight removed.
+NOT DELIVERED: source parser11643 healthy active, real dramteatr index130/263.
+Old682 candidate superseded, no second build needed. New Philharmonia catch-up
+and canonical provenance reconciliation remain outstanding, no competing intake.
+
+Normal TG11638 terminal partial03:11:18:123 exact message receipts,16 created,
+56 merge operations,72 accepted source anchors verified over65 unique cards,
+zero missing anchors.26 messages have a technical breakdown;29 terminal-error
+metrics also include exclusions. No blind replay. Own5477/5478 merge existing,
+old nine own-digest cards not repaired. Full exact receipts retained.
+
+Media144431/9779 executedok03:18:43, dependent public jobs stillpending.
+Poster35057 rejected/automated_semantic_conflict, no bypass. Two old reviews
+146263/146266 completed nochange but created pending near-seven-second followups
+146486/146487. Repeated loop not yet proved, sustained post-reset prevention
+NOT accepted. Other146264/146265 pending. Earlier future-job stability is not
+later reset acceptance. Need producer/input evidence before more code changes;
+no markdone/reset/requeue or budget bypass. Evidence in qualification receipt,
+tg11638-terminal-summary.json and media-reset-followups-0323.md.
+
+
+### 2026-11-05 04:10 UTC — combined release delivered after parser terminal
+
+Actual production now runs merged main `3948742db73a13e859553529b7fb79a99ec8adb9`,
+image `intake-philharmonia-program-20261105`, immutable
+`sha256:539b919052c3d2dedd673e7e4ba49ee5ce845d29096dbc61399dcfd0ebfd1356`.
+This includes ordinal classification, fresh background selection and official
+programme-only HTML extraction. Prior complete qualification remains valid;
+no redundant build or source replay was performed. Explicit live source, SQLite,
+model settings, identity/date/cinema/media and HTML controls pass. Health ready,
+DB ok, scheduler preserved and Kotopogoda unchanged.
+
+Normal parser 11643 terminated partial at03:57:57:263 occurrence results,
+4 created,4 ticket updates,253 unchanged,2 technical failures plus the separate
+Philharmonia source failure. Exact result roster and source links for the four
+new Events10541–10544 and four updated cards retained. Per-source updated counts
+also include unchanged occurrences; do not present them as unique card updates.
+No blind replay. Philharmonia compensating import and39-row canonical provenance
+reconciliation remain outstanding after this release; extraction39/39 is not
+canonical acceptance.
+
+The original cutover refused before changes because exact media claim101711
+for Event7117 was running. A recorded one-off decision preserves only that
+claim under the existing independent media stale/backoff contract; no source,
+MCP, festival or publication task was interrupted. After restart the exact
+claim became error/stale with existing next retry05:09:47, without manual reset.
+Its eventual terminal/successor outcome remains to verify. No product flag,
+worker pause, queue edit or new retry mechanism was introduced. Normal VK04:15
+and public projections remain independent acceptance criteria.
+
+Media reviews for all four original loop cards have now executed, but several
+near-seven-second successors remain pending. Source rehydrate logs show added=0
+and exact-object merges; a repeated execution loop and its exact branch are not
+yet established. Sustained post-reset prevention is not accepted. Event9779 media
+review done, public Telegraph/calendar pending and TG due07:50. Rejected original
+poster remains rejected; no semantic or feature-budget override.
+
+Retained evidence: philharmonia-delivery-receipt.json,
+philharmonia-media-claim-restart-0409.md, philharmonia-exact-media-cutover.log,
+philharmonia-live-verify-0410.log, parser11643-terminal-0410.json and
+media-followup-producer-0350.md in the existing retained incident directory.
+
+
+### 2026-11-05 04:31 UTC — normal VK progress and media follow-up explanation
+
+Normal automatic VK11644 started04:15:02, run e830bb4dbd0c467e96a3822a3f049ff7,
+batch auto:1793852102. First carrier89182/source26841 produced CREATED10545/10546,
+child states26659/26660, EventSources14003507/14003508 and both carrier links.
+Next accepted source26849/carrier88993 MERGED existing10537, source14003509.
+Four no-event/exclusion rows and another active carrier follow. This is progress,
+not acceptance of the entire scheduled package; no competing intake was started.
+Docs825 merged after all four CI green, no runtime restart.
+
+Media follow-up correlation is now stronger than the earlier rehydrate hypothesis:
+all four pending seven-second jobs were created milliseconds after pair reviews
+31480/31616/31465/31468 resolved duplicate. Their original approved posters have
+geometry error rows from November3, older than the existing20-hour retry horizon.
+The existing pair-resolution branch arms another eligible geometry pass. None of
+these follow-ups has executed again. Do not infer a rapid loop or suppress this
+existing continuation from source-rehydrate added=0 alone. No new producer change
+is justified; actual subsequent bounded execution still needs verification.
+Evidence media-pair-followup-explanation-0432.md and linked raw JSON retained.
+
+The existing Philharmonia recovery request is pending, attempts0. A bounded
+one-source existing-pipeline driver is prepared, not applied; read-only plan
+correctly refuses active VK11644. Only after terminal normal VK and safe heavy
+idle, with90 minutes plus5 before07:05 guide, may it run once. Stable run ID
+INC-2026-11-05-philharmonia-source-catchup. Reconcile unknown outcomes first;
+never run the old programme or37-row recovery plan.
+
+
+### 2026-11-05 04:52 UTC — ordinary VK terminal, bounded Philharmonia catch-up started
+
+Normal automatic VK11644 terminal partial04:46:26:12 terminal posts, zero
+unresolved,2 created10545/10546,4 updated8317/9783/9940/10537. All6 accepted
+source anchors and carrier links verified. Seven no-event carriers, one product
+exclusion and one partial technical carrier88987/source26820; it accepted8317
+but refused three children26663–26665 for ungrounded location. Their exact official
+ticket cards9122/7179/7180 already exist and were confirmed by today's official
+Estrada parser11643. These are additional-source failures, not three missing
+canonical Events. No blind partial replay or identity/location bypass.
+
+After terminal normal imports, idle MCP and independently checked heavy work,
+read-only Philharmonia plan passed. Applied once through existing run_source_parsing
+with only_sources=['philharmonia']; ops11645 started04:49:46, stable run ID
+INC-2026-11-05-philharmonia-source-catchup. Remote version181 completed and returned
+all39 occurrences. LOCAL processing remains active; first unchanged7519 and new
+10547 confirmed in its event-result log. Remote completion is not canonical
+acceptance. Do not rerun the driver; reconcile the existing run if delivery of
+its result is lost. The pending recovery request is a backstop and can remain
+pending until this explicit run settles it. Request status alone does not mean
+no recovery is active. No unrelated source/kernel or new product mechanism.
+
+Retained exact input: philharmonia-kaggle181-results.json (160100 bytes), local
+apply log and philharmonia-catchup-state-0451.json. Normal VK final receipts and
+vk88987-residual-explanation.md retain the distinction between rejected additional
+provenance and absent canonical Events. Remaining public projections and all
+previous scheduled checks still need verification.
+
+
+### 2026-11-05 05:25 UTC — ready projection starvation reproduced
+
+Job100934/9779 is still pending after its own latest media144431 completed
+at03:18:43. Actual worker logs continue choosing unrelated media/VK jobs;132
+media jobs due at05:17:54. Fresh snapshot selection is live, so this is a separate
+priority rule: ALL ordinary media precedes ready public projections, despite
+existing per-event dependencies already expressing the required media ordering.
+
+A real SQLite distinction fails before: ready Telegraph waits for unrelated
+media. Its blocked-own-media contrast passes. Proposed correction swaps only
+ordinary media and ordinary projection lanes in the existing priority map:
+six scalar values, zero net functional lines, two explanatory comment lines.
+VK/fresh Telegram rank-2 and missing-media VK rank-3 remain unchanged; all due,
+dependency, lifecycle, budget and public spacing checks remain intact. No new
+rank, state, retry, aging mechanism, worker or flag.35 focused controls pass;
+six broad Telegram timing failures reproduce on unchanged original worker and
+must not be attributed to this patch. No provider or production queue writes
+from controls, provider audit clean. This change is NOT built or delivered.
+
+Philharmonia11645 remains active and progressing; normal3D scheduler11646
+also started at05:15. It is independent of the source heavy gate and does not
+justify interrupting either job. Qualification may proceed in isolation, but
+Events cutover must await their safe terminal state. Prepared ready-projections
+scripts expect actual394/539b and the Philharmonia-program tag; read before use.
+No build, preflight or new image yet. Exact evidence in outbox-ready-projection-plan.md,
+outbox-ready-before.log, outbox-ready-focused.log and original-controls.log.
+
+
+### 2026-11-05 05:38 UTC — ready-projection candidate qualified, not delivered
+
+PR826 merged all required CI and contract tests green. Exact main
+`ae5d459ceeab30e86703ac48c63287a7fbdc9b8e` qualified as
+`intake-ready-projections-20261105`, immutable
+`sha256:f023a4e0f27fce2bb52282893fe982e3217bd56412950bb0cfbb6516ca5a9fb9`.
+Full4447 source/actual394 ancestry and unchanged dependency inputs passed.
+Initialized isolated inherited controls and actual ready-projection/blocked-own-media
+SQLite contrasts passed; wrong SHA refused and HTTP isolation verified. Owned
+preflight removed. First probe had an operational NameError from missing main
+import; corrected harness reran completely on fresh isolated databases. Image
+source was unchanged, so no rebuild. This is NOT DELIVERED while11645 processes
+healthy local source data. Do not rebuild or interrupt the import for cutover.
+
+Correction to earlier test characterization: five baseline failures are quiet-time
+spacing expectations, the sixth is absent local Telethon, all reproduced using
+the unchanged original worker.35 focused and39 broad passing cases are valid;
+the six failures are not successful checks. No local package/prod config change.
+
+Exact source181 reconciliation currently finds one active canonical card with
+an exact source URL/date/time anchor for every39 official catalogue occurrences,
+zero ambiguous anchors. Local source pipeline has not reached terminal, so this
+coverage check is not final run acceptance. The exact formerly fatal Bakh/Requiem
+source is now CREATED10565 with EventSource14003531, December6 18:00. Its venue
+name/address agree with the current official homepage; no speculative venue
+profile correction was made. Evidence philharmonia-partial-reconcile-0538.json,
+philharmonia-crash-source-receipt-0536.json and official https://filarmonia39.ru/.
+
+A new substantive audit handoff1793856400.415239 was sent in the existing
+coordination thread with the Markdown report and PR826. No recipient response
+after two bounded reads; status sent_unconfirmed, not accepted. Test limitation
+correction followed without a new audit request. No new chat or auditor schedule.
+Retained ready-projections-qualification-receipt.json records all evidence and
+staged exact host scripts. Actual394 remains healthy; no production switch.
+
+
+### 2026-11-05 05:49 UTC — PR826 delivered; Philharmonia recovery accepted
+
+PR826 is delivered from merged main ae5d459ceeab30e86703ac48c63287a7fbdc9b8e, immutable image sha256:f023a4e0f27fce2bb52282893fe982e3217bd56412950bb0cfbb6516ca5a9fb9. Original Events-only cutover passed idle guards without exceptions; runtime, SQLite, settings and inherited controls pass, ready=true, Kotopogoda unchanged. Full 4447-file qualification and initialized isolated ready/blocked SQLite controls passed. No new state, worker, retry, budget bypass or semantic change.
+
+The actual normal worker completed Event9779 ICS100933 at05:42:19, Telegraph100934 at05:43:00 and calendar post100935 at05:43:07, after its own media had been done since03:18:43. Public Telegraph read confirms the current title «Песни о любви», November27 18:00, Зеленоградск, Железнодорожная1 and updated description. The existing page URL retains its old slug; that does not mean its body is stale. TG100937 remains legitimately due07:50 UTC. Rejected poster35057 remains rejected, with no override. Calendar public read is tracked separately.
+
+Philharmonia existing-pipeline catch-up11645 completed SUCCESS05:36:49:39 rows,19 CREATED10547–10565,20 unchanged, zero failures. Exact official URL/date/time reconciliation proves39 unique active source anchors over39 unique Events, no ambiguous or missing occurrence. The previously fatal programme-only page now anchors Event10565. Do not run the catch-up again. The result's empty added_event_ids arrays are a reporting limitation: the actual event-result log and exact anchors establish the19 creations.
+
+Operator-script correction: catch-up called the existing settlement helper while its request was still pending; the helper only updates running requests, so it silently left this single request pending. After successful ops and39-source reconciliation, a one-time explicit transaction settled only that exact unchanged pending Philharmonia request to done at05:47:59. Request attempt count remains0 because no scheduled claim occurred; no Event or Job row changed. Read-only plan, guarded script and before/after receipt retained. This is correction of the operator driver, not a new product recovery path or another import.
+
+Evidence retained under the existing incident artifact directory: ready-projections-delivery-receipt.json, ready-projections-live-verify.log, ready-projections-cutover.log, philharmonia-final-reconcile.json, philharmonia-terminal-summary.json, philharmonia-settle-exact-plan.json, philharmonia-settle-exact-applied.json, media-ready-postdeploy-0547.json and9779-telegraph-public-0550.html. Old daily duplicate pairs and nine own-digest cards remain untouched. All five incidents stay open for remaining normal-slot, media, duplicate and promo-pair acceptance.
