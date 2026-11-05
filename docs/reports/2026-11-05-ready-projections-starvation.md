@@ -21,8 +21,9 @@ Unchanged production chooses the unrelated media and fails the distinction;
 the corrected version chooses the ready projection. A second case still blocks
 a projection on its own pending media.35 focused worker, dependency, captcha,
 lifecycle and coalescing controls pass, including existing VK ordering.
-Six broader Telegram timing failures reproduce with the unchanged original
-worker during the same quiet-time window; they are not successful checks.
+Six broader Telegram failures reproduce with the unchanged original worker:
+five quiet-time/spacing expectations and one absent local Telethon package.
+They are not successful checks.
 Provider-path audit passes. No external provider call or production queue
 mutation is used by these controls.
 
@@ -38,3 +39,8 @@ Retained evidence is under the existing intake recovery directory:
 `outbox-ready-focused.log`, `outbox-ready-original-controls.log` and
 `media-exact-0516.json`. Existing canonical incident:
 [INC-2026-11-02](incidents/INC-2026-11-02-intake-quota-vk-media.md).
+
+
+## Live delivery and first acceptance, November5 05:49 UTC
+
+PR826 is delivered on RunCoveer as ae5d459ceeab30e86703ac48c63287a7fbdc9b8e. Actual ordinary worker completed the previously starved Event9779 Telegraph and calendar projections at05:43 UTC, without manual drains or requeue. Public Telegraph body now has the current title and November27 date. Its scheduled rich Telegram card remains due07:50 UTC, so that publication is still a separate acceptance check. Readiness, SQLite, settings and unrelated Kotopogoda service passed live checks. No provider or media budgets were bypassed. See the canonical incident timeline for exact receipts and the separate successful39-row Philharmonia recovery.
