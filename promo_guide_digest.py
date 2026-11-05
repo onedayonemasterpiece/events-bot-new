@@ -91,7 +91,8 @@ async def run_digest_repost(db, bot, *, campaign, activity, target, now_utc):
             (target_key, issue_id),
         )
         previous = await cur.fetchone()
-    if previous:
+    # Daily cadence permits each edition; explicit daily caps still apply.
+    if previous and every_days > 1:
         last_day = datetime.fromisoformat(json.loads(previous[0])["published_at"]).astimezone(tz).date()
         if (today - last_day).days < every_days:
             return result("skipped", reason="dedup_window")

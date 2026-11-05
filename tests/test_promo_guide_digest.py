@@ -11,9 +11,10 @@ from guide_excursions.max_delivery import get_delivery, request_key
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("afisha_cap", [1, None])
 @pytest.mark.parametrize("lost_reply", [False, True])
 @pytest.mark.parametrize("late_start", [False, True])
-async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monkeypatch, lost_reply, late_start):
+async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monkeypatch, lost_reply, late_start, afisha_cap):
     import promo
     import guide_excursions.visual_digest as visual
     db = Database(str(tmp_path / "db.sqlite"))
@@ -60,18 +61,18 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
         session.add(c)
         await session.flush()
         session.add(PromoTarget(campaign_id=c.id, target_type="guide_digest", query_text="visual_schedule"))
-        activities = [PromoActivity(campaign_id=c.id, surface="vk_repost", daily_cap=1,
+        activities = [PromoActivity(campaign_id=c.id, surface="vk_repost", daily_cap=afisha_cap if dest == 200 else 1,
                      config_json={"source_group": 100, "target_group": dest, "every_days": days})
                      for dest, days in [(200, 1), (300, 3)]]
         session.add_all(activities)
         await session.commit()
         cid = c.id
         aids = [a.id for a in activities]
-    async def edition(issue, at):
+    async def edition(issue, at, family="visual_schedule"):
         async with db.raw_conn() as conn:
             await conn.execute("CREATE TABLE IF NOT EXISTS guide_digest_issue (id INTEGER PRIMARY KEY, family TEXT, status TEXT, published_at TEXT, published_targets_json TEXT)")
-            await conn.execute("INSERT INTO guide_digest_issue(id,family,status,published_at,published_targets_json) VALUES (?, 'visual_schedule', 'published', ?, ?)",
-                (issue, at.isoformat(), json.dumps({"vk:source": {"group_id": 100, "post_urls": [f"https://vk.com/wall-100_{issue}"]}})))
+            await conn.execute("INSERT INTO guide_digest_issue(id,family,status,published_at,published_targets_json) VALUES (?, ?, 'published', ?, ?)",
+                (issue, family, at.isoformat(), json.dumps({"vk:source": {"group_id": 100, "post_urls": [f"https://vk.com/wall-100_{issue}"]}})))
             await conn.commit()
     try:
         await edition(1, now)
@@ -118,10 +119,17 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
         assert len(calls) == 5
         await run(now + timedelta(hours=4))
         assert len(calls) == 5
-        await edition(33, now)
+        if afisha_cap is None:
+            async with db.get_session() as session:
+                session.add(PromoTarget(campaign_id=cid, target_type="guide_digest", query_text="new_occurrences"))
+                await session.commit()
+        await edition(33, now, "new_occurrences" if afisha_cap is None else "visual_schedule")
         capped = await run(now + timedelta(hours=5))
-        assert all(r.reason in {"dedup_window", "daily_cap_reached"} for r in capped)
-        assert len(calls) == 5
+        if afisha_cap is None:
+            assert len(calls) == 6 and calls[-1]["target_group_id"] == 200
+        else:
+            assert all(r.reason in {"dedup_window", "daily_cap_reached"} for r in capped)
+            assert len(calls) == 5
         async with db.get_session() as session:
             campaign = await session.get(PromoCampaign, cid)
             campaign.status = "paused"
@@ -129,6 +137,6 @@ async def test_digest_campaign_schedule_cadence_pause_and_restart(tmp_path, monk
         now += timedelta(days=3)
         await edition(34, now)
         assert await run(now + timedelta(hours=3)) == []
-        assert len(calls) == 5
+        assert len(calls) == (6 if afisha_cap is None else 5)
     finally:
         await db.close()
