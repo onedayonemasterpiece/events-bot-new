@@ -19800,14 +19800,16 @@ async def _run_due_jobs_once_locked(
         jobs = [
             _normalize_job(job) for job in (await session.execute(stmt)).scalars().all()
         ]
+    # Ready public work waits for its own dependencies, not unrelated media.
+    # Missing-media VK retains its existing higher-priority media lane below.
     priority = {
-        JobTask.event_media_review: -1,
+        JobTask.event_media_review: 0,
         JobTask.vk_sync: -2,
-        JobTask.telegraph_build: 0,
-        JobTask.tg_event_publish: 0,
-        JobTask.tg_premium_emoji_edit: 0,
-        JobTask.ics_publish: 0,
-        JobTask.tg_ics_post: 0,
+        JobTask.telegraph_build: -1,
+        JobTask.tg_event_publish: -1,
+        JobTask.tg_premium_emoji_edit: -1,
+        JobTask.ics_publish: -1,
+        JobTask.tg_ics_post: -1,
         JobTask.month_pages: 1,
         JobTask.week_pages: 1,
         JobTask.weekend_pages: 1,

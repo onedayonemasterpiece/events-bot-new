@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Let ready public projections run before unrelated media reviews, preserving each event's dependency, missing-media VK priority and publication spacing.
 - Preserve Philharmonia catalogue collection when an official detail page provides programme and performer paragraphs instead of an optional prose-description block.
 - Refresh the background outbox selection after each completed job, so newly due media and publication work does not wait behind an older whole-batch snapshot.
 - Treat parser catalogue ordinal hashes as fallback keys, so a reordered catalogue recalls the existing event while retaining native occurrence and ticket guards.
