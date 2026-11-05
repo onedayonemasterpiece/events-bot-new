@@ -48,3 +48,32 @@ def test_cherryflash_notebook_uses_common_story_publish_helper():
     assert "story_publish_requested = bool((selection_manifest or {}).get('story_publish_enabled'))" in source
     assert "CherryFlash story publish requested but shared story helper is unavailable in Kaggle bundle" in source
     assert "CherryFlash story publish requested but story_publish.json was not mounted into Kaggle input" in source
+
+
+def test_bootstrap_installs_and_imports_pillow_in_blender_interpreter(monkeypatch, tmp_path):
+    import subprocess
+
+    bundle = tmp_path / "blender"
+    blender = bundle / "blender"
+    python = bundle / "4.5/python/bin/python3.11"
+    python.parent.mkdir(parents=True)
+    blender.touch()
+    python.touch()
+    source = _cell_source(0).replace("/opt/blender-4.5.4-linux-x64", str(bundle))
+    source = source.replace("/etc/apt/sources.list.d", str(tmp_path / "no-apt-sources"))
+    installed = set()
+    checked = []
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == str(python) and cmd[1:4] == ["-m", "pip", "install"]:
+            installed.update(cmd[4:])
+        if cmd[0] == str(blender) and "--python-expr" in cmd:
+            if "pillow" not in installed:
+                raise subprocess.CalledProcessError(1, cmd, stderr="No module named PIL")
+            checked.append(True)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    exec(compile(source, str(NOTEBOOK_PATH), "exec"), {})
+    assert "pillow" in installed
+    assert checked == [True]
