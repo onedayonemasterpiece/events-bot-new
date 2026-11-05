@@ -1,5 +1,7 @@
 # Инциденты
 
+- `INC-2026-11-05-cherryflash-blender-pillow.md`: CherryFlash bundled Blender dependency installation and actual import smoke.
+
 Канонический индекс production incidents и post-incident разборов. Эти записи должны использоваться как обязательный regression-check перед любыми новыми изменениями в затронутых prod-поверхностях.
 
 ## Автоматический запуск incident workflow

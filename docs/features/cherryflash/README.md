@@ -22,6 +22,8 @@ The approved 720×1280 contract preserves the agreed visual hierarchy: centered 
 
 The icon layer uses the approved SVG Repo-derived assets packaged in `video_announce/assets/cherryflash_icons/` (`walk`, `route`, `water`, `building`) via pre-rendered masks; hand-drawn substitute glyphs are fallback-only. The motion contract is non-static from encoded frame 1, keeps a tiny upward drift through P2, and keeps background bubbles moving during P3 with depth-scaled speeds. CTA text must remain screenshotable: phone numbers are shown as phone numbers, Telegram booking shows `@username`, and VK-only booking falls back to a compact `vk.com/<slug>`/`VK` label instead of a human name that cannot be used for booking.
 
+The notebook installs Pillow into Blender's bundled Python as well as notebook Python, then checks the actual Blender import with a nonzero Python-error exit code. Notebook packages alone do not satisfy Blender dependencies; see `INC-2026-11-05-cherryflash-blender-pillow`.
+
 ## Canonical routes
 
 - Current `/v` feature: `docs/features/crumple-video/README.md`
