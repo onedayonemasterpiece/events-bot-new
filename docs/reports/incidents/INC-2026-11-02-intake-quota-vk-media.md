@@ -1479,3 +1479,88 @@ Retained evidence: philharmonia-delivery-receipt.json,
 philharmonia-media-claim-restart-0409.md, philharmonia-exact-media-cutover.log,
 philharmonia-live-verify-0410.log, parser11643-terminal-0410.json and
 media-followup-producer-0350.md in the existing retained incident directory.
+
+
+### 2026-11-05 04:31 UTC — normal VK progress and media follow-up explanation
+
+Normal automatic VK11644 started04:15:02, run e830bb4dbd0c467e96a3822a3f049ff7,
+batch auto:1793852102. First carrier89182/source26841 produced CREATED10545/10546,
+child states26659/26660, EventSources14003507/14003508 and both carrier links.
+Next accepted source26849/carrier88993 MERGED existing10537, source14003509.
+Four no-event/exclusion rows and another active carrier follow. This is progress,
+not acceptance of the entire scheduled package; no competing intake was started.
+Docs825 merged after all four CI green, no runtime restart.
+
+Media follow-up correlation is now stronger than the earlier rehydrate hypothesis:
+all four pending seven-second jobs were created milliseconds after pair reviews
+31480/31616/31465/31468 resolved duplicate. Their original approved posters have
+geometry error rows from November3, older than the existing20-hour retry horizon.
+The existing pair-resolution branch arms another eligible geometry pass. None of
+these follow-ups has executed again. Do not infer a rapid loop or suppress this
+existing continuation from source-rehydrate added=0 alone. No new producer change
+is justified; actual subsequent bounded execution still needs verification.
+Evidence media-pair-followup-explanation-0432.md and linked raw JSON retained.
+
+The existing Philharmonia recovery request is pending, attempts0. A bounded
+one-source existing-pipeline driver is prepared, not applied; read-only plan
+correctly refuses active VK11644. Only after terminal normal VK and safe heavy
+idle, with90 minutes plus5 before07:05 guide, may it run once. Stable run ID
+INC-2026-11-05-philharmonia-source-catchup. Reconcile unknown outcomes first;
+never run the old programme or37-row recovery plan.
+
+
+### 2026-11-05 04:52 UTC — ordinary VK terminal, bounded Philharmonia catch-up started
+
+Normal automatic VK11644 terminal partial04:46:26:12 terminal posts, zero
+unresolved,2 created10545/10546,4 updated8317/9783/9940/10537. All6 accepted
+source anchors and carrier links verified. Seven no-event carriers, one product
+exclusion and one partial technical carrier88987/source26820; it accepted8317
+but refused three children26663–26665 for ungrounded location. Their exact official
+ticket cards9122/7179/7180 already exist and were confirmed by today's official
+Estrada parser11643. These are additional-source failures, not three missing
+canonical Events. No blind partial replay or identity/location bypass.
+
+After terminal normal imports, idle MCP and independently checked heavy work,
+read-only Philharmonia plan passed. Applied once through existing run_source_parsing
+with only_sources=['philharmonia']; ops11645 started04:49:46, stable run ID
+INC-2026-11-05-philharmonia-source-catchup. Remote version181 completed and returned
+all39 occurrences. LOCAL processing remains active; first unchanged7519 and new
+10547 confirmed in its event-result log. Remote completion is not canonical
+acceptance. Do not rerun the driver; reconcile the existing run if delivery of
+its result is lost. The pending recovery request is a backstop and can remain
+pending until this explicit run settles it. Request status alone does not mean
+no recovery is active. No unrelated source/kernel or new product mechanism.
+
+Retained exact input: philharmonia-kaggle181-results.json (160100 bytes), local
+apply log and philharmonia-catchup-state-0451.json. Normal VK final receipts and
+vk88987-residual-explanation.md retain the distinction between rejected additional
+provenance and absent canonical Events. Remaining public projections and all
+previous scheduled checks still need verification.
+
+
+### 2026-11-05 05:25 UTC — ready projection starvation reproduced
+
+Job100934/9779 is still pending after its own latest media144431 completed
+at03:18:43. Actual worker logs continue choosing unrelated media/VK jobs;132
+media jobs due at05:17:54. Fresh snapshot selection is live, so this is a separate
+priority rule: ALL ordinary media precedes ready public projections, despite
+existing per-event dependencies already expressing the required media ordering.
+
+A real SQLite distinction fails before: ready Telegraph waits for unrelated
+media. Its blocked-own-media contrast passes. Proposed correction swaps only
+ordinary media and ordinary projection lanes in the existing priority map:
+six scalar values, zero net functional lines, two explanatory comment lines.
+VK/fresh Telegram rank-2 and missing-media VK rank-3 remain unchanged; all due,
+dependency, lifecycle, budget and public spacing checks remain intact. No new
+rank, state, retry, aging mechanism, worker or flag.35 focused controls pass;
+six broad Telegram timing failures reproduce on unchanged original worker and
+must not be attributed to this patch. No provider or production queue writes
+from controls, provider audit clean. This change is NOT built or delivered.
+
+Philharmonia11645 remains active and progressing; normal3D scheduler11646
+also started at05:15. It is independent of the source heavy gate and does not
+justify interrupting either job. Qualification may proceed in isolation, but
+Events cutover must await their safe terminal state. Prepared ready-projections
+scripts expect actual394/539b and the Philharmonia-program tag; read before use.
+No build, preflight or new image yet. Exact evidence in outbox-ready-projection-plan.md,
+outbox-ready-before.log, outbox-ready-focused.log and original-controls.log.
