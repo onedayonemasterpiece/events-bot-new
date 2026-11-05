@@ -532,3 +532,5 @@
     explicit not-run integrity status is not an integrity PASS.
 
 - `INC-2026-10-23-vk-legacy-backlog-recovery.md`: working live VK publishing; three source-verified legacy future events recovered into native October 24 queue; residual containment/media backlog remains open.
+
+- `INC-2026-11-05-vk-near-event-starvation.md`: a dated near-term invitation must reach the normal VK parser despite newer arrivals; retain history interleaving and semantic qualification.

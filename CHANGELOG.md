@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Prioritize the nearest current/future event hint in the existing fresh VK import lane, so an approaching event cannot wait behind newer publications; preserve historical interleaving.
 - Release guide-import SQLite write transactions before source scanning and provider enrichment, keeping unrelated outbox and promo writes available during slow model calls.
 - Keep generated parser-slot bindings behind the existing merge identity gate, so a shared catalogue position cannot silently rename an unrelated event.
 - Install Pillow in CherryFlash Blender bundled Python and check the actual import before rendering guide scenes.

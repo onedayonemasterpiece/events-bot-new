@@ -465,7 +465,11 @@ async def pick_next(
                 fresh_since_history = int((state_row[0] if state_row else 0) or 0)
                 pick_history = fresh_since_history >= history_every - 1
                 if not pick_history:
-                    order_clause = "date DESC"
+                    order_clause = (
+                        "CASE WHEN event_ts_hint >= unixepoch('now','+2 hours','start of day','-2 hours') THEN 0 ELSE 1 END, "
+                        "CASE WHEN event_ts_hint >= unixepoch('now','+2 hours','start of day','-2 hours') THEN event_ts_hint END ASC, "
+                        "date DESC"
+                    )
                 await conn.execute(
                     """
                     UPDATE vk_auto_import_state
