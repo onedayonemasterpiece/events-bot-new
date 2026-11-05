@@ -1714,3 +1714,12 @@ Evidence: guide11666-terminal-summary.json, guide11666-receipts-1852.json, guide
 ## November 5 19:12 UTC — preserve independent queue release in promo correction
 
 Actual runtime was independently updated to PR838 c7b945179 before this release; the candidate ancestry check included it, rather than restoring remembered a82. Qualified merged PR840 runtime9ec3247c585ec27de8e243ea4a9aad0bbcb74627 is now live, immutable751fa08c6afe8db518c08da923e7ba2427512dc65692427afca4e38db576432e. Health ready=true, DBok, model/promo/cinema/identity settings and Kotopogoda unchanged. No intake replay, new kernel or semantic guard change. Normal full guide11666 and concurrent writer acceptance remain as documented above. Promo's real evening send still needs ordinary tick/public receipt acceptance; details in the spacing incident. Preserve normal TG21:40 UTC and November6 actual paired spacing.
+
+
+## November 5 21:04 UTC — evening audit received and real promo acceptance
+
+Ester Show replied in the existing coordination thread at1793908134.692769. Full PR842 report read and merged after all four required CI green; review document is now published in main. This acknowledges the earlier #834/#835 handoffs: #834 is correct, #835 has no comments; the reviewer withdrew the Lite-default objection and blind own-source-disable suggestion after the supplied counts. This is verified review delivery, not independent SSH verification by the auditor or authority to alter guards.
+
+Read-only follow-up after at least24 hours of #834 production runtime (November6 after14:03 UTC): count parser merge-gate calls and FINAL_RETRY/FINAL_DISTINCT outcomes over a precisely stated window. Do not infer daily rates from tonight's partial exposure or add an early deterministic title exemption. Prior recurrence/locked-fact proposals remain unimplemented and require their real contrasting controls, especially19099 refusal. Past-media expensive-stage root and drain timing remain observations, not permission for reset/mark-done or a guessed worker change.
+
+Actual ordinary evening promo331 is publicly accepted at wall-231920894_13570,117m21s after source384, one matching copy/zero Anons in latest100. No release or source replay this turn. Runtime9ec healthy; preserve normal TG21:40 and November6 paired spacing. Retained auditor842.diff, auditor842-acceptance.json and promo331-acceptance-receipt.json.
