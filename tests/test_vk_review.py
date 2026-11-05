@@ -966,3 +966,33 @@ def test_vkrev_story_title_strips_vk_links() -> None:
     assert result == expected[:64]
     assert "[" not in result
     assert "vk.com" not in result
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("same_day", [False, True])
+async def test_scheduled_pick_near_event_before_newer_publications(tmp_path, monkeypatch, same_day):
+    monkeypatch.setenv("VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD", "2")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = int(_time.time())
+    day_start = ((now + 7200) // 86400) * 86400 - 7200
+    near_hint = day_start if same_day else now + 3600
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            "INSERT INTO vk_inbox(group_id,post_id,date,text,has_date,event_ts_hint,status) "
+            "VALUES(1,?,?, 'source',1,?,'pending')",
+            [(1, now - 172800, near_hint),
+             (2, now - 60, now + 86400),
+             (3, now - 30, day_start - 3600),
+             (4, now, None)],
+        )
+        await conn.commit()
+    first = await vk_review.pick_next(
+        db, 10, "scheduled", prefer_oldest=True, resume_locked=False
+    )
+    assert first and first.post_id == 1
+    await vk_review.mark_rejected(db, first.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE)
+    second = await vk_review.pick_next(
+        db, 10, "scheduled", prefer_oldest=True, resume_locked=False
+    )
+    assert second and second.post_id == 2
+    await db.close()

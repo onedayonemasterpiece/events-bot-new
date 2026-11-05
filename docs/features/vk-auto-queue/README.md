@@ -556,3 +556,13 @@ instead of spending both sends on the same unavailable primary. No prompt, topic
 schema, global row deadline or terminal
 retry policy changes. Large programmes can still reach the row deadline, so
 compare the candidate ledger and canonical sources with carrier-level receipts.
+
+### Near-event ordering under backlog
+
+The existing fresh lane first takes carriers whose `event_ts_hint` is today or later in Kaliningrad,
+ordered by that hint ascending (date-only hints remain urgent all day), then falls back to newest publication first.
+The history lane and its persisted cursor remain unchanged. This hint only
+orders work: every carrier still passes the same evidence, semantic and Smart
+Update qualification. No missing hint or past hint excludes a source. This
+prevents a dated November 6 invitation published on November 3 from waiting
+behind a continuing stream of newer posts.
