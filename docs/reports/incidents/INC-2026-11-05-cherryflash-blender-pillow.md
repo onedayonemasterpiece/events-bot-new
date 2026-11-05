@@ -64,3 +64,12 @@ Baseline: one distinguishing failure, three controls pass. Fixed: 25 notebook, g
 
 - [ ] Merge green CI, qualify and deliver exact main at a safe import boundary.
 - [ ] Reconcile session 1565; verify subsequent existing-pipeline render and publication without a duplicate kernel.
+
+
+## November 5 08:51 UTC — qualified release delivered, actual render pending
+
+PR831 merged after all four required CI41995242091 green. Exact main aa489fde8b47951738b78bf7a00494bb3e2cb1cc is now delivered, immutable sha256:e887c63c249c2bf67e1a270c2365967a616cb43052d3df33f0297f68515429dd, image intake-blender-pillow-20261105. Full4449-file source proof, initialized isolated actual bootstrap (separate interpreter inventories), inherited controls, wrong-SHA refusal and HTTP isolation passed. Early HTTP polls during bootstrap returned reset; final isolated HTTP succeeded with ready=false and DB skipped, as required. Owned preflight removed.
+
+Original cutover guards passed with no active ops, MCP intake or background claims; no exception or manual claim reset. Untracked work inspection showed only the normal launcher. Explicit live source/settings/SQLite/identity/date/ordinal/queue checks passed, ready=true, scheduler normal, Kotopogoda unchanged. No healthy source import interrupted. Retained blender-pillow-delivery-receipt.json and live/cutover/preflight logs.
+
+Existing session1565 also terminal FAILED before release; its exact downloaded log reproduces the same missing PIL and 0/177 guide frames, not another hypothesis. No manual kernel launched. Normal enabled popular-review watchdog next tick09:00:51 UTC can recover today's absent successful slot using the existing pipeline and new notebook. Actual new kernel output, complete render and publication remain unaccepted; incident stays open. Do not duplicate an active retry or treat a RUNNING state as delivery.

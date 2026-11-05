@@ -252,3 +252,8 @@ Retained evidence: promo-guide-state-1134.jsonl, promo328-live-repost-1136.json
 and promo328-acceptance-receipt.json in the existing intake recovery directory.
 The independent 11:20 ordinary guide monitor ops 11627 is still scanning remote
 source ruin_keepers; its final import result is not accepted from heartbeat alone.
+
+
+## November 5 08:49 UTC — normal source accepted, delayed repost pending
+
+Normal visual issue330 ran through scheduled ops11652 after waiting for VK11651. Public source https://vk.com/wall-238875824_382 is confirmed with provider timestamp08:43:59 UTC, postponed ID381. Campaign14 ordinary tick froze Afisha activity48 due10:50:59 UTC,127 minutes after the source; expected actual send is the first subsequent ordinary tick. No manual callback or canary. Anons activity49 has a prepared delivery but remains subject to existing three-day cadence until November6: prepared is not sent. Both payloads reference actual live source382. Real Afisha delivery and November6 paired spacing still need ledger and public copy_history acceptance. Retained promo330-ledger-0849.json and guide330-public-0848.json.
