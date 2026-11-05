@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Keep generated parser-slot bindings behind the existing merge identity gate, so a shared catalogue position cannot silently rename an unrelated event.
 - Install Pillow in CherryFlash Blender bundled Python and check the actual import before rendering guide scenes.
 - Let the existing semantic guide dedup judge evaluate same-post title paraphrases instead of treating low title-token overlap as proof of distinct tours; default that judge to Gemini 3.5 Flash Lite within unchanged budgets.
 - Let ready public projections run before unrelated media reviews, preserving each event's dependency, missing-media VK priority and publication spacing.
