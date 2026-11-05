@@ -61,7 +61,7 @@
 
 - строит deterministic candidate pairs по same-date buckets;
 - сначала применяет heuristic rules;
-- потом best-effort вызывает Gemma pair judge;
+- потом best-effort вызывает pair judge (по умолчанию Gemini 3.5 Flash Lite, существующая настройка `GUIDE_EXCURSIONS_DEDUP_MODEL` сохраняется);
 - если LLM недоступен, остаётся на conservative no-merge fallback;
 - в digest идут только canonical rows, а suppressed member ids помечаются опубликованными вместе с canonical cluster.
 
@@ -224,3 +224,10 @@ LLM нельзя вызывать на все пары. Нужен deterministic
 Prompt contract:
 
 - [Guide Excursions Dedup Prompts](/workspaces/events-bot-new/docs/llm/guide-excursions-dedup.md)
+
+
+### Один исходный пост с разными редакторскими заголовками
+
+Низкое лексическое пересечение названий не доказывает разные экскурсии, если обе карточки связаны с одним исходным постом. В этом случае существующий semantic pair judge принимает решение по полному контексту; совпадение ссылки или времени не форсирует merge. Отдельные туры из одного расписания могут остаться distinct. Для разных постов прежний защитный negative case общего контакта сохраняется.
+
+Регрессия: `INC-2026-11-05-guide-title-drift-duplicate.md`, карточки716/718. Default Gemma не уложилась в существующий pair budget, а Lite3.5 обработала тот же запрос за2.4секунды. Лимиты, timeout, схема, cache и retry поведение не меняются. Canonical title/date fingerprint остаётся прежним; подавление повторной публикации использует уже существующие published-reference clusters.
