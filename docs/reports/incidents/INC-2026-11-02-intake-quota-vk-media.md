@@ -1409,3 +1409,73 @@ existing listing date and output ISO string tests remain unchanged. Prior
 local probes lacked test-only bs4; optional package versions from actual
 container were installed only under retained artifacts. Required CI now covers
 the Philharmonia tests. Delivery and real pipeline acceptance remain pending.
+
+
+### 2026-11-05 03:24 UTC — combined programme fix qualified and normal TG terminal
+
+PR824 merged all four CI green. Exact main3948742db73a13e859553529b7fb79a99ec8adb9
+qualified as intake-philharmonia-program-20261105, immutable
+sha256:539b919052c3d2dedd673e7e4ba49ee5ce845d29096dbc61399dcfd0ebfd1356.
+Full4446 source proof, actuald148 ancestry, initialized isolated actual
+programme-only/empty/prose-primary plus inherited queue/ordinal/native/date/media
+controls, wrong-SHA refusal and HTTP isolation passed. Preflight removed.
+NOT DELIVERED: source parser11643 healthy active, real dramteatr index130/263.
+Old682 candidate superseded, no second build needed. New Philharmonia catch-up
+and canonical provenance reconciliation remain outstanding, no competing intake.
+
+Normal TG11638 terminal partial03:11:18:123 exact message receipts,16 created,
+56 merge operations,72 accepted source anchors verified over65 unique cards,
+zero missing anchors.26 messages have a technical breakdown;29 terminal-error
+metrics also include exclusions. No blind replay. Own5477/5478 merge existing,
+old nine own-digest cards not repaired. Full exact receipts retained.
+
+Media144431/9779 executedok03:18:43, dependent public jobs stillpending.
+Poster35057 rejected/automated_semantic_conflict, no bypass. Two old reviews
+146263/146266 completed nochange but created pending near-seven-second followups
+146486/146487. Repeated loop not yet proved, sustained post-reset prevention
+NOT accepted. Other146264/146265 pending. Earlier future-job stability is not
+later reset acceptance. Need producer/input evidence before more code changes;
+no markdone/reset/requeue or budget bypass. Evidence in qualification receipt,
+tg11638-terminal-summary.json and media-reset-followups-0323.md.
+
+
+### 2026-11-05 04:10 UTC — combined release delivered after parser terminal
+
+Actual production now runs merged main `3948742db73a13e859553529b7fb79a99ec8adb9`,
+image `intake-philharmonia-program-20261105`, immutable
+`sha256:539b919052c3d2dedd673e7e4ba49ee5ce845d29096dbc61399dcfd0ebfd1356`.
+This includes ordinal classification, fresh background selection and official
+programme-only HTML extraction. Prior complete qualification remains valid;
+no redundant build or source replay was performed. Explicit live source, SQLite,
+model settings, identity/date/cinema/media and HTML controls pass. Health ready,
+DB ok, scheduler preserved and Kotopogoda unchanged.
+
+Normal parser 11643 terminated partial at03:57:57:263 occurrence results,
+4 created,4 ticket updates,253 unchanged,2 technical failures plus the separate
+Philharmonia source failure. Exact result roster and source links for the four
+new Events10541–10544 and four updated cards retained. Per-source updated counts
+also include unchanged occurrences; do not present them as unique card updates.
+No blind replay. Philharmonia compensating import and39-row canonical provenance
+reconciliation remain outstanding after this release; extraction39/39 is not
+canonical acceptance.
+
+The original cutover refused before changes because exact media claim101711
+for Event7117 was running. A recorded one-off decision preserves only that
+claim under the existing independent media stale/backoff contract; no source,
+MCP, festival or publication task was interrupted. After restart the exact
+claim became error/stale with existing next retry05:09:47, without manual reset.
+Its eventual terminal/successor outcome remains to verify. No product flag,
+worker pause, queue edit or new retry mechanism was introduced. Normal VK04:15
+and public projections remain independent acceptance criteria.
+
+Media reviews for all four original loop cards have now executed, but several
+near-seven-second successors remain pending. Source rehydrate logs show added=0
+and exact-object merges; a repeated execution loop and its exact branch are not
+yet established. Sustained post-reset prevention is not accepted. Event9779 media
+review done, public Telegraph/calendar pending and TG due07:50. Rejected original
+poster remains rejected; no semantic or feature-budget override.
+
+Retained evidence: philharmonia-delivery-receipt.json,
+philharmonia-media-claim-restart-0409.md, philharmonia-exact-media-cutover.log,
+philharmonia-live-verify-0410.log, parser11643-terminal-0410.json and
+media-followup-producer-0350.md in the existing retained incident directory.

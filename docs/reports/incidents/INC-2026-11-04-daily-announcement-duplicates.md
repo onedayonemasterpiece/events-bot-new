@@ -165,3 +165,16 @@ release directory and require safe idle after remote AND local terminal.
 Receipt parser-ordinal-qualification-receipt.json retained. Old duplicate pairs
 and own-digest9 cards are not cleaned; ordinary parser receipt acceptance and
 existing normal Telegram/media/promo controls remain outstanding.
+
+
+## 2026-11-05 04:10 UTC — ordinal prevention delivered, old pairs untouched
+
+PR821 is now delivered in combined merged main3948742db73a13e859553529b7fb79a99ec8adb9,
+immutable539b919052c3d2dedd673e7e4ba49ee5ce845d29096dbc61399dcfd0ebfd1356.
+Exact source qualification and initialized controls passed before release;
+actual live generated/native identity check, unchanged semantic guard hashes,
+settings and readiness pass. No old pair or nine own-digest card was merged,
+deleted or replayed. Next normal parser source-to-canonical outcomes and bounded
+old-pair provenance reconciliation remain required. Legitimate separate times,
+sectors and native ticket identities remain distinct. Delivery receipt is
+philharmonia-delivery-receipt.json in retained intake recovery evidence.
