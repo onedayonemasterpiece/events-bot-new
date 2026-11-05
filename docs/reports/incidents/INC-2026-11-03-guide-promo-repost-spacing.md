@@ -284,3 +284,19 @@ The exact guarded campaign transaction removed only campaign14/Afisha48 daily ca
 Live source resolution independently maps postponed383 to public https://vk.com/wall-238875824_384, provider time18:59:00 UTC. Existing callback must use that actual identity/time. MorningAfisha13544 remains accepted and unchanged. At19:11:46 no issue331 campaign row existed yet; the next ordinary five-minute tick must freeze its delay, then actual public copy_history, 30–180 minute delay and no duplicates must be checked. A new configured target or green release is not delivery acceptance. Anons remains cadence-skipped untilNovember6, whose actual pair spacing is still outstanding.
 
 Evidence in retained incident directory: promo-editions-delivery-receipt.json, promo-editions-preflight-probe.log, promo-editions-live-checks.log, promo-all-editions-config-apply.json, promo331-ledger-after-config.json and promo331-live-source.json. No accepted operation, programme or Philharmonia/Cherryflash recovery repeated.
+
+
+## November 5 19:37 UTC — normal tick froze evening schedule
+
+Actual ordinary promo_vk ticks submitted and completed on the existing five-minute scheduler after delivery. Issue331/Afisha48 now has a prepared per-edition row for live source wall-238875824_384, source timestamp18:59:00, frozen due20:54:00 UTC (115 minutes). Receipt remains empty: this is scheduling acceptance, not a public repost. Morning issue330 still returns its original13544 URL without resend. Anons49 is dedup_window untilNovember6 even though an issue331 prepared row has due20:03; prepared does not mean authorized/sent.
+
+Read-only evidence promo331-ledger-1934.json and promo331-normal-ticks-1937.log. Runtime9ec remains healthy/DBok/issuesempty; docs841 merged after all four green without restart. Next actual acceptance is after20:54 and the subsequent normal tick: target URL, exact384 copy_history, provider delay and absence of duplicate copies. Preserve normal TG21:40 and November6 actual paired spacing.
+
+
+## November 5 21:04 UTC — second edition publicly accepted through normal campaign
+
+Evening issue331/Afisha48 reached published through the ordinary promo_vk tick, with target https://vk.com/wall-231920894_13570. Authenticated public wall read confirms copy_history points exactly to source wall-238875824_384, matching text and four photos. Provider target timestamp20:56:21 minus source18:59:00 is7041 seconds,117 minutes21 seconds, inside30–180 minutes. Frozen due20:54 remains unchanged. Ledger published_at20:55:52.651894 records the callback start, not the later provider timestamp. Latest100 target posts contain one matching Afisha copy and zero Anons copies.
+
+This accepts the actual second-family/same-day delivery through the corrected existing campaign, beyond unit tests or a prepared row. Morning13544 remains unchanged. Anons retains its three-day cadence untilNovember6; its prepared row is not sent. No manual callback, canary, provider resend or campaign reapplication. Real paired spacing remains a separate November6 criterion, so the incident stays open. Runtime9ec remains healthy and unchanged.
+
+Evidence: promo331-ledger-2102.json, promo331-live-public-2103.json, promo331-normal-send.log and promo331-acceptance-receipt.json under retained intake incident artifacts. The earlier intentional schedule append is preserved here. Normal Telegram21:40 UTC remains required.
