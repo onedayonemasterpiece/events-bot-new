@@ -1330,3 +1330,45 @@ background-refresh and explicit-full-drain controls pass after; current-fixture
 valid baseline has1 failure/1 pass. Provider audit PASS, unapproved0/debt0.
 Existing CI now includes the new two-case queue regression. No model call,
 Event/source replay or production data write in these controls.
+
+
+### 2026-11-05 01:14 UTC — combined queue and ordinal candidate qualified
+
+PR822 merged after all four CI checks and contract-tests passed. Clean exact
+main682e9031d47769cadfe6c42803dab88a8a5c191b built and qualified as
+runcoveer/events:intake-outbox-fresh-20261105, immutable
+sha256:7a7658e1c3b9b871d84212f06f13f33acecaf9268b4b77039e81fa0a9ae479e4.
+Full4,445-file source proof, actual d148 ancestry, initialized isolated actual
+background worker/SQLite refresh control, inherited ordinal/native/date/media
+controls, wrong-SHA refusal and final HTTP isolation passed. Early HTTP reset
+was startup timing; final check passed. Own preflight container removed.
+
+NOT DELIVERED: ordinary TG11638 local import still progresses at01:12 through
+kldevents5178 and ecoklgd3629. Actuald148 remains healthy, no cutover attempt
+or interruption. Host exact cutover/verify scripts staged; old undelivered834d
+ordinal-only candidate is superseded. Target9779 media/projections and exact
+four146263–146266 still pending at01:13; stale URLs not accepted. No queue
+reset, source replay, public replacement or budget bypass. Need safe terminal
+intake release followed by real worker/public receipts. Receipt
+outbox-fresh-qualification-receipt.json and linked logs retained.
+
+
+### 2026-11-05 02:38 UTC — normal parser slot starts alongside TG intake
+
+The normal source parser02:30 slot started ops11643 at02:30:04, run
+`a737808d41d3433193e91ce5ec508d40`. Real Qtickets remote run completed and
+returned two files around02:35; theatres remote run was still RUNNING.
+TG11638 meanwhile completed kldevents5200 as MERGED10313, then5201 rejected
+and meowafisha9088 started. This proves actual source progress and normal
+scheduler submission, not final parser/import acceptance. Both local ops still
+running; no restart, competing CLI intake or duplicate remote kernel.
+
+Combined682e9031d candidate remains fully qualified and undelivered; actuald148
+healthy. At02:36 Event9779 successor144431/projections and exact four
+146263–146266 remain pending, with old receipts explicitly not accepted.
+The safe-release gate preserves active imports. Need both terminal results,
+then Events-only delivery and ordinary worker/publication receipts. Existing
+festival restart contract excludes blind interruption. All pending normal
+VK04:15, visual guide08:30 and November6 promo-pair checks preserved.
+Evidence tg-parser-local-0236.json, parser-slot-0236.log,
+media-reset-exact-0237.json and outbox-await-runtime-0238.txt retained.
