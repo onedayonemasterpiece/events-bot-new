@@ -257,3 +257,10 @@ source ruin_keepers; its final import result is not accepted from heartbeat alon
 ## November 5 08:49 UTC — normal source accepted, delayed repost pending
 
 Normal visual issue330 ran through scheduled ops11652 after waiting for VK11651. Public source https://vk.com/wall-238875824_382 is confirmed with provider timestamp08:43:59 UTC, postponed ID381. Campaign14 ordinary tick froze Afisha activity48 due10:50:59 UTC,127 minutes after the source; expected actual send is the first subsequent ordinary tick. No manual callback or canary. Anons activity49 has a prepared delivery but remains subject to existing three-day cadence until November6: prepared is not sent. Both payloads reference actual live source382. Real Afisha delivery and November6 paired spacing still need ledger and public copy_history acceptance. Retained promo330-ledger-0849.json and guide330-public-0848.json.
+
+
+## November 5 11:10 UTC — today's ordinary Afisha repost accepted
+
+Campaign14/issue330 published through the normal promo tick at ledger time10:55:51.912325 UTC, preserving frozen due10:50:59 and actual source382. Public VKread confirms https://vk.com/wall-231920894_13544 has copy_history pointing exactly to source wall-238875824_382, same text and photo. Actual provider timestamp10:56:03 minus source08:43:59 is7924 seconds,132 minutes4 seconds, inside30–180 minutes. Latest100 target posts contain exactly one matching Afisha copy and zero Anons copies. No manual callback, canary, reset or resend.
+
+Anons remains correctly cadence-skipped untilNovember6 despite its prepared ledger row. Today's single-target delivery is accepted; actual next paired spacing is still a separate November6 check. Existing posts remain unchanged. Evidence promo330-ledger-1053.json (actual capture11:08:25), promo330-live-public-1109.json and promo330-acceptance-receipt.json in retained incident evidence. Filename timestamps are operator labels; JSON capture/provider timestamps are authoritative.

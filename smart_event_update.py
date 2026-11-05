@@ -19145,7 +19145,11 @@ async def _smart_event_update_impl(
     authoritative_candidate_anchor = False
     try:
         anchor_match = await _match_existing_event_by_candidate_key(db, candidate)
-        authoritative_candidate_anchor = anchor_match is not None
+        # A generated parser slot recalls an owner; it does not prove a source-native identity.
+        authoritative_candidate_anchor = anchor_match is not None and (
+            not str(candidate.source_type or "").startswith("parser:")
+            or is_explicit_occurrence_key(candidate.occurrence_key)
+        )
         if anchor_match is None:
             anchor_match = await _match_existing_event_by_event_source_url(db, candidate)
     except Exception:
