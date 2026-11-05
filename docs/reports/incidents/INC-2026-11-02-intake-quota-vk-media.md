@@ -1372,3 +1372,40 @@ festival restart contract excludes blind interruption. All pending normal
 VK04:15, visual guide08:30 and November6 promo-pair checks preserved.
 Evidence tg-parser-local-0236.json, parser-slot-0236.log,
 media-reset-exact-0237.json and outbox-await-runtime-0238.txt retained.
+
+
+### 2026-11-05 03:15 UTC — exact Philharmonia source failure identified
+
+Normal parser11643 Philharmonia remote version180 failed before writing any
+catalogue JSON: ValueError detail description missing for the official
+velikie-shedevry-muzyki-bakh-rekviem-motsarta page. Missing optional status client
+was only a warning, not the failure. Live read-only HTTP200 confirms this
+page has programme and performer paragraphs but no prose-description block.
+The collector incorrectly requires optional prose and aborts the whole
+catalogue. This is HTML extraction/coverage, not model/provider or date logic.
+
+Minimal correction reads those existing paragraphs only when prose is absent;
+empty page or heading/buttons-only content still raises. Prose remains primary,
+no invented text, skipped exception or fake-success partial catalogue. Two net
+functional lines, no worker/state/retry/provider change. Distinguishing current
+fixture before1fail/8pass, exact error matches remote; after validation pending.
+No production Event/queue writes, competing kernel or intake. Existing accepted
+source recovery operations remain untouched. Related July27 source-coverage
+record remains a required regression contract. Retained remote log and exact
+HTML plus philharmonia-program-plan.md provide provenance. The first two local
+probe invocations lacked optional bs4 before any HTTP; corrected fetch used
+stdlib inspection, production packages untouched. Test-only existing bs4==4.15.0
+and soupsieve==2.10 installed into retained artifacts, no project dependency
+change or global installation.
+
+
+After-fix9 Philharmonia controls and2 prior queue contrasts pass (11 total).
+A read-only live full catalogue run extracts39/39 listing occurrences, all with
+nonempty official detail text; no Event/Job writes or model calls. This accepts
+HTML extraction only, not source-to-canonical Smart Update or production
+catch-up. Existing fail-closed empty/heading-only page and exact prose-primary
+controls pass. New fixture is minimal real performer/programme sections;
+existing listing date and output ISO string tests remain unchanged. Prior
+local probes lacked test-only bs4; optional package versions from actual
+container were installed only under retained artifacts. Required CI now covers
+the Philharmonia tests. Delivery and real pipeline acceptance remain pending.

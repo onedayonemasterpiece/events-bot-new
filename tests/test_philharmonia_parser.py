@@ -5,6 +5,8 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from source_parsing.philharmonia import parse_philharmonia_output
 
 
@@ -136,3 +138,25 @@ def test_production_output_keeps_normalized_date_as_iso_text(tmp_path):
     assert len(events) == 1
     assert events[0].parsed_date == "2026-08-02"
     assert isinstance(events[0].parsed_date, str)
+
+
+def test_programme_only_detail_preserves_official_source_text():
+    parser = _load_parser()
+    detail = (FIXTURES / "philharmonia-program-only.html").read_text(encoding="utf-8")
+    event = parser.enrich_event_from_detail_html({"url": "https://filarmonia39.ru/afisha/velikie-shedevry-muzyki-bakh-rekviem-motsarta/"}, detail)
+    assert "Токката и фуга ре минор" in event["description"]
+    assert "Моцарт «Реквием»" in event["description"]
+    assert "Мария Гаврилюк" in event["description"]
+    assert "Купить" not in event["description"]
+
+
+def test_detail_without_prose_or_programme_still_rejected():
+    parser = _load_parser()
+    with pytest.raises(ValueError, match="detail description missing"):
+        parser.enrich_event_from_detail_html({"url": "https://filarmonia39.ru/empty/"}, '<footer>Филармония</footer><section class="production_program"><h1>Программа</h1></section><a class="buy_button" href="/buy/">Купить</a>')
+
+
+def test_prose_description_stays_primary_over_programme():
+    parser = _load_parser()
+    event = parser.enrich_event_from_detail_html({"url": "https://filarmonia39.ru/control/"}, '<section class="production_description"><div class="text_container">Полное описание концерта.</div></section><section class="production_program">Дополнительная программа</section>')
+    assert event["description"] == "Полное описание концерта."
