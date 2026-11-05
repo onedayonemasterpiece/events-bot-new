@@ -141,3 +141,27 @@ managed merge/projection contract. Preserve legitimate multi-session cards.
 Release evidence: not built or deployed. No public or data repair accepted.
 Follow-ups: nine own-digest rows and source prevention, exact old-pair cleanup,
 normal Telegram import acceptance and existing media/promo verification.
+
+
+## 2026-11-04 22:57 UTC — merged-main candidate qualified, delivery pending
+
+PR821 merged after all four required CI green (workflow41926319718). Exact
+main834d5ea935aa53b9270e4d948b5aee0369e3d130 built as
+runcoveer/events:intake-parser-ordinal-20261105, immutable
+sha256:b49a6df0b3b2c7ea8d60950f8a0187fda5cd005c39f8c9eb713ce1238c252124.
+Full4,444-file source proof, actual d148 ancestry and unchanged dependency
+inputs passed. Initialized isolated runtime passed actual legacy ordinal recall
+(10→15 and4→3), different-time/native countercontrols and inherited controls.
+Wrong SHA refused before writes. HTTP ready=false/db=skipped establishes
+isolation; own preflight container removed. Real model-only controls and
+actual19099 replay from the unchanged candidate inputs remain valid.
+
+NOT DELIVERED: normal scheduled TG11638 is still remote-scanning source56
+kldevents;55 of57 sources done,74 messages. Last source transition22:51:03,
+not a terminal acceptance or proof of continued per-post progress by itself.
+Actual runtime remains healthy d148, no cutover attempt, intake interruption
+or source replay. Staged exact cutover/verify scripts are under the candidate
+release directory and require safe idle after remote AND local terminal.
+Receipt parser-ordinal-qualification-receipt.json retained. Old duplicate pairs
+and own-digest9 cards are not cleaned; ordinary parser receipt acceptance and
+existing normal Telegram/media/promo controls remain outstanding.

@@ -1254,3 +1254,79 @@ November 5 00:05 UTC due time. Normal TG 21:40 UTC and the media reset, parser,
 VK, visual guide and November 6 promo pair checks remain outstanding.
 Receipt grounding-diag-release-receipt.json and verification logs are retained
 in the existing incident artifact directory. Four incidents remain open.
+
+
+### 2026-11-04 23:20 UTC — normal TG remote terminal, local import progressing
+
+Normal scheduled TG11638 remote scan finished23:00:49 with57 sources and123
+messages. Local ops is still running; remote completion is not acceptance.
+Source/candidate anchors confirm new10526/10527 and signalkld12400 children
+10528/10529 with EventSource13992397–13992399/13992401. Next message
+locostandup4362 started; this is actual progress, not heartbeat inference.
+One sampled signalkld12399 child is technical distinct_not_grounded; three
+locostandup4361 children are past-event exclusions, not technical failures.
+These are bounded samples, not final totals. Whole-run/own-digest outcomes
+still require terminal receipts. No competing intake or restart.
+
+PR821 prevention image remains fully qualified and undelivered, no rebuild or
+cutover attempt. Actuald148 healthy. Four deferred jobs146263–146266 retain
+original timestamps and Nov5 00:05 due, no seconds-loop recurrence. Keep
+media00:10/parser02:30/VK04:15/guide08:30 and Nov6 pair checks. Evidence:
+tg-normal-progress-2318.json, tg11638-local-2320.json and
+tg11638-early-anchors-2320.json in retained recovery directory.
+
+
+### 2026-11-05 00:15 UTC — media reset observed, targets not yet processed
+
+Budget-reset checkpoint does not accept Event9779 publication: actual media
+successor144431 and dependent100934/100935/100937 remain pending, old done
+143291 and last_result URLs are stale. Exact four146263–146266 retain original
+timestamps and due00:05, no seconds-loop recurrence but no execution receipt.
+Worker is actively completing other media jobs; due queue has303 jobs (not
+303 missing events). Actual500/503 provider failures continue. No queue reset,
+recommit, budget bypass, markdone or public replacement. Repeat exact-target
+checks and read current public outputs after actual terminal.
+
+Normal TG11638 local import continues through kldevents5161/5162/5163 with
+fresh00:11 transitions, no terminal acceptance yet. Qualified PR821 remains
+undelivered to preserve healthy intake. Actuald148 healthy. Retained evidence
+media-reset-check-0015.md and its linked JSON/logs. All later normal parser,
+VK, visual-guide and promo-pair checks preserved.
+
+
+### 2026-11-05 00:55 UTC — stale whole-batch snapshot delays midnight targets
+
+Read-only evidence narrows the queue delay beyond provider failures. At00:45
+festival_pages10382 timed out after900024 ms; the same worker immediately
+picked another old festival_pages10386. Exact media144431 and146263–146266,
+due00:05, still had zero attempts at00:50. _run_due_jobs_once_locked selects
+one due snapshot and drains it entirely; job_outbox_worker cannot reconsider
+newly due jobs until the old batch ends. This is mechanical queue freshness,
+not a semantic model/date problem or proof of a dead worker.
+
+Minimal candidate adds optional private max_jobs to the existing drain and
+sets it to1 only in the background worker. It finishes the existing claim,
+releases the existing lock and reselects by existing priority. Explicit drains
+keep their unlimited default. No new worker, persistent state, retry, timer,
+quota bypass or changed task priority. Six net functional production lines;
+public projection idempotency and all source identity/date rules unchanged.
+
+Real isolated SQLite control enqueues a higher-priority media job during the
+first of two festival handlers. Original code incorrectly runs the second
+festival; explicit-full-drain contrast still passes. Initial fake handler had
+a wrong festival signature and is invalid evidence; corrected baseline has
+one distinguishing failure and one passing full-drain contrast. After-fix
+checks and release qualification remain pending. No provider/production writes
+or import interruption. Actuald148 and qualified-but-undelivered834 candidate
+remain unchanged. Evidence media-reset-exact-0050.json, media-tg-worker-0052.log,
+outbox-selection-valid-before.log, outbox-fresh-selection-plan.md retained.
+
+
+After-fix expanded outbox run:29 passed,3 failed. All three failures reproduce
+with the exact original834d drain functions restored in memory (test_job_expired,
+weekday navigation expectation and running month-page follow-up expectation).
+They are not new passes or corrected by this change. Both distinguishing
+background-refresh and explicit-full-drain controls pass after; current-fixture
+valid baseline has1 failure/1 pass. Provider audit PASS, unapproved0/debt0.
+Existing CI now includes the new two-case queue regression. No model call,
+Event/source replay or production data write in these controls.
