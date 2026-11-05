@@ -21,6 +21,7 @@ jobs:
           tests/test_guide_max_pipeline.py
           tests/test_guide_max_owner_ack.py
           tests/test_guide_visual_digest.py
+          tests/test_guide_import_transactions.py
           tests/test_guide_gemma4_prompt_contract.py
 
   smart-update-identity-state-machine:

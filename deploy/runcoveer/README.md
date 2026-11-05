@@ -13,6 +13,15 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## VK near-event queue release, 2026-11-05
+
+Build exact merged main as `runcoveer/events:vk-near-event-20261105`.
+Rollback: `runcoveer/events:intake-guide-transactions-20261105` (read the actual
+runtime before cutover). Preserve all current configuration and Kotopogoda.
+Qualify the actual pending queue on an isolated DB, including the unchanged
+history lane; after Events-only activation, verify the normal import receipt
+for the November 6 Boyko source instead of creating an Event manually.
+
 ## Guide VK card PNG release, 2026-11-04
 
 Events image: `runcoveer/events:guide-vk-png-20261104`; rollback:

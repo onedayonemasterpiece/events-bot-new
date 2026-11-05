@@ -1,5 +1,7 @@
 # Инциденты
 
+- `INC-2026-11-05-cherryflash-blender-pillow.md`: CherryFlash bundled Blender dependency installation and actual import smoke.
+
 Канонический индекс production incidents и post-incident разборов. Эти записи должны использоваться как обязательный regression-check перед любыми новыми изменениями в затронутых prod-поверхностях.
 
 ## Автоматический запуск incident workflow
@@ -530,3 +532,5 @@
     explicit not-run integrity status is not an integrity PASS.
 
 - `INC-2026-10-23-vk-legacy-backlog-recovery.md`: working live VK publishing; three source-verified legacy future events recovered into native October 24 queue; residual containment/media backlog remains open.
+
+- `INC-2026-11-05-vk-near-event-starvation.md`: a dated near-term invitation must reach the normal VK parser despite newer arrivals; retain history interleaving and semantic qualification.

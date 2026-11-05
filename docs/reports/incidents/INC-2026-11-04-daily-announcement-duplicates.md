@@ -178,3 +178,23 @@ deleted or replayed. Next normal parser source-to-canonical outcomes and bounded
 old-pair provenance reconciliation remain required. Legitimate separate times,
 sectors and native ticket identities remain distinct. Delivery receipt is
 philharmonia-delivery-receipt.json in retained intake recovery evidence.
+
+
+## November 5 11:48 UTC — one-owner negative control finds same-slot authority bypass
+
+The auditor's missing one-anchor/unrelated-title control is now exercised. An isolated full-pipeline database has exactly one piano-concert owner on a broad Tretyakov catalogue URL. A robotics lecture candidate shares the date, explicit time and venue. With ordinal10→15 the enforcing merge gate is called and the recorded real response ends in RETRY_SCHEDULED without owner mutation. With ordinal10→10 the generated key resolves as source_candidate_anchor, the semantic gate is skipped and existing code returns MERGED, replacing the title/source with the unrelated lecture. No production Event or Job was changed. This is an isolated production-code counterexample, not proof of a counted live false merge.
+
+The authority assignment is identical before PR821; the earlier ordinal classification patch did not introduce that assignment. Exact older-runtime replay has not yet established an introduction commit. Do not attribute this counterexample to today's release from source chronology alone.
+
+Minimal prevention keeps generated parser binding lookup as recall but removes its exemption from the already existing enforcing merge identity gate. Native/vendor parser IDs and non-parser durable-child edit authority remain unchanged. Three net functional Python lines plus one comment; no new semantic rule, state, retry, worker, key format, queue or source replay. Before corrected distinguishing controls:2fail/1native pass; after3pass. Controls cover unrelated programme refusal, legitimate programme paraphrase and native edit. Existing title safety may retain a canonical title while accepting new source text; the positive test does not require an unnecessary rename.
+
+Actual model-only negative used the unchanged production function and shared limiter: Gemma HTTP500, configured Lite3.5 reserve HTTP503, then existing GPT-4o fallback. The latter returned unsupported festival/time claims. Existing quote grounding removed unsupported evidence and final guard returned FINAL_RETRY/merge_distinct_not_grounded. This proves protected refusal for that response, not grounded DISTINCT classification. Isolated replay is explicitly a replay of that response, not another live call. First standalone harness stopped at unrelated local region resolution; retained as rejected evidence, then corrected local-only fixture used fresh isolated SQLite. No quota, production model setting or semantic guard changed.
+
+Evidence: one-owner-unrelated-model-control.py/.json/.log, one-owner-unrelated-pipeline-control.py/.json/.log, one-owner-unrelated-pipeline-region-blocked.json/.log, one-owner-valid-before.log, one-owner-after.log and parser-fallback-authority-plan.md under retained incident directory. Candidate is not yet merged, qualified or delivered. Old duplicate pairs and nine own-digest cards remain untouched. Mandatory remaining checks: full existing ordinal/native/date/source-edit regressions, latest-head CI, exact main ancestry and isolated release controls, followed by ordinary runtime source receipts. Decision19099 remains retry; no source replay or forced merge.
+
+
+## November 5 16:00 UTC — prevention delivered and bounded data plan ready
+
+PR821 ordinal classification and PR834 generated parser authority protection are delivered in actual a82c2f6b14892347305814b904bd128edf7c703e; explicit live checks passed. Earlier candidate-not-delivered notes above are historical. No date/native identity guard was removed.
+
+The existing manifest-driven repair operator returned dry-run ready for exact canonical pairs10522→10393 and10511→10442, changed=false and no social actions. Database opened read-only with query_only; temporary driver has no apply branch. This is a plan, not applied repair. Distinct ticket52231/Event10396 remains outside both clusters. Frozen manifest path and receipt are in retained old-duplicate-pairs-bounded-plan.md and old-pairs-dry-run-1602.json. Current public VK13415 describes legitimate Parter sector and is also stored on the other piano cards; VK13437 is shared by the movie pair. Existing operator retains public references and returns a separate cleanup mapping, never deletes social posts. Shared URLs must survive any later exact canonical cleanup. Old pairs and nine own-digest cards remain unchanged.

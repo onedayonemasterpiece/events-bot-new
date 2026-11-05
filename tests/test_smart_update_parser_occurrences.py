@@ -335,3 +335,77 @@ async def test_parser_ordinal_drift_updates_existing_event_and_source_binding(tm
             assert set(source_ids) == {results[0].event_id}
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("native,same_programme", [(False, False), (False, True), (True, True)])
+async def test_one_parser_owner_same_slot_keeps_semantic_gate_for_generated_keys(
+    tmp_path, monkeypatch, native, same_programme,
+):
+    from unittest.mock import AsyncMock
+    from sqlalchemy import func, select
+    from smart_update_identity import IdentityGateMode, stable_candidate_identity
+    from models import JobOutbox
+
+    db = Database(str(tmp_path / "one-owner.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.ENFORCE)
+        monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.ENFORCE)
+        monkeypatch.setattr(su, "_classify_topics", AsyncMock(return_value=None))
+        url = "https://kaliningrad.tretyakovgallery.ru/tickets"
+        occurrence = "source-native:concert-42" if native else _parser_occurrence_key(
+            source_type="tretyakov", source_url=url, date_value="2099-11-20",
+            end_date_value=None, time_value="20:00", producer_ordinal=10,
+        )
+        old = EventCandidate(
+            source_type="parser:tretyakov", source_url=url,
+            title="Русская фортепианная школа", date="2099-11-20", time="20:00",
+            location_name="Филиал Третьяковской галереи", city="Калининград",
+            source_text="Концерт Чайковского и Рахманинова.", occurrence_key=occurrence,
+        )
+        key, _ = stable_candidate_identity(old)
+        async with db.get_session() as session:
+            owner = Event(title=old.title, description=old.source_text,
+                          source_text=old.source_text, date=old.date, time=old.time,
+                          location_name=old.location_name, city=old.city)
+            session.add(owner)
+            await session.flush()
+            owner_id = int(owner.id)
+            session.add(EventSource(event_id=owner_id, source_type=old.source_type,
+                                    source_url=url, canonical_source_url=url,
+                                    source_role="identity_bearing", candidate_key=key,
+                                    occurrence_key=occurrence))
+            await session.commit()
+        gate = AsyncMock(return_value={
+            "action": "allow_merge" if same_programme else "skip_merge_side_effects",
+            "relation": "source_update" if same_programme else "unknown",
+            "confidence": 0.99, "reason_code": "same_programme" if same_programme else "unrelated_programme",
+            "reason": "isolated semantic verdict", "source_grounded_evidence": [],
+            "blocking_conflicts": [] if same_programme else ["different programme"],
+            "allowed_fields": ["title", "description", "source_text"] if same_programme else [],
+        })
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", gate)
+        candidate = EventCandidate(
+            source_type=old.source_type, source_url=url,
+            title="Школа русского фортепиано" if same_programme else "Роботы исследуют Марс",
+            date=old.date, time=old.time, location_name=old.location_name, city=old.city,
+            source_text="Концерт Чайковского и Рахманинова: обновлённая программа." if same_programme else "Лекция о марсоходах и космической робототехнике.",
+            occurrence_key=occurrence,
+        )
+        result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+        assert gate.await_count == (0 if native else 1)
+        if same_programme:
+            assert result.outcome is su.SmartUpdateTerminalOutcome.MERGED
+            assert result.event_id == owner_id
+        else:
+            assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        async with db.get_session() as session:
+            owner = await session.get(Event, owner_id)
+            assert owner.title in ({old.title, candidate.title} if same_programme else {old.title})
+            assert owner.source_text == (candidate.source_text if same_programme else old.source_text)
+            assert (await session.execute(select(func.count(Event.id)))).scalar_one() == 1
+            assert (await session.execute(select(func.count(JobOutbox.id)))).scalar_one() == 0
+    finally:
+        await db.close()

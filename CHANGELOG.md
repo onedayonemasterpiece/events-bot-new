@@ -6,6 +6,11 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Prioritize the nearest current/future event hint in the existing fresh VK import lane, so an approaching event cannot wait behind newer publications; preserve historical interleaving.
+- Release guide-import SQLite write transactions before source scanning and provider enrichment, keeping unrelated outbox and promo writes available during slow model calls.
+- Keep generated parser-slot bindings behind the existing merge identity gate, so a shared catalogue position cannot silently rename an unrelated event.
+- Install Pillow in CherryFlash Blender bundled Python and check the actual import before rendering guide scenes.
+- Let the existing semantic guide dedup judge evaluate same-post title paraphrases instead of treating low title-token overlap as proof of distinct tours; default that judge to Gemini 3.5 Flash Lite within unchanged budgets.
 - Let ready public projections run before unrelated media reviews, preserving each event's dependency, missing-media VK priority and publication spacing.
 - Preserve Philharmonia catalogue collection when an official detail page provides programme and performer paragraphs instead of an optional prose-description block.
 - Refresh the background outbox selection after each completed job, so newly due media and publication work does not wait behind an older whole-batch snapshot.

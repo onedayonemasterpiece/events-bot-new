@@ -252,3 +252,35 @@ Retained evidence: promo-guide-state-1134.jsonl, promo328-live-repost-1136.json
 and promo328-acceptance-receipt.json in the existing intake recovery directory.
 The independent 11:20 ordinary guide monitor ops 11627 is still scanning remote
 source ruin_keepers; its final import result is not accepted from heartbeat alone.
+
+
+## November 5 08:49 UTC — normal source accepted, delayed repost pending
+
+Normal visual issue330 ran through scheduled ops11652 after waiting for VK11651. Public source https://vk.com/wall-238875824_382 is confirmed with provider timestamp08:43:59 UTC, postponed ID381. Campaign14 ordinary tick froze Afisha activity48 due10:50:59 UTC,127 minutes after the source; expected actual send is the first subsequent ordinary tick. No manual callback or canary. Anons activity49 has a prepared delivery but remains subject to existing three-day cadence until November6: prepared is not sent. Both payloads reference actual live source382. Real Afisha delivery and November6 paired spacing still need ledger and public copy_history acceptance. Retained promo330-ledger-0849.json and guide330-public-0848.json.
+
+
+## November 5 11:10 UTC — today's ordinary Afisha repost accepted
+
+Campaign14/issue330 published through the normal promo tick at ledger time10:55:51.912325 UTC, preserving frozen due10:50:59 and actual source382. Public VKread confirms https://vk.com/wall-231920894_13544 has copy_history pointing exactly to source wall-238875824_382, same text and photo. Actual provider timestamp10:56:03 minus source08:43:59 is7924 seconds,132 minutes4 seconds, inside30–180 minutes. Latest100 target posts contain exactly one matching Afisha copy and zero Anons copies. No manual callback, canary, reset or resend.
+
+Anons remains correctly cadence-skipped untilNovember6 despite its prepared ledger row. Today's single-target delivery is accepted; actual next paired spacing is still a separate November6 check. Existing posts remain unchanged. Evidence promo330-ledger-1053.json (actual capture11:08:25), promo330-live-public-1109.json and promo330-acceptance-receipt.json in retained incident evidence. Filename timestamps are operator labels; JSON capture/provider timestamps are authoritative.
+
+
+## November 5 19:02 UTC — second real digest coverage defect
+
+Ordinary full guide11666 produced new_occurrences issue331 with a VK receipt, while campaign14 only selects visual_schedule target21 and caps Afisha once per day. The actual per-edition guide_visual_delivery ledger has no issue331 delivery. A separate cadence condition also denies another same-day issue for every_days1 even without an explicit cap. This contradicts the original after-each-digest requirement; morning repost13544 remains accepted and must not repeat. Public source identity/time for331 still needs the existing live resolver; a rejected social-reader call is not acceptance.
+
+The narrow change applies multi-day cadence only when every_days is greater than one. Existing per-issue idempotency, explicit daily caps, frozen random delay, real-send spacing, three-day Anons cadence and lost-reply recovery remain. Net production change: one condition and one explanatory comment. The existing full scheduler test now contrasts capped and uncapped second editions, including a second family target. Before: four uncapped failures and four passing capped controls. After: all eight pass, including lost replies and overdue spacing. No provider, Event, Job or campaign writes.
+
+Deployment and exact campaign target/cap correction are pending. Reuse existing family targets for visual_schedule, new_occurrences and last_call, and remove only the campaign/Afisha caps that prevent each edition; preserve Anons cap1/every_days3. No new scheduler, states, retries, exposure mechanism or public canary. Retained promo331-scope-read.json, promo-all-editions-plan.md and promo-editions-family.log.
+
+
+## November 5 19:12 UTC — qualified delivery and exact campaign correction
+
+PR840 merged after all four required CI jobs passed on a333398cca4b59a17166aac5748753ab90c1e7a3. Exact merged source9ec3247c585ec27de8e243ea4a9aad0bbcb74627 was qualified and delivered as intake-promo-editions-20261105, immutable sha256:751fa08c6afe8db518c08da923e7ba2427512dc65692427afca4e38db576432e. The actual prior runtime had independently advanced to PR838 c7b945179cfddaf08007c28dd242d72f74fd4c12; ancestry passed and its queue ordering remains included. Full4451 file proof, initialized isolated eight real scheduler contrasts and inherited controls, wrong-SHA refusal and HTTP isolation passed. Owned preflight removed. Safe idle Events-only cutover, explicit live checks, ready=true/DBok and unchanged settings/Kotopogoda verified.
+
+The exact guarded campaign transaction removed only campaign14/Afisha48 daily caps and added existing-family targets22 new_occurrences and23 last_call. Target21 visual_schedule and Anons49 cap1/every_days3 remain. Existing per-edition receipt hash was unchanged through the transaction. No Event/Job writes, manual provider callback, canary or resend. Typed campaign update lacks target/activity changes, so one guarded operator transaction applied the complete configuration. Apply receipt and fresh readback confirm success; do not repeat it.
+
+Live source resolution independently maps postponed383 to public https://vk.com/wall-238875824_384, provider time18:59:00 UTC. Existing callback must use that actual identity/time. MorningAfisha13544 remains accepted and unchanged. At19:11:46 no issue331 campaign row existed yet; the next ordinary five-minute tick must freeze its delay, then actual public copy_history, 30–180 minute delay and no duplicates must be checked. A new configured target or green release is not delivery acceptance. Anons remains cadence-skipped untilNovember6, whose actual pair spacing is still outstanding.
+
+Evidence in retained incident directory: promo-editions-delivery-receipt.json, promo-editions-preflight-probe.log, promo-editions-live-checks.log, promo-all-editions-config-apply.json, promo331-ledger-after-config.json and promo331-live-source.json. No accepted operation, programme or Philharmonia/Cherryflash recovery repeated.

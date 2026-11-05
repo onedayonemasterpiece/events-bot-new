@@ -21,7 +21,7 @@ GUIDE_EXCURSIONS_DEDUP_ENABLED = (
 GUIDE_EXCURSIONS_DEDUP_LLM_ENABLED = (
     (os.getenv("GUIDE_EXCURSIONS_DEDUP_LLM_ENABLED") or "1").strip().lower() in {"1", "true", "yes", "on"}
 )
-GUIDE_EXCURSIONS_DEDUP_MODEL = (os.getenv("GUIDE_EXCURSIONS_DEDUP_MODEL") or "gemma-4-31b").strip() or "gemma-4-31b"
+GUIDE_EXCURSIONS_DEDUP_MODEL = (os.getenv("GUIDE_EXCURSIONS_DEDUP_MODEL") or "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
 GUIDE_EXCURSIONS_DEDUP_MAX_PAIRS = max(
     1,
     min(int((os.getenv("GUIDE_EXCURSIONS_DEDUP_MAX_PAIRS") or "12") or 12), 40),
@@ -363,7 +363,7 @@ def _heuristic_pair_decision(left: Mapping[str, Any], right: Mapping[str, Any], 
             "reason_short": "Same source, same date and strong route overlap.",
             "decided_by": "heuristic",
         }
-    if same_source and same_date and same_booking and same_time and token_score <= 0.05:
+    if same_source and same_date and not same_channel_post and same_booking and same_time and token_score <= 0.05:
         return {
             "decision": "distinct",
             "relation": "same_contact_but_different_product",
