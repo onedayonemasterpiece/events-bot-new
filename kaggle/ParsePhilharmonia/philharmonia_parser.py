@@ -117,6 +117,8 @@ def enrich_event_from_detail_html(event: dict[str, Any], html: str) -> dict[str,
         soup.select_one(".production_description .text_container")
     )
     if not description:
+        description = " ".join(_clean_text(node) for node in soup.select(".production_performers p, .production_program p"))
+    if not description:
         raise ValueError(f"detail description missing for {event.get('url')}")
     enriched["description"] = description
 
