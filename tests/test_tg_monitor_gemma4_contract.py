@@ -1178,7 +1178,16 @@ def test_tg_monitor_event_schema_carries_gemma4_descriptions() -> None:
     assert "Single lowercase Russian noun" in source
     assert "parenthetical origin/collection note" in source
     assert "biographical/affiliation mention of a speaker" in source
-    assert "Human-readable event name. Never include inline comments" in source
+    schema_node = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "EVENT_ARRAY_SCHEMA" for target in node.targets)
+    )
+    namespace = {"_string_schema": lambda description=None: {"type": "string", "description": description}}
+    exec(compile(ast.Module(body=[schema_node], type_ignores=[]), "<event-schema>", "exec"), namespace)
+    title_description = namespace["EVENT_ARRAY_SCHEMA"]["items"]["properties"]["title"]["description"]
+    assert "Human-readable event name." in title_description
+    assert "Never include inline comments" in title_description
     assert "Message date is context for resolving explicit relative anchors, not a default event date." in source
     assert "Never include uncertainty markers like \"or something similar\"" in source
     assert "return one attendee-facing lecture title, not two rows" in source
