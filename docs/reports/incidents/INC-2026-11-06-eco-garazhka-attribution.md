@@ -1,6 +1,6 @@
 # INC-2026-11-06-eco-garazhka-attribution
 
-Status: mitigated, prevention delivery pending; owner retains current story until expiry
+Status: monitoring; prevention delivered, owner retains current story until expiry
 Severity: sev2
 Service: Telegram intake / Smart Update / Cherryflash ECO
 Opened: 2026-11-06
@@ -39,7 +39,7 @@ Treat as regression guard when changing Telegram source metadata, forwarded-post
 
 Mandatory: exact forwarded source preserves Garazhka identity; opposite explicitly named EcoKoenig festival remains valid; no organizer/participant inferred from publisher alone; normal multi-event/date/native/19099 controls remain; source-level outputs cross real Telegram server import and Smart Update on isolated SQLite with no production writes. Current replay fixture provides typed evidence manifests; initial incomplete fixture was rejected, then corrected rather than weakening the contract. Both actual live schema-control outputs are substituted into the import fixture: real Telegram import and Smart Update create two appropriately distinct named Events with zero errors, network blocked.118 import/producer/source-contract tests pass (including the real-output replay). Earlier expected-output-only checks are not counted as producer evidence. This tests downstream identity preservation, not proof of the live producer's reasoning.
 
-Before delivery: latest-head all required CI, exact merged main/actual-runtime ancestry, full source proof, initialized isolated preflight including controls, negative SHA/HTTP isolation, safe idle Events-only cutover and live verification. No prevention deployed yet. No closure until prevention delivery and passing end-to-end extraction/replay are evidenced; current story disposition is explicitly accepted by the owner until expiry.
+Before delivery: latest-head all required CI, exact merged main/actual-runtime ancestry, full source proof, initialized isolated preflight including controls, negative SHA/HTTP isolation, safe idle Events-only cutover and live verification. Candidate-stage status: prevention was not deployed at this point. Final qualified delivery is recorded below. Current story disposition is explicitly accepted by the owner until expiry; static-site acceptance remains separate.
 
 ## Required evidence
 
@@ -58,3 +58,42 @@ Managed retained directory: /home/dev/artifacts/events-bot-new/20261102T233947Z-
 - eco10471-vk-public.json / eco10471-rich-tg-public.json: independent corrected VK and rich Telegram content. Earlier rejected fixture/control evidence is retained.
 
 No production rebuild, restart, source replay, story resend or unrelated data cleanup has occurred.
+
+## November 6 20:11 UTC — prevention delivered
+
+PR855 merged after all four latest-head required CI passed, workflow42282703152,
+head5b8f4e31648f492e4a588e63462375f12ba35768. A brittle schema-description test
+initially froze adjacent old words; it now inspects the actual schema and
+preserves both event-name/comment constraints. Local Gemma4/incident modules57pass;
+prior118 source/import controls remain valid, not175 unique tests.
+
+Exact main38b34d3f559e145eeae8945c878f76f996f73e65 is DELIVERED, image
+intake-tg-publisher-20261106, immutable
+sha256:b0ce4feb2343ddb9f458b8f5f2f095263e0753822a7e7e22209f5c36afc33a0e.
+Full4459 tracked files, actualb86 ancestry/dependency proof, wrong-SHA rejection,
+initialized isolated controls and final HTTP isolation passed. Existing enforcing
+generated/native identity controls passed. The final offline import fixture first
+hit the production vector lane while sockets were blocked; only this isolated
+fixture was aligned to the existing unit-test offline create/merge gate defaults.
+Both actual model outputs then passed real import/Smart Update; this is downstream
+preservation evidence, not enabled live vector identity acceptance. Production
+settings and semantic guards were not changed. Final HTTP capture was repeated
+without curl -f because expected503 discards its isolation body; a fresh same-image
+initialized isolated container confirmed ready=false/db=skipped and was removed.
+Earlier accepted inherited controls were not blindly rerun.
+
+A normal media claim completed before the guarded idle Events-only cutover;
+no claim reset or healthy intake interruption. Live runtime/models/SQLite,
+cinema, identity/adjudicator hashes, date/source scope, queue and guide dedup
+controls pass; ready=true, DBok, issuesempty, Kotopogoda unchanged. Actual live
+schema hash037dc19dd27fe81f3ef60da0824ab7de9d67b2cd5fafaebf81ec7a74d0991975
+matches the qualified model-control schema. Event10471 remains Garazhka on
+November7–8 at12:00. Existing story1866 remains until expiry by explicit owner
+choice, with no replacement. Current static-site projection has not been
+independently accepted. Next ordinary TG21:40UTC source outcomes remain an
+operational observation; no compensating source replay is needed for this
+already corrected canonical event.
+
+Retained tg-publisher-delivery-receipt.json, tg-publisher-build.log,
+tg-publisher-preflight-probe.log, tg-publisher-preflight-import-corrected.log,
+tg-publisher-live-verification.log and tg-publisher-live-health.json.

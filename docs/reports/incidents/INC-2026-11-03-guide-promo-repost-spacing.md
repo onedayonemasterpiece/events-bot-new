@@ -322,3 +322,12 @@ All mandatory closure checks are satisfied:
 This closes the observed promo timing and each-edition coverage defect. No corrective resend is needed. Routine scheduled campaigns continue with the existing three-day Anons cadence. MAX command_expired on issue332, intake technical refusals, semantic venue issues and independent video verification are separate surfaces and remain outside this closure. Their outstanding work is preserved in the primary incident and continuation state.
 
 Closure evidence: promo332-acceptance-receipt.json, promo332-ledger-1112.json, promo332-live-public-1114.json and promo-closure-health-1256.txt under retained intake artifacts. Original November 3 posts and all accepted receipts remain unchanged.
+
+## November 6 19:59 UTC — ordinary second-edition skip
+
+Issue333 source wall-238875824_389 published18:57UTC. Frozen Afisha due21:46
+remains scheduled. The ordinary19:59:56 tick skips the second Anons edition
+with reason dedup_window, preserving morning2335; this is the observed reason,
+not an inferred daily_cap receipt. No callback, resend or campaign apply.
+The earlier accepted eligible pair and incident closure remain unchanged.
+Retained promo333-afterdue-tick.log and promo333-ledger-2001.json.
