@@ -1,6 +1,6 @@
 # INC-2026-11-06-eco-garazhka-attribution
 
-Status: mitigated, prevention and story repair pending
+Status: mitigated, prevention delivery pending; owner retains current story until expiry
 Severity: sev2
 Service: Telegram intake / Smart Update / Cherryflash ECO
 Opened: 2026-11-06
@@ -25,7 +25,7 @@ ECO session1573, partner_eco_nature_001, published November6 11:41:57UTC. Event1
 
 Owner directly requested source verification and correction. Exact bounded transaction corrected title to «Фестиваль осознанного потребления „Гаражка“», festival to «Гаражка», retired unsupported fact208464 to conflict and inserted audit note212223 from official source13992414. The transaction checks old values, event schedule, official source and absence of concurrent MCP intake; repeated execution returns already_applied. No schedule, location, source binding or poster change.
 
-Typed description operation evt_op_RRV2kGE-3NbCDl3mNwSWsgin3KQ6nngt accepted once at19:11:26UTC; only the false festival name was replaced in the existing description. A broader first proposal was rejected PUBLIC_TEXT_FACT_UNRESOLVED and never committed; consistency guard was retained. Ordinary workers completed Telegraph143666 and calendar143667/VK143668 reconciliation. Public Telegraph API and calendar10376 independently show the correct Garazhka title and no EcoKoenig attribution. Independent public VK13386 and rich TG5157 now also show the correct title and no EcoKoenig attribution; rich TG edit observed19:25:55UTC. All five exact outbox jobs143665–143669 are done. MCP revision-status still reports telegram/calendar outcome_unknown despite exact public and DB receipts; do not retry them on that status alone. Static-site last build remains failed/not built and is not claimed repaired. Already published business story1866 correction/removal is not yet verified.
+Typed description operation evt_op_RRV2kGE-3NbCDl3mNwSWsgin3KQ6nngt accepted once at19:11:26UTC; only the false festival name was replaced in the existing description. A broader first proposal was rejected PUBLIC_TEXT_FACT_UNRESOLVED and never committed; consistency guard was retained. Ordinary workers completed Telegraph143666 and calendar143667/VK143668 reconciliation. Public Telegraph API and calendar10376 independently show the correct Garazhka title and no EcoKoenig attribution. Independent public VK13386 and rich TG5157 now also show the correct title and no EcoKoenig attribution; rich TG edit observed19:25:55UTC. All five exact outbox jobs143665–143669 are done. MCP revision-status still reports telegram/calendar outcome_unknown despite exact public and DB receipts; do not retry them on that status alone. Static-site last build remains failed/not built and is not claimed repaired. The owner explicitly chose «Оставить историю до истечения» in the native dialogue on November6 19:33UTC. Leave story1866 unchanged until expiry: do not delete, rerender or resend it. This resolves the requested story disposition, not prevention delivery.
 
 ## Narrow prevention candidate
 
@@ -39,11 +39,11 @@ Treat as regression guard when changing Telegram source metadata, forwarded-post
 
 Mandatory: exact forwarded source preserves Garazhka identity; opposite explicitly named EcoKoenig festival remains valid; no organizer/participant inferred from publisher alone; normal multi-event/date/native/19099 controls remain; source-level outputs cross real Telegram server import and Smart Update on isolated SQLite with no production writes. Current replay fixture provides typed evidence manifests; initial incomplete fixture was rejected, then corrected rather than weakening the contract. Both actual live schema-control outputs are substituted into the import fixture: real Telegram import and Smart Update create two appropriately distinct named Events with zero errors, network blocked.118 import/producer/source-contract tests pass (including the real-output replay). Earlier expected-output-only checks are not counted as producer evidence. This tests downstream identity preservation, not proof of the live producer's reasoning.
 
-Before delivery: latest-head all required CI, exact merged main/actual-runtime ancestry, full source proof, initialized isolated preflight including controls, negative SHA/HTTP isolation, safe idle Events-only cutover and live verification. No prevention deployed yet. No closure until corrected public story surface and passing end-to-end extraction/replay are evidenced or an explicit external blocker remains recorded.
+Before delivery: latest-head all required CI, exact merged main/actual-runtime ancestry, full source proof, initialized isolated preflight including controls, negative SHA/HTTP isolation, safe idle Events-only cutover and live verification. No prevention deployed yet. No closure until prevention delivery and passing end-to-end extraction/replay are evidenced; current story disposition is explicitly accepted by the owner until expiry.
 
 ## Required evidence
 
-Before closure retain exact source/forward identity, before/after model outputs, passing same-import replay, opposite control, merged-main and actual immutable release, corrected current public projections and explicit story disposition. Existing story repair is independent from canonical repair and prevention.
+Before closure retain exact source/forward identity, before/after model outputs, passing same-import replay, opposite control, merged-main and actual immutable release, corrected current public projections and the explicit owner decision retaining this story until expiry. Existing story repair is independent from canonical repair and prevention.
 
 ## Retained evidence
 
