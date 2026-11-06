@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Ground Telegram event and festival names in message/OCR evidence instead of inferring organizer or participant identity from the publishing channel.
 - Request a verbatim venue repair when a normalized source address cannot pass the existing location grounding check; keep missing-place rejection unchanged.
 - Prioritize the nearest current/future event hint in the existing fresh VK import lane, so an approaching event cannot wait behind newer publications; preserve historical interleaving.
 - Release guide-import SQLite write transactions before source scanning and provider enrichment, keeping unrelated outbox and promo writes available during slow model calls.
