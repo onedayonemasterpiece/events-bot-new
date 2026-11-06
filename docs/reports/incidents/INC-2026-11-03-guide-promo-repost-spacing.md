@@ -300,3 +300,10 @@ Evening issue331/Afisha48 reached published through the ordinary promo_vk tick, 
 This accepts the actual second-family/same-day delivery through the corrected existing campaign, beyond unit tests or a prepared row. Morning13544 remains unchanged. Anons retains its three-day cadence untilNovember6; its prepared row is not sent. No manual callback, canary, provider resend or campaign reapplication. Real paired spacing remains a separate November6 criterion, so the incident stays open. Runtime9ec remains healthy and unchanged.
 
 Evidence: promo331-ledger-2102.json, promo331-live-public-2103.json, promo331-normal-send.log and promo331-acceptance-receipt.json under retained intake incident artifacts. The earlier intentional schedule append is preserved here. Normal Telegram21:40 UTC remains required.
+
+
+## November 6 11:12 UTC — actual paired spacing publicly accepted
+
+Normal visual issue332 waited for VK11680, then ops11681 ran08:42:11–08:42:32. Its live source is wall-238875824_386, published08:52:17 UTC, replacing postponed385. Ordinary campaign14 delivery receipts and authenticated public latest100 wall reads agree: Afisha wall-231920894_13640 at09:24:26, Anons wall-231828790_2335 at10:29:25. Delays are32m9s and97m8s; actual separation64m59s. Both copy_history objects identify exact source386 with matching five-item text and photo, and each destination has exactly one matching copy. Frozen due09:22:17/10:29:17 is unchanged. This accepts actual November6 pair spacing through the existing campaign, without callback, canary, resend or config reapply. The30-minute separation threshold remains an operator choice described above.
+
+MAX delivery for 332 separately failed command_expired; VK/TG transport receipts do not establish MAX success. Independent public Telegram message 516 read confirms the current five-item photo message. Runtime freshly remains independent b86aa845d2bbe77c0410cb168da37fbc1741cb96 with ready=true and DB ok. Retained evidence promo332-ledger-1112.json, promo332-live-public-1114.json and promo332-acceptance-receipt.json. Artifact filenames are labels; capture timestamps are authoritative.
