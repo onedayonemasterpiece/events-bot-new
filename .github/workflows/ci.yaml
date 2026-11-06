@@ -74,6 +74,7 @@ jobs:
           tests/test_source_parse_prompt_contract.py
           tests/test_event_parse_llm_first_contract.py
           tests/test_telegram_monitor_llm_first_producer_contract.py
+          tests/test_inc_20261106_eco_garazhka_attribution.py
           tests/test_telegram_monitor_service.py
           tests/test_tg_monitor_gemma4_contract.py
           tests/test_tg_monitor_reprocess_incomplete_scan.py

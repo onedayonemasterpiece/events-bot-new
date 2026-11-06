@@ -1635,7 +1635,10 @@ EVENT_ARRAY_SCHEMA = {
         'type': 'object',
         'properties': {
             'title': _string_schema(
-                'Human-readable event name. Never include inline comments (//, #), '
+                'Human-readable event name. The publishing channel/source is not the event, organizer or participant. '
+                'Never use its name in title unless that name is explicitly grounded in message text/OCR; '
+                'first-person wording alone does not establish that identity. Preserve the named event from the full text, '
+                'including inflected forms. Never include inline comments (//, #), '
                 "meta-commentary, reasoning, or markdown markers (**, __, ```). "
                 'Never include uncertainty markers like "or something similar", alternative title candidates, '
                 'or instruction-like text. '
@@ -1733,7 +1736,11 @@ EVENT_ARRAY_SCHEMA = {
             },
             'pushkin_card': {'type': 'boolean'},
             'search_digest': _string_schema(),
-            'festival': _string_schema(),
+            'festival': _string_schema(
+                'Specific festival name explicitly grounded in message text/OCR, including inflected forms; empty if unnamed. '
+                'Never infer it from the publishing channel/source or first-person wording. '
+                'A generic category such as festival is not a name.'
+            ),
         },
         'required': [
             'title',

@@ -1,0 +1,146 @@
+{
+  "schema_version": 2,
+  "run_id": "INC-2026-11-06-publisher-replay",
+  "stats": {
+    "sources_total": 1,
+    "messages_scanned": 2,
+    "messages_with_events": 2,
+    "events_extracted": 2
+  },
+  "messages": [
+    {
+      "source_username": "ecoklgd",
+      "source_title": "ЭкоКёниг",
+      "message_id": 99001,
+      "message_date": "2026-11-03T07:20:22+00:00",
+      "source_link": "https://t.me/ecoklgd/99001",
+      "text": "7 лет фестиваля в Калининграде🥹❤️\n\nМы долго шли к этому празднику, и уже в эти выходные ✅7-8 ноября, он случится в прекрасном и любимом месте — в Понарте 🎁\n\nНаш фестиваль — ничто без гостей (поэтому мы будем вас ждать на своп, сортировку и маркет локальных товаров💓)\n\nА ещё — мы нуждаемся в помощи!✊🏼\n\nЕсли ты фотограф, оформитель или крутой кондитер, который собирает портфолио — напиши в комментариях ❤️ и мы свяжемся с тобой по сотрудничеству! \n\n*отправь другу, если это про него ☝🏼\n\nДо встречи на Гаражке!💗\n\n✅7/8 ноября(12:00-19:00)\n📍Понарт",
+      "events": [
+        {
+          "title": "Гаражка",
+          "date": "2026-11-07",
+          "time": "12:00",
+          "end_date": "2026-11-08",
+          "location_name": "Понарт",
+          "location_address": "",
+          "city": "Калининград",
+          "ticket_link": "",
+          "ticket_status": "",
+          "raw_excerpt": "7 лет фестиваля в Калининграде🥹❤️ Мы долго шли к этому празднику, и уже в эти выходные ✅7-8 ноября, он случится в прекрасном и любимом месте — в Понарте 🎁",
+          "event_type": "фестиваль",
+          "emoji": "🥹",
+          "is_free": false,
+          "pushkin_card": false,
+          "search_digest": "Гаражка в Понарте",
+          "festival": "Гаражка"
+        }
+      ],
+      "source_parse_decision": {
+        "disposition": "EVENTS_FOUND",
+        "events": [
+          {
+            "title": "Гаражка",
+            "date": "2026-11-07",
+            "time": "12:00",
+            "end_date": "2026-11-08",
+            "location_name": "Понарт",
+            "location_address": "",
+            "city": "Калининград",
+            "ticket_link": "",
+            "ticket_status": "",
+            "raw_excerpt": "7 лет фестиваля в Калининграде🥹❤️ Мы долго шли к этому празднику, и уже в эти выходные ✅7-8 ноября, он случится в прекрасном и любимом месте — в Понарте 🎁",
+            "event_type": "фестиваль",
+            "emoji": "🥹",
+            "is_free": false,
+            "pushkin_card": false,
+            "search_digest": "Гаражка в Понарте",
+            "festival": "Гаражка"
+          }
+        ],
+        "lifecycle_actions": [],
+        "evidence_complete": true,
+        "parse_version": "source-parse-v1",
+        "evidence_manifest": {
+          "raw_text_chars": 544,
+          "raw_text_hash": "713cc88879f769781601ed9ceaefbb180ec8586df3eb49dbd410912ae6d5ed4d",
+          "attachment_count": 0,
+          "ocr_blocks_available": 0,
+          "ocr_blocks_included": 0,
+          "included_chars": 544,
+          "omitted_blocks": [],
+          "unavailable_attachment_count": 0,
+          "ocr_complete": true,
+          "source_text_truncated": false,
+          "provider_output_truncated": false,
+          "evidence_complete": true
+        }
+      }
+    },
+    {
+      "source_username": "ecoklgd",
+      "source_title": "ЭкоКёниг",
+      "message_id": 99002,
+      "message_date": "2026-11-03T07:20:22+00:00",
+      "source_link": "https://t.me/ecoklgd/99002",
+      "text": "Фестиваль «ЭкоКёниг» состоится 7 ноября 2026 года в Понарте, Калининград. Начало в 12:00. Организатор — ЭкоКёниг.",
+      "events": [
+        {
+          "title": "Фестиваль «ЭкоКёниг»",
+          "date": "2026-11-07",
+          "time": "12:00",
+          "end_date": "",
+          "location_name": "Понарт",
+          "location_address": "",
+          "city": "Калининград",
+          "ticket_link": "",
+          "ticket_status": "",
+          "raw_excerpt": "Фестиваль «ЭкоКёниг» состоится 7 ноября 2026 года в Калининграде в Понарте. Начало в 12:00. Вход свободный.",
+          "event_type": "фестиваль",
+          "emoji": "",
+          "is_free": true,
+          "search_digest": "Фестиваль «ЭкоКёниг» в Калининграде",
+          "festival": "ЭкоКёниг"
+        }
+      ],
+      "source_parse_decision": {
+        "disposition": "EVENTS_FOUND",
+        "events": [
+          {
+            "title": "Фестиваль «ЭкоКёниг»",
+            "date": "2026-11-07",
+            "time": "12:00",
+            "end_date": "",
+            "location_name": "Понарт",
+            "location_address": "",
+            "city": "Калининград",
+            "ticket_link": "",
+            "ticket_status": "",
+            "raw_excerpt": "Фестиваль «ЭкоКёниг» состоится 7 ноября 2026 года в Калининграде в Понарте. Начало в 12:00. Вход свободный.",
+            "event_type": "фестиваль",
+            "emoji": "",
+            "is_free": true,
+            "search_digest": "Фестиваль «ЭкоКёниг» в Калининграде",
+            "festival": "ЭкоКёниг"
+          }
+        ],
+        "lifecycle_actions": [],
+        "evidence_complete": true,
+        "parse_version": "source-parse-v1",
+        "evidence_manifest": {
+          "raw_text_chars": 113,
+          "raw_text_hash": "196646fcacb17f8cce8372923aa0639e7eb4b2598f11a2bcc63cd97e44f67591",
+          "attachment_count": 0,
+          "ocr_blocks_available": 0,
+          "ocr_blocks_included": 0,
+          "included_chars": 113,
+          "omitted_blocks": [],
+          "unavailable_attachment_count": 0,
+          "ocr_complete": true,
+          "source_text_truncated": false,
+          "provider_output_truncated": false,
+          "evidence_complete": true
+        }
+      }
+    }
+  ]
+}
