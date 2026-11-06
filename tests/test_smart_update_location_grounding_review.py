@@ -457,3 +457,26 @@ def test_parent_only_repair_quote_logs_without_changing_retry_contract(monkeypat
     assert "location_grounding.repair_quote_not_grounded" in caplog.text
     assert "parent_quote=True" in caplog.text
     assert quote not in caplog.text
+
+
+def test_reformatted_source_address_requests_verbatim_repair(monkeypatch):
+    payload = json.loads((Path(__file__).parent / 'replays' /
+        'INC-2026-11-05-vk-near-event-starvation' / 'boyko.json').read_text())
+    draft = payload['drafts'][0]
+    candidate = _candidate(draft['venue'], draft['source_text'])
+    candidate.location_address = draft['location_address']
+    fragment = 'дома № 3 по улице Горького'
+
+    async def reviewer(prompt, *_args, **_kwargs):
+        assert 'Если адрес передан другими' in prompt
+        assert 'выбери repair и скопируй цельный фрагмент' in prompt
+        return {'decision': 'repair', 'location_name': fragment,
+                'location_address': None, 'city': 'Советск',
+                'evidence_quote': fragment}
+
+    monkeypatch.setattr(seu, 'SMART_UPDATE_LLM_DISABLED', False)
+    monkeypatch.setattr(seu, '_ask_gemma_json', reviewer)
+    assert asyncio.run(seu._llm_review_candidate_location_grounding(
+        candidate, trigger_reason='vk_location_not_in_post')) == (True, 'llm_repair')
+    assert candidate.location_name == fragment
+    assert candidate.location_address is None
