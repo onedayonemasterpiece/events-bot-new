@@ -1,6 +1,7 @@
 # INC-2026-11-05 VK near-event starvation under fresh backlog
 
-Status: open. Severity: sev2. Surface: VK auto-import queue.
+Status: resolved for the observed queue and grounding regression on November 6. Severity: sev2. Surface: VK auto-import queue.
+Broader source onboarding/backlog verification remains open in the registry continuation below.
 Registry continuation: inc_f5d0a79f3a7ffa6073158f3c.
 
 ## Evidence and root cause
@@ -62,3 +63,40 @@ Mandatory checks: all18 location controls, actual VK persistence/Smart Update
 shadow replay, missing-place opposite control, preserve accepted walk and exact
 source identity. Before closure collect exact-main release and actual failed-child
 receipt. Do not replay the already accepted sibling or rewrite carrier status.
+
+
+## November 6 — delivered repair and real child acceptance
+
+PR846 merged as `b86aa845d2bbe77c0410cb168da37fbc1741cb96` and was released as
+`runcoveer/events:vk-location-verbatim-20261106`, immutable
+`sha256:345ccf7ed8e46de7e29c9fc2141e07072aa537dbab2ea689c89329a85a5ae409`.
+The running predecessor9ec3247c is an ancestor; all4452 tracked files were verified.
+All seven applicable CI groups passed (additional product/browser jobs were
+path-skipped). Existing inherited contracts and no-network startup passed on a
+separate initialized shadow schema. No schema/dependency change required a new
+full production DB copy. Events-only Compose cutover preserved settings and
+Kotopogoda; live health returned ok=true, ready=true, issues=[]. Rollback is the
+previous immutable751fa08c6afe image, Compose backup in the exact release folder.
+
+Compensating ops11676 replayed only failed ordinal0 via the ordinary VK
+`persist_event_and_pages` and Smart Update using the unchanged stored draft.
+It created canonical10619, mural opening, November6 14:00, Sovietsk, source venue
+`фасаде дома № 3 по улице Горького`. Accepted walk10617/ordinal1 was not replayed.
+The normal exact-parse-replay ledger and carrier reducer recorded both accepted
+children: inbox88166 and packet26326 are imported / EVENTS_RESOLVED. Independent
+readback confirmed both exact EventSource anchors and inbox-event links.
+No direct Event insert, source-date mutation or manufactured queue success.
+The one-off catch-up had no scheduler and started only with no active ops;
+normal configured-source scheduling was preserved.
+
+Evidence: `boyko-production-receipt.json`, `boyko-catchup.log`,
+`boyko-cutover.log`, `boyko-release-build.log`, `boyko-live-health.json`,
+`boyko-inherited-preflight.log`, `boyko-preflight-startup.log` in the retained
+quality directory above. A nonfatal transport-schedules lookup in the one-off
+runner used its script directory; the event committed and normal service
+projections were queued. This was runner context, not a location/release failure.
+
+Residual general-source historical queues and other technical parse failures
+are not resolved by this post's success. Continue them under the broader
+onboarding incident, without replaying either accepted Boyko child. Garry's
+already acknowledged Slack success must not be sent again.
