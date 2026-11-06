@@ -1101,3 +1101,5 @@ Linked occurrences and festival identity remain owned by their existing
 features.  Full contract and separate production gate:
 [Interest clubs](../interest-clubs/README.md) and
 [release plan](../interest-clubs/release-plan.md).
+
+Location reviewer KEEP requires lexical source support. When an address is reformatted or reordered, the same reviewer must return REPAIR with a verbatim place fragment, leaving a separate address null if unavailable. This aligns the prompt with the existing validator without introducing address inference. See `INC-2026-11-05-vk-near-event-starvation`.

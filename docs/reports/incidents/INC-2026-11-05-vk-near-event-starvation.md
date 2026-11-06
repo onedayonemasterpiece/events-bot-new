@@ -33,3 +33,32 @@ to manufacture successful processing. Current status is not delivered.
 ## November 6 04:56 UTC — actual ordinary selection verified
 
 The earlier not-delivered status is historical. PR838 was preserved in delivered runtime9ec3247c585ec27de8e243ea4a9aad0bbcb74627. Ordinary04:15 VK batch11673 actually selected formerly starved carrier88166/source26326, wall394310405_3914. The pipeline created10617, the November6 14:00 thematic Sovietsk cinema walk, with an exact EventSource and carrier link. Its other child refused location_grounding_review:llm_keep_not_grounded, leaving the carrier terminal partial failed_technical rather than clean imported. This proves claim-order liveness for the observed formerly waiting post, not success of every child or public publication. No manual callback, claim reset, date change or source replay. Preserve10617 and do not replay the entire post. Evidence vk11673-terminal-summary.json and vk11673-child-anchor-proof.json in the retained intake artifact directory. Residual semantic grounding remains open.
+
+
+## November 6 — residual normalized-address grounding
+
+Ordinary source child27022 (mural opening) returned semantic KEEP twice, but
+`Горького 3` / `ул. Горького, 3` is not a verbatim substring of the authoritative
+`дома № 3 по улице Горького`. The prompt permitted semantic KEEP while its
+validator required lexical support. This is a semantic reviewer contract issue;
+no deterministic address inference or grounding exemption is appropriate.
+
+The existing reviewer prompt now requests REPAIR with a complete verbatim venue
+fragment for reordered/reworded addresses. No new call, retry, validator, flag,
+state or worker. Production diff is +4 lines, budget +5. Existing negative
+controls still reject invented venues and missing locations.
+
+Retained evidence: `/home/dev/artifacts/events-bot-new/20261104T093210Z-guide-digest-vk-quality-20261104`.
+`boyko-location-tests.log`: distinguishing test fails before, all18 location tests pass after.
+`boyko-shadow.log`: exact stored VK draft passed `persist_event_and_pages` and
+Smart Update with real providers in a fresh shadow seeded with accepted walk10617.
+The opening was CREATED with source-grounded `фасаде дома № 3 по улице Горького`;
+walk10617 remained unchanged. The real-provider negative control with no stated
+place was rejected `llm_reject_missing_location`. Shadow event10618 is not a
+production receipt. No publication or canonical production writes in this replay.
+
+Treat as regression guard when editing location prompts/validation or VK child replay.
+Mandatory checks: all18 location controls, actual VK persistence/Smart Update
+shadow replay, missing-place opposite control, preserve accepted walk and exact
+source identity. Before closure collect exact-main release and actual failed-child
+receipt. Do not replay the already accepted sibling or rewrite carrier status.
