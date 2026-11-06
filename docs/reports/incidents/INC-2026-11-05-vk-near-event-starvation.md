@@ -28,3 +28,8 @@ Delivery requires exact merged main, runtime ancestry, full source verification,
 isolated startup, Events-only cutover and the actual standard import receipt.
 Do not change source dates, insert Events manually or rewrite queue statuses
 to manufacture successful processing. Current status is not delivered.
+
+
+## November 6 04:56 UTC — actual ordinary selection verified
+
+The earlier not-delivered status is historical. PR838 was preserved in delivered runtime9ec3247c585ec27de8e243ea4a9aad0bbcb74627. Ordinary04:15 VK batch11673 actually selected formerly starved carrier88166/source26326, wall394310405_3914. The pipeline created10617, the November6 14:00 thematic Sovietsk cinema walk, with an exact EventSource and carrier link. Its other child refused location_grounding_review:llm_keep_not_grounded, leaving the carrier terminal partial failed_technical rather than clean imported. This proves claim-order liveness for the observed formerly waiting post, not success of every child or public publication. No manual callback, claim reset, date change or source replay. Preserve10617 and do not replay the entire post. Evidence vk11673-terminal-summary.json and vk11673-child-anchor-proof.json in the retained intake artifact directory. Residual semantic grounding remains open.
