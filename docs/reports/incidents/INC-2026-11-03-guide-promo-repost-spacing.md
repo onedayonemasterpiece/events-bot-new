@@ -1,10 +1,10 @@
 # INC-2026-11-03 Guide promo catch-up collapsed independent repost delays
 
-Status: open
+Status: closed
 Severity: sev3
 Service: Events Bot / promo_vk / guide-digest reposts
 Opened: 2026-11-03
-Closed: —
+Closed: 2026-11-06
 Owners: Codex
 Registry: inc_9b10802ccbe05795372dd983
 Related incidents: INC-2026-06-04-80-stories-promo-vk-scheduler-gap, INC-2026-11-02-intake-quota-vk-media
@@ -82,8 +82,7 @@ release SHA/image, scheduler logs and future actual post timestamps.
 
 ## Release and closure evidence
 
-Fix is being tested; not deployed. Original source import must not be interrupted.
-Keep the incident open until delivery and temporal verification are recorded.
+Closed after qualified merged-main delivery and actual normal two-destination timing verification on November 6. The historical delivery and observation entries below retain the earlier open states. Original source imports and unrelated incidents remain independent.
 
 ## Follow-ups
 
@@ -307,3 +306,19 @@ Evidence: promo331-ledger-2102.json, promo331-live-public-2103.json, promo331-no
 Normal visual issue332 waited for VK11680, then ops11681 ran08:42:11–08:42:32. Its live source is wall-238875824_386, published08:52:17 UTC, replacing postponed385. Ordinary campaign14 delivery receipts and authenticated public latest100 wall reads agree: Afisha wall-231920894_13640 at09:24:26, Anons wall-231828790_2335 at10:29:25. Delays are32m9s and97m8s; actual separation64m59s. Both copy_history objects identify exact source386 with matching five-item text and photo, and each destination has exactly one matching copy. Frozen due09:22:17/10:29:17 is unchanged. This accepts actual November6 pair spacing through the existing campaign, without callback, canary, resend or config reapply. The30-minute separation threshold remains an operator choice described above.
 
 MAX delivery for 332 separately failed command_expired; VK/TG transport receipts do not establish MAX success. Independent public Telegram message 516 read confirms the current five-item photo message. Runtime freshly remains independent b86aa845d2bbe77c0410cb168da37fbc1741cb96 with ready=true and DB ok. Retained evidence promo332-ledger-1112.json, promo332-live-public-1114.json and promo332-acceptance-receipt.json. Artifact filenames are labels; capture timestamps are authoritative.
+
+
+## Closure, November 6 — normal pair criterion fulfilled
+
+The root cause was overdue sibling actions executing together despite separate sampled due times. The existing edition ledger now separates planned times and constrains actual or uncertain-attempt sibling sends; lost replies retain their original timing evidence. Later source heavy-wait and per-edition/cap corrections are delivered and verified independently. No extra scheduler, state, retry worker, public canary or replay was introduced.
+
+All mandatory closure checks are satisfied:
+
+- Distinguishing overdue baseline: two failures. Corrected promo/delivery regressions: 66 passing tests, plus all four normal/overdue and normal/lost-reply contrasts. Later multi-edition/family controls: eight pass. Existing cadence, explicit caps and pause behavior remain. Retained promo-spacing-before.log, promo-spacing-after.log, promo-spacing-final.log and promo-editions-family.log.
+- Spacing fix delivered in merged main 7d03b15853d3548299aa334418a9a907ae415312, immutable sha256:96896a2b00717740524948c4b49caedc4b6f2a96e6dba4bf23c5482789ade566. Later per-edition correction delivered in 9ec3247c585ec27de8e243ea4a9aad0bbcb74627, immutable sha256:751fa08c6afe8db518c08da923e7ba2427512dc65692427afca4e38db576432e. Required CI, exact source, initialized isolated controls, safe Events-only cutover, health, model/cinema/identity and unchanged Kotopogoda evidence are recorded above.
+- Fresh actual runtime b86aa845d2bbe77c0410cb168da37fbc1741cb96 preserves 9ec ancestry; ready=true, DB ok and no health issues. No new deployment for closure.
+- Ordinary campaign delivery accepted on November 4 and 5, including two distinct editions on November 5. The next eligible normal pair on November 6 is publicly verified: exact source386, Afisha13640 and Anons2335, actual delays32m9s and97m8s, separation64m59s, exactly one copy per destination in latest100 posts. Frozen due times are preserved.
+
+This closes the observed promo timing and each-edition coverage defect. No corrective resend is needed. Routine scheduled campaigns continue with the existing three-day Anons cadence. MAX command_expired on issue332, intake technical refusals, semantic venue issues and independent video verification are separate surfaces and remain outside this closure. Their outstanding work is preserved in the primary incident and continuation state.
+
+Closure evidence: promo332-acceptance-receipt.json, promo332-ledger-1112.json, promo332-live-public-1114.json and promo-closure-health-1256.txt under retained intake artifacts. Original November 3 posts and all accepted receipts remain unchanged.
