@@ -24,7 +24,8 @@ def test_vk_booking_contact_is_screenshotable_handle() -> None:
 
 
 @pytest.mark.asyncio
-async def test_choose_guide_excursion_promo_filters_future_personal_avatar_and_repeats(tmp_path) -> None:
+@pytest.mark.parametrize("previous_status, eligible_again", [("FAILED", True), ("RENDERING", False), ("PUBLISHED_TEST", False), ("DONE", False)])
+async def test_choose_guide_excursion_promo_filters_future_personal_avatar_and_repeats(tmp_path, previous_status, eligible_again) -> None:
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     con = sqlite3.connect(db.path)
@@ -70,12 +71,16 @@ async def test_choose_guide_excursion_promo_filters_future_personal_avatar_and_r
 
     con = sqlite3.connect(db.path)
     con.execute(
-        "INSERT INTO videoannounce_session(id, status, profile_key, selection_params, created_at) VALUES(100,'DONE','popular_review',?, '2026-07-06 00:10:00')",
-        (json.dumps({"guide_excursion_promo": {"occurrence_id": 10}}),),
+        "INSERT INTO videoannounce_session(id, status, profile_key, selection_params, created_at) VALUES(100,?,'popular_review',?, '2026-07-06 00:10:00')",
+        (previous_status, json.dumps({"guide_excursion_promo": {"occurrence_id": 10}})),
     )
     con.commit(); con.close()
     repeated = await choose_guide_excursion_promo(
         db,
         now=datetime(2026, 7, 6, 8, 0, tzinfo=timezone.utc),
     )
-    assert repeated is None
+    if eligible_again:
+        assert repeated is not None
+        assert repeated["occurrence_id"] == 10
+    else:
+        assert repeated is None

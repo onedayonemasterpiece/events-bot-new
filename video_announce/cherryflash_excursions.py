@@ -386,6 +386,7 @@ async def choose_guide_excursion_promo(
             SELECT selection_params
             FROM videoannounce_session
             WHERE profile_key = 'popular_review'
+              AND status != 'FAILED'
               AND date(created_at) >= date(?)
             ORDER BY id DESC
             LIMIT 8

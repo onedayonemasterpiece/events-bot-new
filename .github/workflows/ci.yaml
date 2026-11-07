@@ -240,6 +240,7 @@ jobs:
           tests/test_vk_auto_queue_import.py
           tests/test_video_announce_poller.py
           tests/test_video_announce_v_pipeline.py
+          tests/test_cherryflash_guide_excursions.py
       - name: Enforce shared Google AI limiter contracts
         run: |
           python scripts/inspect/audit_google_ai_provider_paths.py --root .
