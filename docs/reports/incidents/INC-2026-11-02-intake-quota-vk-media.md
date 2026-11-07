@@ -2027,3 +2027,66 @@ Retained evidence: description-quality-normal-cohort37.json,
 description10676-stage-log.txt, description10676-stage-token-summary.json,
 description10676-offline-grounding-contrasts.json,
 description10666-candidate-provenance.json and description10666-initial-stage-log.txt.
+
+
+### November 7 07:12 UTC — scope-stage correction and upstream preview loss
+
+Further actual stage logs correct the interpretation of candidate 27359's null
+stored scope: this is a pre-processing snapshot, not proof that review was skipped.
+The actual occurrence_scope_review ran at 02:59:42 and returned llm_single_event
+at 02:59:44, although producer metrics already contain source_event_count=14.
+Existing code then adopts the whole source. Its review input does not include
+that producer count. The later bundle review returned llm_grounded. This narrows
+foreign-sibling contamination to a wrong accepted scope decision, not a missing
+call or the last release. Do not infer a fix from the snapshot alone or weaken
+any grounding check. Exact original selected-excerpt payload remains unavailable.
+
+A separate upstream truncation is now proven for Event 10672. A fresh read of
+the official musical-theatre page shows og:description has 987 characters and
+ends mid-sentence. Stored source narrative equals that metadata exactly. The
+notebook scrape_muz_details prefers og:description over the visible page body,
+then only tries body selectors when metadata is absent. Fresh visible text
+contains the completed sentence and a separate stage-smoke/first-rows warning,
+which this imported source omitted. This is source acquisition loss before any
+writer cap. No current occurrence date was inferred from this page's unrelated
+nearest-show listing and no retime or replay occurred. The fresh source URL is
+https://muzteatr39.ru/spektakli/muzykalnye/bremenskie-muzykanty/ .
+
+Read-only evidence: description10666-full-stage-log.txt,
+description10666-scope-stage-summary.json and
+muzteatr-bremen-description-live.json under retained intake artifacts. Two small
+fresh official-page reads were used: the first extracted metadata, the second
+identified visible paragraphs after old fallback selectors found no block.
+Browser search cache alone was not treated as current DOM proof. No production
+code, prompt, config or canonical data changed. A later minimal proposal must
+use identity-bound full source text with sparse and unrelated-sidebar controls,
+not a global length increase or a new repair mechanism.
+
+
+### November 7 07:42 UTC — normal guide accepted; narrow source acquisition fix
+
+Guide 11706 reached remote done 07:22:50 and local SUCCESS 07:25:31 UTC.
+All 30 sources, 50 posts, zero creates and four updates; zero final errors.
+Exact anchors for 721/722/723/719 and final date/time/status fields verified,
+missing or different zero. No guide replay or callback.
+
+Mechanical prevention now reads direct product paragraphs, lists and blockquotes
+from the musical-theatre description column identified by its own spek_bor block,
+before unchanged metadata/legacy fallbacks. Nested nearest-show rows, other
+columns, reviews and historical premiere date are excluded. This transports source
+text to the existing LLM; it does not classify or rewrite event meaning.
+Net production +5 lines, one concise URL/character-count/body-presence log.
+No state, retry, worker, extra provider call, global length/prompt change or
+canonical repair. The separate wrong-scope semantic decision is not fixed here.
+
+Actual retained DOM control: before 987 characters, missing sentence ending and
+stage-smoke warning; after 1131 characters, both present, no sibling schedule or
+premiere date. Synthetic long-prose/list, empty-body and metadata-only contrasts
+exercise the real notebook function with a mocked page boundary. Original has
+one distinguishing failure and two passes; final broad parser-contract set has
+79 passes, provider audit unapproved=0/allowlisted_debt=0. Existing CI ingestion
+job now includes the notebook tests. No production writes or source replay.
+Existing Event 10672 is not silently claimed repaired by prevention source code.
+Merge, qualification, delivery and normal post-release source effects remain
+pending. Evidence guide11706-terminal-proof.json, muz-body-before.log,
+muz-body-regressions.log and muz-body-actual-control.json in retained artifacts.
