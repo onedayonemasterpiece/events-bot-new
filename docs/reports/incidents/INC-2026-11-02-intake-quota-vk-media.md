@@ -2287,3 +2287,36 @@ The existing materializer skips an exact managed object only when thumbnails are
 Narrow correction reuses the existing thumbnail path while preserving downloaded WebP bytes/content hash for exact managed paths. Seven net production lines, no new state, flag, retry, worker, quota change or semantic decision. Legacy conversion and genuinely different display invalidation remain. Valid original distinguishing test fails URL identity while two contrasts pass; final89 media regressions pass and provider audit is clean. First draft fixture lacked matching pixel evidence and was corrected before the accepted original baseline. Candidate not yet merged, built or delivered. No queue reset or production data repair.
 
 Evidence media10041-exact-images.json, exact-reencode.json, display-transitions.json, pipeline-before.log, pipeline-after.log, media-exact-before-valid.log, media-exact-regressions.log and media10041-fix-plan.json in retained intake artifacts. Docs867 merged after all four green, docs main2bc813fca is not runtime. Ordinary video14:45 remains scheduled and must not be interrupted.
+
+
+### November 7, 15:04 UTC — exact-media candidate qualified, ordinary video active
+
+PR868 merged only after all four required CI green at latest head990fefbfa680fdfa754b232297ee4a58723d1f4d. Exact main7b84899da1aafb85d107ef40374c68e197a44f2c built once as intake-media-exact-20261107, immutable sha256:ea8a121356fae069468c127f00d45164dad9895ced2e1900c352f98e7a60d430. All4459 tracked source files verified with actual330 ancestry, unchanged dependency inputs. Initialized isolated exact-byte two-pass SQLite control retains one poster/zero jobs and display/geometry/classification; transport mocked. All inherited controls pass. Wrong SHA rejects before initialization. Final isolated HTTP503 ready=false/DB skipped is the expected inactive preflight with no production data mount. Owned preflight removed.
+
+NOT DELIVERED. Ordinary scheduled video_tomorrow11720 started14:45 UTC and handoff succeeded14:51:12 into session1582, dataset zigomaro/video-afisha-session-1582, kernel zigomaro/crumple-video. Exact normal poller responses remain QUEUED through15:01:27; local RENDERING is not frame/terminal acceptance. No duplicate kernel, registry reset, manual recovery or restart. Preserve active session before any cutover. Candidate qualification does not prove current Event10041 loop stopped; no queue reset or mark-done. Event10672 final narrative and original Muzteatr zero-source root remain open.
+
+Evidence media-exact-qualification.json, full build/preflight/wrong-SHA/HTTP logs, video1582-state-1458.json, state-1502.json and latest-polls-1502.log in retained intake artifacts. Host cutover/verify scripts staged in exact7b release directory, expecting old330/ce74 runtime. No cutover attempted.
+
+
+Ordinary session1582 subsequently entered real provider RUNNING: latest exact poll15:35:59 UTC, callback render/posters14 at15:35:32 with elapsed1335seconds and12 selected scenes. The initial scenes_done=0 field is not a per-scene completion counter; no frame or terminal/publication acceptance is inferred. Candidate7b remains qualified and undelivered, no rebuild/cutover, no duplicate kernel or registry reset. Retained video1582-state-1536.json and polls-1536.log.
+
+
+### November 7 17:09 UTC — normal VK terminal and actual description fallback
+
+Ordinary VK11722 run9b23bc099c89415e8fe19a12395f8f0f, exact assigned batch auto:1794069001, terminal PARTIAL16:47:18: twelve terminal carriers, zero unresolved, two created10686/10687 with exact source anchors14125575/14125576 and carrier links verified. Four identity technical carriers remain distinct from four no-event and two policy/lifecycle exclusions. Separate context child27428 attaches existing10537 with anchor14125574; parent91080 remains technical due another refused child and has no carrier link. No replay or claim of full carrier acceptance. Proof vk11722-terminal-proof.json.
+
+New normal-create10687 has703-character source, ten retained narrative facts including conductor and named programme, but126-character stored description exactly equals raw_excerpt. Actual writer191/1700 tokens STOP was rejected for logistics; cleanup rewrite Gemma500 fell back to Lite3.5,165/900 STOP also rejected. Extraction1014/1400 STOP; create_description logged facts10/descFalse. This is observed fallback-induced narrative loss, not output-cap truncation. Original rejected bodies are not retained, so no specific false-positive guard trigger or safe prompt change is proved. No provider call, canonical repair or guard weakening. Event10686 source768/description619 retains route/architect/sculptor but omits1852–1855 construction date; its loss stage remains untraced. Evidence description10686-10687-first-read.json, description10687-facts.json, writer-boundary.log and quality-observation.json.
+
+Video1582 remains actual RUNNING through17:06:06, RENDERING/error null, render/posters14 callback elapsed6728seconds. No final frame/output/publication acceptance. Qualified7b media release remains undelivered while remote work is active, no rebuild or cutover.
+
+
+### November 7 17:44 UTC — exact media prevention delivered, ordinary result still observed
+
+Exact main7b84899da1aafb85d107ef40374c68e197a44f2c delivered as intake-media-exact-20261107, immutable sha256:ea8a121356fae069468c127f00d45164dad9895ced2e1900c352f98e7a60d430. After video1582 terminal and naturally completed media claims, guarded first cutover found idle ops/MCP/background and switched Events only. Actual old330/ce74 ancestry proved; staged script checksum matches reviewed copy. Settings and Kotopogoda preserved. Explicit live exact-byte derivative and inherited controls exit0, DB quick_check ok, health ready=true with zero restarts. First health read reset during startup; later healthy receipt is authoritative. No rebuild, quota bypass, source replay or queue reset.
+
+Ordinary Event10041 review151130 completed after delivery and151131 is pending; sustained fast-successor quiescence is NOT yet accepted. Continue actual ordinary processing before claiming recurrence resolved. A first diagnostic poster query used obsolete sha256 column and failed read-only, then corrected schema-based job query; no mutation. Evidence media-exact-delivery-receipt.json, cutover-attempt1.log, live-verify.log, live-health.json and media10041-postrelease-1745.json.
+
+Video1582 finished17:35:32, PUBLISHED_TEST17:35:37. Exact output log binds video-afisha-session-1582; all five target receipts successful. Independent public read verifies VKwall-231828790_2343 with video456239533,34seconds720x1280 and Telegramkenigevents5528 as MessageMediaStory. Story content playback not independently verified. No rerun or resend. Sanitized report video1582-terminal-safe.log and public read receipts retained. Raw transport report remains restricted remotely.
+
+
+At17:46:01 the ordinary worker completed transition reviews151130–151132. Latest151133 is pending until November8 00:05 UTC through the existing budget deferral, with no currently immediate successor. This is initial quiescence, not yet a sustained observation or post-reset acceptance. No reset, budget change or second producer fix. Retained media10041-postrelease-1747.json. Registry delivery verification107 recorded once, do not repeat.
