@@ -131,18 +131,18 @@ PR862 merged all four green, exactc70c1c6efcff6bb36d0a8a931dcddcb6ee4c9c2e quali
 
 ## November 7 09:57 UTC — delivered prevention and ordinary video result
 
-PR862/863 delivered with PR861 from exact main6b9cedf93f49c4c4742ba27c313a99079d68e4e9,
+PR 862/863 delivered with PR 861 from exact main 6b9cedf93f49c4c4742ba27c313a99079d68e4e9,
 immutable sha256:a4ebc2cfc82a4b736a03d3a9867a2cea4357e54cfd2c0347e38689cb4d6dd659.
 Qualification includes actual initialized selector SQLite contrasts, exact bundle
 font/icon loading, notebook and cancellation controls; wrong SHA and HTTP isolation
 pass. Live source checks load three approved fonts and four masks and expose
-occurrence652 via read-only selector. Health ready=true, settings/Kotopogoda unchanged.
+occurrence 652 via read-only selector. Health ready=true, settings/Kotopogoda unchanged.
 No registry reset, duplicate kernel, manual recovery or modified frozen selection.
 
-Existing session1578 naturally finished at09:40:14 and published_at09:40:33.
+Existing session 1578 naturally finished at 09:40:14 and published_at 09:40:33.
 Exact output manifest binds cherryflash-session-1578-1794039195; all eleven target
-receipts report ok. Independent authenticated reads confirm VKwall-231828790_2342
-with37-second video456239531 at720x1280 and Telegramkenigevents5525 linking story544.
+receipts report ok. Independent authenticated reads confirm VK wall-231828790_2342
+with 37-second video 456239531 at 720×1280 and Telegram kenigevents/5525 linking story 544.
 No resend. Its frozen selection contains no guide scene, so this successful video
 does not accept the repaired true3D guide render. A subsequent ordinary selection
 and complete guide-scene render/publication remain required before closure.
