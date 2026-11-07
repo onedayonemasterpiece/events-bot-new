@@ -345,3 +345,18 @@ and prepared ledger, not a new publication. No callback, canary, campaign apply
 or resend. Previous morning pair and incident closure remain unchanged.
 Retained promo333-ledger-2153.json, promo333-live-public-2153.json and
 promo333-acceptance-receipt.json.
+
+
+## November 7 10:24 UTC — ordinary issue 334 repost accepted
+
+Afisha ledger published through the ordinary campaign after unchanged frozen
+due 10:12:31 UTC. Independent authenticated public read confirms
+https://vk.com/wall-231920894_13746, exact copy_history source391
+from wall-238875824 at 08:40:31 UTC. Provider timestamp is
+2026-11-07T10:17:45+00:00; actual delay 97m 14s, inside 30–180 minutes.
+Latest 100 posts contain one matching Afisha copy and zero Anons copies.
+Anons retains the already observed ordinary dedup_window skip and prepared
+ledger; no new Anons publication is inferred. No callback, resend, campaign
+configuration apply or repeated incident closure. Prior eligible pair remains
+accepted. Evidence promo334-acceptance-receipt.json, ledger and exact live
+public read in retained intake recovery artifacts.

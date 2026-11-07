@@ -2128,3 +2128,45 @@ Evidence guide-history-delivery-receipt.json, qualification, cutover and explici
 live verification logs; description10678-current-writer-summary.json in retained
 intake recovery artifacts. Ordinary VK 10:00 and future true3D guide-render
 acceptance are still distinct product checks.
+
+
+## November 7 10:24 UTC — first normal VK after combined release
+
+Automatic VK 11711, run 827d44fcfe3142599a70641599f971f5, exact batch
+auto:1794045600 reached SUCCESS at 10:11:49 UTC. Twelve terminal carriers,
+zero unresolved, zero creates and two merged existing Events 8317/9584.
+Both exact candidate/source/occurrence anchors 14114434/14114435 and carrier
+links 76642/75842 verified, missing zero. Six no-event and four policy exclusions
+are separate from zero final technical refusals. An initial malformed parse
+attempt settled through the existing retry into a terminal policy exclusion;
+it is not a failed carrier. No source replay or runtime restart.
+
+This run contains no new Event description, so it does not substitute for the
+owner-requested new-event quality check or normal parser full-source acceptance.
+Evidence vk11711-terminal-proof.json and the pinned terminal snapshot in retained
+intake recovery artifacts. Docs PR 864 merged all four required green; runtime
+remains the qualified 6b9 release, not the docs HEAD.
+
+
+## November 7 11:49 UTC — normal light guide and scope boundary evidence
+
+Guide 11715, run 3581d0930d48, scheduled exactly 11:20 UTC, remote DONE
+11:41:29 and local SUCCESS 11:43:56. All thirty sources, fifty posts, four
+existing updates, zero creates and zero final errors. All four exact source
+anchors and final date/time/status fields verified with zero missing or
+differences. Undated template 720 remains digest_eligible=0; dated 721/722/723
+retain actual source dates. No replay, callback or competing intake. Evidence
+guide11715-terminal-proof.json and pinned source/occurrence receipts.
+
+Exact retained input for the separate 10666 scope defect is not clipped by
+existing scope-review limits. Telegram candidate 27359 source has 1608 characters
+and excerpt27; later VK candidate 27385 has1829/excerpt77. Both are below
+7000/1200 caps; both date headings and next-day excursion programme are inside
+the supplied source. The actual original llm_single_event result kept the full
+corpus. This excludes source clipping at that boundary, not model semantic
+misclassification or later contamination. It does not reproduce the original
+response or establish a validated prompt fix. No provider call, production
+write, prompt/cap/model/guard change or canonical repair. Original 10678 refusal
+and separate 10676 fact loss remain unresolved. Normal parser12:15 source-to-final
+description acceptance remains required. Evidence
+description10666-scope-clipping-boundary.json and retained original stage log.
