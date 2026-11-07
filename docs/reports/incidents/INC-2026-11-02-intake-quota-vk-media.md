@@ -1932,3 +1932,39 @@ verified eight changed rows and two refusals, no production mutation.
 Evidence parser11702-terminal-proof.json, parser11702-full-row-receipts.log,
 parser11702-anchors-corrected.json and vk-cancel-before/after/final.log in retained
 intake artifacts. Runtime38b34d3f remains delivered unchanged.
+
+
+### 2026-11-07 06:11 UTC — accepted-child cancellation fix delivered
+
+PR #858 merged after all four required checks passed at exact head
+`dec041dc00b38b7f3ea0a57e220b27017a0f395e`. Clean merged main
+`87c047ad7e98d9d669096ac948c0044e6fff0125` contains the actual previous
+production release. The image `intake-vk-child-receipts-20261107` is pinned to
+`sha256:6900e3f4fd2e536b387d58e27c638ba3a64c015c01ee8fca11f2703bc9dce285`.
+All 4459 tracked source files verified. Initialized isolated preflight passed
+five actual cancellation and zero-accepted contrast controls, plus inherited
+identity, date, media, guide concurrency and publisher-output replay controls.
+Typed persist is mocked in the bookkeeping controls; the SQLite writes are real
+and isolated. The inherited publisher replay uses offline fixture identity
+settings, separately from enforcing identity controls; it is not evidence of
+live model acceptance. Wrong SHA failed before DB creation. Final isolated HTTP
+returned 200 with ready=false and db=skipped, with no production data mount.
+The owned preflight container was removed.
+
+First guarded cutover refused before mutation because media job 150345 became
+active. That claim completed naturally; fresh idle guards then passed and only
+Events was recreated. Actual source and immutable image match the candidate.
+Explicit live controls, SQLite quick_check, health ready=true, scheduler health
+and model settings pass. Kotopogoda container is unchanged. No provider test
+call, production Event/Job repair, source replay or semantic guard change.
+The original eight committed merges under failed carrier 90609 still lack
+carrier bookkeeping; prevention delivery does not retroactively repair them.
+Normal post-release VK acceptance remains pending. Preserve light guide 07:05
+and visual guide 08:30 UTC.
+
+Evidence in retained intake artifacts: vk-child-build.log,
+vk-child-qualification.json, vk-child-preflight.log,
+vk-child-final-http-isolation.log, vk-child-cutover-after-media-terminal.log,
+vk-child-live-verify.log, vk-child-health-startup.json and
+vk-child-delivery-receipt.json. Incident remains open for normal-run acceptance
+and separately retained data-integrity residuals.
