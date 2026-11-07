@@ -2160,13 +2160,14 @@ guide11715-terminal-proof.json and pinned source/occurrence receipts.
 
 Exact retained input for the separate 10666 scope defect is not clipped by
 existing scope-review limits. Telegram candidate 27359 source has 1608 characters
-and excerpt27; later VK candidate 27385 has1829/excerpt77. Both are below
+and a 27-character excerpt; later VK candidate 27385 has 1829 source characters
+and a 77-character excerpt. Both are below
 7000/1200 caps; both date headings and next-day excursion programme are inside
 the supplied source. The actual original llm_single_event result kept the full
 corpus. This excludes source clipping at that boundary, not model semantic
 misclassification or later contamination. It does not reproduce the original
 response or establish a validated prompt fix. No provider call, production
 write, prompt/cap/model/guard change or canonical repair. Original 10678 refusal
-and separate 10676 fact loss remain unresolved. Normal parser12:15 source-to-final
+and separate 10676 fact loss remain unresolved. Normal parser at 12:15 UTC source-to-final
 description acceptance remains required. Evidence
 description10666-scope-clipping-boundary.json and retained original stage log.
