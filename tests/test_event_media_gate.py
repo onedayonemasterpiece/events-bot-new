@@ -1772,3 +1772,45 @@ async def test_backfill_stages_legacy_multi_image_event_without_deleting_evidenc
     rerun = module.stage(con, current_date="2026-07-13", apply=False)
     con.close()
     assert rerun["staged_events"] == 0
+
+
+@pytest.mark.asyncio
+async def test_exact_cdn_thumbnail_backfill_preserves_display_bytes(monkeypatch) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    image = Image.new("RGB", (64, 48))
+    image.putdata([((x * 31 + y * 7) % 256, (x * 13) % 256, (y * 23) % 256)
+                   for y in range(48) for x in range(64)])
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    original = prepare_image_for_supabase(buffer.getvalue()).webp_bytes
+    digest = hashlib.sha256(original).hexdigest()
+    path = f"p/image/v2/{digest[:2]}/{digest}.webp"
+    url = f"https://static.kenigevents.ru/{path}"
+    uploads = []
+
+    def download(requested, **kwargs):
+        assert requested == url
+        return DownloadedPoster(original, "image/webp", requested)
+
+    def upload(data, *, object_path, **kwargs):
+        uploads.append((object_path, data))
+        return f"https://static.kenigevents.ru/{object_path}"
+
+    monkeypatch.setattr(event_media, "_download_url", download)
+    monkeypatch.setattr("yandex_storage.upload_yandex_public_bytes", upload)
+    poster = EventPoster(
+        event_id=1, poster_hash="a" * 64, supabase_url=url,
+        supabase_path=path, raw_sha256=digest, review_status=APPROVED,
+        image_geometry_id=42, media_semantic_status="classified",
+        pixel_sha256=compute_image_fingerprints(original).pixel_sha256,
+    )
+    for _ in range(2):
+        assert await event_media.materialize_event_media_candidate_to_cdn(poster)
+        assert poster.supabase_url == url
+        assert poster.raw_sha256 == digest
+        assert poster.image_geometry_id == 42
+        assert poster.media_semantic_status == "classified"
+        assert poster.thumbnail_256_url and poster.thumbnail_512_url
+    assert uploads[0] == (path, original)
+    assert len(uploads) == 3  # First backfill only; second pass is already complete.
