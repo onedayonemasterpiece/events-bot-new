@@ -87,7 +87,7 @@ async def test_muz_details_preserves_product_prose_and_metadata_fallback(body_mo
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", ["empty_navigation_error", "populated", "snapshot_io_error"])
+@pytest.mark.parametrize("case", ["empty_navigation_error", "empty_invalid_row", "populated", "snapshot_io_error"])
 async def test_muz_schedule_zero_result_keeps_bounded_diagnostics(case, tmp_path, monkeypatch, capsys):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -95,7 +95,9 @@ async def test_muz_schedule_zero_result_keeps_bounded_diagnostics(case, tmp_path
     html = ('<div class="row afisha"><div class="afisha_data">'
             '<div class="afisha_nom">20</div>Ноября 18:30</div>'
             '<div class="afisha_spek_title"><a href="/spektakli/control/">Концерт</a></div></div>'
-            if case == "populated" else '<html><title>Temporary upstream response</title></html>')
+            if case in {"populated", "empty_invalid_row"} else '<html><title>Temporary upstream response</title></html>')
+    if case == "empty_invalid_row":
+        html = html.replace("afisha_spek_title", "unrelated")
     node = next(n for n in ast.parse(_source()).body if isinstance(n, ast.AsyncFunctionDef)
                 and n.name == "scrape_muz_schedule")
     namespace = {"BeautifulSoup": BeautifulSoup, "re": re,
@@ -111,12 +113,13 @@ async def test_muz_schedule_zero_result_keeps_bounded_diagnostics(case, tmp_path
                            goto=AsyncMock(side_effect=TimeoutError() if case == "empty_navigation_error" else None),
                            wait_for_timeout=AsyncMock(), mouse=SimpleNamespace(wheel=AsyncMock()))
     result = await namespace["scrape_muz_schedule"](page, "https://muzteatr39.ru/afisha")
-    if case == "empty_navigation_error":
+    if case in {"empty_navigation_error", "empty_invalid_row"}:
         assert (tmp_path / "muz_schedule_empty.html").read_text() == html
         log = capsys.readouterr().out
-        assert "schedule_navigation_failed type=TimeoutError" in log
+        if case == "empty_navigation_error":
+            assert "schedule_navigation_failed type=TimeoutError" in log
         assert "url=https://muzteatr39.ru/unexpected-response/" in log
-        assert f"chars={len(html)} rows=0" in log
+        assert f"chars={len(html)} rows={1 if case == 'empty_invalid_row' else 0}" in log
     else:
         assert not (tmp_path / "muz_schedule_empty.html").exists()
     if case == "populated":

@@ -2246,3 +2246,9 @@ does not block the parser. Provider audit exits zero. Candidate not merged,
 built, qualified or delivered; diagnosis and ordinary recovery remain open.
 Evidence muz-zero-diag-before.log, muz-zero-diag-regressions.log and
 muz-zero-diag-provider-audit.log in retained intake artifacts.
+
+Final diagnostic refinement retains HTML for zero parsed events, including
+nonempty selector rows with unusable fields. Final baseline two failures and
+two passing contrasts; all 67 regressions pass after. Net production +8 lines
+(seven functional and one blank), within the ten-line budget. Parsing and
+existing cancellation/catch semantics remain unchanged. No new release yet.
