@@ -2090,3 +2090,41 @@ Existing Event 10672 is not silently claimed repaired by prevention source code.
 Merge, qualification, delivery and normal post-release source effects remain
 pending. Evidence guide11706-terminal-proof.json, muz-body-before.log,
 muz-body-regressions.log and muz-body-actual-control.json in retained artifacts.
+
+
+## November 7 09:57 UTC — combined prevention delivered
+
+PR861 full musical-theatre source acquisition, PR862 exact bundle font/icon paths
+and PR863 failed-session promotion-history exclusion are delivered together from
+merged exact main 6b9cedf93f49c4c4742ba27c313a99079d68e4e9, immutable
+sha256:a4ebc2cfc82a4b736a03d3a9867a2cea4357e54cfd2c0347e38689cb4d6dd659.
+All four required latest-head CI, full 4459-file source proof and initialized
+isolated inherited controls passed. Wrong SHA was refused before DB init; final
+HTTP isolation passed and the owned preflight was removed. Earlier 071/c70
+candidates were never delivered and are superseded. No rebuild was repeated.
+
+Video1578 completed naturally and media150639 reached done before cutover. Fresh
+ops, MCP, background and remote-render checks were empty. Only Events switched;
+settings, Kotopogoda and its source mount remain unchanged. Explicit live source,
+identity/native/date/queue controls, retained DOM extraction1131, three fonts and
+four masks passed; live selector exposes652 read-only. Health ready=true, DB and
+scheduler healthy. No provider publication, source replay or canonical repair
+was part of those live controls. The first command used unavailable host python
+and did not execute; old runtime and absent backup were confirmed before the
+successful python3 invocation. A host-only verify path was then correctly fed
+to container stdin; its final exit is zero.
+
+Normal parser12:15 source-to-stored/public description acceptance remains pending;
+retained DOM1131 is not proof that the writer preserves every useful fact. Existing
+10672 was not replayed or repaired. Separate10666 scope misclassification and
+10676 fact loss remain unresolved. A fresh exact five-fact10678 model-only writer
+control produced510 characters and passed unchanged cleanup; ticket/address
+contrasts still reject. It did not reproduce the original refusal, whose bodies
+are unretained. No cap, prompt, model setting or grounding guard changed; no
+Event/Job writes. Owner KPI remains actual defects disappearing without new
+defects or recurrence, rather than release count or longer text alone.
+
+Evidence guide-history-delivery-receipt.json, qualification, cutover and explicit
+live verification logs; description10678-current-writer-summary.json in retained
+intake recovery artifacts. Ordinary VK10:00 and future true3D guide-render
+acceptance are still distinct product checks.

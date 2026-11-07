@@ -127,3 +127,24 @@ Same existing watchdog1578 advanced to publish after a completed render, but its
 A one-line predicate in the existing choose_guide_excursion_promo history query excludes FAILED only. Existing active and published cooldowns remain. Before: one distinguishing failure and five passing selector/availability/contact contrasts. This is bookkeeping of shown promotions, not a new cadence or event-semantic rule. Required CI now includes this existing selector test module. No state, retry, worker, recovery script, production correction or new kernel. Current1578 remains frozen and publishing; do not resend its other scenes to restore this missing optional placement. Full ordinary video publication and a future actual guide-scene selection/render remain distinct acceptance criteria.
 
 PR862 merged all four green, exactc70c1c6efcff6bb36d0a8a931dcddcb6ee4c9c2e qualified with immutable0d59bb2caf90bee028a53000410a9666a8f3f988541207dae73fe1c065b54534. It is not delivered and does not qualify this newer query change. Prepared source must be merged/qualified with both preceding fixes before claiming combined prevention. Source/full4459, isolated font/icon and retained DOM controls, wrong SHA and HTTP isolation passed for c70. HTTP503 is the inactive preflight after178seconds grace, with ready=false and DB skipped, not a live-service outage. Owned container removed. Initial local qualification writer assumedHTTP200 and was corrected to the actual isolation receipt without repeating a successful probe.
+
+
+## November 7 09:57 UTC — delivered prevention and ordinary video result
+
+PR862/863 delivered with PR861 from exact main6b9cedf93f49c4c4742ba27c313a99079d68e4e9,
+immutable sha256:a4ebc2cfc82a4b736a03d3a9867a2cea4357e54cfd2c0347e38689cb4d6dd659.
+Qualification includes actual initialized selector SQLite contrasts, exact bundle
+font/icon loading, notebook and cancellation controls; wrong SHA and HTTP isolation
+pass. Live source checks load three approved fonts and four masks and expose
+occurrence652 via read-only selector. Health ready=true, settings/Kotopogoda unchanged.
+No registry reset, duplicate kernel, manual recovery or modified frozen selection.
+
+Existing session1578 naturally finished at09:40:14 and published_at09:40:33.
+Exact output manifest binds cherryflash-session-1578-1794039195; all eleven target
+receipts report ok. Independent authenticated reads confirm VKwall-231828790_2342
+with37-second video456239531 at720x1280 and Telegramkenigevents5525 linking story544.
+No resend. Its frozen selection contains no guide scene, so this successful video
+does not accept the repaired true3D guide render. A subsequent ordinary selection
+and complete guide-scene render/publication remain required before closure.
+Evidence video1578-terminal-acceptance.json, exact public reads and combined
+guide-history-delivery-receipt.json in retained intake recovery artifacts.
