@@ -2512,3 +2512,82 @@ async def test_storage_admission_stops_batch_before_claim(tmp_path, monkeypatch,
     assert status == "error"
     assert json.loads(details)["skip_reason"] == "storage_admission"
     assert any("512" in text for _, text in bot.messages)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('external_cancel', [False, True])
+@pytest.mark.parametrize('accepted_outcome', [SmartUpdateTerminalOutcome.CREATED, SmartUpdateTerminalOutcome.MERGED])
+async def test_vk_committed_child_survives_next_child_cancellation(tmp_path, monkeypatch, external_cancel, accepted_outcome):
+    from models import Event
+
+    db = Database(str(tmp_path / 'partial-cancel.sqlite'))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute("INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','Source')")
+        await conn.commit()
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db, group_id=1, owner_type='group',
+        post={'date': 1, 'post_id': 100, 'text': 'two events', 'photos': []},
+        source_url='https://vk.com/wall-1_100', keyword_hints=(), date_hints=(), event_ts_hint=None,
+    )
+    entered_second = asyncio.Event()
+    never = asyncio.Event()
+    calls = []
+
+    async def fake_fetch(*args, **kwargs):
+        return 'two events', [], datetime.now(timezone.utc), {}, vk_auto_queue.VkFetchStatus(True, 'ok')
+
+    async def fake_build(*args, **kwargs):
+        drafts = [vk_intake.EventDraft(title=t, date='2026-12-31', venue='Venue') for t in ('First', 'Second')]
+        decision = SourceParseDecision(
+            [{'title': d.title} for d in drafts], disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source('two events'),
+        )
+        return vk_intake.DraftParseResult(drafts, decision=decision), None
+
+    async def fake_persist(draft, *args, **kwargs):
+        calls.append(draft.title)
+        if draft.title == 'Second':
+            entered_second.set()
+            await never.wait()
+        async with db.get_session() as session:
+            event = Event(title=draft.title, date=draft.date, time='12:00', description='', source_text='source', location_name='Venue')
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+            event_id = event.id
+        return vk_intake.PersistResult(
+            event_id=event_id, telegraph_url='', ics_supabase_url='', ics_tg_url='',
+            event_date=draft.date, event_end_date=None, event_time='12:00', event_type=None, is_free=False,
+            smart_result=SmartUpdateResult(outcome=accepted_outcome, event_id=event_id),
+        )
+
+    monkeypatch.setenv('VK_AUTO_IMPORT_ROW_TIMEOUT_SEC', '1' if not external_cancel else '60')
+    monkeypatch.setattr(vk_auto_queue, 'fetch_vk_post_text_and_photos', fake_fetch)
+    monkeypatch.setattr(vk_intake, 'build_event_drafts', fake_build)
+    monkeypatch.setattr(vk_intake, 'persist_event_and_pages', fake_persist)
+    bot = DummyBot()
+    task = asyncio.create_task(vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123))
+    await asyncio.wait_for(entered_second.wait(), 5)
+    if external_cancel:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    else:
+        report = await task
+        assert report.inbox_failed_technical == 1
+        reported_ids = report.created_event_ids if accepted_outcome is SmartUpdateTerminalOutcome.CREATED else report.updated_event_ids
+        assert len(reported_ids) == 1
+    async with db.raw_conn() as conn:
+        links = await (await conn.execute('SELECT event_id FROM vk_inbox_import_event')).fetchall()
+        events = await (await conn.execute('SELECT id FROM event')).fetchall()
+        inbox = await (await conn.execute('SELECT status,last_typed_reason FROM vk_inbox WHERE source_packet_id=?', (packet_id,))).fetchone()
+        attempt = await (await conn.execute('SELECT smart_update_child_outcomes_json FROM vk_source_packet_attempt WHERE source_packet_id=? ORDER BY id DESC LIMIT 1', (packet_id,))).fetchone()
+    assert len(events) == 1
+    assert links == events
+    assert accepted_outcome.value in json.loads(attempt[0])
+    if external_cancel:
+        assert inbox[0] == 'locked'
+    else:
+        assert inbox == ('failed_technical', 'ROW_TIMEOUT')
+    assert calls == ['First', 'Second']

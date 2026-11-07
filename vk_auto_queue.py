@@ -1054,7 +1054,7 @@ async def _terminalize_vk_auto_failure(
     await vk_review.record_carrier_resolution(
         db,
         source_packet_id=getattr(post, "source_packet_id", None),
-        child_outcomes=list(child_outcomes or ()),
+        child_outcomes=list(child_outcomes) if child_outcomes is not None else None,
         terminal_carrier_outcome="FAILED_TECHNICAL",
         typed_error_reason=reason,
     )
@@ -3018,8 +3018,22 @@ async def _process_vk_inbox_row(
             imported_event_dates.append(res.event_date)
             if smart_result.outcome is SmartUpdateTerminalOutcome.CREATED:
                 created_ids.append(int(res.event_id))
+                report.created_event_ids.append(int(res.event_id))
             else:
                 updated_ids.append(int(res.event_id))
+                report.updated_event_ids.append(int(res.event_id))
+            # Preserve completed children before awaiting the next child: row
+            # cancellation must not discard their existing receipt links.
+            async with db.raw_conn() as conn:
+                await conn.execute(
+                    "INSERT OR IGNORE INTO vk_inbox_import_event(inbox_id,event_id) VALUES(?,?)",
+                    (int(post.id), int(res.event_id)),
+                )
+                await conn.commit()
+            logger.info(
+                "vk_auto.child_committed inbox_id=%s event_id=%s outcome=%s",
+                post.id, res.event_id, smart_result.outcome.value,
+            )
             added = int(getattr(res, "smart_added_posters", 0) or 0)
             added_posters_total += added
             added_posters_by_event_id[int(res.event_id)] = added
@@ -3053,6 +3067,11 @@ async def _process_vk_inbox_row(
             partial_error = exc_txt
             ok = True
             break
+        finally:
+            await vk_review.record_carrier_resolution(
+                db, source_packet_id=getattr(post, "source_packet_id", None),
+                child_outcomes=child_outcomes, terminal_carrier_outcome=None,
+            )
     if drafts:
         _tmark("persist_total", persist_total_sec)
 
@@ -3203,8 +3222,6 @@ async def _process_vk_inbox_row(
             terminal_carrier_outcome=carrier_outcome,
         )
         report.inbox_imported += 1
-    report.created_event_ids.extend(created_ids)
-    report.updated_event_ids.extend(updated_ids)
 
     created_cnt = len(created_ids)
     updated_cnt = len(updated_ids)
