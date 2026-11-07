@@ -1968,3 +1968,62 @@ vk-child-final-http-isolation.log, vk-child-cutover-after-media-terminal.log,
 vk-child-live-verify.log, vk-child-health-startup.json and
 vk-child-delivery-receipt.json. Incident remains open for normal-run acceptance
 and separately retained data-integrity residuals.
+
+
+### November 7 06:36 UTC — owner quality criterion and new-description analysis
+
+The owner explicitly requires actual event defects to disappear, fixes to avoid
+new defects, and prior incidents not to recur. Tests and releases support this
+criterion; they do not replace real source-to-card quality. The owner also asks
+for analysis of descriptions on new imports: preserve relevant factual detail,
+let narrative length reflect fact volume, and improve quality without filler or
+invented content. No arbitrary defect target or proportional length quota adopted.
+
+A retained cohort contains exactly 37 new Events from accepted ordinary runs:
+TG 11697 creates 10639–10670, parser 11702 creates 10671/10672/10673/10676, and VK 11703
+creates 10674. Unrelated 10675 is excluded. This is a current canonical snapshot,
+which can include later ordinary merges. The examples below were selected for
+investigation, not a representative defect-rate estimate.
+
+- 10676 «Стихи в цене»: source says six poets, one monetary prize and ticket-funded
+  prize fund; stored description of 121 characters and fact ledger omit them. Actual
+  extraction log rejects the generated six-poet claim for lexical support 2/8.
+  Extraction 696 of 1400 tokens and writer 51 of 1700 tokens both finish STOP. This example
+  was not truncated by either output token cap. The original evidence_quote is
+  not retained, so reconstructed quote controls cannot identify that exact quote.
+  With an exact short source quote, an atomic six-poet fact passes while the
+  logged composite sentence fails. A different number written as a word also
+  passes that isolated lexical check: it is not a complete semantic verifier and
+  must not be weakened to force the positive. No such wrong-number production
+  claim was established. Missing prize cause remains unproved.
+- 10641 park birthday, 10648 photography lecture and 10656 finance seminar show
+  additional lost programme/topic detail. Trace extraction, selection and seed
+  fallback separately before attributing these omissions to a writer limit.
+- 10666 «Кормление пеликанов», November 7 16:00: stored prose contains Alexander
+  Pauli and the programme of the separate November 8 11:00 excursion. Initial
+  Telegram candidate 27359 has the full multi-event post, narrow raw_excerpt,
+  null occurrence_scope_text; foreign facts were already recorded 03:00:22.
+  Existing create_bundle_grounding nevertheless returned llm_grounded.
+  Later VK merge is not the introduction of those facts. This also predates
+  the 06:09 accepted-child bookkeeping release; do not blame it for this content.
+
+Main split-create production route already scales description budget with facts
+(default ceiling 12000 characters), and excludes the legacy 1800 character shrinking
+branch after fact-first routing. Rich fact extraction has its own 7000 character
+input and 1400 token output bounds, plus 40/30 fact selection boundaries. These are
+investigation points, not proof that a specific boundary caused every omission.
+Source length includes logistics, unrelated programme blocks, repeated information
+and parser instructions; length ratio alone is not a quality measure. Event 10672
+also has an upstream source ending mid-sentence, a separate boundary to inspect.
+
+Next: preserve fact coverage and occurrence ownership through the existing pipeline,
+including sparse-source, rich-source, distinct-sibling, named-person, number and
+unsupported-claim controls before any prompt or limit proposal. No new normalizer,
+state, retry, worker, source replay, Event/Job repair, provider call, prompt change
+or guard weakening. Related May 11 lecturer fact-loss incident read fully; do not
+repeat its old manual replay instruction. Incident remains open.
+
+Retained evidence: description-quality-normal-cohort37.json,
+description10676-stage-log.txt, description10676-stage-token-summary.json,
+description10676-offline-grounding-contrasts.json,
+description10666-candidate-provenance.json and description10666-initial-stage-log.txt.
