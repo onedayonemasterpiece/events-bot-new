@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ast
 import json
 import shutil
 from datetime import datetime, timedelta, timezone
@@ -1935,3 +1936,58 @@ async def test_story_publish_only_recovery_skips_already_published_session(tmp_p
     recoverable = await poller_module._load_session_if_publish_only_allowed(db, 677)
     assert recoverable is not None
     assert recoverable.id == 677
+
+
+@pytest.fixture
+def guide_font_loader():
+    from PIL import Image, ImageFont
+
+    source = Path("scripts/render_cherryflash_guide_true3d_v4.py").read_text()
+    nodes = [n for n in ast.parse(source).body if (isinstance(n, ast.FunctionDef) and n.name in {"font", "resolve_asset_path", "build_icon"}) or (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "ICON_MASKS" for t in n.targets))]
+    namespace = {"Path": Path, "ImageFont": ImageFont, "Image": Image}
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "guide-renderer-font", "exec"), namespace)
+    return namespace
+
+
+@pytest.mark.parametrize("layout", ["bundle", "repository"])
+def test_guide_fonts_load_from_actual_cherryflash_layout(tmp_path, guide_font_loader, layout):
+    from video_announce.scenario import VideoAnnounceScenario
+
+    scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
+    fonts = {"Akrobat-Bold.otf", "Akrobat-Black.otf", "DrukCyr-Super.ttf"}
+    selected = [(source, target) for source, target in scenario._iter_cherryflash_bundle_files() if source.name in fonts]
+    assert {source.name for source, _ in selected} == fonts
+    for source, target in selected:
+        destination = tmp_path / (target if layout == "bundle" else f"video_announce/assets/{source.name}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        loaded = guide_font_loader["font"](tmp_path, f"video_announce/assets/{source.name}", 24)
+        assert loaded.getbbox("Экскурсия 7 ноября")[2] > 0
+        assert Path(loaded.path) == destination
+
+
+def test_guide_missing_font_still_fails(tmp_path, guide_font_loader):
+    with pytest.raises(FileNotFoundError):
+        guide_font_loader["font"](tmp_path, "video_announce/assets/Akrobat-Bold.otf", 24)
+
+
+
+@pytest.mark.parametrize("layout", ["bundle", "repository"])
+def test_guide_icons_keep_exact_masks_in_actual_bundle(tmp_path, guide_font_loader, layout):
+    from PIL import Image, ImageChops
+
+    scenario = VideoAnnounceScenario(db=None, bot=None, chat_id=0, user_id=0)
+    for source, target in scenario._iter_cherryflash_bundle_files():
+        if source.parent.name != "cherryflash_icons":
+            continue
+        destination = tmp_path / (target if layout == "bundle" else f"video_announce/assets/cherryflash_icons/{source.name}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+    for kind, filename in guide_font_loader["ICON_MASKS"].items():
+        icon = guide_font_loader["build_icon"](tmp_path, kind, 48, (12, 34, 56))
+        source = Path("video_announce/assets/cherryflash_icons") / filename
+        expected = Image.open(source).convert("L").resize((48, 48), Image.Resampling.LANCZOS)
+        assert ImageChops.difference(icon.getchannel("A"), expected).getbbox() is None
+    fallback = guide_font_loader["build_icon"](tmp_path, "unknown", 48, (12, 34, 56))
+    walk = guide_font_loader["build_icon"](tmp_path, "walk", 48, (12, 34, 56))
+    assert ImageChops.difference(fallback, walk).getbbox() is None

@@ -24,6 +24,8 @@ The icon layer uses the approved SVG Repo-derived assets packaged in `video_anno
 
 The notebook installs Pillow into Blender's bundled Python as well as notebook Python, then checks the actual Blender import with a nonzero Python-error exit code. Notebook packages alone do not satisfy Blender dependencies; see `INC-2026-11-05-cherryflash-blender-pillow`.
 
+The approved guide renderer uses its existing asset resolver for fonts and icon masks. Repository `video_announce/assets/...` paths retain priority; the existing Kaggle bundle places the same files under `assets/...`. Both layouts must load the exact same fonts and masks. Missing files remain errors; no substitute font, icon redesign or new publication path is permitted.
+
 ## Canonical routes
 
 - Current `/v` feature: `docs/features/crumple-video/README.md`

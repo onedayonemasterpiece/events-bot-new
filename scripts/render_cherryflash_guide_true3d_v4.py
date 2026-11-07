@@ -124,7 +124,7 @@ def hex_blender(hex_color: str, alpha: float = 1.0) -> tuple[float, float, float
     return (srgb_to_linear(r/255), srgb_to_linear(g/255), srgb_to_linear(b/255), alpha)
 
 def font(root: Path, rel: str, size: int) -> ImageFont.FreeTypeFont:
-    p = root / rel
+    p = resolve_asset_path(root, rel)
     if not p.exists():
         raise FileNotFoundError(p)
     return ImageFont.truetype(str(p), size)
@@ -160,7 +160,11 @@ def resolve_asset_path(root: Path, value: str | Path) -> Path:
     path = Path(value)
     if path.is_absolute():
         return path
-    return root / path
+    resolved = root / path
+    # The existing Kaggle bundle maps video_announce/assets to top-level assets.
+    if not resolved.exists() and path.parts[:2] == ("video_announce", "assets"):
+        return root / Path(*path.parts[1:])
+    return resolved
 
 # ---------------------------------------------------------------------------
 # PIL asset preparation and overlay
@@ -178,9 +182,9 @@ def crop_avatar_square(src_path: Path, dst_path: Path, size: int = 1200) -> None
         crop.save(dst_path, quality=96)
 
 def build_icon(root: Path, kind: str, size: int, color: tuple[int,int,int]) -> Image.Image:
-    mask_path = root / "video_announce" / "assets" / "cherryflash_icons" / ICON_MASKS.get(kind, ICON_MASKS["walk"])
+    mask_path = resolve_asset_path(root, Path("video_announce/assets/cherryflash_icons") / ICON_MASKS.get(kind, ICON_MASKS["walk"]))
     if not mask_path.exists():
-        mask_path = root / "video_announce" / "assets" / "cherryflash_icons" / ICON_MASKS["walk"]
+        mask_path = resolve_asset_path(root, Path("video_announce/assets/cherryflash_icons") / ICON_MASKS["walk"])
     mask = Image.open(mask_path).convert("L").resize((size, size), Image.Resampling.LANCZOS)
     icon = Image.new("RGBA", (size, size), (*color, 255))
     icon.putalpha(mask)
