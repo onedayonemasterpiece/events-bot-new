@@ -1089,3 +1089,19 @@ async def test_emergency_reserve_covers_smart_update_stages(monkeypatch, label):
     assert calls[0]['max_provider_attempts'] == (1 if label == 'collection_candidate_adjudication' else 2)
     if label != 'collection_candidate_adjudication':
         assert calls[0]['fallback_models'][0] == 'gemini-3.6-flash'
+
+
+def test_split_description_keeps_actual_anniversary_programme_word_boundary():
+    # Retained real writer output for Event10687, November7 control.
+    body = 'Калининградский симфонический оркестр представляет программу «Осенняя фантазия», проходящую в рамках 40-го юбилейного сезона коллектива. За дирижёрским пультом — заслуженный деятель искусств России Аркадий Фельдман.\n\n### Программа концерта\nВ первом отделении прозвучит Симфония ре минор Сезара Франка, а также Венгерские танцы № 5 и № 6 Иоганнеса Брамса.\n\n### Джазовый блок\nВторая часть вечера включает композиции известных авторов:\n* Дюк Эллингтон\n* Элмер Бернстайн\n* Эндрю Ллойд Уэббер\n* Джордж Гершвин\n* Дмитрий Шостакович'
+    candidate = su.EventCandidate(source_text="Концерт", source_type="vk", source_url="https://vk.com/wall-26231813_11053", title="Концерт «Осенняя фантазия»", date="2026-11-08", time="19:00", location_address="Калининградский проспект 11")
+    result = su._cleanup_g4_split_create_description(body, candidate=candidate)
+    assert result is not None
+    for fact in ("40-го", "Аркадий Фельдман", "Сезара Франка", "Иоганнеса Брамса", "Дюк Эллингтон", "Элмер Бернстайн", "Эндрю Ллойд Уэббер", "Джордж Гершвин", "Дмитрий Шостакович"):
+        assert fact in result
+
+
+@pytest.mark.parametrize("text", ["ул.Ленина 2", "ул Ленина 2", "улица Ленина 2", "пр.Мира 12", "пр Мира 12", "проспект Мира 12", "пер.Малый 3", "пл.Победы 1", "дом 5", "д.5", "Адрес: Клиническая 21.", "Вход по билетам.", "Начало в 19:00."])
+def test_split_description_still_rejects_hard_logistics(text):
+    candidate = su.EventCandidate(source_text="Концерт", source_type="vk", source_url="https://vk.com/wall-1_2", title="Концерт")
+    assert su._description_needs_g4_split_create_logistics_reject(text, candidate=candidate)

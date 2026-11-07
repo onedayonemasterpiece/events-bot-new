@@ -3663,7 +3663,7 @@ _LOGISTICS_TICKET_BOILERPLATE_DROP_RE = re.compile(
 _LOGISTICS_EXPLICIT_ADDRESS_RE = re.compile(
     r"(?i)\b("
     r"по\s+адресу|адрес|"
-    r"(?:ул\.?|улиц\w*|пр\.?|проспект\w*|пер\.?|переул\w*|пл\.?|площад\w*|дом|д\.)"
+    r"(?:ул\b\.?|улиц\w*|пр\b\.?|проспект\w*|пер\b\.?|переул\w*|пл\b\.?|площад\w*|дом\b|д\.)"
     r"[^.!?\n]{0,80}\d"
     r")\b"
 )
@@ -4660,9 +4660,10 @@ def _cleanup_g4_split_create_description(
         raw = _clip(raw, SMART_UPDATE_DESCRIPTION_MAX_CHARS)
     if _description_needs_g4_split_create_logistics_reject(raw, candidate=candidate):
         logger.warning(
-            "smart_update: g4_split_description_writer rejected description with logistics source_type=%s source_url=%s",
+            "smart_update: g4_split_description_writer rejected description with logistics source_type=%s source_url=%s explicit_address=%s",
             candidate.source_type,
             candidate.source_url,
+            bool(_LOGISTICS_EXPLICIT_ADDRESS_RE.search(raw)),
         )
         return None
     return raw.strip() or None
