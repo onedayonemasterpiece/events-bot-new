@@ -72,6 +72,7 @@ jobs:
           tests/test_job_worker_fresh_selection.py
           tests/test_philharmonia_parser.py
           tests/test_parse_theatres_notebook.py
+          tests/test_event_media_gate.py
           tests/test_source_parse_prompt_contract.py
           tests/test_event_parse_llm_first_contract.py
           tests/test_telegram_monitor_llm_first_producer_contract.py

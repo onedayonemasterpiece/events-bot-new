@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Sequence
@@ -878,6 +878,13 @@ async def materialize_event_media_candidate_to_cdn(
     # dHash is deliberately fuzzy and therefore cannot be an immutable object
     # identity: two different renditions can share it and overwrite the same
     # public URL.  Address canonical WebP objects by their exact encoded bytes.
+    source_object = parse_yandex_storage_url(downloaded.source_url)
+    if source_object and _is_exact_content_poster_path(source_object[1]):
+        # Missing thumbnails must not replace an existing immutable display.
+        prepared = replace(
+            prepared, webp_bytes=downloaded.data,
+            encoded_sha256=hashlib.sha256(downloaded.data).hexdigest(),
+        )
     prefix = (os.getenv("SUPABASE_POSTERS_PREFIX") or "p").strip().strip("/") or "p"
     encoded_sha256 = str(prepared.encoded_sha256 or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", encoded_sha256):
