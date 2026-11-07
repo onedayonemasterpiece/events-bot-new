@@ -6329,7 +6329,7 @@ _PRICE_CONTEXT_RE = re.compile(
     r"|р\."
     r")"
 )
-_PRICE_NUMBER_RE = re.compile(r"(?u)\b\d{2,6}\b")
+_PRICE_NUMBER_RE = re.compile(r"(?u)\b\d{1,6}\b")
 _NON_TICKET_MONEY_CONTEXT_RE = re.compile(
     r"(?iu)\b("
     r"компенсац\w*|"
@@ -8061,7 +8061,7 @@ def _has_price_evidence(text: str | None, *values: int | None) -> bool:
         return False
     if not (_PRICE_CONTEXT_RE.search(raw) and _PRICE_NUMBER_RE.search(raw)):
         return False
-    nums = {int(v) for v in values if isinstance(v, int) and v > 0}
+    nums = {int(v) for v in values if isinstance(v, int) and v >= 0}
     if not nums:
         return True
     for n in nums:
@@ -18869,16 +18869,20 @@ async def _smart_event_update_impl(
         if not _has_price_evidence(price_probe, candidate.ticket_price_min, candidate.ticket_price_max):
             before_min = candidate.ticket_price_min
             before_max = candidate.ticket_price_max
+            for price_field in ("ticket_price_min", "ticket_price_max"):
+                if getattr(candidate, price_field) == 0 and candidate.is_free is not True:
+                    setattr(candidate, price_field, None)
             note = "Semantic hint: extracted price lacks deterministic source match"
             if note not in text_filter_facts:
                 text_filter_facts.append(note)
             logger.info(
-                "smart_update.semantic_hint reason=price_evidence_conflict source_type=%s source_url=%s title=%s value=%s..%s",
+                "smart_update.semantic_hint reason=price_evidence_conflict source_type=%s source_url=%s title=%s value=%s..%s zero_cleared=%s",
                 candidate.source_type,
                 candidate.source_url,
                 _clip_title(clean_title),
                 before_min,
                 before_max,
+                (before_min, before_max) != (candidate.ticket_price_min, candidate.ticket_price_max),
             )
 
     free_probe_text = "\n".join(

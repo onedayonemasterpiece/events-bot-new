@@ -13,6 +13,11 @@ async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
     return None
 
 
+async def _grounded_location_for_eventness_only(*_args, **_kwargs):
+    # These two tests isolate eventness; location review has its own contract suite.
+    return True, None
+
+
 async def _grounded_bundle_review():
     return True, "llm_grounded", []
 
@@ -334,7 +339,9 @@ async def test_e6853_replay_llm_fails_closed_before_duration_or_create(tmp_path,
     await db.init()
     try:
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "_llm_review_candidate_location_grounding", _grounded_location_for_eventness_only)
 
         async def _review(*_args, **_kwargs):
             return "non_event", 0.97, "past details do not ground the future occurrence"
@@ -767,6 +774,8 @@ async def test_zero_ticket_price_without_explicit_free_evidence_stays_not_free(t
             saved = await session.get(Event, result.event_id)
             assert saved is not None
             assert saved.is_free is False
+            assert saved.ticket_price_min is None
+            assert saved.ticket_price_max is None
     finally:
         await db.close()
 
@@ -1296,6 +1305,7 @@ async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_pa
 
     try:
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "_llm_review_candidate_location_grounding", _grounded_location_for_eventness_only)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
         monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
         monkeypatch.setattr(
@@ -1429,5 +1439,46 @@ async def test_zoo_ticket_validity_notice_is_llm_reviewed_and_skipped(tmp_path, 
         async with db.get_session() as session:
             rows = (await session.execute(select(Event))).scalars().all()
             assert rows == []
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_text,price_min,price_max,is_free,expected_min,expected_max",
+    [
+        ('ТЁРКА Х Локация | Разыгрываем 2 билета на Сольный стендап Васи Медведева🌟\n\nВасилий Медведев - комик из проектов «Разгоны», «Стендап комики» и «Женский взгляд»\n\nТеперь - сольный концерт, где повседневный кринж, странные мысли и жизненные приколы превращаются в стендап\n\nПриходи за сильными шутками и качественной комедией!\n\n📍13 ноября 19:00\nСбор гостей: 18:30\nГде: Стендап-клуб «Локация», ул. Юбилейная, 18\n\nУсловия участия❗️\n1.Подписаться на каналы: ТЁРКА и Стендап клуб Локация\n2.Нажать кнопку «Участвовать»\n3.Ждать результатов!\n\nУчастников: 26\nПризовых мест: 2\nДата розыгрыша: 10:00, 12.11.2026 MSK (4 дня)', 0, None, False, None, None),
+        ("Вход свободный. Сольный стендап.", 0, 0, True, 0, 0),
+        ("Билеты 0 руб. Сольный стендап.", 0, None, False, 0, None),
+        ("Билеты от 500 руб. Сольный стендап.", 500, None, False, 500, None),
+        ('ТЁРКА Х Локация | Разыгрываем 2 билета на Сольный стендап Васи Медведева🌟\n\nВасилий Медведев - комик из проектов «Разгоны», «Стендап комики» и «Женский взгляд»\n\nТеперь - сольный концерт, где повседневный кринж, странные мысли и жизненные приколы превращаются в стендап\n\nПриходи за сильными шутками и качественной комедией!\n\n📍13 ноября 19:00\nСбор гостей: 18:30\nГде: Стендап-клуб «Локация», ул. Юбилейная, 18\n\nУсловия участия❗️\n1.Подписаться на каналы: ТЁРКА и Стендап клуб Локация\n2.Нажать кнопку «Участвовать»\n3.Ждать результатов!\n\nУчастников: 26\nПризовых мест: 2\nДата розыгрыша: 10:00, 12.11.2026 MSK (4 дня)' + "\nСтоимость билета 500 руб.", 500, None, False, 500, None),
+        ("Цена не указана. Сольный стендап.", None, None, False, None, None),
+        ("Разыгрываем приз 500 руб. Сольный стендап.", 0, None, False, None, None),
+    ],
+    ids=["actual-raffle-unknown", "explicit-free", "explicit-zero", "paid", "raffle-and-paid", "unknown", "prize-is-not-admission"],
+)
+async def test_source_ticket_price_reaches_canonical_without_unsupported_zero(
+    tmp_path, monkeypatch, source_text, price_min, price_max, is_free, expected_min, expected_max
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        candidate = EventCandidate(
+            source_type="telegram", source_url="https://t.me/locostandup/4389",
+            source_text=source_text, title="Сольный стендап Васи Медведева",
+            date="2026-11-13", time="19:00", location_name="Стендап клуб Локация",
+            location_address="Юбилейная 18", city="Калининград",
+            ticket_price_min=price_min, ticket_price_max=price_max, is_free=is_free,
+            event_type="стендап", source_disposition="EVENTS_FOUND", source_evidence_complete=True,
+        )
+        result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+        assert result.status == "created"
+        async with db.get_session() as session:
+            saved = await session.get(Event, result.event_id)
+            assert saved.ticket_price_min == expected_min
+            assert saved.ticket_price_max == expected_max
+            assert saved.is_free is is_free
     finally:
         await db.close()
