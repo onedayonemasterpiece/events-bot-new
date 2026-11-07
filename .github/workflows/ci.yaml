@@ -250,7 +250,8 @@ jobs:
             tests/test_google_ai_limiter_supabase.py \
             tests/test_google_ai_rolling_window_migration.py \
             tests/test_audit_google_ai_provider_paths.py \
-            tests/test_smart_update_provider_fallback_safety.py
+            tests/test_smart_update_provider_fallback_safety.py \
+            tests/test_smart_update_native_schema.py
           node --experimental-strip-types --test \
             supabase/functions/event-search/google-quota.test.mjs \
             supabase/functions/event-search/occurrence-families.test.mjs
