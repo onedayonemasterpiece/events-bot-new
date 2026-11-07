@@ -1882,3 +1882,53 @@ tg11697-terminal-exact.json,tg11697-terminal-proof.json and imports-progress-034
 No production mutation, replay, new kernel, runtime build or restart was performed
 for this observation. All older once-only recovery and native/date/identity guards
 remain. Residual technical failures keep the original incident open.
+
+
+## November7 04:56UTC — VK row timeout hides accepted children in summary
+
+Normal VK11703 terminal PARTIAL04:54:03UTC,12terminal carriers and zero unresolved.
+Its report lists one CREATED10674 and one updated10596 with exact carrier/source
+links. A third carrier90609/source27242, wall-48383763_42850, exceeded existing
+1800second row timeout after eight durable MERGED children had committed. All
+those exact candidate/source anchors remain, but carrier links are absent and
+attempt12256 child outcomes are empty. Actual accepted child operations total10
+over9Events with no missing source anchor; do not equate report2 with only2
+persisted results or claim all carrier links verified. Two technical carriers,
+seven no-event and one missing_location policy exclusion remain distinct.
+
+Bounded source inspection shows row cancellation bypasses the existing partial
+exception path and final link/report bookkeeping after the draft loop. Introduction
+commit is unproved. No replay, limit increase, data repair or guard weakening.
+Required follow-up: isolated post-commit cancellation regression and zero-accepted
+timeout contrast, then minimal reuse of existing partial/failure finalization while
+preserving cancellation. Parser11702 resumed normal rows226–233 after VK terminal;
+keep the healthy import running. Evidence vk11703-terminal-proof.json and
+vk11703-row-timeout-observation.md under retained intake artifacts.
+
+
+## November7 05:36UTC — cancellation regression and candidate fix
+
+An isolated SQLite reproduction commits one Event, then blocks the next child.
+The real row timeout loses the first report count; external task cancellation
+loses its carrier link. Both controls fail on the original code; the existing
+zero-accepted timeout control passes. The narrow candidate moves existing child
+link/outcome/report bookkeeping to each completed child, retaining final carrier
+failure and cancellation propagation. No state, retry, worker, timeout increase,
+semantic rule, source replay or production data repair. A concise committed-child
+log adds correlation for the previously invisible prefix. Final94 VK import/review
+tests pass, including CREATED/MERGED crossed with row timeout/external cancellation;
+provider audit passes. These are mocked typed persist boundaries with real isolated
+SQLite bookkeeping, not new live semantic-model acceptance. Candidate is not yet
+merged, built, qualified or delivered.
+
+Normal parser11702 reached PARTIAL05:02:48UTC:323 rows,4created10671/10672/10673/10676,
+4updates8317/10442/10521/10635,313unchanged and2protected native-ticket conflicts.
+All323 indexed terminal row receipts and all8 exact changed-card source anchors
+are present. New theatre dates are January5/6/10 2027; Qtickets event is November8
+17:00. The existing photography52541 and quiz52878 conflicts remain guarded;
+no rebind, retiming or replay. Initial RO query used source_type='parser' and
+returned zero; actual source types use parser:<source>. Corrected prefix query
+verified eight changed rows and two refusals, no production mutation.
+Evidence parser11702-terminal-proof.json, parser11702-full-row-receipts.log,
+parser11702-anchors-corrected.json and vk-cancel-before/after/final.log in retained
+intake artifacts. Runtime38b34d3f remains delivered unchanged.

@@ -977,18 +977,20 @@ async def record_carrier_resolution(
     db: Database,
     *,
     source_packet_id: int | None,
-    child_outcomes: list[str],
+    child_outcomes: list[str] | None,
     terminal_carrier_outcome: str | None,
     next_attempt_at: str | None = None,
     typed_error_reason: str | None = None,
 ) -> None:
+    """Store completed child results; omitted outcomes preserve the last prefix."""
     if source_packet_id is None:
         return
     async with db.raw_conn() as conn:
         await conn.execute(
             """
             UPDATE vk_source_packet_attempt
-            SET smart_update_child_outcomes_json=?,terminal_carrier_outcome=?,
+            SET smart_update_child_outcomes_json=COALESCE(?,smart_update_child_outcomes_json),
+                terminal_carrier_outcome=COALESCE(?,terminal_carrier_outcome),
                 next_attempt_at=?,typed_error_reason=COALESCE(?,typed_error_reason)
             WHERE id=(
                 SELECT id FROM vk_source_packet_attempt
@@ -996,7 +998,7 @@ async def record_carrier_resolution(
             )
             """,
             (
-                json.dumps(child_outcomes, ensure_ascii=False), terminal_carrier_outcome,
+                json.dumps(child_outcomes, ensure_ascii=False) if child_outcomes is not None else None, terminal_carrier_outcome,
                 next_attempt_at, typed_error_reason, int(source_packet_id),
             ),
         )
