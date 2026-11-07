@@ -84,3 +84,44 @@ async def test_muz_details_preserves_product_prose_and_metadata_fallback(body_mo
         assert "Первый пункт программы\nВторой пункт программы" in description
     assert not any(text in description for text in
                    ["Другой сеанс", "Посторонний отзыв", "соседнего спектакля", "2023"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["empty_navigation_error", "populated", "snapshot_io_error"])
+async def test_muz_schedule_zero_result_keeps_bounded_diagnostics(case, tmp_path, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    html = ('<div class="row afisha"><div class="afisha_data">'
+            '<div class="afisha_nom">20</div>Ноября 18:30</div>'
+            '<div class="afisha_spek_title"><a href="/spektakli/control/">Концерт</a></div></div>'
+            if case == "populated" else '<html><title>Temporary upstream response</title></html>')
+    node = next(n for n in ast.parse(_source()).body if isinstance(n, ast.AsyncFunctionDef)
+                and n.name == "scrape_muz_schedule")
+    namespace = {"BeautifulSoup": BeautifulSoup, "re": re,
+                 "stable_page_content": AsyncMock(return_value=html),
+                 "BASE_URL_MUZ": "https://muzteatr39.ru"}
+    if case == "snapshot_io_error":
+        def unwritable(*args, **kwargs):
+            raise OSError("Read-only output")
+        namespace["open"] = unwritable
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "notebook", "exec"), namespace)
+    monkeypatch.chdir(tmp_path)
+    page = SimpleNamespace(url="https://muzteatr39.ru/unexpected-response/",
+                           goto=AsyncMock(side_effect=TimeoutError() if case == "empty_navigation_error" else None),
+                           wait_for_timeout=AsyncMock(), mouse=SimpleNamespace(wheel=AsyncMock()))
+    result = await namespace["scrape_muz_schedule"](page, "https://muzteatr39.ru/afisha")
+    if case == "empty_navigation_error":
+        assert (tmp_path / "muz_schedule_empty.html").read_text() == html
+        log = capsys.readouterr().out
+        assert "schedule_navigation_failed type=TimeoutError" in log
+        assert "url=https://muzteatr39.ru/unexpected-response/" in log
+        assert f"chars={len(html)} rows=0" in log
+    else:
+        assert not (tmp_path / "muz_schedule_empty.html").exists()
+    if case == "populated":
+        assert len(result) == 1
+        assert result[0]["date_raw"] == "20 НОЯБРЯ 18:30"
+        assert result[0]["url"] == "https://muzteatr39.ru/spektakli/control/"
+    else:
+        assert result == []
