@@ -2252,3 +2252,27 @@ nonempty selector rows with unusable fields. Final baseline two failures and
 two passing contrasts; all 67 regressions pass after. Net production +8 lines
 (seven functional and one blank), within the ten-line budget. Parsing and
 existing cancellation/catch semantics remain unchanged. No new release yet.
+
+
+### November 7, 13:43 UTC — normal parser terminal and diagnostic release qualification
+
+Normal parser 11716 reached PARTIAL at 13:23:43 UTC: 293 rows, no new Events, three reported updates, 288 unchanged, two native-ticket refusals and one retry scheduled. The three reported updates comprise MERGED 10521 and 10635 with fresh source anchors 14080916/14080923, plus NOOP_EXACT_REPLAY 10442 with existing anchor 13850072. Dates and times are preserved. Both actual technical refusals remain specific_ticket_occurrence_conflict against 10506/10578; no replay or rebind. A separate retained EventPoster database-lock error and the Sobor retry counter require exact stage reconciliation before calling the item recovered.
+
+Muzteatr returned no source file in this normal run, so Event 10672 has not gained the full body or stage-smoke warning. The pending Muzteatr request was scheduled once at 13:12:28, attempts 11 preserved; no compensating kernel or driver has run. PR 866 merged after all four required CI green. Exact main 330d35078605e6db79f485d4f8f9e3e9573d8e05 builds intake-muz-zero-diag-20261107, full 4459 tracked files verified. This is diagnostic evidence preservation, not a proven fix of the original empty source. Qualification and delivery status are recorded separately in retained receipts.
+
+New normal VK 11719 started automatically at 13:30 UTC, run 11dc56f1c4d14414b3e1ee3dec25092e. Actual row timing logs pin batch auto:1794058200; no guessed timestamp fallback. New Event 10685 has 508 description characters from 672 source-prose characters plus poster OCR. Poster explicitly supports November 8, 16:00 and programme details. The source weather condition is retained in search_digest but omitted from the description: a concrete fact-preservation finding, not proof of token truncation. No prompt/cap/guard change or canonical repair. Preserve healthy normal processing and accepted children.
+
+Evidence: parser11716-terminal-proof.json, parser11716-terminal-anchors.json, vk11719-progress.json, description10685-quality-observation.json, muz-zero-diag-build.log in the existing retained intake artifact directory.
+
+
+### November 7, 14:05 UTC — diagnostics delivered; exact VK terminal and media recurrence
+
+PR 866 is delivered from exact merged main 330d35078605e6db79f485d4f8f9e3e9573d8e05, image intake-muz-zero-diag-20261107, immutable sha256:ce74cdd0162d3ccb3c976af3a5d9cc5898c7d46506049be9a35abd559bd636f0. Full 4459 source proof, initialized isolated four actual diagnostics and inherited controls, wrong SHA and HTTP isolation passed; owned preflight removed. Runtime diagnostic file boundary is in-memory mocked; local tests exercise filesystem. Explicit live verification exits zero, health ready=true and DB ok, settings and Kotopogoda unchanged. First cutover refused before mutation for media150881; it finished naturally and the later fresh idle guard passed. No normal intake, MCP or remote render was interrupted. No repeated build or cutover after delivery.
+
+VK 11719 terminal PARTIAL at 13:44:03: twelve terminal carriers, zero unresolved; CREATED10685 and three MERGED source operations into10007/9068/9068, four operations over three Events. Exact child/candidate/occurrence/source/carrier links verified for all four. The two 9068 carrier rows are historical and preserved, not newly inserted links. Five no-event carriers, one policy carrier, two technical carriers. Programme27318 has five policy child exclusions and one identity refusal; no whole-post replay. Evidence vk11719-terminal-proof.json and terminal-anchors.json.
+
+Sobor retry correlation now established: exact recovery request last_error=existing_media_reconcile_failed at13:04:37.922854 maps to Event10382 and retained EventPoster SQLite write-lock exception. Ticket/canonical row completed unchanged; recovery success remains unobserved. No reset or replay.
+
+Separately, actual media Event10041 repeatedly completed jobs150875–150882 (ok/changed), then generated another pending successor. This is sustained execution evidence rather than pending-only seven-second inference. Targeted logs repeatedly rehydrate five candidates with added=0, then log raw-SHA conflicts; neither message establishes the enqueue root or a provider-call count. No queue reset, mark-done, budget bypass or guessed producer fix. New exact producer/input investigation remains open. Retained media10041-sequential-read.json, posters-read.json and stage-read.log.
+
+Muzteatr request remains pending attempts11, scheduled once; no source catch-up kernel has run. Full narrative acceptance for10672 remains open. Diagnostic delivery does not fix or explain the original zero-source response. Keep ordinary video14:45 and subsequent normal slots.
