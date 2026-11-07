@@ -117,6 +117,8 @@ jobs:
           tests/test_pre_create_duplicate_probe.py
           tests/test_repair_smart_update_identity_20260804.py
           tests/test_smart_event_update.py
+          tests/test_smart_event_update_non_event_guards.py
+          tests/test_smart_event_update_ticket_fields.py
           tests/test_event_update_merge.py
           tests/test_smart_update_parser_occurrences.py
           tests/test_ticket_sites_queue.py
