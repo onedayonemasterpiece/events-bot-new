@@ -6,6 +6,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Exclude failed CherryFlash sessions from guide-excursion promotion history; keep active and published sessions protected against repeated selection.
 - Resolve CherryFlash guide-scene fonts and icon masks from the existing Kaggle bundle layout while preserving repository paths and exact approved assets.
 - Preserve musical-theatre product paragraphs and visitor warnings instead of substituting a truncated metadata preview; keep sparse-page fallbacks and schedule parsing unchanged.
 - Ground Telegram event and festival names in message/OCR evidence instead of inferring organizer or participant identity from the publishing channel.
