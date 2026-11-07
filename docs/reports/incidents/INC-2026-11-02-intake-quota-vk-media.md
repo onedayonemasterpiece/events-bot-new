@@ -2171,3 +2171,84 @@ write, prompt/cap/model/guard change or canonical repair. Original 10678 refusal
 and separate 10676 fact loss remain unresolved. Normal parser at 12:15 UTC source-to-final
 description acceptance remains required. Evidence
 description10666-scope-clipping-boundary.json and retained original stage log.
+
+
+## November 7 12:22 UTC — normal parser description baseline
+
+Automatic parser 11716 started 12:15:10 UTC, run
+7bf92fa994734dc1b231c253899a0273. Philharmonia remote completed; Qtickets
+completed in 294.1 seconds and returned two files. Theatres still RUNNING
+through poll 12/60 at 12:21:42. Remote completion is not local acceptance.
+
+Exact Event 10672 baseline during collection: January 6, 2027 at 15:00,
+source 1185 characters including structured header, description 390 characters;
+neither retains the stage-smoke warning. The existing exact-parser fast path
+can update age/lifecycle and tickets while bypassing paid Smart Update prose.
+This is a code-boundary observation, not proof today's row has taken that path.
+Normal raw input, exact row outcome and final narrative must be reconciled before
+claiming acquisition prevention repaired the existing card. No forced refresh,
+source replay, provider call or canonical write. Evidence
+parser11716-progress-1222.json and muz-description-existing-refresh-boundary.md
+in retained intake recovery artifacts.
+
+
+## November 7 12:48 UTC — actual musical-theatre zero source result
+
+Theatres remote COMPLETE after 996.5 seconds, downloaded seven files at
+12:31:55. Actual output contains Dramteatr, Sobor and Tretyakov; no Muzteatr
+JSON/CSV. The same kernel log explicitly reports Muzteatr schedule scan at
+https://muzteatr39.ru/afisha followed by zero events. Thus this normal run does
+not yet accept musical-theatre full-description acquisition or improve 10672.
+Local processing continues normally, Dramteatr index 136 of 293 at 12:44:23;
+no competing run or interruption.
+
+A separate fresh temporary browser resolves /afisha to /action/cat/afisha/
+with visible programme entries; it was closed after inspection. Fresh public
+HTTP HTML has thirty matching schedule rows. Offline execution of the actual
+unchanged schedule function against that HTML returns thirty sessions. This is
+a mocked browser-transport control, not the original Kaggle DOM. Source AST
+comparison proves schedule/link/run functions unchanged between old 87c and
+delivered 6b9. The description-body function changed separately.
+
+Original zero-row DOM and navigation response are unretained, so transport,
+transient upstream response and navigation state remain unresolved. Do not
+attribute runtime cause to a selector or today's body fix from later HTML alone.
+No speculative parser/prompt/limit change, source replay or canonical repair.
+Evidence muz-normal-11716-zero-receipt.json, muz-afisha-live-1246.html,
+muz-afisha-current-parser-replay.json and muz-schedule-source-lineage.json
+in retained intake recovery artifacts. Parser terminal receipts remain pending.
+
+
+## November 7 13:15 UTC — durable source request and zero-output diagnostics
+
+Parser 11716 remains active with real Tretyakov transitions: row 185 merged
+existing 10635 at 13:10:03; row 186 candidate entered Smart Update at 13:10:46.
+No interruption or source replay. The historical Muzteatr recovery request was
+done since November 3 with attempts11. The existing scheduling helper was called
+once under an exact old-row guard at 13:12:28: now pending with reason
+ops11716:normal_kaggle_schedule_zero:2026-11-07, attempts unchanged. It started
+no kernel and wrote no Event/Job. Receipt
+muz-normal-zero-recovery-request-receipt.json; never repeat blindly.
+
+Narrow source change addresses lost failure evidence, not the unproved cause:
+seven net production lines retain the already-read HTML only when schedule
+selector rows are empty, log actual page URL/character count/row count, and log
+the navigation exception class. Existing broad navigation catch semantics and
+all parsing results remain unchanged. Artifact OSError logs and leaves the
+existing empty result intact. Existing Kaggle output transport carries HTML;
+local importer reads JSON only. No new state/retry/worker/limit, selector change,
+provider call or semantic decision.
+
+Before: one failing diagnostic-retention control and two passing contrasts.
+After: all 66 notebook/source parser/attachment/status/retention tests pass.
+The populated contrast retains exact title/date/time/URL; output write failure
+does not block the parser. Provider audit exits zero. Candidate not merged,
+built, qualified or delivered; diagnosis and ordinary recovery remain open.
+Evidence muz-zero-diag-before.log, muz-zero-diag-regressions.log and
+muz-zero-diag-provider-audit.log in retained intake artifacts.
+
+Final diagnostic refinement retains HTML for zero parsed events, including
+nonempty selector rows with unusable fields. Final baseline two failures and
+two passing contrasts; all 67 regressions pass after. Net production +8 lines
+(seven functional and one blank), within the ten-line budget. Parsing and
+existing cancellation/catch semantics remain unchanged. No new release yet.
