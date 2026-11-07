@@ -1847,3 +1847,38 @@ Normal FULL guide11696, run44761ad4fc8b, remote done18:40:24 and local PARTIAL18
 New catalogue rows724/725 resemble existing722/719 from the same posts because title/time fingerprint inputs changed. This is not a newly proved public duplicate: actual existing display-stage controls resolve722/724 and719/725 to same_occurrence, both through the existing same-source/date route-overlap heuristic with no model call or canonical write. Normal runtime new_occurrences dedup reports raw33/display26/covered33/suppressed7. Automatic issue333 selects only722/723; published coverage marks both722/724, while725 remains unpublished behind already published719/issue331. Thus the existing digest protection works for these exact pairs. No new normalizer, matching rule, data merge or publication-mark cleanup is warranted by this observation. These controls do not assert that catalogue rows are canonical-cleaned or that unrelated pairs have been audited.
 
 Retained evidence: guide11696-progress-1900.json, guide11696-terminal-summary.json, guide11696-receipts-1903.json, guide719-725-display-readonly.py/.json/.log and guide11696-display-runtime.log. The read-only checker uses the actual existing row preparation and dedup functions; production Event/Job writes zero, pair decisions heuristic, no provider requests. Prior accepted parser/VK/video evidence and native/date/identity guards remain unchanged. Routine new digest publication and its existing promo receipt require their own public verification; no manual callback or resend.
+
+
+## November 7 03:44 UTC — ordinary Telegram terminal acceptance
+
+Automatic TG11697, run226108572d2c4aaa8fde77b60b3cd57d, scheduled November6
+21:40UTC, remote done22:52:14 and local PARTIAL November7 03:23:41UTC.
+All57 sources and the exact138-message roster reconciled:138 fresh terminal
+message receipts, zero missing/stale. Thirty-two CREATED10639–10670 and54
+MERGED operations cover81 unique Events; all86 exact candidate/source/occurrence
+anchors are present. Context attachment/replay counts in interim monitoring
+were additional updated states, not extra imported Events or unique new anchors.
+
+Message outcomes:57 done,4 partial,7 partial_terminal_error,34 confirmed_no_event,
+22 policy-skipped and14 terminal_error. Twenty-one messages carry technical or
+identity refusals; policy exclusions remain separate even where a partial message
+contains both. Exact refusals include15 identity retries, two invalid location
+review responses and one unavailable scope review; five source-evidence failures
+also appear at message level without an accepted child. No whole-message replay,
+guard relaxation or forced creation. The large zoo8123 message continued real
+child transitions for over30minutes, so its unchanged message counter did not
+mean a stalled import. Accepted children remain preserved.
+
+Own kenigevents5497 created10639/10640 and5498 created10641;5511 merged10554,
+5504 merged10393,5512 no-event,5510/5513 protected retries, remaining digest
+messages policy-excluded or source-evidence refused. The subsequent ordinary
+kldevents5273 merged10640 and supplied December22 11:00 without another card.
+This does not establish global absence of own-source duplicates or justify
+blanket source disable. Normal parser11702 started02:30UTC and now has actual
+local progress142/323 at03:42; its terminal source acceptance remains separate.
+
+Retained evidence in the intake artifact directory:tg11697-frozen-roster.json,
+tg11697-terminal-exact.json,tg11697-terminal-proof.json and imports-progress-0344.log.
+No production mutation, replay, new kernel, runtime build or restart was performed
+for this observation. All older once-only recovery and native/date/identity guards
+remain. Residual technical failures keep the original incident open.

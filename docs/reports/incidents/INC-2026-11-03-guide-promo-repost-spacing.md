@@ -331,3 +331,17 @@ with reason dedup_window, preserving morning2335; this is the observed reason,
 not an inferred daily_cap receipt. No callback, resend or campaign apply.
 The earlier accepted eligible pair and incident closure remain unchanged.
 Retained promo333-afterdue-tick.log and promo333-ledger-2001.json.
+
+## November 6 21:54 UTC — ordinary evening repost accepted
+
+Issue333 Afisha ledger is published with unchanged frozen due21:46UTC and source
+wall-238875824_389 timestamp18:57UTC. Authenticated public read confirms target
+https://vk.com/wall-231920894_13674, exact copy_history389 and two-trip text/photos.
+Provider timestamp21:50:43 minus source18:57 gives10423seconds,173m43s, inside
+30–180minutes. Ledger published_at21:50:16.802711 is the callback timestamp,
+not the later provider date. Latest100 posts contain one matching Afisha copy
+and zero Anons copies; Anons retains the already observed dedup_window skip
+and prepared ledger, not a new publication. No callback, canary, campaign apply
+or resend. Previous morning pair and incident closure remain unchanged.
+Retained promo333-ledger-2153.json, promo333-live-public-2153.json and
+promo333-acceptance-receipt.json.

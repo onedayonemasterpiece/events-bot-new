@@ -97,3 +97,20 @@ already corrected canonical event.
 Retained tg-publisher-delivery-receipt.json, tg-publisher-build.log,
 tg-publisher-preflight-probe.log, tg-publisher-preflight-import-corrected.log,
 tg-publisher-live-verification.log and tg-publisher-live-health.json.
+
+
+## November 7 03:44 UTC — ordinary post-release source result
+
+Normal TG11697 imported official garazhka_kld1638 into existing10471 at00:48:57UTC,
+with exact EventSource14092070. Linked garazhka_world583 context replay retains
+anchor14092071. Current canonical title remains «Фестиваль осознанного потребления
+„Гаражка“», November7–8 at12:00, Понарт. The false Eco attribution did not return
+in this exact ordinary source merge. The complete TG run later reached PARTIAL
+03:23:41 with all138 fresh message receipts and86 accepted source anchors verified.
+
+This is normal-source/canonical acceptance, not independent static-site projection
+verification or a claim that every content attribution is correct. Existing public
+correction receipts remain; no repair driver or typed description commit repeated.
+Owner choice to retain story1573/business1866 until expiry is unchanged. Evidence:
+eco10471-normal-tg11697-receipt.json and tg11697-terminal-proof.json in retained
+intake artifacts. No delete, rerender, resend or new kernel.
