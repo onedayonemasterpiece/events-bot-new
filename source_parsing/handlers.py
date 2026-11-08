@@ -602,6 +602,23 @@ async def attach_parser_source_to_exact_existing(
         exact_url_identity = (
             _normalize_source_url_for_match(stored.ticket_link) == normalized_url
         )
+        if stored.ticket_link and not exact_url_identity and not existing_by_url_is_owned_occurrence:
+            logger.info(
+                "source_parsing: guarded refresh event_id=%s reason=ticket_identity_changed", event_id
+            )
+            return False
+        # Compare narrative bodies, not the parser's mutable structured header.
+        prior_text = (
+            (existing_by_url.source_text if existing_by_url else None) or stored.source_text or ""
+        )
+        prior_body = prior_text.split("\nОписание:\n", 1)[-1].split("\n\nКонтракт источника:", 1)[0]
+        incoming_body = str(event.description or "").strip()
+        if incoming_body and " ".join(incoming_body.split()) != " ".join(prior_body.split()):
+            logger.info(
+                "source_parsing: guarded refresh event_id=%s reason=source_body_changed old_chars=%d new_chars=%d",
+                event_id, len(prior_body), len(incoming_body),
+            )
+            return False
         if not title_matches and not existing_by_url_is_owned_occurrence:
             # Smart Update may legitimately turn a terse official title into a
             # presentation title.  Replaying that same occurrence must not pay

@@ -210,7 +210,7 @@ async def test_qtickets_exact_attach_persists_slot_identity_and_schedule_fact(tm
         stored = Event(
             title="Светлогорск и Янтарный",
             description="Однодневная экскурсия",
-            source_text="Источник",
+            source_text="Однодневная экскурсия.",
             date=event_date,
             time="09:15",
             location_name="Центральная площадь",
@@ -838,3 +838,80 @@ async def test_current_official_available_occurrence_reactivates_stale_postponem
     assert changed is True
     assert refreshed is not None
     assert refreshed.lifecycle_status == "active"
+
+
+@pytest.mark.parametrize("change", ["unchanged", "whitespace", "body", "date", "ticket"])
+@pytest.mark.asyncio
+async def test_parser_content_refresh_reaches_existing_guarded_route(
+    tmp_path, monkeypatch, change,
+):
+    """A known occurrence does not authorize stale prose or another ticket."""
+    db = Database(str(tmp_path / "content-refresh.sqlite"))
+    await db.init()
+    day = (date.today() + timedelta(days=30)).isoformat()
+    url = "https://muzteatr39.ru/spektakli/bremenskie-muzykanty/"
+    old_body = "В спектакле прозвучат хиты Геннадия Гладкова и Юрия Энтина."
+    source = f"Название: Бременские музыканты\nДата: {day}\nВремя: 15:00\n\nОписание:\n{old_body}"
+    async with db.get_session() as session:
+        stored = Event(
+            title="Бременские музыканты" if change == "ticket" else "Спектакль «Бременские музыканты»",
+            description="Прежний текст.",
+            source_text=source, date=day, time="15:00", location_name="Музыкальный театр",
+            ticket_link=url,
+        )
+        session.add(stored)
+        await session.commit()
+        await session.refresh(stored)
+        event_id = int(stored.id)
+        session.add(EventSource(
+            event_id=event_id, source_type="parser:muzteatr", source_url=url,
+            canonical_source_url=url.rstrip("/"), source_role="identity_bearing",
+            source_text=source, candidate_key="owned-child", occurrence_key="parser-slot:owned-child",
+        ))
+        await session.commit()
+    candidate = TheatreEvent(
+        title="Бременские музыканты", description=(
+            "  ".join(old_body.split()) if change == "whitespace" else old_body
+        ) + (
+            " В спектакле используется сценический дым." if change == "body" else ""
+        ), date_raw=day + " 15:00", parsed_date=(
+            (date.today() + timedelta(days=31)).isoformat() if change == "date" else day
+        ), parsed_time="15:00", ticket_status="available", source_type="muzteatr",
+        location="Музыкальный театр", url=url + "other-ticket" if change == "ticket" else url,
+        photos=[],
+    )
+    calls = []
+
+    async def recall(*args, **kwargs):
+        return event_id, False
+
+    async def guarded_route(*args, **kwargs):
+        calls.append(args[2])
+        return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+
+    async def unchanged(*args, **kwargs):
+        return True, False
+
+    async def no_change(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(handlers, "find_existing_event", recall)
+    monkeypatch.setattr(handlers, "add_new_event_via_queue", guarded_route)
+    monkeypatch.setattr(handlers, "update_event_ticket_status", unchanged)
+    monkeypatch.setattr(handlers, "update_linked_events", no_change)
+    monkeypatch.setattr(handlers, "schedule_existing_event_update", no_change)
+    try:
+        await handlers.process_source_events(
+            db, None, [candidate], source="muzteatr", start_index=0, total_count=1,
+        )
+        assert bool(calls) == (change in {"body", "date", "ticket"})
+        async with db.get_session() as session:
+            final = await session.get(Event, event_id)
+            sources = list((await session.execute(
+                select(EventSource).where(EventSource.event_id == event_id)
+            )).scalars())
+            assert final.source_text == source
+            assert final.description == "Прежний текст."
+            assert len(sources) == 1
+    finally:
+        await db.close()
