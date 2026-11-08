@@ -840,7 +840,7 @@ async def test_current_official_available_occurrence_reactivates_stale_postponem
     assert refreshed.lifecycle_status == "active"
 
 
-@pytest.mark.parametrize("change", ["unchanged", "whitespace", "body", "date", "ticket"])
+@pytest.mark.parametrize("change", ["unchanged", "whitespace", "metadata", "body", "date", "ticket"])
 @pytest.mark.asyncio
 async def test_parser_content_refresh_reaches_existing_guarded_route(
     tmp_path, monkeypatch, change,
@@ -851,7 +851,8 @@ async def test_parser_content_refresh_reaches_existing_guarded_route(
     day = (date.today() + timedelta(days=30)).isoformat()
     url = "https://muzteatr39.ru/spektakli/bremenskie-muzykanty/"
     old_body = "В спектакле прозвучат хиты Геннадия Гладкова и Юрия Энтина."
-    source = f"Название: Бременские музыканты\nДата: {day}\nВремя: 15:00\n\nОписание:\n{old_body}"
+    stored_body = old_body + ("\n\nВозраст: 6+\n\nСцена: Большая сцена" if change == "metadata" else "")
+    source = f"Название: Бременские музыканты\nДата: {day}\nВремя: 15:00\n\nОписание:\n{stored_body}"
     async with db.get_session() as session:
         stored = Event(
             title="Бременские музыканты" if change == "ticket" else "Спектакль «Бременские музыканты»",
@@ -878,6 +879,8 @@ async def test_parser_content_refresh_reaches_existing_guarded_route(
             (date.today() + timedelta(days=31)).isoformat() if change == "date" else day
         ), parsed_time="15:00", ticket_status="available", source_type="muzteatr",
         location="Музыкальный театр", url=url + "other-ticket" if change == "ticket" else url,
+        age_restriction="6+" if change == "metadata" else "",
+        scene="Большая сцена" if change == "metadata" else "",
         photos=[],
     )
     calls = []

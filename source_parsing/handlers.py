@@ -612,8 +612,8 @@ async def attach_parser_source_to_exact_existing(
             (existing_by_url.source_text if existing_by_url else None) or stored.source_text or ""
         )
         prior_body = prior_text.split("\nОписание:\n", 1)[-1].split("\n\nКонтракт источника:", 1)[0]
-        incoming_body = str(event.description or "").strip()
-        if incoming_body and " ".join(incoming_body.split()) != " ".join(prior_body.split()):
+        incoming_body = _parser_description(event)
+        if event.description and " ".join(incoming_body.split()) != " ".join(prior_body.split()):
             logger.info(
                 "source_parsing: guarded refresh event_id=%s reason=source_body_changed old_chars=%d new_chars=%d",
                 event_id, len(prior_body), len(incoming_body),
@@ -660,7 +660,7 @@ async def attach_parser_source_to_exact_existing(
             )
             projected_source_text = _build_parser_source_text(
                 event,
-                full_description=(event.description or "").strip(),
+                full_description=_parser_description(event),
                 location_name=str(stored.location_name or event.location or "").strip(),
             )
             vendor_schedule_end_date = str(
@@ -915,6 +915,17 @@ def _format_parser_ticket_status(ticket_status: str | None) -> str:
         "sold_out": "распродано",
         "unknown": "неизвестно",
     }.get(normalized, normalized)
+
+
+def _parser_description(theatre_event: TheatreEvent) -> str:
+    description_parts = []
+    if theatre_event.description:
+        description_parts.append(theatre_event.description)
+    if theatre_event.age_restriction:
+        description_parts.append(f"Возраст: {theatre_event.age_restriction}")
+    if theatre_event.scene:
+        description_parts.append(f"Сцена: {theatre_event.scene}")
+    return "\n\n".join(description_parts) if description_parts else theatre_event.title
 
 
 def _build_parser_source_text(
@@ -1596,17 +1607,8 @@ async def add_new_event_via_queue(
     import main as main_mod
     
     try:
-        # Build description with all available info
-        description_parts = []
-        if theatre_event.description:
-            description_parts.append(theatre_event.description)
-        if theatre_event.age_restriction:
-            description_parts.append(f"Возраст: {theatre_event.age_restriction}")
-        if theatre_event.scene:
-            description_parts.append(f"Сцена: {theatre_event.scene}")
-        
         location_name = normalize_location_name(theatre_event.location, theatre_event.scene)
-        full_description = "\n\n".join(description_parts) if description_parts else theatre_event.title
+        full_description = _parser_description(theatre_event)
         source_text = _build_parser_source_text(
             theatre_event,
             full_description=full_description,
