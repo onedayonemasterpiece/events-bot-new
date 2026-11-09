@@ -1136,12 +1136,13 @@ def test_renderer_music_selection_reads_dataset_range_manifest(monkeypatch, tmp_
 
 
 def test_recent_music_exclusions_uses_issue_manifest_history() -> None:
+    registered_at = datetime.now(timezone.utc).isoformat()
     state = {
         "recent_music": [],
         "issues": {
             "22": {
                 "issue_number": 22,
-                "registered_at": "2026-05-13T12:00:00+00:00",
+                "registered_at": registered_at,
                 "selected_music": {
                     "file": "01 - The Promise.flac",
                     "start": 233.41,
@@ -1159,7 +1160,7 @@ def test_recent_music_exclusions_uses_issue_manifest_history() -> None:
             "start": 233.41,
             "end": 257.738,
             "issue_number": 22,
-            "created_at": "2026-05-13T12:00:00+00:00",
+            "created_at": registered_at,
         }
     ]
 
