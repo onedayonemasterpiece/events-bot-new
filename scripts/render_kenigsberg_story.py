@@ -55,12 +55,12 @@ MUSIC_RANGES = {
 VIDEO_DATASETS = [
     {
         "period_key": "1919-1940",
-        "dataset": "zigomaro/koenigsberg19191940",
+        "dataset": "richss777/koenigsberg19191940",
         "aliases": ["koenigsberg19191940", "19191940"],
     },
     {
         "period_key": "winter",
-        "dataset": "zigomaro/koenigsberg-winter",
+        "dataset": "richss777/koenigsberg-winter",
         "aliases": ["koenigsberg-winter", "winter"],
     },
 ]

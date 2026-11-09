@@ -1253,7 +1253,7 @@ class VideoAnnounceScenario:
         - ``kaggle_slug``: filter by the resolved Kaggle kernel slug. This is
           what actually serializes on Kaggle's side — see INC-2026-05-26 round
           2: partner tracks `popular_review_konb` and `popular_review_eco` are
-          different `profile_key`s but BOTH push to the same `zigomaro/cherryflash`
+          different `profile_key`s but BOTH push to the same `richss777/cherryflash`
           kernel slug, so a `profile_key`-only lock lets them clash on Kaggle
           (multiple QUEUED versions piling on the same kernel, contending for
           the account's concurrent-kernel quota and never starting).

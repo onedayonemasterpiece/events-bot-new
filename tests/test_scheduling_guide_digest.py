@@ -36,7 +36,7 @@ async def test_scheduled_guide_digest_notifies_operator_when_no_new_items(monkey
         assert kwargs["chat_id"] == 4242
         return SimpleNamespace(
             errors=[],
-            recovery_kernel_ref="zigomaro/guide-excursions-monitor",
+            recovery_kernel_ref="richss777/guide-excursions-monitor",
             import_completed=True,
         )
 
@@ -79,7 +79,7 @@ async def test_scheduled_guide_digest_notifies_operator_when_no_new_items(monkey
 
     await scheduling._run_scheduled_guide_excursions(object(), bot, mode="full")
 
-    assert cleared == ["zigomaro/guide-excursions-monitor"]
+    assert cleared == ["richss777/guide-excursions-monitor"]
     assert bot.sent_messages == [
         (
             4242,
@@ -102,7 +102,7 @@ async def test_scheduled_guide_digest_publishes_after_nonfatal_partial_warning(m
             errors=[],
             warnings=["kaggle result marked as partial; llm_deferred=1; llm_error=0"],
             ops_run_id=765,
-            recovery_kernel_ref="zigomaro/guide-excursions-monitor",
+            recovery_kernel_ref="richss777/guide-excursions-monitor",
             import_completed=True,
         )
 
@@ -146,7 +146,7 @@ async def test_scheduled_guide_digest_publishes_after_nonfatal_partial_warning(m
 
     await scheduling._run_scheduled_guide_excursions(object(), bot, mode="full")
 
-    assert cleared == ["zigomaro/guide-excursions-monitor"]
+    assert cleared == ["richss777/guide-excursions-monitor"]
     assert published == [{"family": "new_occurrences", "chat_id": 4242}]
     assert bot.sent_messages == [
         (

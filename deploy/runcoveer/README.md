@@ -13,6 +13,19 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Kaggle account migration, 2026-11-09
+
+Events uses richss777. Credentials and all runtime kernel/dataset references must
+move together; never query the retired account or its datasets during recovery.
+Image `runcoveer/events:kaggle-account-20261109` fixes notebook metadata/defaults
+and removes duplicate pushes after SaveKernel returns invalid sources with an
+already-created version. BGE checks prepared/input dataset readiness before
+submission. Do not drop classifier checks to compensate for missing artifacts.
+Use the Events-only exact-main cutover; preserve Kotopogoda and the current
+image for rollback. Retire old-account recovery records locally without making
+remote requests. Qualify output import with a real new-account task; API auth
+and /healthz alone do not establish product success.
+
 ## VK near-event queue release, 2026-11-05
 
 Build exact merged main as `runcoveer/events:vk-near-event-20261105`.

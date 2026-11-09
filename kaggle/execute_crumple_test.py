@@ -171,7 +171,7 @@ async def run_crumple_test():
         create_test_payload(TEST_AFISHA_DIR, dataset_path / "payload.json")
         
         # Create dataset-metadata.json
-        username = os.getenv("KAGGLE_USERNAME", "zigomaro")
+        username = os.getenv("KAGGLE_USERNAME", "richss777")
         dataset_slug = f"{username}/crumple-video-test"
         dataset_meta = {
             "id": dataset_slug,
@@ -209,14 +209,14 @@ async def run_crumple_test():
         logger.info(f"Pushing CrumpleVideo kernel with dataset: {dataset_slug}")
         try:
             # Use push_kernel directly with the correct dataset
-            assets_dataset = os.getenv("CRUMPLE_ASSETS_DATASET", "zigomaro/video-announce-assets")
+            assets_dataset = os.getenv("CRUMPLE_ASSETS_DATASET", "richss777/video-announce-assets")
             client.push_kernel(
                 kernel_path=KERNEL_DIR,
                 dataset_sources=[dataset_slug, assets_dataset],
             )
             # Get kernel ref from metadata
             meta = json.loads((KERNEL_DIR / "kernel-metadata.json").read_text())
-            kernel_ref = meta.get("id", "zigomaro/crumple-video")
+            kernel_ref = meta.get("id", "richss777/crumple-video")
         except Exception as e:
             logger.error(f"Failed to deploy kernel: {e}")
             return False

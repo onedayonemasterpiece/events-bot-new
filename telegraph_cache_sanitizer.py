@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 TargetKind = Literal["event", "festival", "month", "weekend", "festivals_index"]
 
 KERNEL_PATH = Path("kaggle") / "TelegraphCacheProbe"
-DEFAULT_KERNEL_REF = "zigomaro/telegraph-cache-probe"
+DEFAULT_KERNEL_REF = "richss777/telegraph-cache-probe"
 
 CONFIG_DATASET_CIPHER = "telegraph-cache-probe-cipher"
 CONFIG_DATASET_KEY = "telegraph-cache-probe-key"

@@ -10,7 +10,7 @@ async def test_cancel_acknowledged_remote_job_is_not_busy(monkeypatch):
         return [
             {
                 "type": "tg_monitoring",
-                "kernel_ref": "zigomaro/telegram-monitor-bot",
+                "kernel_ref": "richss777/telegram-monitor-bot",
                 "created_at": "2026-04-27T21:41:25+00:00",
                 "meta": {"run_id": "cancelled-run"},
             }
@@ -36,7 +36,7 @@ async def test_running_remote_job_is_busy(monkeypatch):
         return [
             {
                 "type": "guide_monitoring",
-                "kernel_ref": "zigomaro/guide-excursions-monitor",
+                "kernel_ref": "richss777/guide-excursions-monitor",
                 "created_at": "2026-04-27T21:41:25+00:00",
                 "meta": {"run_id": "running-run"},
             }
@@ -64,7 +64,7 @@ async def test_running_kenigsberg_story_job_is_busy(monkeypatch):
         return [
             {
                 "type": "kenigsberg_story",
-                "kernel_ref": "zigomaro/koenigsberg-stories",
+                "kernel_ref": "richss777/koenigsberg-stories",
                 "created_at": "2026-06-12T18:30:00+00:00",
                 "meta": {
                     "run_id": "kenigsberg-session-421",
@@ -100,7 +100,7 @@ async def test_different_auth_scope_remote_job_is_not_busy(monkeypatch):
         return [
             {
                 "type": "kenigsberg_story",
-                "kernel_ref": "zigomaro/koenigsberg-stories",
+                "kernel_ref": "richss777/koenigsberg-stories",
                 "created_at": "2026-06-12T18:30:00+00:00",
                 "meta": {
                     "run_id": "kenigsberg-session-421",
@@ -138,7 +138,7 @@ async def test_fresh_unknown_status_lookup_failure_is_busy(monkeypatch):
         return [
             {
                 "type": "guide_monitoring",
-                "kernel_ref": "zigomaro/guide-excursions-monitor",
+                "kernel_ref": "richss777/guide-excursions-monitor",
                 "created_at": "2026-06-07T19:55:00+00:00",
                 "meta": {"run_id": "fresh-unknown"},
             }
@@ -170,7 +170,7 @@ async def test_stale_transient_unknown_status_lookup_failure_is_not_busy(monkeyp
         return [
             {
                 "type": "guide_monitoring",
-                "kernel_ref": "zigomaro/guide-excursions-monitor",
+                "kernel_ref": "richss777/guide-excursions-monitor",
                 "created_at": "2026-06-06T07:00:23+00:00",
                 "meta": {"run_id": "stale-unknown"},
             }
@@ -196,7 +196,7 @@ async def test_stale_transient_unknown_status_lookup_failure_is_not_busy(monkeyp
 
     assert conflicts == []
     assert marked
-    assert marked[0][0:2] == ("guide_monitoring", "zigomaro/guide-excursions-monitor")
+    assert marked[0][0:2] == ("guide_monitoring", "richss777/guide-excursions-monitor")
     assert marked[0][2]["remote_session_guard_ignore_reason"] == "stale_transient_status_lookup_failure"
 
 
@@ -206,7 +206,7 @@ async def test_stale_non_transient_unknown_status_lookup_failure_stays_busy(monk
         return [
             {
                 "type": "guide_monitoring",
-                "kernel_ref": "zigomaro/guide-excursions-monitor",
+                "kernel_ref": "richss777/guide-excursions-monitor",
                 "created_at": "2026-06-06T07:00:23+00:00",
                 "meta": {"run_id": "auth-error"},
             }

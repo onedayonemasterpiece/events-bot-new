@@ -66,7 +66,7 @@ async def run_philharmonia_kaggle_kernel(
     start_time = time.time()
     client = KaggleClient()
     kernel_path = KERNELS_ROOT_PATH / PHILHARMONIA_KERNEL_FOLDER
-    kernel_ref = f"zigomaro/parse-philharmonia"  # Default
+    kernel_ref = f"richss777/parse-philharmonia"  # Default
     registered = False
     ledger_run_id: str | None = None
 

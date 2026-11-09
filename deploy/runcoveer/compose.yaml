@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-photo-size-20261109
+    image: runcoveer/events:kaggle-account-20261109
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

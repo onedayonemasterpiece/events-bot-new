@@ -290,7 +290,7 @@ async def test_run_tomorrow_pipeline_lane_busy_does_not_create_selected_session(
                 status=VideoAnnounceSessionStatus.RENDERING,
                 profile_key="popular_review_eco",
                 selection_params={"_video_lane_auth_env": "LANE1"},
-                kaggle_kernel_ref="zigomaro/cherryflash",
+                kaggle_kernel_ref="richss777/cherryflash",
             )
         )
         session.add(
@@ -298,7 +298,7 @@ async def test_run_tomorrow_pipeline_lane_busy_does_not_create_selected_session(
                 status=VideoAnnounceSessionStatus.RENDERING,
                 profile_key="popular_review_konb",
                 selection_params={"_video_lane_auth_env": "LANE2"},
-                kaggle_kernel_ref="zigomaro/cherryflash-video-lane-1",
+                kaggle_kernel_ref="richss777/cherryflash-video-lane-1",
             )
         )
         await session.commit()
@@ -351,7 +351,7 @@ async def test_start_render_persists_notify_chat_id_for_recovery(monkeypatch, tm
             status=VideoAnnounceSessionStatus.SELECTED,
             profile_key="default",
             selection_params={"mode": "default"},
-            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_kernel_ref="richss777/crumple-video",
             test_chat_id=-1002210431821,
         )
         session.add(sess)
@@ -603,7 +603,7 @@ async def test_render_and_notify_cherryflash_fails_when_bind_wait_does_not_confi
 
     class _DummyClient:
         def get_kernel_status(self, kernel_ref: str) -> dict[str, str]:
-            assert kernel_ref == "zigomaro/cherryflash"
+            assert kernel_ref == "richss777/cherryflash"
             return {"status": "RUNNING"}
 
     bot = _DummyBot()
@@ -612,16 +612,16 @@ async def test_render_and_notify_cherryflash_fails_when_bind_wait_does_not_confi
 
     async def _fake_create_dataset(self, session_obj, json_text, finalized, *, client):  # noqa: ANN001,ARG002
         assert session_obj.id == session_id
-        return "zigomaro/cherryflash-session-161", ["zigomaro/story-cipher"]
+        return "richss777/cherryflash-session-161", ["richss777/story-cipher"]
 
     async def _fake_push_kernel(self, client, dataset_sources, kernel_ref, **kwargs):  # noqa: ANN001,ARG001
         assert kernel_ref == "local:CherryFlash"
         assert dataset_sources == [
-            "zigomaro/cherryflash-session-161",
-            "zigomaro/story-cipher",
+            "richss777/cherryflash-session-161",
+            "richss777/story-cipher",
         ]
         call_order.append(("push_kernel", kernel_ref))
-        return "zigomaro/cherryflash"
+        return "richss777/cherryflash"
 
     async def _fake_update_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
         return (123, 1)
@@ -633,10 +633,10 @@ async def test_render_and_notify_cherryflash_fails_when_bind_wait_does_not_confi
 
     async def _fake_await_kernel_dataset_sources(client, kernel_ref, expected_sources, **kwargs):  # noqa: ANN001
         call_order.append(("bind_wait", kernel_ref))
-        assert kernel_ref == "zigomaro/cherryflash"
+        assert kernel_ref == "richss777/cherryflash"
         assert expected_sources == [
-            "zigomaro/cherryflash-session-161",
-            "zigomaro/story-cipher",
+            "richss777/cherryflash-session-161",
+            "richss777/story-cipher",
         ]
         raise RuntimeError("bind failed")
 
@@ -667,9 +667,9 @@ async def test_render_and_notify_cherryflash_fails_when_bind_wait_does_not_confi
     )
 
     assert call_order == [
-        ("dataset_ready", "zigomaro/cherryflash-session-161"),
+        ("dataset_ready", "richss777/cherryflash-session-161"),
         ("push_kernel", "local:CherryFlash"),
-        ("bind_wait", "zigomaro/cherryflash"),
+        ("bind_wait", "richss777/cherryflash"),
     ]
 
     async with db.get_session() as session:
@@ -712,23 +712,23 @@ async def test_render_and_notify_non_cherryflash_still_fails_on_bind_wait_error(
 
     async def _fake_create_dataset(self, session_obj, json_text, finalized, *, client):  # noqa: ANN001,ARG002
         assert session_obj.id == session_id
-        return "zigomaro/video-afisha-session-161", []
+        return "richss777/video-afisha-session-161", []
 
     async def _fake_push_kernel(self, client, dataset_sources, kernel_ref):  # noqa: ANN001
         assert kernel_ref == "owner/video-announce-renderer"
-        assert dataset_sources == ["zigomaro/video-afisha-session-161"]
+        assert dataset_sources == ["richss777/video-afisha-session-161"]
         return "owner/video-announce-renderer"
 
     async def _fake_update_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
         return (123, 1)
 
     async def _fake_await_dataset_ready(client, dataset_ref, **kwargs):  # noqa: ANN001
-        assert dataset_ref == "zigomaro/video-afisha-session-161"
+        assert dataset_ref == "richss777/video-afisha-session-161"
         return {"status": "ready", "files": ["payload.json"]}
 
     async def _fake_await_kernel_dataset_sources(client, kernel_ref, expected_sources, **kwargs):  # noqa: ANN001
         assert kernel_ref == "owner/video-announce-renderer"
-        assert expected_sources == ["zigomaro/video-afisha-session-161"]
+        assert expected_sources == ["richss777/video-afisha-session-161"]
         raise RuntimeError("bind failed")
 
     monkeypatch.setattr(scenario_module, "KaggleClient", _DummyClient)
@@ -976,7 +976,7 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
         "video_announce.scenario.write_story_secret_files",
         _fake_write_story_secret_files,
     )
-    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("KAGGLE_USERNAME", "richss777")
 
     snapshot_dir = tmp_path / "snapshot"
     calls: list[tuple[str, Path]] = []
@@ -1013,7 +1013,7 @@ async def test_create_cherryflash_dataset_writes_story_publish_config_when_enabl
         selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
     )
 
-    assert dataset_id.startswith("zigomaro/cherryflash-session-42-")
+    assert dataset_id.startswith("richss777/cherryflash-session-42-")
     assert story_sources == []
     assert len(calls) == 1
     assert calls[0][0] == "create_dataset"
@@ -1051,7 +1051,7 @@ async def test_create_cherryflash_dataset_fails_when_story_requested_but_config_
         "video_announce.scenario.build_story_publish_config",
         AsyncMock(return_value=None),
     )
-    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("KAGGLE_USERNAME", "richss777")
 
     class _DummyClient:
         def create_dataset(self, path):  # noqa: ANN001
@@ -1085,7 +1085,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
     monkeypatch,
     tmp_path,
 ):
-    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("KAGGLE_USERNAME", "richss777")
     monkeypatch.setenv("VK_ACCESS_TOKEN5", "vk-token")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -1095,7 +1095,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
 
     async def _fake_create_cherryflash_dataset(session_obj, json_text, *, client, selection_params):  # noqa: ANN001
         captured["selection_params"] = dict(selection_params)
-        return "zigomaro/cherryflash-session-test", []
+        return "richss777/cherryflash-session-test", []
 
     monkeypatch.setattr(scenario, "_create_cherryflash_dataset", _fake_create_cherryflash_dataset)
 
@@ -1127,7 +1127,7 @@ async def test_create_dataset_preserves_story_flags_when_payload_selection_meta_
         client=SimpleNamespace(),
     )
 
-    assert dataset_id == "zigomaro/cherryflash-session-test"
+    assert dataset_id == "richss777/cherryflash-session-test"
     assert story_sources == []
     assert captured["selection_params"] == {
         "mode": "popular_review",
@@ -1146,7 +1146,7 @@ async def test_create_crumple_dataset_bundles_current_story_helper_when_story_en
     monkeypatch,
     tmp_path,
 ):
-    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("KAGGLE_USERNAME", "richss777")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -1204,7 +1204,7 @@ async def test_create_crumple_dataset_bundles_current_story_helper_when_story_en
 
     session_obj = SimpleNamespace(
         id=676,
-        kaggle_kernel_ref="zigomaro/crumple-video",
+        kaggle_kernel_ref="richss777/crumple-video",
         selection_params={"story_publish_enabled": True, "story_publish_mode": "video"},
         main_chat_id=-100123,
     )
@@ -1216,7 +1216,7 @@ async def test_create_crumple_dataset_bundles_current_story_helper_when_story_en
         client=_DummyClient(),
     )
 
-    assert dataset_id == "zigomaro/video-afisha-session-676"
+    assert dataset_id == "richss777/video-afisha-session-676"
     assert story_sources == []
     assert len(calls) == 1
     assert calls[0][0] == "create_dataset"
@@ -1241,7 +1241,7 @@ async def test_video_lane_assignment_skips_busy_lane_and_sets_resource_and_targe
     )
     monkeypatch.setenv(
         "VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS",
-        "zigomaro/cherryflash,zigomaro/cherryflash-video1",
+        "richss777/cherryflash,richss777/cherryflash-video1",
     )
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -1255,7 +1255,7 @@ async def test_video_lane_assignment_skips_busy_lane_and_sets_resource_and_targe
                 "story_publish_enabled": True,
                 "_video_lane_auth_env": "TELEGRAM_AUTH_BUNDLE_STORY",
             },
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
         )
         fresh = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.SELECTED,
@@ -1277,8 +1277,8 @@ async def test_video_lane_assignment_skips_busy_lane_and_sets_resource_and_targe
     assert params["_video_lane_auth_env"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
     assert params["_video_lane_resource_key"] == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
     assert params["_kaggle_source_kernel_ref"] == "local:CherryFlash"
-    assert params["_kaggle_target_kernel_ref"] == "zigomaro/cherryflash-video1"
-    assert kernel_ref == "zigomaro/cherryflash-video1"
+    assert params["_kaggle_target_kernel_ref"] == "richss777/cherryflash-video1"
+    assert kernel_ref == "richss777/cherryflash-video1"
 
 
 @pytest.mark.asyncio
@@ -1292,7 +1292,7 @@ async def test_video_lane_assignment_skips_active_resource_lease(
     )
     monkeypatch.setenv(
         "VIDEO_ANNOUNCE_CHERRYFLASH_KERNEL_REFS",
-        "zigomaro/cherryflash,zigomaro/cherryflash-video1",
+        "richss777/cherryflash,richss777/cherryflash-video1",
     )
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -1336,8 +1336,8 @@ async def test_video_lane_assignment_skips_active_resource_lease(
     assert params["_video_lane_auth_env"] == "TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
     assert params["_video_lane_resource_key"] == "telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1"
     assert params["_kaggle_source_kernel_ref"] == "local:CherryFlash"
-    assert params["_kaggle_target_kernel_ref"] == "zigomaro/cherryflash-video1"
-    assert kernel_ref == "zigomaro/cherryflash-video1"
+    assert params["_kaggle_target_kernel_ref"] == "richss777/cherryflash-video1"
+    assert kernel_ref == "richss777/cherryflash-video1"
 
 
 @pytest.mark.asyncio
@@ -1457,7 +1457,7 @@ async def test_create_story_publish_only_dataset_filters_failed_vk_target(
     monkeypatch,
     tmp_path,
 ):
-    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("KAGGLE_USERNAME", "richss777")
     monkeypatch.setenv("VK_ACCESS_TOKEN5", "vk-token")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -1529,7 +1529,7 @@ async def test_create_story_publish_only_dataset_filters_failed_vk_target(
         },
     )
 
-    assert dataset_id.startswith("zigomaro/crumple-story-publish-session-676-")
+    assert dataset_id.startswith("richss777/crumple-story-publish-session-676-")
     assert story_sources == []
     assert (snapshot_dir / "crumple_video_final.mp4").read_bytes() == b"video"
     assert (snapshot_dir / "story_publish.enc").exists()
@@ -1573,7 +1573,7 @@ async def test_create_cherryflash_dataset_retries_dataset_create_after_invalid_t
     monkeypatch.setattr(scenario, "_prefetch_scene_images", _fake_prefetch)
     monkeypatch.setattr(scenario, "_selected_event_dates", _fake_selected_event_dates)
     monkeypatch.setattr("video_announce.scenario.asyncio.sleep", _fake_sleep)
-    monkeypatch.setenv("KAGGLE_USERNAME", "zigomaro")
+    monkeypatch.setenv("KAGGLE_USERNAME", "richss777")
 
     sleep_calls: list[int] = []
     create_calls = 0
@@ -1616,7 +1616,7 @@ async def test_create_cherryflash_dataset_retries_dataset_create_after_invalid_t
         selection_params={"story_publish_enabled": False, "story_publish_mode": "video"},
     )
 
-    assert dataset_id.startswith("zigomaro/cherryflash-session-42-")
+    assert dataset_id.startswith("richss777/cherryflash-session-42-")
     assert story_sources == []
     assert create_calls == 2
     assert sleep_calls == [10]

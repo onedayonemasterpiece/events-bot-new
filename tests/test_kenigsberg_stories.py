@@ -39,12 +39,12 @@ def test_parse_second_ranges_accepts_single_seconds_and_ranges() -> None:
 def test_map_generated_ban_range_back_to_dominant_source_segment() -> None:
     issue = {
         "issue_number": 15,
-        "dataset": "zigomaro/koenigsberg19191940",
+        "dataset": "richss777/koenigsberg19191940",
         "segments": [
             {
                 "timeline_start": 0.0,
                 "timeline_end": 5.0,
-                "dataset": "zigomaro/koenigsberg19191940",
+                "dataset": "richss777/koenigsberg19191940",
                 "source_file": "devau.mp4",
                 "source_start": 12.0,
                 "source_end": 17.0,
@@ -52,7 +52,7 @@ def test_map_generated_ban_range_back_to_dominant_source_segment() -> None:
             {
                 "timeline_start": 5.0,
                 "timeline_end": 10.0,
-                "dataset": "zigomaro/koenigsberg19191940",
+                "dataset": "richss777/koenigsberg19191940",
                 "source_file": "kneiphof.mp4",
                 "source_start": 40.0,
                 "source_end": 45.0,
@@ -73,19 +73,19 @@ def test_map_generated_ban_range_back_to_dominant_source_segment() -> None:
 def test_map_integer_ban_range_ignores_small_edge_overlap() -> None:
     issue = {
         "issue_number": 4,
-        "dataset": "zigomaro/koenigsberg19191940",
+        "dataset": "richss777/koenigsberg19191940",
         "segments": [
             {
                 "timeline_start": 0.0,
                 "timeline_end": 5.7,
-                "dataset": "zigomaro/koenigsberg19191940",
+                "dataset": "richss777/koenigsberg19191940",
                 "source_file": "main.mp4",
                 "source_start": 10.0,
             },
             {
                 "timeline_start": 5.7,
                 "timeline_end": 9.0,
-                "dataset": "zigomaro/koenigsberg19191940",
+                "dataset": "richss777/koenigsberg19191940",
                 "source_file": "edge.mp4",
                 "source_start": 40.0,
             },
@@ -106,7 +106,7 @@ def test_format_bans_report_lists_recent_source_bans() -> None:
             "source_bans": [
                 {
                     "issue_number": 15,
-                    "dataset": "zigomaro/koenigsberg-winter",
+                    "dataset": "richss777/koenigsberg-winter",
                     "source_file": "winter.mp4",
                     "source_start": 1.25,
                     "source_end": 3.5,
@@ -116,7 +116,7 @@ def test_format_bans_report_lists_recent_source_bans() -> None:
     )
 
     assert "Kenigsberg bans: 1" in report
-    assert "issue #15 zigomaro/koenigsberg-winter winter.mp4 1.25-3.50s" in report
+    assert "issue #15 richss777/koenigsberg-winter winter.mp4 1.25-3.50s" in report
 
 
 def test_admin_assist_routes_kenigsberg_ban_request(monkeypatch) -> None:
@@ -562,7 +562,7 @@ def test_renderer_avoids_source_bans(monkeypatch, tmp_path) -> None:
         [video],
         [(0.0, 2.0)],
         rng=renderer.random.Random(1),
-        dataset_slug="zigomaro/koenigsberg19191940",
+        dataset_slug="richss777/koenigsberg19191940",
         crop_px=96,
         source_bans=[{"source_file": "devau.mp4", "source_start": 0.0, "source_end": 9.0}],
     )
@@ -583,11 +583,11 @@ def test_renderer_treats_recent_source_exclusions_as_soft(monkeypatch, tmp_path)
         videos,
         [(0.0, 2.0), (2.0, 4.0)],
         rng=renderer.random.Random(1),
-        dataset_slug="zigomaro/koenigsberg-winter",
+        dataset_slug="richss777/koenigsberg-winter",
         crop_px=96,
         source_bans=[
             {
-                "dataset": "zigomaro/koenigsberg-winter",
+                "dataset": "richss777/koenigsberg-winter",
                 "source_file": video.name,
                 "source_start": 0.0,
                 "source_end": 5.0,
@@ -614,7 +614,7 @@ def test_renderer_uses_current_generation_overlap_only_as_emergency(monkeypatch,
         [video],
         [(0.0, 2.0), (2.0, 4.0)],
         rng=renderer.random.Random(1),
-        dataset_slug="zigomaro/koenigsberg-winter",
+        dataset_slug="richss777/koenigsberg-winter",
         crop_px=96,
         source_bans=[],
     )
@@ -637,7 +637,7 @@ def test_renderer_prefers_unused_video_files_within_one_story(monkeypatch, tmp_p
         videos,
         [(0.0, 2.0), (2.0, 4.0), (4.0, 6.0)],
         rng=renderer.random.Random(7),
-        dataset_slug="zigomaro/koenigsberg19191940",
+        dataset_slug="richss777/koenigsberg19191940",
         crop_px=96,
         source_bans=[],
     )
@@ -654,7 +654,7 @@ def test_renderer_avoids_overlapping_source_ranges_within_one_story(monkeypatch,
         [video],
         [(0.0, 2.0), (2.0, 4.0), (4.0, 6.0)],
         rng=renderer.random.Random(1),
-        dataset_slug="zigomaro/koenigsberg19191940",
+        dataset_slug="richss777/koenigsberg19191940",
         crop_px=96,
         source_bans=[],
     )
@@ -670,10 +670,10 @@ def test_recent_source_exclusions_use_previous_issue_segments() -> None:
                 "15": {
                     "issue_number": 15,
                     "registered_at": "2026-05-12T10:00:00+00:00",
-                    "dataset": "zigomaro/koenigsberg19191940",
+                    "dataset": "richss777/koenigsberg19191940",
                     "segments": [
                         {
-                            "dataset": "zigomaro/koenigsberg19191940",
+                            "dataset": "richss777/koenigsberg19191940",
                             "source_file": "devau.mp4",
                             "source_start": 12.0,
                             "source_end": 14.5,
@@ -687,7 +687,7 @@ def test_recent_source_exclusions_use_previous_issue_segments() -> None:
 
     assert exclusions == [
         {
-            "dataset": "zigomaro/koenigsberg19191940",
+            "dataset": "richss777/koenigsberg19191940",
             "source_file": "devau.mp4",
             "source_start": 12.0,
             "source_end": 14.5,
@@ -781,7 +781,7 @@ async def test_reset_recent_usage_windows_preserves_bans_and_issue_history(tmp_p
                 "registered_at": "2026-05-13T10:00:00+00:00",
                 "segments": [
                     {
-                        "dataset": "zigomaro/koenigsberg19191940",
+                        "dataset": "richss777/koenigsberg19191940",
                         "source_file": "x.mp4",
                         "source_start": 1,
                         "source_end": 2,
@@ -872,7 +872,7 @@ async def test_poetry_test_manifest_does_not_consume_pending_poem(tmp_path) -> N
 
 
 def test_renderer_selects_video_dataset_from_nested_kaggle_datasets_dir(tmp_path) -> None:
-    dataset_dir = tmp_path / "datasets" / "zigomaro" / "koenigsberg19191940"
+    dataset_dir = tmp_path / "datasets" / "richss777" / "koenigsberg19191940"
     dataset_dir.mkdir(parents=True)
     video = dataset_dir / "devau.mp4"
     video.write_bytes(b"stub")
@@ -884,7 +884,7 @@ def test_renderer_selects_video_dataset_from_nested_kaggle_datasets_dir(tmp_path
 
     assert selected == dataset_dir
     assert period_key == "1919-1940"
-    assert dataset_slug == "zigomaro/koenigsberg19191940"
+    assert dataset_slug == "richss777/koenigsberg19191940"
 
 
 def test_renderer_randomly_selects_from_mounted_video_datasets(tmp_path) -> None:
@@ -1136,12 +1136,13 @@ def test_renderer_music_selection_reads_dataset_range_manifest(monkeypatch, tmp_
 
 
 def test_recent_music_exclusions_uses_issue_manifest_history() -> None:
+    registered_at = datetime.now(timezone.utc).isoformat()
     state = {
         "recent_music": [],
         "issues": {
             "22": {
                 "issue_number": 22,
-                "registered_at": "2026-05-13T12:00:00+00:00",
+                "registered_at": registered_at,
                 "selected_music": {
                     "file": "01 - The Promise.flac",
                     "start": 233.41,
@@ -1159,7 +1160,7 @@ def test_recent_music_exclusions_uses_issue_manifest_history() -> None:
             "start": 233.41,
             "end": 257.738,
             "issue_number": 22,
-            "created_at": "2026-05-13T12:00:00+00:00",
+            "created_at": registered_at,
         }
     ]
 
@@ -1410,8 +1411,8 @@ def test_kenigsberg_detects_stale_local_handoff_session() -> None:
         created_at=None,
     )
     handed_off = SimpleNamespace(
-        kaggle_kernel_ref="zigomaro/koenigsberg-stories",
-        kaggle_dataset="zigomaro/kenigsberg-session-266-1778610442",
+        kaggle_kernel_ref="richss777/koenigsberg-stories",
+        kaggle_dataset="richss777/kenigsberg-session-266-1778610442",
         started_at=now - timedelta(hours=1),
         created_at=None,
     )

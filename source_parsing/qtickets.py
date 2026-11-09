@@ -74,7 +74,7 @@ async def run_qtickets_kaggle_kernel(
     start_time = time.time()
     client = KaggleClient()
     kernel_path = KERNELS_ROOT_PATH / QTICKETS_KERNEL_FOLDER
-    kernel_ref = "zigomaro/parse-qtickets"  # Default
+    kernel_ref = "richss777/parse-qtickets"  # Default
     registered = False
     ledger_run_id: str | None = None
 

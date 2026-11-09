@@ -104,14 +104,14 @@ def test_create_or_update_story_dataset_versions_existing_dataset() -> None:
 
     story_publish._create_or_update_dataset(
         Client(),
-        "zigomaro/crumple-video-story-secrets-cipher",
+        "richss777/crumple-video-story-secrets-cipher",
         title="Secrets",
         filename="story_publish.enc",
         data=b"encrypted",
     )
 
     assert calls == [
-        ("status", "zigomaro/crumple-video-story-secrets-cipher"),
+        ("status", "richss777/crumple-video-story-secrets-cipher"),
         ("version", "refresh story secrets"),
     ]
 

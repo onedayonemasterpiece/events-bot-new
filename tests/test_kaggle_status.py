@@ -134,13 +134,13 @@ def test_create_kaggle_status_dataset_uses_kaggle_valid_title():
 
     dataset = create_kaggle_status_dataset(
         FakeClient(),
-        username="zigomaro",
+        username="richss777",
         slug_prefix="status-ParseTheatres",
         run_id="status-smoke-20260613223955",
         config={"run_id": "status-smoke-20260613223955"},
     )
 
-    assert dataset.startswith("zigomaro/status-parsetheatres-status-sm-")
+    assert dataset.startswith("richss777/status-parsetheatres-status-sm-")
     assert len(dataset.rsplit("-", 1)[-1]) == 8
     assert titles
     assert 6 <= len(titles[0]) <= 50
@@ -507,7 +507,7 @@ def test_create_kaggle_status_dataset_keeps_long_run_ids_unique():
     ):
         create_kaggle_status_dataset(
             FakeClient(),
-            username="zigomaro",
+            username="richss777",
             slug_prefix="status-EventAgeBgeAssessment",
             run_id=run_id,
             config={"run_id": run_id},
@@ -529,7 +529,7 @@ def test_create_kaggle_status_dataset_does_not_version_after_validation_error():
     with pytest.raises(ValueError, match="dataset title"):
         create_kaggle_status_dataset(
             FakeClient(),
-            username="zigomaro",
+            username="richss777",
             slug_prefix="status-ParseTheatres",
             run_id="status-smoke-20260613223955",
             config={"run_id": "status-smoke-20260613223955"},
@@ -555,7 +555,7 @@ def test_create_kaggle_status_dataset_versions_existing_dataset():
 
     create_kaggle_status_dataset(
         FakeClient(),
-        username="zigomaro",
+        username="richss777",
         slug_prefix="status-ParseTheatres",
         run_id="status-smoke-20260613223955",
         config={"run_id": "status-smoke-20260613223955"},
@@ -592,8 +592,8 @@ async def test_kaggle_run_config_and_alive_callback(tmp_path, monkeypatch):
         session_id=664,
         kind="cherryflash",
         notebook="CherryFlash",
-        kernel_ref="zigomaro/cherryflash",
-        dataset_ref="zigomaro/cherryflash-session-664",
+        kernel_ref="richss777/cherryflash",
+        dataset_ref="richss777/cherryflash-session-664",
         resource_leases=["telegram_session:s22"],
     )
 

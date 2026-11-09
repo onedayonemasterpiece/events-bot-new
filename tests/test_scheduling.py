@@ -1442,8 +1442,8 @@ async def test_scheduled_popular_review_waits_for_confirmed_kaggle_handoff(
                 status="RENDERING",
                 target_date="2026-04-12",
                 created_at="2026-04-12 07:44:00",
-                kaggle_dataset="zigomaro/cherryflash-session-200",
-                kaggle_kernel_ref="zigomaro/cherryflash",
+                kaggle_dataset="richss777/cherryflash-session-200",
+                kaggle_kernel_ref="richss777/cherryflash",
             )
 
     monkeypatch.setattr("video_announce.scenario.VideoAnnounceScenario", FakeScenario)
@@ -1461,8 +1461,8 @@ async def test_scheduled_popular_review_waits_for_confirmed_kaggle_handoff(
     details = json.loads(details_raw)
     assert status == "success"
     assert details["session_status"] == "RENDERING"
-    assert details["kaggle_dataset"] == "zigomaro/cherryflash-session-200"
-    assert details["kaggle_kernel_ref"] == "zigomaro/cherryflash"
+    assert details["kaggle_dataset"] == "richss777/cherryflash-session-200"
+    assert details["kaggle_kernel_ref"] == "richss777/cherryflash"
 
 
 @pytest.mark.asyncio
@@ -1621,8 +1621,8 @@ async def test_popular_review_startup_catchup_stops_after_two_failed_sessions(
             status="FAILED",
             target_date="2026-04-12",
             created_at=f"2026-04-12 08:{suffix - 180:02d}:00",
-            kaggle_dataset=f"zigomaro/cherryflash-session-{suffix}",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_dataset=f"richss777/cherryflash-session-{suffix}",
+            kaggle_kernel_ref="richss777/cherryflash",
             error="{'status': 'ERROR'}",
         )
 
@@ -1653,8 +1653,8 @@ async def test_popular_review_watchdog_retries_failed_remote_handoff(
         status="FAILED",
         target_date="2026-04-12",
         created_at="2026-04-12 07:44:00",
-        kaggle_dataset="zigomaro/cherryflash-session-181",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-181",
+        kaggle_kernel_ref="richss777/cherryflash",
         error="runtime restart before Kaggle handoff; rerun required",
     )
 
@@ -1685,8 +1685,8 @@ async def test_popular_review_retry_cap_ignores_deploy_orphan_before_remote_hand
         status="FAILED",
         target_date="2026-04-12",
         created_at="2026-04-12 07:44:00",
-        kaggle_dataset="zigomaro/cherryflash-session-181",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-181",
+        kaggle_kernel_ref="richss777/cherryflash",
         error="{'status': 'ERROR'}",
     )
     await _insert_popular_review_session(
@@ -1694,7 +1694,7 @@ async def test_popular_review_retry_cap_ignores_deploy_orphan_before_remote_hand
         status="FAILED",
         target_date="2026-04-12",
         created_at="2026-04-12 08:17:00",
-        kaggle_kernel_ref="zigomaro/cherryflash-video-lane-1",
+        kaggle_kernel_ref="richss777/cherryflash-video-lane-1",
         error="runtime restart before Kaggle handoff; rerun required",
     )
 
@@ -1720,8 +1720,8 @@ async def test_popular_review_watchdog_skips_failed_session_with_video_output(
         status="FAILED",
         target_date="2026-04-12",
         created_at="2026-04-12 07:44:00",
-        kaggle_dataset="zigomaro/cherryflash-session-682",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-682",
+        kaggle_kernel_ref="richss777/cherryflash",
         video_url="cherryflash_full_final.mp4",
         error="kernel output download failed",
     )
@@ -1753,8 +1753,8 @@ async def test_popular_review_watchdog_skips_failed_session_with_terminal_ledger
         status="FAILED",
         target_date="2026-04-12",
         created_at="2026-04-12 07:44:00",
-        kaggle_dataset="zigomaro/cherryflash-session-682",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-682",
+        kaggle_kernel_ref="richss777/cherryflash",
         error="post-render bot delivery failed",
     )
     await _insert_terminal_kaggle_ledger(db, session_id=session_id)
@@ -1786,8 +1786,8 @@ async def test_popular_review_watchdog_skips_failed_session_with_live_heartbeat(
         status="FAILED",
         target_date="2026-04-12",
         created_at="2026-04-12 07:44:00",
-        kaggle_dataset="zigomaro/cherryflash-session-714",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-714",
+        kaggle_kernel_ref="richss777/cherryflash",
         error="missing video output",
     )
     await _insert_live_kaggle_ledger(
@@ -1823,8 +1823,8 @@ async def test_popular_review_watchdog_skips_publish_blocked_session(
         status="PUBLISH_BLOCKED",
         target_date="2026-04-12",
         created_at="2026-04-12 07:44:00",
-        kaggle_dataset="zigomaro/cherryflash-session-682",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-682",
+        kaggle_kernel_ref="richss777/cherryflash",
         video_url="cherryflash_full_final.mp4",
         error="story publish failed: @kenigevents BOOSTS_REQUIRED",
     )
@@ -1856,8 +1856,8 @@ async def test_popular_review_watchdog_skips_rendering_remote_handoff(
         status="RENDERING",
         target_date="2026-04-12",
         created_at="2026-04-12 07:44:00",
-        kaggle_dataset="zigomaro/cherryflash-session-181",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-181",
+        kaggle_kernel_ref="richss777/cherryflash",
     )
 
     calls: list[dict] = []
@@ -1888,8 +1888,8 @@ async def test_popular_review_watchdog_stops_after_two_failed_sessions(
             status="FAILED",
             target_date="2026-04-12",
             created_at=f"2026-04-12 08:{suffix - 180:02d}:00",
-            kaggle_dataset=f"zigomaro/cherryflash-session-{suffix}",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_dataset=f"richss777/cherryflash-session-{suffix}",
+            kaggle_kernel_ref="richss777/cherryflash",
             error="{'status': 'ERROR'}",
         )
 
@@ -1937,8 +1937,8 @@ async def test_partner_track_watchdog_retries_failed_remote_handoff(
         profile_key="popular_review_konb",
         target_date="2026-04-12",
         created_at="2026-04-12 10:47:22",
-        kaggle_dataset="zigomaro/cherryflash-session-635",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-635",
+        kaggle_kernel_ref="richss777/cherryflash",
         error="{'status': 'ERROR'}",
     )
 
@@ -1989,8 +1989,8 @@ async def test_partner_track_watchdog_stops_after_two_failed_sessions(
             profile_key="popular_review_konb",
             target_date="2026-04-12",
             created_at=f"2026-04-12 10:{suffix - 600:02d}:22",
-            kaggle_dataset=f"zigomaro/cherryflash-session-{suffix}",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_dataset=f"richss777/cherryflash-session-{suffix}",
+            kaggle_kernel_ref="richss777/cherryflash",
             error="missing video output",
         )
 
@@ -2651,7 +2651,7 @@ async def test_critical_scheduler_watchdog_defers_guide_after_remote_busy_skip(
                 "remote_telegram_session_conflicts": [
                     {
                         "job_type": "tg_monitoring",
-                        "kernel_ref": "zigomaro/telegram-monitor-bot",
+                        "kernel_ref": "richss777/telegram-monitor-bot",
                     }
                 ],
             },
@@ -2667,7 +2667,7 @@ async def test_critical_scheduler_watchdog_defers_guide_after_remote_busy_skip(
                 "remote_telegram_session_conflicts": [
                     {
                         "job_type": "tg_monitoring",
-                        "kernel_ref": "zigomaro/telegram-monitor-bot",
+                        "kernel_ref": "richss777/telegram-monitor-bot",
                     }
                 ],
             },
@@ -2733,7 +2733,7 @@ async def test_critical_scheduler_watchdog_defers_guide_remote_busy_after_local_
                 "remote_telegram_session_conflicts": [
                     {
                         "job_type": "tg_monitoring",
-                        "kernel_ref": "zigomaro/telegram-monitor-bot",
+                        "kernel_ref": "richss777/telegram-monitor-bot",
                     }
                 ],
             },
@@ -2749,7 +2749,7 @@ async def test_critical_scheduler_watchdog_defers_guide_remote_busy_after_local_
                 "remote_telegram_session_conflicts": [
                     {
                         "job_type": "tg_monitoring",
-                        "kernel_ref": "zigomaro/telegram-monitor-bot",
+                        "kernel_ref": "richss777/telegram-monitor-bot",
                     }
                 ],
             },
