@@ -2423,3 +2423,8 @@ Event 10672 still has stale prose after full source acquisition. A narrow mechan
 
 
 Consumer review before merge caught a candidate-only regression: the existing producer appends age and scene to the narrative body, so a raw-description comparison would pay for unchanged content. A new failing metadata contrast led to extracting that existing composition into one shared helper, used by create, compare and Qtickets attachment. No new semantic rule. Final diff +30/−11, net +19, within the 20-line budget; 70 parser tests and four retained actual route controls pass. Pure read-only comparison of current 33-row Muzteatr output against exact URL/slot owners finds 25 changed bodies and eight unchanged, no missing owners, provider calls or Event/Job writes. This is a bounded route diagnostic, not final prose acceptance.
+
+
+## November 9 — ordinary announcement audit after the pause
+
+See [the source-bound audit](../2026-11-09-non-guide-announcement-audit.md). Combined70a3 prevention delivered with live health/settings preserved. TG11753 has96 fresh messages but only56 of58 exact accepted child anchors: later anchor_forced siblings overwrite the same Event/source binding. No replay or manufactured repair applied. Kaggle401 now blocks ordinary guide and partner handoffs; required video1587 channel stories separately need boosts. Healthy scheduling is not event-quality or full-delivery acceptance.
