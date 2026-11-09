@@ -40,7 +40,7 @@ vk_intake.py, universal source parsing, canonical Event 10699 and its managed pu
 - Exact managed graph before any repair; preserve original source and public references, distinct native/date events and the owner story-retention decision.
 - Verify corrected canonical and public ordinary announcement results before closure. No whole-source replay or broad public deletion.
 
-## Current mitigation and remaining work
+## Initial mitigation state, superseded by the delivery below
 
 No canonical merge, retime, source replay, public post edit or resend has been applied. Candidate is not delivered. The already corrected 10471 and its original source anchors are preserved. Duplicate December 7 improvisation cards were also observed in the public added-events announcement; exact identity and native/time controls remain required before repair.
 
@@ -49,3 +49,17 @@ Separate video issues: session 1587 ended PUBLISH_BLOCKED with required Telegram
 ## Retained evidence
 
 Existing retained task directory /home/dev/artifacts/events-bot-new/20261102T233947Z-intake-recovery-20261103: non-guide-runs-20261109.json, daily-nonguide-public-tg-20261109.json, nonguide-vk-public.json, vk-published-date-before.log, vk-published-date-regressions.log, vk-published-date-provider-audit.log and model-control logs. Required production source/public verification remains open.
+
+## November 9, 11:30 UTC — delivered prevention and bounded correction
+
+PR 877 and PR 876 are delivered together from exact main `70a3d33fccf77840373116d3869ad4e793707904`, image `intake-vk-source-date-20261109`, immutable `sha256:e7eca5e85f20b588152dc04c3dd26b0142bec9db97faa46232bc9f534c75da12`. All four required checks passed. Full 4462-file source verification, actual 516 ancestry, initialized isolated inherited controls, four retained parser routing controls and six metadata contrasts passed. Eight VK context/rollover controls passed. Wrong SHA rejected before initialization; final isolated HTTP503 was ready=false/database skipped after 231 seconds. The only mounts were readonly launcher and data tmpfs. Owned preflight was removed. Six metadata controls initially ran with production optimization; an explicit unoptimized repeat passed all six. Actual live controls and ready=true passed, settings and Kotopogoda stayed unchanged.
+
+The route spy is not enabled semantic identity or final prose proof. The exact source model control returned November8 but also an unsupported address. No whole-event quality conclusion follows from that control. Ordinary post-release acceptance remains required.
+
+The existing managed operator merged 10699 into 10471 ONCE under manifest `78df907e6b4fe17f561220ff9b118de42aa31b2de19a21ca0fb7c07d015d5a0a`. Actual scoped graph apply/verify was first exercised in isolated SQLite. Production verification preserved the correct November7–8 interval, both moved source anchors, candidate ownership, poster graph and every existing public URL. All scoped orphan/owner checks were zero; database-wide foreign-key violations remained the pre-existing 195, not newly fixed or introduced. No whole-source replay, guessed retime, old title/fact driver or story operation occurred.
+
+The wrong festival block was removed from existing daily messages [kenigevents5539](https://t.me/kenigevents/5539) and [keniggpt3447](https://t.me/keniggpt/3447). Entity offsets outside that block were preserved. The production publishing bot edited those exact IDs, with no replacement send. Independent shared-E2E reads match the exact planned remaining text. Individual obsolete projections and VK daily2352 have not been independently corrected or verified; preserving their IDs does not establish content correctness. The incident remains open.
+
+Separate non-guide findings and precise limits are in [the audit report](../2026-11-09-non-guide-announcement-audit.md). Kaggle 401 affected the ordinary11:20 guide as well as partner video launches. No credential rotation, access bypass or required-channel downgrade was made.
+
+Additional retained receipts: vk-source-date-qualification.json, vk-source-date-delivery-receipt.json, garazhka10699-shadow-control.json, garazhka10699-merge-receipt.jsonl, garazhka-daily-public-plan.json, garazhka-daily-tg-edit-receipt.json and garazhka-daily-public-verification.json.
