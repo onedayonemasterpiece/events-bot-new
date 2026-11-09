@@ -1,6 +1,7 @@
 # INC-2026-11-09 VK photo size rejection loses complete source evidence
 
-Status: open. Severity: sev2. Service: VK intake / poster OCR.
+Status: resolved, verified in production on 2026-11-09. Severity: sev2.
+Service: VK intake / poster OCR.
 Opened: 2026-11-09. Registry continuation: inc_f5d0a79f3a7ffa6073158f3c.
 
 ## Summary and impact
@@ -57,7 +58,52 @@ as a complete source-import replay.
 
 ## Resolution and follow-ups
 
-Pending actual-main delivery and standard source catch-up. Preserve failed
-attempt history. Do not replay already accepted Boyko children or completed
-Garry scan; this correction only addresses photo transport. Remaining missing
-assets such as Golubkov's404 are separate and must not bypass evidence guards.
+PR #879 passed all four CI checks and merged as
+`486abac3e8cf8a6ec3902f4168fc8c89526c19df`. Delivered Events-only image
+`runcoveer/events:vk-photo-size-20261109`, immutable
+`sha256:efe0c1cb25584a1d428c9de3fed411b398f916e40435b4032e87f87f610e1009`.
+Running `70a3d33fccf77840373116d3869ad4e793707904` was proven an ancestor;
+all 4464 tracked source files matched. Initialized isolated preflight without
+network, inherited behavior checks, and live readiness passed. Cutover observed
+no active operations, MCP effects or background jobs. Kotopogoda stayed unchanged.
+The rollback Compose and prior immutable image are retained in the release folder.
+
+Actual ordinary source catch-up ops 11774 completed at 11:49:57 UTC. Inbox 88635
+and packet 26670 now have `confirmed_no_event` /
+`CONFIRMED_NO_EVENT:SERVICE_OR_RENTAL`. Attempt 12430 has eight attachments,
+eight included OCR blocks, zero unavailable attachments, no truncation, and
+`evidence_complete=true`. The source describes individual tour booking without
+a dated invitation; no Event was fabricated. Prior failed attempt 12342 is
+preserved with its seven-of-eight incomplete manifest.
+
+The same standard handler also resolved the two long-pending December posts:
+Guideva inbox 88324 / packet 26405 / ops 11772 created Event 10741; 2meterguide
+inbox 88692 / packet 26724 / ops 11773 merged into that same event. Both carriers
+and packets are imported / EVENTS_RESOLVED with complete evidence. Independent
+SQL readback confirms both exact source anchors and the canonical event:
+«Новогодняя ярмарка на острове Канта», 2026-12-24 through 2027-01-10, free,
+unknown opening time left blank.
+
+Source anchors: https://vk.com/wall-196142551_21602 and
+https://vk.com/wall-208865971_151400. No date or priority was edited; no parallel
+scanner, scheduler or manual Event payload was introduced. Already accepted
+Boyko and Garry records were not replayed. Golubkov packet 26877 with an
+unavailable HTTP 404 video thumbnail remains a distinct unresolved source case.
+
+Additional retained evidence: `mutilina-photo-catchup-20261109.log`,
+`new-sources-targeted-catchup-20261109-current.log`,
+`new-source-acceptance-readback.log`, `vk-photo-inherited-preflight.log`,
+`vk-photo-cutover.log`, and `vk-photo-live-health.log`. The temporary isolated
+preflight container and its initialized database were removed after verification.
+
+Additional ordinary catch-up ops 11775–11779 resolved four near-date posts and
+Krylova's latest repost. Inbox 88698, 88685, 88694 and 90097 now have
+CONFIRMED_PRODUCT_EXCLUSION / missing_location, including the mixed post with
+two December Kaliningrad itineraries; none supplied a concrete venue accepted
+by Smart Update. Inbox 88370 / packet 26456 has
+CONFIRMED_PRODUCT_EXCLUSION / past_event for the September 19 Zaalau invitation.
+All five manifests are complete with all attachments included. No Events were
+created from those carriers. The optional poster-to-draft assignment for 88694
+encountered provider HTTP 503; the normal nonfatal path continued, preserving
+complete evidence and the independently verified terminal exclusion. Evidence:
+`near-source-catchup-20261109.log` and `near-source-readback.log`.
