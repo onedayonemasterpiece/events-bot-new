@@ -98,6 +98,7 @@ jobs:
           tests/test_vk_intake_history.py
           tests/test_vk_intake_poster_budget.py
           tests/test_vk_intake_parse_context.py
+          tests/test_vk_photo_size_fallback.py
           tests/test_vk_intake_year_rollover.py
           tests/test_vk_review.py
           tests/test_vk_review_lock_retry.py
