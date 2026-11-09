@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-location-verbatim-20261106
+    image: runcoveer/events:vk-photo-size-20261109
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

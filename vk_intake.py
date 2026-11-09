@@ -2754,6 +2754,25 @@ def _collapse_same_post_exact_drafts(drafts_in: list[EventDraft]) -> list[EventD
     return out
 
 
+def _smaller_vk_photo_url(url: str) -> str | None:
+    """Use one smaller rendition explicitly advertised by the VK CDN URL."""
+    parts = urlsplit(url)
+    if not (parts.hostname or "").endswith(".userapi.com"):
+        return None
+    query = dict(parse_qsl(parts.query))
+    try:
+        width = int(query.get("cs", "").split("x")[0])
+        widths = [int(size.split("x")[0]) for size in query.get("as", "").split(",")
+                  if re.fullmatch(r"[1-9][0-9]*x[1-9][0-9]*", size)]
+    except ValueError:
+        return None
+    smaller = max((value for value in widths if value < width), default=0)
+    if not smaller:
+        return None
+    query["cs"] = f"{smaller}x0"
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 async def _download_photo_media(urls: Sequence[str]) -> list[tuple[bytes, str]]:
     if not urls:
         return []
@@ -2806,9 +2825,9 @@ async def _download_photo_media(urls: Sequence[str]) -> list[tuple[bytes, str]]:
 
     for idx, url in enumerate(urls):
 
-        async def _fetch() -> tuple[bytes, str | None, str | None]:
+        async def _fetch(download_url: str) -> tuple[bytes, str | None, str | None]:
             async with semaphore:
-                async with session.get(url, headers=request_headers) as resp:
+                async with session.get(download_url, headers=request_headers) as resp:
                     resp.raise_for_status()
                     content_type = resp.headers.get("Content-Type")
                     content_length = resp.headers.get("Content-Length")
@@ -2825,9 +2844,15 @@ async def _download_photo_media(urls: Sequence[str]) -> list[tuple[bytes, str]]:
         content_type: str | None = None
         content_length: str | None = None
         try:
-            data, content_type, content_length = await asyncio.wait_for(
-                _fetch(), timeout
-            )
+            try:
+                data, content_type, content_length = await asyncio.wait_for(_fetch(url), timeout)
+            except ValueError as exc:
+                smaller_url = _smaller_vk_photo_url(url) if str(exc) == "file too large" else None
+                if not smaller_url:
+                    raise
+                logging.info("vk.photo_media size_fallback url=%s rendition=%s max_bytes=%s",
+                             url, smaller_url, max_size)
+                data, content_type, content_length = await asyncio.wait_for(_fetch(smaller_url), timeout)
             size = len(data)
             if size > max_size:
                 raise ValueError("file too large")
