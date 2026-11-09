@@ -95,3 +95,15 @@ Additional retained evidence: `mutilina-photo-catchup-20261109.log`,
 `new-source-acceptance-readback.log`, `vk-photo-inherited-preflight.log`,
 `vk-photo-cutover.log`, and `vk-photo-live-health.log`. The temporary isolated
 preflight container and its initialized database were removed after verification.
+
+Additional ordinary catch-up ops 11775–11779 resolved four near-date posts and
+Krylova's latest repost. Inbox 88698, 88685, 88694 and 90097 now have
+CONFIRMED_PRODUCT_EXCLUSION / missing_location, including the mixed post with
+two December Kaliningrad itineraries; none supplied a concrete venue accepted
+by Smart Update. Inbox 88370 / packet 26456 has
+CONFIRMED_PRODUCT_EXCLUSION / past_event for the September 19 Zaalau invitation.
+All five manifests are complete with all attachments included. No Events were
+created from those carriers. The optional poster-to-draft assignment for 88694
+encountered provider HTTP 503; the normal nonfatal path continued, preserving
+complete evidence and the independently verified terminal exclusion. Evidence:
+`near-source-catchup-20261109.log` and `near-source-readback.log`.
