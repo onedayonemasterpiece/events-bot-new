@@ -2376,7 +2376,7 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         mod = load_module()
         refusal = (
             "RuntimeError: Region Talk Kaggle launch refused: active kernel(s) "
-            "detected zigomaro/region-talk-candidate-report(QUEUED); auth bundle "
+            "detected richss777/region-talk-candidate-report(QUEUED); auth bundle "
             "TELEGRAM_AUTH_BUNDLE_DISCOVERY1 must not be used concurrently."
         )
         proc = mock.Mock(returncode=1, stdout=refusal)

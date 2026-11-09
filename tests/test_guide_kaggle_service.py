@@ -149,9 +149,9 @@ async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
 
     async def fake_push(*_args, **_kwargs):
         return (
-            "zigomaro/guide-excursions-monitor",
+            "richss777/guide-excursions-monitor",
             {"dataset_sources": ["cipher", "key"]},
-            {"ref": "zigomaro/guide-excursions-monitor", "version_number": 7},
+            {"ref": "richss777/guide-excursions-monitor", "version_number": 7},
         )
 
     async def fake_shape(*_args, **_kwargs):
@@ -275,9 +275,9 @@ async def test_post_push_handoff_failure_preserves_intent_and_datasets(
     async def fake_push(*_args, **_kwargs):
         calls.append(("push",))
         return (
-            "zigomaro/guide-excursions-monitor",
+            "richss777/guide-excursions-monitor",
             {"dataset_sources": ["owner/cipher-run", "owner/key-run"]},
-            {"ref": "zigomaro/guide-excursions-monitor", "version_number": 5},
+            {"ref": "richss777/guide-excursions-monitor", "version_number": 5},
         )
 
     async def fake_shape(*_args, **_kwargs):
@@ -319,7 +319,7 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
 ) -> None:
     jobs = [
         {
-            "kernel_ref": "zigomaro/guide-excursions-monitor",
+            "kernel_ref": "richss777/guide-excursions-monitor",
             "meta": {
                 "run_id": "f18774f300c7",
                 "mode": "full",
@@ -342,7 +342,7 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
         return jobs
 
     async def fake_download_guide_results(_client, kernel_ref: str, run_id: str) -> Path:
-        assert kernel_ref == "zigomaro/guide-excursions-monitor"
+        assert kernel_ref == "richss777/guide-excursions-monitor"
         assert run_id == "f18774f300c7"
         return results_path
 
@@ -379,4 +379,4 @@ async def test_resume_guide_monitor_jobs_uses_output_when_status_lookup_fails(
 
     assert recovered == 1
     assert len(imported) == 1
-    assert removed == [("guide_monitoring", "zigomaro/guide-excursions-monitor")]
+    assert removed == [("guide_monitoring", "richss777/guide-excursions-monitor")]

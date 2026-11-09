@@ -1,5 +1,7 @@
 # Инциденты
 
+- `INC-2026-11-09-kaggle-account-migration.md`: account migration, duplicate SaveKernel retries and new-account-only recovery.
+
 - `INC-2026-11-09-vk-relative-publication-date.md`: VK publication timestamp lost before the LLM shifts relative dates into an incorrect daily announcement.
 
 - `INC-2026-11-08-giveaway-zero-ticket-price.md`: ordinary Telegram raffle source carries unsupported numeric zero into a public admission-price block; preserve real event and grounded ticket controls.

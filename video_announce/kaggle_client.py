@@ -53,8 +53,6 @@ DEFAULT_KERNEL_IGNORE_PATTERNS = (
     "sequence/",
     "sequence*/",
 )
-KERNEL_PUSH_INVALID_DATASET_RETRY_SECONDS = 180
-KERNEL_PUSH_INVALID_DATASET_RETRY_POLL_SECONDS = 10
 
 
 def _normalize_kernel_ref(ref: str | None) -> str:
@@ -797,11 +795,6 @@ def _push_kernel_request_with_retries(
         for item in (meta_data.get("dataset_sources") or [])
         if str(item).strip()
     ]
-    retry_deadline = (
-        time.monotonic() + KERNEL_PUSH_INVALID_DATASET_RETRY_SECONDS
-        if requested_sources
-        else time.monotonic()
-    )
 
     while True:
         meta_path.write_text(json.dumps(meta_data, ensure_ascii=False, indent=2))
@@ -836,14 +829,13 @@ def _push_kernel_request_with_retries(
             if item in requested_sources
         ]
         if invalid_requested:
-            if time.monotonic() < retry_deadline:
-                logger.warning(
-                    "kaggle: kernels_push invalid dataset sources=%s; waiting %ss and retrying",
-                    invalid_requested,
-                    KERNEL_PUSH_INVALID_DATASET_RETRY_POLL_SECONDS,
-                )
-                time.sleep(KERNEL_PUSH_INVALID_DATASET_RETRY_POLL_SECONDS)
-                continue
+            # SaveKernel can create a version even when it rejects a dataset.
+            # Repeating that accepted request launches duplicate notebook runs.
+            logger.error(
+                "kaggle: dataset binding rejected ref=%s version=%s; not resubmitting",
+                response_info.get("ref"),
+                response_info.get("version_number"),
+            )
             raise RuntimeError(
                 "Kaggle kernels_push rejected dataset sources: "
                 + ", ".join(invalid_requested)
@@ -923,7 +915,7 @@ def _kernel_slug(kernel_ref: str) -> str:
 def resolve_kaggle_slug(kernel_ref: str | None) -> str | None:
     """Resolve a kernel_ref (local: or owner/slug) to the Kaggle kernel id used at push time.
 
-    `local:CherryFlash` and `zigomaro/cherryflash` both refer to the same
+    `local:CherryFlash` and `richss777/cherryflash` both refer to the same
     Kaggle kernel; the lock against concurrent same-kernel pushes must
     normalize them. For ``local:`` refs we read ``kernel-metadata.json`` (the
     same file ``kernels_push`` would send) and return its ``id`` field; for

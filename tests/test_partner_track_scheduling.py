@@ -269,8 +269,8 @@ async def test_partner_eco_watchdog_skips_if_session_already_published_today(
         target_date="2026-05-14",
         status="PUBLISHED_TEST",
         created_at="2026-05-14 10:35:00",
-        kaggle_dataset="zigomaro/cherryflash-session-901",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-901",
+        kaggle_kernel_ref="richss777/cherryflash",
     )
 
     calls: list[tuple[str, dict]] = []
@@ -443,8 +443,8 @@ async def test_partner_watchdog_only_counts_matching_profile_key(
         target_date="2026-05-14",
         status="PUBLISHED_TEST",
         created_at="2026-05-14 08:30:00",
-        kaggle_dataset="zigomaro/cherryflash-session-900",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_dataset="richss777/cherryflash-session-900",
+        kaggle_kernel_ref="richss777/cherryflash",
     )
 
     calls: list[str] = []

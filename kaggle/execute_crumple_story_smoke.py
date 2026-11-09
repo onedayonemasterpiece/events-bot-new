@@ -83,7 +83,7 @@ def _create_payload(image_name: str) -> dict:
 async def run_story_smoke() -> bool:
     client = KaggleClient()
     assets_dataset = os.getenv(
-        "CRUMPLE_ASSETS_DATASET", "zigomaro/video-announce-assets"
+        "CRUMPLE_ASSETS_DATASET", "richss777/video-announce-assets"
     ).strip()
     target_peer = _story_target()
     _require_env("KAGGLE_USERNAME")
@@ -205,7 +205,7 @@ async def run_story_smoke() -> bool:
             dataset_sources=[dataset_slug, assets_dataset, *secret_datasets],
         )
         meta = json.loads((KERNEL_DIR / "kernel-metadata.json").read_text(encoding="utf-8"))
-        kernel_ref = meta.get("id", "zigomaro/crumple-video")
+        kernel_ref = meta.get("id", "richss777/crumple-video")
 
     logger.info("kernel deployed: %s", kernel_ref)
     start_time = time.time()

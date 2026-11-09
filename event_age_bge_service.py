@@ -398,10 +398,13 @@ async def run_event_age_bge_batch(db: Database) -> dict[str, Any]:
     run_id = "event-age-bge-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     slug_name = _dataset_slug(run_id)
     dataset_ref = f"{username}/{slug_name}"
-    from video_announce.kaggle_client import KaggleClient
+    from video_announce.kaggle_client import KaggleClient, await_dataset_ready
     from source_parsing.kaggle_runner import run_kaggle_kernel
 
     client = KaggleClient()
+    artifact_ref = (os.getenv("EVENT_AGE_BGE_ARTIFACT_DATASET") or "").strip()
+    if artifact_ref:
+        await await_dataset_ready(client, artifact_ref)
     with tempfile.TemporaryDirectory(prefix="event-age-bge-input-") as tmp:
         root = Path(tmp)
         (root / "event_age_bge_input.jsonl").write_text(
@@ -449,7 +452,7 @@ async def run_event_age_bge_batch(db: Database) -> dict[str, Any]:
             encoding="utf-8",
         )
         await asyncio.to_thread(client.create_dataset, root, public=False)
-    artifact_ref = (os.getenv("EVENT_AGE_BGE_ARTIFACT_DATASET") or "").strip()
+    await await_dataset_ready(client, dataset_ref)
     dataset_sources = [dataset_ref, *([artifact_ref] if artifact_ref else [])]
     status, files, duration = await run_kaggle_kernel(
         "EventAgeBgeAssessment",

@@ -1,5 +1,5 @@
 {
-  "id": "zigomaro/video-afisha",
+  "id": "richss777/video-afisha",
   "title": "Video Afisha",
   "code_file": "video_afisha.ipynb",
   "language": "python",
@@ -8,7 +8,7 @@
   "enable_gpu": false,
   "enable_internet": true,
   "dataset_sources": [
-    "zigomaro/afisha-dataset-2"
+    "richss777/afisha-dataset-2"
   ],
   "competition_sources": [],
   "kernel_sources": [],

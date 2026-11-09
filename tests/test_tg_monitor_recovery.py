@@ -13,21 +13,21 @@ async def test_recovery_imports_stale_same_pid_job_when_run_lock_is_free(monkeyp
 
     class DummyKaggleClient:
         def get_kernel_status(self, kernel_ref: str) -> dict:
-            assert kernel_ref == "zigomaro/telegram-monitor-bot"
+            assert kernel_ref == "richss777/telegram-monitor-bot"
             return {"status": "complete"}
 
     async def fake_list_jobs(job_type: str | None = None):
         assert job_type == "tg_monitoring"
         return [
             {
-                "kernel_ref": "zigomaro/telegram-monitor-bot",
+                "kernel_ref": "richss777/telegram-monitor-bot",
                 "meta": {"run_id": "run-stale", "pid": os.getpid()},
             }
         ]
 
     async def fake_download_results(client, kernel_ref: str, run_id: str) -> Path:
         assert isinstance(client, DummyKaggleClient)
-        assert kernel_ref == "zigomaro/telegram-monitor-bot"
+        assert kernel_ref == "richss777/telegram-monitor-bot"
         assert run_id == "run-stale"
         path = tmp_path / "telegram_results.json"
         path.write_text('{"messages":[]}', encoding="utf-8")
@@ -51,7 +51,7 @@ async def test_recovery_imports_stale_same_pid_job_when_run_lock_is_free(monkeyp
 
     assert recovered == 1
     assert imported == [("run-stale", str(tmp_path / "telegram_results.json"))]
-    assert removed == [("tg_monitoring", "zigomaro/telegram-monitor-bot")]
+    assert removed == [("tg_monitoring", "richss777/telegram-monitor-bot")]
 
 
 @pytest.mark.asyncio
@@ -61,21 +61,21 @@ async def test_recovery_imports_output_when_status_lookup_fails(monkeypatch, tmp
 
     class DummyKaggleClient:
         def get_kernel_status(self, kernel_ref: str) -> dict:
-            assert kernel_ref == "zigomaro/telegram-monitor-bot"
+            assert kernel_ref == "richss777/telegram-monitor-bot"
             raise RuntimeError("GetKernelSessionStatus 500")
 
     async def fake_list_jobs(job_type: str | None = None):
         assert job_type == "tg_monitoring"
         return [
             {
-                "kernel_ref": "zigomaro/telegram-monitor-bot",
+                "kernel_ref": "richss777/telegram-monitor-bot",
                 "meta": {"run_id": "run-output-ready", "pid": 999999},
             }
         ]
 
     async def fake_download_results(client, kernel_ref: str, run_id: str) -> Path:
         assert isinstance(client, DummyKaggleClient)
-        assert kernel_ref == "zigomaro/telegram-monitor-bot"
+        assert kernel_ref == "richss777/telegram-monitor-bot"
         assert run_id == "run-output-ready"
         path = tmp_path / "telegram_results.json"
         path.write_text('{"messages":[]}', encoding="utf-8")
@@ -97,7 +97,7 @@ async def test_recovery_imports_output_when_status_lookup_fails(monkeypatch, tmp
 
     assert recovered == 1
     assert imported == [("run-output-ready", str(tmp_path / "telegram_results.json"))]
-    assert removed == [("tg_monitoring", "zigomaro/telegram-monitor-bot")]
+    assert removed == [("tg_monitoring", "richss777/telegram-monitor-bot")]
 
 
 @pytest.mark.asyncio
@@ -109,7 +109,7 @@ async def test_recovery_skips_same_pid_job_while_run_lock_is_held(monkeypatch) -
     async def fake_list_jobs(job_type: str | None = None):
         return [
             {
-                "kernel_ref": "zigomaro/telegram-monitor-bot",
+                "kernel_ref": "richss777/telegram-monitor-bot",
                 "meta": {"run_id": "run-active", "pid": os.getpid()},
             }
         ]
@@ -129,14 +129,14 @@ async def test_recovery_releases_exact_lease_as_soon_as_cancel_is_terminal(monke
 
     class DummyKaggleClient:
         def get_kernel_status(self, kernel_ref: str) -> dict:
-            assert kernel_ref == "zigomaro/telegram-monitor-bot"
+            assert kernel_ref == "richss777/telegram-monitor-bot"
             return {"status": "CANCEL_ACKNOWLEDGED"}
 
     async def fake_list_jobs(job_type: str | None = None):
         assert job_type == "tg_monitoring"
         return [
             {
-                "kernel_ref": "zigomaro/telegram-monitor-bot",
+                "kernel_ref": "richss777/telegram-monitor-bot",
                 "meta": {"run_id": "run-cancelled", "pid": 999999},
             }
         ]

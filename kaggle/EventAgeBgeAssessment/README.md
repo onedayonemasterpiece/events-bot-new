@@ -38,7 +38,7 @@ python kaggle/execute_event_age_bge_assessment.py \
   --dataset-source USER/PRIVATE-INPUT --run-id event-age-bge-canary
 ```
 
-Canonical private kernel ref: `zigomaro/event-age-bge-assessment-shadow`.
+Canonical private kernel ref: `richss777/event-age-bge-assessment-shadow`.
 
 The launcher checks both states: Kaggle kernel `COMPLETE` and the downloaded
 worker report. A bounded `partial` report is returned as a non-zero launcher

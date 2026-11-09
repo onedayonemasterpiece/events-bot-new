@@ -62,7 +62,7 @@ CherryFlash `/v -> popular_review` sessions repeatedly failed to launch on Kaggl
 - targeted `pytest` for `tests/test_kaggle_client.py` and CherryFlash pipeline tests;
 - prove that `deploy_kernel_update()` fails on non-empty `SaveKernel.error`;
 - prove that CherryFlash retries on CPU when Kaggle returns the weekly GPU quota error;
-- prove that CherryFlash retries `invalidDatasetSources` for the fresh session dataset instead of silently accepting stale launch state;
+- prove that `invalidDatasetSources` fails explicitly without resubmitting an already-created version (corrected by `INC-2026-11-09-kaggle-account-migration`);
 - verify deployed SHA is reachable from `origin/main`.
 
 ### Required evidence
@@ -97,3 +97,7 @@ CherryFlash `/v -> popular_review` sessions repeatedly failed to launch on Kaggl
 ## Prevention
 
 - Kaggle kernel launch wrappers must not treat `SaveKernel` as successful without checking `ApiSaveKernelResponse.error` and invalid source lists.
+
+## Correction, 2026-11-09
+
+The former invalid-source retry requirement is superseded by `INC-2026-11-09-kaggle-account-migration`: SaveKernel can return a created version together with invalid sources. Repeating push creates duplicate executions. Await dataset readiness before submission using the existing helper, preserve explicit source-binding errors, and do not resubmit accepted versions. GPU-quota rejection without an accepted version retains its existing CPU fallback.

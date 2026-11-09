@@ -38,7 +38,7 @@ def test_cherryflash_requires_full_product_video_not_intro_approval(
     intro.write_bytes(b"intro-only")
     session_obj = VideoAnnounceSession(
         profile_key="popular_review",
-        kaggle_kernel_ref="zigomaro/cherryflash",
+        kaggle_kernel_ref="richss777/cherryflash",
     )
 
     assert poller_module._find_session_video(session_obj, [intro]) is None
@@ -59,7 +59,7 @@ async def test_error_kernel_with_intro_only_output_does_not_false_green_cherryfl
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
             test_chat_id=123,
             selection_params={"mode": "popular_review", "story_publish_enabled": True},
         )
@@ -109,7 +109,7 @@ async def test_error_kernel_with_intro_only_output_does_not_false_green_cherryfl
             id=session_id,
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
         ),
         bot=_DummyBot(),
         notify_chat_id=777,
@@ -192,7 +192,7 @@ async def test_resume_rendering_sessions_fails_stale_pre_handoff_without_notify_
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash-video-lane-1",
+            kaggle_kernel_ref="richss777/cherryflash-video-lane-1",
             kaggle_dataset=None,
             started_at=datetime.now(timezone.utc) - timedelta(minutes=30),
         )
@@ -266,7 +266,7 @@ async def test_resume_rendering_sessions_skips_fresh_remote_pre_handoff_without_
         session.add(User(user_id=1, is_superadmin=True))
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/cherryflash-video1",
+            kaggle_kernel_ref="richss777/cherryflash-video1",
             kaggle_dataset=None,
             test_chat_id=123,
             started_at=datetime.now(timezone.utc) - timedelta(minutes=1),
@@ -302,8 +302,8 @@ async def test_resume_rendering_sessions_restarts_remote_kernel_pollers(monkeypa
         session.add(User(user_id=1, is_superadmin=True))
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/crumple-video",
-            kaggle_dataset="zigomaro/video-announce-session-1",
+            kaggle_kernel_ref="richss777/crumple-video",
+            kaggle_dataset="richss777/video-announce-session-1",
             test_chat_id=123,
         )
         session.add(sess)
@@ -324,7 +324,7 @@ async def test_resume_rendering_sessions_restarts_remote_kernel_pollers(monkeypa
     recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
 
     assert recovered == 1
-    assert started == [(session_id, "zigomaro/video-announce-session-1")]
+    assert started == [(session_id, "richss777/video-announce-session-1")]
     assert bot.messages == []
 
 
@@ -341,8 +341,8 @@ async def test_resume_reconciles_old_terminal_ledger_without_repolling_mutable_k
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
-            kaggle_dataset="zigomaro/cherryflash-session-1083",
+            kaggle_kernel_ref="richss777/cherryflash",
+            kaggle_dataset="richss777/cherryflash-session-1083",
             test_chat_id=-1002210431821,
             started_at=now - timedelta(days=2),
             selection_params={"notify_chat_id": 123},
@@ -367,8 +367,8 @@ async def test_resume_reconciles_old_terminal_ledger_without_repolling_mutable_k
             (
                 f"videoannounce:{session_id}",
                 session_id,
-                "zigomaro/cherryflash",
-                "zigomaro/cherryflash-session-1083",
+                "richss777/cherryflash",
+                "richss777/cherryflash-session-1083",
                 terminal_at,
                 terminal_at,
                 terminal_at,
@@ -414,8 +414,8 @@ async def test_terminal_ledger_grace_does_not_race_healthy_output_processing(tmp
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
-            kaggle_dataset="zigomaro/cherryflash-session-fresh",
+            kaggle_kernel_ref="richss777/cherryflash",
+            kaggle_dataset="richss777/cherryflash-session-fresh",
             started_at=now - timedelta(minutes=30),
         )
         session.add(sess)
@@ -436,8 +436,8 @@ async def test_terminal_ledger_grace_does_not_race_healthy_output_processing(tmp
             (
                 f"videoannounce:{session_id}",
                 session_id,
-                "zigomaro/cherryflash",
-                "zigomaro/cherryflash-session-fresh",
+                "richss777/cherryflash",
+                "richss777/cherryflash-session-fresh",
                 terminal_at,
                 terminal_at,
                 terminal_at,
@@ -472,8 +472,8 @@ async def test_resume_rendering_sessions_revives_false_failed_live_ledger(
         session.add(User(user_id=1, is_superadmin=True))
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.FAILED,
-            kaggle_kernel_ref="zigomaro/cherryflash",
-            kaggle_dataset="zigomaro/cherryflash-session-714",
+            kaggle_kernel_ref="richss777/cherryflash",
+            kaggle_dataset="richss777/cherryflash-session-714",
             test_chat_id=123,
             error="missing video output",
             finished_at=datetime.now(timezone.utc) - timedelta(minutes=5),
@@ -498,8 +498,8 @@ async def test_resume_rendering_sessions_revives_false_failed_live_ledger(
             (
                 f"videoannounce:{session_id}",
                 session_id,
-                "zigomaro/cherryflash",
-                "zigomaro/cherryflash-session-714",
+                "richss777/cherryflash",
+                "richss777/cherryflash-session-714",
                 heartbeat_at,
                 heartbeat_at,
                 heartbeat_at,
@@ -520,7 +520,7 @@ async def test_resume_rendering_sessions_revives_false_failed_live_ledger(
     recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
 
     assert recovered == 1
-    assert started == [(session_id, "zigomaro/cherryflash-session-714")]
+    assert started == [(session_id, "richss777/cherryflash-session-714")]
     async with db.get_session() as session:
         refreshed = await session.get(VideoAnnounceSession, session_id)
         assert refreshed is not None
@@ -540,8 +540,8 @@ async def test_publish_only_ledgers_do_not_resume_already_published_session(
         session.add(User(user_id=1, is_superadmin=True))
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
-            kaggle_kernel_ref="zigomaro/crumple-video",
-            kaggle_dataset="zigomaro/video-afisha-session-777",
+            kaggle_kernel_ref="richss777/crumple-video",
+            kaggle_dataset="richss777/video-afisha-session-777",
             test_chat_id=123,
             video_url="crumple_video_final.mp4",
             published_at=datetime.now(timezone.utc) - timedelta(minutes=90),
@@ -561,8 +561,8 @@ async def test_publish_only_ledgers_do_not_resume_already_published_session(
                 status, phase, token_hash, progress_json, created_at, updated_at
             )
             VALUES(?, ?, 'crumple_story_publish_only', 'CrumpleStoryPublishOnly',
-                   'zigomaro/crumple-story-publish-only',
-                   'zigomaro/crumple-story-publish-session-777',
+                   'richss777/crumple-story-publish-only',
+                   'richss777/crumple-story-publish-session-777',
                    'created', 'created', 'token', '{}', ?, ?)
             """,
             (
@@ -601,8 +601,8 @@ async def test_live_ledger_does_not_resume_done_session(monkeypatch, tmp_path: P
         session.add(User(user_id=1, is_superadmin=True))
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.DONE,
-            kaggle_kernel_ref="zigomaro/crumple-video",
-            kaggle_dataset="zigomaro/video-afisha-session-777",
+            kaggle_kernel_ref="richss777/crumple-video",
+            kaggle_dataset="richss777/video-afisha-session-777",
             test_chat_id=123,
             video_url="crumple_video_final.mp4",
             finished_at=datetime.now(timezone.utc),
@@ -627,8 +627,8 @@ async def test_live_ledger_does_not_resume_done_session(monkeypatch, tmp_path: P
             (
                 f"videoannounce:{session_id}",
                 session_id,
-                "zigomaro/crumple-video",
-                "zigomaro/video-afisha-session-777",
+                "richss777/crumple-video",
+                "richss777/video-afisha-session-777",
                 heartbeat_at,
                 heartbeat_at,
                 heartbeat_at,
@@ -667,7 +667,7 @@ async def test_kenigsberg_poller_clears_remote_telegram_registry(monkeypatch):
         id=777,
         status=VideoAnnounceSessionStatus.RENDERING,
         profile_key="kenigsberg_story",
-        kaggle_kernel_ref="zigomaro/koenigsberg-stories",
+        kaggle_kernel_ref="richss777/koenigsberg-stories",
     )
 
     task = poller_module.start_kernel_poller_task(
@@ -683,7 +683,7 @@ async def test_kenigsberg_poller_clears_remote_telegram_registry(monkeypatch):
     await task
     await asyncio.sleep(0)
 
-    assert removed == [("kenigsberg_story", "zigomaro/koenigsberg-stories")]
+    assert removed == [("kenigsberg_story", "richss777/koenigsberg-stories")]
 
 
 @pytest.mark.asyncio
@@ -725,8 +725,8 @@ async def test_provider_terminal_error_reconciles_stale_rendering_once(tmp_path:
         session.add(User(user_id=777, is_superadmin=True))
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/crumple-video",
-            kaggle_dataset="zigomaro/video-afisha-session-1",
+            kaggle_kernel_ref="richss777/crumple-video",
+            kaggle_dataset="richss777/video-afisha-session-1",
             started_at=now - timedelta(hours=2),
         )
         session.add(obj)
@@ -740,7 +740,7 @@ async def test_provider_terminal_error_reconciles_stale_rendering_once(tmp_path:
         def kernel_has_dataset_sources(
             self, _kernel_ref: str, expected: list[str]
         ) -> tuple[bool, dict]:
-            assert expected == ["zigomaro/video-afisha-session-1"]
+            assert expected == ["richss777/video-afisha-session-1"]
             return True, {}
 
         def get_kernel_status(self, _kernel_ref: str) -> dict[str, str]:
@@ -788,7 +788,7 @@ async def test_fresh_ledger_heartbeat_prevents_provider_terminal_probe(tmp_path:
     async with db.get_session() as session:
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_kernel_ref="richss777/crumple-video",
             started_at=now - timedelta(hours=2),
         )
         session.add(obj)
@@ -839,8 +839,8 @@ async def test_expired_render_with_reused_kernel_becomes_publish_blocked(tmp_pat
     async with db.get_session() as session:
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/crumple-video",
-            kaggle_dataset="zigomaro/video-afisha-session-old",
+            kaggle_kernel_ref="richss777/crumple-video",
+            kaggle_dataset="richss777/video-afisha-session-old",
             started_at=now - timedelta(hours=13),
         )
         session.add(obj)
@@ -852,8 +852,8 @@ async def test_expired_render_with_reused_kernel_becomes_publish_blocked(tmp_pat
         def kernel_has_dataset_sources(
             self, _kernel_ref: str, expected: list[str]
         ) -> tuple[bool, dict]:
-            assert expected == ["zigomaro/video-afisha-session-old"]
-            return False, {"dataset_sources": ["zigomaro/video-afisha-session-new"]}
+            assert expected == ["richss777/video-afisha-session-old"]
+            return False, {"dataset_sources": ["richss777/video-afisha-session-new"]}
 
         def get_kernel_status(self, _kernel_ref: str) -> dict[str, str]:
             raise AssertionError("reused kernel status is not exact evidence for old session")
@@ -878,7 +878,7 @@ async def test_expired_render_with_active_exact_lease_remains_rendering(tmp_path
     async with db.get_session() as session:
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_kernel_ref="richss777/crumple-video",
             started_at=now - timedelta(hours=13),
         )
         session.add(obj)
@@ -928,7 +928,7 @@ async def test_expired_render_reconciliation_fails_closed_when_lease_read_unknow
     async with db.get_session() as session:
         obj = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_kernel_ref="richss777/crumple-video",
             started_at=now - timedelta(hours=13),
         )
         session.add(obj)
@@ -1258,7 +1258,7 @@ async def test_completed_published_kernel_cleans_recognized_output_tree(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
             test_chat_id=123,
             selection_params={"target_date": "2026-07-19", "mode": "popular_review"},
         )
@@ -1287,7 +1287,7 @@ async def test_completed_published_kernel_cleans_recognized_output_tree(
         VideoAnnounceSession(
             id=session_id,
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
         ),
         bot=_DummyBot(),
         notify_chat_id=777,
@@ -1319,7 +1319,7 @@ async def test_completed_kernel_bot_delivery_failure_becomes_publish_blocked(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
             test_chat_id=-1002210431821,
             selection_params={"target_date": "2026-06-16", "mode": "popular_review"},
         )
@@ -1349,7 +1349,7 @@ async def test_completed_kernel_bot_delivery_failure_becomes_publish_blocked(
     await poller_module.run_kernel_poller(
         db,
         _CompleteKernelClient(),
-        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="richss777/cherryflash"),
         bot=bot,
         notify_chat_id=777,
         test_chat_id=-1002210431821,
@@ -1386,7 +1386,7 @@ async def test_story_failure_after_render_becomes_publish_blocked(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="default",
-            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_kernel_ref="richss777/crumple-video",
             test_chat_id=123,
             selection_params={"target_date": "2026-06-17", "mode": "tomorrow"},
         )
@@ -1431,7 +1431,7 @@ async def test_story_failure_after_render_becomes_publish_blocked(
     await poller_module.run_kernel_poller(
         db,
         StoryFailureClient(),
-        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/crumple-video"),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="richss777/crumple-video"),
         bot=bot,
         notify_chat_id=777,
         test_chat_id=123,
@@ -1461,7 +1461,7 @@ async def test_error_kernel_with_rendered_story_failure_becomes_publish_blocked(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="kenigsberg_story",
-            kaggle_kernel_ref="zigomaro/koenigsberg-stories",
+            kaggle_kernel_ref="richss777/koenigsberg-stories",
             test_chat_id=123,
             selection_params={"target_date": "2026-06-12", "mode": "kenigsberg_story"},
         )
@@ -1512,7 +1512,7 @@ async def test_error_kernel_with_rendered_story_failure_becomes_publish_blocked(
         VideoAnnounceSession(
             id=session_id,
             status=VideoAnnounceSessionStatus.RENDERING,
-            kaggle_kernel_ref="zigomaro/koenigsberg-stories",
+            kaggle_kernel_ref="richss777/koenigsberg-stories",
         ),
         bot=bot,
         notify_chat_id=777,
@@ -1543,7 +1543,7 @@ async def test_cancelled_kernel_does_not_probe_or_publish_output(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
             test_chat_id=123,
             selection_params={"target_date": "2026-06-18", "mode": "popular_review"},
         )
@@ -1572,7 +1572,7 @@ async def test_cancelled_kernel_does_not_probe_or_publish_output(
     await poller_module.run_kernel_poller(
         db,
         CancelledClient(),
-        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="richss777/cherryflash"),
         bot=bot,
         notify_chat_id=777,
         test_chat_id=123,
@@ -1604,7 +1604,7 @@ async def test_error_status_with_fresh_notebook_heartbeat_keeps_polling(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
             test_chat_id=123,
             selection_params={"target_date": "2026-06-18", "mode": "popular_review"},
         )
@@ -1667,7 +1667,7 @@ async def test_error_status_with_fresh_notebook_heartbeat_keeps_polling(
     await poller_module.run_kernel_poller(
         db,
         client,
-        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="richss777/cherryflash"),
         bot=_DummyBot(),
         notify_chat_id=777,
         test_chat_id=123,
@@ -1701,7 +1701,7 @@ async def test_complete_kernel_missing_video_with_story_preflight_failure_is_pub
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="default",
-            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_kernel_ref="richss777/crumple-video",
             test_chat_id=123,
             selection_params={"target_date": "2026-04-25", "mode": "tomorrow"},
         )
@@ -1734,7 +1734,7 @@ async def test_complete_kernel_missing_video_with_story_preflight_failure_is_pub
     await poller_module.run_kernel_poller(
         db,
         PreflightFailureNoVideoClient(),
-        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/crumple-video"),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="richss777/crumple-video"),
         bot=bot,
         notify_chat_id=777,
         test_chat_id=123,
@@ -1764,7 +1764,7 @@ async def test_unknown_status_probes_output_before_failed(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
             test_chat_id=123,
             selection_params={"target_date": "2026-06-08", "mode": "popular_review"},
         )
@@ -1802,7 +1802,7 @@ async def test_unknown_status_probes_output_before_failed(
     await poller_module.run_kernel_poller(
         db,
         client,
-        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="richss777/cherryflash"),
         bot=_DummyBot(),
         notify_chat_id=777,
         test_chat_id=123,
@@ -1831,7 +1831,7 @@ async def test_timeout_probes_output_before_failed(
         sess = VideoAnnounceSession(
             status=VideoAnnounceSessionStatus.RENDERING,
             profile_key="popular_review",
-            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_kernel_ref="richss777/cherryflash",
             test_chat_id=123,
             selection_params={"target_date": "2026-06-18", "mode": "popular_review"},
         )
@@ -1860,7 +1860,7 @@ async def test_timeout_probes_output_before_failed(
     await poller_module.run_kernel_poller(
         db,
         _CompleteKernelClient(),
-        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="zigomaro/cherryflash"),
+        VideoAnnounceSession(id=session_id, status=VideoAnnounceSessionStatus.RENDERING, kaggle_kernel_ref="richss777/cherryflash"),
         bot=_DummyBot(),
         notify_chat_id=777,
         test_chat_id=123,

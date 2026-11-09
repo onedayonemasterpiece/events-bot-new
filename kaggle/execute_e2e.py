@@ -41,7 +41,7 @@ async def run_e2e_tests():
     # Standardize ref: username/slug
     # If the user env has different username, it might mismatch what's in file if not careful.
     # But usually push_kernel uses what is in metadata or API defaults.
-    kernel_ref = f"{meta['id']}"  # e.g. zigomaro/events-bot-e2e
+    kernel_ref = f"{meta['id']}"  # e.g. richss777/events-bot-e2e
     
     logger.info(f"Kernel pushed: {kernel_ref}. Waiting for execution...")
     

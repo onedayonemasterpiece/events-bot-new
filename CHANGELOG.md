@@ -1,5 +1,7 @@
 # Changelog
 
+- Fix Kaggle account migration to richss777 across runtime defaults and notebook metadata; stop duplicate pushes after invalid dataset-source responses.
+
 ## [Unreleased]
 
 - Fixed: retain VK source publication time in the existing primary parse and verifier context so delayed imports do not resolve relative dates from the import day.

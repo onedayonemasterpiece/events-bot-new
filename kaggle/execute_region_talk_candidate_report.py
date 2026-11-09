@@ -660,7 +660,7 @@ def kernel_ref_from_meta(kernel_path: Path, *, kernel_slug: str | None = None) -
     slug = kernel_slug or str(meta.get("slug") or raw_id.split("/", 1)[-1] or kernel_path.name).strip()
     if username:
         return f"{username}/{slug}"
-    return raw_id if "/" in raw_id else f"zigomaro/{slug}"
+    return raw_id if "/" in raw_id else f"richss777/{slug}"
 
 
 def prepared_kernel_path(*, run_id: str, kernel_slug: str | None) -> Path:

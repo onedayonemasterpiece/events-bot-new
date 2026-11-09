@@ -25,7 +25,7 @@ async def _close_databases_after_test():
 
 @pytest.mark.asyncio
 async def test_read_pref_returns_none_when_unset(db: Database):
-    assert await accel_pref.read_active_pref(db, "zigomaro/cherryflash") is None
+    assert await accel_pref.read_active_pref(db, "richss777/cherryflash") is None
 
 
 @pytest.mark.asyncio
@@ -35,9 +35,9 @@ async def test_write_and_read_roundtrip(db: Database):
         expires_at=datetime.now(timezone.utc) + timedelta(hours=12),
         reason="unit-test",
     )
-    await accel_pref.write_pref(db, "zigomaro/cherryflash", pref)
+    await accel_pref.write_pref(db, "richss777/cherryflash", pref)
 
-    got = await accel_pref.read_active_pref(db, "zigomaro/cherryflash")
+    got = await accel_pref.read_active_pref(db, "richss777/cherryflash")
     assert got is not None
     assert got.tier == accel_pref.TIER_T4
     assert got.reason == "unit-test"
@@ -50,15 +50,15 @@ async def test_expired_pref_returns_none(db: Database):
         expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
         reason="already-expired",
     )
-    await accel_pref.write_pref(db, "zigomaro/cherryflash", pref)
-    assert await accel_pref.read_active_pref(db, "zigomaro/cherryflash") is None
+    await accel_pref.write_pref(db, "richss777/cherryflash", pref)
+    assert await accel_pref.read_active_pref(db, "richss777/cherryflash") is None
 
 
 @pytest.mark.asyncio
 async def test_demote_p100_to_t4(db: Database):
     new_pref = await accel_pref.demote(
         db,
-        "zigomaro/cherryflash",
+        "richss777/cherryflash",
         current_tier=accel_pref.TIER_DEFAULT,
         reason="queue >300s",
     )
@@ -67,7 +67,7 @@ async def test_demote_p100_to_t4(db: Database):
     assert new_pref.expires_at > datetime.now(timezone.utc) + timedelta(hours=17)
     assert new_pref.expires_at < datetime.now(timezone.utc) + timedelta(hours=31)
 
-    persisted = await accel_pref.read_active_pref(db, "zigomaro/cherryflash")
+    persisted = await accel_pref.read_active_pref(db, "richss777/cherryflash")
     assert persisted is not None
     assert persisted.tier == accel_pref.TIER_T4
 
@@ -76,7 +76,7 @@ async def test_demote_p100_to_t4(db: Database):
 async def test_demote_t4_exhausts_ladder(db: Database):
     result = await accel_pref.demote(
         db,
-        "zigomaro/cherryflash",
+        "richss777/cherryflash",
         current_tier=accel_pref.TIER_T4,
         reason="queue >300s on t4",
     )
@@ -87,7 +87,7 @@ async def test_demote_t4_exhausts_ladder(db: Database):
 async def test_demote_unknown_slug_returns_none(db: Database):
     result = await accel_pref.demote(
         db,
-        "zigomaro/some-unmapped-kernel",
+        "richss777/some-unmapped-kernel",
         current_tier=accel_pref.TIER_DEFAULT,
         reason="test",
     )
@@ -113,11 +113,11 @@ def test_tier_to_machine_shape_known():
 
 
 def test_ladder_for_known_slug():
-    assert accel_pref.ladder_for("zigomaro/cherryflash") == [
+    assert accel_pref.ladder_for("richss777/cherryflash") == [
         accel_pref.TIER_DEFAULT,
         accel_pref.TIER_T4,
     ]
-    assert accel_pref.ladder_for("zigomaro/unknown") == []
+    assert accel_pref.ladder_for("richss777/unknown") == []
 
 
 def test_ladder_for_cpu_kernel_is_empty():
@@ -126,14 +126,14 @@ def test_ladder_for_cpu_kernel_is_empty():
     # empty ladder as the signal to skip demote for this slug. Without
     # this guard, a >5min QUEUED on a CPU kernel would hard-fail the run.
     # Regression: INC-2026-05-26 round 4 (session #539).
-    assert accel_pref.ladder_for("zigomaro/crumple-video") == []
+    assert accel_pref.ladder_for("richss777/crumple-video") == []
 
 
 def test_next_tier_step():
     assert accel_pref.next_tier(
-        "zigomaro/cherryflash", accel_pref.TIER_DEFAULT
+        "richss777/cherryflash", accel_pref.TIER_DEFAULT
     ) == accel_pref.TIER_T4
-    assert accel_pref.next_tier("zigomaro/cherryflash", accel_pref.TIER_T4) is None
+    assert accel_pref.next_tier("richss777/cherryflash", accel_pref.TIER_T4) is None
 
 
 def test_queue_demote_threshold_default():

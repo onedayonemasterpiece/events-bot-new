@@ -31,8 +31,8 @@ TIER_DEFAULT = "p100"
 TIER_T4 = "t4x2"
 
 _LADDER: dict[str, list[str]] = {
-    "zigomaro/cherryflash": [TIER_DEFAULT, TIER_T4],
-    "zigomaro/koenigsberg-stories": [TIER_DEFAULT, TIER_T4],
+    "richss777/cherryflash": [TIER_DEFAULT, TIER_T4],
+    "richss777/koenigsberg-stories": [TIER_DEFAULT, TIER_T4],
 }
 
 _TIER_TO_MACHINE_SHAPE = {

@@ -76,10 +76,10 @@ async def test_telegraph_cache_registers_remote_auth_scope(monkeypatch, tmp_path
         assert kwargs["current_auth_scope"] == "TELEGRAM_AUTH_BUNDLE_S22"
 
     async def fake_prepare(*args, **kwargs):  # noqa: ANN002, ANN003
-        return "zigomaro/telegraph-cache-probe-cipher", "zigomaro/telegraph-cache-probe-key"
+        return "richss777/telegraph-cache-probe-cipher", "richss777/telegraph-cache-probe-key"
 
     async def fake_push(*args, **kwargs):  # noqa: ANN002, ANN003
-        return "zigomaro/telegraph-cache-probe"
+        return "richss777/telegraph-cache-probe"
 
     async def fake_poll(*args, **kwargs):  # noqa: ANN002, ANN003
         return "complete", {"status": "COMPLETE"}, 1.0
@@ -129,7 +129,7 @@ async def test_telegraph_cache_registers_remote_auth_scope(monkeypatch, tmp_path
     assert registered == [
         (
             "telegraph_cache_probe",
-            "zigomaro/telegraph-cache-probe",
+            "richss777/telegraph-cache-probe",
             {
                 "run_id": result["run_id"],
                 "chat_id": 42,
@@ -138,5 +138,5 @@ async def test_telegraph_cache_registers_remote_auth_scope(monkeypatch, tmp_path
             },
         )
     ]
-    assert removed == [("telegraph_cache_probe", "zigomaro/telegraph-cache-probe")]
+    assert removed == [("telegraph_cache_probe", "richss777/telegraph-cache-probe")]
     assert finished[-1]["status"] == "success"

@@ -241,7 +241,7 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
 
         runner.wait_dataset_ready(
             Client(),
-            "zigomaro/example",
+            "richss777/example",
             expected_files=["region_talk_run_config.json", "google_ai/__init__.py"],
             timeout_seconds=1,
         )
@@ -7624,7 +7624,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 cfg = folder / "region_talk_run_config.json"
                 if cfg.exists():
                     captured["config"] = json.loads(cfg.read_text(encoding="utf-8"))
-            return "zigomaro/" + slug
+            return "richss777/" + slug
         try:
             os.environ["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"] = "47"
             os.environ["REGION_TALK_TG_RESOLVE_DELAY_MIN_SECONDS"] = "11"
@@ -7633,7 +7633,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             os.environ.pop("GOOGLE_AI_PROVIDER_TIMEOUT_SEC", None)
             mod.create_or_replace_dataset = fake_create
             mod.wait_dataset_ready = lambda *args, **kwargs: None
-            refs = mod.build_input_datasets(object(), run_id="unit-timeout", username="zigomaro")
+            refs = mod.build_input_datasets(object(), run_id="unit-timeout", username="richss777")
             self.assertEqual(len(refs), 2)
             env = captured["config"]["env"]
             self.assertEqual(env["REGION_TALK_LLM_CALL_TIMEOUT_SECONDS"], "47")
@@ -8593,12 +8593,12 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
                 cfg = folder / "region_talk_run_config.json"
                 if cfg.exists():
                     captured["config"] = json.loads(cfg.read_text(encoding="utf-8"))
-            return "zigomaro/" + slug
+            return "richss777/" + slug
 
         try:
             mod.create_or_replace_dataset = fake_create
             mod.wait_dataset_ready = lambda *args, **kwargs: None
-            mod.build_input_datasets(object(), run_id="unit-ydb-default", username="zigomaro")
+            mod.build_input_datasets(object(), run_id="unit-ydb-default", username="richss777")
             self.assertEqual(captured["config"]["env"]["REGION_TALK_STATE_BACKEND"], "ydb")
             self.assertEqual(captured["config"]["env"]["REGION_TALK_REQUIRE_YDB_STATE"], "1")
         finally:
@@ -8776,8 +8776,8 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         class Api:
             def dataset_list(self, **kwargs):
                 return [
-                    Item("zigomaro/region-talk-config-old", "2026-07-10T00:00:00Z"),
-                    Item("zigomaro/unrelated", "2026-07-10T00:00:00Z"),
+                    Item("richss777/region-talk-config-old", "2026-07-10T00:00:00Z"),
+                    Item("richss777/unrelated", "2026-07-10T00:00:00Z"),
                 ] if kwargs.get("page") == 1 else []
         class Client:
             api = Api()
@@ -8792,13 +8792,13 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             "REGION_TALK_KAGGLE_INPUT_GC_MAX_DELETE": "10",
         }):
             ref = mod.create_or_replace_dataset(
-                client, "zigomaro", "region-talk-config-current", "current",
+                client, "richss777", "region-talk-config-current", "current",
                 lambda folder: (folder / "payload.json").write_text("{}"),
             )
-        self.assertEqual(ref, "zigomaro/region-talk-config-current")
+        self.assertEqual(ref, "richss777/region-talk-config-current")
         self.assertEqual(client.creates, 3)
-        self.assertIn("zigomaro/region-talk-config-old", client.deleted)
-        self.assertNotIn("zigomaro/unrelated", client.deleted)
+        self.assertIn("richss777/region-talk-config-old", client.deleted)
+        self.assertNotIn("richss777/unrelated", client.deleted)
 
     def test_source_queue_sequence_repair_bypasses_live_handoff_cap(self) -> None:
         mod = load_module()

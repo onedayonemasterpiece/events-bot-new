@@ -19,7 +19,7 @@ def make_event(**overrides) -> Event:
         "id": 10,
         "title": "Спектакль",
         "description": "Драма о взрослении",
-        "date": "2026-08-20",
+        "date": "2099-08-20",
         "time": "19:00",
         "location_name": "Театр",
         "source_text": "Источник",
@@ -331,3 +331,28 @@ async def test_startup_seed_catches_preexisting_not_scheduled_event(tmp_path, mo
     assert calls[0][0][1] == missing_id
     assert calls[0][1]["payload"]["reason"] == "startup_backlog"
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_missing_prepared_dataset_stops_before_creating_or_pushing_inputs(monkeypatch):
+    import event_age_bge_service as service
+    from video_announce import kaggle_client
+
+    async def collect(*args, **kwargs):
+        return [object()], {}
+
+    checked = []
+
+    async def unavailable(client, ref, **kwargs):
+        checked.append(ref)
+        raise RuntimeError("prepared dataset unavailable")
+
+    monkeypatch.setenv("KAGGLE_USERNAME", "richss777")
+    monkeypatch.setenv("EVENT_AGE_BGE_MODEL_REVISION", "revision")
+    monkeypatch.setenv("EVENT_AGE_BGE_ARTIFACT_DATASET", "richss777/prepared-bge")
+    monkeypatch.setattr(service, "collect_event_age_bge_inputs", collect)
+    monkeypatch.setattr(kaggle_client, "KaggleClient", object)
+    monkeypatch.setattr(kaggle_client, "await_dataset_ready", unavailable)
+    with pytest.raises(RuntimeError, match="prepared dataset unavailable"):
+        await service.run_event_age_bge_batch(None)
+    assert checked == ["richss777/prepared-bge"]

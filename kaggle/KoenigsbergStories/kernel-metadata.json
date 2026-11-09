@@ -1,5 +1,5 @@
 {
-  "id": "zigomaro/koenigsberg-stories",
+  "id": "richss777/koenigsberg-stories",
   "title": "Koenigsberg Stories",
   "code_file": "koenigsberg_stories.ipynb",
   "language": "python",
@@ -8,10 +8,10 @@
   "enable_gpu": true,
   "enable_internet": true,
   "dataset_sources": [
-    "zigomaro/koenigsberg19191940",
-    "zigomaro/koenigsberg-winter",
-    "zigomaro/koenigsberg-music",
-    "zigomaro/kenigsberg-audio"
+    "richss777/koenigsberg19191940",
+    "richss777/koenigsberg-winter",
+    "richss777/koenigsberg-music",
+    "richss777/kenigsberg-audio"
   ],
   "competition_sources": [],
   "kernel_sources": [],

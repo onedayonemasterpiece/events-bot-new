@@ -158,8 +158,8 @@ async def test_post_push_registry_failure_preserves_tg_intent_and_datasets(
     async def fake_push(*_args, **_kwargs):
         calls.append(("push",))
         return (
-            "zigomaro/telegram-monitor-bot",
-            {"ref": "zigomaro/telegram-monitor-bot", "version_number": 9},
+            "richss777/telegram-monitor-bot",
+            {"ref": "richss777/telegram-monitor-bot", "version_number": 9},
         )
 
     async def fake_promote(*_args, **_kwargs):
@@ -331,7 +331,7 @@ async def test_poll_kaggle_kernel_retries_status_http_500(monkeypatch):
 
     status, status_data, _duration = await _poll_kaggle_kernel(
         client,
-        "zigomaro/telegram-monitor-bot",
+        "richss777/telegram-monitor-bot",
         run_id="run-http-500",
         timeout_minutes=1,
         status_callback=status_callback,
@@ -359,7 +359,7 @@ async def test_poll_kaggle_kernel_treats_cancel_states_as_terminal(
 
     status, status_data, _duration = await _poll_kaggle_kernel(
         FakeClient(),
-        "zigomaro/telegram-monitor-bot",
+        "richss777/telegram-monitor-bot",
         run_id="run-cancelled",
         timeout_minutes=1,
     )
@@ -412,7 +412,7 @@ async def test_poll_kaggle_kernel_completes_from_output_when_status_api_keeps_50
 
     status, status_data, _duration = await _poll_kaggle_kernel(
         client,
-        "zigomaro/telegram-monitor-bot",
+        "richss777/telegram-monitor-bot",
         run_id="run-output-ready",
         timeout_minutes=1,
         status_callback=status_callback,

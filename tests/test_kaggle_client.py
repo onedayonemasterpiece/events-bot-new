@@ -39,11 +39,11 @@ def test_normalize_kernel_ref_strips_code_and_owner_leading_slash(monkeypatch):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")
 
-    assert module._normalize_kernel_ref("/code/zigomaro/cherryflash-video-lane-1") == (
-        "zigomaro/cherryflash-video-lane-1"
+    assert module._normalize_kernel_ref("/code/richss777/cherryflash-video-lane-1") == (
+        "richss777/cherryflash-video-lane-1"
     )
-    assert module._normalize_kernel_ref("/zigomaro/cherryflash-video-lane-1") == (
-        "zigomaro/cherryflash-video-lane-1"
+    assert module._normalize_kernel_ref("/richss777/cherryflash-video-lane-1") == (
+        "richss777/cherryflash-video-lane-1"
     )
 
 
@@ -53,7 +53,7 @@ def test_get_kernel_revision_uses_exact_metadata_endpoint(monkeypatch):
     requests = []
 
     class Metadata:
-        ref = "zigomaro/guide-excursions-monitor"
+        ref = "richss777/guide-excursions-monitor"
         current_version_number = 41
 
     class ExactClient:
@@ -80,8 +80,8 @@ def test_get_kernel_revision_uses_exact_metadata_endpoint(monkeypatch):
     client = module.KaggleClient()
     monkeypatch.setattr(client, "_get_api", lambda: StubApi())
 
-    assert client.get_kernel_revision("zigomaro/guide-excursions-monitor") == 41
-    assert requests == [("zigomaro", "guide-excursions-monitor")]
+    assert client.get_kernel_revision("richss777/guide-excursions-monitor") == 41
+    assert requests == [("richss777", "guide-excursions-monitor")]
 
 
 def test_kaggle_test_skips_max_size(monkeypatch):
@@ -139,7 +139,7 @@ def test_dataset_list_files_paginates_until_expected_file_can_be_seen(monkeypatc
 
     class StubApi:
         def dataset_list_files(self, dataset, page_token=None, page_size=20):
-            assert dataset == "zigomaro/cherryflash-session-162"
+            assert dataset == "richss777/cherryflash-session-162"
             calls.append((page_token, page_size))
             if page_token is None:
                 return Response([File("Final.png"), File("assets/Akrobat-Bold.otf")], "page-2")
@@ -149,7 +149,7 @@ def test_dataset_list_files_paginates_until_expected_file_can_be_seen(monkeypatc
     client = KaggleClient()
     monkeypatch.setattr(client, "_get_api", lambda: StubApi())
 
-    files = client.dataset_list_files("zigomaro/cherryflash-session-162", page_size=20)
+    files = client.dataset_list_files("richss777/cherryflash-session-162", page_size=20)
 
     assert [item["name"] for item in files] == [
         "Final.png",
@@ -171,14 +171,14 @@ async def test_await_dataset_ready_waits_until_status_ready_and_payload_visible(
             self.files_calls = 0
 
         def dataset_status(self, dataset_ref: str) -> str:
-            assert dataset_ref == "zigomaro/cherryflash-session-161"
+            assert dataset_ref == "richss777/cherryflash-session-161"
             self.status_calls += 1
             if self.status_calls == 1:
                 return "running"
             return "ready"
 
         def dataset_list_files(self, dataset_ref: str, *, page_size: int = 20) -> list[dict[str, object]]:
-            assert dataset_ref == "zigomaro/cherryflash-session-161"
+            assert dataset_ref == "richss777/cherryflash-session-161"
             assert page_size >= 20
             self.files_calls += 1
             if self.files_calls == 1:
@@ -187,7 +187,7 @@ async def test_await_dataset_ready_waits_until_status_ready_and_payload_visible(
 
     meta = await module.await_dataset_ready(
         StubClient(),
-        "zigomaro/cherryflash-session-161",
+        "richss777/cherryflash-session-161",
         timeout_seconds=2,
         poll_interval_seconds=1,
         expected_files=["payload.json"],
@@ -207,7 +207,7 @@ def test_deploy_kernel_update_retries_without_gpu_on_cherryflash_quota(monkeypat
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/cherryflash",
+  "id": "richss777/cherryflash",
   "title": "CherryFlash",
   "code_file": "cherryflash.ipynb",
   "language": "python",
@@ -242,9 +242,9 @@ def test_deploy_kernel_update_retries_without_gpu_on_cherryflash_quota(monkeypat
             if len(push_gpu_flags) == 1:
                 return Response(
                     error="Maximum weekly GPU quota of 30.00 hours reached.",
-                    invalid_dataset_sources=["zigomaro/cherryflash-session-200"],
+                    invalid_dataset_sources=["richss777/cherryflash-session-200"],
                 )
-            return Response(ref="/code/zigomaro/cherryflash", version_number=53)
+            return Response(ref="/code/richss777/cherryflash", version_number=53)
 
     client = KaggleClient()
     monkeypatch.setattr(client, "_get_api", lambda: StubApi())
@@ -256,11 +256,11 @@ def test_deploy_kernel_update_retries_without_gpu_on_cherryflash_quota(monkeypat
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
 
     result = client.deploy_kernel_update(
-        "zigomaro/cherryflash",
-        ["zigomaro/cherryflash-session-200"],
+        "richss777/cherryflash",
+        ["richss777/cherryflash-session-200"],
     )
 
-    assert result == "zigomaro/cherryflash"
+    assert result == "richss777/cherryflash"
     assert push_gpu_flags == [True, False]
 
 
@@ -274,7 +274,7 @@ def test_deploy_kernel_update_retries_without_gpu_on_kenigsberg_quota(monkeypatc
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/koenigsberg-stories",
+  "id": "richss777/koenigsberg-stories",
   "title": "Koenigsberg Stories",
   "code_file": "koenigsberg_stories.ipynb",
   "language": "python",
@@ -308,7 +308,7 @@ def test_deploy_kernel_update_retries_without_gpu_on_kenigsberg_quota(monkeypatc
             push_gpu_flags.append(bool(meta.get("enable_gpu")))
             if len(push_gpu_flags) == 1:
                 return Response(error="Maximum weekly GPU quota of 30.00 hours reached.")
-            return Response(ref="/code/zigomaro/koenigsberg-stories", version_number=3)
+            return Response(ref="/code/richss777/koenigsberg-stories", version_number=3)
 
     client = KaggleClient()
     monkeypatch.setattr(client, "_get_api", lambda: StubApi())
@@ -324,11 +324,11 @@ def test_deploy_kernel_update_retries_without_gpu_on_kenigsberg_quota(monkeypatc
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
 
     result = client.deploy_kernel_update(
-        "zigomaro/koenigsberg-stories",
-        ["zigomaro/kenigsberg-session-1-1777298000"],
+        "richss777/koenigsberg-stories",
+        ["richss777/kenigsberg-session-1-1777298000"],
     )
 
-    assert result == "zigomaro/koenigsberg-stories"
+    assert result == "richss777/koenigsberg-stories"
     assert push_gpu_flags == [True, False]
 
 
@@ -342,7 +342,7 @@ def test_deploy_kernel_update_does_not_cpu_fallback_crumple_video(monkeypatch, t
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/crumple-video",
+  "id": "richss777/crumple-video",
   "title": "Crumple Video",
   "code_file": "crumple_video.ipynb",
   "language": "python",
@@ -387,13 +387,13 @@ def test_deploy_kernel_update_does_not_cpu_fallback_crumple_video(monkeypatch, t
     with pytest.raises(RuntimeError, match="Maximum weekly GPU quota"):
         client.deploy_kernel_update(
             "local:CrumpleVideo",
-            ["zigomaro/video-afisha-session-766"],
+            ["richss777/video-afisha-session-766"],
         )
 
     assert push_gpu_flags == [True]
 
 
-def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkeypatch, tmp_path):
+def test_deploy_kernel_update_does_not_resubmit_created_version_with_invalid_sources(monkeypatch, tmp_path):
     _install_dummy_kaggle(monkeypatch)
     module = importlib.import_module("video_announce.kaggle_client")
     KaggleClient = module.KaggleClient
@@ -403,7 +403,7 @@ def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkey
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/cherryflash",
+  "id": "richss777/cherryflash",
   "title": "CherryFlash",
   "code_file": "cherryflash.ipynb",
   "language": "python",
@@ -436,11 +436,11 @@ def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkey
             calls["count"] += 1
             if calls["count"] == 1:
                 return Response(
-                    ref="/code/zigomaro/cherryflash",
+                    ref="/code/richss777/cherryflash",
                     version_number=53,
-                    invalid_dataset_sources=["zigomaro/cherryflash-session-201"],
+                    invalid_dataset_sources=["richss777/cherryflash-session-201"],
                 )
-            return Response(ref="/code/zigomaro/cherryflash", version_number=54)
+            return Response(ref="/code/richss777/cherryflash", version_number=54)
 
     client = KaggleClient()
     monkeypatch.setattr(client, "_get_api", lambda: StubApi())
@@ -451,13 +451,13 @@ def test_deploy_kernel_update_retries_invalid_dataset_sources_until_valid(monkey
     )
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
 
-    result = client.deploy_kernel_update(
-        "zigomaro/cherryflash",
-        ["zigomaro/cherryflash-session-201"],
-    )
+    with pytest.raises(RuntimeError, match="rejected dataset sources"):
+        client.deploy_kernel_update(
+            "richss777/cherryflash",
+            ["richss777/cherryflash-session-201"],
+        )
 
-    assert result == "zigomaro/cherryflash"
-    assert calls["count"] == 2
+    assert calls["count"] == 1
 
 
 def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypatch, tmp_path):
@@ -470,7 +470,7 @@ def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypat
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/cherryflash",
+  "id": "richss777/cherryflash",
   "title": "CherryFlash",
   "code_file": "cherryflash.ipynb",
   "language": "python",
@@ -479,8 +479,8 @@ def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypat
   "enable_gpu": true,
   "enable_internet": true,
   "dataset_sources": [
-    "zigomaro/cherryflash-session-192-1777189467",
-    "zigomaro/crumple-video-story-secrets-cipher"
+    "richss777/cherryflash-session-192-1777189467",
+    "richss777/crumple-video-story-secrets-cipher"
   ]
 }
 """.strip(),
@@ -493,7 +493,7 @@ def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypat
     pushed_sources: list[str] = []
 
     class Response:
-        ref = "/code/zigomaro/cherryflash"
+        ref = "/code/richss777/cherryflash"
         versionNumber = 77
         error = ""
         invalidDatasetSources: list[str] = []
@@ -515,14 +515,14 @@ def test_deploy_kernel_update_prunes_stale_cherryflash_session_sources(monkeypat
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
 
     result = client.deploy_kernel_update(
-        "zigomaro/cherryflash",
-        ["zigomaro/cherryflash-session-219-1777298000"],
+        "richss777/cherryflash",
+        ["richss777/cherryflash-session-219-1777298000"],
     )
 
-    assert result == "zigomaro/cherryflash"
+    assert result == "richss777/cherryflash"
     assert pushed_sources == [
-        "zigomaro/crumple-video-story-secrets-cipher",
-        "zigomaro/cherryflash-session-219-1777298000",
+        "richss777/crumple-video-story-secrets-cipher",
+        "richss777/cherryflash-session-219-1777298000",
     ]
 
 
@@ -536,7 +536,7 @@ def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, 
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/cherryflash",
+  "id": "richss777/cherryflash",
   "title": "CherryFlash",
   "code_file": "cherryflash.ipynb",
   "language": "python",
@@ -545,7 +545,7 @@ def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, 
   "enable_gpu": false,
   "enable_internet": true,
   "dataset_sources": [
-    "zigomaro/cherryflash-session-old"
+    "richss777/cherryflash-session-old"
   ]
 }
 """.strip(),
@@ -558,7 +558,7 @@ def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, 
     pushed_meta: dict = {}
 
     class Response:
-        ref = "/code/zigomaro/cherryflash-video1"
+        ref = "/code/richss777/cherryflash-video1"
         versionNumber = 78
         error = ""
         invalidDatasetSources: list[str] = []
@@ -584,15 +584,15 @@ def test_deploy_kernel_update_can_push_local_source_to_lane_target(monkeypatch, 
 
     result = client.deploy_kernel_update(
         "local:CherryFlash",
-        ["zigomaro/cherryflash-session-220"],
-        target_kernel_ref="zigomaro/cherryflash-video1",
+        ["richss777/cherryflash-session-220"],
+        target_kernel_ref="richss777/cherryflash-video1",
     )
 
-    assert result == "zigomaro/cherryflash-video1"
-    assert pushed_meta["id"] == "zigomaro/cherryflash-video1"
+    assert result == "richss777/cherryflash-video1"
+    assert pushed_meta["id"] == "richss777/cherryflash-video1"
     assert pushed_meta["slug"] == "cherryflash-video1"
     assert pushed_meta["title"] == "cherryflash-video1"
-    assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-220"]
+    assert pushed_meta["dataset_sources"] == ["richss777/cherryflash-session-220"]
 
 
 def test_quota_remaining_seconds_from_raw_parses_kaggle_duration_strings(monkeypatch):
@@ -623,7 +623,7 @@ def test_kaggle_kernel_exists_treats_wrong_slug_as_missing(monkeypatch):
                 "The most likely cause is a wrong kernel slug."
             )
 
-    assert module._kaggle_kernel_exists(StubApi(), "zigomaro/missing-lane") is False
+    assert module._kaggle_kernel_exists(StubApi(), "richss777/missing-lane") is False
 
 
 def test_deploy_kernel_update_creates_missing_lane_target_cpu_first_when_gpu_quota_exhausted(
@@ -639,7 +639,7 @@ def test_deploy_kernel_update_creates_missing_lane_target_cpu_first_when_gpu_quo
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/cherryflash",
+  "id": "richss777/cherryflash",
   "title": "CherryFlash",
   "code_file": "cherryflash.ipynb",
   "language": "python",
@@ -649,7 +649,7 @@ def test_deploy_kernel_update_creates_missing_lane_target_cpu_first_when_gpu_quo
   "enable_internet": true,
   "machine_shape": "NvidiaTeslaT4",
   "dataset_sources": [
-    "zigomaro/cherryflash-session-old"
+    "richss777/cherryflash-session-old"
   ]
 }
 """.strip(),
@@ -662,7 +662,7 @@ def test_deploy_kernel_update_creates_missing_lane_target_cpu_first_when_gpu_quo
     pushed_meta: dict = {}
 
     class Response:
-        ref = "/code/zigomaro/cherryflash-video1"
+        ref = "/code/richss777/cherryflash-video1"
         versionNumber = 79
         error = ""
         invalidDatasetSources: list[str] = []
@@ -690,16 +690,16 @@ def test_deploy_kernel_update_creates_missing_lane_target_cpu_first_when_gpu_quo
 
     result = client.deploy_kernel_update(
         "local:CherryFlash",
-        ["zigomaro/cherryflash-session-221"],
-        target_kernel_ref="zigomaro/cherryflash-video1",
+        ["richss777/cherryflash-session-221"],
+        target_kernel_ref="richss777/cherryflash-video1",
         machine_shape="NvidiaTeslaT4",
     )
 
-    assert result == "zigomaro/cherryflash-video1"
-    assert pushed_meta["id"] == "zigomaro/cherryflash-video1"
+    assert result == "richss777/cherryflash-video1"
+    assert pushed_meta["id"] == "richss777/cherryflash-video1"
     assert pushed_meta["enable_gpu"] is False
     assert "machine_shape" not in pushed_meta
-    assert pushed_meta["dataset_sources"] == ["zigomaro/cherryflash-session-221"]
+    assert pushed_meta["dataset_sources"] == ["richss777/cherryflash-session-221"]
 
 
 def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatch, tmp_path):
@@ -712,7 +712,7 @@ def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatc
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/koenigsberg-stories",
+  "id": "richss777/koenigsberg-stories",
   "title": "Koenigsberg Stories",
   "code_file": "koenigsberg_stories.ipynb",
   "language": "python",
@@ -721,10 +721,10 @@ def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatc
   "enable_gpu": true,
   "enable_internet": true,
   "dataset_sources": [
-    "zigomaro/kenigsberg-session-99-1777189467",
-    "zigomaro/koenigsberg19191940",
-    "zigomaro/koenigsberg-winter",
-    "zigomaro/koenigsberg-music"
+    "richss777/kenigsberg-session-99-1777189467",
+    "richss777/koenigsberg19191940",
+    "richss777/koenigsberg-winter",
+    "richss777/koenigsberg-music"
   ]
 }
 """.strip(),
@@ -737,7 +737,7 @@ def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatc
     pushed_sources: list[str] = []
 
     class Response:
-        ref = "/code/zigomaro/koenigsberg-stories"
+        ref = "/code/richss777/koenigsberg-stories"
         versionNumber = 7
         error = ""
         invalidDatasetSources: list[str] = []
@@ -763,16 +763,16 @@ def test_deploy_kernel_update_prunes_stale_kenigsberg_session_sources(monkeypatc
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
 
     result = client.deploy_kernel_update(
-        "zigomaro/koenigsberg-stories",
-        ["zigomaro/kenigsberg-session-100-1777298000"],
+        "richss777/koenigsberg-stories",
+        ["richss777/kenigsberg-session-100-1777298000"],
     )
 
-    assert result == "zigomaro/koenigsberg-stories"
+    assert result == "richss777/koenigsberg-stories"
     assert pushed_sources == [
-        "zigomaro/koenigsberg19191940",
-        "zigomaro/koenigsberg-winter",
-        "zigomaro/koenigsberg-music",
-        "zigomaro/kenigsberg-session-100-1777298000",
+        "richss777/koenigsberg19191940",
+        "richss777/koenigsberg-winter",
+        "richss777/koenigsberg-music",
+        "richss777/kenigsberg-session-100-1777298000",
     ]
 
 
@@ -786,7 +786,7 @@ def test_deploy_kernel_update_prunes_stale_crumple_publish_only_session_sources(
     (kernel_dir / "kernel-metadata.json").write_text(
         """
 {
-  "id": "zigomaro/crumple-story-publish-only",
+  "id": "richss777/crumple-story-publish-only",
   "title": "Crumple Story Publish Only",
   "code_file": "publish_only.py",
   "language": "python",
@@ -795,8 +795,8 @@ def test_deploy_kernel_update_prunes_stale_crumple_publish_only_session_sources(
   "enable_gpu": false,
   "enable_internet": true,
   "dataset_sources": [
-    "zigomaro/crumple-story-publish-session-676-1777189467",
-    "zigomaro/crumple-video-story-secrets-cipher"
+    "richss777/crumple-story-publish-session-676-1777189467",
+    "richss777/crumple-video-story-secrets-cipher"
   ]
 }
 """.strip(),
@@ -806,7 +806,7 @@ def test_deploy_kernel_update_prunes_stale_crumple_publish_only_session_sources(
     pushed_sources: list[str] = []
 
     class Response:
-        ref = "/code/zigomaro/crumple-story-publish-only"
+        ref = "/code/richss777/crumple-story-publish-only"
         versionNumber = 8
         error = ""
         invalidDatasetSources: list[str] = []
@@ -832,14 +832,14 @@ def test_deploy_kernel_update_prunes_stale_crumple_publish_only_session_sources(
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
 
     result = client.deploy_kernel_update(
-        "zigomaro/crumple-story-publish-only",
-        ["zigomaro/crumple-story-publish-session-677-1777298000"],
+        "richss777/crumple-story-publish-only",
+        ["richss777/crumple-story-publish-session-677-1777298000"],
     )
 
-    assert result == "zigomaro/crumple-story-publish-only"
+    assert result == "richss777/crumple-story-publish-only"
     assert pushed_sources == [
-        "zigomaro/crumple-video-story-secrets-cipher",
-        "zigomaro/crumple-story-publish-session-677-1777298000",
+        "richss777/crumple-video-story-secrets-cipher",
+        "richss777/crumple-story-publish-session-677-1777298000",
     ]
 
 
