@@ -2925,6 +2925,7 @@ async def vk_intake_parse_llm(
     source_text: str | None = None,
     source_name: str | None = None,
     operator_extra: str | None = None,
+    publish_ts: datetime | int | float | None = None,
     festival_names: Sequence[str] | None = None,
     festival_alias_pairs: Sequence[tuple[str, int]] | None = None,
     poster_media: Sequence[PosterMedia] | None = None,
@@ -2940,6 +2941,15 @@ async def vk_intake_parse_llm(
     parse_event_via_llm = require_main_attr("parse_event_via_llm")
 
     parse_kwargs: dict[str, Any] = {}
+    if publish_ts is not None:
+        published = publish_ts if isinstance(publish_ts, datetime) else datetime.fromtimestamp(
+            publish_ts, require_main_attr("LOCAL_TZ")
+        )
+        parse_kwargs["published_at"] = published.isoformat()
+        prompt_text = (
+            f"Дата публикации источника: {published.isoformat()}. "
+            f"Относительные даты считай от даты публикации, а не от дня импорта.\n{prompt_text}"
+        )
     poster_items = list(poster_media or [])
     raw_poster_texts = collect_poster_texts(poster_items)
     raw_poster_texts.extend(
@@ -3176,6 +3186,7 @@ async def build_event_drafts_from_vk(
         source_text=text,
         source_name=source_name,
         operator_extra=operator_extra,
+        publish_ts=publish_ts,
         festival_names=festival_names,
         festival_alias_pairs=festival_alias_pairs,
         poster_media=poster_media,

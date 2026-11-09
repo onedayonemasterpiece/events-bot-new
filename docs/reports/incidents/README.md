@@ -1,5 +1,7 @@
 # Инциденты
 
+- `INC-2026-11-09-vk-relative-publication-date.md`: VK publication timestamp lost before the LLM shifts relative dates into an incorrect daily announcement.
+
 - `INC-2026-11-08-giveaway-zero-ticket-price.md`: ordinary Telegram raffle source carries unsupported numeric zero into a public admission-price block; preserve real event and grounded ticket controls.
 - `INC-2026-11-06-eco-garazhka-attribution.md`: forwarded Garazhka announcement wrongly attributed to publishing channel EcoKoenig; source-grounded identity and public correction.
 

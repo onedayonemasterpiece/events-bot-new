@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fixed: retain VK source publication time in the existing primary parse and verifier context so delayed imports do not resolve relative dates from the import day.
+
+
 ### Added
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
