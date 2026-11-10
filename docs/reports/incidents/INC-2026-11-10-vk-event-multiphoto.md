@@ -161,3 +161,30 @@ PY
 ```
 
 Если пригодных записей меньше четырёх, зафиксировать фактическое число изменений и отдельно количество контрольных совпадений. По принятым ссылкам проверить сетку, первый кадр карусели и листание до второго отличающегося фото на компьютере и в приложении ВК. Проверить читаемость надписи и сохранность нижней части исходника. Указать клиент, ссылки и результаты в общем треде. Эмулятор обозначить отдельно. После readback и независимой визуальной проверки координатор добавляет release evidence.
+
+## Release verification, 2026-11-10 23:28–23:32 UTC
+
+PR 886 was accepted by independent quality review and merged as
+`2c18976b47515dd1bb03121f4dbfd3ef2993e3d7`. Events now runs image
+`runcoveer/events:vk-multiphoto-replay-20261110`
+(`sha256:8e40c6fc3ffae3149b2a49e54956b901d4ebd87928180403f5d076d823a109cc`).
+The previous running release is its ancestor. Full tracked-tree verification
+covered 4,467 files; isolated preflight made no provider calls. Live health
+reported ready, database ok, scheduler ok and no issues. Kotopogoda retained
+its original container. Rollback image is the preceding gallery release.
+
+The documented backfill, using a new receipt file, updated four existing posts:
+- Grid: https://vk.com/wall-231920894_13856 and https://vk.com/wall-231920894_13855.
+- Carousel: https://vk.com/wall-231920894_13825 and https://vk.com/wall-231920894_13802.
+
+Each returned two group-owned photos. Readback preserved text, publication time
+and wall ID. A separate replay of the new receipt completed successfully with
+four wall.getById calls, zero wall.edit, zero wall.post and zero photo uploads.
+The original two receipts remain unchanged, including the recorded mismatch
+for the first photo of 13856. The incident remains open for independent visual
+acceptance of the actual grid, carousel, full cover, hint and second frame.
+
+Retained evidence: central task directory
+`/home/dev/artifacts/events-bot-new/20261110T203533Z-vk-multiphoto-crew`, files
+`replay-cutover-receipt.json`, `accepted-vk-replay-fixed-posts.jsonl`,
+`fixed-backfill.stderr` and `fixed-replay.stderr`.
