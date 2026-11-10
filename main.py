@@ -2353,6 +2353,10 @@ def _vk_carousel_cover(data: bytes) -> bytes:
     head = font_size / 3
     draw.line([(tip - head, middle - head), (tip, middle), (tip - head, middle + head)],
               fill="white", width=stroke)
+    # VK cropped the live portrait carousel to 2:3, including the footer.
+    if 3 * cover.width < 2 * cover.height:
+        width = (2 * cover.height + 2) // 3
+        cover = ImageOps.pad(cover, (width, cover.height), color="#18212b")
     out = BytesIO()
     cover.save(out, "JPEG", quality=95, subsampling=0)
     return out.getvalue()
@@ -16061,7 +16065,8 @@ async def _managed_vk_post_state(ev: Event) -> tuple[bool, bool]:
             for att in (item.get("attachments") or [])
         )
         mode = _vk_event_gallery_mode(ev.id, expected_count)
-        return photos >= expected_count and (mode is None or item.get("primary_attachments_mode") == mode)
+        reported_mode = item.get("primary_attachments_mode")
+        return photos >= expected_count and (mode is None or reported_mode in (None, mode))
 
     try:
         response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")

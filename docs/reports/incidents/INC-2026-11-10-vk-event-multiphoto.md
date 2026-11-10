@@ -16,26 +16,37 @@
 
 У режима выкладки была отдельная причина: обычный event publisher не выбирал карусель. Общий VK upload уже поддерживал несколько фото. [Обсуждение и исходные наблюдения](https://mira-projects.slack.com/archives/C0C9LS6L3J8/p1794342920292269).
 
+## Дополнение по живому повтору, 10 ноября
+
+В 22:21 UTC команда обновила три записи. Журнал содержит по два успешных `edit_vk_post` для сеток 13856 и 13855. Для карусели 13825 первый edit начался в 22:21:43.993, закончился в 22:21:44.922, второй начался в 22:21:45.108 и вернул captcha 14 из проверки квитанции. Две строки старой квитанции содержат пользовательские ID, переданные редактору. В этом окне в журнале обычного `vk_sync` нет. Последнее задание `vk_sync` для события 10705 обновлено 8 ноября в 13:45:47 UTC.
+
+На карусель передали `photo868977531_457265678, photo868977531_457265677`. Позднее оба штатных способа чтения одним пользовательским актором вернули тот же текст, дату 1794171240 и фото `photo-231920894_456252030, photo-231920894_456252031` в этом порядке. Поле верхнего уровня `primary_attachments_mode` отсутствовало. Проверка вызывала обычный редактор с ID загрузки и желаемым режимом. Его ветка no-op требует совпадения текста, упорядоченных ID и явно запрошенного режима. Команда проверки теперь обходит редактор целиком и запоминает ID из чтения стены.
+
+Качество открыло карусель 1/2 и перешло на второй кадр. На первом wall-фото даже полный вариант 815×1222 обрезает шапку и нижнюю часть QR-кода, полоса «листай →» отсутствует. Копию по пользовательскому ID ВК не вернул. Три уже изменённые записи подлежат чтению по точным ссылкам [13856](https://vk.com/wall-231920894_13856), [13855](https://vk.com/wall-231920894_13855), [13825](https://vk.com/wall-231920894_13825). Старые строки с ID загрузки оставить в исходном виде. Несовпадение при повторе передаётся координатору и качеству для визуальной сверки исходных кадров. Карусель 13825 остаётся непринятой.
+
 ## Treat as regression guard when
 
 При изменениях approved-галереи, полноты managed VK-поста, `vk_sync`, загрузки обложки и режима `wall.post` / `wall.edit`. Сохраняются контракты [дублей и частичной загрузки](INC-2026-06-09-event-media-duplicates.md), [разных визуально похожих снимков](INC-2026-05-11-poster-near-duplicate-and-tram-photo-dropped.md), [сбора изображений из нескольких источников](INC-2026-05-05-event-source-media-aggregation-gap.md) и [неопределённого исхода публикации](INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown.md).
 
 ## Mandatory checks before closure or deploy
 
-`tests/test_event_media_gate.py::test_managed_vk_gallery_publish_and_edit_replay` проверяет оба layout, зеркало тех же байтов, второй approved-кадр, обновление недостающего вложения, сохранение текста и слота, единственный `wall.post`, смену формата с явным или отсутствующим режимом ВК, сохранение старых вложений и хеша при сбое замены [A,B] → [A,C], затем один edit на изменение и повтор без загрузок. Отдельные примеры проверяют прозрачную афишу и уменьшение JPEG 6000×4000 до полного декодирования. Существующие проверки медиагейта покрывают одинаковые пиксели в разных контейнерах, визуально разные снимки и исключение pending/rejected. Существующие проверки VK покрывают частичную загрузку и сохранение вложений, captcha, защищённое восстановление ID и различие между отказом до `wall.post` и неопределённым исходом самого `wall.post`.
+`tests/test_event_media_gate.py::test_managed_vk_gallery_publish_and_edit_replay` проверяет оба layout, зеркало тех же байтов, второй approved-кадр, обновление недостающего вложения, сохранение текста и слота, единственный `wall.post`, смену явно отличающегося формата и повтор при пропущенном поле режима, сохранение старых вложений и хеша при сбое замены [A,B] → [A,C], затем один edit на изменение и повтор без загрузок. Отдельные примеры проверяют прозрачную афишу и уменьшение JPEG 6000×4000 до полного декодирования. Существующие проверки медиагейта покрывают одинаковые пиксели в разных контейнерах, визуально разные снимки и исключение pending/rejected. Существующие проверки VK покрывают частичную загрузку и сохранение вложений, captcha, защищённое восстановление ID и различие между отказом до `wall.post` и неопределённым исходом самого `wall.post`.
 
 ## Required evidence и небольшой backfill
 
 После выпуска координатор запускает этот блок на стенде. Первый запуск выбирает до двух действительно изменённых записей каждого формата из последних 100 постов. Совпадение числа фото и формата сетки отмечается отдельно как контроль по этим двум признакам. Старой карусели загружается новая первая картинка с подсказкой. Источник фото — упорядоченные approved-записи медиаревью. Исходный текст, слот и конкретный wall ID сохраняются.
 
-Для повторной приёмки запустить тот же блок. Если в файле есть принятые записи, команда читает только эти wall ID и передаёт редактору уже принятые ID вложений, в том числе обложки. Повтор проверяет, что каждая запись всё ещё совпадает, а обычный редактор возвращает no-op.
+Для повтора запустить тот же блок. В квитанцию попадают упорядоченные ID вложений, которые вернул сам пост после edit. Если в файле уже есть записи, команда только читает эти wall ID и сверяет текст, слот и вложения. Расхождение останавливает проверку. Если VK опускает формат, его и визуальное соответствие загруженной обложке подтверждают в клиенте. Квитанция фиксирует результат чтения, вид и содержимое кадров принимает качество.
 
 ```bash
 set -o pipefail
 receipt=/home/dev/artifacts/events-bot-new/20261110T203533Z-vk-multiphoto-crew/accepted-vk-posts.jsonl
-touch "$receipt"
+accepted=None
+if [ -e "$receipt" ]; then
+    accepted=$(python3 -c 'import json, sys; print([json.loads(line) for line in sys.stdin])' < "$receipt") || exit 1
+fi
 {
-python3 -c 'import json, sys; print("accepted =", [json.loads(line) for line in sys.stdin])' < "$receipt" &&
+printf 'accepted = %s\n' "$accepted"
 cat <<'PY'
 import asyncio
 import json
@@ -52,21 +63,28 @@ async def wall_item(ref):
 def photo_ids(item):
     return [f"photo{a['photo']['owner_id']}_{a['photo']['id']}" for a in item["attachments"]]
 
-async def check_accepted(record):
-    ref, mode, ids = record["ref"], record["mode"], record["ids"]
-    url = "https://vk.com/wall" + ref
+async def wall_photos(record):
+    ref = record["ref"]
     item = await wall_item(ref)
-    assert item and f"{item['owner_id']}_{item['id']}" == ref
-    assert (item["text"], item["date"]) == (record["text"], record["date"])
-    assert item.get("primary_attachments_mode") == mode and photo_ids(item) == ids
-    edited = await main.edit_vk_post(url, item["text"], attachments=ids, primary_attachments_mode=mode)
-    assert not edited
-    print(url, mode, len(ids), "повтор без изменения", file=sys.stderr)
+    if not item or f"{item['owner_id']}_{item['id']}" != ref:
+        raise RuntimeError(f"{ref}: запись не найдена")
+    if (item["text"], item["date"]) != (record["text"], record["date"]):
+        raise RuntimeError(f"{ref}: изменился текст или слот")
+    mode = item.get("primary_attachments_mode")
+    if mode is not None and mode != record["mode"]:
+        raise RuntimeError(f"{ref}: VK вернул другой формат {mode}")
+    if any(a.get("type") != "photo" for a in item.get("attachments", [])):
+        raise RuntimeError(f"{ref}: на стене появились другие вложения")
+    return photo_ids(item)
 
 async def backfill():
-    if accepted:
+    if accepted is not None:
+        if not accepted:
+            raise RuntimeError("Пустая квитанция: нет записей для проверки")
         for record in accepted:
-            await check_accepted(record)
+            if await wall_photos(record) != record["ids"]:
+                raise RuntimeError(f"{record['ref']}: изменился состав или порядок фото")
+            print("https://vk.com/wall" + record["ref"], "вложения совпали", file=sys.stderr)
         return
 
     db = main.Database("/data/db.sqlite")
@@ -121,8 +139,11 @@ async def backfill():
         if not edited:
             controls += 1
             continue
-        record = dict(ref=ref, mode=mode, ids=ids, text=item["text"], date=item["date"])
-        await check_accepted(record)
+        record = dict(ref=ref, mode=mode, text=item["text"], date=item["date"])
+        wall_ids = await wall_photos(record)
+        if len(wall_ids) != len(ids) or (wall_ids == photo_ids(item) and wall_ids != ids):
+            raise RuntimeError(f"{ref}: замена галереи не подтверждена")
+        record["ids"] = wall_ids
         print(json.dumps(record, ensure_ascii=False), flush=True)
         changed[mode] += 1
     print("Изменено", changed, "контрольных совпадений", controls, file=sys.stderr)
