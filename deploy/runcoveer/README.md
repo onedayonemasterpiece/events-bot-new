@@ -13,6 +13,16 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## VK event gallery release, 2026-11-10
+
+Events-only image `runcoveer/events:vk-multiphoto-20261110` contains merged
+main `e9c0d524efc374ff89bebf5f2877f2725e6bd498` (PR 883). Full tracked-tree
+verification passed for 4,467 files; the network-isolated preflight passed
+without provider requests. Rollback image is
+`runcoveer/events:kaggle-account-20261109`. Kotopogoda is unchanged.
+Live post and visual acceptance remain tracked in
+[the gallery incident](../../docs/reports/incidents/INC-2026-11-10-vk-event-multiphoto.md).
+
 ## Kaggle account migration, 2026-11-09
 
 Events uses richss777. Credentials and all runtime kernel/dataset references must

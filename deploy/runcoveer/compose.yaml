@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:kaggle-account-20261109
+    image: runcoveer/events:vk-multiphoto-20261110
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
