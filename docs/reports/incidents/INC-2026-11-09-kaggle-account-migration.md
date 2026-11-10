@@ -79,3 +79,14 @@ Exact-name searches across local project worktrees, retained artifacts and avail
 ## Follow-ups
 
 Prepared private datasets must exist under the new account before their consumers can be qualified. Missing assets must remain explicit failures; do not remove classifier quality checks or silently downgrade BGE assessments.
+
+## November 10 video recovery and nested mount failure
+
+The owner reported missing ordinary Cherryflash and CrumpleVideo publications after the credential migration. Authentication and social metrics were insufficient video acceptance. Only the new account was contacted. Private `richss777/video-announce-assets` was restored once from the deployed production fonts, music and helper code: 37 files, 18.1 MB. Existing normal input/push pipelines provisioned previously absent targets with real event selections.
+
+- Cherryflash session 1599 / handoff operation 11861: `richss777/cherryflash` version 1, dataset `richss777/cherryflash-session-1599-1794343824`. At 21:24 UTC it was still publishing, without terminal/public acceptance. Do not rerun it.
+- CrumpleVideo session 1601 / handoff operation 11863: `richss777/crumple-video-video1` version 1, dataset `richss777/video-afisha-session-1601`. Failed at 21:11:51 UTC before creating an MP4. Its actual notebook log found payload and helper under `/kaggle/input/datasets/richss777/video-afisha-session-1601`, then inspected only `/kaggle/input/datasets` for assets and raised `Required CrumpleVideo intro font not found: Benzin-Bold.ttf`. Required fonts were present in the session bundle.
+
+The existing notebook asset loader enumerated only immediate input directories. Change that enumeration to recursive directory discovery, retaining its existing copying, font requirements and failure behavior. The actual loader test fails on the retained nested layout before the fix; legacy layout and absent-font rejection already pass. After the fix all three controls pass, including static helper/music copying. These small path fixtures do not qualify font rendering or public publication. No new retry, state, worker, semantic rule or missing-asset bypass is added. Net production change: one replaced line (net zero), budget two lines.
+
+Retained evidence: `/home/dev/artifacts/events-bot-new/20261110T204306Z-video-migration-completion-20261110`, especially `nested-assets-before.log` and `progress-2130.json`; exact terminal provider log is retained privately on RunCoveer under `/data/incident_recovery/video-migration-20261110/crumple1601-terminal/`. Candidate code is not a delivered release or a successful compensating render. Remaining configured video lanes and ordinary scheduled recurrence still need verification.
