@@ -2326,14 +2326,24 @@ def _vk_carousel_cover(data: bytes) -> bytes:
     from PIL import Image, ImageDraw, ImageFont, ImageOps
 
     with Image.open(BytesIO(data)) as source:
+        # JPEG draft downsamples in the decoder, before thumbnail loads the raster.
+        max_side = 1600
+        scale = max(1, max(source.size) / max_side)
+        source.draft("RGB", tuple(max(1, int(side / scale)) for side in source.size))
         if source.width * source.height > 20_000_000:
             raise ValueError("VK upload source exceeds 20 MP")
-        photo = ImageOps.exif_transpose(source).convert("RGB")
+        source.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+        photo = ImageOps.exif_transpose(source)
     font_size = max(1, round(photo.width / 19))
     font = ImageFont.truetype(Path(__file__).parent / "assets/fonts/Cygre-Bold.ttf", font_size)
     footer = max(2, round(font_size * 1.8))
     cover = Image.new("RGB", (photo.width, photo.height + footer), "#18212b")
-    cover.paste(photo)
+    if "A" in photo.getbands() or "transparency" in photo.info:
+        photo = photo.convert("RGBA")
+        cover.paste("white", (0, 0, photo.width, photo.height))
+        cover.paste(photo, mask=photo.getchannel("A"))
+    else:
+        cover.paste(photo)
     draw = ImageDraw.Draw(cover)
     middle = photo.height + footer // 2
     tip = photo.width - font_size // 2
@@ -16050,7 +16060,8 @@ async def _managed_vk_post_state(ev: Event) -> tuple[bool, bool]:
             isinstance(att, dict) and att.get("type") == "photo"
             for att in (item.get("attachments") or [])
         )
-        return photos >= expected_count
+        mode = _vk_event_gallery_mode(ev.id, expected_count)
+        return photos >= expected_count and (mode is None or item.get("primary_attachments_mode") == mode)
 
     try:
         response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")

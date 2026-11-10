@@ -1,6 +1,6 @@
 # E2E Scenario Index
 
-- Обычные анонсы ВК — два approved-фото, оба режима, создание и редактирование по тому же wall ID, затем повтор без записи. [Команда и визуальная приёмка на desktop и телефоне](../reports/incidents/INC-2026-11-10-vk-event-multiphoto.md).
+- Обычные анонсы ВК — два approved-фото, оба режима, создание и редактирование по тому же wall ID, замена одного кадра после сбоя загрузки, смена полной сетки на карусель, затем повтор без загрузок и записи. [Команда и визуальная приёмка на компьютере и в приложении ВК](../reports/incidents/INC-2026-11-10-vk-event-multiphoto.md).
 
 The static browser release gate logs bounded source/target specimen diagnostics (gallery ownership, image-slide counts and CTA paths) when selecting the real gallery journey. These diagnostics do not replace or relax any journey assertion; a missing qualifying pair remains a failing gate. Deterministic CI pins its build clock to the checked-in preview corpus, with `preview-current-date.test.mjs` requiring synchronized fixture metadata. Production and ordinary preview builds still use the current Kaliningrad clock. `scripts/inspect/inspect_static_fixture_clock.py` prints the fixture clock for diagnosis.
 

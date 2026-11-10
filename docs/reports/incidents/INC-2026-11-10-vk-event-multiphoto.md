@@ -22,32 +22,64 @@
 
 ## Mandatory checks before closure or deploy
 
-`tests/test_event_media_gate.py::test_managed_vk_gallery_publish_and_edit_replay` проверяет оба layout, зеркало тех же байтов, второй approved-кадр, обновление недостающего вложения, сохранение текста и слота, один `wall.post`, один `wall.edit` и повтор без загрузок. Существующие проверки медиагейта покрывают одинаковые пиксели в разных контейнерах, визуально разные снимки и исключение pending/rejected. Существующие проверки VK покрывают частичную загрузку и сохранение вложений, captcha, защищённое восстановление ID и различие между отказом до `wall.post` и неопределённым исходом самого `wall.post`.
+`tests/test_event_media_gate.py::test_managed_vk_gallery_publish_and_edit_replay` проверяет оба layout, зеркало тех же байтов, второй approved-кадр, обновление недостающего вложения, сохранение текста и слота, единственный `wall.post`, смену формата с явным или отсутствующим режимом ВК, сохранение старых вложений и хеша при сбое замены [A,B] → [A,C], затем один edit на изменение и повтор без загрузок. Отдельные примеры проверяют прозрачную афишу и уменьшение JPEG 6000×4000 до полного декодирования. Существующие проверки медиагейта покрывают одинаковые пиксели в разных контейнерах, визуально разные снимки и исключение pending/rejected. Существующие проверки VK покрывают частичную загрузку и сохранение вложений, captcha, защищённое восстановление ID и различие между отказом до `wall.post` и неопределённым исходом самого `wall.post`.
 
 ## Required evidence и небольшой backfill
 
-После выпуска координатор выполняет команду со стенда. Она читает последние записи сообщества и текущие approved-галереи, берёт до двух редактируемых анонсов каждого формата, работает с конкретными wall ID через обычные upload и `edit_vk_post`. Текст берётся со стены. Время публикации не передаётся в edit. Удалённые записи, репосты, смешанные вложения и неоднозначные привязки пропускаются. Команда не содержит вызова создания поста.
+После выпуска координатор запускает этот блок на стенде. Первый запуск выбирает до двух действительно изменённых записей каждого формата из последних 100 постов. Совпадение числа фото и формата сетки отмечается отдельно как контроль по этим двум признакам. Старой карусели загружается новая первая картинка с подсказкой. Источник фото — упорядоченные approved-записи медиаревью. Исходный текст, слот и конкретный wall ID сохраняются.
+
+Для повторной приёмки запустить тот же блок. Если в файле есть принятые записи, команда читает только эти wall ID и передаёт редактору уже принятые ID вложений, в том числе обложки. Повтор проверяет, что каждая запись всё ещё совпадает, а обычный редактор возвращает no-op.
 
 ```bash
-ssh runcoveer-production 'sudo -n docker exec -i -w /app deployment-events-1 python -' <<'PY'
+set -o pipefail
+receipt=/home/dev/artifacts/events-bot-new/20261110T203533Z-vk-multiphoto-crew/accepted-vk-posts.jsonl
+touch "$receipt"
+{
+python3 -c 'import json, sys; print("accepted =", [json.loads(line) for line in sys.stdin])' < "$receipt" &&
+cat <<'PY'
 import asyncio
+import json
+import sys
 from datetime import datetime, timezone
+
 import main
 from event_media import get_event_gallery_urls
 
+async def wall_item(ref):
+    response = await main.vk_api("wall.getById", posts=ref, _force_user_actor=True)
+    return next(iter(main._vk_wall_get_by_id_items(response)), None)
+
+def photo_ids(item):
+    return [f"photo{a['photo']['owner_id']}_{a['photo']['id']}" for a in item["attachments"]]
+
+async def check_accepted(record):
+    ref, mode, ids = record["ref"], record["mode"], record["ids"]
+    url = "https://vk.com/wall" + ref
+    item = await wall_item(ref)
+    assert item and f"{item['owner_id']}_{item['id']}" == ref
+    assert (item["text"], item["date"]) == (record["text"], record["date"])
+    assert item.get("primary_attachments_mode") == mode and photo_ids(item) == ids
+    edited = await main.edit_vk_post(url, item["text"], attachments=ids, primary_attachments_mode=mode)
+    assert not edited
+    print(url, mode, len(ids), "повтор без изменения", file=sys.stderr)
+
 async def backfill():
+    if accepted:
+        for record in accepted:
+            await check_accepted(record)
+        return
+
     db = main.Database("/data/db.sqlite")
     group = str(main.VK_EVENTS_GROUP_ID or main.VK_AFISHA_GROUP_ID).lstrip("-")
     owner = -int(group)
     result = await main.vk_api("wall.get", owner_id=owner, filter="owner", count=100)
     recent = main._vk_postponed_items(result)
-    chosen = {"carousel": 0, "grid": 0}
+    changed = {"carousel": 0, "grid": 0}
+    controls = 0
     for post in sorted(recent, key=lambda p: p.get("date", 0), reverse=True):
-        if all(n == 2 for n in chosen.values()):
+        if all(n == 2 for n in changed.values()):
             break
         if post.get("owner_id") != owner or post.get("copy_history") or post.get("is_deleted"):
-            continue
-        if any(a.get("type") != "photo" for a in post.get("attachments", [])):
             continue
         if datetime.now(timezone.utc) - datetime.fromtimestamp(post["date"], timezone.utc) > main.VK_POST_MAX_EDIT_AGE:
             continue
@@ -60,52 +92,51 @@ async def backfill():
             ))).scalars().all()
             if len(matches) != 1:
                 continue
-            event = matches[0]
-            approved = await get_event_gallery_urls(session, event.id, legacy_fallback=False)
-            urls = (await main._dedupe_event_photo_urls_for_publish(event.photo_urls))[:main.VK_MAX_ATTACHMENTS]
-            if len(urls) < 2 or not set(urls).issubset(approved):
-                continue
-        mode = "carousel" if event.id % 2 else "grid"
-        if chosen[mode] == 2:
+            event_id = matches[0].id
+            approved = await get_event_gallery_urls(session, event_id, legacy_fallback=False)
+            urls = (await main._dedupe_event_photo_urls_for_publish(approved))[:main.VK_MAX_ATTACHMENTS]
+        mode = main._vk_event_gallery_mode(event_id, len(urls))
+        if mode is None or changed[mode] == 2:
             continue
-        current = main._vk_wall_get_by_id_items(await main.vk_api(
-            "wall.getById", posts=ref, _force_user_actor=True,
-        ))
-        if not current or current[0].get("can_edit") != 1:
+        item = await wall_item(ref)
+        if not item or item.get("can_edit") != 1 or item.get("is_deleted") or item.get("copy_history"):
             continue
-        item = current[0]
-        original = (item["text"], item["date"])
         old = item.get("attachments", [])
-        if item.get("is_deleted") or any(a.get("type") != "photo" for a in old):
+        if any(a.get("type") != "photo" for a in old):
             continue
-        if len(old) == len(urls) and item.get("primary_attachments_mode") == mode:
-            chosen[mode] += 1
-            print(event.id, url, mode, len(old), "без изменений; проверить визуально")
+        if mode == "grid" and len(old) == len(urls) and item.get("primary_attachments_mode") == mode:
+            controls += 1
+            print(url, "контроль: совпали число фото и сетка", file=sys.stderr)
             continue
-        ids, carousel = await main._upload_vk_event_gallery(group, urls, event.id, db, None)
-        if len(ids) != len(urls):
-            print(url, "неполная загрузка, пропуск")
+        ids, uploaded_mode = await main._upload_vk_event_gallery(group, urls, event_id, db, None)
+        if len(ids) != len(urls) or uploaded_mode != mode:
+            print(url, "неполная загрузка, пропуск", file=sys.stderr)
             continue
         try:
-            await main.edit_vk_post(url, original[0], db, None, ids, carousel=carousel)
+            edited = await main.edit_vk_post(url, item["text"], db, None, ids, primary_attachments_mode=mode)
         except main.VKAPIError as error:
             if error.code == 15 and "edit time expired" in str(error).lower():
                 continue
             raise
-        after, = main._vk_wall_get_by_id_items(await main.vk_api("wall.getById", posts=ref))
-        assert (after["text"], after["date"]) == original
-        assert after.get("primary_attachments_mode") == mode
-        actual = [f"photo{a['photo']['owner_id']}_{a['photo']['id']}" for a in after["attachments"]]
-        assert actual == ids
-        assert not await main.edit_vk_post(url, original[0], db, None, ids, carousel=carousel)
-        chosen[mode] += 1
-        print(event.id, url, mode, len(ids), "повтор без изменения")
-    print("Проверено", chosen)
-    await main.close_http_session()
+        if not edited:
+            controls += 1
+            continue
+        record = dict(ref=ref, mode=mode, ids=ids, text=item["text"], date=item["date"])
+        await check_accepted(record)
+        print(json.dumps(record, ensure_ascii=False), flush=True)
+        changed[mode] += 1
+    print("Изменено", changed, "контрольных совпадений", controls, file=sys.stderr)
     await db.engine.dispose()
 
-asyncio.run(backfill())
+async def run():
+    try:
+        await backfill()
+    finally:
+        await main.close_http_session()
+
+asyncio.run(run())
 PY
+} | ssh runcoveer-production 'sudo -n docker exec -i -w /app deployment-events-1 python -' | tee -a "$receipt"
 ```
 
-Если недавних подходящих записей меньше четырёх, сохранить фактическое число. Для проверки с телефона и desktop открыть напечатанные ссылки. Снять сетку и первый кадр карусели целиком, пролистать до второго отличающегося фото, проверить читаемость «листай →» и сохранность нижней части исходника. Зафиксировать тип клиента, ссылки и результаты в общем треде. Эмулятор обозначить отдельно. После readback и независимой визуальной проверки координатор добавляет release evidence.
+Если пригодных записей меньше четырёх, зафиксировать фактическое число изменений и отдельно количество контрольных совпадений. По принятым ссылкам проверить сетку, первый кадр карусели и листание до второго отличающегося фото на компьютере и в приложении ВК. Проверить читаемость надписи и сохранность нижней части исходника. Указать клиент, ссылки и результаты в общем треде. Эмулятор обозначить отдельно. После readback и независимой визуальной проверки координатор добавляет release evidence.

@@ -4,7 +4,7 @@
 
 ## [Unreleased]
 
-- Fixed: ordinary VK event posts edit an incomplete photo set after later approvals. Multi-photo events use a stable grid or a carousel with a “листай →” footer on the first upload copy.
+- Fixed: ordinary VK event posts edit an incomplete photo set after later approvals. Partial replacements retain their previous publication hash until every approved photo uploads. Multi-photo events migrate the same post to the requested grid or carousel, with a “листай →” footer on the first carousel upload copy.
 
 - Fixed: retain VK source publication time in the existing primary parse and verifier context so delayed imports do not resolve relative dates from the import day.
 

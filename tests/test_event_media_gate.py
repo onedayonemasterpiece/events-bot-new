@@ -1178,6 +1178,110 @@ async def test_legacy_fallback_cannot_republish_quarantined_ledger(tmp_path) -> 
     assert urls == []
 
 
+def test_vk_backfill_recipe_replays_only_accepted_wall_ids(tmp_path, monkeypatch, capsys):
+    """Exercise the coordinator's exact runbook with a local wall and real approved rows."""
+    import asyncio
+    import main
+
+    db = Database(str(tmp_path / "accepted.sqlite"))
+    monkeypatch.setattr(main, "Database", lambda _: db)
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    urls = [f"https://static.example/{letter}.jpg" for letter in "abc"]
+    # Four complete grids are controls. The old carousel has no cue and an outdated cache.
+    event_ids = [2, 4, 6, 8, 9, 10]
+    now = int(main.datetime.now(main.timezone.utc).timestamp())
+
+    def photos(ids):
+        return [{"type": "photo", "photo": {"owner_id": -1, "id": n}} for n in ids]
+
+    wall = {n: {"owner_id": -1, "id": n, "date": now - i, "can_edit": 1, "text": f"event {n}",
+                "primary_attachments_mode": "carousel" if n == 9 else "grid",
+                "attachments": photos([1, 2, 3] if n == 9 else [1] if n == 10 else [1, 2])} for i, n in enumerate(event_ids)}
+
+    async def seed():
+        await db.init()
+        async with db.get_session() as session:
+            for n in event_ids:
+                ev = _event()
+                ev.id, ev.photo_urls, ev.source_vk_post_url = n, urls[:2], f"https://vk.com/wall-1_{n}"
+                session.add(ev)
+                await session.flush()
+                for i, url in enumerate(urls if n == 9 else urls[:2]):
+                    session.add(EventPoster(event_id=n, poster_hash=f"p{n}-{i}", catbox_url=url,
+                                            review_status=APPROVED))
+            await session.commit()
+
+    asyncio.run(seed())
+    scans, uploads, writes, reads = [], [], [], []
+
+    async def api(method, **params):
+        if method == "wall.get":
+            scans.append(method)
+            return {"response": {"items": list(wall.values())}}
+        assert method == "wall.getById"
+        reads.append(params["posts"])
+        return {"response": {"items": [wall[int(params["posts"].split("_")[1])]]}}
+
+    async def upload(group, ordered, n, db, bot):
+        uploads.append((n, list(ordered)))
+        return [f"photo-1_{n * 10 + i}" for i in range(len(ordered))], main._vk_event_gallery_mode(n, len(ordered))
+
+    async def edit(url, text, db=None, bot=None, attachments=None, *, primary_attachments_mode):
+        n = int(url.rsplit("_", 1)[1])
+        new = photos([int(ref.rsplit("_", 1)[1]) for ref in attachments])
+        assert text == wall[n]["text"]
+        if new == wall[n]["attachments"] and wall[n]["primary_attachments_mode"] == primary_attachments_mode:
+            return False
+        writes.append(n)
+        wall[n].update(attachments=new, primary_attachments_mode=primary_attachments_mode)
+        return True
+
+    monkeypatch.setattr(main, "vk_api", api)
+    monkeypatch.setattr(main, "_upload_vk_event_gallery", upload)
+    monkeypatch.setattr(main, "edit_vk_post", edit)
+    report = Path(__file__).resolve().parents[1] / "docs/reports/incidents/INC-2026-11-10-vk-event-multiphoto.md"
+    python = report.read_text().split("cat <<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+    exec(compile(python, str(report), "exec"), {"accepted": []})
+    first_run = capsys.readouterr()
+    assert "контрольных совпадений 4" in first_run.err
+    accepted = [json.loads(line) for line in first_run.out.splitlines()]
+    assert [row["ref"] for row in accepted] == ["-1_9", "-1_10"]
+    assert uploads == [(9, urls), (10, urls[:2])] and writes == [9, 10]
+    reads.clear()
+    exec(compile(python, str(report), "exec"), {"accepted": accepted})
+    assert reads == ["-1_9", "-1_10"] and len(scans) == 1
+    assert len(uploads) == 2 and writes == [9, 10] and not capsys.readouterr().out
+
+
+def test_vk_carousel_cover_composites_transparency_and_bounds_jpeg_decode(monkeypatch):
+    import main
+    from PIL import JpegImagePlugin
+
+    source = Image.new("RGBA", (80, 60))
+    source.paste((0, 0, 0, 255), (20, 15, 60, 45))
+    png = io.BytesIO()
+    source.save(png, "PNG")
+    with Image.open(io.BytesIO(main._vk_carousel_cover(png.getvalue()))) as cover:
+        assert cover.getpixel((4, 4))[0] > 245 and cover.getpixel((40, 30))[0] < 10
+        assert cover.height > source.height
+
+    jpeg = io.BytesIO()
+    Image.new("RGB", (6000, 4000), "white").save(jpeg, "JPEG")
+    payload = jpeg.getvalue()
+    original_load = JpegImagePlugin.JpegImageFile.load
+
+    def bounded_load(image, *args, **kwargs):
+        assert image.width * image.height <= 20_000_000
+        return original_load(image, *args, **kwargs)
+
+    monkeypatch.setattr(JpegImagePlugin.JpegImageFile, "load", bounded_load)
+    with Image.open(io.BytesIO(main._vk_carousel_cover(payload))) as cover:
+        assert cover.width <= 1600 and cover.height > cover.width * 2 / 3
+        cover.load()
+    with Image.open(io.BytesIO(payload)) as original:
+        assert original.size == (6000, 4000)
+
+
 @pytest.mark.parametrize(("event_id", "layout"), [(100, "grid"), (101, "carousel")])
 @pytest.mark.asyncio
 async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_path, monkeypatch):
@@ -1222,13 +1326,16 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
     monkeypatch.setattr(main, "_resolve_vk_postponed_wall_id_any_actor", AsyncMock(return_value=9))
     wall = {"id": 9, "can_edit": 1}
     writes, uploads = [], []
+    unavailable = set()
+    replacement = "https://static.example/c.png"
+    source_ids = {url: index for index, url in enumerate([*urls, replacement], start=1)}
 
     async def api(method, params=None, *args, **kwargs):
         if method == "wall.getById":
             return {"response": {"items": [wall]}}
         assert method in ("wall.post", "wall.edit")
         ids = params["attachments"].split(",")
-        assert ids == ["photo-1_1", "photo-1_2"]
+        assert ids[0] == "photo-1_1"
         assert params["primary_attachments_mode"] == layout
         if method == "wall.post":
             assert params["publish_date"] == slot
@@ -1243,13 +1350,15 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
         return {"response": {"post_id": 9} if method == "wall.post" else 1}
 
     async def upload(group_id, url, *args, swipe_hint=False):
-        uploads.append((urls.index(url), swipe_hint))
+        uploads.append((source_ids[url], swipe_hint))
+        if url in unavailable:
+            return None
         if swipe_hint:
             with Image.open(io.BytesIO(main._vk_carousel_cover(original))) as cover:
                 assert cover.width == 64 and cover.height > 48
                 assert cover.getpixel((5, 10))[0] > 245 and cover.getpixel((50, 10))[0] < 10
                 assert cover.crop((0, 48, cover.width, cover.height)).convert("L").getextrema()[1] > 100
-        return f"photo-1_{urls.index(url) + 1}"
+        return f"photo-1_{source_ids[url]}"
 
     monkeypatch.setattr(main, "_vk_api", api)
     monkeypatch.setattr(main, "vk_api", api)
@@ -1264,7 +1373,51 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
     await main.job_sync_vk_source_post(event_id, db, None)
     await main.job_sync_vk_source_post(event_id, db, None)
     assert writes == ["wall.post", "wall.edit"]
-    assert sorted(uploads) == [(0, layout == "carousel")] * 2 + [(1, False)] * 2
+    assert sorted(uploads) == [(1, layout == "carousel")] * 2 + [(2, False)] * 2
+
+    # A full old layout, or missing mode in VK's reply, is still an explicit edit.
+    post_url = managed.source_vk_post_url
+    expected_uploads = sorted([(1, layout == "carousel"), (2, False)])
+    for old_layout in ("grid" if layout == "carousel" else "carousel", None):
+        wall["primary_attachments_mode"] = old_layout
+        assert not await main._event_has_existing_managed_vk_post(managed)
+        uploads.clear()
+        writes.clear()
+        await main.job_sync_vk_source_post(event_id, db, None)
+        await main.job_sync_vk_source_post(event_id, db, None)
+        assert writes == ["wall.edit"] and sorted(uploads) == expected_uploads
+        assert wall["primary_attachments_mode"] == layout
+
+    # A caller outside ordinary events leaves the format alone on a no-op.
+    assert not await main.edit_vk_post(post_url, wall["text"], attachments=["photo-1_1", "photo-1_2"])
+    assert writes == ["wall.edit"]
+
+    # The approved pair changes from [A, B] to [A, C]. Equal counts cannot prove delivery.
+    async with db.get_session() as session:
+        row = (await session.execute(select(EventPoster).where(
+            EventPoster.event_id == event_id, EventPoster.catbox_url == second,
+        ))).scalar_one()
+        row.catbox_url = replacement
+        await session.flush()
+        await event_media.sync_event_gallery_projection(session, event_id)
+        await session.commit()
+    unavailable.add(replacement)
+    writes.clear()
+    with pytest.raises(RuntimeError, match="vk_sync_partial_media_upload"):
+        await main.job_sync_vk_source_post(event_id, db, None)
+    async with db.get_session() as session:
+        assert (await session.get(Event, event_id)).vk_source_hash == managed.vk_source_hash
+    assert not writes and [a["photo"]["id"] for a in wall["attachments"]] == [1, 2]
+
+    unavailable.clear()
+    uploads.clear()
+    await main.job_sync_vk_source_post(event_id, db, None)
+    await main.job_sync_vk_source_post(event_id, db, None)
+    assert writes == ["wall.edit"] and sorted(uploads) == [(1, layout == "carousel"), (3, False)]
+    assert [a["photo"]["id"] for a in wall["attachments"]] == [1, 3]
+    async with db.get_session() as session:
+        updated = await session.get(Event, event_id)
+        assert updated.source_vk_post_url == post_url and updated.vk_source_hash != managed.vk_source_hash
     await db.engine.dispose()
 
 
