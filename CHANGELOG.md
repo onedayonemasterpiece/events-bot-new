@@ -11,6 +11,7 @@
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed
+- Discover CrumpleVideo fonts and static assets under nested Kaggle dataset mounts while retaining the existing missing-font failure.
 - Fetch one smaller VK-advertised rendition when a photo exceeds the existing download limit, preserving complete poster evidence without raising the byte budget.
 - Route changed parser description bodies and different unowned ticket URLs through existing Smart Update guards instead of skipping them as unchanged ticket refreshes.
 - Exclude failed CherryFlash sessions from guide-excursion promotion history; keep active and published sessions protected against repeated selection.
