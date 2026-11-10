@@ -1178,9 +1178,11 @@ async def test_legacy_fallback_cannot_republish_quarantined_ledger(tmp_path) -> 
     assert urls == []
 
 
-def test_vk_backfill_recipe_replays_only_accepted_wall_ids(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("optimize", [0, 1])
+def test_vk_backfill_recipe_replays_only_accepted_wall_ids(tmp_path, monkeypatch, capsys, optimize):
     """Exercise the coordinator's exact runbook with a local wall and real approved rows."""
     import asyncio
+    from copy import deepcopy
     import main
 
     db = Database(str(tmp_path / "accepted.sqlite"))
@@ -1220,37 +1222,75 @@ def test_vk_backfill_recipe_replays_only_accepted_wall_ids(tmp_path, monkeypatch
             return {"response": {"items": list(wall.values())}}
         assert method == "wall.getById"
         reads.append(params["posts"])
-        return {"response": {"items": [wall[int(params["posts"].split("_")[1])]]}}
+        item = wall[int(params["posts"].split("_")[1])]
+        return {"items": [deepcopy(item)], "reaction_sets": []}
 
     async def upload(group, ordered, n, db, bot):
         uploads.append((n, list(ordered)))
-        return [f"photo-1_{n * 10 + i}" for i in range(len(ordered))], main._vk_event_gallery_mode(n, len(ordered))
+        return [f"photo868977531_{n * 10 + i}" for i in range(len(ordered))], main._vk_event_gallery_mode(n, len(ordered))
 
-    async def edit(url, text, db=None, bot=None, attachments=None, *, primary_attachments_mode):
-        n = int(url.rsplit("_", 1)[1])
-        new = photos([int(ref.rsplit("_", 1)[1]) for ref in attachments])
-        assert text == wall[n]["text"]
-        if new == wall[n]["attachments"] and wall[n]["primary_attachments_mode"] == primary_attachments_mode:
-            return False
+    async def internal_api(method, params, *_args, **_kwargs):
+        if method == "wall.getById":
+            return {"response": [wall[int(params["posts"].split("_")[1])]]}
+        assert method == "wall.edit"
+        n = int(params["post_id"])
+        assert params["message"] == wall[n]["text"]
         writes.append(n)
-        wall[n].update(attachments=new, primary_attachments_mode=primary_attachments_mode)
-        return True
+        new_ids = [int(ref.split("_")[1]) + 1000 for ref in params["attachments"].split(",")]
+        wall[n]["attachments"] = photos(new_ids)
+        wall[n].pop("primary_attachments_mode", None)
+        return {"response": {"post_id": n}}
 
     monkeypatch.setattr(main, "vk_api", api)
+    monkeypatch.setattr(main, "_vk_api", internal_api)
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "fixture")
     monkeypatch.setattr(main, "_upload_vk_event_gallery", upload)
-    monkeypatch.setattr(main, "edit_vk_post", edit)
     report = Path(__file__).resolve().parents[1] / "docs/reports/incidents/INC-2026-11-10-vk-event-multiphoto.md"
     python = report.read_text().split("cat <<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
-    exec(compile(python, str(report), "exec"), {"accepted": []})
+    recipe = compile(python, str(report), "exec", optimize=optimize)
+    with pytest.raises(RuntimeError, match="Пустая квитанция"):
+        exec(recipe, {"accepted": []})
+    assert not scans and not uploads and not writes
+    exec(recipe, {"accepted": None})
     first_run = capsys.readouterr()
     assert "контрольных совпадений 4" in first_run.err
     accepted = [json.loads(line) for line in first_run.out.splitlines()]
     assert [row["ref"] for row in accepted] == ["-1_9", "-1_10"]
+    assert accepted[0]["ids"] == ["photo-1_1090", "photo-1_1091", "photo-1_1092"]
     assert uploads == [(9, urls), (10, urls[:2])] and writes == [9, 10]
     reads.clear()
-    exec(compile(python, str(report), "exec"), {"accepted": accepted})
+    exec(recipe, {"accepted": accepted})
     assert reads == ["-1_9", "-1_10"] and len(scans) == 1
     assert len(uploads) == 2 and writes == [9, 10] and not capsys.readouterr().out
+
+    # A receipt from the first live run held upload IDs instead of wall IDs.
+    stale = {**accepted[0], "ids": ["photo868977531_90", "photo868977531_91", "photo868977531_92"]}
+    with pytest.raises(RuntimeError, match="-1_9"):
+        exec(recipe, {"accepted": [stale]})
+    assert len(uploads) == 2 and writes == [9, 10]
+
+    # The check is read-only even if a subsequent editor replaces an accepted frame.
+    wall[9]["attachments"].reverse()
+    with pytest.raises(RuntimeError, match="-1_9"):
+        exec(recipe, {"accepted": accepted})
+    assert len(uploads) == 2 and writes == [9, 10]
+
+
+def test_vk_carousel_cover_keeps_poster_edges_and_hint_in_wall_crop():
+    import main
+    from PIL import ImageOps
+
+    poster = Image.new("RGB", (815, 1600), "#202020")
+    poster.paste("green", (0, 0, poster.width, 45))
+    poster.paste("red", (0, poster.height - 45, poster.width, poster.height))
+    source = io.BytesIO()
+    poster.save(source, "PNG")
+    with Image.open(io.BytesIO(main._vk_carousel_cover(source.getvalue()))) as cover:
+        wall = ImageOps.fit(cover, (815, 1222))
+        assert wall.getpixel((400, 12))[1] > 100
+        assert wall.crop((300, 1060, 500, 1210)).getextrema()[0][1] > 220
+        # The cue is the only white ink in this fixture.
+        assert wall.crop((0, 1160, 815, 1222)).convert("L").getextrema()[1] > 220
 
 
 def test_vk_carousel_cover_composites_transparency_and_bounds_jpeg_decode(monkeypatch):
@@ -1375,18 +1415,22 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
     assert writes == ["wall.post", "wall.edit"]
     assert sorted(uploads) == [(1, layout == "carousel")] * 2 + [(2, False)] * 2
 
-    # A full old layout, or missing mode in VK's reply, is still an explicit edit.
+    # VK may omit the layout after accepting a gallery. Its absence alone
+    # must not trigger another upload or wall.edit for the completed publication.
     post_url = managed.source_vk_post_url
-    expected_uploads = sorted([(1, layout == "carousel"), (2, False)])
-    for old_layout in ("grid" if layout == "carousel" else "carousel", None):
-        wall["primary_attachments_mode"] = old_layout
-        assert not await main._event_has_existing_managed_vk_post(managed)
-        uploads.clear()
-        writes.clear()
-        await main.job_sync_vk_source_post(event_id, db, None)
-        await main.job_sync_vk_source_post(event_id, db, None)
-        assert writes == ["wall.edit"] and sorted(uploads) == expected_uploads
-        assert wall["primary_attachments_mode"] == layout
+    wall.pop("primary_attachments_mode")
+    writes.clear()
+    uploads.clear()
+    await main.job_sync_vk_source_post(event_id, db, None)
+    assert not writes and not uploads
+
+    # VK explicitly reports the wrong layout on this legacy post.
+    wall["primary_attachments_mode"] = "grid" if layout == "carousel" else "carousel"
+    assert not await main._event_has_existing_managed_vk_post(managed)
+    await main.job_sync_vk_source_post(event_id, db, None)
+    await main.job_sync_vk_source_post(event_id, db, None)
+    assert writes == ["wall.edit"] and sorted(uploads) == [(1, layout == "carousel"), (2, False)]
+    assert wall["primary_attachments_mode"] == layout
 
     # A caller outside ordinary events leaves the format alone on a no-op.
     assert not await main.edit_vk_post(post_url, wall["text"], attachments=["photo-1_1", "photo-1_2"])
