@@ -1178,6 +1178,96 @@ async def test_legacy_fallback_cannot_republish_quarantined_ledger(tmp_path) -> 
     assert urls == []
 
 
+@pytest.mark.parametrize(("event_id", "layout"), [(100, "grid"), (101, "carousel")])
+@pytest.mark.asyncio
+async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    import main
+
+    db = Database(str(tmp_path / "gallery.sqlite"))
+    await db.init()
+    first, mirror, second = (f"https://static.example/{name}.png" for name in ("a", "copy", "b"))
+    original = _pattern_png_bytes()
+    async with db.get_session() as session:
+        event = _event()
+        event.id, event.date = event_id, "2099-06-01"
+        session.add(event)
+        await session.flush()
+        for url, image in [(first, original), (mirror, original), (second, _pattern_png_bytes(invert=True))]:
+            await _apply_posters(session, event_id, [
+                PosterCandidate(catbox_url=url, sha256=hashlib.sha256(image).hexdigest())
+            ])
+        rows = list((await session.execute(
+            select(EventPoster).where(EventPoster.event_id == event_id).order_by(EventPoster.id)
+        )).scalars())
+        assert len(rows) == 2
+        assert [row.review_status for row in rows] == [APPROVED, PENDING_REVIEW]
+        # Model the late approval observed on the wall. The media gate's pair tests
+        # separately exercise the real pixel comparison and the review decision.
+        rows[1].review_status = APPROVED
+        await session.flush()
+        await event_media.sync_event_gallery_projection(session, event_id)
+        await session.commit()
+        await session.refresh(event)
+        urls = list(event.photo_urls)
+        assert len(urls) == 2 and urls[1] == second
+
+    for key, value in {"VK_EVENTS_GROUP_ID": "1", "VK_USER_TOKEN": "fixture", "VK_PHOTOS_ENABLED": True,
+                       "VK_MAX_ATTACHMENTS": 10}.items():
+        monkeypatch.setattr(main, key, value)
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "fixture")
+    monkeypatch.setattr(main, "choose_vk_actor", lambda *_: [main.VkActor("user", "fixture", "user")])
+    slot = int(main.datetime.now(main.timezone.utc).timestamp()) + 3600
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", AsyncMock(return_value=slot))
+    monkeypatch.setattr(main, "_resolve_vk_postponed_wall_id_any_actor", AsyncMock(return_value=9))
+    wall = {"id": 9, "can_edit": 1}
+    writes, uploads = [], []
+
+    async def api(method, params=None, *args, **kwargs):
+        if method == "wall.getById":
+            return {"response": {"items": [wall]}}
+        assert method in ("wall.post", "wall.edit")
+        ids = params["attachments"].split(",")
+        assert ids == ["photo-1_1", "photo-1_2"]
+        assert params["primary_attachments_mode"] == layout
+        if method == "wall.post":
+            assert params["publish_date"] == slot
+            wall["date"] = slot
+        else:
+            assert (params["owner_id"], params["post_id"]) == ("-1", "9")
+            assert "publish_date" not in params and params["message"] == wall["text"]
+        writes.append(method)
+        wall.update(text=params["message"], primary_attachments_mode=layout, attachments=[
+            {"type": "photo", "photo": {"owner_id": -1, "id": int(ref.split("_")[1])}} for ref in ids
+        ])
+        return {"response": {"post_id": 9} if method == "wall.post" else 1}
+
+    async def upload(group_id, url, *args, swipe_hint=False):
+        uploads.append((urls.index(url), swipe_hint))
+        if swipe_hint:
+            with Image.open(io.BytesIO(main._vk_carousel_cover(original))) as cover:
+                assert cover.width == 64 and cover.height > 48
+                assert cover.getpixel((5, 10))[0] > 245 and cover.getpixel((50, 10))[0] < 10
+                assert cover.crop((0, 48, cover.width, cover.height)).convert("L").getextrema()[1] > 100
+        return f"photo-1_{urls.index(url) + 1}"
+
+    monkeypatch.setattr(main, "_vk_api", api)
+    monkeypatch.setattr(main, "vk_api", api)
+    monkeypatch.setattr(main, "upload_vk_photo", upload)
+    await main.job_sync_vk_source_post(event_id, db, None)
+    # Existing managed post has only its first image, even though its hash matches.
+    wall["attachments"].pop()
+    async with db.get_session() as session:
+        managed = await session.get(Event, event_id)
+        assert managed.source_vk_post_url == "https://vk.com/wall-1_9"
+    assert not await main._event_has_existing_managed_vk_post(managed)
+    await main.job_sync_vk_source_post(event_id, db, None)
+    await main.job_sync_vk_source_post(event_id, db, None)
+    assert writes == ["wall.post", "wall.edit"]
+    assert sorted(uploads) == [(0, layout == "carousel")] * 2 + [(1, False)] * 2
+    await db.engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_exact_pixel_duplicate_is_resolved_without_provider_call(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "db.sqlite"))

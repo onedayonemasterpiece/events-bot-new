@@ -1,5 +1,7 @@
 # Инциденты
 
+- [INC-2026-11-10 — неполная фотогалерея анонсов ВК](INC-2026-11-10-vk-event-multiphoto.md). Повторная синхронизация, сетка, карусель и edit-only приёмка.
+
 - `INC-2026-11-09-kaggle-account-migration.md`: account migration, duplicate SaveKernel retries and new-account-only recovery.
 
 - `INC-2026-11-09-vk-relative-publication-date.md`: VK publication timestamp lost before the LLM shifts relative dates into an incorrect daily announcement.
