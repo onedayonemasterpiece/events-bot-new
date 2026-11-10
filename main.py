@@ -2321,6 +2321,43 @@ def ensure_jpeg(
     return data, name
 
 
+def _vk_carousel_cover(data: bytes) -> bytes:
+    """Append a swipe cue outside the photo, only on the copy uploaded to VK."""
+    from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+    with Image.open(BytesIO(data)) as source:
+        # JPEG draft downsamples in the decoder, before thumbnail loads the raster.
+        max_side = 1600
+        scale = max(1, max(source.size) / max_side)
+        source.draft("RGB", tuple(max(1, int(side / scale)) for side in source.size))
+        if source.width * source.height > 20_000_000:
+            raise ValueError("VK upload source exceeds 20 MP")
+        source.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+        photo = ImageOps.exif_transpose(source)
+    font_size = max(1, round(photo.width / 19))
+    font = ImageFont.truetype(Path(__file__).parent / "assets/fonts/Cygre-Bold.ttf", font_size)
+    footer = max(2, round(font_size * 1.8))
+    cover = Image.new("RGB", (photo.width, photo.height + footer), "#18212b")
+    if "A" in photo.getbands() or "transparency" in photo.info:
+        photo = photo.convert("RGBA")
+        cover.paste("white", (0, 0, photo.width, photo.height))
+        cover.paste(photo, mask=photo.getchannel("A"))
+    else:
+        cover.paste(photo)
+    draw = ImageDraw.Draw(cover)
+    middle = photo.height + footer // 2
+    tip = photo.width - font_size // 2
+    draw.text((tip - 1.4 * font_size, middle), "листай", font=font, fill="white", anchor="rm")
+    stroke = max(1, font_size // 12)
+    draw.line((tip - font_size, middle, tip, middle), fill="white", width=stroke)
+    head = font_size / 3
+    draw.line([(tip - head, middle - head), (tip, middle), (tip - head, middle + head)],
+              fill="white", width=stroke)
+    out = BytesIO()
+    cover.save(out, "JPEG", quality=95, subsampling=0)
+    return out.getvalue()
+
+
 def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
     """Smaller 4:4:4 JPEGs for VK upload servers that silently reject a photo."""
     from PIL import Image, ImageOps
@@ -4231,6 +4268,7 @@ async def upload_vk_photo(
     *,
     token: str | None = None,
     token_kind: str = "group",
+    swipe_hint: bool = False,
 ) -> str | None:
     """Upload an image to VK and return attachment id."""
     if not url:
@@ -4292,6 +4330,8 @@ async def upload_vk_photo(
                                 return data
 
                 img_bytes = await asyncio.wait_for(_download(), HTTP_TIMEOUT)
+                if swipe_hint:
+                    img_bytes = await asyncio.to_thread(_vk_carousel_cover, img_bytes)
                 source_image_bytes = img_bytes
                 try:
                     img_bytes, _ = ensure_jpeg(
@@ -16012,13 +16052,22 @@ async def _managed_vk_post_state(ev: Event) -> tuple[bool, bool]:
     ids = _vk_owner_and_post_id(existing_vk_url)
     if not ids:
         return False, False
-    expected_media = bool(list(getattr(ev, "photo_urls", None) or []))
+    expected_urls = await _dedupe_event_photo_urls_for_publish(getattr(ev, "photo_urls", None))
+    expected_count = len(expected_urls[:VK_MAX_ATTACHMENTS])
+
+    def media_complete(item: dict) -> bool:
+        photos = sum(
+            isinstance(att, dict) and att.get("type") == "photo"
+            for att in (item.get("attachments") or [])
+        )
+        mode = _vk_event_gallery_mode(ev.id, expected_count)
+        return photos >= expected_count and (mode is None or item.get("primary_attachments_mode") == mode)
+
     try:
         response = await vk_api("wall.getById", posts=f"{ids[0]}_{ids[1]}")
         items = _vk_wall_get_by_id_items(response)
         if items:
-            complete = (not expected_media) or _vk_wall_item_has_photo(items[0])
-            return True, complete
+            return True, media_complete(items[0])
     except Exception:
         logging.warning(
             "managed VK post existence probe failed event_id=%s url=%s",
@@ -16042,8 +16091,7 @@ async def _managed_vk_post_state(ev: Event) -> tuple[bool, bool]:
                 existing_vk_url,
                 resolved_id,
             )
-            complete = (not expected_media) or _vk_wall_item_has_photo(item)
-            return True, complete
+            return True, media_complete(item)
     except Exception:
         logging.warning(
             "managed VK postponed existence probe failed event_id=%s url=%s",

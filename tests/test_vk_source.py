@@ -769,6 +769,35 @@ async def test_sync_vk_source_post_passes_vk_coauthor_candidate(monkeypatch):
     assert posted["vk_coauthor_screen_name"] == "prodetstvosu"
 
 
+@pytest.mark.parametrize(("options", "wire_mode"), [({}, "grid"), ({"carousel": True}, None)])
+@pytest.mark.asyncio
+async def test_vk_shared_publishers_keep_legacy_layout(options, wire_mode, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    actor = main.VkActor("user", "fixture", "user")
+    ids = ["photo-1_4", "photo-1_5"]
+    item = {"text": "original", "can_edit": 1, "primary_attachments_mode": "carousel",
+            "attachments": [{"type": "photo", "photo": {"owner_id": -1, "id": n}} for n in (4, 5)]}
+    calls = []
+
+    async def api(method, params, *_args, **_kwargs):
+        if method == "wall.getById":
+            return {"response": {"items": [item]}}
+        calls.append((method, params.get("primary_attachments_mode")))
+        return {"response": {"post_id": 9} if method == "wall.post" else 1}
+
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "fixture")
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "fixture")
+    monkeypatch.setattr(main, "choose_vk_actor", lambda *_: [actor])
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", AsyncMock(return_value=None))
+    monkeypatch.setattr(main, "_vk_api", api)
+    url = await main.post_to_vk("1", "original", attachments=ids, **options)
+    assert not await main.edit_vk_post(url, "original", attachments=ids, **options)
+    assert await main.edit_vk_post(url, "updated", attachments=ids, **options)
+    assert calls == [("wall.post", wire_mode), ("wall.edit", wire_mode)]
+
+
 @pytest.mark.asyncio
 async def test_post_to_vk_sends_coauthor_params_and_retries_without_rejected_params(monkeypatch):
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
@@ -1740,9 +1769,9 @@ async def test_sync_vk_source_post_attaches_partial_reupload_to_text_only_post(
     monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
     monkeypatch.setattr(main, "edit_vk_post", fake_edit)
 
-    url = await main.sync_vk_source_post(event, "new", None, None)
+    with pytest.raises(RuntimeError, match="vk_sync_partial_media_upload"):
+        await main.sync_vk_source_post(event, "new", None, None)
 
-    assert url == "https://vk.com/wall-1_1"
     assert edited["attachments"] == ["ph1"]
 
 
@@ -1785,19 +1814,16 @@ async def test_sync_vk_source_post_preserves_existing_photos_on_partial_reupload
     async def fake_upload(group_id, url, db=None, bot=None, *, token=None, token_kind="group"):
         return "ph1" if url.endswith("img1") else None
 
-    edited = {}
-
     async def fake_edit(url, message, db=None, bot=None, attachments=None, **kwargs):
-        edited["attachments"] = attachments
+        pytest.fail("the old gallery must stay intact until every replacement is ready")
 
     monkeypatch.setattr(main, "_vk_api", fake_vk_api)
     monkeypatch.setattr(main, "vk_api", fake_vk_api)
     monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
     monkeypatch.setattr(main, "edit_vk_post", fake_edit)
 
-    await main.sync_vk_source_post(event, "new", None, None)
-
-    assert edited["attachments"] is None
+    with pytest.raises(RuntimeError, match="vk_sync_partial_media_upload"):
+        await main.sync_vk_source_post(event, "new", None, None)
 
 
 @pytest.mark.asyncio

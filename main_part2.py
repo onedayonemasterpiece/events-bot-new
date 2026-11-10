@@ -4373,6 +4373,8 @@ async def post_to_vk(
     source_event_id: int | None = None,
     location_marker: Mapping[str, Any] | None = None,
     latest_publish_ts: int | None = None,
+    *,
+    primary_attachments_mode: str | None = None,
 ) -> str | None:
     if not group_id:
         return None
@@ -4425,12 +4427,8 @@ async def post_to_vk(
             )
     if attachments:
         params_base["attachments"] = ",".join(attachments)
-        if len(attachments) > 1 and not carousel:
-            # Multi-photo posts default to carousel in modern VK clients;
-            # publish as a grid so all images are visible at once. When
-            # ``carousel`` is set we intentionally leave the default carousel
-            # rendering (swipeable) instead of forcing a grid.
-            params_base["primary_attachments_mode"] = "grid"
+        if len(attachments) > 1 and (primary_attachments_mode or not carousel):
+            params_base["primary_attachments_mode"] = primary_attachments_mode or "grid"
     actors = choose_vk_actor(owner_id, "wall.post")
     if not actors:
         raise VKAPIError(None, "VK token missing", method="wall.post")
@@ -7364,6 +7362,37 @@ async def _event_media_ledger_intentionally_empty(
     )
 
 
+def _vk_event_gallery_mode(event_id: int | None, count: int) -> str | None:
+    if count < 2:
+        return None
+    return "carousel" if event_id and event_id % 2 else "grid"
+
+
+async def _upload_vk_event_gallery(
+    group_id: str, urls: list[str], event_id: int | None, db: Database | None, bot: Bot | None,
+) -> tuple[list[str], str | None]:
+    """Upload approved URLs in display order; label the cover only if a second photo is ready."""
+    mode = _vk_event_gallery_mode(event_id, len(urls))
+    carousel = mode == "carousel"
+    attachments: list[str] = []
+    # Upload the cover last in a carousel: a partial edit can still use a lone unlabelled photo.
+    for url in (reversed(urls) if carousel else urls):
+        if carousel and url == urls[0] and attachments:
+            photo = await upload_vk_photo(group_id, url, db, bot, swipe_hint=True)
+            if not photo:
+                mode = "grid"
+        else:
+            photo = await upload_vk_photo(group_id, url, db, bot)
+        if photo:
+            attachments.append(photo)
+        elif not VK_USER_TOKEN:
+            logging.info("VK photo upload skipped: user token required", extra={"eid": event_id})
+            break
+    if carousel:
+        attachments.reverse()
+    return attachments, mode if len(attachments) > 1 else None
+
+
 async def sync_vk_source_post(
     event: Event,
     text: str,
@@ -7500,78 +7529,20 @@ async def sync_vk_source_post(
                         len(telegraph_images),
                     )
     photo_upload_expected = False
-    photo_upload_skipped_missing_user_token = False
+    partial_upload = False
+    gallery_mode = None
     if VK_PHOTOS_ENABLED and photo_urls_source:
-        ids: list[str] = []
         photo_urls_for_publish = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
             :VK_MAX_ATTACHMENTS
         ]
         photo_upload_expected = bool(photo_urls_for_publish)
-        for url in photo_urls_for_publish:
-            photo_id = await upload_vk_photo(target_group_id, url, db, bot)
-            if photo_id:
-                ids.append(photo_id)
-            elif not VK_USER_TOKEN:
-                logging.info(
-                    "VK photo upload skipped: user token required",
-                    extra={"eid": event.id},
-                )
-                photo_upload_skipped_missing_user_token = True
-                break
-        if ids:
-            if existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
-                # Preserve an existing photo set on partial re-upload, but
-                # do not preserve *no media*.  Late rehydration commonly
-                # reaches a text-only projection after one of several raw
-                # source URLs has expired; attaching the successfully
-                # uploaded subset is strictly better and lets the normal
-                # media-completeness contract converge.
-                existing_has_photos = True  # provider failure => fail safe
-                try:
-                    existing_ids = _vk_owner_and_post_id(existing_vk_post_url)
-                    if existing_ids:
-                        existing_response = await vk_api(
-                            "wall.getById",
-                            posts=f"{existing_ids[0]}_{existing_ids[1]}",
-                        )
-                        existing_items = _vk_wall_get_by_id_items(existing_response)
-                        if existing_items:
-                            existing_has_photos = _vk_wall_item_has_photo(
-                                existing_items[0]
-                            )
-                except Exception:
-                    logging.warning(
-                        "VK partial media existing attachment probe failed event_id=%s url=%s",
-                        event.id,
-                        existing_vk_post_url,
-                        exc_info=True,
-                    )
-                if existing_has_photos:
-                    logging.warning(
-                        "VK photo upload partial for existing post; preserving attachments event_id=%s uploaded=%s expected=%s",
-                        event.id,
-                        len(ids),
-                        len(photo_urls_for_publish),
-                    )
-                else:
-                    attachments = ids
-                    logging.warning(
-                        "VK photo upload partial for text-only existing post; attaching available media event_id=%s uploaded=%s expected=%s",
-                        event.id,
-                        len(ids),
-                        len(photo_urls_for_publish),
-                    )
-            elif not existing_vk_post_url and len(ids) < len(photo_urls_for_publish):
-                logging.error(
-                    "sync_vk_source_post blocked partial source post media event_id=%s source_url=%s uploaded=%s expected=%s",
-                    event.id,
-                    getattr(event, "source_post_url", None),
-                    len(ids),
-                    len(photo_urls_for_publish),
-                )
-                raise RuntimeError("vk_sync_partial_media_upload")
-            else:
-                attachments = ids
+        ids, gallery_mode = await _upload_vk_event_gallery(
+            target_group_id, photo_urls_for_publish, event.id, db, bot,
+        )
+        attachments = ids or None
+        partial_upload = len(ids) < len(photo_urls_for_publish)
+        if not existing_vk_post_url and ids and partial_upload:
+            raise RuntimeError("vk_sync_partial_media_upload")
     elif photo_urls_source:
         photo_urls_for_publish = photo_urls_source[:VK_MAX_ATTACHMENTS]
 
@@ -7614,7 +7585,7 @@ async def sync_vk_source_post(
             event, db, bot=bot, vk_api_fn=_vk_api
         )
         existing = ""
-        existing_has_photos = False
+        existing_item = None
         try:
             ids = _vk_owner_and_post_id(existing_vk_post_url)
             if ids:
@@ -7623,16 +7594,23 @@ async def sync_vk_source_post(
                 )
                 items = _vk_wall_get_by_id_items(response)
                 if items:
-                    existing = items[0].get("text", "")
-                    existing_has_photos = _vk_wall_item_has_photo(items[0])
+                    existing_item = items[0]
+                    existing = existing_item.get("text", "")
+                    if attachments is None:
+                        gallery_mode = existing_item.get("primary_attachments_mode")
         except Exception as e:
             logging.error("failed to fetch existing VK post: %s", e)
 
+        # Leave an existing gallery intact until its complete replacement uploads.
+        # A verified text-only post can still receive the available subset below.
+        existing_has_photos = _vk_wall_item_has_photo(existing_item)
+        if partial_upload and (existing_item is None or existing_has_photos):
+            raise RuntimeError("vk_sync_partial_media_upload")
         if (
             photo_upload_expected
             and not attachments
             and not existing_has_photos
-            and not photo_upload_skipped_missing_user_token
+            and VK_USER_TOKEN
         ):
             logging.error(
                 "sync_vk_source_post blocked text-only existing post event_id=%s source_url=%s expected_photos=%s",
@@ -7708,8 +7686,12 @@ async def sync_vk_source_post(
             db,
             bot,
             attachments,
+            primary_attachments_mode=gallery_mode,
             location_marker=location_marker,
         )
+        if partial_upload:
+            # The available subset is visible, but the job must retry before recording its hash.
+            raise RuntimeError("vk_sync_partial_media_upload")
         url = existing_vk_post_url
         logging.info("sync_vk_source_post updated %s", url)
     else:
@@ -7729,7 +7711,7 @@ async def sync_vk_source_post(
                     _vk_require_media_for_telegram_source_posts()
                     and await _event_has_telegram_origin(event, db)
                 )
-                or (photo_upload_expected and not photo_upload_skipped_missing_user_token)
+                or (photo_upload_expected and VK_USER_TOKEN)
                 or has_unmaterialized_candidate
             )
         ):
@@ -7750,12 +7732,14 @@ async def sync_vk_source_post(
         except Exception:
             coauthor = None
         url = None
-        url = await _apply_afishaengagement_variant(
-            prepared_message=message,
-            prepared_photo_urls=photo_urls_for_publish,
-            phase="public_create_preflight",
-            public_only=True,
-        )
+        # CTA templates replace a single source image. A full event gallery uses its own layout.
+        if len(photo_urls_for_publish) == 1:
+            url = await _apply_afishaengagement_variant(
+                prepared_message=message,
+                prepared_photo_urls=photo_urls_for_publish,
+                phase="public_create_preflight",
+                public_only=True,
+            )
         if not url:
             url = await post_to_vk(
                 target_group_id,
@@ -7763,6 +7747,7 @@ async def sync_vk_source_post(
                 db,
                 bot,
                 attachments,
+                primary_attachments_mode=gallery_mode,
                 vk_coauthor_url=getattr(coauthor, "url", None) if coauthor else None,
                 vk_coauthor_screen_name=getattr(coauthor, "screen_name", None) if coauthor else None,
                 source_publish_url=publish_source_url,
@@ -7783,6 +7768,8 @@ async def edit_vk_post(
     attachments: list[str] | None = None,
     carousel: bool = False,
     location_marker: Mapping[str, Any] | None = None,
+    *,
+    primary_attachments_mode: str | None = None,
 ) -> bool:
     """Edit an existing VK post.
 
@@ -7848,6 +7835,7 @@ async def edit_vk_post(
         edit_token_kind = "group"
     current: list[str] = []
     post_text = ""
+    current_layout = None
     old_attachments: list[str] = []
     edit_allowed = True
     edit_block_reason: str | None = None
@@ -7868,6 +7856,7 @@ async def edit_vk_post(
         if items:
             post = items[0]
             post_text = post.get("text") or ""
+            current_layout = post.get("primary_attachments_mode")
             can_edit_flag = post.get("can_edit")
             if can_edit_flag is not None and not bool(can_edit_flag):
                 edit_allowed = False
@@ -7897,7 +7886,12 @@ async def edit_vk_post(
         current = attachments[:]
     else:
         current = old_attachments.copy()
-    if post_text == message and current == old_attachments and not location_params:
+    layout_changed = (
+        len(current) > 1 and primary_attachments_mode is not None and primary_attachments_mode != current_layout
+    )
+    if len(current) > 1 and (primary_attachments_mode or not carousel):
+        params["primary_attachments_mode"] = primary_attachments_mode or "grid"
+    if post_text == message and current == old_attachments and not location_params and not layout_changed:
         logging.info("edit_vk_post: no changes for %s", post_url)
         return False
     if not edit_allowed:
@@ -7920,10 +7914,6 @@ async def edit_vk_post(
         params["attachments"] = ",".join(current) if current else ""
     elif current:
         params["attachments"] = ",".join(current)
-    if len(current) > 1 and not carousel:
-        # Mirror post_to_vk: keep multi-photo posts as a grid unless the caller
-        # intentionally edits a swipeable carousel.
-        params["primary_attachments_mode"] = "grid"
     if not edit_token:
         raise VKAPIError(None, "VK_USER_TOKEN missing", method="wall.edit")
     try:
