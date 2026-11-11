@@ -13,6 +13,18 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## VK gallery replay and cover correction, 2026-11-10
+
+Events-only image `runcoveer/events:vk-multiphoto-replay-20261110` contains
+merged main `2c18976b47515dd1bb03121f4dbfd3ef2993e3d7` (PR 886).
+All 4,467 tracked files matched the source tree. Network-isolated preflight
+passed without provider calls; live readiness, database and scheduler passed.
+Rollback is `runcoveer/events:vk-multiphoto-20261110`; Kotopogoda is unchanged.
+Four existing posts were edited once each, then read back with the original
+text and publication time. Receipt replay made four reads and zero edits,
+posts or photo uploads. Independent live visual acceptance is still pending
+in [the gallery incident](../../docs/reports/incidents/INC-2026-11-10-vk-event-multiphoto.md).
+
 ## VK event gallery release, 2026-11-10
 
 Events-only image `runcoveer/events:vk-multiphoto-20261110` contains merged
