@@ -103,3 +103,84 @@ async def test_projection_waits_for_own_media_only(tmp_path, monkeypatch, media_
         assert calls == [expected]
     finally:
         await db.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_initial_publications_wait_for_complete_gallery_across_media_followups(tmp_path, monkeypatch):
+    """One CDN seed must not let VK/TG/Telegraph overtake the remaining source photos."""
+    from unittest.mock import AsyncMock
+    from sqlmodel import select
+    import event_media
+
+    db = main.Database(str(tmp_path / 'complete-gallery.sqlite'))
+    await db.init()
+    clock = datetime.now(timezone.utc)
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None): return clock
+    monkeypatch.setattr(main, 'datetime', Clock)
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    monkeypatch.setenv('DISABLE_ICS_JOBS', '1')
+    monkeypatch.setattr(main, 'next_tg_event_publish_run_at', AsyncMock(return_value=clock))
+    monkeypatch.setattr(event_media, 'is_event_media_cdn_url', lambda url: True)
+    calls = []
+    stage = 0
+    try:
+        async with db.get_session() as session:
+            ev = main.Event(title='Source has two photos', date='2099-01-01', time='18:00',
+                            location_name='Venue', source_text='Source', description='Event',
+                            photo_urls=['https://cdn.example/first.jpg'])
+            session.add(ev)
+            await session.flush()
+            eid = ev.id
+            await event_media.enqueue_event_media_review_job(session, eid, next_run_at=clock)
+            await session.commit()
+
+        async def media_handler(event_id, *_args):
+            nonlocal stage
+            stage += 1
+            calls.append(('media', stage))
+            async with db.get_session() as session:
+                stored = await session.get(main.Event, event_id)
+                if stage == 1:
+                    await event_media.enqueue_event_media_review_job(
+                        session, event_id, next_run_at=clock, force_followup=True)
+                else:
+                    stored.photo_urls = ['https://cdn.example/first.jpg', 'https://cdn.example/second.jpg']
+                    session.add(stored)
+                await session.commit()
+                await session.refresh(stored)
+            await main.schedule_event_update_tasks(db, stored, refresh_existing_vk=True)
+            return stage == 2
+
+        def publisher(name):
+            async def publish(event_id, *_args):
+                async with db.get_session() as session:
+                    stored = await session.get(main.Event, event_id)
+                calls.append((name, len(stored.photo_urls)))
+                return True
+            return publish
+
+        monkeypatch.setattr(main, 'JOB_HANDLERS', {
+            'event_media_review': media_handler,
+            'vk_sync': publisher('vk'),
+            'telegraph_build': publisher('telegraph'),
+            'tg_event_publish': publisher('tg'),
+        })
+        await main.schedule_event_update_tasks(db, ev)
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
+        assert calls == [('media', 1)]
+        clock += timedelta(seconds=10)
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
+        assert calls == [('media', 1), ('media', 2)]
+        clock += timedelta(seconds=10)
+        await main._run_due_jobs_once(db, None)
+        clock += timedelta(seconds=10)
+        await main._run_due_jobs_once(db, None)
+        assert sorted(calls[2:]) == [('telegraph', 2), ('tg', 2), ('vk', 2)]
+        async with db.get_session() as session:
+            jobs = list((await session.execute(select(main.JobOutbox).where(
+                main.JobOutbox.task == main.JobTask.vk_sync))).scalars())
+            assert len(jobs) == 1 and jobs[0].status == main.JobStatus.done
+    finally:
+        await db.close()

@@ -66,7 +66,8 @@ async def test_new_post_schedules_one_comment_after_public_time_without_wall_pol
                 assert kw['token_kind'] == 'service'
                 return {'response': {'items': [
                     {'id': 5, 'date': published_at-86400, 'text': 'Старый пост'},
-                    {'id': 20, 'postponed_id': 10, 'date': published_at, 'post_type': 'post'},
+                    # A prior gallery edit may have made the actual public date earlier.
+                    {'id': 20, 'postponed_id': 10, 'date': published_at-60, 'post_type': 'post'},
                 ]}}
             if method == 'docs.getWallUploadServer':
                 return {'response': {'upload_url': 'https://upload.example/file'}}

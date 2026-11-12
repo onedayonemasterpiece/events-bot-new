@@ -270,3 +270,46 @@ Retained evidence: central task directory
 `/home/dev/artifacts/events-bot-new/20261110T203533Z-vk-multiphoto-crew`, files
 `replay-cutover-receipt.json`, `accepted-vk-replay-fixed-posts.jsonl`,
 `fixed-backfill.stderr` and `fixed-replay.stderr`.
+
+
+## November 12: initial publication overtook the remaining source photos
+
+The owner clarified that multiple images must already be attached to a new
+postponed announcement, after initial source preparation. Updating the post
+later is not the acceptance criterion. A direct postponed-wall snapshot found
+five entries and one photo in each. Fresh event10888 demonstrates the race:
+nine source candidates, an initial one-photo post14154, then a five-photo public
+post14155 as pair reviews progressed. Source/media transport can deliver several
+images, but the initial preparation contract was broken.
+
+`schedule_event_update_tasks` considered media complete once the first seed was
+a CDN URL. It then omitted the media dependency, while VK's higher priority let
+it publish before existing media followups. Reuse the latest media JobOutbox
+and `event_media_review:<event_id>` dependency for VK and Telegraph; Telegram
+already depends on Telegraph. No new readiness state, queue, limiter, polling,
+retry path, media model or review policy. The existing worker owns completion
+and follows the latest media job across continuations.
+
+A related observed defect: post14154 was scheduled for20:20 UTC, but public
+post14155 had provider timestamp20:04:28 UTC during its first gallery update.
+`wall.edit` did not pass the already-read future publication timestamp; preserve
+that value in the edit. The existing fixture had explicitly asserted absence
+of publish_date on this edit and is corrected to preserve the scheduled slot.
+The calendar task's added lower bound on actual public date is removed:
+a new-post task must accept its exact binding even when the previous editor
+released it earlier than the planned time; no historical bootstrap is added.
+
+Distinguishing regressions on exact previous main ab7e2728: premature VK dispatch
+and missing postponed edit timestamp both fail, while the ordinary public edit
+control passes. With the fix, the real outbox first processes two media stages,
+then invokes each of VK/Telegraph/TG exactly once with both source images.
+An unchanged event's media dependency remains independent of other events.
+Fixtures which invoked the pair helper outside the worker now explicitly
+complete that fixture's JobOutbox before their separate VK-only assertion.
+
+Mandatory checks: tests/test_job_worker_fresh_selection.py,
+tests/test_event_media_gate.py, tests/test_vk_calendar_comments.py, ICS and
+separate CAPTCHA-pause regressions. Actual normal intake must still demonstrate
+a new postponed post with a complete unique gallery and preserved publication
+time. Green tests or an already-updated public post do not close this incident.
+Retained evidence: /home/dev/artifacts/events-bot-new/20261112T201732Z-vk-complete-gallery-before-publication-20261112.
