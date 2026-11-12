@@ -15732,9 +15732,11 @@ async def enqueue_job(
                         if task == JobTask.static_site_build
                         else payload
                     )
-                if depends_on:
+                if replace_depends_on and (job.depends_on or "") != (dep_str or ""):
+                    job.next_run_at = run_time
+                if depends_on or replace_depends_on:
                     if replace_depends_on:
-                        job.depends_on = ",".join(depends_on)
+                        job.depends_on = dep_str
                     else:
                         cur = set(filter(None, (job.depends_on or "").split(",")))
                         cur.update(depends_on)
@@ -15786,9 +15788,9 @@ async def enqueue_job(
                 }:
                     job.payload = payload
                     updated = True
-                if depends_on:
+                if depends_on or replace_depends_on:
                     if replace_depends_on:
-                        new_depends_on = ",".join(depends_on)
+                        new_depends_on = dep_str or ""
                         if (job.depends_on or "") != new_depends_on:
                             job.depends_on = new_depends_on
                             updated = True
@@ -15950,9 +15952,9 @@ async def enqueue_job(
                 job.next_run_at = next_run_at
             else:
                 job.next_run_at = now
-            if depends_on:
+            if depends_on or replace_depends_on:
                 if replace_depends_on:
-                    job.depends_on = ",".join(depends_on)
+                    job.depends_on = dep_str
                 else:
                     cur = set(filter(None, (job.depends_on or "").split(",")))
                     cur.update(depends_on)
@@ -17190,9 +17192,14 @@ async def schedule_event_update_tasks(
     )
     async with db.get_session() as session:
         media_job = (await session.execute(
-            select(JobOutbox).where(
+            select(JobOutbox).join(EventPoster, EventPoster.event_id == JobOutbox.event_id).where(
                 JobOutbox.event_id == eid,
                 JobOutbox.task == JobTask.event_media_review,
+                or_(
+                    EventPoster.review_status == "pending_review",
+                    and_(EventPoster.review_status == "approved",
+                         EventPoster.media_semantic_status != "classified"),
+                ),
             ).order_by(JobOutbox.id.desc()).limit(1)
         )).scalar_one_or_none()
     if media_job is not None and media_job.status != JobStatus.done:

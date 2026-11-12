@@ -133,6 +133,10 @@ async def test_initial_publications_wait_for_complete_gallery_across_media_follo
             session.add(ev)
             await session.flush()
             eid = ev.id
+            session.add(main.EventPoster(event_id=eid, poster_hash='first',
+                                         review_status='approved', media_semantic_status='classified'))
+            session.add(main.EventPoster(event_id=eid, poster_hash='second',
+                                         review_status='pending_review', media_semantic_status='pending'))
             await event_media.enqueue_event_media_review_job(session, eid, next_run_at=clock)
             await session.commit()
 
@@ -145,9 +149,26 @@ async def test_initial_publications_wait_for_complete_gallery_across_media_follo
                 if stage == 1:
                     await event_media.enqueue_event_media_review_job(
                         session, event_id, next_run_at=clock, force_followup=True)
+                    # An earlier dependency check may already have deferred these jobs.
+                    for waiting in (await session.execute(select(main.JobOutbox).where(
+                        main.JobOutbox.event_id == event_id,
+                        main.JobOutbox.task.in_([main.JobTask.vk_sync, main.JobTask.telegraph_build]),
+                    ))).scalars():
+                        waiting.next_run_at = clock + timedelta(days=1)
+                        session.add(waiting)
                 else:
                     stored.photo_urls = ['https://cdn.example/first.jpg', 'https://cdn.example/second.jpg']
                     session.add(stored)
+                    poster = (await session.execute(select(main.EventPoster).where(
+                        main.EventPoster.event_id == event_id,
+                        main.EventPoster.poster_hash == 'second',
+                    ))).scalar_one()
+                    poster.review_status = 'approved'
+                    poster.media_semantic_status = 'classified'
+                    session.add(poster)
+                    # The gallery is complete; optional geometry can wait until tomorrow.
+                    await event_media.enqueue_event_media_review_job(
+                        session, event_id, next_run_at=clock + timedelta(days=1), force_followup=True)
                 await session.commit()
                 await session.refresh(stored)
             await main.schedule_event_update_tasks(db, stored, refresh_existing_vk=True)

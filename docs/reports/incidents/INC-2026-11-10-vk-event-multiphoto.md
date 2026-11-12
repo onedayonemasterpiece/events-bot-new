@@ -313,3 +313,29 @@ separate CAPTCHA-pause regressions. Actual normal intake must still demonstrate
 a new postponed post with a complete unique gallery and preserved publication
 time. Green tests or an already-updated public post do not close this incident.
 Retained evidence: /home/dev/artifacts/events-bot-new/20261112T201732Z-vk-complete-gallery-before-publication-20261112.
+
+
+### Optional geometry must not delay a complete gallery, November12
+
+After PR918, ordinary new10890/10891 each had one source poster, one approved
+and semantically classified ledger row, and no pair-review rows. Yet the latest
+media followup waited until00:05 UTC because optional image_geometry usage
+had reached its existing100-call budget at02:40 UTC. The broad dependency on
+any latest media job incorrectly deferred Telegraph and VK with it. Event10892
+still had genuine pending semantic work and is a negative control.
+
+Publication now depends on the existing media job only while a source poster
+is pending pair review or an approved poster is not yet semantically classified.
+Optional geometry retains its normal job and budget. No extra state, flag,
+queue, model, limit or provider request. Existing enqueue replacement now also
+honors an empty dependency list and re-arms a pending job whose dependencies
+actually changed, instead of retaining its obsolete tomorrow deferral.
+
+The initialized two-stage worker witness fails on exact PR919: it waits for
+tomorrow's optional geometry despite two ready photos. After source preparation
+it must publish VK/Telegraph/TG once with both images, while geometry remains
+pending. It also simulates already-deferred publication rows. This preserves
+the earlier witness that a first CDN seed cannot overtake the second source.
+Evidence: retained artifact20261112T204450Z-vk-no-repeated-metrics-or-docs,
+single-photo-next-day-defer-audit.md and geometry test logs. A normal initial
+multi-photo postponed post remains the live acceptance criterion.
