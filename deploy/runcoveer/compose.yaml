@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:calendar-friendly-file-20261112
+    image: runcoveer/events:calendar-captcha-context-20261112
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
