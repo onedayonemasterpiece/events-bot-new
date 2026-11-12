@@ -359,3 +359,30 @@ existing job/fanout. Initialized linked/unlinked controls reproduce the wrong
 unlinked hold before the one-line correction and preserve the linked hold.
 No new state, queue, flag, model or budget. Included with notification fix in
 one release so import does not need another separate restart.
+
+### Ложный конфликт обложки общей программы, 13 ноября
+
+Обычный Telegram recovery 12057 создал событие 10897 из carrier 4271.
+Pair 33232 получил одним настоящим primary вызовом distinct/confidence 1.0,
+но одновременно semantic_conflict=true. Второе изображение 37530 было
+отклонено до semantic-role классификации; первоначальная публикация 14167
+снова получила одну картинку. Визуально исходники различаются: карточка
+семейной программы 22 ноября с мастер-классом и общая обложка тех же
+семейных арт-выходных 20–22 ноября. Оба исходника 1020×1280.
+
+Прежняя инструкция называла другую дату или название конфликтом без
+различения общей программы и входящего события. Уточнение существующего
+pair prompt требует несовместимости именно фактов целевого события;
+подтверждённая обложка программы с включающим диапазоном дат допустима.
+Явно несовместимые даты, цена, место и другая программа остаются конфликтом.
+Schema, модели, limiter, статусы, role policy и сохранённые review keys
+не меняются. Исторические решения автоматически не инвалидируются.
+Это семантический дефект: исправление LLM-first, без keyword overrides,
+ручного approval или выбранного public backfill.
+
+Проверка изменения должна включать настоящий вызов исправленного prompt
+через существующий общий limiter на этих двух изображениях и отрицательный
+контроль с несовместимой датой. Проверки транспорта и остальных переходов
+выполняются существующими media regression tests. До результатов, выпуска
+и следующей обычной initial multi-photo публикации критерий открыт.
+Evidence: /home/dev/artifacts/events-bot-new/20261112T224118Z-vk-parent-program-image-relevance-20261113.

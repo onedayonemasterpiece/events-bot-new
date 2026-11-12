@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Treat a visually related parent-program cover and its event card as compatible gallery images; retain rejection of incompatible event dates and unrelated programmes without resetting historical review receipts.
 - Keep automatic Telegram recovery and scheduled VK per-post progress quiet; send one Telegram recovery summary and log intermediate LLM warnings while retaining terminal alerts.
 - Complete source galleries publish without waiting for optional image geometry; dependency replacement clears an empty list and removes stale dependency deferral.
 - Suppress repeated Telegram per-post progress for completed carriers during import recovery. Temporarily disconnect automatic calendar document jobs after an isolated `docs.save` CAPTCHA; preserve photo publication and existing receipts.
