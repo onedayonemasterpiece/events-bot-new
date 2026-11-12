@@ -173,6 +173,12 @@ Defaults:
 
 Результаты: duplicate → `duplicate`; distinct → `approved`; semantic conflict/
 unrelated candidate → `rejected`; failure/uncertain → fail-closed quarantine.
+После подтверждения duplicate managed rendition сохраняет прежний приоритет,
+затем canonical выбирается по площади изображения; прежний approved статус
+служит только tie-breaker при равном качестве. Победитель становится approved,
+другая версия — duplicate с canonical ref, а обычный fanout обновляет галерею.
+Больший размер не отменяет semantic-conflict verdict: unrelated изображение
+по-прежнему отклоняется независимо от разрешения.
 После изменения projection обычный event fanout перестраивает Telegraph,
 Telegram, managed VK и static site.
 Pair worker сохраняет факт изменения projection до создания следующего
