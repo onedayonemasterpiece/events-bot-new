@@ -1,6 +1,6 @@
 # Qtickets browser runtime missing system libraries
 
-Status: open. Severity: sev2. Service: Qtickets source parser / Kaggle.
+Status: open. Registry: inc_08fb0623433bb50f278f2578. Severity: sev2. Service: Qtickets source parser / Kaggle.
 
 ## Observed impact and cause
 
@@ -25,3 +25,9 @@ Changing Qtickets notebook startup, browser dependencies or Kaggle runtime prepa
 ## Required evidence
 
 Retained task /home/dev/artifacts/events-bot-new/20261112T101438Z-vk-calendar-rollout-20261112: parser11980-boundary.log, qtickets-failure-sanitized-extract.log, qtickets-bootstrap-before.log and final controls. Remote output contains execution diagnostics, not a source-data repair authorization. Incident remains open until actual source import succeeds.
+
+## November 12 qualification and actual source recovery
+
+PR893 merged after all four required checks passed. Exact main df9ba64d92e230d7909fbb6c139f0fd15dab41a3 is fully qualified, image runcoveer/events:qtickets-browser-deps-20261112, immutable sha256:d837939f17b1415248188f153b839f0cf59629fed7fc2da82f99ca5a9bc3bd3e. All4474 source files matched, actual db31 ancestry and unchanged dependency inputs proved. Initialized isolated actual startup and inherited calendar controls passed; wrong SHA rejected before initialization; network-none HTTP503 ready=false/DBskipped at156.7seconds; owned preflight removed. Browser package management is mocked in isolated controls, not actual Kaggle acceptance. Steady runtime has not yet switched; do not claim delivery or closure.
+
+A one-time source-only recovery stages the exact merged Qtickets notebook in a private operator directory and invokes the existing normal remote runner against the confirmed failed target. SaveKernel accepted version7 with no invalid inputs. This launches no whole-parser replay and imports no already accepted source rows. Exclusive remote intent /data/operator_experiments/qtickets-browser-20261112/recovery-intent.json; reconcile it instead of repeating the driver. Normal source receipts and actual output remain required. Preserve active local resume operation11983 and the newer related-event changes; retain all original native/date/identity guards.
