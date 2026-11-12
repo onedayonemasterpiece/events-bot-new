@@ -75,7 +75,7 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
             row = await session.get(Setting, key)
             state = json.loads(row.value) if row else {}
         if state.get("hash") == fingerprint and state.get("comment_id") and state.get("text") in COMMENT_TEXTS:
-            return True
+            return False
         token = main._vk_user_token()
         if not token:
             raise RuntimeError("VK calendar document requires the configured user actor")
@@ -104,6 +104,10 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
             posts = response.get("items", []) if isinstance(response, dict) else response
         if not posts or posts[0].get("post_type", "post") != "post" or posts[0].get("date", 0) > datetime.now(timezone.utc).timestamp():
             return False  # Existing live-ID scan calls us again when the item is public.
+        # Use actual publication time; the same post keeps its delay on retries.
+        delay = random.Random(f"{owner}_{post}").randint(300, 900)
+        if posts[0].get("date", 0) + delay > datetime.now(timezone.utc).timestamp():
+            return False
         # The owner requested today's backfill, not older wall history.
         if posts[0].get("date", 0) < datetime(2026, 11, 12, tzinfo=main.LOCAL_TZ).timestamp():
             return False

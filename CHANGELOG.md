@@ -7,6 +7,7 @@
 - Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
 
 ### Fixed
+- Calendar comments run only through the periodic live scan, with a stable 5–15 minute delay after actual publication and one changed comment per pass; postponed and newly published posts are not commented immediately.
 - Reviewed event-gallery changes requeue the existing managed VK sync after pair or semantic review, allowing approved additions and higher-resolution replacements to update the same post automatically.
 - Calendar live scans reuse the exact already-fetched VK wall item, avoiding another user-token read for each match while preserving publication-date cutoff and delivery receipts.
 - Existing event-media downloads encode international hostnames with IDNA, allowing full-resolution Yantar Hall posters to reach the ordinary CDN and review path instead of failing before HTTP transport.

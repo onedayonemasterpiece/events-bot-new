@@ -16314,7 +16314,8 @@ async def _reconcile_recent_managed_vk_live_urls(
         if not _vk_captcha_needed:
             try:
                 from vk_calendar_comments import ensure_calendar_comment
-                await ensure_calendar_comment(db, ev, ev.source_vk_post_url, candidate_item=matches[0])
+                if await ensure_calendar_comment(db, ev, ev.source_vk_post_url, candidate_item=matches[0]):
+                    break
             except Exception as exc:
                 logging.exception("vk.calendar_comment failed event_id=%s; next live scan will retry", event_id)
                 if isinstance(exc, VKAPIError) and exc.code == 14:
@@ -23903,8 +23904,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                     same_day_group,
                     vk_url=str(ev.source_vk_post_url or existing_vk_post_url),
                 )
-            from vk_calendar_comments import ensure_calendar_comment
-            await ensure_calendar_comment(db, ev, existing_vk_post_url)
             return
         if post_exists:
             logging.warning(
@@ -23955,8 +23954,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             same_day_group,
             vk_url=vk_url,
         )
-        from vk_calendar_comments import ensure_calendar_comment
-        await ensure_calendar_comment(db, event_for_notice or ev, vk_url)
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:
             await _send_or_update_partner_admin_notice(

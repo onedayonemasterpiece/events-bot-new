@@ -20,3 +20,5 @@ instead of repeating a user-token `wall.getById` before the rollout cutoff.
 Standalone publication and mismatched items retain the existing read. No
 persistent cache, actor change or CAPTCHA bypass is introduced; this removes
 redundant reads and does not establish that VK will stop issuing challenges.
+
+Owner decision, November 12 follow-up: delivery is deferred from publication. Only the existing periodic live-wall scan sends calendar comments, after the provider confirms that the post is public. Each post has a stable, nonuniform delay of 5–15 minutes from its actual publication timestamp; the existing five-minute scan can add up to five minutes. A postponed item is never commented before publication. At most one changed comment is delivered per scan; unchanged receipts return without consuming that delivery. No extra scheduler, queue, persisted timer or immediate publication callback is added.
