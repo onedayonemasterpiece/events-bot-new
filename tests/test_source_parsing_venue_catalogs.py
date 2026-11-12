@@ -118,3 +118,34 @@ def test_yantarhall_year_rollover_and_terminal_page():
     assert events[0]["parsed_date"] == "2027-01-03"
     assert yantarhall_next_page(html) is None
 
+
+def test_yantarhall_gala_uses_desktop_poster_before_mobile_duplicate():
+    # Real catalogue pair for event10846: the mobile card precedes its tile.
+    href = "/afisha/kontsert-k-100-letiyu-galiny-vishnevskoy 28 00 16/"
+    mobile = "/upload/iblock/e7b/59v776w5jnvfrsja4rp775ljdlgu46ut/366kh450_2.jpg"
+    desktop = "/upload/iblock/311/exmq43om3jjfv9hmb52gec4jsyjaabxx/1800kh900_2.jpg"
+    html = f"""
+    <ul id="ajax-table-list"><li class="table-list" data-event-link="{href}">
+      <div class="event-date"><p class="event-day">28</p>
+        <p class="event-month">Ноября</p><p class="event-time">16:00</p></div>
+      <div class="image-mobile" style="background: url({mobile})"></div>
+      <a class="event-title-text" href="{href}">Галина, GALA!</a>
+    </li></ul>
+    <ul id="ajax-tiles-list"><li class="tiles-list" data-event-link="{href}">
+      <div class="event-image" style="background-image: url('{desktop}')"></div>
+      <a class="event-title-text" href="{href}">Галина, GALA!</a>
+      <div class="event-date"><p class="event-date-month">28 Ноября</p>
+        <p class="event-time">16:00</p></div>
+    </li></ul>
+    """
+    events = parse_yantarhall_html(html, today=date(2026, 11, 12))
+
+    assert len(events) == 1
+    assert events[0]["photos"] == ["https://янтарьхолл.рф" + desktop]
+    assert (events[0]["parsed_date"], events[0]["parsed_time"]) == ("2026-11-28", "16:00")
+
+    # A catalogue/AJAX page exposing only the mobile view still supplies it.
+    mobile_only = html.split('<ul id="ajax-tiles-list">')[0]
+    assert parse_yantarhall_html(mobile_only, today=date(2026, 11, 12))[0]["photos"] == [
+        "https://янтарьхолл.рф" + mobile
+    ]
