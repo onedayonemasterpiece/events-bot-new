@@ -16315,9 +16315,10 @@ async def _reconcile_recent_managed_vk_live_urls(
             from vk_calendar_comments import ensure_calendar_comment
             await ensure_calendar_comment(db, ev, ev.source_vk_post_url)
         except Exception as exc:
+            logging.exception("vk.calendar_comment failed event_id=%s; next live scan will retry", event_id)
             if isinstance(exc, VKAPIError) and exc.code == 14:
                 await vk_captcha_pause_outbox(db)
-            logging.exception("vk.calendar_comment failed event_id=%s; next live scan will retry", event_id)
+                break
         if recovered >= 10:
             break
     return recovered

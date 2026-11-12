@@ -6,6 +6,7 @@ import json
 import logging
 import random
 import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 
 from sqlmodel import select
@@ -64,8 +65,9 @@ async def ensure_calendar_comment(db, event, post_url):
         events = [e for e in events if not e.silent and e.lifecycle_status == "active" and e.identity_status != "merged"]
         if not events:
             return False
-        filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', " ", events[0].title)
-        filename = " ".join(filename.split())[:120].rstrip(" .") + ".ics"
+        filename = "".join(c for c in events[0].title if unicodedata.category(c) not in {"So", "Sk", "Cf"} and c not in "\ufe0e\ufe0f\u20e3")
+        filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', " ", filename)
+        filename = (" ".join(filename.split())[:120].rstrip(" .") or "Событие") + ".ics"
         body = await calendar_bytes(db, events)
         fingerprint = hashlib.sha256(filename.encode("utf-8") + b"\0" + body).hexdigest()
         key = f"vk_calendar_comment:{owner}:{post}"

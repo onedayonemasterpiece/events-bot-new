@@ -36,10 +36,11 @@ async def test_bad_date_is_not_invented():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('title,filename', [('Лекция','Лекция.ics'), ('🎨 👩🏽‍🎨 🇷🇺 Лекция ❤️','Лекция.ics'), ('1️⃣ C++ — 2026','1 C++ — 2026.ics'), ('🎶','Событие.ics')])
 @pytest.mark.parametrize('adopt',[False,True])
-async def test_delivery_reuses_document_after_comment_failure_and_updates_without_duplicate(tmp_path,monkeypatch,adopt):
+async def test_delivery_reuses_document_after_comment_failure_and_updates_without_duplicate(tmp_path,monkeypatch,adopt,title,filename):
     db=Database(str(tmp_path/'db.sqlite'));await db.init()
-    ev=event()
+    ev=event(title=title)
     async with db.get_session() as session:
         session.add(ev);await session.commit()
     monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
@@ -56,7 +57,7 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
             assert 'group_id' not in params  # Actual group-storage access was denied.
             value={'upload_url':'https://upload.example/file'}
         elif method=='docs.save':
-            assert params['title']=='Лекция.ics'
+            assert params['title']==filename
             value={'doc':{'id':30,'owner_id':20,'ext':'ics'}}
         elif method=='wall.createComment':
             if fail[0]:fail[0]=False;raise RuntimeError('Lost comment response')
@@ -184,3 +185,26 @@ async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tm
     if captcha:pause.assert_awaited_once_with(db)
     else:pause.assert_not_awaited()
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_calendar_scan_stops_after_first_captcha_for_shared_post(tmp_path,monkeypatch):
+    from unittest.mock import AsyncMock
+    db=Database(str(tmp_path/'db.sqlite'));await db.init()
+    try:
+        async with db.get_session() as session:
+            session.add(event(date='2099-11-14'))
+            session.add(event(id=2,date='2099-11-14',time='20:00'))
+            await session.commit()
+        monkeypatch.setattr(main,'VK_EVENTS_GROUP_ID','231920894')
+        monkeypatch.setattr(main,'VK_SERVICE_TOKEN','read-fixture')
+        monkeypatch.setattr(main,'_vk_api',AsyncMock(return_value={'response':{'items':[{'id':10,'post_type':'post'}]}}))
+        delivery=AsyncMock(side_effect=main.VKAPIError(14,'Captcha needed'))
+        pause=AsyncMock()
+        monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
+        monkeypatch.setattr(main,'vk_captcha_pause_outbox',pause)
+        assert await main._reconcile_recent_managed_vk_live_urls(db,bot=None)==0
+        assert delivery.await_count==1
+        pause.assert_awaited_once_with(db)
+    finally:
+        await db.close()
