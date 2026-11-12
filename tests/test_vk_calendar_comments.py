@@ -184,3 +184,26 @@ async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tm
     if captcha:pause.assert_awaited_once_with(db)
     else:pause.assert_not_awaited()
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_calendar_scan_stops_after_first_captcha_for_shared_post(tmp_path,monkeypatch):
+    from unittest.mock import AsyncMock
+    db=Database(str(tmp_path/'db.sqlite'));await db.init()
+    try:
+        async with db.get_session() as session:
+            session.add(event(date='2099-11-14'))
+            session.add(event(id=2,date='2099-11-14',time='20:00'))
+            await session.commit()
+        monkeypatch.setattr(main,'VK_EVENTS_GROUP_ID','231920894')
+        monkeypatch.setattr(main,'VK_SERVICE_TOKEN','read-fixture')
+        monkeypatch.setattr(main,'_vk_api',AsyncMock(return_value={'response':{'items':[{'id':10,'post_type':'post'}]}}))
+        delivery=AsyncMock(side_effect=main.VKAPIError(14,'Captcha needed'))
+        pause=AsyncMock()
+        monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
+        monkeypatch.setattr(main,'vk_captcha_pause_outbox',pause)
+        assert await main._reconcile_recent_managed_vk_live_urls(db,bot=None)==0
+        assert delivery.await_count==1
+        pause.assert_awaited_once_with(db)
+    finally:
+        await db.close()
