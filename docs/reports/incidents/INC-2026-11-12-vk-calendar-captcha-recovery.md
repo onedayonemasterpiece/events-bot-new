@@ -55,3 +55,33 @@ and legacy receipt migration, delete/create on an actual time change, and
 no duplicate write after a lost creation response. Existing CAPTCHA and deferred
 publication checks remain mandatory. Live replacement and ordinary multiphoto
 acceptance remain open while the owner prepares replacement credentials.
+
+## Containment after credential replacement, 19:07 UTC
+
+Exact main `3facbcacd947f054c2e1ebf1308f973dedd96a16` delivered the delayed,
+content-only comment changes with a replacement primary credential. Source
+verification, isolated preflight and live health passed. The actual process
+loaded the new credential; its authorization had previously succeeded from the
+production host. No broad token matrix or manual publication was performed.
+
+The ordinary scan received upload-document HTTP 504 for events 10872 and 10871,
+then real `docs.save` code 14 for event 10535 at 19:07:21 UTC. The first two
+failures continued to another calendar candidate because the previous pacing
+stopped only on success or CAPTCHA. No comments were delivered; normal photo
+jobs 154623/154705 paused under the existing global challenge handling.
+
+Calendar and photo upload use the same user credential. The last challenged
+method does not prove that VK's restriction is method-scoped; do not bypass the
+cache or rotate actors. Temporary containment therefore subtracts only the
+automatic calendar invocation from live-ID reconciliation. Service-token
+postponed-ID recovery, existing challenge cooldown/probe/resume, media publishing
+and calendar receipts remain intact. Automatic calendar comments are unavailable
+until a legitimate working document route is verified. This is a partial
+mitigation, not full feature or multiphoto acceptance.
+
+Mandatory regression: exact published-ID recovery must not invoke the optional
+calendar writer or add a new challenge pause. Existing marker-scoped recovery
+and cached-CAPTCHA guards must still pass; ordinary photo delivery is verified
+only after that existing recovery, never by ignoring a live challenge. Retained
+implementation tests continue to verify delayed delivery, content-only receipts
+and replacement safety. Live acceptance still requires real photo attachments.

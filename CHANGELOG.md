@@ -9,6 +9,7 @@
 - Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
 
 ### Fixed
+- Temporarily disconnect automatic calendar writes after a replacement credential still receives docs.save CAPTCHA; preserve ordinary photo jobs, service live-ID reconciliation, and existing challenge recovery without bypass.
 - Calendar replacement GUIDs use the saved document receipt, keeping retries stable while distinguishing a return to an earlier event time from a deleted comment.
 - Calendar comments ignore cosmetic template/filename changes; migrate existing receipts without VK calls and replace comments only when calendar content changes, preserving deferred delivery.
 - Calendar comments run only through the periodic live scan, with a stable 5–15 minute delay after actual publication and one changed comment per pass; postponed and newly published posts are not commented immediately.
