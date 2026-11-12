@@ -14,23 +14,12 @@ from bs4 import BeautifulSoup
 def ensure_playwright():
     try:
         from playwright.sync_api import sync_playwright
-        return True
     except ImportError:
         print("Installing Playwright...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "playwright", "-q"])
-        subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
-        # Install system dependencies
-        subprocess.run(["apt-get", "update"], capture_output=True)
-        subprocess.run(["apt-get", "install", "-y", "libglib2.0-0", "libnss3", "libnspr4", "libatk1.0-0",
-                        "libatk-bridge2.0-0", "libcups2", "libdrm2", "libdbus-1-3", "libxcb1",
-                        "libxkbcommon0", "libx11-6", "libxcomposite1", "libxdamage1", "libxext6",
-                        "libxfixes3", "libxrandr2", "libgbm1", "libpango-1.0-0", "libcairo2",
-                        "libasound2"], capture_output=True)
-        try:
-            from playwright.sync_api import sync_playwright
-            return True
-        except:
-            return False
+    # Python import alone does not prove Chromium's system libraries exist.
+    subprocess.check_call([sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"])
+    return True
 
 HAS_PLAYWRIGHT = ensure_playwright()
 

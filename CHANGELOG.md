@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+- Fixed: Qtickets installs Chromium and its checked system dependencies even when the Playwright Python package is already present. Missing browser libraries now fail during preparation instead of silently claiming readiness.
+
 - Fixed: the existing Kaggle builder can return current related-event JSON with `STATIC_SITE_BUILD_PROFILE=related-only`, without Astro or site publication. Failed remote builds no longer retain their active claim indefinitely and block vector synchronization.
 
 - Fixed: VK gallery backfill replay only reads the recorded wall posts. Receipts use the photo IDs returned by the wall after the edit, preserving their order when VK assigns community-owned copies. An omitted layout no longer re-uploads a complete managed gallery. Tall carousel covers fit the observed 2:3 wall frame with their footer intact.
