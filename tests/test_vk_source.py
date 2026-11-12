@@ -2161,7 +2161,7 @@ async def test_sync_vk_source_post_does_not_preserve_old_hashtag_tail(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monkeypatch):
+async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monkeypatch, calendar_comment_delivery):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
@@ -2194,6 +2194,7 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
 
     await main.job_sync_vk_source_post(event_id, db, None)
+    calendar_comment_delivery.assert_awaited_once()
 
     assert calls == [("New title", "Same body", False)]
     async with db.get_session() as session:
@@ -2203,7 +2204,7 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_job_sync_vk_source_post_resyncs_when_calendar_projection_is_removed(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, calendar_comment_delivery
 ):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -2244,6 +2245,7 @@ async def test_job_sync_vk_source_post_resyncs_when_calendar_projection_is_remov
     )
 
     await main.job_sync_vk_source_post(event_id, db, None)
+    calendar_comment_delivery.assert_awaited_once()
 
     assert calls == [(event_id, "Same body", None)]
     async with db.get_session() as session:
@@ -2253,7 +2255,7 @@ async def test_job_sync_vk_source_post_resyncs_when_calendar_projection_is_remov
 
 
 @pytest.mark.asyncio
-async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path, monkeypatch):
+async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path, monkeypatch, calendar_comment_delivery):
     db = main.Database(str(tmp_path / "db.sqlite"))
     await db.init()
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "231920894")
@@ -2304,6 +2306,7 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
     monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
 
     await main.job_sync_vk_source_post(event_id, db, None)
+    calendar_comment_delivery.assert_awaited_once()
 
     assert calls == [(None, "Same body")]
     async with db.get_session() as session:
@@ -2575,3 +2578,12 @@ async def test_sync_vk_source_post_updates_without_append(monkeypatch):
     assert "old text" not in msg
     assert "updated text" in msg
     assert main.CONTENT_SEPARATOR not in msg
+
+
+@pytest.fixture
+def calendar_comment_delivery(monkeypatch):
+    from unittest.mock import AsyncMock
+    import vk_calendar_comments
+    delivery = AsyncMock(return_value=True)
+    monkeypatch.setattr(vk_calendar_comments, "ensure_calendar_comment", delivery)
+    return delivery

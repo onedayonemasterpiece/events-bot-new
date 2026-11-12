@@ -1,0 +1,114 @@
+import json
+from datetime import date
+
+import pytest
+from sqlmodel import select
+import main
+from db import Database
+from models import Event, Setting
+import vk_calendar_comments as comments
+
+
+def event(**kw):
+    values=dict(id=1,title='Лекция',date='2026-11-14',time='18:00',location_name='Музей',description='Программа',source_text='Исходник',source_vk_post_url='https://vk.com/wall-231920894_10')
+    values.update(kw)
+    return Event(**values)
+
+
+@pytest.mark.asyncio
+async def test_calendar_preserves_time_and_explicit_all_day_span():
+    timed=event()
+    exhibition=event(id=2,time='',date='2026-11-14',end_date='2026-11-16')
+    raw=await comments.calendar_bytes(None,[timed,exhibition])
+    assert raw==await comments.calendar_bytes(None,[timed,exhibition])
+    parts=main.Calendar.from_ical(raw).walk('VEVENT')
+    assert parts[0].decoded('DTSTART').hour==18
+    assert parts[1].decoded('DTSTART')==date(2026,11,14)
+    assert parts[1].decoded('DTEND')==date(2026,11,17)
+    assert str(parts[0]['UID'])!=str(parts[1]['UID'])
+
+
+@pytest.mark.asyncio
+async def test_bad_date_is_not_invented():
+    with pytest.raises(ValueError,match='exact event date'):
+        await comments.calendar_bytes(None,[event(date='')])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('adopt',[False,True])
+async def test_delivery_reuses_document_after_comment_failure_and_updates_without_duplicate(tmp_path,monkeypatch,adopt):
+    db=Database(str(tmp_path/'db.sqlite'));await db.init()
+    ev=event()
+    async with db.get_session() as session:
+        session.add(ev);await session.commit()
+    monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
+    monkeypatch.setattr(main,'_vk_user_token',lambda:'fixture')
+    calls=[];fail=[not adopt]
+    async def api(method,params,**kwargs):
+        calls.append((method,params))
+        if method=='wall.getById':value={'items':[{'id':10,'post_type':'post'}]}
+        elif method=='wall.getComments':value={'count':int(adopt),'items':[{'id':90,'from_id':-231920894,'attachments':[{'type':'doc','doc':{'ext':'ics'}}]}] if adopt else []}
+        elif method=='docs.getWallUploadServer':
+            assert 'group_id' not in params  # Actual group-storage access was denied.
+            value={'upload_url':'https://upload.example/file'}
+        elif method=='docs.save':value={'doc':{'id':30,'owner_id':20,'ext':'ics'}}
+        elif method=='wall.createComment':
+            if fail[0]:fail[0]=False;raise RuntimeError('Lost comment response')
+            value={'comment_id':90}
+        elif method=='wall.editComment':value=1
+        else:raise AssertionError(method)
+        return {'response':value}
+    monkeypatch.setattr(main,'_vk_api',api)
+    class Response:
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        def raise_for_status(self):pass
+        async def json(self,**kw):return {'file':'uploaded-file'}
+    class HTTP:
+        def post(self,*args,**kw):return Response()
+    monkeypatch.setattr(main,'get_http_session',lambda:HTTP())
+    if not adopt:
+        with pytest.raises(RuntimeError,match='Lost comment response'):
+            await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert sum(m=='docs.save' for m,_ in calls)==1
+    creates=[p for m,p in calls if m=='wall.createComment']
+    if adopt:assert not creates
+    else:assert len(creates)==2 and creates[0]['guid']==creates[1]['guid']
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    before=len(calls)
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert len(calls)==before
+    async with db.get_session() as session:
+        row=await session.get(Event,1);row.time='19:00';session.add(row);await session.commit()
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert calls[-1][0]=='wall.editComment'
+    async with db.get_session() as session:
+        state=json.loads((await session.execute(select(Setting))).scalars().one().value)
+    assert state['text'] in comments.COMMENT_TEXTS
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_external_wall_is_never_modified(monkeypatch):
+    monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
+    assert not await comments.ensure_calendar_comment(None,event(),'https://vk.com/wall-999_10')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state',['postponed','silent','cancelled'])
+async def test_nonpublic_or_hidden_event_has_no_document_upload(tmp_path,monkeypatch,state):
+    db=Database(str(tmp_path/'db.sqlite'));await db.init()
+    ev=event(silent=state=='silent',lifecycle_status='cancelled' if state=='cancelled' else 'active')
+    async with db.get_session() as session:
+        session.add(ev);await session.commit()
+    monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
+    monkeypatch.setattr(main,'_vk_user_token',lambda:'fixture')
+    async def api(method,params,**kwargs):
+        assert state=='postponed' and method=='wall.getById'
+        return {'response':{'items':[{'id':10,'post_type':'postpone'}]}}
+    monkeypatch.setattr(main,'_vk_api',api)
+    assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    async with db.get_session() as session:
+        assert not (await session.execute(select(Setting))).scalars().all()
+    await db.close()
