@@ -17202,7 +17202,7 @@ async def schedule_event_update_tasks(
                 JobOutbox.task == JobTask.event_media_review,
                 or_(
                     EventPoster.review_status == "pending_review",
-                    and_(EventPoster.review_status == "approved",
+                    and_(bool(ev.linked_event_ids), EventPoster.review_status == "approved",
                          EventPoster.media_semantic_status != "classified"),
                 ),
             ).order_by(JobOutbox.id.desc()).limit(1)
