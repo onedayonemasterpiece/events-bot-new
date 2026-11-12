@@ -1,5 +1,7 @@
 # Changelog
 
+- Fix venue-review evidence citations: request one contiguous source quote when venue and address are on separate lines; keep grounding validation unchanged.
+
 - Fix Kaggle account migration to richss777 across runtime defaults and notebook metadata; stop duplicate pushes after invalid dataset-source responses.
 
 ## [Unreleased]

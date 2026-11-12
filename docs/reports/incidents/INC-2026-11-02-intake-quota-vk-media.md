@@ -2452,3 +2452,30 @@ not production configuration and do not prove resolution of a long-held writer.
 Verify the next actual ordinary VK claim and terminal source/carrier receipts
 before accepting live recovery. Retained evidence is in
 `/home/dev/artifacts/events-bot-new/20261112T135027Z-calendar-friendly-file-20261112/`.
+
+
+### 2026-11-12 — Boyko venue citation prevents accepted source import
+
+Boyko post `https://vk.com/wall394310405_3967`, inbox 94719 / packet 28276,
+reached normal `_process_vk_inbox_row` in ops 12030. Attempt 12691 is typed
+EVENTS_FOUND with complete 1/1 OCR, no missing/truncated evidence. The poster
+explicitly supplies 18 November 2026, 19:00, Pugacheva 13, admission 500 RUB;
+the post names the library of hotel Chaika. No Event was created: child 28554
+failed `location_grounding_review:llm_response_invalid`.
+
+A read-only exact-candidate replay isolated a malformed reviewer citation:
+both responses stitched a venue sentence and a distant address line with
+`...`. The existing contiguous substring validator correctly rejected both.
+This is a reviewer output-contract issue, not missing evidence or a reason to
+weaken semantic/grounding checks. The existing prompt now requests exactly one
+contiguous source quote, forbids stitched quotations, and explains that one
+quote need not repeat both fields. Venue/address values remain independently
+validated against the whole source. No retry, deterministic venue rule, schema,
+queue or alternate parser was added.
+
+Acceptance requires the actual ordinary carrier/packet terminal and exact
+EventSource plus canonical facts after delivery; a prompt probe or green CI
+alone is insufficient. Evidence is retained under the existing central
+`20261104T093210Z-guide-digest-vk-quality-20261104` task: original and fixed
+`boyko-location-*-probe-20261112.log`, source catchup log and provider audit.
+Prior accepted carriers and unavailable Golubkov video evidence are unrelated.

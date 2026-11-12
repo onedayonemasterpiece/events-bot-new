@@ -480,3 +480,30 @@ def test_reformatted_source_address_requests_verbatim_repair(monkeypatch):
         candidate, trigger_reason='vk_location_not_in_post')) == (True, 'llm_repair')
     assert candidate.location_name == fragment
     assert candidate.location_address is None
+
+
+def test_repair_quotes_one_contiguous_fragment_when_venue_and_address_are_separate(monkeypatch):
+    candidate = _candidate(
+        'Гостиница «Чайка»',
+        'Встреча пройдет в библиотеке отеля «Чайка».\nАДРЕС: ПУГАЧЕВА, 13',
+    )
+    candidate.location_address = 'Пугачева 13'
+
+    async def fake_ask(prompt, *_args, **_kwargs):
+        assert 'один непрерывный' in prompt
+        assert 'Не склеивай разные фрагменты' in prompt
+        assert 'процитируй только один из них' in prompt
+        return {
+            'decision': 'repair', 'confidence': 1.0,
+            'location_name': 'библиотеке отеля «Чайка»',
+            'location_address': 'ПУГАЧЕВА, 13', 'city': 'Калининград',
+            'evidence_quote': 'Встреча пройдет в библиотеке отеля «Чайка».',
+            'reason_short': 'Venue and address appear on separate source lines.',
+        }
+
+    monkeypatch.setattr(seu, '_ask_gemma_json', fake_ask)
+    assert asyncio.run(seu._llm_review_candidate_location_grounding(
+        candidate, trigger_reason='explicit_location_role_conflicts_candidate'
+    )) == (True, 'llm_repair')
+    assert candidate.location_name == 'библиотеке отеля «Чайка»'
+    assert candidate.location_address == 'ПУГАЧЕВА, 13'
