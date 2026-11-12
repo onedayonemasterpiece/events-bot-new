@@ -659,6 +659,19 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
     event = await session.get(Event, int(event_id))
     if event is None:
         return 0
+    excluded = select(EventPoster.id).where(
+        EventPoster.event_id == int(event_id),
+        EventPoster.review_status.notin_((APPROVED, PENDING_REVIEW)),
+    )
+    await session.execute(
+        update(EventMediaPairReview).where(
+            EventMediaPairReview.event_id == int(event_id),
+            EventMediaPairReview.status.in_(("pending", "deferred")),
+            or_(EventMediaPairReview.left_poster_id.in_(excluded),
+                EventMediaPairReview.right_poster_id.in_(excluded)),
+        ).values(status="cancelled", reason_code="poster_already_excluded",
+                 updated_at=datetime.now(timezone.utc))
+    )
     rows = (
         await session.execute(
             select(EventPoster)
@@ -2151,6 +2164,7 @@ async def _reconcile_pending_posters(session: Any, event_id: int) -> int:
             await session.execute(
                 select(EventMediaPairReview).where(
                     EventMediaPairReview.event_id == int(event_id),
+                    EventMediaPairReview.status != "cancelled",
                     or_(
                         EventMediaPairReview.left_poster_id == int(poster.id or 0),
                         EventMediaPairReview.right_poster_id == int(poster.id or 0),
@@ -2538,6 +2552,14 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
 
         review.provider_calls = int(review.provider_calls or 0) + provider_calls
         review.updated_at = datetime.now(timezone.utc)
+        if provider_calls == 0 and error == "media_review_primary_budget_exhausted":
+            # Admission is not a review attempt: otherwise three busy days
+            # permanently quarantine an image the model has never seen.
+            review.attempts = max(0, int(review.attempts or 0) - 1)
+            logger.info(
+                "event_media_pair_budget_deferred event_id=%s review_id=%s attempts=%s",
+                event_id, review.id, review.attempts,
+            )
         max_attempts = _env_int("EVENT_MEDIA_REVIEW_MAX_UNCERTAIN_ATTEMPTS", 3, lo=1, hi=20)
         if decision and decision["decision"] in {"duplicate", "distinct"}:
             survivor = _choose_survivor(left, right)
