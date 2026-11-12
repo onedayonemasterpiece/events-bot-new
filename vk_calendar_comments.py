@@ -95,6 +95,9 @@ async def ensure_calendar_comment(db, event, post_url):
         posts = response.get("items", []) if isinstance(response, dict) else response
         if not posts or posts[0].get("post_type", "post") != "post" or posts[0].get("date", 0) > datetime.now(timezone.utc).timestamp():
             return False  # Existing live-ID scan calls us again when the item is public.
+        # The owner requested today's backfill, not older wall history.
+        if posts[0].get("date", 0) < datetime(2026, 11, 12, tzinfo=main.LOCAL_TZ).timestamp():
+            return False
         # Recover an acknowledged-but-unrecorded comment, and adopt the owner's pilot.
         if not state.get("comment_id"):
             offset = 0

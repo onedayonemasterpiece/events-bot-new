@@ -46,7 +46,7 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     calls=[];fail=[not adopt]
     async def api(method,params,**kwargs):
         calls.append((method,params))
-        if method=='wall.getById':value={'items':[{'id':10,'post_type':'post'}]}
+        if method=='wall.getById':value={'items':[{'id':10,'post_type':'post','date':1794484800}]}
         elif method=='wall.getComments':value={'count':int(adopt),'items':[{'id':90,'from_id':-231920894,'attachments':[{'type':'doc','doc':{'ext':'ics'}}]}] if adopt else []}
         elif method=='docs.getWallUploadServer':
             assert 'group_id' not in params  # Actual group-storage access was denied.
