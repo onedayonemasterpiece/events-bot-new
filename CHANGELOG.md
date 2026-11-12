@@ -9,6 +9,7 @@
 - Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
 
 ### Fixed
+- Calendar replacement GUIDs use the saved document receipt, keeping retries stable while distinguishing a return to an earlier event time from a deleted comment.
 - Calendar comments ignore cosmetic template/filename changes; migrate existing receipts without VK calls and replace comments only when calendar content changes, preserving deferred delivery.
 - Calendar comments run only through the periodic live scan, with a stable 5–15 minute delay after actual publication and one changed comment per pass; postponed and newly published posts are not commented immediately.
 - Reviewed event-gallery changes requeue the existing managed VK sync after pair or semantic review, allowing approved additions and higher-resolution replacements to update the same post automatically.

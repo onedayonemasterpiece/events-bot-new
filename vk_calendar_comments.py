@@ -157,7 +157,7 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
                 await api("wall.deleteComment", owner_id=owner, comment_id=state["comment_id"])
                 state.pop("comment_id")
                 await persist()
-            result = await api("wall.createComment", post_id=post, from_group=abs(owner), guid=f"calendar:{owner}:{post}:{fingerprint}", **params)
+            result = await api("wall.createComment", post_id=post, from_group=abs(owner), guid=f"calendar:{owner}:{post}:{'_'.join(state['document'].split('_', 2)[:2])}", **params)
             state["comment_id"] = result["comment_id"]
         state["hash"] = fingerprint
         await persist()
