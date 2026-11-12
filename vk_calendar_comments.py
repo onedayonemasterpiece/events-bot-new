@@ -51,7 +51,7 @@ async def calendar_bytes(db, events):
     return calendar.to_ical()
 
 
-async def ensure_calendar_comment(db, event, post_url):
+async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
     import aiohttp
     import main
     ids = main._vk_owner_and_post_id(str(post_url or ""))
@@ -96,8 +96,12 @@ async def ensure_calendar_comment(db, event, post_url):
                 session.add(row)
                 await session.commit()
 
-        response = await api("wall.getById", posts=f"{owner}_{post}")
-        posts = response.get("items", []) if isinstance(response, dict) else response
+        posts = []
+        if candidate_item and int(candidate_item.get("id") or 0) == post and int(candidate_item.get("owner_id") or 0) == owner:
+            posts = [candidate_item]
+        if not posts:
+            response = await api("wall.getById", posts=f"{owner}_{post}")
+            posts = response.get("items", []) if isinstance(response, dict) else response
         if not posts or posts[0].get("post_type", "post") != "post" or posts[0].get("date", 0) > datetime.now(timezone.utc).timestamp():
             return False  # Existing live-ID scan calls us again when the item is public.
         # The owner requested today's backfill, not older wall history.
