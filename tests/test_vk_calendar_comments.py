@@ -112,6 +112,12 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     assert len(calls)==before_calls
     assert sum(m=='docs.save' for m,_ in calls)==before_saves
     assert not any(m=='wall.editComment' for m,_ in calls)
+    async with db.get_session() as session:
+        row=await session.get(Event,1);row.time='18:00';session.add(row);await session.commit()
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    latest_create=next(p for m,p in reversed(calls) if m=='wall.createComment')
+    assert latest_create['guid']!=creates[0]['guid']  # Restoring the old time is a new document version.
+    assert len(live_comments)==1
     monkeypatch.setattr(comments,'COMMENT_TEXTS',('Другой шаблон',))
     before=len(calls)
     assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
