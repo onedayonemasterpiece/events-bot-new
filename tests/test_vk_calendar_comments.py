@@ -208,3 +208,64 @@ async def test_calendar_scan_stops_after_first_captcha_for_shared_post(tmp_path,
         pause.assert_awaited_once_with(db)
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_known_captcha_repeated_calendar_scan_does_not_renew_pause(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import AsyncMock
+    from models import JobOutbox, JobStatus, JobTask
+
+    db = Database(str(tmp_path / 'captcha-cadence.sqlite'))
+    await db.init()
+    original_marker = 'captcha_wait:original'
+    original_at = datetime.now(timezone.utc) - timedelta(minutes=9)
+    real_api = main._vk_api
+    pauses = AsyncMock(wraps=main.vk_captcha_pause_outbox)
+    user_cached_calls = []
+    service_reads = []
+    try:
+        async with db.get_session() as session:
+            session.add(event(date='2099-11-14'))
+            await session.flush()
+            session.add(JobOutbox(event_id=1, task=JobTask.vk_sync, status=JobStatus.paused,
+                                  last_error=original_marker, updated_at=original_at,
+                                  next_run_at=original_at + timedelta(days=3650)))
+            await session.commit()
+        monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+        monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
+        monkeypatch.setattr(main, 'VK_SERVICE_TOKEN', 'read-fixture')
+        monkeypatch.setattr(main, '_vk_user_token', lambda: 'user-fixture')
+        monkeypatch.setattr(main, '_vk_captcha_needed', True)
+        monkeypatch.setattr(main, '_vk_captcha_resume', None)
+        monkeypatch.setattr(main, 'get_bot', lambda: None)
+        monkeypatch.setattr(comments, 'calendar_bytes', AsyncMock(return_value=b'calendar'))
+        monkeypatch.setattr(main, 'vk_captcha_pause_outbox', pauses)
+
+        async def api(method, params, *args, **kwargs):
+            if kwargs.get('token_kind') == 'service':
+                service_reads.append(method)
+                return {'response': {'items': [{'id': 10, 'post_type': 'post'}]}}
+            user_cached_calls.append(method)
+            # The real transport returns cached code14 before any HTTP call.
+            return await real_api(method, params, *args, **kwargs)
+
+        monkeypatch.setattr(main, '_vk_api', api)
+        for _ in range(2):
+            async with db.get_session() as session:
+                session.add(JobOutbox(event_id=1, task=JobTask.vk_sync,
+                                      status=JobStatus.pending))
+                await session.commit()
+            assert await main._reconcile_recent_managed_vk_live_urls(db, bot=None) == 0
+
+        async with db.get_session() as session:
+            rows = (await session.execute(select(JobOutbox).order_by(JobOutbox.id))).scalars().all()
+            actual = [(r.status.value, r.last_error, str(r.updated_at)) for r in rows]
+        print({'pause_calls': pauses.await_count, 'cached_user_methods': user_cached_calls,
+               'actual_jobs': actual})
+        pauses.assert_not_awaited()
+        assert service_reads == ['wall.get', 'wall.get']
+        assert [row.status for row in rows] == [JobStatus.paused, JobStatus.pending, JobStatus.pending]
+        assert rows[0].last_error == original_marker
+    finally:
+        await db.close()

@@ -16,3 +16,16 @@ Mandatory checks: delivery passes its exact DB/bot context; ordinary scan regist
 Public proof: [new workshop](https://vk.com/wall-231920894_14106?reply=14108), [new exhibition](https://vk.com/wall-231920894_14098?reply=14099). Retained evidence: `/home/dev/artifacts/events-bot-new/20261112T135027Z-calendar-friendly-file-20261112/`.
 
 Pre-delivery multi-event review of PR900 found that a shared post could hit the cached challenge twice in one scan. Stop the existing scan after registering the first CAPTCHA cohort, so it does not replace the resume callback with an empty second cohort. The initialized two-event contrast fails before this one-line change;25 calendar/captcha tests pass afterwards. No prevention image was built or deployed before this correction.
+
+The same repeated action also occurred across scans. At 15:07:14.089 UTC a
+calendar error reached `main.py:3988`, the cached CAPTCHA early raise before
+provider HTTP; a new cohort was recorded at 15:07:14.092. Earlier cohorts were
+created at 14:45:33, 14:52:31 and 14:58:53. Since automatic recovery uses the
+newest paused timestamp, these cached errors renewed its 600-second cooldown.
+An initialized two-scan regression reproduces two pause calls without provider
+HTTP. The existing calendar action now runs only when `_vk_captcha_needed`
+is false. Service-token live-ID reconciliation and its existing recovery limit
+remain active. First real CAPTCHA still uses the original pause/break path;
+there is no new timer, marker migration, forced resume or provider bypass.
+Verify ordinary marker-scoped recovery and public photo delivery after release;
+passing the regression does not establish live CAPTCHA clearance.
