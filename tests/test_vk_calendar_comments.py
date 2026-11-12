@@ -269,3 +269,43 @@ async def test_known_captcha_repeated_calendar_scan_does_not_renew_pause(tmp_pat
         assert rows[0].last_error == original_marker
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_live_scan_reuses_exact_provider_item_before_calendar_cutoff(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    db = Database(str(tmp_path / 'calendar-provider-item.sqlite'))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            session.add(event(date='2099-11-14'))
+            await session.commit()
+        item = {'id': 10, 'owner_id': -231920894, 'post_type': 'post', 'date': 1}
+        calls = []
+        monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+        monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
+        monkeypatch.setattr(main, 'VK_SERVICE_TOKEN', 'service-fixture')
+        monkeypatch.setattr(main, '_vk_user_token', lambda: 'user-fixture')
+        monkeypatch.setattr(main, '_vk_captcha_needed', False)
+        monkeypatch.setattr(comments, 'calendar_bytes', AsyncMock(return_value=b'calendar'))
+
+        async def api(method, params, *args, **kwargs):
+            calls.append((method, kwargs.get('token_kind')))
+            return {'response': {'items': [item]}}
+
+        monkeypatch.setattr(main, '_vk_api', api)
+        assert await main._reconcile_recent_managed_vk_live_urls(db, bot=None) == 0
+        assert calls == [('wall.get', 'service')]
+        for mismatch in ({**item, 'id': 11}, {**item, 'owner_id': -999}):
+            calls.clear()
+            assert not await comments.ensure_calendar_comment(
+                db, event(date='2099-11-14'), 'https://vk.com/wall-231920894_10',
+                candidate_item=mismatch,
+            )
+            assert calls == [('wall.getById', 'user')]
+        # The actual old publication timestamp still excludes calendar delivery.
+        async with db.get_session() as session:
+            assert (await session.execute(select(Setting))).scalars().all() == []
+    finally:
+        await db.close()

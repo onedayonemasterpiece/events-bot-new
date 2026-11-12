@@ -13,3 +13,10 @@ Errors propagate to existing JobOutbox retry handling or the existing periodic l
 Relevant tests: `tests/test_vk_calendar_comments.py`, `tests/test_ics_builder.py`, and the managed-publication contracts in `tests/test_vk_source.py`. Qualification is a merged-main isolated release and real comment/document readback; tests or a document upload alone do not establish publication.
 
 The existing document fingerprint includes its readable filename as well as calendar bytes. On the next ordinary reconciliation, old technical filenames are replaced in the same acknowledged comment, using the existing document receipt and stable comment GUID. Unchanged repeat calls produce no provider effects. No new state, queue or worker is added.
+
+The existing service-token live scan passes its exact owner/post match to the
+calendar helper, which reuses that provider item's publication state and date
+instead of repeating a user-token `wall.getById` before the rollout cutoff.
+Standalone publication and mismatched items retain the existing read. No
+persistent cache, actor change or CAPTCHA bypass is introduced; this removes
+redundant reads and does not establish that VK will stop issuing challenges.
