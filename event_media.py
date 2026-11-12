@@ -752,10 +752,15 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
 
 def _quote_url(url: str) -> str:
     parts = urlsplit(url)
+    host = parts.hostname or ""
+    netloc = parts.netloc.rpartition("@")[0] + "@" if "@" in parts.netloc else ""
+    netloc += f"[{host}]" if ":" in host else host.encode("idna").decode("ascii")
+    if parts.port is not None:
+        netloc += f":{parts.port}"
     return urlunsplit(
         (
             parts.scheme,
-            parts.netloc,
+            netloc,
             quote(parts.path, safe="/%:@"),
             quote(parts.query, safe="=&?/:+,%"),
             parts.fragment,
