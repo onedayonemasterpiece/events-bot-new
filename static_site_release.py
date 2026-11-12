@@ -2330,6 +2330,25 @@ def prune_static_site_outputs(
     }
 
 
+def related_projection_input(
+    request_payload: Mapping[str, Any], receipt_path: str | os.PathLike[str],
+) -> tuple[str, dict[str, Any]]:
+    """Use the completed vector owner's input while newer ingest remains queued."""
+    receipt = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    snapshot = receipt.get("projection_snapshot") or {}
+    if not snapshot.get("sqlite_path") or not snapshot.get("manifest_path"):
+        raise StaticSiteRetryableError("related_projection_snapshot_pending")
+    validate_snapshot(snapshot["sqlite_path"], snapshot["manifest_path"])
+    payload = dict(request_payload)
+    revisions = receipt.get("event_revisions") or {}
+    payload["event_revisions"] = {
+        str(key): revisions[str(key)] for key in payload.get("event_revisions", {})
+        if str(key) in revisions
+    }
+    validate_vector_barrier(payload, receipt_path)
+    return str(snapshot["sqlite_path"]), payload
+
+
 def validate_vector_barrier(request_payload: Mapping[str, Any], receipt_path: str | os.PathLike[str] | None) -> dict[str, Any]:
     """Validate an optional, hash-bound vector projection receipt.
 

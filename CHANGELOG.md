@@ -7,6 +7,7 @@
 - Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
 
 ### Fixed
+- Related-only calculation uses the completed vector projection's immutable input instead of chasing ongoing live imports; vector completion wakes the existing shared Kaggle queue.
 - Confirmed event-image duplicates retain the higher-resolution rendition instead of an already-approved thumbnail; the existing duplicate transition replaces the gallery and triggers normal publishing without bypassing semantic relevance.
 - Event vector sync uses the configured shared Google key pool through the canonical limiter instead of stopping when its legacy default key exhausts its daily quota.
 - Event media pair review uses its configured Gemma escalation when the primary returns a temporary provider failure such as HTTP 503; physical send accounting now includes failed provider calls. Existing quota handling and semantic checks remain active.

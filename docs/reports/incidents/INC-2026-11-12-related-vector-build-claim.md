@@ -66,3 +66,14 @@ selects `STATIC_SITE_RELATED_MODE=pgvector`. This fix preserves that model space
 it does not assert that the BGE cutover has passed its separate quality gates.
 
 Pending live verification. No restoration or closure is claimed by this record.
+
+Normal vector runs 11994, 11999 and 12002 completed on November 12, but ongoing
+Smart Updates repeatedly moved the live revisions ahead of their snapshots,
+preventing the related Kaggle from starting. Related-only now consumes the
+vector owner's bounded immutable input, and vector completion wakes the same
+outbox. New ingestion is handled by the following projection instead of
+invalidating the ready one. A concurrent-update regression checks that the
+input remains the projected version while the live Event advances. The static
+job receives peer priority with vectors in this mode; site profiles retain
+their existing policy. Product acceptance still requires fresh related JSON
+and then the owner's authorized VK cards/links feature, not vector counters.

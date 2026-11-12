@@ -7,6 +7,61 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.mark.asyncio
+async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_path, monkeypatch):
+    import event_vector_sync as vectors
+    import main
+    from static_site_release import related_projection_input, validate_vector_barrier
+
+    db = main.Database(str(tmp_path / 'live.sqlite'))
+    await db.init()
+    monkeypatch.setenv('ENABLE_EVENT_VECTOR_SYNC', '1')
+    monkeypatch.setenv('ENABLE_STATIC_SITE_KAGGLE_BUILDER', '1')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    receipt_path = tmp_path / 'vector-receipt.json'
+    monkeypatch.setenv('EVENT_VECTOR_SYNC_RECEIPT_PATH', str(receipt_path))
+    try:
+        async with db.get_session() as session:
+            event = main.Event(title='Projected title', description='Facts', date='2099-01-01',
+                               time='19:00', location_name='Дом искусств', city='Калининград', source_text='source')
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+            event_id = int(event.id)
+            projected_revision = main.event_public_revision(event)
+
+        async def project(cmd, *, stage, run_id):
+            if stage == 'export':
+                Path(cmd[cmd.index('--output-dir') + 1], 'preview-events.json').write_text('{"events": []}')
+            else:
+                # A real Smart Update can commit while provider embedding runs.
+                with sqlite3.connect(db.path) as c:
+                    c.execute('update event set title=? where id=?', ('New live title', event_id))
+                Path(cmd[cmd.index('--report-json') + 1]).write_text(json.dumps({
+                    'events': 1, 'complete': True, 'coverage': {'status': 'complete'},
+                    'catalog_revision': 'a' * 64, 'corpus_revision': 'b' * 64,
+                    'search_document_revision': 'b' * 64, 'search_v3_hash': 'b' * 64,
+                    'related_v1_hash': 'c' * 64,
+                }))
+            return []
+
+        monkeypatch.setattr(vectors, '_run_process', project)
+        await vectors.run_event_vector_sync(db, trigger='scheduled')
+        payload = {'event_revisions': {str(event_id): 'new-live-revision', '99999': 'new-event'},
+                   'vector_barrier': {'required': True}}
+        source, bound = related_projection_input(payload, receipt_path)
+        assert bound['event_revisions'] == {str(event_id): projected_revision}
+        assert validate_vector_barrier(bound, receipt_path)['status'] == 'complete'
+        with sqlite3.connect(source) as c:
+            assert c.execute('select title from event where id=?', (event_id,)).fetchone()[0] == 'Projected title'
+        with sqlite3.connect(db.path) as c:
+            assert c.execute('select title from event where id=?', (event_id,)).fetchone()[0] == 'New live title'
+            queued = json.loads(c.execute("select payload from joboutbox where task='static_site_build'").fetchone()[0])
+            assert 'vector_projection_ready' in queued['reasons']
+    finally:
+        await db.close()
+
+
 def test_related_only_returns_importable_json_without_site_build(tmp_path, monkeypatch):
     from scripts import run_static_site_builder_kaggle as runner
 

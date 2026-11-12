@@ -300,6 +300,7 @@ from static_site_release import (
     prune_secret_candidate_objects,
     prune_immutable_snapshots,
     prune_static_site_outputs,
+    related_projection_input,
     request_watermark as _static_site_request_watermark,
     resolve_checked_static_site_artifact,
     resolve_current_secret_candidate,
@@ -19888,7 +19889,7 @@ async def _run_due_jobs_once_locked(
         JobTask.festival_pages: 1,
         JobTask.interest_club_relation: 2,
         JobTask.event_vector_sync: 2,
-        JobTask.static_site_build: 3,
+        JobTask.static_site_build: 2 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 3,
         JobTask.event_age_bge_assessment: 4,
     }
     tg_event_added_at: dict[int, datetime | None] = {}
@@ -25923,9 +25924,21 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         # successful reconciliation deletes it. Only a genuinely new build
         # needs scratch room for another compact projection and checked output.
         raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
-    request_payload, refreshed_revision_ids = (
-        await _refresh_static_site_vector_barrier_payload(db, request_payload)
-    )
+    snapshot_source = db.path
+    if (
+        os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
+        and os.getenv("STATIC_SITE_RELATED_MODE") == "pgvector"
+    ):
+        snapshot_source, request_payload = await asyncio.to_thread(
+            related_projection_input, request_payload,
+            (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip(),
+        )
+        request_payload["target_watermark"] = static_site_request_watermark(request_payload)
+        refreshed_revision_ids = list(request_payload["event_revisions"])
+    else:
+        request_payload, refreshed_revision_ids = (
+            await _refresh_static_site_vector_barrier_payload(db, request_payload)
+        )
     if refreshed_revision_ids:
         await _patch_static_site_request_payload(
             db,
@@ -25980,7 +25993,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     snapshot_id = f"snapshot-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:10]}"
     snapshot_path, manifest_path, snapshot_metadata = await asyncio.to_thread(
         create_immutable_projection_snapshot,
-        db.path,
+        snapshot_source,
         snapshot_root,
         request_payload=request_payload,
         snapshot_id=snapshot_id,

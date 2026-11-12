@@ -23,7 +23,10 @@ from sqlmodel import Session, create_engine, select
 
 from models import Event
 from ops_run import finish_ops_run, start_ops_run
-from static_site_release import event_public_revision
+from static_site_release import (
+    create_immutable_projection_snapshot, event_public_revision,
+    prune_immutable_snapshots,
+)
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent
@@ -235,6 +238,9 @@ async def run_event_vector_sync(
         details=details,
     )
     started = asyncio.get_running_loop().time()
+    receipt_path = Path(
+        (os.getenv("EVENT_VECTOR_SYNC_RECEIPT_PATH") or "").strip() or DEFAULT_RECEIPT_PATH
+    )
     try:
         async with _SYNC_LOCK:
             catalog_limit = _env_int("EVENT_VECTOR_SYNC_CATALOG_LIMIT", 5000, minimum=1)
@@ -314,11 +320,19 @@ async def run_event_vector_sync(
                 coverage = report.get("coverage")
                 if not isinstance(coverage, dict) or coverage.get("status") != "complete":
                     raise RuntimeError("event vector report coverage is not complete")
+                projection_snapshot = None
+                if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+                    projection_root = receipt_path.parent / "event_vector_projections"
+                    projection_path, manifest_path, _ = await asyncio.to_thread(
+                        create_immutable_projection_snapshot, snapshot_path, projection_root,
+                        request_payload={"event_revisions": event_revisions},
+                    )
+                    projection_snapshot = {
+                        "sqlite_path": str(projection_path), "manifest_path": str(manifest_path)
+                    }
+                    logger.info("event_vector_sync projection_snapshot_ready run_id=%s events=%s snapshot=%s",
+                                ops_run_id, report.get("events"), projection_path.name)
 
-            receipt_path = Path(
-                (os.getenv("EVENT_VECTOR_SYNC_RECEIPT_PATH") or "").strip()
-                or DEFAULT_RECEIPT_PATH
-            )
             receipt = {
                 "schema_version": RECEIPT_SCHEMA_VERSION,
                 "status": "complete",
@@ -338,7 +352,14 @@ async def run_event_vector_sync(
                 "coverage": report.get("coverage"),
                 "event_revisions": event_revisions,
             }
+            if projection_snapshot:
+                receipt["projection_snapshot"] = projection_snapshot
             await asyncio.to_thread(_atomic_write_json, receipt_path, receipt)
+            if projection_snapshot:
+                await asyncio.to_thread(
+                    prune_immutable_snapshots, projection_root,
+                    preserve_paths=list(projection_snapshot.values()), keep_latest_terminal=1,
+                )
 
         metrics = {
             "events": int(report.get("events") or 0),
@@ -381,6 +402,12 @@ async def run_event_vector_sync(
             owner_event_id,
             json.dumps(metrics, ensure_ascii=False, sort_keys=True),
         )
+        if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+            from main import enqueue_static_site_build_request
+            await enqueue_static_site_build_request(
+                db, reason="vector_projection_ready",
+                event_ids=[owner_event_id] if owner_event_id else [],
+            )
         return {"status": "success", "ops_run_id": ops_run_id, **metrics, **details}
     except Exception as exc:
         details["error"] = str(exc)[:4000]
