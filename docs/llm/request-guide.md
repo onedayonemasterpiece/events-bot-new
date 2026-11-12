@@ -246,3 +246,10 @@ Direct event intake also reads the existing VK source's festival context before
 Smart Update. Its SQL expression uses the module's `sql_text` alias because
 `text` in that function is the original source string. This changes no source
 classification or identity rule.
+
+### Operator notifications
+
+`notify_llm_incident` keeps WARNING observations in structured runtime logs rather
+than sending intermediate fallback/retry warnings to Telegram. Other severities
+retain the existing operator/superadmin delivery and deduplication. Terminal
+failures remain visible; model choice, fallback, limiter and retry behavior do not change.

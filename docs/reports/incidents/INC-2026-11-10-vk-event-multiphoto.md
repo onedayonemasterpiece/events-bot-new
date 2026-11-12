@@ -339,3 +339,23 @@ the earlier witness that a first CDN seed cannot overtake the second source.
 Evidence: retained artifact20261112T204450Z-vk-no-repeated-metrics-or-docs,
 single-photo-next-day-defer-audit.md and geometry test logs. A normal initial
 multi-photo postponed post remains the live acceptance criterion.
+
+
+### Keep the established unlinked gallery eligibility
+
+Follow-up read-only review found10892 has linked_event_ids=[], one approved
+first-source poster and a canonical gallery URL, yet the new generic semantic
+prerequisite defers its VK155386/Telegraph155384 to00:05 because semantic_role
+allowance is exhausted. That prerequisite was not present before PR918.
+Canonical get_event_gallery_rows requires completed semantic classification
+only for linked events. Event10893 is such a linked event ([7315,9351]) and
+must retain its existing guard. This supersedes the universal semantic
+prerequisite described above, rather than creating a new publication policy.
+
+The dependency predicate now follows that existing linked-event distinction.
+Pending source pair-review still blocks the first publication until all images
+are adjudicated. Role enrichment for unlinked approved images remains in its
+existing job/fanout. Initialized linked/unlinked controls reproduce the wrong
+unlinked hold before the one-line correction and preserve the linked hold.
+No new state, queue, flag, model or budget. Included with notification fix in
+one release so import does not need another separate restart.

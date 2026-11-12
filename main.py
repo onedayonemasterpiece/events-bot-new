@@ -5308,13 +5308,18 @@ async def notify_llm_incident(kind: str, payload: dict[str, Any]) -> None:
     Operator chat is the chat where the triggering action was initiated (Telegram UI).
     For scheduled/background tasks where no operator context exists, we only notify superadmin.
     """
+    severity = str(payload.get("severity") or "critical").upper()
+    if severity == "WARNING":
+        logging.warning("llm_incident.warning kind=%s consumer=%s model=%s next_model=%s message=%s",
+                        kind, payload.get("consumer"), payload.get("model"),
+                        payload.get("next_model"), str(payload.get("message") or "")[:400])
+        return
     current_db = get_db()
     current_bot = get_bot()
     if not current_db or not current_bot:
         logging.warning("notify_llm_incident skipped: db/bot unavailable kind=%s", kind)
         return
 
-    severity = str(payload.get("severity") or "critical").upper()
     consumer = str(payload.get("consumer") or "unknown")
     model = str(payload.get("requested_model") or payload.get("model") or "unknown")
     invoked_model = str(payload.get("invoked_model") or payload.get("provider_model_name") or "")
@@ -17197,7 +17202,7 @@ async def schedule_event_update_tasks(
                 JobOutbox.task == JobTask.event_media_review,
                 or_(
                     EventPoster.review_status == "pending_review",
-                    and_(EventPoster.review_status == "approved",
+                    and_(bool(ev.linked_event_ids), EventPoster.review_status == "approved",
                          EventPoster.media_semantic_status != "classified"),
                 ),
             ).order_by(JobOutbox.id.desc()).limit(1)

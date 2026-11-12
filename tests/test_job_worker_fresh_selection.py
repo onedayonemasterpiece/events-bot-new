@@ -205,3 +205,41 @@ async def test_initial_publications_wait_for_complete_gallery_across_media_follo
             assert len(jobs) == 1 and jobs[0].status == main.JobStatus.done
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('linked', [False, True])
+async def test_approved_gallery_keeps_existing_linked_semantic_guard(tmp_path, monkeypatch, linked):
+    from unittest.mock import AsyncMock
+    import event_media
+    db = main.Database(str(tmp_path / 'linked-gallery.sqlite'))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    monkeypatch.setattr(main, 'DISABLE_PAGE_JOBS', True)
+    monkeypatch.setenv('DISABLE_ICS_JOBS', '1')
+    monkeypatch.setattr(event_media, 'is_event_media_cdn_url', lambda url: True)
+    calls = []
+    async def publish(eid, *_args):
+        calls.append(eid)
+        return True
+    monkeypatch.setattr(main, 'JOB_HANDLERS', {
+        'vk_sync': publish, 'telegraph_build': publish,
+        'event_media_review': AsyncMock(side_effect=AssertionError('Tomorrow enrichment must not run now')),
+    })
+    try:
+        async with db.get_session() as session:
+            ev = main.Event(title='Approved source image', date='2099-01-01', time='18:00',
+                            location_name='Venue', source_text='Source', description='Event',
+                            linked_event_ids=[123] if linked else [], photo_urls=['https://cdn.example/ready.jpg'])
+            session.add(ev)
+            await session.flush()
+            session.add(main.EventPoster(event_id=ev.id, poster_hash='ready', review_status='approved',
+                                         media_semantic_status='pending'))
+            await event_media.enqueue_event_media_review_job(session, ev.id, next_run_at=now + timedelta(days=1))
+            await session.commit()
+        await main.schedule_event_update_tasks(db, ev)
+        await main._run_due_jobs_once(db, None)
+        assert len(calls) == (0 if linked else 2)
+    finally:
+        await db.close()

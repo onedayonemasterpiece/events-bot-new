@@ -1,4 +1,6 @@
 import os
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from pathlib import Path
 
 import pytest
@@ -34,7 +36,10 @@ async def test_recovery_imports_stale_same_pid_job_when_run_lock_is_free(monkeyp
         return path
 
     async def fake_import_from_results(db, *, results_path, run_id: str, **kwargs):
+        assert kwargs['send_progress'] is False
+        assert kwargs['chat_id'] is None
         imported.append((run_id, str(results_path)))
+        return tg_service.TelegramMonitorReport(run_id=run_id)
 
     async def fake_remove_job(job_type: str, kernel_ref: str) -> None:
         removed.append((job_type, kernel_ref))
@@ -47,7 +52,9 @@ async def test_recovery_imports_stale_same_pid_job_when_run_lock_is_free(monkeyp
 
     assert not tg_service._RUN_LOCK.locked()
 
-    recovered = await tg_service.resume_telegram_monitor_jobs(object(), bot=None, chat_id=123)
+    bot = SimpleNamespace(send_message=AsyncMock())
+    recovered = await tg_service.resume_telegram_monitor_jobs(object(), bot=bot, chat_id=123)
+    assert bot.send_message.await_count == 1
 
     assert recovered == 1
     assert imported == [("run-stale", str(tmp_path / "telegram_results.json"))]
@@ -82,7 +89,10 @@ async def test_recovery_imports_output_when_status_lookup_fails(monkeypatch, tmp
         return path
 
     async def fake_import_from_results(db, *, results_path, run_id: str, **kwargs):
+        assert kwargs['send_progress'] is False
+        assert kwargs['chat_id'] is None
         imported.append((run_id, str(results_path)))
+        return tg_service.TelegramMonitorReport(run_id=run_id)
 
     async def fake_remove_job(job_type: str, kernel_ref: str) -> None:
         removed.append((job_type, kernel_ref))
@@ -93,7 +103,9 @@ async def test_recovery_imports_output_when_status_lookup_fails(monkeypatch, tmp
     monkeypatch.setattr(tg_service, "run_telegram_import_from_results", fake_import_from_results)
     monkeypatch.setattr(tg_service, "remove_job", fake_remove_job)
 
-    recovered = await tg_service.resume_telegram_monitor_jobs(object(), bot=None, chat_id=123)
+    bot = SimpleNamespace(send_message=AsyncMock())
+    recovered = await tg_service.resume_telegram_monitor_jobs(object(), bot=bot, chat_id=123)
+    assert bot.send_message.await_count == 1
 
     assert recovered == 1
     assert imported == [("run-output-ready", str(tmp_path / "telegram_results.json"))]
