@@ -142,7 +142,12 @@ Defaults:
 - максимум 3 automatic attempts, затем `unresolved`; изображение остается
   непубличным, ручной очереди нет;
 - exhausted primary budget не тратит escalation budget; retry переносится на
-  следующий UTC day;
+  следующий UTC day и не расходует automatic attempt, поскольку provider не
+  рассматривал пару. Три дня отсутствия allowance не превращают такую пару
+  в terminal `unresolved`;
+- pending/deferred пары с уже rejected/duplicate/unavailable изображением
+  отменяются до скачивания и provider admission. Они не мешают отдельному
+  кандидату получить approval по оставшимся действующим парам;
 - если другой/ручной `event_media_review` пришёл раньше `next_run_at`
   отложенной пары, no-op проход повторно ставит ровно один durable job на
   минимальный future retry. Ранний проход не расходует VLM budget и не может

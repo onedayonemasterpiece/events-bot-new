@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Event media: отказ локального суточного allowance без provider call не исчерпывает automatic attempts; пары с уже исключёнными изображениями отменяются до новых расходов и не блокируют остальные кадры.
+
 - Fixed: Qtickets installs Chromium and its checked system dependencies even when the Playwright Python package is already present. Missing browser libraries now fail during preparation instead of silently claiming readiness.
 
 - Fixed: the existing Kaggle builder can return current related-event JSON with `STATIC_SITE_BUILD_PROFILE=related-only`, without Astro or site publication. Failed remote builds no longer retain their active claim indefinitely and block vector synchronization.

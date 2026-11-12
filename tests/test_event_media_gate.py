@@ -1346,12 +1346,47 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
         )).scalars())
         assert len(rows) == 2
         assert [row.review_status for row in rows] == [APPROVED, PENDING_REVIEW]
-        # Model the late approval observed on the wall. The media gate's pair tests
-        # separately exercise the real pixel comparison and the review decision.
-        rows[1].review_status = APPROVED
-        await session.flush()
-        await event_media.sync_event_gallery_projection(session, event_id)
+        first_poster_id = rows[0].id
         await session.commit()
+
+    async def download(poster):
+        return DownloadedPoster(
+            original if poster.id == first_poster_id else _pattern_png_bytes(invert=True),
+            "image/png", poster.catbox_url,
+        )
+
+    denied = True
+
+    async def reviewer(**kwargs):
+        if denied:
+            return None, 0
+        return dict(decision="distinct", duplicate_kind="none", confidence=0.99,
+                    semantic_conflict=False, canonical_side="either", reason_code="different_photos"), 1
+
+    monkeypatch.setattr(event_media, "_download_poster", download)
+    monkeypatch.setattr(event_media, "_call_reviewer", reviewer)
+    # Three exhausted allowance days must not permanently lose an unseen image.
+    for _ in range(3):
+        async with db.get_session() as session:
+            pair = (await session.execute(select(EventMediaPairReview).where(
+                EventMediaPairReview.event_id == event_id,
+            ))).scalar_one()
+            pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
+            await session.commit()
+        await review_next_event_media_pair(event_id, db)
+        async with db.get_session() as session:
+            pair = await session.get(EventMediaPairReview, pair.id)
+            assert pair.status == "deferred" and pair.attempts == 0
+            assert pair.provider_calls == 0
+
+    denied = False
+    async with db.get_session() as session:
+        pair = await session.get(EventMediaPairReview, pair.id)
+        pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
+        await session.commit()
+    await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        event = await session.get(Event, event_id)
         await session.refresh(event)
         urls = list(event.photo_urls)
         assert len(urls) == 2 and urls[1] == second
@@ -1463,6 +1498,38 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
         updated = await session.get(Event, event_id)
         assert updated.source_vk_post_url == post_url and updated.vk_source_hash != managed.vk_source_hash
     await db.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_rejected_poster_pair_does_not_spend_or_block_candidate(tmp_path):
+    db = Database(str(tmp_path / "excluded.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        posters = [EventPoster(event_id=event.id, poster_hash=str(i),
+                   supabase_url=f"https://static.example/{i}.png", review_status=status)
+                   for i, status in enumerate([APPROVED, "rejected", PENDING_REVIEW])]
+        session.add_all(posters)
+        await session.flush()
+        stale = EventMediaPairReview(event_id=event.id, left_poster_id=posters[1].id,
+            right_poster_id=posters[2].id, context_hash="stale", pair_input_hash="stale",
+            status="deferred", attempts=1, provider_calls=0)
+        session.add(stale)
+        await session.flush()
+        await event_media.ensure_event_media_reviews(session, event.id)
+        await session.refresh(stale)
+        assert stale.status == "cancelled" and stale.provider_calls == 0
+        active = (await session.execute(select(EventMediaPairReview).where(
+            EventMediaPairReview.event_id == event.id,
+            EventMediaPairReview.status == "pending",
+        ))).scalar_one()
+        active.status, active.decision = "resolved", "distinct"
+        await session.flush()
+        assert await event_media._reconcile_pending_posters(session, event.id) == 1
+        assert posters[2].review_status == APPROVED
+    await db.close()
 
 
 @pytest.mark.asyncio
