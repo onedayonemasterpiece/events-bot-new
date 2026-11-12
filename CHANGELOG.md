@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+- Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
+
 ### Fixed
 - Event media pair review uses the existing shared Google project/model limiter without the artificial local 100/25 daily cap; fresh second images can progress after large galleries consume the old allowance. Models and credentials stay unchanged; actual inference calls may increase.
 - Event media: отказ локального суточного allowance без provider call не исчерпывает automatic attempts; пары с уже исключёнными изображениями отменяются до новых расходов и не блокируют остальные кадры.

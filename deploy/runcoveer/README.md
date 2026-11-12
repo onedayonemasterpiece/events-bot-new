@@ -13,6 +13,17 @@ Host: `78.111.90.203`, Serverspace `l72s1332671`, Ubuntu 26.04,
 Scope: Events Bot and Kotopogoda application runtimes. Yandex Object Storage,
 CDN, Supabase, Kaggle and other managed dependencies stay external.
 
+## Release during ordinary imports, owner decision 2026-11-12
+
+Active imports or background jobs do not by themselves block a prepared,
+verified release. Do not require an empty operation queue or wait for a gap
+between recurring imports. Use the normal Events-only Compose update, preserve
+data and durable receipts, and verify task continuation/recovery and the
+requested product effect on ordinary imports. Record active operations as
+release context rather than a deployment gate. A concrete observed risk may
+need an action specific to that operation; it does not justify a general ban.
+This owner decision supersedes the historical wait-for-import wording below.
+
 ## VK gallery replay and cover correction, 2026-11-10
 
 Events-only image `runcoveer/events:vk-multiphoto-replay-20261110` contains
@@ -73,15 +84,16 @@ Image: `runcoveer/events:intake-topics-retry-20261103`; rollback:
 `runcoveer/events:intake-topics-20261103`. The existing topic client now permits
 one attempt per model, ensuring its two-send ceiling includes the configured
 reserve after a retryable 503. Keep all other routing settings. Build exact
-merged main; switch Events only after active normal imports finish.
+merged main; switch Events through the normal Events-only update and verify
+ongoing imports on the new release.
 
 ## Topic fallback release, 2026-11-03
 
 Events image: `runcoveer/events:intake-topics-20261103`; rollback:
 `runcoveer/events:intake-fairness-20261103`. Restore the existing general model
 fallback list for topic classification; preserve the live Lite ordering and OCR
-setting. Build merged main, wait for active imports to finish and switch Events
-only. Verify actual import receipts, not just container readiness.
+setting. Build merged main and switch Events only. Verify actual import
+receipts on the new release, not just container readiness.
 
 ## Source parser fairness release, 2026-11-03
 

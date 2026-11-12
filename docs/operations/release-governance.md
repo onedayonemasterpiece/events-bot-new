@@ -30,6 +30,12 @@ Fly — legacy/rollback-only после миграции; `scripts/deploy_fly_ma
    `sudo docker compose -f /opt/runcoveer/deployment/compose.yaml up -d --no-deps --no-build --pull never events`.
    Сохрани production `DEPLOY_PREFLIGHT=0`; не запускай общий двухсервисный
    `deploy.sh` для Events-only обновления. Kotopogoda и её source mount не меняются.
+Работающий импорт или фоновая задача сами по себе не запрещают этот выпуск.
+Не требуй пустой очереди операций: сохрани данные и durable receipts, выполни
+штатное обновление и проверь продолжение либо восстановление задач и результат
+на обычном импорте. Решение владельца от 12 ноября 2026 года заменяет прежнее
+общее ожидание завершения импортов.
+
 5. Проверь readiness, scheduler и реальный product effect. Политика логов —
    [runtime-logs.md](runtime-logs.md). Исходный runbook содержит preflight,
    single-writer и rollback contracts; не подменяй их Fly-командами.
