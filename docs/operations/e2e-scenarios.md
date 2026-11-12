@@ -138,3 +138,9 @@ See [operations guide](partner-event-operations.md) and [scoped v2 registry](../
 Guide-digest promo reposts: `tests/test_promo_guide_digest.py` covers the normal promo runner, frozen delay, 1/3-day cadence, pause and reply-loss reconciliation. Live acceptance uses the actual daily guide source post, two VK repost URLs and `guide_visual_delivery` receipts; see [promo contract](../features/promo-campaigns/README.md#guide-digest-repost-campaigns).
 
 Registered VK slot contention: `tests/test_scheduling_vk_wait.py` boots the actual scheduler registration and verifies that a normal VK slot waits behind an active source-parser event, then executes once. Live acceptance still requires the actual scheduled/watchdog run and source/child receipts; see [VK queue contract](../features/vk-auto-queue/README.md).
+
+VK calendar comment lifecycle: `tests/test_vk_calendar_comments.py` verifies zero
+VK calls for unchanged calendar bytes and legacy receipt migration despite a
+changed text template, delete/create only after a real time change, recovery of
+an accepted creation with a lost response without duplicate writes, and the
+existing postponed/recent-post delay and one-changed-comment scan contracts.

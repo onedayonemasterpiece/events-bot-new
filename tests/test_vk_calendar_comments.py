@@ -47,22 +47,27 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     monkeypatch.setattr(main,'_vk_user_token',lambda:'fixture')
     bot=object()
     monkeypatch.setattr(main,'get_bot',lambda:bot)
-    calls=[];fail=[not adopt]
+    calls=[];fail=[not adopt];live_comments={90:29} if adopt else {};documents=[29];guids={}
     async def api(method,params,*context,**kwargs):
         assert context==(db,bot)
         calls.append((method,params))
         if method=='wall.getById':value={'items':[{'id':10,'post_type':'post','date':1794441600}]}
-        elif method=='wall.getComments':value={'count':int(adopt),'items':[{'id':90,'from_id':-231920894,'attachments':[{'type':'doc','doc':{'ext':'ics'}}]}] if adopt else []}
+        elif method=='wall.getComments':value={'count':len(live_comments),'items':[{'id':cid,'from_id':-231920894,'attachments':[{'type':'doc','doc':{'ext':'ics','owner_id':20,'id':did}}]} for cid,did in live_comments.items()]}
         elif method=='docs.getWallUploadServer':
             assert 'group_id' not in params  # Actual group-storage access was denied.
             value={'upload_url':'https://upload.example/file'}
         elif method=='docs.save':
             assert params['title']==filename
-            value={'doc':{'id':30,'owner_id':20,'ext':'ics'}}
+            documents[0]+=1
+            value={'doc':{'id':documents[0],'owner_id':20,'ext':'ics'}}
         elif method=='wall.createComment':
+            cid=guids.setdefault(params['guid'],90+len(guids)+int(adopt))
+            live_comments[cid]=int(params['attachments'].split('_')[1])
             if fail[0]:fail[0]=False;raise RuntimeError('Lost comment response')
-            value={'comment_id':90}
-        elif method=='wall.editComment':value=1
+            value={'comment_id':cid}
+        elif method=='wall.deleteComment':
+            assert params['comment_id'] in live_comments
+            live_comments.pop(params['comment_id']);value=1
         else:raise AssertionError(method)
         return {'response':value}
     monkeypatch.setattr(main,'_vk_api',api)
@@ -77,11 +82,11 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     if not adopt:
         with pytest.raises(RuntimeError,match='Lost comment response'):
             await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
-    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url) is adopt
     assert sum(m=='docs.save' for m,_ in calls)==1
     creates=[p for m,p in calls if m=='wall.createComment']
-    if adopt:assert not creates
-    else:assert len(creates)==2 and creates[0]['guid']==creates[1]['guid']
+    assert len(creates)==1
+    assert len(live_comments)==1
     assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
     before=len(calls)
     assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
@@ -89,22 +94,25 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     async with db.get_session() as session:
         row=await session.get(Event,1);row.time='19:00';session.add(row);await session.commit()
     assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
-    assert calls[-1][0]=='wall.editComment'
+    assert [m for m,_ in calls[-2:]]==['wall.deleteComment','wall.createComment']
+    assert calls[-1][1]['guid']!=creates[0]['guid']
+    assert len(live_comments)==1
     async with db.get_session() as session:
         state=json.loads((await session.execute(select(Setting))).scalars().one().value)
     assert state['text'] in comments.COMMENT_TEXTS
     state['text']='Добавьте событие в календарь, чтобы не забыть 📅 Файл прикреплён.'
-    old_hash=hashlib.sha256(await comments.calendar_bytes(db,[event(time='19:00')])).hexdigest()
+    old_hash=hashlib.sha256(filename.encode()+b'\0'+await comments.calendar_bytes(db,[event(title=title,time='19:00',added_at=ev.added_at)])).hexdigest()
     state.update(hash=old_hash,document_hash=old_hash)
     async with db.get_session() as session:
         row=(await session.execute(select(Setting))).scalars().one()
         row.value=json.dumps(state);session.add(row);await session.commit()
     before_saves=sum(m=='docs.save' for m,_ in calls)
-    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
-    assert sum(m=='docs.save' for m,_ in calls)==before_saves+1
-    assert calls[-1][0]=='wall.editComment' and calls[-1][1]['comment_id']==90
-    assert 'два раза' in calls[-1][1]['message']
-    assert sum(m=='wall.createComment' for m,_ in calls)==len(creates)
+    before_calls=len(calls)
+    assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert len(calls)==before_calls
+    assert sum(m=='docs.save' for m,_ in calls)==before_saves
+    assert not any(m=='wall.editComment' for m,_ in calls)
+    monkeypatch.setattr(comments,'COMMENT_TEXTS',('Другой шаблон',))
     before=len(calls)
     assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
     assert len(calls)==before
