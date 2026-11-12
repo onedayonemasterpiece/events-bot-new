@@ -30,7 +30,9 @@
   `VK_CAPTCHA_RESUME_SPACING_SEC`. Исторические/manual paused rows не входят в
   такое восстановление. Необратимый `wall.edit` (`edit time expired`, удалённый
   post) завершает только конкретный sync без бесконечного retry и без глобальной
-  captcha-паузы.
+  captcha-паузы. Календарные комментарии при активном cached challenge не
+  повторяют публикационное действие и не обновляют cooldown; service-token
+  восстановление live ID продолжает работать.
 - Для нового managed `klgdevents` поста Telegram-origin события (`source_post_url=t.me/...`, Telegram chat/message fields или `event_source.source_type=telegram`) silent text-only fallback запрещён. Если после `event.photo_urls`, Telegraph fallback и upload попыток нет ни одного `photo...` attachment, `sync_vk_source_post` должен вернуть ошибку `vk_sync_missing_media_for_telegram_event`, а не создавать `wall.post` с `attachments=0`. Emergency override: `VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS=0`.
 - Для любого нового managed `klgdevents` поста, если после нормализации `event.photo_urls` есть хотя бы одна картинка для upload, но VK photo upload вернул 0 attachments, `sync_vk_source_post` должен fail closed до `wall.post`. Это предотвращает postponed/text-only посты для VK-origin событий с уже доступной media, например когда canonical managed image не загрузилась в VK.
 - Тот же fail-closed boundary распространяется на VK-origin события, у которых

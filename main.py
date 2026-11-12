@@ -16311,14 +16311,15 @@ async def _reconcile_recent_managed_vk_live_urls(
             if not await _recover_managed_vk_live_url(db, ev, bot=bot, candidate_item=matches[0]):
                 continue
             recovered += 1
-        try:
-            from vk_calendar_comments import ensure_calendar_comment
-            await ensure_calendar_comment(db, ev, ev.source_vk_post_url)
-        except Exception as exc:
-            logging.exception("vk.calendar_comment failed event_id=%s; next live scan will retry", event_id)
-            if isinstance(exc, VKAPIError) and exc.code == 14:
-                await vk_captcha_pause_outbox(db)
-                break
+        if not _vk_captcha_needed:
+            try:
+                from vk_calendar_comments import ensure_calendar_comment
+                await ensure_calendar_comment(db, ev, ev.source_vk_post_url)
+            except Exception as exc:
+                logging.exception("vk.calendar_comment failed event_id=%s; next live scan will retry", event_id)
+                if isinstance(exc, VKAPIError) and exc.code == 14:
+                    await vk_captcha_pause_outbox(db)
+                    break
         if recovered >= 10:
             break
     return recovered
