@@ -24663,6 +24663,15 @@ def _static_site_build_kaggle_command(
         # Computation and validation are mandatory candidate evidence.  This is
         # intentionally independent of related retrieval and per-page rollout.
         cmd.append("--collection-semantic-compute")
+    elif profile == "related-only":
+        cmd.extend(["--profile", profile, "--catalog-mode", "full",
+                    "--repo-sha", repo_sha or "", "--run-id", run_id or "",
+                    "--snapshot-manifest", snapshot_manifest_path or ""])
+        for flag, value in (("--expected-snapshot-id", expected_snapshot_id),
+                            ("--expected-snapshot-sha256", expected_snapshot_sha256),
+                            ("--expected-snapshot-size", expected_snapshot_size)):
+            if value:
+                cmd.extend([flag, str(value)])
     elif _env_flag("STATIC_SITE_COLLECTION_SEMANTIC_COMPUTE"):
         cmd.append("--collection-semantic-compute")
     if adopt_existing:
@@ -25121,6 +25130,23 @@ async def _finish_static_site_candidate(
     result_path = output_dir / "static_site_build_result.json"
     if not result_path.is_file():
         raise StaticSitePermanentError("static_site_result_receipt_missing")
+    related_result = json.loads(result_path.read_text(encoding="utf-8"))
+    if related_result.get("profile") == "related-only":
+        # The runner validated and atomically imported the JSON. Completing
+        # computation must not mark an HTML release or candidate as published.
+        await _patch_static_site_request_payload(db, job_id, {"build_receipt": {
+            "status": "related_ready", "run_id": run_id,
+            "input_fingerprint": input_fingerprint, "published": False,
+            "related_retrieval": related_result.get("related_retrieval"),
+        }})
+        await asyncio.to_thread(
+            finish_static_site_build_claim, db.path, claim_token=claim_token,
+            run_id=run_id, input_fingerprint=input_fingerprint,
+            effective_date=clock.effective_date, success=False,
+            receipt={"status": "related_ready", "published": False},
+        )
+        logging.info("related_ready run_id=%s build_id=%s published=false", run_id, build_id)
+        return True
     result, candidate_archive = await asyncio.to_thread(
         validate_production_candidate_result,
         result_path,
@@ -25615,7 +25641,7 @@ async def _recover_previous_static_site_attempt(
         repo_sha=required["repo_sha"],
         run_id=claim.run_id,
         candidate_token=required["candidate_token"],
-        profile="production-candidate",
+        profile=str(handoff.get("profile") or "production-candidate"),
         adopt_existing=True,
         expected_dataset_ref=claim.dataset_ref,
         related_corpus_revision=related_corpus_revision or None,
@@ -25978,8 +26004,11 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     related_cache_path = (
         os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json"
     ).strip()
+    profile = (os.getenv("STATIC_SITE_BUILD_PROFILE") or "production-candidate").strip()
+    if profile not in {"production-candidate", "related-only"}:
+        raise StaticSitePermanentError("unsupported_static_site_build_profile")
     fingerprint_config = {
-        "profile": "production-candidate",
+        "profile": profile,
         "catalog_mode": "full",
         "limit": limit,
         "public_site_origin": _first_env(
@@ -26214,6 +26243,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     "effective_date": clock.effective_date,
                     "current_datetime": clock.current_datetime,
                     "prepared_at": static_site_iso_utc(),
+                    "profile": profile,
                 }
             },
         )
@@ -26235,7 +26265,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             repo_sha=repo_sha,
             run_id=run_id,
             candidate_token=candidate_token,
-            profile="production-candidate",
+            profile=profile,
             related_corpus_revision=related_corpus_revision,
             search_corpus_receipt_path=(
                 search_corpus_receipt_path
@@ -26316,6 +26346,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     recovery_claim
                     and recovery_claim.run_id == run_id
                     and recovery_claim.dataset_ref
+                    and recovery_claim.remote_status not in {"failed", "cancelled", "error"}
                 )
             except Exception:
                 # Fail closed for the immutable recovery input. A later
