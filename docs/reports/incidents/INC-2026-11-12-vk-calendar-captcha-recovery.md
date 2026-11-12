@@ -117,3 +117,38 @@ requests after completion. Lost-response recovery must reuse the document
 without another create. Existing marker-scoped pause/recovery remains required.
 A release and real ordinary post/comment receipt are still needed for live
 acceptance; this source change does not establish CAPTCHA clearance.
+
+
+## Isolated scheduled document failure and repeated import UI, 20:40 UTC
+
+PR918 actual `cc0edabccc1b26f0222c89e1ef2add731a0d70b0` passed live
+health. At20:40:07 UTC job155301/event10888 performed one document upload,
+then `docs.save` returned genuine code14 on the replacement primary actor.
+There was no calendar history scan or clustered write in this invocation.
+The harmless `wall.get` recovery probe cannot prove `docs.save` is usable.
+Automatic calendar task creation is therefore temporarily disconnected again;
+the existing affected job alone is contained, preserving its receipt. This
+is not calendar feature acceptance. Photo jobs and the shared CAPTCHA guard
+remain intact; no challenge bypass or actor rotation is introduced.
+
+The owner also received the same68-post Telegram progress repeatedly. The
+saved run `tg-new-account-bootstrap-20261112` has102 raw carriers,68 with
+events; successive releases interrupted its server import. Existing scan
+receipts correctly avoid repeat Smart Update, but the progress callback
+created a new message even for `metrics_only` carriers. Start now reports
+that already-computed status and the UI suppresses both start and done for
+it. Metrics, aggregate summaries and incomplete/new-carrier progress remain.
+The initialized distinguishing test imports the same completed carrier twice
+with fresh real callbacks: no per-post send/edit, no Smart Update, both reports
+retain metrics_only. It fails before the two-line fix. Focused recovery,
+media, queue and calendar tests:76 passed in33.00seconds.
+
+The owner's filename/slug hypothesis matches the earlier incident timeline:
+`6b3b394fa` replaced `event-<id>.ics` and added filename to document_hash;
+the first subsequent bulk rewrite at16:15 local preceded code14 at16:16.
+This proves a re-upload trigger, not that Cyrillic itself causes a CAPTCHA.
+Successful later readable-name receipts are counterexamples to that stronger
+claim. No new provider request is needed to establish the repeated-upload bug.
+Evidence: `/home/dev/artifacts/events-bot-new/20261112T204450Z-vk-no-repeated-metrics-or-docs/`
+and the retained load retrospective. Calendar and initial full-gallery live
+acceptance remain open.

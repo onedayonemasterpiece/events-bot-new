@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-complete-gallery-20261112
+    image: runcoveer/events:vk-quiet-recovery-20261112
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

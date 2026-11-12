@@ -761,3 +761,11 @@ The automatic recent-identity retry consumer introduced on 2026-10-23 was revert
 at the owner's request. The legacy retry worker remains opt-in/default off.
 Native VK postponed recovery posts are already provider-owned and independent
 of any Smart Update retry worker. See INC-2026-10-23-vk-legacy-backlog-recovery.
+
+### Recovery progress without repeated notifications
+
+Recovery can revisit a saved result file after a release interrupts its import.
+Existing `telegram_scanned_message` receipts keep completed carriers in
+`metrics_only`; both start and done callbacks suppress per-post messages for
+that status. Metrics and the final aggregate report remain available. New,
+forced and incomplete carriers still show their actual import progress.

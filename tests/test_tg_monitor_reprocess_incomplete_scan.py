@@ -456,7 +456,20 @@ async def test_keeps_documented_skipped_scan_metrics_only(tmp_path, monkeypatch)
 
     monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
 
-    report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
+    from source_parsing.telegram.service import _make_import_progress_callback
+    class QuietBot:
+        async def send_message(self, *args, **kwargs):
+            pytest.fail("A completed carrier must not send repeated per-post progress")
+        async def edit_message_text(self, *args, **kwargs):
+            pytest.fail("A completed carrier must not edit per-post progress")
+    for _ in range(2):
+        callback = _make_import_progress_callback(
+            db=db, bot=QuietBot(), chat_id=1, send_progress=True,
+        )
+        report = await tg_handlers.process_telegram_results(
+            _results_path(tmp_path), db, progress_callback=callback,
+        )
+        assert report.messages_metrics_only == 1
 
     assert calls == []
     assert report.messages_metrics_only == 1

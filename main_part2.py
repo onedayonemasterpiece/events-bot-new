@@ -4545,9 +4545,6 @@ async def post_to_vk(
                     len(message),
                     len(attachments or []),
                 )
-                if db is not None and source_event_id and publish_date:
-                    from vk_calendar_comments import schedule_calendar_comment
-                    await schedule_calendar_comment(db, source_event_id, url, publish_date)
                 return url
             err_code = (
                 data.get("error", {}).get("error_code") if isinstance(data, dict) else None
