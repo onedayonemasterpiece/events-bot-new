@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Resume an existing Telegram handoff before accepting an earlier partial slot delivery or delaying a new launch; preserve the existing recovery cadence and duplicate-launch guards.
 - Qtickets selects the declared higher-density event hero instead of the small JSON-LD thumbnail, preserving structured facts and the existing fallback without another page request.
 - Treat a visually related parent-program cover and its event card as compatible gallery images; retain rejection of incompatible event dates and unrelated programmes without resetting historical review receipts.
 - Keep automatic Telegram recovery and scheduled VK per-post progress quiet; send one Telegram recovery summary and log intermediate LLM warnings while retaining terminal alerts.

@@ -412,3 +412,26 @@ structured-fact/occurrence regressions также обязательны.
 До выпуска и обычного нового collection/import/VK readback качество
 не считать полностью принятым. Evidence:
 /home/dev/artifacts/events-bot-new/20261112T230543Z-qtickets-declared-poster-density-20261113.
+
+### Готовый Telegram output остановлен перед восстановлением, 13 ноября
+
+Обычный catchup-tg-monitoring-5233941e7fc14bc487f4282b703b093d
+завершился в 23:15 UTC с ledger DONE/CLEANUP. До 23:22 нового
+импорта не было. Local operation 12058 прервал выпуск; более ранний
+recovery_import 12057 имел partial и считался доставкой суточного слота.
+Watchdog возвращался по этому условию до существующей проверки registry.
+ENABLE_KAGGLE_RECOVERY выключен, поэтому другого автоматического
+продолжения данного handoff в этом runtime не было.
+
+Существующая проверка registry перенесена перед условиями доставки
+и terminal retry нового запуска. Inflight, grace/lookback и deferred cadence
+сохранены. Пустой registry по-прежнему не запускает новый kernel
+при прежней доставке. Production net 0: только перестановка. Нет нового
+worker, состояния, таймера, retry или ручного replay исходных данных.
+
+Initialized DB regression со старым partial и новым cancelled run:
+до исправления положительный контроль падает, отрицательный проходит;
+после оба проходят. Существующие TG watchdog guards также проходят.
+Продуктовая проверка после выпуска — обычное продолжение сохранённого
+output, новые media candidates и initial VK attachments, а не запуск
+выбранного source packet. Evidence: тот же retained artifact PR 923.
