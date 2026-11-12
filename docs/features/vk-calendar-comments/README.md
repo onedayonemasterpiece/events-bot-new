@@ -1,5 +1,12 @@
 # Calendar files in Afisha comments
 
+Automatic calendar task creation is temporarily disconnected after a single
+scheduled `docs.save` still returned code 14 at 20:40:07 UTC on November 12.
+The affected task is contained with its receipt preserved; a successful
+`wall.get` must not be mistaken for proof that document writes work.
+Photo publication remains enabled. The scheduled helper below is retained
+for transport repair and tests; it is not currently called by `post_to_vk`.
+
 Only a newly created postponed event announcement schedules a calendar comment.
 The successful `post_to_vk` call knows its exact publication timestamp and adds
 one `vk_calendar_comment` task to the existing `JobOutbox`, with `next_run_at`

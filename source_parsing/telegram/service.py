@@ -2491,7 +2491,7 @@ def _make_import_progress_callback(
 
     async def _handle_import_progress(progress: TelegramMonitorImportProgress) -> None:
         nonlocal import_progress_message_id, import_progress_key
-        if not (send_progress and bot and chat_id):
+        if not (send_progress and bot and chat_id) or progress.status == "metrics_only":
             return
         key = (str(progress.source_username), int(progress.message_id))
         if progress.stage == "start":

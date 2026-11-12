@@ -34,7 +34,7 @@ async def test_bad_date_is_not_invented():
 
 
 @pytest.mark.asyncio
-async def test_new_post_schedules_one_comment_after_public_time_without_wall_polling(tmp_path, monkeypatch):
+async def test_calendar_containment_keeps_new_post_free_of_document_jobs(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     from models import JobOutbox, JobStatus, JobTask
     db = Database(str(tmp_path / 'scheduled.sqlite'))
@@ -90,6 +90,10 @@ async def test_new_post_schedules_one_comment_after_public_time_without_wall_pol
         url = await main.post_to_vk('231920894', 'Анонс', db, None,
                                     publish_date=published_at, source_event_id=1)
         assert url == 'https://vk.com/wall-231920894_10'
+        async with db.get_session() as session:
+            assert list((await session.execute(select(JobOutbox))).scalars()) == []
+        # Exercise the retained scheduled helper explicitly; normal publishing is contained.
+        await comments.schedule_calendar_comment(db, 1, url, published_at)
         async with db.get_session() as session:
             stored = await session.get(Event, 1)
             stored.source_vk_post_url = url
