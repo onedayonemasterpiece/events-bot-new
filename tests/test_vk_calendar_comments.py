@@ -82,9 +82,9 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     creates=[p for m,p in calls if m=='wall.createComment']
     if adopt:assert not creates
     else:assert len(creates)==2 and creates[0]['guid']==creates[1]['guid']
-    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
     before=len(calls)
-    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
     assert len(calls)==before
     async with db.get_session() as session:
         row=await session.get(Event,1);row.time='19:00';session.add(row);await session.commit()
@@ -106,7 +106,7 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     assert 'два раза' in calls[-1][1]['message']
     assert sum(m=='wall.createComment' for m,_ in calls)==len(creates)
     before=len(calls)
-    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert not await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
     assert len(calls)==before
     await db.close()
 
@@ -137,7 +137,7 @@ async def test_nonpublic_or_hidden_event_has_no_document_upload(tmp_path,monkeyp
 
 
 @pytest.mark.asyncio
-async def test_failed_calendar_delivery_retries_without_another_wall_post(tmp_path,monkeypatch):
+async def test_publication_defers_calendar_delivery_to_the_periodic_scan(tmp_path,monkeypatch):
     from unittest.mock import AsyncMock
     db=Database(str(tmp_path/'db.sqlite'));await db.init()
     ev=event(source_vk_post_url=None)
@@ -151,11 +151,10 @@ async def test_failed_calendar_delivery_retries_without_another_wall_post(tmp_pa
     monkeypatch.setattr(main,'sync_vk_source_post',publish)
     delivery=AsyncMock(side_effect=[RuntimeError('Calendar network failure'),True])
     monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
-    with pytest.raises(RuntimeError,match='Calendar network failure'):
-        await main.job_sync_vk_source_post(1,db,None)
+    await main.job_sync_vk_source_post(1,db,None)
     await main.job_sync_vk_source_post(1,db,None)
     publish.assert_awaited_once()
-    assert delivery.await_count==2
+    delivery.assert_not_awaited()
     await db.close()
 
 
@@ -309,3 +308,47 @@ async def test_live_scan_reuses_exact_provider_item_before_calendar_cutoff(tmp_p
             assert (await session.execute(select(Setting))).scalars().all() == []
     finally:
         await db.close()
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('age,post_type', [(0,'post'),(180,'post'),(-3600,'post'),(1800,'postpone')])
+async def test_calendar_waits_after_actual_publication(tmp_path,monkeypatch,age,post_type):
+    from datetime import datetime,timezone
+    from unittest.mock import AsyncMock
+    fixed=datetime(2026,11,12,14,0,tzinfo=timezone.utc)
+    class Clock(datetime):
+        @classmethod
+        def now(cls,tz=None):return fixed
+    db=Database(str(tmp_path/'delayed.sqlite'));await db.init()
+    try:
+        async with db.get_session() as session:
+            session.add(event());await session.commit()
+        monkeypatch.setattr(comments,'datetime',Clock)
+        monkeypatch.setattr(comments,'calendar_bytes',AsyncMock(return_value=b'calendar'))
+        monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
+        monkeypatch.setattr(main,'_vk_user_token',lambda:'fixture')
+        api=AsyncMock()
+        monkeypatch.setattr(main,'_vk_api',api)
+        item=dict(id=10,owner_id=-231920894,date=int(fixed.timestamp())-age,post_type=post_type)
+        assert not await comments.ensure_calendar_comment(db,event(),event().source_vk_post_url,candidate_item=item)
+        api.assert_not_awaited()
+    finally:await db.close()
+
+@pytest.mark.asyncio
+async def test_calendar_scan_delivers_one_changed_comment_and_skips_unchanged(tmp_path,monkeypatch):
+    from unittest.mock import AsyncMock
+    db=Database(str(tmp_path/'one-comment.sqlite'));await db.init()
+    try:
+        async with db.get_session() as session:
+            for eid in range(1,4):
+                session.add(event(id=eid,date='2099-11-14',source_vk_post_url=f'https://vk.com/wall-231920894_{eid}'))
+            await session.commit()
+        monkeypatch.setattr(main,'VK_EVENTS_GROUP_ID','231920894')
+        monkeypatch.setattr(main,'VK_SERVICE_TOKEN','fixture')
+        monkeypatch.setattr(main,'_vk_captcha_needed',False)
+        items=[dict(id=eid,owner_id=-231920894,date=1794480000,post_type='post') for eid in range(1,4)]
+        monkeypatch.setattr(main,'_vk_api',AsyncMock(return_value={'response':{'items':items}}))
+        delivery=AsyncMock(side_effect=[False,True,True])
+        monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
+        await main._reconcile_recent_managed_vk_live_urls(db,bot=None)
+        assert delivery.await_count==2
+    finally:await db.close()

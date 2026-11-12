@@ -2194,7 +2194,7 @@ async def test_job_sync_vk_source_post_resyncs_title_only_change(tmp_path, monke
     monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
 
     await main.job_sync_vk_source_post(event_id, db, None)
-    calendar_comment_delivery.assert_awaited_once()
+    calendar_comment_delivery.assert_not_awaited()
 
     assert calls == [("New title", "Same body", False)]
     async with db.get_session() as session:
@@ -2245,7 +2245,7 @@ async def test_job_sync_vk_source_post_resyncs_when_calendar_projection_is_remov
     )
 
     await main.job_sync_vk_source_post(event_id, db, None)
-    calendar_comment_delivery.assert_awaited_once()
+    calendar_comment_delivery.assert_not_awaited()
 
     assert calls == [(event_id, "Same body", None)]
     async with db.get_session() as session:
@@ -2306,7 +2306,7 @@ async def test_job_sync_vk_source_post_republishes_missing_managed_post(tmp_path
     monkeypatch.setattr(main, "sync_vk_source_post", fake_sync_vk_source_post)
 
     await main.job_sync_vk_source_post(event_id, db, None)
-    calendar_comment_delivery.assert_awaited_once()
+    calendar_comment_delivery.assert_not_awaited()
 
     assert calls == [(None, "Same body")]
     async with db.get_session() as session:
