@@ -1261,6 +1261,7 @@ def build_embedding_client(*, key_env: str) -> GoogleAIClient:
         secrets_provider=SecretsProvider(),
         consumer="event_vector_sync",
         default_env_var_name=key_env,
+        reserve_key_envs=os.getenv("GOOGLE_AI_NORMAL_KEY_ENVS") or None,
     )
 
 

@@ -52,4 +52,17 @@ Crew control reads actual freshness/coverage/output, rather than healthz alone.
 
 ## Release and closure evidence
 
+The related-only release reached production and the terminal claim was cleared.
+Catch-up persisted 1,016 embedding rows for 622 documents, then stopped on Google
+429. The selected key 4 scope reached its 1,000 RPD limit while other registered
+scopes remained available. Production already configures a six-key
+`GOOGLE_AI_NORMAL_KEY_ENVS` pool, but vector sync's explicit default lane disables
+implicit pool inheritance. Pass that existing pool to the shared client; retain
+the legacy lane only when no normal pool is configured. No quota is raised or
+reset, and every pool reservation remains project/model scoped and atomic.
+
+The BGE-M3 static-related implementation also exists, but actual runtime still
+selects `STATIC_SITE_RELATED_MODE=pgvector`. This fix preserves that model space;
+it does not assert that the BGE cutover has passed its separate quality gates.
+
 Pending live verification. No restoration or closure is claimed by this record.
