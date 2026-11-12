@@ -408,3 +408,63 @@ async def test_permanent_vk_edit_error_does_not_pause_whole_outbox(
     assert main._vk_captcha_resume is None
     assert calls == (["wall.getById"] if preflight_blocked else ["wall.getById", "wall.edit"])
     assert job.terminal_reason != "applied"
+
+
+@pytest.mark.asyncio
+async def test_captcha_resume_defers_flush_until_eligibility_reads_finish(tmp_path, monkeypatch):
+    from sqlalchemy import event as sa_event
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Session
+
+    db = Database(str(tmp_path / "resume-flush.sqlite"))
+    await db.init()
+    marker = "captcha_wait:flush-regression"
+    async with db.get_session() as session:
+        for title, date, cohort in [
+            ("first", "2099-01-04", marker),
+            ("second", "2099-01-05", marker),
+            ("past", "2020-01-01", marker),
+            ("historical", "2099-01-06", "manual:keep-paused"),
+        ]:
+            ev = Event(title=title, description="d", date=date, time="12:00",
+                       location_name="loc", source_text="src")
+            session.add(ev)
+            await session.flush()
+            session.add(JobOutbox(event_id=ev.id, task=JobTask.vk_sync,
+                                  status=JobStatus.paused, last_error=cohort))
+        await session.commit()
+
+    reading_event = False
+    flushes = []
+    original_get = AsyncSession.get
+
+    async def observe_get(session, model, *args, **kwargs):
+        nonlocal reading_event
+        reading_event = model is Event
+        try:
+            return await original_get(session, model, *args, **kwargs)
+        finally:
+            reading_event = False
+
+    def observe_flush(session, context, instances):
+        flushes.append(reading_event)
+
+    monkeypatch.setattr(AsyncSession, "get", observe_get)
+    monkeypatch.setattr(main, "VK_CAPTCHA_RESUME_SPACING_SEC", 30)
+    sa_event.listen(Session, "before_flush", observe_flush)
+    try:
+        assert await main._resume_vk_captcha_outbox(db, marker) == 2
+    finally:
+        sa_event.remove(Session, "before_flush", observe_flush)
+
+    # One flush belongs to the existing final commit; no Event read writes jobs.
+    assert flushes == [False]
+    async with db.get_session() as session:
+        jobs = (await session.execute(select(JobOutbox).order_by(JobOutbox.id))).scalars().all()
+    assert [job.status for job in jobs] == [
+        JobStatus.pending, JobStatus.pending, JobStatus.done, JobStatus.paused,
+    ]
+    assert jobs[1].next_run_at - jobs[0].next_run_at == timedelta(seconds=30)
+    assert jobs[2].last_error == "captcha_recovery_skipped_past_or_inactive"
+    assert jobs[3].last_error == "manual:keep-paused"
+    await db.engine.dispose()

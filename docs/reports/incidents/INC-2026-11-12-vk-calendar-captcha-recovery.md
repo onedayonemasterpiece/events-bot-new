@@ -29,3 +29,16 @@ remain active. First real CAPTCHA still uses the original pause/break path;
 there is no new timer, marker migration, forced resume or provider bypass.
 Verify ordinary marker-scoped recovery and public photo delivery after release;
 passing the regression does not establish live CAPTCHA clearance.
+
+
+After the latest cohort recovered two jobs at15:38:44 UTC, subsequent recovery
+loops failed on older persisted cohorts. The15:40–15:42 traceback shows
+`session.get(Event, ...)` triggering Query-invoked autoflush of an earlier
+`JobOutbox` update, then `database is locked` after the30-second busy timeout.
+The recovery loop now uses the same `session.no_autoflush` read context already
+used in the outbox worker, leaving the existing final commit intact. An isolated
+actual-loop regression distinguishes three premature read-time flushes from
+one final-commit flush and verifies marker scope, past-event exclusion and
+30-second pacing. This removes the premature write; the external lock holder
+was not identified and general SQLite contention is not claimed resolved.
+No new recovery path or live cohort mutation was introduced.
