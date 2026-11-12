@@ -21,6 +21,10 @@ CDN без копирования объекта; source/Supabase/legacy-bucket 
 контрактом: отдельные immutable derivatives лучше используют HTTP cache,
 не заставляют декодировать невидимые изображения и не требуют runtime crop-map.
 
+Source downloads encode international hostnames with the standard IDNA codec
+before the existing urllib request; UTF-8 paths and queries remain percent-encoded.
+This applies to both CDN materialization and pair-review source downloads.
+
 Ошибка оставляет `review_status=pending_review`,
 `review_reason=cdn_mirror_pending` и durable retry `event_media_review`. Это
 единый путь для новых событий, existing-event parser updates, source rehydrate
