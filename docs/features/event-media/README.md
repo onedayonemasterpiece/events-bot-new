@@ -425,3 +425,9 @@ Raw-byte identity assignment performs its per-event uniqueness probe inside a
 `no_autoflush` block. A poster with other staged fingerprint changes therefore
 cannot flush a conflicting `raw_sha256` before the canonical survivor is found;
 the duplicate keeps `NULL` and pair review retains the evidence.
+
+When pair review or semantic classification changes the approved gallery, the
+existing projection fanout schedules with `refresh_existing_vk=True`. This
+requeues a completed managed `vk_sync` for the same post instead of treating
+its existence as completion of the new media projection. Unchanged galleries
+do not repeat this fanout; semantic exclusions still determine public media.

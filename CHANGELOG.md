@@ -7,6 +7,7 @@
 - Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
 
 ### Fixed
+- Reviewed event-gallery changes requeue the existing managed VK sync after pair or semantic review, allowing approved additions and higher-resolution replacements to update the same post automatically.
 - Calendar live scans reuse the exact already-fetched VK wall item, avoiding another user-token read for each match while preserving publication-date cutoff and delivery receipts.
 - Existing event-media downloads encode international hostnames with IDNA, allowing full-resolution Yantar Hall posters to reach the ordinary CDN and review path instead of failing before HTTP transport.
 - Calendar comment scans skip their publishing action while the existing CAPTCHA cache is active, preserving service reads and the original recovery cooldown instead of creating repeated pause cohorts.

@@ -2303,3 +2303,62 @@ def test_media_download_encodes_international_host_and_path(monkeypatch, authori
     # urllib retains explicit credentials in .host; the URL authority must preserve them.
     assert request.host == (("user:pass@" if "@" in authority else "") + expected_host)
     assert request.selector == "/%D0%B0%D1%84%D0%B8%D1%88%D0%B0/1800%20x900.jpg?%D0%B8%D0%BC%D1%8F=%D0%93%D0%B0%D0%BB%D0%B0&x=1%202"
+
+
+@pytest.mark.asyncio
+async def test_reviewed_gallery_change_requeues_done_managed_vk_job(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    import main
+
+    db = Database(str(tmp_path / "managed-fanout.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    # Model the successful provider existence/media probe; the scheduler and
+    # outbox writes below are real, including requeue_done admission.
+    monkeypatch.setattr(main, "_event_has_existing_managed_vk_post", AsyncMock(return_value=True))
+    async with db.get_session() as session:
+        ev = _event()
+        ev.date = "2099-06-01"
+        ev.source_vk_post_url = "https://vk.com/wall-1_5"
+        session.add(ev)
+        await session.flush()
+        event_id = ev.id
+        await _apply_posters(session, event_id, [PosterCandidate(
+            supabase_url=f"https://static.example/{name}.png", sha256=name,
+        ) for name in ("small", "full")])
+        session.add(JobOutbox(event_id=event_id, task=JobTask.vk_sync,
+                              status=main.JobStatus.done))
+        await session.commit()
+
+    async def download(poster):
+        return DownloadedPoster(_pattern_png_bytes(invert=poster.display_order == 1),
+                                "image/png", poster.supabase_url)
+
+    async def reviewer(**kwargs):
+        return dict(decision="distinct", duplicate_kind="none", confidence=0.99,
+                    semantic_conflict=False, canonical_side="either", reason_code="different_photos")
+
+    monkeypatch.setattr(event_media, "_download_poster", download)
+    monkeypatch.setattr(event_media, "_call_reviewer", reviewer)
+    assert await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+        job = (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.vk_sync,
+        ))).scalar_one()
+        assert len(ev.photo_urls) == 2
+        assert ev.source_vk_post_url == "https://vk.com/wall-1_5"
+        assert job.status == main.JobStatus.pending
+        job.status = main.JobStatus.done
+        await session.commit()
+        unchanged_at = job.updated_at
+
+    assert not await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+        job = (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.vk_sync,
+        ))).scalar_one()
+        assert job.status == main.JobStatus.done and job.updated_at == unchanged_at
+        assert ev.source_vk_post_url == "https://vk.com/wall-1_5"
+    await db.close()
