@@ -144,3 +144,22 @@ An already accepted guide source or event must not be replayed to create a
 nonzero count. The exact new-account revision lookup now returns 1; the normal recovery registry
 is empty after successful import. Verify the next ordinary scheduled run through
 the existing positive-revision path, without this operator provisioning adapter.
+
+### Ordinary scheduled recurrence accepted
+
+On November 12 the 13:20 Kaliningrad light entry 11978 skipped while Telegram
+monitoring held the heavy operation gate. The ordinary automatic full entry
+11979 (trigger=scheduled, run `e6e6df92290e`) started at 13:20:02 and imported
+successfully at 14:09:24. Its original launcher obtained the positive existing
+revision and submitted version 2 once, with no invalid dataset sources or
+operator provisioning adapter. The exact callback run has 30 source_done events;
+all 30 source reports were materialized, 81 posts processed, 34 LLM analyses
+successful, ten occurrence updates and zero errors or new occurrences. All eight
+onboarded sources again returned ok and their last_scan_at values advanced;
+primary and post-source joins confirm no future occurrences from those eight.
+This completes the ordinary guide recurrence check. Evidence:
+`guide-recurrence-readback-20261112.json` in the retained source-onboarding
+directory. Actual runtime `9a782e4d01368cc117f3125e610bf41ebba1b401` contains prior
+`2c18976b47515dd1bb03121f4dbfd3ef2993e3d7`; health is ready with no issues.
+No deployment, repeated scan, source replay, or extra publication was performed
+for this verification. Other account migration data blockers remain separate.
