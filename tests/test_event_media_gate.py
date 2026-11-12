@@ -1528,6 +1528,87 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
 
 
 @pytest.mark.asyncio
+async def test_confirmed_duplicate_upgrades_approved_thumbnail_and_runs_vk(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    import main
+
+    db = Database(str(tmp_path / "fullres.sqlite"))
+    await db.init()
+    small, full = (f"https://static.example/{name}.png" for name in ("small", "full"))
+    payloads = {}
+    for url, size in [(small, (366, 450)), (full, (1800, 900))]:
+        with Image.open(io.BytesIO(_pattern_png_bytes())) as image:
+            out = io.BytesIO()
+            image.resize(size).save(out, format="PNG")
+            payloads[url] = out.getvalue()
+
+    async def download(poster):
+        return DownloadedPoster(payloads[poster.supabase_url], "image/png", poster.supabase_url)
+
+    async def reviewer(**kwargs):
+        kwargs["attempt_observer"]({"requested_model": kwargs["model"]})
+        return dict(decision="duplicate", duplicate_kind="mirror_reencode", confidence=0.99,
+                    semantic_conflict=False, canonical_side="either", reason_code="same_poster")
+
+    monkeypatch.setattr(event_media, "_download_poster", download)
+    monkeypatch.setattr(event_media, "_call_reviewer", reviewer)
+    async with db.get_session() as session:
+        event = _event()
+        event.date = "2099-06-01"
+        session.add(event)
+        await session.flush()
+        event_id = event.id
+        await _apply_posters(session, event_id, [PosterCandidate(
+            supabase_url=url, sha256=hashlib.sha256(payloads[url]).hexdigest(),
+        ) for url in (small, full)])
+        await session.commit()
+        posters = (await session.execute(select(EventPoster).where(
+            EventPoster.event_id == event_id).order_by(EventPoster.id))).scalars().all()
+        assert [p.review_status for p in posters] == [APPROVED, PENDING_REVIEW]
+
+    assert await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        event = await session.get(Event, event_id)
+        rows = (await session.execute(select(EventPoster).where(
+            EventPoster.event_id == event_id).order_by(EventPoster.id))).scalars().all()
+        pair = (await session.execute(select(EventMediaPairReview).where(
+            EventMediaPairReview.event_id == event_id))).scalar_one()
+        assert event.photo_urls == [full]
+        assert rows[0].review_status == DUPLICATE and rows[0].duplicate_of_id == rows[1].id
+        assert rows[1].review_status == APPROVED and (rows[1].width, rows[1].height) == (1800, 900)
+        assert pair.decision == "duplicate" and pair.canonical_poster_id == rows[1].id
+
+    for key, value in {"VK_EVENTS_GROUP_ID": "1", "VK_USER_TOKEN": "fixture",
+                       "VK_PHOTOS_ENABLED": True, "VK_MAX_ATTACHMENTS": 10}.items():
+        monkeypatch.setattr(main, key, value)
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "fixture")
+    monkeypatch.setattr(main, "choose_vk_actor", lambda *_: [main.VkActor("user", "fixture", "user")])
+    slot = int(main.datetime.now(main.timezone.utc).timestamp()) + 3600
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", AsyncMock(return_value=slot))
+    monkeypatch.setattr(main, "_resolve_vk_postponed_wall_id_any_actor", AsyncMock(return_value=5))
+    wall, uploads = {"id": 5}, []
+
+    async def api(method, params=None, *args, **kwargs):
+        if method == "wall.getById":
+            return {"response": {"items": [wall]}}
+        assert method == "wall.post"
+        wall.update(text=params["message"], date=params["publish_date"], attachments=params["attachments"])
+        return {"response": {"post_id": 5}}
+
+    async def upload(group, url, *args, **kwargs):
+        uploads.append(url)
+        return "photo-1_2"
+
+    monkeypatch.setattr(main, "_vk_api", api)
+    monkeypatch.setattr(main, "vk_api", api)
+    monkeypatch.setattr(main, "upload_vk_photo", upload)
+    assert await main._run_due_jobs_once(db, None, only_event=event_id,
+                                       allowed_tasks={JobTask.vk_sync}) == 1
+    assert uploads == [full] and wall["attachments"] == "photo-1_2"
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_rejected_poster_pair_does_not_spend_or_block_candidate(tmp_path):
     db = Database(str(tmp_path / "excluded.sqlite"))
     await db.init()
@@ -1791,6 +1872,10 @@ async def test_semantic_conflict_rejects_candidate_without_manual_queue(tmp_path
         "https://static.example/right.png": _pattern_png_bytes(invert=False),
         "https://static.example/wrong.png": _pattern_png_bytes(invert=True),
     }
+    with Image.open(io.BytesIO(payloads["https://static.example/wrong.png"])) as image:
+        out = io.BytesIO()
+        image.resize((1800, 900)).save(out, format="PNG")
+        payloads["https://static.example/wrong.png"] = out.getvalue()
 
     async def fake_download(poster: EventPoster) -> DownloadedPoster:
         url = str(poster.supabase_url)
@@ -1835,6 +1920,7 @@ async def test_semantic_conflict_rejects_candidate_without_manual_queue(tmp_path
         )
         event = await session.get(Event, event_id)
     assert [row.review_status for row in rows] == [APPROVED, "rejected"]
+    assert rows[1].width > rows[0].width
     assert event.photo_urls == ["https://static.example/right.png"]
 
 

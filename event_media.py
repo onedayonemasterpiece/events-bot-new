@@ -1129,9 +1129,9 @@ def _poster_quality_key(poster: EventPoster) -> tuple[int, int, int, int]:
     url = resolve_poster_display_url(poster)
     area = int(poster.width or 0) * int(poster.height or 0)
     return (
-        int(poster.review_status == APPROVED),
         int(_is_managed_url(url)),
         area,
+        int(poster.review_status == APPROVED),
         -int(poster.id or 0),
     )
 
@@ -2571,6 +2571,17 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
             canonical: EventPoster | None = None
             if decision["decision"] == "duplicate":
                 canonical = survivor
+                duplicate = right if canonical.id == left.id else left
+                canonical.review_status = APPROVED
+                canonical.duplicate_of_id = None
+                canonical.review_reason = "automated_pair_duplicate_survivor"
+                canonical.reviewed_at = review.updated_at
+                duplicate.review_status = DUPLICATE
+                duplicate.duplicate_of_id = canonical.id
+                duplicate.review_reason = "automated_pair_duplicate"
+                duplicate.reviewed_at = review.updated_at
+                session.add(canonical)
+                session.add(duplicate)
             elif bool(decision["semantic_conflict"]):
                 if decision["canonical_side"] == "left":
                     canonical = left
