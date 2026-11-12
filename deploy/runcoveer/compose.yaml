@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:related-only-20261112
+    image: runcoveer/events:qtickets-browser-deps-20261112
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
