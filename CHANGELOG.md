@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Keep automatic Telegram recovery and scheduled VK per-post progress quiet; send one Telegram recovery summary and log intermediate LLM warnings while retaining terminal alerts.
 - Complete source galleries publish without waiting for optional image geometry; dependency replacement clears an empty list and removes stale dependency deferral.
 - Suppress repeated Telegram per-post progress for completed carriers during import recovery. Temporarily disconnect automatic calendar document jobs after an isolated `docs.save` CAPTCHA; preserve photo publication and existing receipts.
 

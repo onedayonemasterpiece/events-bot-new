@@ -152,3 +152,31 @@ claim. No new provider request is needed to establish the repeated-upload bug.
 Evidence: `/home/dev/artifacts/events-bot-new/20261112T204450Z-vk-no-repeated-metrics-or-docs/`
 and the retained load retrospective. Calendar and initial full-gallery live
 acceptance remain open.
+
+
+## Owner screenshot of continued import noise, 23:23 Kaliningrad
+
+PR919 removed metrics_only per-post callbacks but did not disable recovery's
+own verbose flag. Each release interrupted the local results import; both
+resume routes passed send_progress=true and sent restart/file-path messages.
+The next screenshot also contains scheduled VK per-row progress and an
+intermediate WARNING about a model fallback. This is incomplete notification
+containment, not a new Kaggle extraction or duplicate Smart Update of every
+completed carrier.
+
+Automatic TG recovery now invokes the same importer with its existing progress
+disabled and no chat recipient. Its existing completion notification becomes
+one aggregate format_report result. Scheduled VK start/update progress uses
+its existing trigger to stay quiet; manual progress, actual changed-event
+reports and final batch summary remain. LLM WARNING events stay in structured
+logs; other severities keep existing delivery/deduplication. No provider,
+quota, retry, model, queue, state, timer or credential change.
+
+Four distinguishing cases fail before on exact PR920: both TG resume routes,
+WARNING recipient routing, and scheduled-catchup per-row progress. The manual
+VK batch control passes. After correction18 focused tests pass in5.11seconds,
+including one recovery summary, suppressed intermediate warning, preserved
+terminal alert, manual progress and terminal accounting for15 VK rows.
+Retained evidence:20261112T212650Z-quiet-automatic-import. Live acceptance
+requires the actual normal recovery after release and no repeated restart,
+file-path or per-post chatter. Original multi-photo acceptance remains open.

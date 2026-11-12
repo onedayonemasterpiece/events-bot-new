@@ -768,4 +768,7 @@ Recovery can revisit a saved result file after a release interrupts its import.
 Existing `telegram_scanned_message` receipts keep completed carriers in
 `metrics_only`; both start and done callbacks suppress per-post messages for
 that status. Metrics and the final aggregate report remain available. New,
-forced and incomplete carriers still show their actual import progress.
+forced and incomplete carriers still show progress in interactive imports.
+Automatic recovery calls the same importer without a chat recipient or progress
+and sends one aggregate report only after completion. Restart messages, local
+result-file paths and per-post details are not sent during that recovery.

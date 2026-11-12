@@ -1626,7 +1626,7 @@ async def run_vk_auto_import(
             return default
         return raw in {"1", "true", "yes", "on"}
 
-    send_progress = _env_enabled("VK_AUTO_IMPORT_SEND_PROGRESS", True)
+    send_progress = _env_enabled("VK_AUTO_IMPORT_SEND_PROGRESS", True) and not trigger.startswith("scheduled")
     try:
         progress_every = int(os.getenv("VK_AUTO_IMPORT_PROGRESS_EVERY", "1") or "1")
     except Exception:
