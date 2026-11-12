@@ -1415,6 +1415,14 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
         await session.refresh(event)
         urls = list(event.photo_urls)
         assert len(urls) == 2 and urls[1] == second
+        # This fixture calls the pair helper directly, outside the outbox worker.
+        # Reflect its completed media work before exercising VK-only dispatch.
+        for job in (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.event_media_review,
+        ))).scalars():
+            job.status = main.JobStatus.done
+            session.add(job)
+        await session.commit()
 
     for key, value in {"VK_EVENTS_GROUP_ID": "1", "VK_USER_TOKEN": "fixture", "VK_PHOTOS_ENABLED": True,
                        "VK_MAX_ATTACHMENTS": 10}.items():
@@ -1442,7 +1450,7 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
             wall["date"] = slot
         else:
             assert (params["owner_id"], params["post_id"]) == ("-1", "9")
-            assert "publish_date" not in params and params["message"] == wall["text"]
+            assert params["publish_date"] == slot and params["message"] == wall["text"]
         writes.append(method)
         wall.update(text=params["message"], primary_attachments_mode=layout, attachments=[
             {"type": "photo", "photo": {"owner_id": -1, "id": int(ref.split("_")[1])}} for ref in ids
@@ -1578,6 +1586,13 @@ async def test_confirmed_duplicate_upgrades_approved_thumbnail_and_runs_vk(tmp_p
         assert rows[0].review_status == DUPLICATE and rows[0].duplicate_of_id == rows[1].id
         assert rows[1].review_status == APPROVED and (rows[1].width, rows[1].height) == (1800, 900)
         assert pair.decision == "duplicate" and pair.canonical_poster_id == rows[1].id
+        # Direct helper invocation above did not own/complete the queued job.
+        for job in (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.event_media_review,
+        ))).scalars():
+            job.status = main.JobStatus.done
+            session.add(job)
+        await session.commit()
 
     for key, value in {"VK_EVENTS_GROUP_ID": "1", "VK_USER_TOKEN": "fixture",
                        "VK_PHOTOS_ENABLED": True, "VK_MAX_ATTACHMENTS": 10}.items():
@@ -2362,3 +2377,29 @@ async def test_reviewed_gallery_change_requeues_done_managed_vk_job(tmp_path, mo
         assert job.status == main.JobStatus.done and job.updated_at == unchanged_at
         assert ev.source_vk_post_url == "https://vk.com/wall-1_5"
     await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('postponed', [False, True])
+async def test_gallery_edit_preserves_known_postponed_publication_time(monkeypatch, postponed):
+    from datetime import datetime, timezone
+    import main
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+    monkeypatch.setattr(main, '_vk_user_token', lambda: 'fixture')
+    publication = int(datetime.now(timezone.utc).timestamp()) + (3600 if postponed else -60)
+    writes = []
+    async def api(method, params, *args, **kwargs):
+        if method == 'wall.getById':
+            return {'response': {'items': [{'id': 10, 'date': publication,
+                'post_type': 'postpone' if postponed else 'post', 'text': 'Old', 'attachments': []}]}}
+        assert method == 'wall.edit'
+        writes.append(params)
+        return {'response': 1}
+    monkeypatch.setattr(main, '_vk_api', api)
+    assert await main.edit_vk_post('https://vk.com/wall-231920894_10', 'Updated',
+                                   attachments=['photo1_1', 'photo1_2'])
+    assert len(writes) == 1
+    if postponed:
+        assert writes[0]['publish_date'] == publication
+    else:
+        assert 'publish_date' not in writes[0]

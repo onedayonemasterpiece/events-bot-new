@@ -16221,7 +16221,7 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
         db, bot, token=VK_SERVICE_TOKEN, token_kind="service", skip_captcha=True,
     )
     items = [item for item in _vk_postponed_items(response)
-             if item.get("post_type", "post") == "post" and item.get("date", 0) >= payload["publish_date"]]
+             if item.get("post_type", "post") == "post"]
     matches = [item for item in items
                if int(item.get("postponed_id") or item.get("id") or 0) == postponed_id]
     if not matches:
@@ -17188,6 +17188,15 @@ async def schedule_event_update_tasks(
             or any(not is_event_media_cdn_url(url) for url in event_photo_urls)
         )
     )
+    async with db.get_session() as session:
+        media_job = (await session.execute(
+            select(JobOutbox).where(
+                JobOutbox.event_id == eid,
+                JobOutbox.task == JobTask.event_media_review,
+            ).order_by(JobOutbox.id.desc()).limit(1)
+        )).scalar_one_or_none()
+    if media_job is not None and media_job.status != JobStatus.done:
+        media_dep_key = f"{JobTask.event_media_review.value}:{eid}"
     if needs_media_reconcile and "event_media_review" in JOB_HANDLERS:
         media_dep_key = f"{JobTask.event_media_review.value}:{eid}"
         results[JobTask.event_media_review] = await enqueue_job(
@@ -17240,9 +17249,10 @@ async def schedule_event_update_tasks(
             vk_enqueue_kwargs: dict[str, Any] = {
                 "requeue_done": refresh_existing_vk,
             }
-            if stale_ics_storage and ics_dep:
-                vk_enqueue_kwargs["depends_on"] = [ics_dep]
-                vk_enqueue_kwargs["replace_depends_on"] = True
+            vk_enqueue_kwargs["depends_on"] = [
+                key for key in (media_dep_key, ics_dep if stale_ics_storage else None) if key
+            ]
+            vk_enqueue_kwargs["replace_depends_on"] = True
             await enqueue_job(
                 db,
                 eid,
@@ -26342,8 +26352,8 @@ async def job_event_media_review(
     projection_changed = await review_next_event_media_pair(int(event_id), db, bot)
     # The pair worker can return early after approving a seed/classifying its
     # role. That branch does not run its trailing fanout. Always refresh the
-    # dependencies here after progress: optional second-image review tomorrow
-    # must not block an announcement whose approved CDN seed exists now.
+    # dependencies after progress. Publication waits for the existing media
+    # followups, rather than creating a one-photo post from the first seed.
     if rehydrated or cdn_updated or projection_changed:
         async with db.get_session() as session:
             fresh = await session.get(Event, int(event_id))

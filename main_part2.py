@@ -7860,6 +7860,9 @@ async def edit_vk_post(
             post = items[0]
             post_text = post.get("text") or ""
             current_layout = post.get("primary_attachments_mode")
+            if int(post.get("date") or 0) > datetime.now(timezone.utc).timestamp():
+                params["publish_date"] = int(post["date"])
+
             can_edit_flag = post.get("can_edit")
             if can_edit_flag is not None and not bool(can_edit_flag):
                 edit_allowed = False
