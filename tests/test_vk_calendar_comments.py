@@ -112,3 +112,26 @@ async def test_nonpublic_or_hidden_event_has_no_document_upload(tmp_path,monkeyp
     async with db.get_session() as session:
         assert not (await session.execute(select(Setting))).scalars().all()
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_calendar_delivery_retries_without_another_wall_post(tmp_path,monkeypatch):
+    from unittest.mock import AsyncMock
+    db=Database(str(tmp_path/'db.sqlite'));await db.init()
+    ev=event(source_vk_post_url=None)
+    async with db.get_session() as session:
+        session.add(ev);await session.commit()
+    monkeypatch.setattr(main,'VK_EVENTS_GROUP_ID','231920894')
+    monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
+    monkeypatch.setattr(main,'_recover_managed_vk_live_url',AsyncMock(return_value=False))
+    monkeypatch.setattr(main,'_managed_vk_post_state',AsyncMock(return_value=(True,True)))
+    publish=AsyncMock(return_value='https://vk.com/wall-231920894_10')
+    monkeypatch.setattr(main,'sync_vk_source_post',publish)
+    delivery=AsyncMock(side_effect=[RuntimeError('Calendar network failure'),True])
+    monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
+    with pytest.raises(RuntimeError,match='Calendar network failure'):
+        await main.job_sync_vk_source_post(1,db,None)
+    await main.job_sync_vk_source_post(1,db,None)
+    publish.assert_awaited_once()
+    assert delivery.await_count==2
+    await db.close()
