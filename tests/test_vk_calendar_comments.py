@@ -135,3 +135,26 @@ async def test_failed_calendar_delivery_retries_without_another_wall_post(tmp_pa
     publish.assert_awaited_once()
     assert delivery.await_count==2
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tmp_path,monkeypatch):
+    from unittest.mock import AsyncMock
+    db=Database(str(tmp_path/'db.sqlite'));await db.init()
+    ev=event(date='2099-11-14')
+    async with db.get_session() as session:
+        session.add(ev);await session.commit()
+    monkeypatch.setattr(main,'VK_EVENTS_GROUP_ID','231920894')
+    monkeypatch.setattr(main,'VK_SERVICE_TOKEN','read-fixture')
+    api=AsyncMock(return_value={'response':{'items':[{'id':20,'postponed_id':10,'text':'Общее расписание двух сеансов'}]}})
+    monkeypatch.setattr(main,'_vk_api',api)
+    async def recover(db,ev,**kw):
+        assert kw['candidate_item']['postponed_id']==10
+        ev.source_vk_post_url='https://vk.com/wall-231920894_20'
+        return True
+    monkeypatch.setattr(main,'_recover_managed_vk_live_url',recover)
+    delivery=AsyncMock(return_value=True)
+    monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
+    assert await main._reconcile_recent_managed_vk_live_urls(db,bot=None)==1
+    assert delivery.await_args.args[-1]=='https://vk.com/wall-231920894_20'
+    await db.close()

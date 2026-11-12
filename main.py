@@ -16254,7 +16254,7 @@ async def _reconcile_recent_managed_vk_live_urls(
                     select(Event).where(
                         Event.lifecycle_status == "active",
                         Event.silent == False,  # noqa: E712
-                        Event.date >= today,
+                        or_(Event.date >= today, Event.end_date >= today),
                         Event.source_vk_post_url.like(
                             f"https://vk.com/wall{owner_id}_%"
                         ),
@@ -16262,6 +16262,11 @@ async def _reconcile_recent_managed_vk_live_urls(
                 )
             ).scalars()
         )
+    by_post_id: dict[int, list[Event]] = {}
+    for ev in events:
+        stored_ids = _vk_owner_and_post_id(str(ev.source_vk_post_url or ""))
+        if stored_ids:
+            by_post_id.setdefault(int(stored_ids[1]), []).append(ev)
     by_header: dict[tuple[str, str], list[Event]] = {}
     for ev in events:
         expected_date = next(
@@ -16276,6 +16281,12 @@ async def _reconcile_recent_managed_vk_live_urls(
             by_header.setdefault((str(ev.title or "").strip(), expected_date), []).append(ev)
     matched_items: dict[int, list[dict]] = {}
     for item in live_items:
+        # VK's exact postponed binding also covers posts with several sessions.
+        exact = by_post_id.get(int(item.get("postponed_id") or item.get("id") or 0), [])
+        if exact:
+            for ev in exact:
+                matched_items.setdefault(int(ev.id), []).append(item)
+            continue
         lines = [line.strip() for line in str(item.get("text") or "").splitlines() if line.strip()]
         if not lines:
             continue
