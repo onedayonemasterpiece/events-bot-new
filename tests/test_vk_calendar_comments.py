@@ -36,10 +36,11 @@ async def test_bad_date_is_not_invented():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('title,filename', [('Лекция','Лекция.ics'), ('🎨 👩🏽‍🎨 🇷🇺 Лекция ❤️','Лекция.ics'), ('1️⃣ C++ — 2026','1 C++ — 2026.ics'), ('🎶','Событие.ics')])
 @pytest.mark.parametrize('adopt',[False,True])
-async def test_delivery_reuses_document_after_comment_failure_and_updates_without_duplicate(tmp_path,monkeypatch,adopt):
+async def test_delivery_reuses_document_after_comment_failure_and_updates_without_duplicate(tmp_path,monkeypatch,adopt,title,filename):
     db=Database(str(tmp_path/'db.sqlite'));await db.init()
-    ev=event()
+    ev=event(title=title)
     async with db.get_session() as session:
         session.add(ev);await session.commit()
     monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
@@ -56,7 +57,7 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
             assert 'group_id' not in params  # Actual group-storage access was denied.
             value={'upload_url':'https://upload.example/file'}
         elif method=='docs.save':
-            assert params['title']=='Лекция.ics'
+            assert params['title']==filename
             value={'doc':{'id':30,'owner_id':20,'ext':'ics'}}
         elif method=='wall.createComment':
             if fail[0]:fail[0]=False;raise RuntimeError('Lost comment response')
