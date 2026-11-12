@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import sqlite3
+import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -2272,3 +2273,33 @@ async def test_exact_cdn_thumbnail_backfill_preserves_display_bytes(monkeypatch)
         assert poster.thumbnail_256_url and poster.thumbnail_512_url
     assert uploads[0] == (path, original)
     assert len(uploads) == 3  # First backfill only; second pass is already complete.
+
+
+@pytest.mark.parametrize("authority, expected_host", [
+    ("янтарьхолл.рф:8443", "xn--80awafglm0a6dza.xn--p1ai:8443"),
+    ("example.com:8443", "example.com:8443"),
+    ("[2001:db8::1]:8443", "[2001:db8::1]:8443"),
+    ("user:pass@ЯНТАРЬХОЛЛ.РФ:8443", "xn--80awafglm0a6dza.xn--p1ai:8443"),
+])
+def test_media_download_encodes_international_host_and_path(monkeypatch, authority, expected_host):
+    requests = []
+
+    def open_url(request, *, timeout):
+        # Exercise the HTTP host/selector boundary without network access.
+        request.host.encode("ascii")
+        request.selector.encode("ascii")
+        requests.append(request)
+        response = io.BytesIO(b"poster")
+        response.headers = {"Content-Type": "image/jpeg"}
+        return response
+
+    monkeypatch.setattr(urllib.request, "urlopen", open_url)
+    downloaded = event_media._download_url(
+        f"https://{authority}/афиша/1800%20x900.jpg?имя=Гала&x=1%202",
+        max_bytes=1024, timeout=1,
+    )
+    assert downloaded.data == b"poster"
+    request = requests[0]
+    # urllib retains explicit credentials in .host; the URL authority must preserve them.
+    assert request.host == (("user:pass@" if "@" in authority else "") + expected_host)
+    assert request.selector == "/%D0%B0%D1%84%D0%B8%D1%88%D0%B0/1800%20x900.jpg?%D0%B8%D0%BC%D1%8F=%D0%93%D0%B0%D0%BB%D0%B0&x=1%202"
