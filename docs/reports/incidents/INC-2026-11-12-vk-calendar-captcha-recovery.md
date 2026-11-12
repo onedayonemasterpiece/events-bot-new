@@ -85,3 +85,35 @@ and cached-CAPTCHA guards must still pass; ordinary photo delivery is verified
 only after that existing recovery, never by ignoring a live challenge. Retained
 implementation tests continue to verify delayed delivery, content-only receipts
 and replacement safety. Live acceptance still requires real photo attachments.
+
+
+## Owner correction: one scheduled action, no recurring own-wall scan
+
+The owner explicitly rejected wall reconciliation and historical catch-up for
+calendar delivery. The exact public timestamp is known when a new announcement
+is placed in postponed posts. This supersedes the scan/content-replacement
+regressions above: existing delivered comments are no longer updated by this
+feature, even when an event later changes.
+
+Historical source comparison found the five-minute live-ID scan already in
+September's PR670, before this incident. Calendar integration on November12
+converted it into a repeating writer. Source baseline `c7ee91e61b` and the
+measured traffic analysis are retained in
+`/home/dev/artifacts/events-bot-new/20261112T193558Z-vk-before-after-simplification-20261112/report.md`.
+
+The replacement removes that scan from the worker and deletes its broad
+matching loop. Successful creation schedules one task in the existing
+JobOutbox at publish_date plus nonuniform 5–15 minutes. On execution a single
+service read resolves that announcement; existing ICS transport uploads one
+document and creates one comment. The saved receipt is reused after a lost
+response. No old-public-post bootstrap, new queue, worker, CAPTCHA bypass,
+actor rotation, content hash migration or automatic comment replacement.
+
+Mandatory distinguishing regression:
+`test_new_post_schedules_one_comment_after_public_time_without_wall_polling`
+asserts no calls before the due time, exact new public URL, one upload/create,
+no writes to the historical post, shared-session URL propagation and no repeat
+requests after completion. Lost-response recovery must reuse the document
+without another create. Existing marker-scoped pause/recovery remains required.
+A release and real ordinary post/comment receipt are still needed for live
+acceptance; this source change does not establish CAPTCHA clearance.

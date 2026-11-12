@@ -44,7 +44,6 @@ async def test_new_media_precedes_remaining_background_batch(tmp_path, monkeypat
     monkeypatch.setitem(main.JOB_HANDLERS, "event_media_review", handler)
     monkeypatch.setattr(main, "_watch_nav_jobs", noop)
     monkeypatch.setattr(main, "_log_job_outbox_stats", noop)
-    monkeypatch.setattr(main, "_reconcile_recent_managed_vk_live_urls", noop)
     task = None
     try:
         if background:
@@ -98,7 +97,6 @@ async def test_projection_waits_for_own_media_only(tmp_path, monkeypatch, media_
     monkeypatch.setitem(main.JOB_HANDLERS, "telegraph_build", publication_handler)
     monkeypatch.setattr(main, "_watch_nav_jobs", noop)
     monkeypatch.setattr(main, "_log_job_outbox_stats", noop)
-    monkeypatch.setattr(main, "_reconcile_recent_managed_vk_live_urls", noop)
     try:
         await main._run_due_jobs_once(db, None, max_jobs=1)
         expected = ("publication", publication) if media_ready else ("media", publication)

@@ -1,7 +1,6 @@
 """Calendar documents on the managed Afisha wall, using existing VK and ICS transport."""
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import random
@@ -51,7 +50,23 @@ async def calendar_bytes(db, events):
     return calendar.to_ical()
 
 
-async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
+async def schedule_calendar_comment(db, event_id, post_url, publish_date):
+    """One existing outbox job per new postponed announcement, never wall history."""
+    import main
+    group = str(main.VK_AFISHA_GROUP_ID or "").lstrip("-")
+    ids = main._vk_owner_and_post_id(post_url)
+    if not ids or not group or int(ids[0]) != -int(group):
+        return
+    delay = random.Random(post_url).randint(300, 900)
+    await main.enqueue_job(
+        db, event_id, main.JobTask.vk_calendar_comment,
+        {"post_url": post_url, "publish_date": publish_date},
+        coalesce_key=f"vk_calendar_comment:{ids[0]}:{ids[1]}",
+        next_run_at=datetime.fromtimestamp(publish_date + delay, timezone.utc),
+    )
+
+
+async def ensure_calendar_comment(db, event, post_url):
     import aiohttp
     import main
     ids = main._vk_owner_and_post_id(str(post_url or ""))
@@ -69,9 +84,6 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
         filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', " ", filename)
         filename = (" ".join(filename.split())[:120].rstrip(" .") or "Событие") + ".ics"
         body = await calendar_bytes(db, events)
-        fingerprint = hashlib.sha256(body).hexdigest()
-        # Accept existing receipts without replaying the filename-hash rollout.
-        accepted_hashes = {fingerprint, hashlib.sha256(filename.encode("utf-8") + b"\0" + body).hexdigest()}
         key = f"vk_calendar_comment:{owner}:{post}"
         async with db.get_session() as session:
             row = await session.get(Setting, key)
@@ -86,12 +98,7 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
                 session.add(row)
                 await session.commit()
 
-        if state.get("hash") in accepted_hashes and state.get("comment_id"):
-            if state["hash"] != fingerprint:
-                state["hash"] = fingerprint
-                if state.get("document_hash") in accepted_hashes:
-                    state["document_hash"] = fingerprint
-                await persist()  # Migrate the receipt locally, with no VK requests.
+        if state.get("comment_id"):
             return False
         token = main._vk_user_token()
         if not token:
@@ -103,38 +110,24 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
                 raise RuntimeError(f"VK calendar method failed: {method}")
             return result["response"]
 
-        posts = []
-        if candidate_item and int(candidate_item.get("id") or 0) == post and int(candidate_item.get("owner_id") or 0) == owner:
-            posts = [candidate_item]
-        if not posts:
-            response = await api("wall.getById", posts=f"{owner}_{post}")
-            posts = response.get("items", []) if isinstance(response, dict) else response
-        if not posts or posts[0].get("post_type", "post") != "post" or posts[0].get("date", 0) > datetime.now(timezone.utc).timestamp():
-            return False  # Existing live-ID scan calls us again when the item is public.
-        # Use actual publication time; the same post keeps its delay on retries.
-        delay = random.Random(f"{owner}_{post}").randint(300, 900)
-        if posts[0].get("date", 0) + delay > datetime.now(timezone.utc).timestamp():
-            return False
-        # The owner requested today's backfill, not older wall history.
-        if posts[0].get("date", 0) < datetime(2026, 11, 12, tzinfo=main.LOCAL_TZ).timestamp():
-            return False
-        # Recover an acknowledged-but-unrecorded comment, and adopt the owner's pilot.
-        existing_document = ""
-        if not state.get("comment_id"):
+        # Only a retry with a saved document needs to recover a lost comment response.
+        if state.get("document"):
             offset = 0
             while True:
                 comments = await api("wall.getComments", owner_id=owner, post_id=post, count=100, offset=offset)
-                found = next((c for c in comments.get("items", []) if c.get("from_id") == owner and any(a.get("type") == "doc" and a.get("doc", {}).get("ext") == "ics" for a in c.get("attachments", []))), None)
+                document_id = "_".join(state["document"].split("_", 2)[:2])
+                found = next((c for c in comments.get("items", []) if c.get("from_id") == owner and any(
+                    a.get("type") == "doc" and f"doc{a['doc']['owner_id']}_{a['doc']['id']}" == document_id
+                    for a in c.get("attachments", []))), None)
                 if found:
                     state["comment_id"] = found["id"]
-                    doc = next(a["doc"] for a in found["attachments"] if a.get("type") == "doc" and a.get("doc", {}).get("ext") == "ics")
-                    existing_document = f"doc{doc['owner_id']}_{doc['id']}"
-                    break
+                    await persist()
+                    return False
                 offset += len(comments.get("items", []))
                 if not comments.get("items") or offset >= comments.get("count", 0):
                     break
         state.setdefault("text", random.choice(COMMENT_TEXTS))
-        if state.get("document_hash") not in accepted_hashes:
+        if not state.get("document"):
             upload = await api("docs.getWallUploadServer")
             form = aiohttp.FormData()
             form.add_field("file", body, filename=filename, content_type="text/calendar")
@@ -148,18 +141,10 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
             if document.get("ext") != "ics":
                 raise RuntimeError("VK did not retain the calendar extension")
             state["document"] = f"doc{document['owner_id']}_{document['id']}" + (f"_{document['access_key']}" if document.get("access_key") else "")
-            state["document_hash"] = fingerprint
             await persist()  # Reuse the uploaded document if comment delivery is retried.
         params = dict(owner_id=owner, message=state["text"], attachments=state["document"])
-        recovered = existing_document.split("_", 2)[:2] == state["document"].split("_", 2)[:2]
-        if not recovered:
-            if state.get("comment_id"):
-                await api("wall.deleteComment", owner_id=owner, comment_id=state["comment_id"])
-                state.pop("comment_id")
-                await persist()
-            result = await api("wall.createComment", post_id=post, from_group=abs(owner), guid=f"calendar:{owner}:{post}:{'_'.join(state['document'].split('_', 2)[:2])}", **params)
-            state["comment_id"] = result["comment_id"]
-        state["hash"] = fingerprint
+        result = await api("wall.createComment", post_id=post, from_group=abs(owner), guid=f"calendar:{owner}:{post}", **params)
+        state["comment_id"] = result["comment_id"]
         await persist()
         logging.info("vk.calendar_comment delivered event_id=%s post_id=%s comment_id=%s", event.id, post, state["comment_id"])
-        return not recovered
+        return True
