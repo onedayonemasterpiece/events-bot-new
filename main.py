@@ -16254,7 +16254,7 @@ async def _reconcile_recent_managed_vk_live_urls(
                     select(Event).where(
                         Event.lifecycle_status == "active",
                         Event.silent == False,  # noqa: E712
-                        Event.date >= today,
+                        or_(Event.date >= today, Event.end_date >= today),
                         Event.source_vk_post_url.like(
                             f"https://vk.com/wall{owner_id}_%"
                         ),
@@ -16262,6 +16262,11 @@ async def _reconcile_recent_managed_vk_live_urls(
                 )
             ).scalars()
         )
+    by_post_id: dict[int, list[Event]] = {}
+    for ev in events:
+        stored_ids = _vk_owner_and_post_id(str(ev.source_vk_post_url or ""))
+        if stored_ids:
+            by_post_id.setdefault(int(stored_ids[1]), []).append(ev)
     by_header: dict[tuple[str, str], list[Event]] = {}
     for ev in events:
         expected_date = next(
@@ -16276,6 +16281,12 @@ async def _reconcile_recent_managed_vk_live_urls(
             by_header.setdefault((str(ev.title or "").strip(), expected_date), []).append(ev)
     matched_items: dict[int, list[dict]] = {}
     for item in live_items:
+        # VK's exact postponed binding also covers posts with several sessions.
+        exact = by_post_id.get(int(item.get("postponed_id") or item.get("id") or 0), [])
+        if exact:
+            for ev in exact:
+                matched_items.setdefault(int(ev.id), []).append(item)
+            continue
         lines = [line.strip() for line in str(item.get("text") or "").splitlines() if line.strip()]
         if not lines:
             continue
@@ -16294,12 +16305,17 @@ async def _reconcile_recent_managed_vk_live_urls(
             continue
         ev = events_by_id[event_id]
         old_ids = _vk_owner_and_post_id(str(ev.source_vk_post_url or ""))
-        if not old_ids or int(matches[0].get("id") or 0) == int(old_ids[1]):
+        if not old_ids:
             continue
-        if await _recover_managed_vk_live_url(
-            db, ev, bot=bot, candidate_item=matches[0]
-        ):
+        if int(matches[0].get("id") or 0) != int(old_ids[1]):
+            if not await _recover_managed_vk_live_url(db, ev, bot=bot, candidate_item=matches[0]):
+                continue
             recovered += 1
+        try:
+            from vk_calendar_comments import ensure_calendar_comment
+            await ensure_calendar_comment(db, ev, ev.source_vk_post_url)
+        except Exception:
+            logging.exception("vk.calendar_comment failed event_id=%s; next live scan will retry", event_id)
         if recovered >= 10:
             break
     return recovered
@@ -23883,6 +23899,8 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                     same_day_group,
                     vk_url=str(ev.source_vk_post_url or existing_vk_post_url),
                 )
+            from vk_calendar_comments import ensure_calendar_comment
+            await ensure_calendar_comment(db, ev, existing_vk_post_url)
             return
         if post_exists:
             logging.warning(
@@ -23933,6 +23951,8 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             same_day_group,
             vk_url=vk_url,
         )
+        from vk_calendar_comments import ensure_calendar_comment
+        await ensure_calendar_comment(db, event_for_notice or ev, vk_url)
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:
             await _send_or_update_partner_admin_notice(

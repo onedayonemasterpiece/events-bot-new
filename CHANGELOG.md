@@ -12,6 +12,7 @@
 
 
 ### Added
+- Attach calendar files in friendly, varied comments on managed Afisha event posts; preserve one comment on retries and updates, including all-day events and shared sessions.
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
 ### Fixed

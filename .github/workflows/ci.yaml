@@ -245,6 +245,7 @@ jobs:
           tests/test_supabase_security_hardening.py
           tests/test_vk_auto_queue_import.py
           tests/test_crumple_nested_input_assets.py
+          tests/test_vk_calendar_comments.py
           tests/test_video_announce_poller.py
           tests/test_video_announce_v_pipeline.py
           tests/test_cherryflash_guide_excursions.py
