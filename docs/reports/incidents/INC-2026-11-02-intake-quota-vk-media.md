@@ -2479,3 +2479,33 @@ alone is insufficient. Evidence is retained under the existing central
 `20261104T093210Z-guide-digest-vk-quality-20261104` task: original and fixed
 `boyko-location-*-probe-20261112.log`, source catchup log and provider audit.
 Prior accepted carriers and unavailable Golubkov video evidence are unrelated.
+
+#### Delivery and ordinary Boyko acceptance, 12 November 2026
+
+PR #912 passed all required CI and merged as
+`f26f590e84fa8d8e78fab1dfbfd99a9917a919a5`. Events-only image
+`runcoveer/events:location-contiguous-quote-20261112`, immutable
+`sha256:7a79b83904e3d45cd0a0c2b83347ec1b907c1fe63036fc57ae65373c1cce9ff8`,
+retains running `d44018258b646aba40e120978cbd045cf06ce0d0` ancestry. All 4,475
+tracked files verified, isolated no-network startup passed, and live health
+returned ok/ready with database ok and no issues. Effective environment,
+production data binds and Kotopogoda were preserved. The post-cutover helper's
+order-sensitive Mounts comparison failed after activation; immediate comparison
+of normalized binds and exact before/after Compose reconciled this as a check
+error, not changed mounts. No second cutover was attempted.
+
+Ordinary failed-child replay **12034** reused the complete typed parse through
+`persist_event_and_pages`; venue review returned `llm_repair`. Child **28554**
+was CREATED as canonical **Event 10876**, «Встреча “Привет от Михаила Ивановича!”»:
+**18 November 2026, 19:00, отель «Чайка», ПУГАЧЕВА, 13, 500 RUB**. The time is
+explicit poster evidence, not a default. Independent readback confirms inbox
+**94719** imported, packet **28276** EVENTS_RESOLVED, the exact post 3967
+EventSource and inbox-event anchor to 10876. Original failed attempt 12691 is
+preserved. Retained acceptance evidence: `boyko-3967-accepted-20261112.json`
+and `boyko-3967-child-catchup-20261112.log` in the established artifact task.
+
+Active TG 12031 and VK 12033 were recorded as release context, not a global
+release veto. Retained Telegram results remain present and ordinary recovery
+12035 resumed after restart; its final result is a separate acceptance, not
+proved by Boyko success. No accepted siblings, earlier sources or guide scans
+were replayed, and no additional digest or story was published.
