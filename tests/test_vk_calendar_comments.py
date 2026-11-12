@@ -44,8 +44,11 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
         session.add(ev);await session.commit()
     monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
     monkeypatch.setattr(main,'_vk_user_token',lambda:'fixture')
+    bot=object()
+    monkeypatch.setattr(main,'get_bot',lambda:bot)
     calls=[];fail=[not adopt]
-    async def api(method,params,**kwargs):
+    async def api(method,params,*context,**kwargs):
+        assert context==(db,bot)
         calls.append((method,params))
         if method=='wall.getById':value={'items':[{'id':10,'post_type':'post','date':1794441600}]}
         elif method=='wall.getComments':value={'count':int(adopt),'items':[{'id':90,'from_id':-231920894,'attachments':[{'type':'doc','doc':{'ext':'ics'}}]}] if adopt else []}
@@ -122,7 +125,7 @@ async def test_nonpublic_or_hidden_event_has_no_document_upload(tmp_path,monkeyp
         session.add(ev);await session.commit()
     monkeypatch.setattr(main,'VK_AFISHA_GROUP_ID','231920894')
     monkeypatch.setattr(main,'_vk_user_token',lambda:'fixture')
-    async def api(method,params,**kwargs):
+    async def api(method,params,*context,**kwargs):
         assert state=='postponed' and method=='wall.getById'
         return {'response':{'items':[{'id':10,'post_type':'postpone'}]}}
     monkeypatch.setattr(main,'_vk_api',api)
@@ -156,7 +159,8 @@ async def test_failed_calendar_delivery_retries_without_another_wall_post(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tmp_path,monkeypatch):
+@pytest.mark.parametrize('captcha',[False,True])
+async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tmp_path,monkeypatch,captcha):
     from unittest.mock import AsyncMock
     db=Database(str(tmp_path/'db.sqlite'));await db.init()
     ev=event(date='2099-11-14')
@@ -171,8 +175,12 @@ async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tm
         ev.source_vk_post_url='https://vk.com/wall-231920894_20'
         return True
     monkeypatch.setattr(main,'_recover_managed_vk_live_url',recover)
-    delivery=AsyncMock(return_value=True)
+    delivery=AsyncMock(side_effect=main.VKAPIError(14,'Captcha needed') if captcha else None,return_value=True)
+    pause=AsyncMock()
+    monkeypatch.setattr(main,'vk_captcha_pause_outbox',pause)
     monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
     assert await main._reconcile_recent_managed_vk_live_urls(db,bot=None)==1
     assert delivery.await_args.args[-1]=='https://vk.com/wall-231920894_20'
+    if captcha:pause.assert_awaited_once_with(db)
+    else:pause.assert_not_awaited()
     await db.close()

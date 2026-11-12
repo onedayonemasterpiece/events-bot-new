@@ -79,7 +79,7 @@ async def ensure_calendar_comment(db, event, post_url):
             raise RuntimeError("VK calendar document requires the configured user actor")
 
         async def api(method, **params):
-            result = await main._vk_api(method, params, token=token, token_kind="user")
+            result = await main._vk_api(method, params, db, main.get_bot(), token=token, token_kind="user")
             if "response" not in result:
                 raise RuntimeError(f"VK calendar method failed: {method}")
             return result["response"]
