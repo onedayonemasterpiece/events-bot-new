@@ -14,6 +14,19 @@ from google_ai.exceptions import RateLimitError
 from scripts import sync_event_search_vectors_to_supabase as sync
 
 
+def test_embedding_sync_uses_shared_pool_before_exhausted_default_lane(monkeypatch):
+    from google_ai import limiter_supabase
+
+    monkeypatch.setenv("GOOGLE_AI_NORMAL_KEY_ENVS", "GOOGLE_API_KEY4,GOOGLE_API_KEY3")
+    monkeypatch.setattr(
+        limiter_supabase, "build_google_ai_limiter_supabase_client", lambda **_: object()
+    )
+    client = sync.build_embedding_client(key_env="GOOGLE_API_KEY4")
+    assert client.reserve_key_envs == ["GOOGLE_API_KEY4", "GOOGLE_API_KEY3"]
+    monkeypatch.delenv("GOOGLE_AI_NORMAL_KEY_ENVS")
+    assert sync.build_embedding_client(key_env="GOOGLE_API_KEY4").reserve_key_envs == []
+
+
 def _release_state(path: Path, *, active_job_id=None, last_success_at=None) -> None:
     with sqlite3.connect(path) as con:
         con.execute(
