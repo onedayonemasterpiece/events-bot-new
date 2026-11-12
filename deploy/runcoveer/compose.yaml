@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-media-idna-20261112
+    image: runcoveer/events:vk-claim-lock-20261112
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
