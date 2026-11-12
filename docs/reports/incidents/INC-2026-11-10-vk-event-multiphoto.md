@@ -386,3 +386,29 @@ Schema, модели, limiter, статусы, role policy и сохранённ
 выполняются существующими media regression tests. До результатов, выпуска
 и следующей обычной initial multi-photo публикации критерий открыт.
 Evidence: /home/dev/artifacts/events-bot-new/20261112T224118Z-vk-parent-program-image-relevance-20261113.
+
+### Потеря крупного Qtickets исходника, 13 ноября
+
+Readback 14162/14163/14164 показал маленькие фото. Исходные retained
+Qtickets packets и canonical posters уже имели высоту317; это потеря
+качества до VK, отдельная от Yantar desktop-poster correction.
+Один public GET Impuls source page из production сети дал HTTP200.
+В его JSON-LD/OG афиша317px, но тот же hero внутри poster-container
+объявляет srcset2x. Адрес взят из HTML, не сконструирован. Один download
+этого файла подтвердил реальные1136x634 вместо canonical568x317.
+
+Исправлен только существующий collector: выбирается максимальная
+объявленная плотность выше1x основного hero. Отсутствующий или неверный
+srcset и отдельные логотипы сохраняют старый JSON-LD/OG выбор.
+Данные события, occurrence identity и source import не меняются.
+Никаких дополнительных page fetch, guessed CDN URLs, upscale, state,
+queue, worker или selected source replay. Net production+9, budget15.
+
+Отличающий тест разбирает реальные сохранённые declarations Impuls:
+старый collector выдаёт317px JPG и падает; исправленный выдаёт declared2x
+и сохраняет title/startDate/location. Отрицательные контроли проверяют
+missing/invalid/1x-only/unrelated srcset. Actual browser startup и
+structured-fact/occurrence regressions также обязательны.
+До выпуска и обычного нового collection/import/VK readback качество
+не считать полностью принятым. Evidence:
+/home/dev/artifacts/events-bot-new/20261112T230543Z-qtickets-declared-poster-density-20261113.
