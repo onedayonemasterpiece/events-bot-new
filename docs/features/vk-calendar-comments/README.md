@@ -1,26 +1,26 @@
 # Calendar files in Afisha comments
 
-**Temporary incident containment, November 12:** automatic delivery is disconnected from the live-ID scan. A replacement primary credential still received real `docs.save` code 14 after two upload-server 504 responses, pausing ordinary photo jobs. The calendar implementation and receipts remain available, but no automatic calendar document/comment writes are scheduled. Service-token live-ID recovery and existing CAPTCHA cooldown/probe/resume are preserved. The deferred delivery design below describes the retained implementation, not a current production delivery guarantee. Restore integration only after a verified legitimate document route; do not bypass the challenge or rotate actors after it.
+Only a newly created postponed event announcement schedules a calendar comment.
+The successful `post_to_vk` call knows its exact publication timestamp and adds
+one `vk_calendar_comment` task to the existing `JobOutbox`, with `next_run_at`
+equal to publication time plus a stable, nonuniform 5–15 minute delay.
+This delay belongs to the application; VK has no native delayed comment.
 
-Owner decision, November 12, 2026: every managed event announcement in Полюбить Калининград Афиша receives a friendly comment with the actual `.ics` file. Randomly choose one reviewed sentence from `vk_calendar_comments.COMMENT_TEXTS`; some invite a heart on the comment after adding the event. The owner rejected “планы под рукой” and “не потерять событие”. Do not promise an automatic reminder. November 12 follow-up: the owner confirms the file needs two presses to open calendar addition; every reviewed text explicitly explains this. Use a readable Cyrillic event-title filename, replacing unsafe filename characters with spaces. Do not add event title/date/time to the comment text in this iteration.
+At that time the existing worker resolves this specific announcement's public
+URL with one service-token wall read, persists the live URL, builds the existing
+ICS calendar and uploads/attaches it in a community comment. An idle worker
+never polls our wall. External source imports remain independent.
 
-The successful pilot is https://vk.com/wall-231920894_14063?reply=14065. Owner confirms it works. VK serves the document as application/octet-stream. Group document storage rejected the current publishing user; use that configured user's document storage and publish the comment as the community. No new credentials or silent fallback to a hyperlink.
+There is no historical catch-up, recurring comment reconciliation, template or
+filename re-upload, or automatic editing/deleting of delivered comments.
+The existing receipt retains the uploaded document and delivered comment ID.
+Only recovery of a lost comment response reads comments, using that saved
+exact document; normal delivery does not read comments or re-read the post.
+Existing outbox retries and shared CAPTCHA handling apply without token
+rotation or challenge bypass. A new token alone does not prove recovery.
 
-`vk_calendar_comments.ensure_calendar_comment` extends existing managed VK publication and live-ID reconciliation. The rollout starts with November 12 publications in Europe/Kaliningrad; older wall history is outside the requested backfill. Postponed items wait for the existing live scan; unrelated walls, silent/cancelled events and missing canonical bindings are not modified. No new worker, timer, queue or database schema is introduced. Existing Setting storage holds each post's document/comment receipt. Reuse the existing ICS semaphore, VK transport and calendar builder.
-
-The calendar uses current canonical rows sharing the post, so a two-session post carries both occurrences. A known date without an explicit time is an all-day calendar entry; explicit all-day intervals use exclusive DTEND. Do not invent a start hour. UIDs and creation stamps are stable so retries do not replace an unchanged file. Real calendar-content changes delete the old comment and create a new one; an existing community ICS comment, including the pilot, is adopted. Stable content-version VK GUID protects uncertain comment responses. Uploaded document receipts are persisted before posting, so a retry can reuse the document.
-
-Errors propagate to existing JobOutbox retry handling or the existing periodic live reconciliation. A calendar failure after the post is persisted must not create another wall post. Verify both normal publication and unchanged-post routing. The backfill uses the same helper, scopes posts by their actual VK publication timestamp in Europe/Kaliningrad and reads back each document. It does not replay event import or repost announcements. Posts without an actual event, such as adverts, do not receive a fictitious calendar.
-
-Relevant tests: `tests/test_vk_calendar_comments.py`, `tests/test_ics_builder.py`, and the managed-publication contracts in `tests/test_vk_source.py`. Qualification is a merged-main isolated release and real comment/document readback; tests or a document upload alone do not establish publication.
-
-The document fingerprint covers calendar bytes only. A changed comment template or filename does not update existing comments. The previous filename-inclusive receipts are accepted and migrated locally without VK requests, preventing a mass resend on release. Only a real calendar-content change uploads a replacement document, deletes the old comment, and creates a new one with a GUID derived from the saved document receipt. Restoring an earlier calendar value uploads a new document and therefore cannot reuse the GUID of a deleted comment. Persist the deletion receipt before creation; the existing comment lookup recovers a lost creation response by matching the saved document. No `wall.editComment`, new state field, queue or worker is added.
-
-The existing service-token live scan passes its exact owner/post match to the
-calendar helper, which reuses that provider item's publication state and date
-instead of repeating a user-token `wall.getById` before the rollout cutoff.
-Standalone publication and mismatched items retain the existing read. No
-persistent cache, actor change or CAPTCHA bypass is introduced; this removes
-redundant reads and does not establish that VK will stop issuing challenges.
-
-Owner decision, November 12 follow-up: delivery is deferred from publication. Only the existing periodic live-wall scan sends calendar comments, after the provider confirms that the post is public. Each post has a stable, nonuniform delay of 5–15 minutes from its actual publication timestamp; the existing five-minute scan can add up to five minutes. A postponed item is never commented before publication. At most one changed comment is delivered per scan; unchanged receipts return without consuming that delivery. No extra scheduler, queue, persisted timer or immediate publication callback is added.
+On November 12 the former automatic scan was disconnected in PR 916 after
+real `docs.save` code 14 also occurred on the replacement primary token.
+The scheduled task replaces that scan; previously published posts lacking a
+comment do not create work. Live acceptance requires a normal new post,
+its public URL and actual delayed comment, not just passing tests.
