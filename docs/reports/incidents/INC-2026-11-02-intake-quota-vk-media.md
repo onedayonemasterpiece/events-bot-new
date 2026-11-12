@@ -2423,3 +2423,32 @@ Event 10672 still has stale prose after full source acquisition. A narrow mechan
 
 
 Consumer review before merge caught a candidate-only regression: the existing producer appends age and scene to the narrative body, so a raw-description comparison would pay for unchanged content. A new failing metadata contrast led to extracting that existing composition into one shared helper, used by create, compare and Qtickets attachment. No new semantic rule. Final diff +30/−11, net +19, within the 20-line budget; 70 parser tests and four retained actual route controls pass. Pure read-only comparison of current 33-row Muzteatr output against exact URL/slot owners finds 25 changed bodies and eight unchanged, no missing owners, provider calls or Event/Job writes. This is a bounded route diagnostic, not final prose acceptance.
+
+## November 12 initial queue-claim lock failure
+
+Ordinary catch-up operation12005, run
+`catchup-vk-auto-import-eba915afb8ff4d9f93bc1d6f705f4ea7`, assigned actual batch
+`auto:1794496613`. It committed carrier92503/source27693 into Event10863 and
+reported that row before failing on its next queue selection. At15:27:08 UTC
+its traceback enters `vk_review.pick_next` → `_unlock_stale` → the first UPDATE,
+then `sqlite3.OperationalError: database is locked`. This is distinct from
+cancellation of the active Telegram import during the later release. The
+identity of the connection holding the writer lock is not established.
+
+The initial queue write bypassed this module's existing bounded
+`_retry_locked_write` contract. Use that same helper around `_unlock_stale`
+within the existing connection/transaction. The atomic carrier claim and commit
+remain in place. No retry counts/delays, SQLite timeouts, state, worker, source
+eligibility or semantic/date/native guards change. There is no queue reset or
+replay of the accepted carrier.
+
+A real isolated SQLite writer transaction reproduces this exact failure on
+original code; releasing it after40ms still loses the claim with the fixture's
+1ms busy timeout. The same control succeeds after the change. Cancellation
+propagates with the carrier still pending; a persistent lock still raises after
+the existing bounded contract. Original controls: one failure and two passing
+contrasts. Final28 queue-review tests pass. These synthetic fixture timeouts are
+not production configuration and do not prove resolution of a long-held writer.
+Verify the next actual ordinary VK claim and terminal source/carrier receipts
+before accepting live recovery. Retained evidence is in
+`/home/dev/artifacts/events-bot-new/20261112T135027Z-calendar-friendly-file-20261112/`.

@@ -391,7 +391,9 @@ async def pick_next(
         "COALESCE(owner_type, 'group'), source_packet_id"
     )
     async with db.raw_conn() as conn:
-        await _unlock_stale(conn)
+        await _retry_locked_write(
+            conn, lambda: _unlock_stale(conn), description="pick_next_unlock_stale"
+        )
         if resume_locked:
             cur = await conn.execute(
                 f"""
