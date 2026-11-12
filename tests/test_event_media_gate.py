@@ -961,13 +961,9 @@ async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) ->
                 None,
             )
 
-    async def fake_claim(*_args, **_kwargs) -> bool:
-        return True
-
     import google_ai
     import main
 
-    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_claim)
     monkeypatch.setattr(event_media, "compute_global_ssim", lambda *_args: 0.5)
     monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
     monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
@@ -979,7 +975,6 @@ async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) ->
         left_media=DownloadedPoster(b"left", "image/png", "https://example/left.png"),
         right_media=DownloadedPoster(b"right", "image/png", "https://example/right.png"),
         model="gemini-3.1-flash-lite-preview",
-        stage="primary",
         session=FakeSession(),
     )
 
@@ -1355,33 +1350,43 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
             "image/png", poster.catbox_url,
         )
 
-    denied = True
+    import google_ai
+    from sqlalchemy import text
+    provider_attempts = 0
 
-    async def reviewer(**kwargs):
-        if denied:
-            return None, 0
-        return dict(decision="distinct", duplicate_kind="none", confidence=0.99,
-                    semantic_conflict=False, canonical_side="either", reason_code="different_photos"), 1
+    class FakeGoogleAIClient:
+        def __init__(self, **kwargs):
+            assert kwargs["consumer"] == "event_media_review"
+            assert kwargs["reserve_overflow_key_envs"] == []
+
+        async def generate_content_async(self, **kwargs):
+            nonlocal provider_attempts
+            assert self.allow_reserve_fallback is False
+            assert self.allow_local_limiter_fallback is False
+            assert self.allow_local_limiter_on_reserve_error is False
+            provider_attempts += 1
+            if provider_attempts == 1:
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            return json.dumps(dict(decision="distinct", duplicate_kind="none", confidence=0.99,
+                semantic_conflict=False, canonical_side="either", reason_code="different_photos")), None
 
     monkeypatch.setattr(event_media, "_download_poster", download)
-    monkeypatch.setattr(event_media, "_call_reviewer", reviewer)
-    # Three exhausted allowance days must not permanently lose an unseen image.
-    for _ in range(3):
-        async with db.get_session() as session:
-            pair = (await session.execute(select(EventMediaPairReview).where(
-                EventMediaPairReview.event_id == event_id,
-            ))).scalar_one()
-            pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
-            await session.commit()
-        await review_next_event_media_pair(event_id, db)
-        async with db.get_session() as session:
-            pair = await session.get(EventMediaPairReview, pair.id)
-            assert pair.status == "deferred" and pair.attempts == 0
-            assert pair.provider_calls == 0
-
-    denied = False
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+    monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
+    monkeypatch.setattr(main, "get_supabase_client", lambda: None)
+    # The obsolete local counter must not block normal review after 100 calls.
     async with db.get_session() as session:
-        pair = await session.get(EventMediaPairReview, pair.id)
+        await session.execute(text("INSERT INTO event_media_review_usage(day,stage,calls) "
+            "VALUES (:day,'primary',100)"),
+            {"day": event_media.datetime.now(event_media.timezone.utc).date().isoformat()})
+        await session.commit()
+    await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        pair = (await session.execute(select(EventMediaPairReview).where(
+            EventMediaPairReview.event_id == event_id,
+        ))).scalar_one()
+        assert pair.status == "deferred" and "429" in pair.last_error
+        assert pair.attempts == 1
         pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
         await session.commit()
     await review_next_event_media_pair(event_id, db)
