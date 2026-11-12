@@ -136,7 +136,14 @@ object identity нельзя, поскольку разные пиксели м�
 Defaults:
 
 - primary: `gemini-3.1-flash-lite`;
-- escalation: `models/gemma-4-31b-it` только для uncertain/low-confidence primary;
+- escalation: `models/gemma-4-31b-it` для uncertain/low-confidence primary и
+  retryable provider failure primary (например HTTP 503). Это тот же
+  настроенный VLM-путь, а не положительный семантический вердикт по ошибке.
+  Provider 429 и nonretryable ошибки сохраняют прежний durable retry;
+- Gemma получает тот же field/enum/required contract через проверенный
+  geometry consumer компактный `response_schema` без unsupported
+  `additionalProperties`; Gemini сохраняет strict `response_json_schema`.
+  Оба ответа проходят один application validator;
 - ключ: scoped `GOOGLE_API_KEY4`, без reserve overflow и без `GOOGLE_API_KEY2`;
 - capacity admission: shared project/model atomic Google AI limiter; отдельного
   pair-specific суточного лимита нет. Неиспользуемые старые env
@@ -157,10 +164,20 @@ Defaults:
   `deferred` через десять минут; evidence попытки сохраняется, а дальнейшая
   обработка следует обычным budget/retry правилам без ручного вмешательства.
 
+`provider_calls` учитывает физические отправки через общий
+`GoogleAIClient.attempt_observer`, после atomic `mark_sent`: HTTP 503 тоже
+является вызовом. Structured logs `event_media_pair_provider_sent` и
+`event_media_pair_provider_fallback` связывают событие, пару, модель и статус
+провайдера без изображений и credentials. Если обе модели недоступны, пара
+остаётся в прежнем bounded automatic retry; новый таймер не создаётся.
+
 Результаты: duplicate → `duplicate`; distinct → `approved`; semantic conflict/
 unrelated candidate → `rejected`; failure/uncertain → fail-closed quarantine.
 После изменения projection обычный event fanout перестраивает Telegraph,
 Telegram, managed VK и static site.
+Pair worker сохраняет факт изменения projection до создания следующего
+frontier: его вспомогательная синхронизация не должна погасить fanout только
+что одобренного второго кадра.
 
 The `event_media_review` job also refreshes that fanout after early-return
 worker progress (seed/role/geometry paths). A ready approved CDN image must

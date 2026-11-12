@@ -968,7 +968,7 @@ async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) ->
     monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
     monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
     monkeypatch.setattr(main, "get_supabase_client", lambda: None)
-    result, calls = await event_media._call_reviewer(
+    result = await event_media._call_reviewer(
         event=_event(),
         left=EventPoster(event_id=1, poster_hash="left", review_status=APPROVED),
         right=EventPoster(event_id=1, poster_hash="right", review_status=PENDING_REVIEW),
@@ -978,7 +978,6 @@ async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) ->
         session=FakeSession(),
     )
 
-    assert calls == 1
     assert result and result["decision"] == "distinct"
     config = captured["generation_config"]
     assert isinstance(config, dict)
@@ -1318,8 +1317,9 @@ def test_vk_carousel_cover_composites_transparency_and_bounds_jpeg_decode(monkey
 
 
 @pytest.mark.parametrize(("event_id", "layout"), [(100, "grid"), (101, "carousel")])
+@pytest.mark.parametrize("primary_error", [503, 429, 401])
 @pytest.mark.asyncio
-async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_path, monkeypatch):
+async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, primary_error, tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
     import main
 
@@ -1351,8 +1351,9 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
         )
 
     import google_ai
+    from google_ai.exceptions import ProviderError
     from sqlalchemy import text
-    provider_attempts = 0
+    provider_models = []
 
     class FakeGoogleAIClient:
         def __init__(self, **kwargs):
@@ -1360,13 +1361,22 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
             assert kwargs["reserve_overflow_key_envs"] == []
 
         async def generate_content_async(self, **kwargs):
-            nonlocal provider_attempts
             assert self.allow_reserve_fallback is False
             assert self.allow_local_limiter_fallback is False
             assert self.allow_local_limiter_on_reserve_error is False
-            provider_attempts += 1
-            if provider_attempts == 1:
-                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            model = kwargs["model"]
+            if model == "models/gemma-4-31b-it":
+                config = kwargs["generation_config"]
+                assert "response_json_schema" not in config
+                assert config["response_schema"] == {
+                    k: v for k, v in event_media._REVIEW_SCHEMA.items() if k != "additionalProperties"
+                }
+            provider_models.append(model)
+            if kwargs.get("attempt_observer"):
+                kwargs["attempt_observer"]({"requested_model": model})
+            if len(provider_models) == 1:
+                raise ProviderError(error_type="ServerError", status_code=primary_error,
+                                    retryable=primary_error in (503, 429))
             return json.dumps(dict(decision="distinct", duplicate_kind="none", confidence=0.99,
                 semantic_conflict=False, canonical_side="either", reason_code="different_photos")), None
 
@@ -1385,11 +1395,20 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
         pair = (await session.execute(select(EventMediaPairReview).where(
             EventMediaPairReview.event_id == event_id,
         ))).scalar_one()
-        assert pair.status == "deferred" and "429" in pair.last_error
+        if primary_error == 503:
+            assert pair.status == "resolved" and pair.last_error is None
+            assert pair.escalation_model == "models/gemma-4-31b-it"
+            assert pair.provider_calls == 2
+            assert provider_models == ["gemini-3.1-flash-lite", "models/gemma-4-31b-it"]
+        else:
+            assert pair.status == "deferred" and "ProviderError" in pair.last_error
+            assert pair.escalation_model is None and pair.provider_calls == 1
         assert pair.attempts == 1
-        pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
+        if primary_error != 503:
+            pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
         await session.commit()
-    await review_next_event_media_pair(event_id, db)
+    if primary_error != 503:
+        await review_next_event_media_pair(event_id, db)
     async with db.get_session() as session:
         event = await session.get(Event, event_id)
         await session.refresh(event)
@@ -1443,7 +1462,10 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, tmp_
     monkeypatch.setattr(main, "_vk_api", api)
     monkeypatch.setattr(main, "vk_api", api)
     monkeypatch.setattr(main, "upload_vk_photo", upload)
-    await main.job_sync_vk_source_post(event_id, db, None)
+    # The media worker must fan out an ordinary runnable VK outbox job.
+    assert await main._run_due_jobs_once(
+        db, None, only_event=event_id, allowed_tasks={JobTask.vk_sync},
+    ) == 1
     # Existing managed post has only its first image, even though its hash matches.
     wall["attachments"].pop()
     async with db.get_session() as session:
@@ -1611,17 +1633,14 @@ async def test_final_distinct_pair_promotes_and_enqueues_geometry_accumulation(
         return DownloadedPoster(payloads[url], "image/png", url)
 
     async def distinct_reviewer(**_kwargs):
-        return (
-            {
-                "decision": "distinct",
-                "duplicate_kind": "none",
-                "confidence": 0.99,
-                "semantic_conflict": False,
-                "canonical_side": "either",
-                "reason_code": "different_photos",
-            },
-            1,
-        )
+        return {
+            "decision": "distinct",
+            "duplicate_kind": "none",
+            "confidence": 0.99,
+            "semantic_conflict": False,
+            "canonical_side": "either",
+            "reason_code": "different_photos",
+        }
 
     monkeypatch.setattr(event_media, "_download_poster", fake_download)
     monkeypatch.setattr(event_media, "_call_reviewer", distinct_reviewer)
@@ -1708,17 +1727,14 @@ async def test_pair_review_does_not_reclaim_third_rows_raw_sha(
         return DownloadedPoster(payloads[url], "image/png", url)
 
     async def distinct_reviewer(**_kwargs):
-        return (
-            {
-                "decision": "distinct",
-                "duplicate_kind": "none",
-                "confidence": 0.99,
-                "semantic_conflict": False,
-                "canonical_side": "either",
-                "reason_code": "different_photos",
-            },
-            1,
-        )
+        return {
+            "decision": "distinct",
+            "duplicate_kind": "none",
+            "confidence": 0.99,
+            "semantic_conflict": False,
+            "canonical_side": "either",
+            "reason_code": "different_photos",
+        }
 
     monkeypatch.setattr(event_media, "_download_poster", fake_download)
     monkeypatch.setattr(event_media, "_call_reviewer", distinct_reviewer)
@@ -1781,17 +1797,14 @@ async def test_semantic_conflict_rejects_candidate_without_manual_queue(tmp_path
         return DownloadedPoster(payloads[url], "image/png", url)
 
     async def semantic_reviewer(**_kwargs):
-        return (
-            {
-                "decision": "distinct",
-                "duplicate_kind": "none",
-                "confidence": 0.99,
-                "semantic_conflict": True,
-                "canonical_side": "left",
-                "reason_code": "right_unrelated_to_event",
-            },
-            1,
-        )
+        return {
+            "decision": "distinct",
+            "duplicate_kind": "none",
+            "confidence": 0.99,
+            "semantic_conflict": True,
+            "canonical_side": "left",
+            "reason_code": "right_unrelated_to_event",
+        }
 
     monkeypatch.setattr(event_media, "_download_poster", fake_download)
     monkeypatch.setattr(event_media, "_call_reviewer", semantic_reviewer)
