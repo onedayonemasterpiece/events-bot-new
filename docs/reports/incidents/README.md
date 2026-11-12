@@ -547,3 +547,5 @@
 - `INC-2026-11-05-vk-near-event-starvation.md`: a dated near-term invitation must reach the normal VK parser despite newer arrivals; retain history interleaving and semantic qualification.
 
 - `INC-2026-11-09-vk-photo-size-rejection.md`: VK-advertised smaller renditions preserve complete OCR evidence within the existing photo byte budget.
+
+- [Qtickets Chromium system dependencies, November 12](INC-2026-11-12-qtickets-browser-runtime.md) — open; source import fails before collection.
