@@ -5,17 +5,18 @@ import hashlib
 import json
 import logging
 import random
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlmodel import select
 from models import Event, Setting
 
 COMMENT_TEXTS = (
-    "Добавьте событие в календарь, чтобы не забыть 📅 Файл прикреплён.",
-    "Чтобы не пропустить событие, добавьте его в календарь 📅 Файл во вложении.",
-    "Собираетесь пойти? Добавьте событие в календарь 📅 Откройте прикреплённый файл.",
-    "Добавьте событие в календарь 📅 Поставьте ❤️ этому комментарию, если добавили.",
-    "Чтобы не пропустить событие, сохраните его в календарь 📅 Если добавили — поставьте ❤️ этому комментарию.",
+    "Добавьте событие в календарь, чтобы не забыть 📅 Нажмите на файл два раза — откроется добавление в календарь.",
+    "Чтобы не пропустить событие, добавьте его в календарь 📅 Нажмите на файл два раза — откроется добавление в календарь.",
+    "Собираетесь пойти? Добавьте событие в календарь 📅 Нажмите на файл два раза — откроется добавление в календарь.",
+    "Нажмите на файл два раза, чтобы добавить событие в календарь 📅 Поставьте ❤️ этому комментарию, если добавили.",
+    "Чтобы не пропустить событие, нажмите на файл два раза — откроется добавление в календарь 📅 Если добавили — поставьте ❤️ этому комментарию.",
 )
 
 
@@ -63,8 +64,10 @@ async def ensure_calendar_comment(db, event, post_url):
         events = [e for e in events if not e.silent and e.lifecycle_status == "active" and e.identity_status != "merged"]
         if not events:
             return False
+        filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', " ", events[0].title)
+        filename = " ".join(filename.split())[:120].rstrip(" .") + ".ics"
         body = await calendar_bytes(db, events)
-        fingerprint = hashlib.sha256(body).hexdigest()
+        fingerprint = hashlib.sha256(filename.encode("utf-8") + b"\0" + body).hexdigest()
         key = f"vk_calendar_comment:{owner}:{post}"
         async with db.get_session() as session:
             row = await session.get(Setting, key)
@@ -116,13 +119,13 @@ async def ensure_calendar_comment(db, event, post_url):
         if state.get("document_hash") != fingerprint:
             upload = await api("docs.getWallUploadServer")
             form = aiohttp.FormData()
-            form.add_field("file", body, filename=f"event-{event.id}.ics", content_type="text/calendar")
+            form.add_field("file", body, filename=filename, content_type="text/calendar")
             async with main.get_http_session().post(upload["upload_url"], data=form) as result:
                 result.raise_for_status()
                 uploaded = await result.json(content_type=None)
             if not uploaded.get("file"):
                 raise RuntimeError("VK calendar upload did not return a file")
-            saved = await api("docs.save", file=uploaded["file"], title=f"event-{event.id}.ics")
+            saved = await api("docs.save", file=uploaded["file"], title=filename)
             document = saved[0] if isinstance(saved, list) else saved.get("doc", saved)
             if document.get("ext") != "ics":
                 raise RuntimeError("VK did not retain the calendar extension")
