@@ -1284,13 +1284,8 @@ async def _call_reviewer(
     left_media: DownloadedPoster,
     right_media: DownloadedPoster,
     model: str,
-    stage: str,
     session: Any,
 ) -> tuple[dict[str, Any] | None, int]:
-    limit_name = "EVENT_MEDIA_REVIEW_DAILY_PRIMARY_CALLS" if stage == "primary" else "EVENT_MEDIA_REVIEW_DAILY_ESCALATION_CALLS"
-    default_limit = 100 if stage == "primary" else 25
-    if not await _claim_feature_budget(session, stage, _env_int(limit_name, default_limit, lo=0, hi=5000)):
-        return None, 0
     await session.commit()
 
     from google_ai import GoogleAIClient, SecretsProvider
@@ -2507,24 +2502,16 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                     left_media=left_media,
                     right_media=right_media,
                     model=primary_model,
-                    stage="primary",
                     session=session,
                 )
                 provider_calls += calls
                 review.primary_model = primary_model
                 decision = primary
-                if calls == 0:
-                    # The primary allowance is a hard feature budget, not a
-                    # signal to consume the smaller escalation allowance.
-                    error = "media_review_primary_budget_exhausted"
                 min_confidence = _env_float("EVENT_MEDIA_REVIEW_PRIMARY_CONFIDENCE", 0.92)
                 needs_escalation = (
-                    calls > 0
-                    and (
-                        decision is None
-                        or decision["decision"] == "uncertain"
-                        or float(decision["confidence"]) < min_confidence
-                    )
+                    decision is None
+                    or decision["decision"] == "uncertain"
+                    or float(decision["confidence"]) < min_confidence
                 )
                 if needs_escalation:
                     escalation, calls = await _call_reviewer(
@@ -2534,7 +2521,6 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                         left_media=left_media,
                         right_media=right_media,
                         model=escalation_model,
-                        stage="escalation",
                         session=session,
                     )
                     provider_calls += calls
@@ -2545,21 +2531,11 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                             error = "primary_escalation_disagreement"
                         else:
                             decision = escalation
-                    elif calls == 0:
-                        error = "media_review_budget_exhausted"
             except Exception as exc:
                 error = f"{type(exc).__name__}:{exc}"[:500]
 
         review.provider_calls = int(review.provider_calls or 0) + provider_calls
         review.updated_at = datetime.now(timezone.utc)
-        if provider_calls == 0 and error == "media_review_primary_budget_exhausted":
-            # Admission is not a review attempt: otherwise three busy days
-            # permanently quarantine an image the model has never seen.
-            review.attempts = max(0, int(review.attempts or 0) - 1)
-            logger.info(
-                "event_media_pair_budget_deferred event_id=%s review_id=%s attempts=%s",
-                event_id, review.id, review.attempts,
-            )
         max_attempts = _env_int("EVENT_MEDIA_REVIEW_MAX_UNCERTAIN_ATTEMPTS", 3, lo=1, hi=20)
         if decision and decision["decision"] in {"duplicate", "distinct"}:
             survivor = _choose_survivor(left, right)

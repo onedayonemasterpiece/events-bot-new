@@ -138,13 +138,12 @@ Defaults:
 - primary: `gemini-3.1-flash-lite`;
 - escalation: `models/gemma-4-31b-it` только для uncertain/low-confidence primary;
 - ключ: scoped `GOOGLE_API_KEY4`, без reserve overflow и без `GOOGLE_API_KEY2`;
-- feature budgets: 100 primary + 25 escalation calls/UTC day;
+- capacity admission: shared project/model atomic Google AI limiter; отдельного
+  pair-specific суточного лимита нет. Неиспользуемые старые env
+  `EVENT_MEDIA_REVIEW_DAILY_PRIMARY_CALLS` / `EVENT_MEDIA_REVIEW_DAILY_ESCALATION_CALLS`
+  больше не влияют на worker; оставшиеся исторические counter rows не удаляются;
 - максимум 3 automatic attempts, затем `unresolved`; изображение остается
   непубличным, ручной очереди нет;
-- exhausted primary budget не тратит escalation budget; retry переносится на
-  следующий UTC day и не расходует automatic attempt, поскольку provider не
-  рассматривал пару. Три дня отсутствия allowance не превращают такую пару
-  в terminal `unresolved`;
 - pending/deferred пары с уже rejected/duplicate/unavailable изображением
   отменяются до скачивания и provider admission. Они не мешают отдельному
   кандидату получить approval по оставшимся действующим парам;

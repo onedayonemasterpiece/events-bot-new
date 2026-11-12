@@ -515,9 +515,10 @@ python kaggle/execute_gemma_key2_probe.py --env-file ".env copy"
 
 `event_media_review` uses the shared `GoogleAIClient`, but deliberately has a
 stricter envelope: one image pair per call, KEY4 only, no reserve overflow or
-local limiter fallback, 100 primary + 25 escalation calls per UTC day and at
-most three automatic attempts. Primary budget exhaustion does not consume the
-escalation allowance. Pair/result cache and daily counters live in Fly SQLite;
+local limiter fallback and at most three automatic attempts. Capacity admission
+uses the shared project/model atomic limiter, without a second feature-specific
+daily cap. Actual inference calls may increase as queued media progresses;
+the configured models and key remain unchanged. Pair/result cache lives in SQLite;
 unresolved media stays non-public. Full contract: [Event media](../event-media/README.md).
 
 `smart_update_image_geometry` — отдельный event-media consumer для face/value

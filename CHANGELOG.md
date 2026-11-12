@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Event media pair review uses the existing shared Google project/model limiter without the artificial local 100/25 daily cap; fresh second images can progress after large galleries consume the old allowance. Models and credentials stay unchanged; actual inference calls may increase.
 - Event media: отказ локального суточного allowance без provider call не исчерпывает automatic attempts; пары с уже исключёнными изображениями отменяются до новых расходов и не блокируют остальные кадры.
 
 - Fixed: Qtickets installs Chromium and its checked system dependencies even when the Playwright Python package is already present. Missing browser libraries now fail during preparation instead of silently claiming readiness.
