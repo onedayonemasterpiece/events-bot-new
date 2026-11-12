@@ -29,3 +29,29 @@ remain active. First real CAPTCHA still uses the original pause/break path;
 there is no new timer, marker migration, forced resume or provider bypass.
 Verify ordinary marker-scoped recovery and public photo delivery after release;
 passing the regression does not establish live CAPTCHA clearance.
+
+## Owner correction: no cosmetic comment rewrites, November 12
+
+The owner rejected regular comment edits without a real content change and
+prefers deleting the previous comment and creating a replacement when needed.
+Deferred first delivery is already deployed and remains unchanged. A later
+read-only log audit found 39 calendar deliveries on 26 posts, including repeated
+document uploads after filename/template releases. Full report and bounded
+traffic comparisons are retained at
+`/home/dev/artifacts/events-bot-new/20261112T183333Z-vk-request-load-retrospective-20261112/report.md`.
+This supports an aggravating-load hypothesis; it does not establish VK's
+internal reason for the account block, and CAPTCHA existed before this rollout.
+
+Prevention uses calendar-byte hashes and accepts the previous filename-inclusive
+receipts, migrating them locally without any VK calls. Template membership no
+longer triggers replacement. A real calendar change deletes the previous
+comment and creates a new content-version GUID through the existing deferred
+scan. The existing comment lookup adopts a document-matching accepted creation
+after a lost response, without deleting or creating it again. No new persisted
+fields, queue, timer, actor rotation or challenge bypass are introduced.
+
+The calendar lifecycle regression must show zero VK calls for unchanged content
+and legacy receipt migration, delete/create on an actual time change, and
+no duplicate write after a lost creation response. Existing CAPTCHA and deferred
+publication checks remain mandatory. Live replacement and ordinary multiphoto
+acceptance remain open while the owner prepares replacement credentials.

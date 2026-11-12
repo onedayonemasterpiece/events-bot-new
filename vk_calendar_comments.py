@@ -69,12 +69,29 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
         filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', " ", filename)
         filename = (" ".join(filename.split())[:120].rstrip(" .") or "Событие") + ".ics"
         body = await calendar_bytes(db, events)
-        fingerprint = hashlib.sha256(filename.encode("utf-8") + b"\0" + body).hexdigest()
+        fingerprint = hashlib.sha256(body).hexdigest()
+        # Accept existing receipts without replaying the filename-hash rollout.
+        accepted_hashes = {fingerprint, hashlib.sha256(filename.encode("utf-8") + b"\0" + body).hexdigest()}
         key = f"vk_calendar_comment:{owner}:{post}"
         async with db.get_session() as session:
             row = await session.get(Setting, key)
             state = json.loads(row.value) if row else {}
-        if state.get("hash") == fingerprint and state.get("comment_id") and state.get("text") in COMMENT_TEXTS:
+        async def persist():
+            async with db.get_session() as session:
+                row = await session.get(Setting, key)
+                if row:
+                    row.value = json.dumps(state, ensure_ascii=False)
+                else:
+                    row = Setting(key=key, value=json.dumps(state, ensure_ascii=False))
+                session.add(row)
+                await session.commit()
+
+        if state.get("hash") in accepted_hashes and state.get("comment_id"):
+            if state["hash"] != fingerprint:
+                state["hash"] = fingerprint
+                if state.get("document_hash") in accepted_hashes:
+                    state["document_hash"] = fingerprint
+                await persist()  # Migrate the receipt locally, with no VK requests.
             return False
         token = main._vk_user_token()
         if not token:
@@ -85,16 +102,6 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
             if "response" not in result:
                 raise RuntimeError(f"VK calendar method failed: {method}")
             return result["response"]
-
-        async def persist():
-            async with db.get_session() as session:
-                row = await session.get(Setting, key)
-                if row:
-                    row.value = json.dumps(state, ensure_ascii=False)
-                else:
-                    row = Setting(key=key, value=json.dumps(state, ensure_ascii=False))
-                session.add(row)
-                await session.commit()
 
         posts = []
         if candidate_item and int(candidate_item.get("id") or 0) == post and int(candidate_item.get("owner_id") or 0) == owner:
@@ -112,6 +119,7 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
         if posts[0].get("date", 0) < datetime(2026, 11, 12, tzinfo=main.LOCAL_TZ).timestamp():
             return False
         # Recover an acknowledged-but-unrecorded comment, and adopt the owner's pilot.
+        existing_document = ""
         if not state.get("comment_id"):
             offset = 0
             while True:
@@ -119,14 +127,14 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
                 found = next((c for c in comments.get("items", []) if c.get("from_id") == owner and any(a.get("type") == "doc" and a.get("doc", {}).get("ext") == "ics" for a in c.get("attachments", []))), None)
                 if found:
                     state["comment_id"] = found["id"]
+                    doc = next(a["doc"] for a in found["attachments"] if a.get("type") == "doc" and a.get("doc", {}).get("ext") == "ics")
+                    existing_document = f"doc{doc['owner_id']}_{doc['id']}"
                     break
                 offset += len(comments.get("items", []))
                 if not comments.get("items") or offset >= comments.get("count", 0):
                     break
         state.setdefault("text", random.choice(COMMENT_TEXTS))
-        if state["text"] not in COMMENT_TEXTS:
-            state["text"] = random.choice(COMMENT_TEXTS)
-        if state.get("document_hash") != fingerprint:
+        if state.get("document_hash") not in accepted_hashes:
             upload = await api("docs.getWallUploadServer")
             form = aiohttp.FormData()
             form.add_field("file", body, filename=filename, content_type="text/calendar")
@@ -143,12 +151,15 @@ async def ensure_calendar_comment(db, event, post_url, *, candidate_item=None):
             state["document_hash"] = fingerprint
             await persist()  # Reuse the uploaded document if comment delivery is retried.
         params = dict(owner_id=owner, message=state["text"], attachments=state["document"])
-        if state.get("comment_id"):
-            await api("wall.editComment", comment_id=state["comment_id"], **params)
-        else:
-            result = await api("wall.createComment", post_id=post, from_group=abs(owner), guid=f"calendar:{owner}:{post}", **params)
+        recovered = existing_document.split("_", 2)[:2] == state["document"].split("_", 2)[:2]
+        if not recovered:
+            if state.get("comment_id"):
+                await api("wall.deleteComment", owner_id=owner, comment_id=state["comment_id"])
+                state.pop("comment_id")
+                await persist()
+            result = await api("wall.createComment", post_id=post, from_group=abs(owner), guid=f"calendar:{owner}:{post}:{fingerprint}", **params)
             state["comment_id"] = result["comment_id"]
         state["hash"] = fingerprint
         await persist()
         logging.info("vk.calendar_comment delivered event_id=%s post_id=%s comment_id=%s", event.id, post, state["comment_id"])
-        return True
+        return not recovered
