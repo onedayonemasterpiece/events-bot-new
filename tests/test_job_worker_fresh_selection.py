@@ -114,7 +114,8 @@ async def test_initial_publications_wait_for_complete_gallery_across_media_follo
 
     db = main.Database(str(tmp_path / 'complete-gallery.sqlite'))
     await db.init()
-    clock = datetime.now(timezone.utc)
+    # Gallery readiness is independent of Telegram's real overnight quiet hours.
+    clock = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
     class Clock(datetime):
         @classmethod
         def now(cls, tz=None): return clock

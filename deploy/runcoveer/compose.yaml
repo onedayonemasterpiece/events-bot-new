@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-parent-program-media-20261113
+    image: runcoveer/events:qtickets-poster-density-20261113
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

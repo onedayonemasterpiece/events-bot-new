@@ -386,3 +386,52 @@ Schema, модели, limiter, статусы, role policy и сохранённ
 выполняются существующими media regression tests. До результатов, выпуска
 и следующей обычной initial multi-photo публикации критерий открыт.
 Evidence: /home/dev/artifacts/events-bot-new/20261112T224118Z-vk-parent-program-image-relevance-20261113.
+
+### Потеря крупного Qtickets исходника, 13 ноября
+
+Readback 14162/14163/14164 показал маленькие фото. Исходные retained
+Qtickets packets и canonical posters уже имели высоту317; это потеря
+качества до VK, отдельная от Yantar desktop-poster correction.
+Один public GET Impuls source page из production сети дал HTTP200.
+В его JSON-LD/OG афиша317px, но тот же hero внутри poster-container
+объявляет srcset2x. Адрес взят из HTML, не сконструирован. Один download
+этого файла подтвердил реальные1136x634 вместо canonical568x317.
+
+Исправлен только существующий collector: выбирается максимальная
+объявленная плотность выше1x основного hero. Отсутствующий или неверный
+srcset и отдельные логотипы сохраняют старый JSON-LD/OG выбор.
+Данные события, occurrence identity и source import не меняются.
+Никаких дополнительных page fetch, guessed CDN URLs, upscale, state,
+queue, worker или selected source replay. Net production+9, budget15.
+
+Отличающий тест разбирает реальные сохранённые declarations Impuls:
+старый collector выдаёт317px JPG и падает; исправленный выдаёт declared2x
+и сохраняет title/startDate/location. Отрицательные контроли проверяют
+missing/invalid/1x-only/unrelated srcset. Actual browser startup и
+structured-fact/occurrence regressions также обязательны.
+До выпуска и обычного нового collection/import/VK readback качество
+не считать полностью принятым. Evidence:
+/home/dev/artifacts/events-bot-new/20261112T230543Z-qtickets-declared-poster-density-20261113.
+
+### Готовый Telegram output остановлен перед восстановлением, 13 ноября
+
+Обычный catchup-tg-monitoring-5233941e7fc14bc487f4282b703b093d
+завершился в 23:15 UTC с ledger DONE/CLEANUP. До 23:22 нового
+импорта не было. Local operation 12058 прервал выпуск; более ранний
+recovery_import 12057 имел partial и считался доставкой суточного слота.
+Watchdog возвращался по этому условию до существующей проверки registry.
+ENABLE_KAGGLE_RECOVERY выключен, поэтому другого автоматического
+продолжения данного handoff в этом runtime не было.
+
+Существующая проверка registry перенесена перед условиями доставки
+и terminal retry нового запуска. Inflight, grace/lookback и deferred cadence
+сохранены. Пустой registry по-прежнему не запускает новый kernel
+при прежней доставке. Production net 0: только перестановка. Нет нового
+worker, состояния, таймера, retry или ручного replay исходных данных.
+
+Initialized DB regression со старым partial и новым cancelled run:
+до исправления положительный контроль падает, отрицательный проходит;
+после оба проходят. Существующие TG watchdog guards также проходят.
+Продуктовая проверка после выпуска — обычное продолжение сохранённого
+output, новые media candidates и initial VK attachments, а не запуск
+выбранного source packet. Evidence: тот же retained artifact PR 923.

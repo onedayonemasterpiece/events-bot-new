@@ -1,5 +1,7 @@
 # Telegram Monitoring
 
+Штатный watchdog сначала продолжает существующую передачу из Kaggle registry, затем решает, нужен ли новый запуск суточного слота. Прежний `partial` импорт не отменяет незавершённый результат другого зарегистрированного run. Существующие grace/lookback, защита от одновременного запуска и интервал повторной проверки сохраняются; delivery и terminal-retry условия по-прежнему запрещают лишний новый kernel.
+
 ## P0 typed LLM-first producer/consumer contract
 
 The server candidate adapter preserves the validated `source_disposition` and
