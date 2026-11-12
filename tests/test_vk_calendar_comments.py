@@ -1,4 +1,5 @@
 import json
+import hashlib
 from datetime import date
 
 import pytest
@@ -51,7 +52,9 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
         elif method=='docs.getWallUploadServer':
             assert 'group_id' not in params  # Actual group-storage access was denied.
             value={'upload_url':'https://upload.example/file'}
-        elif method=='docs.save':value={'doc':{'id':30,'owner_id':20,'ext':'ics'}}
+        elif method=='docs.save':
+            assert params['title']=='Лекция.ics'
+            value={'doc':{'id':30,'owner_id':20,'ext':'ics'}}
         elif method=='wall.createComment':
             if fail[0]:fail[0]=False;raise RuntimeError('Lost comment response')
             value={'comment_id':90}
@@ -86,6 +89,21 @@ async def test_delivery_reuses_document_after_comment_failure_and_updates_withou
     async with db.get_session() as session:
         state=json.loads((await session.execute(select(Setting))).scalars().one().value)
     assert state['text'] in comments.COMMENT_TEXTS
+    state['text']='Добавьте событие в календарь, чтобы не забыть 📅 Файл прикреплён.'
+    old_hash=hashlib.sha256(await comments.calendar_bytes(db,[event(time='19:00')])).hexdigest()
+    state.update(hash=old_hash,document_hash=old_hash)
+    async with db.get_session() as session:
+        row=(await session.execute(select(Setting))).scalars().one()
+        row.value=json.dumps(state);session.add(row);await session.commit()
+    before_saves=sum(m=='docs.save' for m,_ in calls)
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert sum(m=='docs.save' for m,_ in calls)==before_saves+1
+    assert calls[-1][0]=='wall.editComment' and calls[-1][1]['comment_id']==90
+    assert 'два раза' in calls[-1][1]['message']
+    assert sum(m=='wall.createComment' for m,_ in calls)==len(creates)
+    before=len(calls)
+    assert await comments.ensure_calendar_comment(db,ev,ev.source_vk_post_url)
+    assert len(calls)==before
     await db.close()
 
 
