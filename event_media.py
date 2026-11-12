@@ -10,7 +10,7 @@ import urllib.request
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
-from typing import Any, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 from urllib.parse import quote, urlsplit, urlunsplit
 
 from sqlalchemy import and_, func, or_, select, text, update
@@ -1285,7 +1285,8 @@ async def _call_reviewer(
     right_media: DownloadedPoster,
     model: str,
     session: Any,
-) -> tuple[dict[str, Any] | None, int]:
+    attempt_observer: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any] | None:
     await session.commit()
 
     from google_ai import GoogleAIClient, SecretsProvider
@@ -1316,21 +1317,25 @@ async def _call_reviewer(
         {"inline_data": {"mime_type": left_media.mime_type, "data": left_media.data}},
         {"inline_data": {"mime_type": right_media.mime_type, "data": right_media.data}},
     ]
+    generation_config = {
+        "temperature": 0,
+        "response_mime_type": "application/json",
+        "response_json_schema": _REVIEW_SCHEMA,
+    }
+    if model.removeprefix("models/").startswith("gemma-4"):
+        # Reuse the hosted Gemma Schema subset proven by geometry review.
+        generation_config.pop("response_json_schema")
+        generation_config["response_schema"] = {
+            key: value for key, value in _REVIEW_SCHEMA.items() if key != "additionalProperties"
+        }
     raw, _usage = await client.generate_content_async(
         model=model,
         prompt=prompt,
-        generation_config={
-            "temperature": 0,
-            "response_mime_type": "application/json",
-            # This is standard JSON Schema.  The current google-genai SDK
-            # contract routes it through response_json_schema; response_schema
-            # is the narrower OpenAPI Schema protobuf and rejects fields such
-            # as additionalProperties before the model is called.
-            "response_json_schema": _REVIEW_SCHEMA,
-        },
+        generation_config=generation_config,
         max_output_tokens=_env_int("EVENT_MEDIA_REVIEW_MAX_OUTPUT_TOKENS", 256, lo=128, hi=512),
+        attempt_observer=attempt_observer,
     )
-    return _validated_decision(_parse_json_object(raw)), 1
+    return _validated_decision(_parse_json_object(raw))
 
 
 def _validated_media_role(value: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -2418,6 +2423,15 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         await session.commit()
 
     provider_calls = 0
+
+    def record_provider_send(metadata: dict[str, Any]) -> None:
+        nonlocal provider_calls
+        provider_calls += 1
+        logger.info(
+            "event_media_pair_provider_sent event_id=%s review_id=%s model=%s calls=%s",
+            event_id, review.id, metadata.get("requested_model"), provider_calls,
+        )
+
     decision: dict[str, Any] | None = None
     left_media: DownloadedPoster | None = None
     right_media: DownloadedPoster | None = None
@@ -2494,19 +2508,29 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         if error is None and decision is None and left_media is not None and right_media is not None:
             primary_model = (os.getenv("EVENT_MEDIA_REVIEW_PRIMARY_MODEL") or "gemini-3.1-flash-lite").strip()
             escalation_model = (os.getenv("EVENT_MEDIA_REVIEW_ESCALATION_MODEL") or "models/gemma-4-31b-it").strip()
+            from google_ai.exceptions import ProviderError
+
             try:
-                primary, calls = await _call_reviewer(
-                    event=event,
-                    left=left,
-                    right=right,
-                    left_media=left_media,
-                    right_media=right_media,
-                    model=primary_model,
-                    session=session,
-                )
-                provider_calls += calls
                 review.primary_model = primary_model
-                decision = primary
+                try:
+                    decision = await _call_reviewer(
+                        event=event,
+                        left=left,
+                        right=right,
+                        left_media=left_media,
+                        right_media=right_media,
+                        model=primary_model,
+                        session=session,
+                        attempt_observer=record_provider_send,
+                    )
+                except ProviderError as exc:
+                    if not exc.retryable or exc.status_code == 429:
+                        raise
+                    logger.warning(
+                        "event_media_pair_provider_fallback event_id=%s review_id=%s model=%s next_model=%s status=%s error_type=%s",
+                        event_id, review.id, primary_model, escalation_model,
+                        exc.status_code, exc.error_type,
+                    )
                 min_confidence = _env_float("EVENT_MEDIA_REVIEW_PRIMARY_CONFIDENCE", 0.92)
                 needs_escalation = (
                     decision is None
@@ -2514,7 +2538,8 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                     or float(decision["confidence"]) < min_confidence
                 )
                 if needs_escalation:
-                    escalation, calls = await _call_reviewer(
+                    review.escalation_model = escalation_model
+                    escalation = await _call_reviewer(
                         event=event,
                         left=left,
                         right=right,
@@ -2522,9 +2547,8 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                         right_media=right_media,
                         model=escalation_model,
                         session=session,
+                        attempt_observer=record_provider_send,
                     )
-                    provider_calls += calls
-                    review.escalation_model = escalation_model
                     if escalation is not None:
                         if decision and decision["decision"] not in {"uncertain", escalation["decision"]}:
                             decision = None
@@ -2582,8 +2606,9 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
             review.next_run_at = _next_utc_day()
         session.add(review)
         await _reconcile_pending_posters(session, int(event_id))
-        await ensure_event_media_reviews(session, int(event_id))
+        # ensure_event_media_reviews also syncs; retain this change for fanout.
         projection_changed = await sync_event_gallery_projection(session, int(event_id))
+        await ensure_event_media_reviews(session, int(event_id))
         # Resolving the final pending pair can promote a new approved poster
         # after the last pair-review job has already been consumed. Arm the
         # independent semantic/geometry enrichment pass for that new poster.

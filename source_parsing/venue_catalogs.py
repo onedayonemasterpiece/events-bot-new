@@ -260,7 +260,7 @@ def _yantar_time_text(card: Tag) -> str:
 
 
 def _yantar_photo(card: Tag) -> str:
-    image_node = card.select_one(".event-image, .image-mobile")
+    image_node = card.select_one(".event-image") or card.select_one(".image-mobile")
     style = str(image_node.get("style") or "") if image_node else ""
     match = _CSS_URL_RE.search(style)
     return _canonical_http_url(YANTARHALL_URL, match.group(2)) if match else ""
@@ -277,7 +277,13 @@ def parse_yantarhall_html(
     soup = BeautifulSoup(html or "", "html.parser")
     output: list[dict[str, Any]] = []
     seen_cards: set[int] = set()
-    for title_node in soup.select(".event-title-text"):
+
+    def desktop_card(title_node: Tag) -> bool:
+        card = _closest_event_card(title_node)
+        return card is not None and card.select_one(".event-image") is not None
+
+    # The page renders mobile cards first, but dedupe keeps the first event.
+    for title_node in sorted(soup.select(".event-title-text"), key=desktop_card, reverse=True):
         card = _closest_event_card(title_node)
         if card is None or id(card) in seen_cards:
             continue

@@ -19,12 +19,19 @@ parser в `source_parsing/venue_catalogs.py`: он читает первую с�
 выключен: структурированная афиша уже содержит якоря, а poster media всё равно
 проходит managed CDN gate.
 
+Одна occurrence встречается в двух представлениях каталога. До дедупликации
+parser предпочитает desktop `.event-image`, содержащий полноразмерную афишу,
+перед расположенной раньше в DOM `.image-mobile` миниатюрой. Это устраняет
+выбор 366×450 вместо доступной 1800×900 версии, как у «Галина, GALA!».
+Если доступен только mobile layout, его изображение сохраняется. Отдельный
+detail HTTP fetch и дополнительные gallery refs для этих вариантов не нужны.
+
 ## Regression checks
 
 1. Fixture покрывает tile и table-list DOM layouts, percent-encoding URL,
-   AJAX next/terminal page и переход года.
+   AJAX next/terminal page, переход года и реальную mobile/desktop пару
+   «Галина, GALA!» с единственным полноразмерным poster ref.
 2. Live probe должен возвращать ненулевой полный каталог и последнюю
    опубликованную будущую дату, а не только первую страницу.
 3. Production catch-up сверяется occurrence-by-occurrence с официальной
    афишей; Telegram freshness сама по себе не считается coverage evidence.
-
