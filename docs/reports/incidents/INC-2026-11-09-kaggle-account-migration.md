@@ -90,3 +90,57 @@ The owner reported missing ordinary Cherryflash and CrumpleVideo publications af
 The existing notebook asset loader enumerated only immediate input directories. Change that enumeration to recursive directory discovery, retaining its existing copying, font requirements and failure behavior. The actual loader test fails on the retained nested layout before the fix; legacy layout and absent-font rejection already pass. After the fix all three controls pass, including static helper/music copying. These small path fixtures do not qualify font rendering or public publication. No new retry, state, worker, semantic rule or missing-asset bypass is added. Net production change: one replaced line (net zero), budget two lines.
 
 Retained evidence: `/home/dev/artifacts/events-bot-new/20261110T204306Z-video-migration-completion-20261110`, especially `nested-assets-before.log` and `progress-2130.json`; exact terminal provider log is retained privately on RunCoveer under `/data/incident_recovery/video-migration-20261110/crumple1601-terminal/`. Candidate code is not a delivered release or a successful compensating render. Remaining configured video lanes and ordinary scheduled recurrence still need verification.
+
+## November 12 guide monitoring target provisioning
+
+The migrated account had no `richss777/guide-excursions-monitor` notebook.
+Normal guide full/light runs, including 11958 and 11968, failed at the exact
+pre-push GetKernel revision lookup with HTTP 403 and empty source reports.
+This was a missing operational target, not a successful scan without findings.
+Authenticated new-account inventory contained nine notebooks and omitted this
+target; an exact new-account GetKernel returned `kernels.get` denied. No retired
+account or resource was queried.
+
+One operator provisioning run used the deployed notebook and a real normal full
+input: ops 11969, run `45cd5f944173`, exact runtime
+`2c18976b47515dd1bb03121f4dbfd3ef2993e3d7`. Existing config encryption, provider
+limiter, prepared notebook, output identity matching and service import were
+retained. No invented positive revision or zero baseline was supplied to the
+normal launch-intent contract. An existing UNKNOWN recovery job/session barrier
+was registered before one SaveKernel, with an exclusive durable operator receipt;
+unknown submission must be reconciled by this exact run and target before any
+repeat. No product code or scheduler was changed and no parallel S22 session
+was started. Offline provider audit passed with unapproved=0 and
+allowlisted_debt=0.
+
+Kaggle accepted version 1 with no invalid dataset sources. All 30 sources emitted
+source_done, and the matching complete report contains 81 posts and 11 total
+occurrences. Remote completion alone does not qualify host materialization.
+The ordinary host import and occurrence enrichment completed successfully at
+10:26:50 UTC: 30 source reports, 81 posts, 34 successful LLM analyses, no errors
+or deferrals, five created records and five updates; one past occurrence skipped.
+Created records are 731, 732, 733, 734 and 735. Record 733 has no date and remains
+unknown; do not describe it as a scheduled future excursion. The accepted future
+new records are 731 (November 15), 732 (November 15), 734 (November 13), and 735
+(November 15). These belong to preexisting sources, not the newly onboarded eight.
+No compensating publication was created. Prior running SHA 486abac3 remains an
+ancestor of the actual runtime. No runtime cutover was needed for provisioning.
+
+All eight newly onboarded guide sources have source_status=ok and no remote
+errors. In the five-day full window, Garry and Boyko each had two posts without
+qualifying invitations, 2meterguide had nine posts and seven successful LLM
+analyses without an occurrence, and the other five had no posts. None of the
+11 remote occurrences belongs to those eight sources. Independent database
+readback confirms all eight last_scan_at values updated on November 12, all
+source reports accepted, and zero future occurrences through both primary source
+and guide_occurrence_source links for sources 23–30.
+
+Retained evidence is under
+`/home/dev/artifacts/events-bot-new/20261104T093210Z-guide-digest-vk-quality-20261104`:
+`guide-bootstrap-20261112.log`, `guide-account-current-20261112.json`, and
+`guide-materialization-readback-20261112.json`. The scoped operator receipt is
+`/data/incident_recovery/guide-account-bootstrap-20261112/bootstrap-receipt.json`.
+An already accepted guide source or event must not be replayed to create a
+nonzero count. The exact new-account revision lookup now returns 1; the normal recovery registry
+is empty after successful import. Verify the next ordinary scheduled run through
+the existing positive-revision path, without this operator provisioning adapter.
