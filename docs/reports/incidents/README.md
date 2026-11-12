@@ -1,5 +1,7 @@
 # Инциденты
 
+- [INC-2026-11-12 — зависшая сборка блокирует похожие события](INC-2026-11-12-related-vector-build-claim.md). Terminal claim, vector freshness и расчёт без Astro.
+
 - [INC-2026-11-10 — неполная фотогалерея анонсов ВК](INC-2026-11-10-vk-event-multiphoto.md). Повторная синхронизация, сетка, карусель и edit-only приёмка.
 
 - `INC-2026-11-09-kaggle-account-migration.md`: account migration, duplicate SaveKernel retries and new-account-only recovery.

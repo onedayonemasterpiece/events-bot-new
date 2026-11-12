@@ -1,10 +1,11 @@
 services:
   events:
-    image: runcoveer/events:vk-calendar-comments-20261112
+    image: runcoveer/events:related-only-20261112
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
     environment:
+      STATIC_SITE_BUILD_PROFILE: "related-only"
       ENABLE_GUIDE_VISUAL_DIGEST_MAX: "1"
       GUIDE_VIBEPUBLISH_URL: "https://mcp-vibepublish.kenigevents.ru"
       GUIDE_VISUAL_DIGEST_MAX_ALIAS: "max_224b98c2579885727f4c"

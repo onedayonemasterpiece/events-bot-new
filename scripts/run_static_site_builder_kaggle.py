@@ -625,6 +625,30 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
     result = json.loads(result_path.read_text(encoding='utf-8'))
     if result.get('ok') is not True or result.get('build_id') != args.build_id:
         raise RuntimeError('Kaggle result build identity/status mismatch')
+    if args.profile == 'related-only':
+        for key in ('profile', 'run_id', 'repo_sha', 'input_fingerprint', 'build_clock'):
+            if result.get(key) != getattr(args, key):
+                raise RuntimeError(f'Kaggle related result {key} mismatch')
+        image_source = args.image_source_contract
+        validate_static_site_source_identity(
+            result.get('source') or {}, repo_sha=args.repo_sha,
+            image_source_manifest_sha256=str(image_source['manifest_sha256']),
+            image_source_tree_sha256=str(image_source['source_tree_sha256']),
+        )
+        artifacts = result.get('artifacts') or []
+        if len(artifacts) != 1 or artifacts[0].get('filename') != 'event_related.json':
+            raise RuntimeError('Kaggle related result artifact missing')
+        related = out_dir / 'event_related.json'
+        require_bounded_durable_cache(related)
+        if sha256_file(related) != artifacts[0].get('sha256'):
+            raise RuntimeError('Kaggle related result artifact mismatch')
+        cache = out_dir / 'event_related_chain_cache.json'
+        require_bounded_durable_cache(cache)
+        target = Path(args.related_cache)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        atomic_copy_file(cache, target)
+        atomic_copy_file(related, target.with_name('static_site_event_related.json'))
+        return result
     result_cache_mode = str(result.get('semantic_cache_mode') or 'warm').strip().lower()
     if result_cache_mode != semantic_cache_mode(args):
         raise RuntimeError('Kaggle result semantic cache mode mismatch')
@@ -1485,7 +1509,7 @@ def main() -> int:
     parser.add_argument('--expected-snapshot-id', default='')
     parser.add_argument('--expected-snapshot-sha256', default='')
     parser.add_argument('--expected-snapshot-size', type=int, default=0)
-    parser.add_argument('--profile', choices=['preview', 'production-candidate'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
+    parser.add_argument('--profile', choices=['preview', 'production-candidate', 'related-only'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
     parser.add_argument('--catalog-mode', choices=['slice', 'full'], default=os.getenv('STATIC_SITE_CATALOG_MODE', 'slice'))
     parser.add_argument('--repo-sha', default=os.getenv('STATIC_SITE_REPO_SHA', ''))
     parser.add_argument(
@@ -1670,6 +1694,9 @@ def main() -> int:
         if args.candidate_token and not re.fullmatch(r'[A-Za-z0-9_-]{43}', args.candidate_token):
             raise SystemExit('--candidate-token must be one 256-bit base64url value')
         args.candidate_token = args.candidate_token or secrets.token_urlsafe(32)
+    elif args.profile == 'related-only':
+        if args.catalog_mode != 'full' or not args.export_in_kaggle:
+            raise SystemExit('related-only requires --catalog-mode full and --export-in-kaggle')
     elif args.catalog_mode != 'slice':
         raise SystemExit('preview profile requires --catalog-mode slice')
     args.snapshot_contract = load_snapshot_contract(args)

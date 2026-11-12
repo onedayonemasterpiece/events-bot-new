@@ -124,7 +124,7 @@ def validate_snapshot_input(db_path: Path, config: dict) -> dict:
     snapshot = config.get('snapshot') if isinstance(config.get('snapshot'), dict) else {}
     expected_sha = str(snapshot.get('sha256') or '').strip().lower()
     expected_size = int(snapshot.get('size') or 0)
-    if config.get('profile') == 'production-candidate':
+    if config.get('profile') in {'production-candidate', 'related-only'}:
         if not snapshot.get('snapshot_id') or not re.fullmatch(r'[0-9a-f]{64}', expected_sha):
             raise RuntimeError('production snapshot identity/hash is missing')
         actual_sha = sha256_file(db_path)
@@ -623,7 +623,7 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--gemma-related-key-env', key_env,
         '--gemma-related-max-anchors', str(config.get('gemma_related_max_anchors') or 0),
     ]
-    if config.get('profile') == 'production-candidate':
+    if config.get('profile') in {'production-candidate', 'related-only'}:
         cmd.extend([
             '--repo-sha', str(config.get('repo_sha') or ''),
             '--run-id', str(config.get('run_id') or ''),
@@ -1171,11 +1171,33 @@ def main() -> int:
             env['PUBLIC_ASTRO_ASSET_BASE_URL'] = str(config['astro_asset_base_url'])
         if config.get('ics_base_url'):
             env['PUBLIC_ICS_BASE_URL'] = str(config['ics_base_url'])
-        apply_public_authorized_search_env(env, config)
-        ensure_python_deps_for_service_share()
         ensure_python_deps_for_bge(config)
         export_preview_data_if_configured(config)
         related_retrieval = read_related_retrieval_receipt()
+        if config.get('profile') == 'related-only':
+            related_path = WORKING / 'event_related.json'
+            shutil.copy2(SITE_DIR / 'src/data/preview-related.json', related_path)
+            payload = json.loads(related_path.read_text(encoding='utf-8'))
+            result = {
+                'schema_version': 'static_site_build_result_v2',
+                'ok': True, 'profile': 'related-only', 'build_id': build_id,
+                'run_id': config.get('run_id'), 'repo_sha': config.get('repo_sha'),
+                'input_fingerprint': config.get('input_fingerprint'),
+                'source': source_identity, 'build_clock': build_clock,
+                'semantic_cache_mode': semantic_cache_contract['mode'],
+                'semantic_cache_inputs_staged': semantic_cache_contract['inputs_staged'],
+                'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
+                'related_retrieval': related_retrieval,
+                'event_count': len(payload.get('events') or payload.get('related') or {}),
+                'artifacts': [{'kind': 'related', 'filename': related_path.name,
+                               'sha256': sha256_file(related_path), 'size': related_path.stat().st_size}],
+            }
+            RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+            cleanup_transient_workspace()
+            finish_status(ok=True, message=f'related calculation ready: {build_id}')
+            return 0
+        apply_public_authorized_search_env(env, config)
+        ensure_python_deps_for_service_share()
         collection_semantic = read_collection_semantic_receipt(config)
         service_share_result = render_daily_service_share(config, build_clock)
         semantic_result_path = SITE_DIR / 'src' / 'data' / 'static-semantic-build-result.json'

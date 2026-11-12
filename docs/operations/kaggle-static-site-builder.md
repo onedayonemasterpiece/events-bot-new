@@ -674,6 +674,26 @@ classified remains explicitly protected rather than silently aged out.
 
 ## Static-site Gemma/related secrets
 
+### Related calculation while the site is deferred
+
+`STATIC_SITE_BUILD_PROFILE=related-only` uses the same coalesced job, immutable
+projection, vector barrier, Kaggle kernel and recovery handoff as a full build.
+It runs the existing related exporter, then returns before service-share, Node,
+Astro and browser-release checks. It publishes no site objects and does not
+update the site's last-success or current-candidate receipt. The shared vector
+owner remains independent; do not enable `STATIC_SITE_SYNC_PGVECTOR_VECTORS`.
+
+The runner imports `event_related.json` as
+`/data/static_site_event_related.json` beside the existing related cache (or
+beside the configured `STATIC_SITE_RELATED_CACHE`). Both normal completion and
+adoption validate/import the output. Consumers use `related[event_id].similar`
+for the selected related list; `chain` and `adjacent_discovery` are not equivalent
+to that selection. `strict_verified_related` states whether Gemma verification
+ran. VK rendering/editing is a separate consumer and is not activated by this
+profile. Return to `production-candidate` when site restoration is ready; the
+same exporter/cache remains in use. A computation-only completion releases the
+site claim with a `related_ready` receipt rather than recording an HTML success.
+
 For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secrets for Gemma verification. The documented project pattern is encrypted split datasets. `scripts/run_static_site_builder_kaggle.py` now creates two short-lived private datasets when `--gemma-related-verify` is enabled:
 
 - cipher dataset: `secrets.enc` plus non-secret `config.json`;
