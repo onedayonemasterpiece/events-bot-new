@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-multiphoto-replay-20261110
+    image: runcoveer/events:vk-calendar-comments-20261112
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
