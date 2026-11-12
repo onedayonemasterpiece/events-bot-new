@@ -5603,7 +5603,8 @@ async def _resume_vk_captcha_outbox(
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
         for job in jobs:
             if job.task == JobTask.vk_sync:
-                event = await session.get(Event, job.event_id)
+                with session.no_autoflush:
+                    event = await session.get(Event, job.event_id)
                 event_end = ((event.end_date or event.date) if event else "") or ""
                 eligible = bool(
                     event

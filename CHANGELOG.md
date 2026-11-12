@@ -7,6 +7,7 @@
 - Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
 
 ### Fixed
+- CAPTCHA cohort recovery defers ORM job writes until its existing final commit instead of autoflushing during event eligibility reads, preserving pacing and past-event exclusions.
 - Existing event-media downloads encode international hostnames with IDNA, allowing full-resolution Yantar Hall posters to reach the ordinary CDN and review path instead of failing before HTTP transport.
 - Calendar comment scans skip their publishing action while the existing CAPTCHA cache is active, preserving service reads and the original recovery cooldown instead of creating repeated pause cohorts.
 - Confirmed event-image duplicates retain the higher-resolution rendition instead of an already-approved thumbnail; the existing duplicate transition replaces the gallery and triggers normal publishing without bypassing semantic relevance.
