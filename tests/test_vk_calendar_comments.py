@@ -173,8 +173,7 @@ async def test_publication_defers_calendar_delivery_to_the_periodic_scan(tmp_pat
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('captcha',[False,True])
-async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tmp_path,monkeypatch,captcha):
+async def test_live_scan_keeps_exact_binding_without_calendar_writes(tmp_path,monkeypatch):
     from unittest.mock import AsyncMock
     db=Database(str(tmp_path/'db.sqlite'));await db.init()
     ev=event(date='2099-11-14')
@@ -189,38 +188,14 @@ async def test_live_scan_uses_exact_postponed_binding_for_shared_session_post(tm
         ev.source_vk_post_url='https://vk.com/wall-231920894_20'
         return True
     monkeypatch.setattr(main,'_recover_managed_vk_live_url',recover)
-    delivery=AsyncMock(side_effect=main.VKAPIError(14,'Captcha needed') if captcha else None,return_value=True)
+    delivery=AsyncMock(side_effect=main.VKAPIError(14,'Captcha needed'))
     pause=AsyncMock()
     monkeypatch.setattr(main,'vk_captcha_pause_outbox',pause)
     monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
     assert await main._reconcile_recent_managed_vk_live_urls(db,bot=None)==1
-    assert delivery.await_args.args[-1]=='https://vk.com/wall-231920894_20'
-    if captcha:pause.assert_awaited_once_with(db)
-    else:pause.assert_not_awaited()
+    delivery.assert_not_awaited()
+    pause.assert_not_awaited()
     await db.close()
-
-
-@pytest.mark.asyncio
-async def test_calendar_scan_stops_after_first_captcha_for_shared_post(tmp_path,monkeypatch):
-    from unittest.mock import AsyncMock
-    db=Database(str(tmp_path/'db.sqlite'));await db.init()
-    try:
-        async with db.get_session() as session:
-            session.add(event(date='2099-11-14'))
-            session.add(event(id=2,date='2099-11-14',time='20:00'))
-            await session.commit()
-        monkeypatch.setattr(main,'VK_EVENTS_GROUP_ID','231920894')
-        monkeypatch.setattr(main,'VK_SERVICE_TOKEN','read-fixture')
-        monkeypatch.setattr(main,'_vk_api',AsyncMock(return_value={'response':{'items':[{'id':10,'post_type':'post'}]}}))
-        delivery=AsyncMock(side_effect=main.VKAPIError(14,'Captcha needed'))
-        pause=AsyncMock()
-        monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
-        monkeypatch.setattr(main,'vk_captcha_pause_outbox',pause)
-        assert await main._reconcile_recent_managed_vk_live_urls(db,bot=None)==0
-        assert delivery.await_count==1
-        pause.assert_awaited_once_with(db)
-    finally:
-        await db.close()
 
 
 @pytest.mark.asyncio
@@ -345,24 +320,4 @@ async def test_calendar_waits_after_actual_publication(tmp_path,monkeypatch,age,
         item=dict(id=10,owner_id=-231920894,date=int(fixed.timestamp())-age,post_type=post_type)
         assert not await comments.ensure_calendar_comment(db,event(),event().source_vk_post_url,candidate_item=item)
         api.assert_not_awaited()
-    finally:await db.close()
-
-@pytest.mark.asyncio
-async def test_calendar_scan_delivers_one_changed_comment_and_skips_unchanged(tmp_path,monkeypatch):
-    from unittest.mock import AsyncMock
-    db=Database(str(tmp_path/'one-comment.sqlite'));await db.init()
-    try:
-        async with db.get_session() as session:
-            for eid in range(1,4):
-                session.add(event(id=eid,date='2099-11-14',source_vk_post_url=f'https://vk.com/wall-231920894_{eid}'))
-            await session.commit()
-        monkeypatch.setattr(main,'VK_EVENTS_GROUP_ID','231920894')
-        monkeypatch.setattr(main,'VK_SERVICE_TOKEN','fixture')
-        monkeypatch.setattr(main,'_vk_captcha_needed',False)
-        items=[dict(id=eid,owner_id=-231920894,date=1794480000,post_type='post') for eid in range(1,4)]
-        monkeypatch.setattr(main,'_vk_api',AsyncMock(return_value={'response':{'items':items}}))
-        delivery=AsyncMock(side_effect=[False,True,True])
-        monkeypatch.setattr(comments,'ensure_calendar_comment',delivery)
-        await main._reconcile_recent_managed_vk_live_urls(db,bot=None)
-        assert delivery.await_count==2
     finally:await db.close()

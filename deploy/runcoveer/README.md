@@ -588,3 +588,7 @@ filename/template changes do not rewrite existing comments; real calendar
 changes delete and recreate the comment using existing receipts. Verify ordinary
 VK delivery after the owner supplies replacement credentials; no historical
 comment replay is required by this release.
+
+## Calendar writer containment, 2026-11-12
+
+Image `runcoveer/events:vk-calendar-containment-20261112` disconnects only the automatic calendar writer that repeatedly blocks normal photo jobs with real docs.save CAPTCHA. It retains service live-ID recovery, all owner media changes, and the existing challenge recovery. Calendar comments are temporarily unavailable; do not call this complete acceptance. Preserve the current primary credential during Events-only release and verify actual photo attachments after normal recovery.

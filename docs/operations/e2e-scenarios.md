@@ -144,3 +144,5 @@ VK calls for unchanged calendar bytes and legacy receipt migration despite a
 changed text template, delete/create only after a real time change, recovery of
 an accepted creation with a lost response without duplicate writes, and the
 existing postponed/recent-post delay and one-changed-comment scan contracts.
+
+Temporary VK calendar containment: live-ID reconciliation recovers the exact published post using the service reader without invoking calendar document writes. Existing marker-scoped CAPTCHA recovery tests remain required; verify ordinary real photo delivery after recovery. Calendar helper tests qualify its retained implementation only, not automatic delivery.
