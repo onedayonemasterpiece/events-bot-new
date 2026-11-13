@@ -311,7 +311,8 @@ async def test_related_compute_is_not_starved_by_media_stream(tmp_path, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_ready_vk_gets_a_turn_before_new_compute_and_repeated_unrelated_media(tmp_path, monkeypatch):
+@pytest.mark.parametrize("ready_task", [main.JobTask.vk_sync, main.JobTask.vk_calendar_comment])
+async def test_ready_vk_gets_a_turn_before_new_compute_and_repeated_unrelated_media(tmp_path, monkeypatch, ready_task):
     db = main.Database(str(tmp_path / 'related-vk-fair.sqlite'))
     await db.init()
     monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
@@ -325,7 +326,7 @@ async def test_ready_vk_gets_a_turn_before_new_compute_and_repeated_unrelated_me
         session.add(main.JobOutbox(event_id=waiting.id, task=main.JobTask.event_media_review, next_run_at=now-timedelta(seconds=30)))
         session.add(main.JobOutbox(event_id=waiting.id, task=main.JobTask.vk_sync, depends_on=f'event_media_review:{wid}', next_run_at=now-timedelta(seconds=30)))
         session.add(main.JobOutbox(event_id=waiting.id, task=main.JobTask.event_vector_sync, next_run_at=now-timedelta(seconds=10)))
-        session.add(main.JobOutbox(event_id=ready.id, task=main.JobTask.vk_sync, next_run_at=now-timedelta(seconds=60)))
+        session.add(main.JobOutbox(event_id=ready.id, task=ready_task, next_run_at=now-timedelta(seconds=60)))
         await session.commit()
     calls = []
     async def media(eid, *_args): calls.append(('media', eid))
@@ -333,7 +334,7 @@ async def test_ready_vk_gets_a_turn_before_new_compute_and_repeated_unrelated_me
     async def publish(eid, *_args): calls.append(('vk', eid))
     monkeypatch.setitem(main.JOB_HANDLERS, 'event_media_review', media)
     monkeypatch.setitem(main.JOB_HANDLERS, 'event_vector_sync', vector)
-    monkeypatch.setitem(main.JOB_HANDLERS, 'vk_sync', publish)
+    monkeypatch.setitem(main.JOB_HANDLERS, ready_task.value, publish)
     try:
         await main._run_due_jobs_once(db, None, max_jobs=1)
         assert calls == [('vk', rid)]
