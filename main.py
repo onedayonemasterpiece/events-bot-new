@@ -5606,7 +5606,8 @@ async def _resume_vk_captcha_outbox(
                 JobOutbox.last_error == marker,
                 JobOutbox.terminal_reason.is_(None),
             )
-            .order_by(JobOutbox.id)
+            .order_by(JobOutbox.task != JobTask.vk_sync,
+                      JobOutbox.task != JobTask.vk_calendar_comment, JobOutbox.id)
         )
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
         for job in jobs:
@@ -23838,8 +23839,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     # plus the body text, so title-only repairs must not be invisible here.
     from vk_event_relations import presentation, ensure_comment
     relations = await presentation(db, ev)
-    source_photo_count = len(await _dedupe_event_photo_urls_for_publish(ev.photo_urls))
-    extra_photos = min(sum(bool(v) for v in relations.values()), max(0, VK_MAX_ATTACHMENTS - source_photo_count))
     new_hash = content_hash(
         "\n".join(
             [
@@ -23854,7 +23853,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 f"ics:{str(getattr(ev, 'ics_url', '') or '<none>')}",
                 json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
                 text_for_vk,
-            ] + ([json.dumps(relations, ensure_ascii=False, sort_keys=True)] if any(relations.values()) else [])
+            ]
         )
     )
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
@@ -23864,9 +23863,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
         managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
     if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
-        post_exists, media_complete = await _managed_vk_post_state(
-            ev, **({"extra_photos": extra_photos} if extra_photos else {})
-        )
+        post_exists, media_complete = await _managed_vk_post_state(ev)
         if post_exists and media_complete:
             await ensure_comment(db, ev, existing_vk_post_url, relations, bot)
             await _copy_same_day_linked_vk_publication(
