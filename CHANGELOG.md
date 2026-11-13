@@ -7,6 +7,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Related comments use the persisted live VK URL after postponed-ID recovery, and graph refresh reconciles the already-fetched public aliases before rendering peer links.
+
 - Skip secret-website authorized-Search qualification for related-only calculation; retain immutable projection, full vector coverage and all website-profile checks.
 
 - Related VK cards omit unsupported decorative emoji and wrap titles by Cygre pixel width, keeping names clear of medallions and marking shortened titles with an ellipsis.

@@ -49,11 +49,13 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         async def postponed(*args):
             return [{'id': 1}]
         async def public(*args, **kwargs):
-            return {'response': {'items': [{'id': 2}]}}
+            return {'response': {'items': [{'id': 20, 'postponed_id': 2}]}}
         monkeypatch.setattr(main, '_fetch_vk_postponed_items_for_owner', postponed)
         monkeypatch.setattr(main, '_vk_api', public)
         await relations.enqueue_refresh(db)
         assert {eid for eid, _, _ in queued} == {1, 2}
+        refreshed = await relations.presentation(db, event)
+        assert refreshed['related'][0]['url'] == 'https://vk.com/wall-1_20'
         assert any(eid == 1 and task == main.JobTask.vk_sync and kw['requeue_done'] for eid, task, kw in queued)
         old_data = json.dumps(data, sort_keys=True)
         path.write_text(json.dumps({'related': {'1': {'pure_related': [4]}}}))
@@ -120,3 +122,30 @@ def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monk
     assert title_lines[-1][0].endswith('…')
     draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
     assert all(draw.textlength(text, font=font) <= 684 for text, font in title_lines)
+
+
+@pytest.mark.asyncio
+async def test_deferred_comment_uses_persisted_live_url_after_boolean_recovery(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / 'live-id.sqlite'))
+    await db.init()
+    async def recover(db, event, **kwargs):
+        event.source_vk_post_url = 'https://vk.com/wall-1_20'
+        return True
+    async def data(*args):
+        return {'dates': [], 'related': []}
+    async def comment(db, event, url, *args):
+        assert url == 'https://vk.com/wall-1_20'
+        return True
+    monkeypatch.setattr(main, '_recover_managed_vk_live_url', recover)
+    monkeypatch.setattr(relations, 'presentation', data)
+    monkeypatch.setattr(relations, 'ensure_comment', comment)
+    try:
+        async with db.get_session() as session:
+            event = main.Event(title='Концерт', description='', source_text='', date='2099-01-01',
+                time='19:00', location_name='Зал', source_vk_post_url='https://vk.com/wall-1_10')
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+        assert await main.job_vk_calendar_comment(event.id, db, None, {'relations': True})
+    finally:
+        await db.close()
