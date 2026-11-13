@@ -1465,6 +1465,7 @@ async def test_source_ticket_price_reaches_canonical_without_unsupported_zero(
     try:
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         candidate = EventCandidate(
             source_type="telegram", source_url="https://t.me/locostandup/4389",
             source_text=source_text, title="Сольный стендап Васи Медведева",

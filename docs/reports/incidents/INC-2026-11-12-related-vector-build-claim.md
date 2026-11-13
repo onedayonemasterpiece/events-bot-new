@@ -202,3 +202,15 @@ inside a paused cohort, and a normal initial publication; only the last resumes.
 No new queue, state, recovery path, provider request or CAPTCHA bypass is added.
 Fresh related JSON21:49UTC704anchors is verified; normal new-post/comment
 acceptance remains blocked by the real VK challenge.
+
+Read-only review caught three terminal rows already resumed by the old release
+before the fix:142439,155207,155563. At22:11UTC their exact failed state and
+current CAPTCHA marker were rechecked, then the three rows were restored to
+terminal error with the existing far-future due; no provider call. Ordinary
+initial job156444 remained pending and unchanged. This is a one-time correction
+of the already-revived data, not another production recovery mechanism.
+CI also crossed local midnight: the unrelated historical price fixture was
+rejected as a past event. Its test now explicitly disables past-event rejection,
+as neighbouring historical-source tests do, keeping the original source/date
+and all seven canonical ticket-price expectations. Seven cases pass locally;
+production ingestion policy remains unchanged.
