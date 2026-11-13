@@ -7,6 +7,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Skip secret-website authorized-Search qualification for related-only calculation; retain immutable projection, full vector coverage and all website-profile checks.
+
 - Related VK cards omit unsupported decorative emoji and wrap titles by Cygre pixel width, keeping names clear of medallions and marking shortened titles with an ellipsis.
 
 - Limit automatic related-card refresh to existing postponed posts and the ten latest public posts; post links only after VK exposes the matching related list.

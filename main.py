@@ -25956,7 +25956,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         snapshot_id=snapshot_id,
     )
     await asyncio.to_thread(validate_snapshot, snapshot_path, manifest_path)
-    if _env_flag("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH"):
+    if os.getenv("STATIC_SITE_BUILD_PROFILE") != "related-only" and _env_flag("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH"):
         try:
             if not search_corpus_receipt_path:
                 raise StaticSiteRetryableError("vector_barrier_receipt_pending")
