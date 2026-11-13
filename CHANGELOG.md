@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Keep the existing deferred media retry after repeated transient provider failures instead of exhausting image review before a semantic answer; retain counters and uncertain-result cap.
 - Reuse the existing media transient-error schedule for pair reviews instead of postponing provider503/timeouts for a full day; preserve daily quotas and uncertain-result policy.
 - Prioritize the existing media dependency of a waiting initial VK publication before unrelated reviews, without requiring a failed publication attempt.
 - Use the already-configured Gemma media escalation when the primary daily quota rejects a reservation; retain minute limits, existing credentials and actual-send accounting.

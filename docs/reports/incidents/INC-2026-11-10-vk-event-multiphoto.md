@@ -493,3 +493,27 @@ Initialized pair regression с lease текущего worker job: до испр�
 /home/dev/artifacts/events-bot-new/20261113T004847Z-vk-pair-existing-transient-retry-20261113.
 Обычный TG registry resume после924 подтверждён operation12066 с00:38:52UTC,
 quiet chat NULL. Ручного source replay не было. Product result ещё открыт.
+
+### Третий transport failure прекращал gallery review без ответа, 13 ноября
+
+Actual33240 дважды не получил semantic verdict: Gemma503 и45s timeout.
+Bounded review existing consumers показал ловушку третьей попытки:
+max-attempt branch ставил unresolved раньше transient defer, selector
+и followup выбирали только pending/deferred, extra photo оставалась pending.
+После geometry followups initialVK мог выйти с seed, без второй картинки.
+Существующий автоматический механизм эту terminal pair не возвращает.
+
+Terminal-attempt условие теперь применяется только когда существующий
+transient scheduler не определяет retry. Это одна заменённая строка,
+net production0 budget3, без новых состояний/лимитов/recovery/provider paths.
+Temporary timeout/5xx и дневной quota отказ сохраняют прежний deferred
+механизм; counter и provider accounting не сбрасываются. Semantic uncertain
+по-прежнему исчерпывается при3попытках. Ошибка не даёт image approval.
+
+Initialized leased-pair regression перед исправлением: third503/timeout/rpd
+падают, пять остальных controls проходят, включая thirdsemanticuncertain.
+После необходим полный этот сценарий и gallery→VK replay controls.
+Evidence retained:
+/home/dev/artifacts/events-bot-new/20261113T011138Z-vk-pair-transient-liveness-20261113.
+Подтверждённый ordinary update13778 с двумя разными фото и листай→
+не заменяет ещё открытый критерий initial fresh10899.
