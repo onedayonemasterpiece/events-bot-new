@@ -102,3 +102,21 @@ async def test_comment_replay_edits_one_comment_and_defers_postponed(tmp_path, m
         assert deferred[-1]['next_run_at'].timestamp() == 4070908860
     finally:
         await db.close()
+
+
+def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monkeypatch):
+    from PIL import ImageDraw
+    seen = []
+    original = ImageDraw.ImageDraw.text
+    def record(self, xy, text, *args, **kwargs):
+        seen.append((xy, text, kwargs.get('font')))
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', record)
+    body = relations.render_card([{'date': '20.11', 'time': '19:00', 'title': '🎭 ' + 'Длинное название концерта ' * 12,
+        'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}])
+    assert Image.open(BytesIO(body)).size == (1080, 1350)
+    assert all('🎭' not in text for _, text, _ in seen)
+    title_lines = [(text, font) for xy, text, font in seen if xy[1] in (398, 428)]
+    assert title_lines[-1][0].endswith('…')
+    draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+    assert all(draw.textlength(text, font=font) <= 684 for text, font in title_lines)

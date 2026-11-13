@@ -73,6 +73,8 @@ def append_list(message, data):
 
 
 def render_card(items, *, schedule=False):
+    from guide_excursions.hook_cards import _strip_emoji
+    from guide_excursions.hook_card_render import _wrap
     image = Image.new('RGB', (1080, 1350), '#F7F5EF')
     draw = ImageDraw.Draw(image)
     draw.ellipse((-260, -300, 510, 360), fill='#E9EDE1')
@@ -101,11 +103,14 @@ def render_card(items, *, schedule=False):
             image.paste(medal, (1008 - (len(medallions) - index) * 120, y + 16), medal)
         label = row['place'] if schedule else row['title']
         width = 924 - len(medallions) * 120
-        lines = textwrap.wrap(label, max(25, width // 18))[:2]
-        for n, line in enumerate(lines):
-            if n == 1 and len(label) > 94:
-                line = line.rstrip(' .') + '…'
-            draw.text((72, y + 48 + n * 30), line, font=font(29), fill='#24382D')
+        title_font = font(29)
+        lines = _wrap(draw, _strip_emoji(label).strip(), title_font, width)
+        if len(lines) > 2:
+            while draw.textlength(lines[1] + '…', font=title_font) > width:
+                lines[1] = lines[1][:-1]
+            lines[1] += '…'
+        for n, line in enumerate(lines[:2]):
+            draw.text((72, y + 48 + n * 30), line, font=title_font, fill='#24382D')
         if row.get('place') and not schedule:
             draw.text((72, y + 111), textwrap.shorten(row['place'], width=max(24, width // 15), placeholder='…'),
                       font=font(24), fill='#315848')

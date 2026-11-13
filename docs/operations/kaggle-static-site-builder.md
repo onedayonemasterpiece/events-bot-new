@@ -824,3 +824,9 @@ A later Smart Update merges its facts without moving a ready snapshot back
 into a trailing quiet window. Both share priority with media needed by an
 initial VK post; they retain existing snapshot and single-flight contracts.
 Website profiles keep their fifteen-minute quiet window unchanged.
+
+Related-only does not perform the authorized Search qualification of a secret
+HTML candidate. That site-only check can reject the complete vector snapshot
+on the full exported Search catalog even though no Search UI is published.
+The immutable projection, complete vector coverage/model hashes and related
+retrieval checks still apply; production-candidate keeps the Search gate.

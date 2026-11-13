@@ -162,3 +162,50 @@ async def test_import_stream_does_not_postpone_ready_related_compute(tmp_path, m
             assert c.execute("select next_run_at from joboutbox where task='static_site_build'").fetchone()[0] == before
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_related_job_does_not_require_website_authorized_search(tmp_path, monkeypatch):
+    import main
+    from static_site_release import create_immutable_projection_snapshot
+    db = main.Database(str(tmp_path / 'live.sqlite'))
+    await db.init()
+    monkeypatch.setenv('ENABLE_STATIC_SITE_KAGGLE_BUILDER', '1')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_RELATED_MODE', 'pgvector')
+    monkeypatch.setenv('STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH', '1')
+    monkeypatch.setenv('STATIC_SITE_SNAPSHOT_DIR', str(tmp_path / 'handoff'))
+    async def noop(*args, **kwargs):
+        return None
+    async def previous(**kwargs):
+        return False, None
+    for name in ('_prune_static_site_terminal_outputs', '_prune_static_site_terminal_snapshots_for_capacity',
+                 '_prune_static_site_abandoned_scratch_for_capacity', '_reconcile_current_static_site_candidate_status',
+                 '_patch_static_site_request_payload'):
+        monkeypatch.setattr(main, name, noop)
+    monkeypatch.setattr(main, '_recover_previous_static_site_attempt', previous)
+    monkeypatch.setattr(main, '_static_site_storage_preflight', lambda: None)
+    monkeypatch.setattr(main, '_resolve_static_site_repo_sha', lambda: 'a' * 40)
+    monkeypatch.setattr(main, '_resolve_static_site_image_source_identity', lambda *args: None)
+    def website_gate(**kwargs):
+        pytest.fail('related-only attempted the deferred website Search qualification')
+    monkeypatch.setattr(main, 'bind_snapshot_search_receipt', website_gate)
+    def stop_at_claim(*args, **kwargs):
+        raise RuntimeError('reached_shared_kaggle_claim')
+    monkeypatch.setattr(main, 'claim_static_site_build', stop_at_claim)
+    try:
+        projected, manifest, _ = create_immutable_projection_snapshot(db.path, tmp_path / 'vector', request_payload={})
+        receipt = tmp_path / 'receipt.json'
+        receipt.write_text(json.dumps({'schema_version': 'event_vector_sync_receipt_v2', 'status': 'complete',
+            'complete': True, 'catalog_revision': 'a' * 64, 'corpus_revision': 'b' * 64,
+            'search_document_revision': 'b' * 64, 'search_v3_hash': 'b' * 64, 'related_v1_hash': 'c' * 64,
+            'coverage': {'status': 'complete'}, 'event_revisions': {},
+            'projection_snapshot': {'sqlite_path': str(projected), 'manifest_path': str(manifest)}}))
+        monkeypatch.setenv('STATIC_SITE_VECTOR_RECEIPT_PATH', str(receipt))
+        async def request(*args):
+            return 12, {'event_revisions': {}, 'vector_barrier': {'required': True}}
+        monkeypatch.setattr(main, '_static_site_running_request', request)
+        with pytest.raises(RuntimeError, match='reached_shared_kaggle_claim'):
+            await main.job_static_site_build_kaggle(1, db, None)
+    finally:
+        await db.close()
