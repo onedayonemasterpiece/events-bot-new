@@ -2214,6 +2214,7 @@ class JobTask(str, Enum):
     event_media_review = "event_media_review"
     telegraph_build = "telegraph_build"
     vk_sync = "vk_sync"
+    vk_calendar_comment = "vk_calendar_comment"
     tg_event_publish = "tg_event_publish"
     tg_premium_emoji_edit = "tg_premium_emoji_edit"
     ics_publish = "ics_publish"

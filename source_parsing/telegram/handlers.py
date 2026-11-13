@@ -6355,7 +6355,7 @@ async def process_telegram_results(
         await _emit_progress(
             TelegramMonitorImportProgress(
                 stage="start",
-                status="running",
+                status="metrics_only" if existing and not forced and not reprocess_incomplete else "running",
                 current_no=int(progress_current_no),
                 total_no=int(progress_total_no),
                 source_username=username,

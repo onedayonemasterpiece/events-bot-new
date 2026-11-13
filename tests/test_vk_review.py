@@ -996,3 +996,55 @@ async def test_scheduled_pick_near_event_before_newer_publications(tmp_path, mon
     )
     assert second and second.post_id == 2
     await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('contention', ['release', 'cancel', 'persistent'])
+async def test_pick_next_writer_contention_keeps_queue_claim_atomic(tmp_path, monkeypatch, contention):
+    import asyncio
+    import sqlite3
+
+    # Only this isolated fixture shortens SQLite's wait; production settings stay unchanged.
+    monkeypatch.setenv('DB_BUSY_TIMEOUT_MS', '500' if contention == 'cancel' else '1')
+    db = Database(str(tmp_path / 'claim-contention.sqlite'))
+    await db.init()
+    task = None
+    try:
+        async with db.raw_conn() as writer:
+            await writer.execute(
+                "INSERT INTO vk_inbox(group_id,post_id,date,text,has_date,status) "
+                "VALUES(1,1,1,'source',1,'pending')"
+            )
+            await writer.commit()
+            await writer.execute('BEGIN IMMEDIATE')
+            task = asyncio.create_task(vk_review.pick_next(db, 71, 'contended-batch'))
+            try:
+                if contention == 'release':
+                    await asyncio.sleep(0.04)
+                    await writer.rollback()
+                    post = await task
+                    assert post is not None and post.post_id == 1
+                elif contention == 'cancel':
+                    await asyncio.sleep(0.02)
+                    task.cancel()
+                    await writer.rollback()
+                    with pytest.raises(asyncio.CancelledError):
+                        await task
+                else:
+                    with pytest.raises(sqlite3.OperationalError, match='database is locked'):
+                        await asyncio.wait_for(task, timeout=4)
+            finally:
+                await writer.rollback()
+        async with db.raw_conn() as check:
+            row = await (await check.execute(
+                'SELECT status,locked_by,review_batch FROM vk_inbox'
+            )).fetchone()
+        assert tuple(row) == (('locked', 71, 'contended-batch') if contention == 'release' else ('pending', None, None))
+    finally:
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        await db.close()

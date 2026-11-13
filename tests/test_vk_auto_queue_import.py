@@ -1031,8 +1031,9 @@ async def test_vk_auto_import_terminalizes_smart_technical_failure_without_retry
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("trigger", ["manual", "scheduled_catchup"])
 async def test_vk_auto_import_fifteen_row_batch_is_fully_terminal_without_retry(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, trigger
 ):
     """Regression for the operator screenshot: 15 selected rows must balance.
 
@@ -1143,9 +1144,14 @@ async def test_vk_auto_import_fifteen_row_batch_is_fully_terminal_without_retry(
     monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
     monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
 
+    bot = DummyBot()
     report = await vk_auto_queue.run_vk_auto_import(
-        db, DummyBot(), chat_id=1, limit=15, operator_id=123
+        db, bot, chat_id=1, limit=15, operator_id=123, trigger=trigger
     )
+    assert any("Разбираю VK пост" in text for _, text in bot.messages) == (trigger == "manual")
+    if trigger != "manual":
+        assert len(bot.messages) == 1
+        assert "VK auto import завершён" in bot.messages[0][1]
 
     assert report.inbox_processed == 15
     assert report.inbox_imported == 0

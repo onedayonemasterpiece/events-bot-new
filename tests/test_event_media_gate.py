@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import sqlite3
+import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,6 +32,7 @@ from models import (
     EventMediaPairReview,
     EventPoster,
     JobOutbox,
+    JobStatus,
     JobTask,
 )
 from smart_event_update import (
@@ -1317,7 +1319,7 @@ def test_vk_carousel_cover_composites_transparency_and_bounds_jpeg_decode(monkey
 
 
 @pytest.mark.parametrize(("event_id", "layout"), [(100, "grid"), (101, "carousel")])
-@pytest.mark.parametrize("primary_error", [503, 429, 401])
+@pytest.mark.parametrize("primary_error", [503, 429, 401, "rpd", "rpm", "tpm"])
 @pytest.mark.asyncio
 async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, primary_error, tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
@@ -1351,7 +1353,7 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
         )
 
     import google_ai
-    from google_ai.exceptions import ProviderError
+    from google_ai.exceptions import ProviderError, RateLimitError
     from sqlalchemy import text
     provider_models = []
 
@@ -1372,6 +1374,9 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
                     k: v for k, v in event_media._REVIEW_SCHEMA.items() if k != "additionalProperties"
                 }
             provider_models.append(model)
+            if len(provider_models) == 1 and isinstance(primary_error, str):
+                # A rejected quota reservation did not send anything to the provider.
+                raise RateLimitError(blocked_reason=primary_error, model=model)
             if kwargs.get("attempt_observer"):
                 kwargs["attempt_observer"]({"requested_model": model})
             if len(provider_models) == 1:
@@ -1395,25 +1400,36 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
         pair = (await session.execute(select(EventMediaPairReview).where(
             EventMediaPairReview.event_id == event_id,
         ))).scalar_one()
-        if primary_error == 503:
+        if primary_error in (503, "rpd"):
             assert pair.status == "resolved" and pair.last_error is None
             assert pair.escalation_model == "models/gemma-4-31b-it"
-            assert pair.provider_calls == 2
+            assert pair.provider_calls == (1 if primary_error == "rpd" else 2)
             assert provider_models == ["gemini-3.1-flash-lite", "models/gemma-4-31b-it"]
         else:
-            assert pair.status == "deferred" and "ProviderError" in pair.last_error
-            assert pair.escalation_model is None and pair.provider_calls == 1
+            assert pair.status == "deferred"
+            expected_error = "RateLimitError" if isinstance(primary_error, str) else "ProviderError"
+            assert expected_error in pair.last_error
+            assert pair.escalation_model is None
+            assert pair.provider_calls == (0 if isinstance(primary_error, str) else 1)
         assert pair.attempts == 1
-        if primary_error != 503:
+        if primary_error not in (503, "rpd"):
             pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
         await session.commit()
-    if primary_error != 503:
+    if primary_error not in (503, "rpd"):
         await review_next_event_media_pair(event_id, db)
     async with db.get_session() as session:
         event = await session.get(Event, event_id)
         await session.refresh(event)
         urls = list(event.photo_urls)
         assert len(urls) == 2 and urls[1] == second
+        # This fixture calls the pair helper directly, outside the outbox worker.
+        # Reflect its completed media work before exercising VK-only dispatch.
+        for job in (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.event_media_review,
+        ))).scalars():
+            job.status = main.JobStatus.done
+            session.add(job)
+        await session.commit()
 
     for key, value in {"VK_EVENTS_GROUP_ID": "1", "VK_USER_TOKEN": "fixture", "VK_PHOTOS_ENABLED": True,
                        "VK_MAX_ATTACHMENTS": 10}.items():
@@ -1441,7 +1457,7 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
             wall["date"] = slot
         else:
             assert (params["owner_id"], params["post_id"]) == ("-1", "9")
-            assert "publish_date" not in params and params["message"] == wall["text"]
+            assert params["publish_date"] == slot and params["message"] == wall["text"]
         writes.append(method)
         wall.update(text=params["message"], primary_attachments_mode=layout, attachments=[
             {"type": "photo", "photo": {"owner_id": -1, "id": int(ref.split("_")[1])}} for ref in ids
@@ -1577,6 +1593,13 @@ async def test_confirmed_duplicate_upgrades_approved_thumbnail_and_runs_vk(tmp_p
         assert rows[0].review_status == DUPLICATE and rows[0].duplicate_of_id == rows[1].id
         assert rows[1].review_status == APPROVED and (rows[1].width, rows[1].height) == (1800, 900)
         assert pair.decision == "duplicate" and pair.canonical_poster_id == rows[1].id
+        # Direct helper invocation above did not own/complete the queued job.
+        for job in (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.event_media_review,
+        ))).scalars():
+            job.status = main.JobStatus.done
+            session.add(job)
+        await session.commit()
 
     for key, value in {"VK_EVENTS_GROUP_ID": "1", "VK_USER_TOKEN": "fixture",
                        "VK_PHOTOS_ENABLED": True, "VK_MAX_ATTACHMENTS": 10}.items():
@@ -2272,3 +2295,188 @@ async def test_exact_cdn_thumbnail_backfill_preserves_display_bytes(monkeypatch)
         assert poster.thumbnail_256_url and poster.thumbnail_512_url
     assert uploads[0] == (path, original)
     assert len(uploads) == 3  # First backfill only; second pass is already complete.
+
+
+@pytest.mark.parametrize("authority, expected_host", [
+    ("янтарьхолл.рф:8443", "xn--80awafglm0a6dza.xn--p1ai:8443"),
+    ("example.com:8443", "example.com:8443"),
+    ("[2001:db8::1]:8443", "[2001:db8::1]:8443"),
+    ("user:pass@ЯНТАРЬХОЛЛ.РФ:8443", "xn--80awafglm0a6dza.xn--p1ai:8443"),
+])
+def test_media_download_encodes_international_host_and_path(monkeypatch, authority, expected_host):
+    requests = []
+
+    def open_url(request, *, timeout):
+        # Exercise the HTTP host/selector boundary without network access.
+        request.host.encode("ascii")
+        request.selector.encode("ascii")
+        requests.append(request)
+        response = io.BytesIO(b"poster")
+        response.headers = {"Content-Type": "image/jpeg"}
+        return response
+
+    monkeypatch.setattr(urllib.request, "urlopen", open_url)
+    downloaded = event_media._download_url(
+        f"https://{authority}/афиша/1800%20x900.jpg?имя=Гала&x=1%202",
+        max_bytes=1024, timeout=1,
+    )
+    assert downloaded.data == b"poster"
+    request = requests[0]
+    # urllib retains explicit credentials in .host; the URL authority must preserve them.
+    assert request.host == (("user:pass@" if "@" in authority else "") + expected_host)
+    assert request.selector == "/%D0%B0%D1%84%D0%B8%D1%88%D0%B0/1800%20x900.jpg?%D0%B8%D0%BC%D1%8F=%D0%93%D0%B0%D0%BB%D0%B0&x=1%202"
+
+
+@pytest.mark.asyncio
+async def test_reviewed_gallery_change_requeues_done_managed_vk_job(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    import main
+
+    db = Database(str(tmp_path / "managed-fanout.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    # Model the successful provider existence/media probe; the scheduler and
+    # outbox writes below are real, including requeue_done admission.
+    monkeypatch.setattr(main, "_event_has_existing_managed_vk_post", AsyncMock(return_value=True))
+    async with db.get_session() as session:
+        ev = _event()
+        ev.date = "2099-06-01"
+        ev.source_vk_post_url = "https://vk.com/wall-1_5"
+        session.add(ev)
+        await session.flush()
+        event_id = ev.id
+        await _apply_posters(session, event_id, [PosterCandidate(
+            supabase_url=f"https://static.example/{name}.png", sha256=name,
+        ) for name in ("small", "full")])
+        session.add(JobOutbox(event_id=event_id, task=JobTask.vk_sync,
+                              status=main.JobStatus.done))
+        await session.commit()
+
+    async def download(poster):
+        return DownloadedPoster(_pattern_png_bytes(invert=poster.display_order == 1),
+                                "image/png", poster.supabase_url)
+
+    async def reviewer(**kwargs):
+        return dict(decision="distinct", duplicate_kind="none", confidence=0.99,
+                    semantic_conflict=False, canonical_side="either", reason_code="different_photos")
+
+    monkeypatch.setattr(event_media, "_download_poster", download)
+    monkeypatch.setattr(event_media, "_call_reviewer", reviewer)
+    assert await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+        job = (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.vk_sync,
+        ))).scalar_one()
+        assert len(ev.photo_urls) == 2
+        assert ev.source_vk_post_url == "https://vk.com/wall-1_5"
+        assert job.status == main.JobStatus.pending
+        job.status = main.JobStatus.done
+        await session.commit()
+        unchanged_at = job.updated_at
+
+    assert not await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        ev = await session.get(Event, event_id)
+        job = (await session.execute(select(JobOutbox).where(
+            JobOutbox.event_id == event_id, JobOutbox.task == JobTask.vk_sync,
+        ))).scalar_one()
+        assert job.status == main.JobStatus.done and job.updated_at == unchanged_at
+        assert ev.source_vk_post_url == "https://vk.com/wall-1_5"
+    await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('postponed', [False, True])
+async def test_gallery_edit_preserves_known_postponed_publication_time(monkeypatch, postponed):
+    from datetime import datetime, timezone
+    import main
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
+    monkeypatch.setattr(main, '_vk_user_token', lambda: 'fixture')
+    publication = int(datetime.now(timezone.utc).timestamp()) + (3600 if postponed else -60)
+    writes = []
+    async def api(method, params, *args, **kwargs):
+        if method == 'wall.getById':
+            return {'response': {'items': [{'id': 10, 'date': publication,
+                'post_type': 'postpone' if postponed else 'post', 'text': 'Old', 'attachments': []}]}}
+        assert method == 'wall.edit'
+        writes.append(params)
+        return {'response': 1}
+    monkeypatch.setattr(main, '_vk_api', api)
+    assert await main.edit_vk_post('https://vk.com/wall-231920894_10', 'Updated',
+                                   attachments=['photo1_1', 'photo1_2'])
+    assert len(writes) == 1
+    if postponed:
+        assert writes[0]['publish_date'] == publication
+    else:
+        assert 'publish_date' not in writes[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure', ['503', 'timeout', 'rpd', 'uncertain'])
+@pytest.mark.parametrize('previous_attempts', [0, 2])
+async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monkeypatch, failure, previous_attempts):
+    from datetime import datetime, timezone, timedelta
+    from google_ai.exceptions import ProviderError, RateLimitError
+    now = datetime(2026, 11, 13, 12, tzinfo=timezone.utc)
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None): return now
+    monkeypatch.setattr(event_media, 'datetime', Clock)
+    monkeypatch.setenv('EVENT_MEDIA_ROLE_TRANSIENT_RETRY_SECONDS', '900')
+    db = Database(str(tmp_path / 'pair-retry.sqlite'))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        event.date = '2099-01-01'
+        session.add(event)
+        await session.flush()
+        eid = event.id
+        await _apply_posters(session, eid, [
+            PosterCandidate(catbox_url='https://static.example/a.png', sha256='a' * 64),
+            PosterCandidate(catbox_url='https://static.example/b.png', sha256='b' * 64),
+        ])
+        pair = (await session.execute(select(EventMediaPairReview).where(
+            EventMediaPairReview.event_id == eid))).scalar_one()
+        pair.attempts = previous_attempts
+        session.add(pair)
+        # Match the real outbox invocation: the current media job is leased.
+        for job in (await session.execute(select(JobOutbox).where(JobOutbox.event_id == eid))).scalars():
+            job.status = JobStatus.running
+            session.add(job)
+        await session.commit()
+    async def download(poster):
+        return DownloadedPoster(_pattern_png_bytes(invert=poster.catbox_url.endswith('b.png')),
+                                'image/png', poster.catbox_url)
+    async def review(**_kwargs):
+        if failure == '503':
+            raise ProviderError(error_type='ServerError', status_code=503, retryable=True)
+        if failure == 'timeout':
+            raise ProviderError(error_type='TimeoutError', error_message='call timed out', retryable=True)
+        if failure == 'rpd':
+            raise RateLimitError(blocked_reason='rpd')
+        return dict(decision='uncertain', duplicate_kind='unknown', confidence=0.5,
+                    semantic_conflict=False, canonical_side='unknown', reason_code='uncertain')
+    monkeypatch.setattr(event_media, '_download_poster', download)
+    monkeypatch.setattr(event_media, '_call_reviewer', review)
+    try:
+        await review_next_event_media_pair(eid, db)
+        async with db.get_session() as session:
+            pair = (await session.execute(select(EventMediaPairReview).where(
+                EventMediaPairReview.event_id == eid))).scalar_one()
+            due = pair.next_run_at.replace(tzinfo=timezone.utc)
+            assert pair.attempts == previous_attempts + 1
+            if failure == 'uncertain' and previous_attempts == 2:
+                assert pair.status == 'unresolved'
+                return
+            assert pair.status == 'deferred'
+            assert due == (now + timedelta(minutes=15) if failure in ('503', 'timeout')
+                           else datetime(2026, 11, 14, 0, 5, tzinfo=timezone.utc))
+            posters = (await session.execute(select(EventPoster).where(EventPoster.event_id == eid))).scalars().all()
+            assert any(p.review_status == PENDING_REVIEW for p in posters)
+            jobs = (await session.execute(select(JobOutbox).where(
+                JobOutbox.event_id == eid, JobOutbox.task == JobTask.event_media_review,
+                JobOutbox.status == JobStatus.pending))).scalars().all()
+            assert any(j.next_run_at.replace(tzinfo=timezone.utc) <= due for j in jobs)
+    finally:
+        await db.engine.dispose()

@@ -2491,7 +2491,7 @@ def _make_import_progress_callback(
 
     async def _handle_import_progress(progress: TelegramMonitorImportProgress) -> None:
         nonlocal import_progress_message_id, import_progress_key
-        if not (send_progress and bot and chat_id):
+        if not (send_progress and bot and chat_id) or progress.status == "metrics_only":
             return
         key = (str(progress.source_username), int(progress.message_id))
         if progress.stage == "start":
@@ -3668,13 +3668,13 @@ async def resume_telegram_monitor_jobs(
                     run_id,
                     exc,
                 )
-                await run_telegram_import_from_results(
+                report = await run_telegram_import_from_results(
                     db,
                     results_path=results_path,
                     bot=bot,
-                    chat_id=notify_chat_id,
+                    chat_id=None,
                     run_id=run_id,
-                    send_progress=bool(bot and notify_chat_id),
+                    send_progress=False,
                     trigger="recovery_import",
                     operator_id=0,
                 )
@@ -3683,7 +3683,7 @@ async def resume_telegram_monitor_jobs(
                 if bot and notify_chat_id:
                     await bot.send_message(
                         int(notify_chat_id),
-                        f"✅ tg_monitor recovery: kernel {kernel_ref} обработан по output после ошибки статуса",
+                        format_report(report), parse_mode="HTML",
                     )
                 continue
 
@@ -3748,13 +3748,13 @@ async def resume_telegram_monitor_jobs(
                 continue
 
             results_path = await _download_results(client, kernel_ref, run_id)
-            await run_telegram_import_from_results(
+            report = await run_telegram_import_from_results(
                 db,
                 results_path=results_path,
                 bot=bot,
-                chat_id=notify_chat_id,
+                chat_id=None,
                 run_id=run_id,
-                send_progress=bool(bot and notify_chat_id),
+                send_progress=False,
                 trigger="recovery_import",
                 operator_id=0,
             )
@@ -3763,7 +3763,7 @@ async def resume_telegram_monitor_jobs(
             if bot and notify_chat_id:
                 await bot.send_message(
                     int(notify_chat_id),
-                    f"✅ tg_monitor recovery: kernel {kernel_ref} обработан",
+                    format_report(report), parse_mode="HTML",
                 )
         finally:
             _TG_MONITOR_RECOVERY_ACTIVE.discard(kernel_ref)

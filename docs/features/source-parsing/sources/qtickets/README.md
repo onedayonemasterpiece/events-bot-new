@@ -8,11 +8,13 @@
 
 Qtickets для Калининграда: `https://kaliningrad.qtickets.events/`.
 
+Основная афиша берётся из самого плотного объявленного `Nx` варианта в `srcset` изображения `.poster-container`, если плотность больше `1x`. Это использует уже загруженный HTML: JSON-LD может содержать только маленькую афишу высотой 317 пикселей, тогда как hero объявляет вариант 1136×634. При отсутствии подходящего `srcset` сохраняется прежний JSON-LD/OpenGraph fallback. Логотипы и картинки вне основной афиши не участвуют; адреса CDN не конструируются, дополнительный запрос страницы и увеличение маленького файла не нужны.
+
 ## Regression Note: March 15, 2026
 
 - Live reproduction on **March 15, 2026** confirmed that the current Playwright parser still finds **40** event cards on `kaliningrad.qtickets.events`, and all parsed items keep a valid `parsed_date`.
 - The fragile point was downstream draft extraction: some Qtickets cards have sparse descriptions, so `/parse` now passes explicit structured facts (`date`, `time`, `venue`, `ticket status`, `price`, `url`) to the LLM together with the raw description.
-- Qtickets currently runs via its own Kaggle kernel `ParseQtickets` / `zigomaro/parse-qtickets` and is not bundled into `ParseTheatres`.
+- Qtickets currently runs via its own Kaggle kernel `ParseQtickets` / `richss777/parse-qtickets` and is not bundled into `ParseTheatres`.
 
 ## Regression Note: June 29, 2026 (`INC-2026-06-29-qtickets-structured-facts-lost`)
 

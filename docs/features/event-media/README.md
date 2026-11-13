@@ -21,6 +21,10 @@ CDN без копирования объекта; source/Supabase/legacy-bucket 
 контрактом: отдельные immutable derivatives лучше используют HTTP cache,
 не заставляют декодировать невидимые изображения и не требуют runtime crop-map.
 
+Source downloads encode international hostnames with the standard IDNA codec
+before the existing urllib request; UTF-8 paths and queries remain percent-encoded.
+This applies to both CDN materialization and pair-review source downloads.
+
 Ошибка оставляет `review_status=pending_review`,
 `review_reason=cdn_mirror_pending` и durable retry `event_media_review`. Это
 единый путь для новых событий, existing-event parser updates, source rehydrate
@@ -137,9 +141,12 @@ Defaults:
 
 - primary: `gemini-3.1-flash-lite`;
 - escalation: `models/gemma-4-31b-it` для uncertain/low-confidence primary и
-  retryable provider failure primary (например HTTP 503). Это тот же
+  retryable provider failure primary (например HTTP 503) и отказа primary
+  reservation по дневной квоте `rpd`. Это тот же
   настроенный VLM-путь, а не положительный семантический вердикт по ошибке.
-  Provider 429 и nonretryable ошибки сохраняют прежний durable retry;
+  Минутные `rpm`/`tpm`, provider 429 и nonretryable ошибки сохраняют прежний durable retry.
+  Gemma получает собственный admission через тот же общий limiter; отказ
+  резерва primary не считается provider send;
 - Gemma получает тот же field/enum/required contract через проверенный
   geometry consumer компактный `response_schema` без unsupported
   `additionalProperties`; Gemini сохраняет strict `response_json_schema`.
@@ -421,3 +428,28 @@ Raw-byte identity assignment performs its per-event uniqueness probe inside a
 `no_autoflush` block. A poster with other staged fingerprint changes therefore
 cannot flush a conflicting `raw_sha256` before the canonical survivor is found;
 the duplicate keeps `NULL` and pair review retains the evidence.
+
+When pair review or semantic classification changes the approved gallery, the
+existing projection fanout schedules with `refresh_existing_vk=True`. This
+requeues a completed managed `vk_sync` for the same post instead of treating
+its existence as completion of the new media projection. Unchanged galleries
+do not repeat this fanout; semantic exclusions still determine public media.
+
+Если pending `vk_sync` явно ждёт `event_media_review:<event_id>`, его
+медиазадание использует существующий приоритет заблокированной VK-публикации.
+Для этого не требуется сначала запускать публикацию до ошибки
+`vk_sync_missing_materialized_media`. Обычные unrelated reviews и готовые
+публикации сохраняют свой порядок; фильтр active/future/silent не меняется.
+
+Парная проверка использует то же существующее расписание временных ошибок,
+что semantic-role проверка: timeout/5xx — через
+`EVENT_MEDIA_ROLE_TRANSIENT_RETRY_SECONDS` (по умолчанию900секунд),
+минутный лимит — через существующий rate delay, дневная квота — следующий
+UTC-day. Semantic uncertain/disagreement без временной ошибки сохраняет
+прежний следующий день. Общий предел попыток и provider-send учёт не меняются.
+
+Исчерпание числа попыток не прекращает обработку распознанной временной
+ошибки или дневного quota admission отказа: такая пара сохраняет тот же
+существующий deferred retry. Счётчик попыток и provider sends не сбрасываются.
+Лимит остаётся для семантически неопределённого результата и ошибок,
+для которых существующий transient scheduler не определяет повтор.

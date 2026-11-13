@@ -1766,6 +1766,7 @@ _http_session: ClientSession | None = None
 # tasks affected by VK captcha pause
 VK_JOB_TASKS = {
     JobTask.vk_sync,
+    JobTask.vk_calendar_comment,
     JobTask.week_pages,
     JobTask.weekend_pages,
     JobTask.festival_pages,
@@ -5308,13 +5309,18 @@ async def notify_llm_incident(kind: str, payload: dict[str, Any]) -> None:
     Operator chat is the chat where the triggering action was initiated (Telegram UI).
     For scheduled/background tasks where no operator context exists, we only notify superadmin.
     """
+    severity = str(payload.get("severity") or "critical").upper()
+    if severity == "WARNING":
+        logging.warning("llm_incident.warning kind=%s consumer=%s model=%s next_model=%s message=%s",
+                        kind, payload.get("consumer"), payload.get("model"),
+                        payload.get("next_model"), str(payload.get("message") or "")[:400])
+        return
     current_db = get_db()
     current_bot = get_bot()
     if not current_db or not current_bot:
         logging.warning("notify_llm_incident skipped: db/bot unavailable kind=%s", kind)
         return
 
-    severity = str(payload.get("severity") or "critical").upper()
     consumer = str(payload.get("consumer") or "unknown")
     model = str(payload.get("requested_model") or payload.get("model") or "unknown")
     invoked_model = str(payload.get("invoked_model") or payload.get("provider_model_name") or "")
@@ -15732,9 +15738,11 @@ async def enqueue_job(
                         if task == JobTask.static_site_build
                         else payload
                     )
-                if depends_on:
+                if replace_depends_on and (job.depends_on or "") != (dep_str or ""):
+                    job.next_run_at = run_time
+                if depends_on or replace_depends_on:
                     if replace_depends_on:
-                        job.depends_on = ",".join(depends_on)
+                        job.depends_on = dep_str
                     else:
                         cur = set(filter(None, (job.depends_on or "").split(",")))
                         cur.update(depends_on)
@@ -15786,9 +15794,9 @@ async def enqueue_job(
                 }:
                     job.payload = payload
                     updated = True
-                if depends_on:
+                if depends_on or replace_depends_on:
                     if replace_depends_on:
-                        new_depends_on = ",".join(depends_on)
+                        new_depends_on = dep_str or ""
                         if (job.depends_on or "") != new_depends_on:
                             job.depends_on = new_depends_on
                             updated = True
@@ -15950,9 +15958,9 @@ async def enqueue_job(
                 job.next_run_at = next_run_at
             else:
                 job.next_run_at = now
-            if depends_on:
+            if depends_on or replace_depends_on:
                 if replace_depends_on:
-                    job.depends_on = ",".join(depends_on)
+                    job.depends_on = dep_str
                 else:
                     cur = set(filter(None, (job.depends_on or "").split(",")))
                     cur.update(depends_on)
@@ -16147,20 +16155,7 @@ async def _recover_managed_vk_live_url(
             bot=bot,
         )
     else:
-        # The periodic scan already found one exact public title/date match.
-        # Check the old id with the service credential too; do not run the
-        # postponed/user-actor probe for every item in the public wall batch.
-        old_response = await _vk_api(
-            "wall.getById",
-            {"posts": f"{ids[0]}_{ids[1]}"},
-            db,
-            bot,
-            token=VK_SERVICE_TOKEN,
-            token_kind="service",
-            skip_captcha=True,
-        )
-        if _vk_wall_get_by_id_items(old_response):
-            return False
+        # The scheduled job has already resolved this specific public post.
         item = candidate_item
     if not item:
         return False
@@ -16184,13 +16179,13 @@ async def _recover_managed_vk_live_url(
             or str(stored.source_vk_post_url or "").strip() != current_url
         ):
             return False
-        stored.source_vk_post_url = live_url
-        session.add(stored)
+        await session.execute(update(Event).where(
+            Event.source_vk_post_url == current_url
+        ).values(source_vk_post_url=live_url))
         source_rows = list(
             (
                 await session.execute(
                     select(EventSource).where(
-                        EventSource.event_id == event_id,
                         EventSource.source_url.in_([current_url, live_url]),
                     )
                 )
@@ -16198,16 +16193,16 @@ async def _recover_managed_vk_live_url(
             .scalars()
             .all()
         )
-        has_live_source = any(row.source_url == live_url for row in source_rows)
+        has_live_source = {row.event_id for row in source_rows if row.source_url == live_url}
         for source_row in source_rows:
             if source_row.source_url != current_url:
                 continue
-            if has_live_source:
+            if source_row.event_id in has_live_source:
                 await session.delete(source_row)
             else:
                 source_row.source_url = live_url
                 session.add(source_row)
-                has_live_source = True
+                has_live_source.add(source_row.event_id)
         await session.commit()
     ev.source_vk_post_url = live_url
     logging.warning(
@@ -16219,111 +16214,39 @@ async def _recover_managed_vk_live_url(
     return True
 
 
-async def _reconcile_recent_managed_vk_live_urls(
-    db: Database,
-    *,
-    bot: Bot | None,
-) -> int:
-    """Find newly public Afisha posts with stale postponed URLs in one wall read.
+async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload: dict) -> bool:
+    """Run once after this announcement's known public time, using JobOutbox."""
+    from vk_calendar_comments import ensure_calendar_comment
 
-    The broad scan uses the service credential. Only an exact, unique
-    title/date match reaches the existing fail-closed per-event recovery.
-    This keeps routine wall polling off the publishing user credential.
-    """
-
-    target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
-    if not VK_SERVICE_TOKEN or not target_group_id:
-        return 0
-    owner_id = -int(target_group_id)
-    data = await _vk_api(
-        "wall.get",
-        {"owner_id": owner_id, "filter": "owner", "count": 100},
-        db,
-        bot,
-        token=VK_SERVICE_TOKEN,
-        token_kind="service",
-        skip_captcha=True,
-    )
-    live_items = _vk_postponed_items(data)
-    if not live_items:
-        return 0
-    today = datetime.now(LOCAL_TZ).date().isoformat()
     async with db.get_session() as session:
-        events = list(
-            (
-                await session.execute(
-                    select(Event).where(
-                        Event.lifecycle_status == "active",
-                        Event.silent == False,  # noqa: E712
-                        or_(Event.date >= today, Event.end_date >= today),
-                        Event.source_vk_post_url.like(
-                            f"https://vk.com/wall{owner_id}_%"
-                        ),
-                    )
-                )
-            ).scalars()
-        )
-    by_post_id: dict[int, list[Event]] = {}
-    for ev in events:
-        stored_ids = _vk_owner_and_post_id(str(ev.source_vk_post_url or ""))
-        if stored_ids:
-            by_post_id.setdefault(int(stored_ids[1]), []).append(ev)
-    by_header: dict[tuple[str, str], list[Event]] = {}
-    for ev in events:
-        expected_date = next(
-            (
-                str(line).strip()
-                for line in build_vk_source_header(ev, None)
-                if str(line).startswith("\U0001f4c5 ")
-            ),
-            "",
-        )
-        if expected_date:
-            by_header.setdefault((str(ev.title or "").strip(), expected_date), []).append(ev)
-    matched_items: dict[int, list[dict]] = {}
-    for item in live_items:
-        # VK's exact postponed binding also covers posts with several sessions.
-        exact = by_post_id.get(int(item.get("postponed_id") or item.get("id") or 0), [])
-        if exact:
-            for ev in exact:
-                matched_items.setdefault(int(ev.id), []).append(item)
-            continue
-        lines = [line.strip() for line in str(item.get("text") or "").splitlines() if line.strip()]
-        if not lines:
-            continue
-        for date_line in lines[1:]:
-            candidates = by_header.get((lines[0], date_line), [])
-            if len(candidates) == 1:
-                matched_items.setdefault(int(candidates[0].id), []).append(item)
-    events_by_id = {int(ev.id): ev for ev in events}
-    recovered = 0
-    for event_id, matches in sorted(
-        matched_items.items(),
-        key=lambda pair: int(pair[1][0].get("id") or 0),
-        reverse=True,
-    ):
-        if len(matches) != 1:
-            continue
-        ev = events_by_id[event_id]
-        old_ids = _vk_owner_and_post_id(str(ev.source_vk_post_url or ""))
-        if not old_ids:
-            continue
-        if int(matches[0].get("id") or 0) != int(old_ids[1]):
-            if not await _recover_managed_vk_live_url(db, ev, bot=bot, candidate_item=matches[0]):
-                continue
-            recovered += 1
-        if not _vk_captcha_needed:
-            try:
-                from vk_calendar_comments import ensure_calendar_comment
-                await ensure_calendar_comment(db, ev, ev.source_vk_post_url)
-            except Exception as exc:
-                logging.exception("vk.calendar_comment failed event_id=%s; next live scan will retry", event_id)
-                if isinstance(exc, VKAPIError) and exc.code == 14:
-                    await vk_captcha_pause_outbox(db)
-                    break
-        if recovered >= 10:
-            break
-    return recovered
+        event = await session.get(Event, event_id)
+    if not event or event.silent or event.lifecycle_status != "active" or event.identity_status == "merged":
+        return False
+    postponed_url = payload["post_url"]
+    owner, postponed_id = map(int, _vk_owner_and_post_id(postponed_url))
+    response = await _vk_api(
+        "wall.get", {"owner_id": owner, "filter": "owner", "count": 100},
+        db, bot, token=VK_SERVICE_TOKEN, token_kind="service", skip_captcha=True,
+    )
+    items = [item for item in _vk_postponed_items(response)
+             if item.get("post_type", "post") == "post"]
+    matches = [item for item in items
+               if int(item.get("postponed_id") or item.get("id") or 0) == postponed_id]
+    if not matches:
+        # Older VK responses omit postponed_id; retain the existing unique header match.
+        dates = {str(line).strip() for line in build_vk_source_header(event, None) if str(line).startswith("📅 ")}
+        matches = []
+        for item in items:
+            lines = [line.strip() for line in str(item.get("text") or "").splitlines() if line.strip()]
+            if lines and lines[0] == event.title.strip() and dates.intersection(lines):
+                matches.append(item)
+    if len(matches) != 1:
+        raise RuntimeError("vk_calendar_public_post_not_found")
+    item = matches[0]
+    if str(event.source_vk_post_url or "") == postponed_url:
+        await _recover_managed_vk_live_url(db, event, bot=bot, candidate_item=item)
+    live_url = f"https://vk.com/wall{owner}_{int(item['id'])}"
+    return await ensure_calendar_comment(db, event, live_url)
 
 
 def _event_vk_publish_end_date(ev: Event) -> date | None:
@@ -17273,6 +17196,20 @@ async def schedule_event_update_tasks(
             or any(not is_event_media_cdn_url(url) for url in event_photo_urls)
         )
     )
+    async with db.get_session() as session:
+        media_job = (await session.execute(
+            select(JobOutbox).join(EventPoster, EventPoster.event_id == JobOutbox.event_id).where(
+                JobOutbox.event_id == eid,
+                JobOutbox.task == JobTask.event_media_review,
+                or_(
+                    EventPoster.review_status == "pending_review",
+                    and_(bool(ev.linked_event_ids), EventPoster.review_status == "approved",
+                         EventPoster.media_semantic_status != "classified"),
+                ),
+            ).order_by(JobOutbox.id.desc()).limit(1)
+        )).scalar_one_or_none()
+    if media_job is not None and media_job.status != JobStatus.done:
+        media_dep_key = f"{JobTask.event_media_review.value}:{eid}"
     if needs_media_reconcile and "event_media_review" in JOB_HANDLERS:
         media_dep_key = f"{JobTask.event_media_review.value}:{eid}"
         results[JobTask.event_media_review] = await enqueue_job(
@@ -17325,9 +17262,10 @@ async def schedule_event_update_tasks(
             vk_enqueue_kwargs: dict[str, Any] = {
                 "requeue_done": refresh_existing_vk,
             }
-            if stale_ics_storage and ics_dep:
-                vk_enqueue_kwargs["depends_on"] = [ics_dep]
-                vk_enqueue_kwargs["replace_depends_on"] = True
+            vk_enqueue_kwargs["depends_on"] = [
+                key for key in (media_dep_key, ics_dep if stale_ics_storage else None) if key
+            ]
+            vk_enqueue_kwargs["replace_depends_on"] = True
             await enqueue_job(
                 db,
                 eid,
@@ -19365,6 +19303,7 @@ TASK_LABELS = {
     "event_media_review": "Проверка изображений",
     "telegraph_build": "Telegraph (событие)",
     "vk_sync": "VK (событие)",
+    "vk_calendar_comment": "VK (календарный комментарий)",
     "tg_event_publish": "Telegram (событие)",
     "ics_publish": "Календарь (ICS)",
     "tg_ics_post": "ICS (Telegram)",
@@ -19429,6 +19368,7 @@ EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
     JobTask.event_media_review,
     JobTask.telegraph_build,
     JobTask.vk_sync,
+    JobTask.vk_calendar_comment,
     JobTask.tg_event_publish,
     JobTask.tg_premium_emoji_edit,
     JobTask.ics_publish,
@@ -19879,6 +19819,7 @@ async def _run_due_jobs_once_locked(
     priority = {
         JobTask.event_media_review: 0,
         JobTask.vk_sync: -2,
+        JobTask.vk_calendar_comment: -1,
         JobTask.telegraph_build: -1,
         JobTask.tg_event_publish: -1,
         JobTask.tg_premium_emoji_edit: -1,
@@ -19946,8 +19887,12 @@ async def _run_due_jobs_once_locked(
                         select(JobOutbox.event_id).where(
                             JobOutbox.event_id.in_(media_review_ids),
                             JobOutbox.task == JobTask.vk_sync,
-                            JobOutbox.status == JobStatus.error,
-                            JobOutbox.last_error.like("vk_sync_missing_materialized_media%"),
+                            or_(
+                                and_(JobOutbox.status == JobStatus.error,
+                                     JobOutbox.last_error.like("vk_sync_missing_materialized_media%")),
+                                and_(JobOutbox.status == JobStatus.pending,
+                                     JobOutbox.depends_on.like("event_media_review:%")),
+                            ),
                         )
                     )
                 ).scalars()
@@ -19960,7 +19905,7 @@ async def _run_due_jobs_once_locked(
             event_id = int(j.event_id)
             event_date, lifecycle, silent = media_review_event.get(event_id, ("", "", True))
             eligible = lifecycle == "active" and not silent and event_date >= media_today
-            # A missing-media VK announcement must get the next available
+            # A VK announcement waiting for media must get the next available
             # semantic-review allowance. Ordinary future reviews follow event
             # date; old events cannot exhaust the daily model budget first.
             date_rank = int(event_date.replace("-", "")) if len(event_date) == 10 and event_date.replace("-", "").isdigit() else 99999999
@@ -20428,6 +20373,8 @@ async def _run_due_jobs_once_locked(
                     if isinstance(obj.payload, dict) and obj.payload.get('publication_kind') in {'lifecycle_notice','lifecycle_reconcile'}:
                         from private_events_mcp.lifecycle_publication import run_lifecycle_publication
                         return await run_lifecycle_publication(db, obj, bot)
+                    if obj.task == JobTask.vk_calendar_comment:
+                        return await handler(obj.event_id, db, bot, obj.payload)
                     if obj.task == JobTask.ics_publish:
                         prog = (
                             ics_progress.get(job.event_id)
@@ -20892,7 +20839,6 @@ async def _watch_nav_jobs(db: Database, bot: Bot) -> None:
 
 async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
     last_log = 0.0
-    last_vk_live_reconcile = 0.0
     while True:
         try:
             async def notifier(
@@ -20927,15 +20873,6 @@ async def job_outbox_worker(db: Database, bot: Bot, interval: float = 2.0):
                 max_jobs=1,  # Refresh priorities after each completed background job.
             )
             await _watch_nav_jobs(db, bot)
-            if _time.monotonic() - last_vk_live_reconcile >= 300.0:
-                # VK assigns a new public id when a postponed post goes live.
-                # Reconcile from one service-token wall read, independently of
-                # future edits to the event or manual job requeues.
-                last_vk_live_reconcile = _time.monotonic()
-                try:
-                    await _reconcile_recent_managed_vk_live_urls(db, bot=bot)
-                except Exception:
-                    logging.exception("vk.live-id periodic reconciliation failed")
             _mark_job_outbox_worker_cycle_ok()
         except Exception as exc:  # pragma: no cover - log unexpected errors
             _mark_job_outbox_worker_cycle_error(exc)
@@ -23904,8 +23841,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                     same_day_group,
                     vk_url=str(ev.source_vk_post_url or existing_vk_post_url),
                 )
-            from vk_calendar_comments import ensure_calendar_comment
-            await ensure_calendar_comment(db, ev, existing_vk_post_url)
             return
         if post_exists:
             logging.warning(
@@ -23956,8 +23891,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             same_day_group,
             vk_url=vk_url,
         )
-        from vk_calendar_comments import ensure_calendar_comment
-        await ensure_calendar_comment(db, event_for_notice or ev, vk_url)
         logline("VK", event_id, "event done", url=vk_url)
         if bot and event_for_notice:
             await _send_or_update_partner_admin_notice(
@@ -26448,8 +26381,8 @@ async def job_event_media_review(
     projection_changed = await review_next_event_media_pair(int(event_id), db, bot)
     # The pair worker can return early after approving a seed/classifying its
     # role. That branch does not run its trailing fanout. Always refresh the
-    # dependencies here after progress: optional second-image review tomorrow
-    # must not block an announcement whose approved CDN seed exists now.
+    # dependencies after progress. Publication waits for the existing media
+    # followups, rather than creating a one-photo post from the first seed.
     if rehydrated or cdn_updated or projection_changed:
         async with db.get_session() as session:
             fresh = await session.get(Event, int(event_id))
@@ -26549,6 +26482,7 @@ JOB_HANDLERS = {
     "interest_club_relation": job_interest_club_relation,
     "telegraph_build": update_telegraph_event_page,
     "vk_sync": job_sync_vk_source_post,
+    "vk_calendar_comment": job_vk_calendar_comment,
     "tg_event_publish": job_publish_tg_event_post,
     "tg_premium_emoji_edit": job_edit_tg_event_premium_emoji,
     "ics_publish": ics_publish,

@@ -752,10 +752,15 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
 
 def _quote_url(url: str) -> str:
     parts = urlsplit(url)
+    host = parts.hostname or ""
+    netloc = parts.netloc.rpartition("@")[0] + "@" if "@" in parts.netloc else ""
+    netloc += f"[{host}]" if ":" in host else host.encode("idna").decode("ascii")
+    if parts.port is not None:
+        netloc += f":{parts.port}"
     return urlunsplit(
         (
             parts.scheme,
-            parts.netloc,
+            netloc,
             quote(parts.path, safe="/%:@"),
             quote(parts.query, safe="=&?/:+,%"),
             parts.fragment,
@@ -1269,8 +1274,14 @@ def _review_prompt(event: Event, left: EventPoster, right: EventPoster, *, ssim:
         "Ты проверяешь РОВНО ДВА изображения одного события. Реши, являются ли они одной и той же "
         "картинкой/афишей, включая зеркало CDN, повторное JPEG/WebP кодирование, небольшой crop или overlay. "
         "Две разные фотографии одного события и две самостоятельные афиши должны быть distinct. Если похожий "
-        "шаблон содержит другую дату, время, название, адрес или цену либо одно изображение вообще не относится "
-        "к событию, поставь semantic_conflict=true, distinct и canonical_side у изображения этого события. "
+        "шаблон содержит явно несовместимые сведения о том же событии (дата, время, название, адрес или цена) "
+        "либо изображение относится к другому событию, поставь semantic_conflict=true, distinct и canonical_side "
+        "у изображения этого события. Общая обложка программы, фестиваля или серии и карточка входящего в неё "
+        "события не конфликтуют: диапазон дат, включающий дату события, общее название и отсутствие частных "
+        "деталей не являются противоречием. При визуально подтверждённой связи с этой программой сохраняй "
+        "обе картинки как distinct без semantic_conflict. Несовместимая дата или другая программа остаются конфликтом. "
+        "Обязательно сверяй даты обеих картинок с event.date: если целевая дата вне указанного диапазона "
+        "программы и не совпадает ни с одной карточкой, это semantic_conflict=true, canonical_side=unknown. "
         "Не делай вывод только по hash/SSIM: обязательно сравни визуальную композицию. Верни только JSON по schema.\n"
         + json.dumps(evidence, ensure_ascii=False, sort_keys=True)
     )
@@ -2137,7 +2148,7 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
             async with db.get_session() as session:
                 fresh = await session.get(Event, int(event_id))
             if fresh is not None:
-                await schedule_event_update_tasks(db, fresh)
+                await schedule_event_update_tasks(db, fresh, refresh_existing_vk=True)
         except Exception:
             logger.warning(
                 "event_media: failed to schedule semantic projection rebuild event_id=%s",
@@ -2508,7 +2519,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         if error is None and decision is None and left_media is not None and right_media is not None:
             primary_model = (os.getenv("EVENT_MEDIA_REVIEW_PRIMARY_MODEL") or "gemini-3.1-flash-lite").strip()
             escalation_model = (os.getenv("EVENT_MEDIA_REVIEW_ESCALATION_MODEL") or "models/gemma-4-31b-it").strip()
-            from google_ai.exceptions import ProviderError
+            from google_ai.exceptions import ProviderError, RateLimitError
 
             try:
                 review.primary_model = primary_model
@@ -2522,6 +2533,13 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                         model=primary_model,
                         session=session,
                         attempt_observer=record_provider_send,
+                    )
+                except RateLimitError as exc:
+                    if exc.blocked_reason != "rpd":
+                        raise
+                    logger.warning(
+                        "event_media_pair_quota_escalation event_id=%s review_id=%s model=%s next_model=%s reason=%s",
+                        event_id, review.id, primary_model, escalation_model, exc.blocked_reason,
                     )
                 except ProviderError as exc:
                     if not exc.retryable or exc.status_code == 429:
@@ -2602,7 +2620,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
             review.response_json = decision
             review.last_error = None
             review.resolved_at = datetime.now(timezone.utc)
-        elif int(review.attempts or 0) >= max_attempts:
+        elif int(review.attempts or 0) >= max_attempts and _media_role_transient_retry_at(error) is None:
             review.status = "unresolved"
             review.decision = "uncertain"
             review.reason_code = "automatic_review_exhausted"
@@ -2614,7 +2632,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
             review.reason_code = "automatic_retry_scheduled"
             review.last_error = error or "uncertain"
             review.response_json = decision
-            review.next_run_at = _next_utc_day()
+            review.next_run_at = _media_role_transient_retry_at(error) or _next_utc_day()
         session.add(review)
         await _reconcile_pending_posters(session, int(event_id))
         # ensure_event_media_reviews also syncs; retain this change for fanout.
@@ -2651,7 +2669,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
             async with db.get_session() as session:
                 fresh = await session.get(Event, int(event_id))
             if fresh is not None:
-                await schedule_event_update_tasks(db, fresh)
+                await schedule_event_update_tasks(db, fresh, refresh_existing_vk=True)
         except Exception:
             logger.warning("event_media: failed to schedule projection rebuild event_id=%s", event_id, exc_info=True)
     return projection_changed

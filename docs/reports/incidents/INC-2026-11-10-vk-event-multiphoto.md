@@ -270,3 +270,250 @@ Retained evidence: central task directory
 `/home/dev/artifacts/events-bot-new/20261110T203533Z-vk-multiphoto-crew`, files
 `replay-cutover-receipt.json`, `accepted-vk-replay-fixed-posts.jsonl`,
 `fixed-backfill.stderr` and `fixed-replay.stderr`.
+
+
+## November 12: initial publication overtook the remaining source photos
+
+The owner clarified that multiple images must already be attached to a new
+postponed announcement, after initial source preparation. Updating the post
+later is not the acceptance criterion. A direct postponed-wall snapshot found
+five entries and one photo in each. Fresh event10888 demonstrates the race:
+nine source candidates, an initial one-photo post14154, then a five-photo public
+post14155 as pair reviews progressed. Source/media transport can deliver several
+images, but the initial preparation contract was broken.
+
+`schedule_event_update_tasks` considered media complete once the first seed was
+a CDN URL. It then omitted the media dependency, while VK's higher priority let
+it publish before existing media followups. Reuse the latest media JobOutbox
+and `event_media_review:<event_id>` dependency for VK and Telegraph; Telegram
+already depends on Telegraph. No new readiness state, queue, limiter, polling,
+retry path, media model or review policy. The existing worker owns completion
+and follows the latest media job across continuations.
+
+A related observed defect: post14154 was scheduled for20:20 UTC, but public
+post14155 had provider timestamp20:04:28 UTC during its first gallery update.
+`wall.edit` did not pass the already-read future publication timestamp; preserve
+that value in the edit. The existing fixture had explicitly asserted absence
+of publish_date on this edit and is corrected to preserve the scheduled slot.
+The calendar task's added lower bound on actual public date is removed:
+a new-post task must accept its exact binding even when the previous editor
+released it earlier than the planned time; no historical bootstrap is added.
+
+Distinguishing regressions on exact previous main ab7e2728: premature VK dispatch
+and missing postponed edit timestamp both fail, while the ordinary public edit
+control passes. With the fix, the real outbox first processes two media stages,
+then invokes each of VK/Telegraph/TG exactly once with both source images.
+An unchanged event's media dependency remains independent of other events.
+Fixtures which invoked the pair helper outside the worker now explicitly
+complete that fixture's JobOutbox before their separate VK-only assertion.
+
+Mandatory checks: tests/test_job_worker_fresh_selection.py,
+tests/test_event_media_gate.py, tests/test_vk_calendar_comments.py, ICS and
+separate CAPTCHA-pause regressions. Actual normal intake must still demonstrate
+a new postponed post with a complete unique gallery and preserved publication
+time. Green tests or an already-updated public post do not close this incident.
+Retained evidence: /home/dev/artifacts/events-bot-new/20261112T201732Z-vk-complete-gallery-before-publication-20261112.
+
+
+### Optional geometry must not delay a complete gallery, November12
+
+After PR918, ordinary new10890/10891 each had one source poster, one approved
+and semantically classified ledger row, and no pair-review rows. Yet the latest
+media followup waited until00:05 UTC because optional image_geometry usage
+had reached its existing100-call budget at02:40 UTC. The broad dependency on
+any latest media job incorrectly deferred Telegraph and VK with it. Event10892
+still had genuine pending semantic work and is a negative control.
+
+Publication now depends on the existing media job only while a source poster
+is pending pair review or an approved poster is not yet semantically classified.
+Optional geometry retains its normal job and budget. No extra state, flag,
+queue, model, limit or provider request. Existing enqueue replacement now also
+honors an empty dependency list and re-arms a pending job whose dependencies
+actually changed, instead of retaining its obsolete tomorrow deferral.
+
+The initialized two-stage worker witness fails on exact PR919: it waits for
+tomorrow's optional geometry despite two ready photos. After source preparation
+it must publish VK/Telegraph/TG once with both images, while geometry remains
+pending. It also simulates already-deferred publication rows. This preserves
+the earlier witness that a first CDN seed cannot overtake the second source.
+Evidence: retained artifact20261112T204450Z-vk-no-repeated-metrics-or-docs,
+single-photo-next-day-defer-audit.md and geometry test logs. A normal initial
+multi-photo postponed post remains the live acceptance criterion.
+
+
+### Keep the established unlinked gallery eligibility
+
+Follow-up read-only review found10892 has linked_event_ids=[], one approved
+first-source poster and a canonical gallery URL, yet the new generic semantic
+prerequisite defers its VK155386/Telegraph155384 to00:05 because semantic_role
+allowance is exhausted. That prerequisite was not present before PR918.
+Canonical get_event_gallery_rows requires completed semantic classification
+only for linked events. Event10893 is such a linked event ([7315,9351]) and
+must retain its existing guard. This supersedes the universal semantic
+prerequisite described above, rather than creating a new publication policy.
+
+The dependency predicate now follows that existing linked-event distinction.
+Pending source pair-review still blocks the first publication until all images
+are adjudicated. Role enrichment for unlinked approved images remains in its
+existing job/fanout. Initialized linked/unlinked controls reproduce the wrong
+unlinked hold before the one-line correction and preserve the linked hold.
+No new state, queue, flag, model or budget. Included with notification fix in
+one release so import does not need another separate restart.
+
+### Ложный конфликт обложки общей программы, 13 ноября
+
+Обычный Telegram recovery 12057 создал событие 10897 из carrier 4271.
+Pair 33232 получил одним настоящим primary вызовом distinct/confidence 1.0,
+но одновременно semantic_conflict=true. Второе изображение 37530 было
+отклонено до semantic-role классификации; первоначальная публикация 14167
+снова получила одну картинку. Визуально исходники различаются: карточка
+семейной программы 22 ноября с мастер-классом и общая обложка тех же
+семейных арт-выходных 20–22 ноября. Оба исходника 1020×1280.
+
+Прежняя инструкция называла другую дату или название конфликтом без
+различения общей программы и входящего события. Уточнение существующего
+pair prompt требует несовместимости именно фактов целевого события;
+подтверждённая обложка программы с включающим диапазоном дат допустима.
+Явно несовместимые даты, цена, место и другая программа остаются конфликтом.
+Schema, модели, limiter, статусы, role policy и сохранённые review keys
+не меняются. Исторические решения автоматически не инвалидируются.
+Это семантический дефект: исправление LLM-first, без keyword overrides,
+ручного approval или выбранного public backfill.
+
+Проверка изменения должна включать настоящий вызов исправленного prompt
+через существующий общий limiter на этих двух изображениях и отрицательный
+контроль с несовместимой датой. Проверки транспорта и остальных переходов
+выполняются существующими media regression tests. До результатов, выпуска
+и следующей обычной initial multi-photo публикации критерий открыт.
+Evidence: /home/dev/artifacts/events-bot-new/20261112T224118Z-vk-parent-program-image-relevance-20261113.
+
+### Потеря крупного Qtickets исходника, 13 ноября
+
+Readback 14162/14163/14164 показал маленькие фото. Исходные retained
+Qtickets packets и canonical posters уже имели высоту317; это потеря
+качества до VK, отдельная от Yantar desktop-poster correction.
+Один public GET Impuls source page из production сети дал HTTP200.
+В его JSON-LD/OG афиша317px, но тот же hero внутри poster-container
+объявляет srcset2x. Адрес взят из HTML, не сконструирован. Один download
+этого файла подтвердил реальные1136x634 вместо canonical568x317.
+
+Исправлен только существующий collector: выбирается максимальная
+объявленная плотность выше1x основного hero. Отсутствующий или неверный
+srcset и отдельные логотипы сохраняют старый JSON-LD/OG выбор.
+Данные события, occurrence identity и source import не меняются.
+Никаких дополнительных page fetch, guessed CDN URLs, upscale, state,
+queue, worker или selected source replay. Net production+9, budget15.
+
+Отличающий тест разбирает реальные сохранённые declarations Impuls:
+старый collector выдаёт317px JPG и падает; исправленный выдаёт declared2x
+и сохраняет title/startDate/location. Отрицательные контроли проверяют
+missing/invalid/1x-only/unrelated srcset. Actual browser startup и
+structured-fact/occurrence regressions также обязательны.
+До выпуска и обычного нового collection/import/VK readback качество
+не считать полностью принятым. Evidence:
+/home/dev/artifacts/events-bot-new/20261112T230543Z-qtickets-declared-poster-density-20261113.
+
+### Готовый Telegram output остановлен перед восстановлением, 13 ноября
+
+Обычный catchup-tg-monitoring-5233941e7fc14bc487f4282b703b093d
+завершился в 23:15 UTC с ledger DONE/CLEANUP. До 23:22 нового
+импорта не было. Local operation 12058 прервал выпуск; более ранний
+recovery_import 12057 имел partial и считался доставкой суточного слота.
+Watchdog возвращался по этому условию до существующей проверки registry.
+ENABLE_KAGGLE_RECOVERY выключен, поэтому другого автоматического
+продолжения данного handoff в этом runtime не было.
+
+Существующая проверка registry перенесена перед условиями доставки
+и terminal retry нового запуска. Inflight, grace/lookback и deferred cadence
+сохранены. Пустой registry по-прежнему не запускает новый kernel
+при прежней доставке. Production net 0: только перестановка. Нет нового
+worker, состояния, таймера, retry или ручного replay исходных данных.
+
+Initialized DB regression со старым partial и новым cancelled run:
+до исправления положительный контроль падает, отрицательный проходит;
+после оба проходят. Существующие TG watchdog guards также проходят.
+Продуктовая проверка после выпуска — обычное продолжение сохранённого
+output, новые media candidates и initial VK attachments, а не запуск
+выбранного source packet. Evidence: тот же retained artifact PR 923.
+
+### Дневной primary quota отказ обходил существующую эскалацию, 13 ноября
+
+Обычный TG import12060 создал posters37535–37537 у10508 и новое
+событие10899 с двумя source candidates. Pair33239 получил RateLimitError
+rpd и был отложен до следующего дня; новый33241 также ушёл до14ноября.
+Это отказ shared LLM limiter, не VK CAPTCHA или удалённый feature cap.
+Код эскалировал uncertain/low confidence и retryable503, но RateLimitError
+сразу попадал в внешний except с переносом на следующий день.
+
+При rpd основной модели теперь используется уже настроенный Gemma review
+с прежними schema, ключом, shared model/project limiter и attempt_observer.
+Не создаются provider path, очередь, квота, retry или новое состояние.
+RPM/TPM, provider429 и auth401 сохраняют прежнее поведение. Отказ резерва
+не считается HTTP send; successful Gemma считается один раз.
+
+Initialized gallery→VK grid/carousel regression до фикса падает, после
+проходит. Контроли сохраняют отсутствие эскалации при minute limits и401/429,
+повторное редактирование без дублей и исходный publish_date.
+Production net+7 при бюджете15. Evidence:
+/home/dev/artifacts/events-bot-new/20261113T001857Z-vk-existing-media-rpd-escalation-20261113.
+До exact-main выпуска и обычного initial VK readback задача открыта.
+
+Новая initial публикация10899 имела pending vk_sync155520 с явной
+depends_on event_media_review:10899. В00:24 UTC её media155516 всё ещё ждало,
+хотя due00:10; actual query нашёл100более ранних media reviews. Существующий
+приоритет blocked_media_event_ids применялся только после failed VK attempt
+с missing_materialized_media, а корректно ожидающая initial publication
+туда не попадала. Расширено только существующее условие на pending VK
+с той же явной media dependency. Active/future/silent eligibility сохранены.
+Ранее готовые VK jobs не получают media priority. Различающий initialized
+worker тест: до1fail/1negativepass, после обязательны оба и весь worker suite.
+Дополнительно main.py net+4; общий production net+11 при прежнем бюджете15.
+Никакой новой очереди, lane, флага, polling или capacity reservation.
+
+### Временный отказ Gemma необоснованно переносил пару на день, 13 ноября
+
+После выпуска924 обычный worker взял новое10899 в00:42:12UTC.
+Primary rpd корректно вызвал existing Gemma escalation, actual send один.
+Gemma вернула настоящий503; pair33240 deferred до14ноября00:05.
+У10508 аналогичный503, у10727 timeout45секунд. Initial10899 остаётся
+безVK URL и блокируется собственной media dependency; extra photo pending.
+
+Ветка pair retry всегда использовала следующий день независимо от причины.
+Semantic-role consumer уже имеет transient-error scheduler:5xx/timeout900секунд,
+minute limits600секунд, rpd следующийUTC-day. Парная проверка теперь
+переиспользует ровно эту функцию, одна заменённая строка, net production0
+при бюджете5. Не добавлены state/queue/retry/лимит/provider path.
+Attempt cap и actual-send accounting сохраняются. Семантический uncertain
+без transport error сохраняет прежний следующий день; ошибка не даёт approval.
+
+Initialized pair regression с lease текущего worker job: до исправления
+503/timeout fail, rpd/uncertain negative controls pass. После обязательны
+даты retry, pending extra image и существующий durable followup не позже due.
+Доказательства в retained artifact:
+/home/dev/artifacts/events-bot-new/20261113T004847Z-vk-pair-existing-transient-retry-20261113.
+Обычный TG registry resume после924 подтверждён operation12066 с00:38:52UTC,
+quiet chat NULL. Ручного source replay не было. Product result ещё открыт.
+
+### Третий transport failure прекращал gallery review без ответа, 13 ноября
+
+Actual33240 дважды не получил semantic verdict: Gemma503 и45s timeout.
+Bounded review existing consumers показал ловушку третьей попытки:
+max-attempt branch ставил unresolved раньше transient defer, selector
+и followup выбирали только pending/deferred, extra photo оставалась pending.
+После geometry followups initialVK мог выйти с seed, без второй картинки.
+Существующий автоматический механизм эту terminal pair не возвращает.
+
+Terminal-attempt условие теперь применяется только когда существующий
+transient scheduler не определяет retry. Это одна заменённая строка,
+net production0 budget3, без новых состояний/лимитов/recovery/provider paths.
+Temporary timeout/5xx и дневной quota отказ сохраняют прежний deferred
+механизм; counter и provider accounting не сбрасываются. Semantic uncertain
+по-прежнему исчерпывается при3попытках. Ошибка не даёт image approval.
+
+Initialized leased-pair regression перед исправлением: third503/timeout/rpd
+падают, пять остальных controls проходят, включая thirdsemanticuncertain.
+После необходим полный этот сценарий и gallery→VK replay controls.
+Evidence retained:
+/home/dev/artifacts/events-bot-new/20261113T011138Z-vk-pair-transient-liveness-20261113.
+Подтверждённый ordinary update13778 с двумя разными фото и листай→
+не заменяет ещё открытый критерий initial fresh10899.

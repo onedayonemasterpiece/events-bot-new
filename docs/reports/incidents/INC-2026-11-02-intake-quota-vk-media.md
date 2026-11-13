@@ -2423,3 +2423,89 @@ Event 10672 still has stale prose after full source acquisition. A narrow mechan
 
 
 Consumer review before merge caught a candidate-only regression: the existing producer appends age and scene to the narrative body, so a raw-description comparison would pay for unchanged content. A new failing metadata contrast led to extracting that existing composition into one shared helper, used by create, compare and Qtickets attachment. No new semantic rule. Final diff +30/−11, net +19, within the 20-line budget; 70 parser tests and four retained actual route controls pass. Pure read-only comparison of current 33-row Muzteatr output against exact URL/slot owners finds 25 changed bodies and eight unchanged, no missing owners, provider calls or Event/Job writes. This is a bounded route diagnostic, not final prose acceptance.
+
+## November 12 initial queue-claim lock failure
+
+Ordinary catch-up operation12005, run
+`catchup-vk-auto-import-eba915afb8ff4d9f93bc1d6f705f4ea7`, assigned actual batch
+`auto:1794496613`. It committed carrier92503/source27693 into Event10863 and
+reported that row before failing on its next queue selection. At15:27:08 UTC
+its traceback enters `vk_review.pick_next` → `_unlock_stale` → the first UPDATE,
+then `sqlite3.OperationalError: database is locked`. This is distinct from
+cancellation of the active Telegram import during the later release. The
+identity of the connection holding the writer lock is not established.
+
+The initial queue write bypassed this module's existing bounded
+`_retry_locked_write` contract. Use that same helper around `_unlock_stale`
+within the existing connection/transaction. The atomic carrier claim and commit
+remain in place. No retry counts/delays, SQLite timeouts, state, worker, source
+eligibility or semantic/date/native guards change. There is no queue reset or
+replay of the accepted carrier.
+
+A real isolated SQLite writer transaction reproduces this exact failure on
+original code; releasing it after40ms still loses the claim with the fixture's
+1ms busy timeout. The same control succeeds after the change. Cancellation
+propagates with the carrier still pending; a persistent lock still raises after
+the existing bounded contract. Original controls: one failure and two passing
+contrasts. Final28 queue-review tests pass. These synthetic fixture timeouts are
+not production configuration and do not prove resolution of a long-held writer.
+Verify the next actual ordinary VK claim and terminal source/carrier receipts
+before accepting live recovery. Retained evidence is in
+`/home/dev/artifacts/events-bot-new/20261112T135027Z-calendar-friendly-file-20261112/`.
+
+
+### 2026-11-12 — Boyko venue citation prevents accepted source import
+
+Boyko post `https://vk.com/wall394310405_3967`, inbox 94719 / packet 28276,
+reached normal `_process_vk_inbox_row` in ops 12030. Attempt 12691 is typed
+EVENTS_FOUND with complete 1/1 OCR, no missing/truncated evidence. The poster
+explicitly supplies 18 November 2026, 19:00, Pugacheva 13, admission 500 RUB;
+the post names the library of hotel Chaika. No Event was created: child 28554
+failed `location_grounding_review:llm_response_invalid`.
+
+A read-only exact-candidate replay isolated a malformed reviewer citation:
+both responses stitched a venue sentence and a distant address line with
+`...`. The existing contiguous substring validator correctly rejected both.
+This is a reviewer output-contract issue, not missing evidence or a reason to
+weaken semantic/grounding checks. The existing prompt now requests exactly one
+contiguous source quote, forbids stitched quotations, and explains that one
+quote need not repeat both fields. Venue/address values remain independently
+validated against the whole source. No retry, deterministic venue rule, schema,
+queue or alternate parser was added.
+
+Acceptance requires the actual ordinary carrier/packet terminal and exact
+EventSource plus canonical facts after delivery; a prompt probe or green CI
+alone is insufficient. Evidence is retained under the existing central
+`20261104T093210Z-guide-digest-vk-quality-20261104` task: original and fixed
+`boyko-location-*-probe-20261112.log`, source catchup log and provider audit.
+Prior accepted carriers and unavailable Golubkov video evidence are unrelated.
+
+#### Delivery and ordinary Boyko acceptance, 12 November 2026
+
+PR #912 passed all required CI and merged as
+`f26f590e84fa8d8e78fab1dfbfd99a9917a919a5`. Events-only image
+`runcoveer/events:location-contiguous-quote-20261112`, immutable
+`sha256:7a79b83904e3d45cd0a0c2b83347ec1b907c1fe63036fc57ae65373c1cce9ff8`,
+retains running `d44018258b646aba40e120978cbd045cf06ce0d0` ancestry. All 4,475
+tracked files verified, isolated no-network startup passed, and live health
+returned ok/ready with database ok and no issues. Effective environment,
+production data binds and Kotopogoda were preserved. The post-cutover helper's
+order-sensitive Mounts comparison failed after activation; immediate comparison
+of normalized binds and exact before/after Compose reconciled this as a check
+error, not changed mounts. No second cutover was attempted.
+
+Ordinary failed-child replay **12034** reused the complete typed parse through
+`persist_event_and_pages`; venue review returned `llm_repair`. Child **28554**
+was CREATED as canonical **Event 10876**, «Встреча “Привет от Михаила Ивановича!”»:
+**18 November 2026, 19:00, отель «Чайка», ПУГАЧЕВА, 13, 500 RUB**. The time is
+explicit poster evidence, not a default. Independent readback confirms inbox
+**94719** imported, packet **28276** EVENTS_RESOLVED, the exact post 3967
+EventSource and inbox-event anchor to 10876. Original failed attempt 12691 is
+preserved. Retained acceptance evidence: `boyko-3967-accepted-20261112.json`
+and `boyko-3967-child-catchup-20261112.log` in the established artifact task.
+
+Active TG 12031 and VK 12033 were recorded as release context, not a global
+release veto. Retained Telegram results remain present and ordinary recovery
+12035 resumed after restart; its final result is a separate acceptance, not
+proved by Boyko success. No accepted siblings, earlier sources or guide scans
+were replayed, and no additional digest or story was published.

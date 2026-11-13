@@ -318,6 +318,15 @@ def parse_event_detail(url):
     image = json_ld.get("image") if json_ld else (og_image["content"] if og_image else None)
     if isinstance(image, list):
         image = image[0]
+    hero = soup.select_one(".poster-container img[srcset]")
+    variants = []
+    for entry in (hero.get("srcset", "") if hero else "").split(","):
+        match = re.fullmatch(r"\s*(https?://\S+)\s+(\d+(?:\.\d+)?)x\s*", entry)
+        if match and float(match[2]) > 1:
+            variants.append((float(match[2]), match[1]))
+    if variants:
+        density, image = max(variants)
+        logger.info("qtickets.poster source=hero_srcset density=%sx", density)
 
     # Price
     price_min = None

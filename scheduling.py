@@ -2683,6 +2683,27 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
     if now_utc - scheduled_utc > timedelta(seconds=_tg_monitoring_catchup_lookback_seconds()):
         return 0
 
+    catchup_key = f"tg_monitoring:{scheduled_local.isoformat()}"
+    if catchup_key in _critical_catchup_inflight:
+        return 0
+    retry_seconds = _tg_monitoring_remote_busy_retry_seconds()
+    deferred_until = _critical_catchup_deferred_until.get(catchup_key)
+    if deferred_until is not None:
+        if now_utc < deferred_until:
+            return 0
+        _critical_catchup_deferred_until.pop(catchup_key, None)
+    # Finish an existing handoff before deciding whether to launch a new run.
+    if await _tg_monitoring_recovery_job_exists(db=db, bot=bot):
+        _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(seconds=retry_seconds)
+        logging.warning(
+            "SCHED critical watchdog deferring tg_monitoring catch-up while recovery registry exists "
+            "scheduled_local=%s now_local=%s retry_seconds=%s",
+            scheduled_local.isoformat(),
+            now_local.isoformat(),
+            retry_seconds,
+        )
+        return 0
+
     window_start = scheduled_utc - timedelta(minutes=5)
     if await _ops_run_delivery_exists(
         db,
@@ -2692,18 +2713,8 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
         triggers=_TG_MONITORING_DELIVERY_TRIGGERS,
     ):
         return 0
-
-    catchup_key = f"tg_monitoring:{scheduled_local.isoformat()}"
     if catchup_key in _critical_catchup_completed:
         return 0
-    if catchup_key in _critical_catchup_inflight:
-        return 0
-    retry_seconds = _tg_monitoring_remote_busy_retry_seconds()
-    deferred_until = _critical_catchup_deferred_until.get(catchup_key)
-    if deferred_until is not None:
-        if now_utc < deferred_until:
-            return 0
-        _critical_catchup_deferred_until.pop(catchup_key, None)
     latest_remote_busy_started = await _latest_tg_monitoring_remote_busy_skip_started_at(
         db,
         day_start_utc=window_start,
@@ -2734,17 +2745,6 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
                 terminal_retry_seconds,
             )
             return 0
-    if await _tg_monitoring_recovery_job_exists(db=db, bot=bot):
-        _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(seconds=retry_seconds)
-        logging.warning(
-            "SCHED critical watchdog deferring tg_monitoring catch-up while recovery registry exists "
-            "scheduled_local=%s now_local=%s retry_seconds=%s",
-            scheduled_local.isoformat(),
-            now_local.isoformat(),
-            retry_seconds,
-        )
-        return 0
-
     from source_parsing.telegram.service import telegram_monitor_scheduler
 
     _critical_catchup_inflight.add(catchup_key)

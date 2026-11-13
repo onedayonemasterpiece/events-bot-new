@@ -1,13 +1,33 @@
 # Changelog
 
+- Fix venue-review evidence citations: request one contiguous source quote when venue and address are on separate lines; keep grounding validation unchanged.
+
 - Fix Kaggle account migration to richss777 across runtime defaults and notebook metadata; stop duplicate pushes after invalid dataset-source responses.
 
 ## [Unreleased]
 
+### Fixed
+- Keep the existing deferred media retry after repeated transient provider failures instead of exhausting image review before a semantic answer; retain counters and uncertain-result cap.
+- Reuse the existing media transient-error schedule for pair reviews instead of postponing provider503/timeouts for a full day; preserve daily quotas and uncertain-result policy.
+- Prioritize the existing media dependency of a waiting initial VK publication before unrelated reviews, without requiring a failed publication attempt.
+- Use the already-configured Gemma media escalation when the primary daily quota rejects a reservation; retain minute limits, existing credentials and actual-send accounting.
+- Resume an existing Telegram handoff before accepting an earlier partial slot delivery or delaying a new launch; preserve the existing recovery cadence and duplicate-launch guards.
+- Qtickets selects the declared higher-density event hero instead of the small JSON-LD thumbnail, preserving structured facts and the existing fallback without another page request.
+- Treat a visually related parent-program cover and its event card as compatible gallery images; retain rejection of incompatible event dates and unrelated programmes without resetting historical review receipts.
+- Keep automatic Telegram recovery and scheduled VK per-post progress quiet; send one Telegram recovery summary and log intermediate LLM warnings while retaining terminal alerts.
+- Complete source galleries publish without waiting for optional image geometry; dependency replacement clears an empty list and removes stale dependency deferral.
+- Suppress repeated Telegram per-post progress for completed carriers during import recovery. Temporarily disconnect automatic calendar document jobs after an isolated `docs.save` CAPTCHA; preserve photo publication and existing receipts.
+
 - Release policy: active imports do not block a normal verified Events update; verify task continuation and product effects on the live import.
 
 ### Fixed
-- Related-only calculation uses the completed vector projection's immutable input instead of chasing ongoing live imports; vector completion wakes the existing shared Kaggle queue.
+- Temporarily disconnect automatic calendar writes after a replacement credential still receives docs.save CAPTCHA; preserve ordinary photo jobs, service live-ID reconciliation, and existing challenge recovery without bypass.
+- Calendar replacement GUIDs use the saved document receipt, keeping retries stable while distinguishing a return to an earlier event time from a deleted comment.
+- Calendar comments ignore cosmetic template/filename changes; migrate existing receipts without VK calls and replace comments only when calendar content changes, preserving deferred delivery.
+- Calendar comments run only through the periodic live scan, with a stable 5–15 minute delay after actual publication and one changed comment per pass; postponed and newly published posts are not commented immediately.
+- Reviewed event-gallery changes requeue the existing managed VK sync after pair or semantic review, allowing approved additions and higher-resolution replacements to update the same post automatically.
+- Calendar live scans reuse the exact already-fetched VK wall item, avoiding another user-token read for each match while preserving publication-date cutoff and delivery receipts.
+- Existing event-media downloads encode international hostnames with IDNA, allowing full-resolution Yantar Hall posters to reach the ordinary CDN and review path instead of failing before HTTP transport.
 - Calendar comment scans skip their publishing action while the existing CAPTCHA cache is active, preserving service reads and the original recovery cooldown instead of creating repeated pause cohorts.
 - Confirmed event-image duplicates retain the higher-resolution rendition instead of an already-approved thumbnail; the existing duplicate transition replaces the gallery and triggers normal publishing without bypassing semantic relevance.
 - Event vector sync uses the configured shared Google key pool through the canonical limiter instead of stopping when its legacy default key exhausts its daily quota.
@@ -26,6 +46,8 @@
 
 - Fixed: retain VK source publication time in the existing primary parse and verifier context so delayed imports do not resolve relative dates from the import day.
 
+
+- Related-only calculation uses the completed vector projection's immutable input instead of chasing ongoing live imports; vector completion wakes the existing shared Kaggle queue.
 
 ### Added
 - Attach calendar files in friendly, varied comments on managed Afisha event posts; preserve one comment on retries and updates, including all-day events and shared sessions.
