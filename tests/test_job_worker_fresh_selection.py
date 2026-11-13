@@ -293,7 +293,8 @@ async def test_related_compute_is_not_starved_by_media_stream(tmp_path, monkeypa
         session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync,
                                   depends_on=f'event_media_review:{event.id}', next_run_at=now - timedelta(seconds=1)))
         for task in (main.JobTask.event_media_review, main.JobTask.event_vector_sync):
-            session.add(main.JobOutbox(event_id=event.id, task=task, next_run_at=now - timedelta(seconds=1)))
+            due = now - timedelta(seconds=60 if task == main.JobTask.event_vector_sync else 1)
+            session.add(main.JobOutbox(event_id=event.id, task=task, next_run_at=due))
         await session.commit()
     calls = []
     async def run(eid, *_args):
@@ -305,5 +306,36 @@ async def test_related_compute_is_not_starved_by_media_stream(tmp_path, monkeypa
     try:
         await main._run_due_jobs_once(db, None, max_jobs=1)
         assert calls == ['vector']
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_ready_vk_gets_a_turn_before_new_compute_and_repeated_unrelated_media(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / 'related-vk-fair.sqlite'))
+    await db.init()
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        waiting = main.Event(title='Waiting for media', description='', source_text='', date='2099-01-01', time='19:00', location_name='Venue')
+        ready = main.Event(title='Ready VK carousel', description='', source_text='', date='2099-01-02', time='19:00', location_name='Venue', photo_urls=['https://cdn.example/poster.jpg'])
+        session.add_all([waiting, ready])
+        await session.flush()
+        wid, rid = waiting.id, ready.id
+        session.add(main.JobOutbox(event_id=waiting.id, task=main.JobTask.event_media_review, next_run_at=now-timedelta(seconds=30)))
+        session.add(main.JobOutbox(event_id=waiting.id, task=main.JobTask.vk_sync, depends_on=f'event_media_review:{wid}', next_run_at=now-timedelta(seconds=30)))
+        session.add(main.JobOutbox(event_id=waiting.id, task=main.JobTask.event_vector_sync, next_run_at=now-timedelta(seconds=10)))
+        session.add(main.JobOutbox(event_id=ready.id, task=main.JobTask.vk_sync, next_run_at=now-timedelta(seconds=60)))
+        await session.commit()
+    calls = []
+    async def media(eid, *_args): calls.append(('media', eid))
+    async def vector(eid, *_args): calls.append(('vector', eid))
+    async def publish(eid, *_args): calls.append(('vk', eid))
+    monkeypatch.setitem(main.JOB_HANDLERS, 'event_media_review', media)
+    monkeypatch.setitem(main.JOB_HANDLERS, 'event_vector_sync', vector)
+    monkeypatch.setitem(main.JOB_HANDLERS, 'vk_sync', publish)
+    try:
+        await main._run_due_jobs_once(db, None, max_jobs=1)
+        assert calls == [('vk', rid)]
     finally:
         await db.close()
