@@ -116,3 +116,20 @@ reconciliation without another post. Existing public duplicates are not deleted
 by this change. Six-hour Crew configuration needed inclusion in the existing
 service allowlist; corrected without adding a timer or service. Wake delivery
 was delayed by host ENOSPC and native dispatch; it is not a punctuality proof.
+
+
+Owner visual correction: use the mobile Reference4 SVG wordmark with its wide
+о, rasterized transparently for Pillow without a new runtime dependency. Reuse
+the approved excursion digest date tile and row typography, retaining exact ISO
+dates for weekdays and explicit date spans. Visual preview retained centrally;
+20 VK/guide renderer and consumer checks pass. The shared text-wrap consumption
+counter is corrected to avoid ellipsis on fully fitted two-line titles.
+
+CI blocker evidence: the first PR933 head passed python, guide and static browser
+jobs, but identity failed eight media retry tests with normal-pool limiter
+unavailable. An isolated clean worktree at exact production/main cea78b3e2
+reproduced the same eight failures (6.78s); these tests and event_media.py are
+unchanged by this PR. Evidence: retained ci-base-media-proof.log in the canonical
+similar-events task directory. This is not a green identity suite. Use the
+release-governance explicit local fallback if the final current-head job repeats
+these exact baseline failures; do not disable or alter unrelated media policy.
