@@ -184,3 +184,33 @@ existing delay and without counting a failed attempt. Delete the graph-completio
 VK enqueue callback entirely: no catalogue scan, no unsolicited job creation,
 no resumed paused/completed job. Regression checks exercise pending -> ready ->
 done on one existing job, plus zero provider calls before readiness.
+
+
+## Terminal VK jobs resurrected by CAPTCHA recovery, November 13
+
+After the complete-initial-post release939, normal recovery resumed188 jobs
+at21:51UTC. Job142439 then attempted to edit old post13322 and triggered
+CAPTCHA again. Its failed marker was written by the CAPTCHA finalizer itself;
+the independently proven historical terminal row is stopped backfill155563. The pause query included terminal
+error rows, replacing their far-future due and diagnostic with the cohort
+marker; the resume query then changed them to pending. Three terminal failed
+VK jobs were present, including an explicitly stopped related backfill.
+The handler also incorrectly marked the temporary CAPTCHA pause as terminal
+failed. It now reserves terminal failure for a non-pause outcome. Both existing
+cohort queries preserve terminal rows by requiring a null terminal reason. A regression covers an existing terminal error, a terminal row already
+inside a paused cohort, and a normal initial publication; only the last resumes.
+No new queue, state, recovery path, provider request or CAPTCHA bypass is added.
+Fresh related JSON21:49UTC704anchors is verified; normal new-post/comment
+acceptance remains blocked by the real VK challenge.
+
+Read-only review caught three terminal rows already resumed by the old release
+before the fix:142439,155207,155563. At22:11UTC their exact failed state and
+current CAPTCHA marker were rechecked, then the three rows were restored to
+terminal error with the existing far-future due; no provider call. Ordinary
+initial job156444 remained pending and unchanged. This is a one-time correction
+of the already-revived data, not another production recovery mechanism.
+CI also crossed local midnight: the unrelated historical price fixture was
+rejected as a past event. Its test now explicitly disables past-event rejection,
+as neighbouring historical-source tests do, keeping the original source/date
+and all seven canonical ticket-price expectations. Seven cases pass locally;
+production ingestion policy remains unchanged.

@@ -285,6 +285,7 @@ async def test_vk_jobs_paused_and_resumed(tmp_path, monkeypatch):
         jobs = (await session.execute(select(JobOutbox))).scalars().all()
     assert all(j.status == JobStatus.paused for j in jobs)
     assert all(j.attempts == 0 for j in jobs)
+    assert all(j.terminal_reason is None for j in jobs)
     assert len({j.last_error for j in jobs}) == 1
     assert jobs[0].last_error.startswith("captcha_wait:")
     assert len(calls) == 1
@@ -408,3 +409,37 @@ async def test_permanent_vk_edit_error_does_not_pause_whole_outbox(
     assert main._vk_captcha_resume is None
     assert calls == (["wall.getById"] if preflight_blocked else ["wall.getById", "wall.edit"])
     assert job.terminal_reason != "applied"
+
+
+@pytest.mark.asyncio
+async def test_captcha_does_not_revive_terminal_vk_jobs(tmp_path):
+    db = Database(str(tmp_path / "terminal-captcha.sqlite"))
+    await db.init()
+    marker = "captcha_wait:terminal-regression"
+    try:
+        async with db.get_session() as session:
+            event = Event(title="future", description="d", source_text="src",
+                          date="2099-01-04", time="12:00", location_name="loc")
+            session.add(event)
+            await session.flush()
+            rows = [
+                JobOutbox(event_id=event.id, task=JobTask.vk_sync,
+                          status=JobStatus.error, terminal_reason="failed",
+                          last_error="permanent failure"),
+                JobOutbox(event_id=event.id, task=JobTask.vk_sync,
+                          status=JobStatus.paused, terminal_reason="failed",
+                          last_error=marker),
+                JobOutbox(event_id=event.id, task=JobTask.vk_sync),
+            ]
+            session.add_all(rows)
+            await session.commit()
+            ids = [row.id for row in rows]
+        await main.vk_captcha_pause_outbox(db, marker=marker)
+        assert await main._resume_vk_captcha_outbox(db, marker) == 1
+        async with db.get_session() as session:
+            jobs = [await session.get(JobOutbox, job_id) for job_id in ids]
+            assert [j.status for j in jobs] == [JobStatus.error, JobStatus.paused, JobStatus.pending]
+            assert jobs[0].last_error == "permanent failure"
+            assert jobs[1].terminal_reason == "failed"
+    finally:
+        await db.close()
