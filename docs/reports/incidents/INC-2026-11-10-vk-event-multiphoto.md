@@ -457,3 +457,15 @@ Initialized gallery→VK grid/carousel regression до фикса падает, 
 Production net+7 при бюджете15. Evidence:
 /home/dev/artifacts/events-bot-new/20261113T001857Z-vk-existing-media-rpd-escalation-20261113.
 До exact-main выпуска и обычного initial VK readback задача открыта.
+
+Новая initial публикация10899 имела pending vk_sync155520 с явной
+depends_on event_media_review:10899. В00:24 UTC её media155516 всё ещё ждало,
+хотя due00:10; actual query нашёл100более ранних media reviews. Существующий
+приоритет blocked_media_event_ids применялся только после failed VK attempt
+с missing_materialized_media, а корректно ожидающая initial publication
+туда не попадала. Расширено только существующее условие на pending VK
+с той же явной media dependency. Active/future/silent eligibility сохранены.
+Ранее готовые VK jobs не получают media priority. Различающий initialized
+worker тест: до1fail/1negativepass, после обязательны оба и весь worker suite.
+Дополнительно main.py net+4; общий production net+11 при прежнем бюджете15.
+Никакой новой очереди, lane, флага, polling или capacity reservation.
