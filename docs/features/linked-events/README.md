@@ -219,3 +219,9 @@ public постами VK (с учётом `postponed_id`). Он не загру�
 существующий `_recover_managed_vk_live_url`, чтобы peer links читали
 актуальные URL. Его результат — boolean, поэтому delayed comment всегда
 берёт обновлённый `Event.source_vk_post_url`, а не return value recovery.
+
+VK также может не вернуть `postponed_id`: это подтверждено живой public
+выборкой 13 ноября. Consumer передаёт уже полученные public items в
+существующий exact-title/date matcher, включая его legacy date rules и
+проверку единственности. Новый запрос на каждого peer не нужен; нет fuzzy
+matching или второго алгоритма восстановления.

@@ -49,7 +49,9 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         async def postponed(*args):
             return [{'id': 1}]
         async def public(*args, **kwargs):
-            return {'response': {'items': [{'id': 20, 'postponed_id': 2}]}}
+            async with db.get_session() as session:
+                peer = await session.get(main.Event, 2)
+            return {'response': {'items': [{'id': 20, 'text': '\n'.join(main.build_vk_source_header(peer, None))}]}}
         monkeypatch.setattr(main, '_fetch_vk_postponed_items_for_owner', postponed)
         monkeypatch.setattr(main, '_vk_api', public)
         await relations.enqueue_refresh(db)

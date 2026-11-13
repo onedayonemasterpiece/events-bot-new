@@ -155,9 +155,13 @@ async def enqueue_refresh(db):
                 or main._event_start_has_passed_for_publication(event)):
             continue
         ids = main._vk_owner_and_post_id(event.source_vk_post_url)
-        if int(ids[1]) not in target_ids:
+        item = public_by_old_id.get(int(ids[1]))
+        if item is None and int(ids[1]) not in target_ids:
+            item = await main._find_unique_live_managed_vk_item_for_event(
+                event, owner_id=owner, db=db, bot=None, candidate_items=main._vk_postponed_items(public))
+        if int(ids[1]) not in target_ids and item is None:
             continue
-        if item := public_by_old_id.get(int(ids[1])):
+        if item:
             await main._recover_managed_vk_live_url(db, event, bot=None, candidate_item=item)
         targets.append(event)
     for event in targets:
