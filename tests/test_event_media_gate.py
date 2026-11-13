@@ -32,6 +32,7 @@ from models import (
     EventMediaPairReview,
     EventPoster,
     JobOutbox,
+    JobStatus,
     JobTask,
 )
 from smart_event_update import (
@@ -2409,3 +2410,64 @@ async def test_gallery_edit_preserves_known_postponed_publication_time(monkeypat
         assert writes[0]['publish_date'] == publication
     else:
         assert 'publish_date' not in writes[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure', ['503', 'timeout', 'rpd', 'uncertain'])
+async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monkeypatch, failure):
+    from datetime import datetime, timezone, timedelta
+    from google_ai.exceptions import ProviderError, RateLimitError
+    now = datetime(2026, 11, 13, 12, tzinfo=timezone.utc)
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None): return now
+    monkeypatch.setattr(event_media, 'datetime', Clock)
+    monkeypatch.setenv('EVENT_MEDIA_ROLE_TRANSIENT_RETRY_SECONDS', '900')
+    db = Database(str(tmp_path / 'pair-retry.sqlite'))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        event.date = '2099-01-01'
+        session.add(event)
+        await session.flush()
+        eid = event.id
+        await _apply_posters(session, eid, [
+            PosterCandidate(catbox_url='https://static.example/a.png', sha256='a' * 64),
+            PosterCandidate(catbox_url='https://static.example/b.png', sha256='b' * 64),
+        ])
+        # Match the real outbox invocation: the current media job is leased.
+        for job in (await session.execute(select(JobOutbox).where(JobOutbox.event_id == eid))).scalars():
+            job.status = JobStatus.running
+            session.add(job)
+        await session.commit()
+    async def download(poster):
+        return DownloadedPoster(_pattern_png_bytes(invert=poster.catbox_url.endswith('b.png')),
+                                'image/png', poster.catbox_url)
+    async def review(**_kwargs):
+        if failure == '503':
+            raise ProviderError(error_type='ServerError', status_code=503, retryable=True)
+        if failure == 'timeout':
+            raise ProviderError(error_type='TimeoutError', error_message='call timed out', retryable=True)
+        if failure == 'rpd':
+            raise RateLimitError(blocked_reason='rpd')
+        return dict(decision='uncertain', duplicate_kind='unknown', confidence=0.5,
+                    semantic_conflict=False, canonical_side='unknown', reason_code='uncertain')
+    monkeypatch.setattr(event_media, '_download_poster', download)
+    monkeypatch.setattr(event_media, '_call_reviewer', review)
+    try:
+        await review_next_event_media_pair(eid, db)
+        async with db.get_session() as session:
+            pair = (await session.execute(select(EventMediaPairReview).where(
+                EventMediaPairReview.event_id == eid))).scalar_one()
+            due = pair.next_run_at.replace(tzinfo=timezone.utc)
+            assert pair.status == 'deferred' and pair.attempts == 1
+            assert due == (now + timedelta(minutes=15) if failure in ('503', 'timeout')
+                           else datetime(2026, 11, 14, 0, 5, tzinfo=timezone.utc))
+            posters = (await session.execute(select(EventPoster).where(EventPoster.event_id == eid))).scalars().all()
+            assert any(p.review_status == PENDING_REVIEW for p in posters)
+            jobs = (await session.execute(select(JobOutbox).where(
+                JobOutbox.event_id == eid, JobOutbox.task == JobTask.event_media_review,
+                JobOutbox.status == JobStatus.pending))).scalars().all()
+            assert any(j.next_run_at.replace(tzinfo=timezone.utc) <= due for j in jobs)
+    finally:
+        await db.engine.dispose()
