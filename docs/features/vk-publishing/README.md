@@ -221,3 +221,9 @@ For linked child events, a pending or unclassified replacement image is not a pu
 ### Неизменяемый старый VK-пост
 
 Если `wall.getById` запрещает редактирование или `wall.edit` возвращает постоянный отказ из-за истёкшего окна, `edit_vk_post` передаёт существующий `VKAPIError` вызывающему коду. Такой отказ не является no-op: `vk_source_hash` и успешная квитанция новой ревизии не записываются. Существующий JobOutbox обработчик завершает только эту задачу как постоянный отказ без автоматического повтора и без общей captcha-паузы. Автоматический новый публичный пост взамен старого не создаётся. `False` остаётся результатом только фактически совпадающего содержимого.
+
+### Calendar comment after public release
+
+Only a newly created managed scheduled announcement enqueues `vk_calendar_comment` in the existing JobOutbox. Its initial due time is the known publication time plus a reproducible random delay of 5–15 minutes. At that time one bounded public-ID lookup resolves the new public post; if its actual publication was later, the same outbox row defers to the actual date plus that delay. This is not a periodic wall scan or a catch-up of old posts. Calendar delivery does not edit the announcement.
+
+The configured user uploads the ICS, waits for the upload response and `docs.save`, then creates the comment without `from_group`. Each document API step and the multipart upload are paced by four seconds, matching the qualified live pilot; this is application pacing, not a claimed VK requirement. The saved document is reused after failures, and document-matching recovery accepts previous group comments and user comments. A saved comment receipt performs no further VK calls. Related-event comments retain their separate payload and lifecycle.
