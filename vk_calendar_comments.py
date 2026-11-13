@@ -1,6 +1,7 @@
 """Calendar documents on the managed Afisha wall, using existing VK and ICS transport."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import random
@@ -105,6 +106,7 @@ async def ensure_calendar_comment(db, event, post_url):
             raise RuntimeError("VK calendar document requires the configured user actor")
 
         async def api(method, **params):
+            await asyncio.sleep(4)
             result = await main._vk_api(method, params, db, main.get_bot(), token=token, token_kind="user")
             if "response" not in result:
                 raise RuntimeError(f"VK calendar method failed: {method}")
@@ -116,7 +118,7 @@ async def ensure_calendar_comment(db, event, post_url):
             while True:
                 comments = await api("wall.getComments", owner_id=owner, post_id=post, count=100, offset=offset)
                 document_id = "_".join(state["document"].split("_", 2)[:2])
-                found = next((c for c in comments.get("items", []) if c.get("from_id") == owner and any(
+                found = next((c for c in comments.get("items", []) if c.get("from_id") in {owner, int(state['document'].split('_', 1)[0][3:])} and any(
                     a.get("type") == "doc" and f"doc{a['doc']['owner_id']}_{a['doc']['id']}" == document_id
                     for a in c.get("attachments", []))), None)
                 if found:
@@ -131,6 +133,7 @@ async def ensure_calendar_comment(db, event, post_url):
             upload = await api("docs.getWallUploadServer")
             form = aiohttp.FormData()
             form.add_field("file", body, filename=filename, content_type="text/calendar")
+            await asyncio.sleep(4)
             async with main.get_http_session().post(upload["upload_url"], data=form) as result:
                 result.raise_for_status()
                 uploaded = await result.json(content_type=None)
@@ -143,7 +146,7 @@ async def ensure_calendar_comment(db, event, post_url):
             state["document"] = f"doc{document['owner_id']}_{document['id']}" + (f"_{document['access_key']}" if document.get("access_key") else "")
             await persist()  # Reuse the uploaded document if comment delivery is retried.
         params = dict(owner_id=owner, message=state["text"], attachments=state["document"])
-        result = await api("wall.createComment", post_id=post, from_group=abs(owner), guid=f"calendar:{owner}:{post}", **params)
+        result = await api("wall.createComment", post_id=post, guid=f"calendar:{owner}:{post}", **params)
         state["comment_id"] = result["comment_id"]
         await persist()
         logging.info("vk.calendar_comment delivered event_id=%s post_id=%s comment_id=%s", event.id, post, state["comment_id"])

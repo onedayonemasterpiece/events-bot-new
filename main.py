@@ -16216,7 +16216,7 @@ async def _recover_managed_vk_live_url(
     return True
 
 
-async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload: dict) -> bool:
+async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload: dict) -> bool | datetime:
     """Run once after this announcement's known public time, using JobOutbox."""
     if payload.get("relations"):
         from vk_event_relations import presentation, ensure_comment
@@ -16254,6 +16254,11 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
     if len(matches) != 1:
         raise RuntimeError("vk_calendar_public_post_not_found")
     item = matches[0]
+    delay = random.Random(postponed_url).randint(300, 900)
+    public_due = datetime.fromtimestamp(int(item["date"]) + delay, timezone.utc)
+    if public_due > datetime.now(timezone.utc):
+        logging.info("vk.calendar_comment deferred event_id=%s public_due=%s", event_id, public_due.isoformat())
+        return public_due
     if str(event.source_vk_post_url or "") == postponed_url:
         await _recover_managed_vk_live_url(db, event, bot=bot, candidate_item=item)
     live_url = f"https://vk.com/wall{owner}_{int(item['id'])}"
@@ -20358,7 +20363,7 @@ async def _run_due_jobs_once_locked(
         pause = False
         static_failure = None
         static_deferred = False
-        vector_deferred_at = None
+        job_deferred_at = None
         vk_flood_retry_at: datetime | None = None
         missing_event_media = False
         if not handler:
@@ -20416,16 +20421,18 @@ async def _run_due_jobs_once_locked(
                         _call_handler(),
                         timeout=max(0.1, runtime_limit),
                     )
+                if obj.task == JobTask.vk_calendar_comment and isinstance(res, datetime):
+                    job_deferred_at = res
                 from private_events_mcp.publication_status import record_worker_receipt
                 receipt_link = await _job_result_link(obj.task, obj.event_id, db)
-                if not (isinstance(obj.payload, dict) and obj.payload.get('publication_kind')):
+                if job_deferred_at is None and not (isinstance(obj.payload, dict) and obj.payload.get('publication_kind')):
                     await record_worker_receipt(db, obj, changed=res is not False, url=receipt_link, had_publication=receipt_had_publication)
                 rebuild = isinstance(res, str) and res == "rebuild"
                 changed = res if isinstance(res, bool) else True
                 link = await _job_result_link(obj.task, obj.event_id, db)
                 if rebuild and link:
                     link += " (forced rebuild)"
-                status = JobStatus.done
+                status = JobStatus.pending if job_deferred_at is not None else JobStatus.done
                 err = None
                 took_ms = (_time.perf_counter() - start) * 1000
                 short = link or ("ok" if changed else "nochange")
@@ -20468,7 +20475,7 @@ async def _run_due_jobs_once_locked(
                 err = str(exc)
                 status = JobStatus.pending
                 retry = False
-                vector_deferred_at = exc.retry_at
+                job_deferred_at = exc.retry_at
                 link = None
                 changed = False
                 logline(
@@ -20621,8 +20628,8 @@ async def _run_due_jobs_once_locked(
                     # current server/remote lease has had time to advance.
                     obj.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=5)
                     send = False
-                elif vector_deferred_at is not None:
-                    retry_at = vector_deferred_at
+                elif job_deferred_at is not None:
+                    retry_at = job_deferred_at
                     if retry_at.tzinfo is None:
                         retry_at = retry_at.replace(tzinfo=timezone.utc)
                     obj.next_run_at = max(

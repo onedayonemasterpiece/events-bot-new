@@ -180,3 +180,12 @@ terminal alert, manual progress and terminal accounting for15 VK rows.
 Retained evidence:20261112T212650Z-quiet-automatic-import. Live acceptance
 requires the actual normal recovery after release and no repeated restart,
 file-path or per-post chatter. Original multi-photo acceptance remains open.
+
+
+## User-authored live qualification and ordinary producer restoration, November 13
+
+A single owner-requested pilot on the newly public concert post14286 completed upload, save and comment with four-second spacing. Exact readback confirmed comment14309 author868977531 (user), document710709617, extensionics and correct filename. Downloading the VK document returned the exact2415 canonical bytes and SHA2565d4c93e5e4c0b549ec4f52e2f8c943f02ad97c109c496a11759bd6c55e23a39d. Parsed UIDevent-10931@kenigevents.ru, December14 at19:00–20:00. Link: https://vk.com/wall-231920894_14286?reply=14309. No CAPTCHA occurred. This qualifies one route; it does not prove that author choice or pacing caused recovery.
+
+Restoration reconnects only new scheduled announcements to the existing one-shot outbox. The handler defers the same row when the actual public date is later than planned, then resolves the exact final URL and sends the user-authored ICS. Existing relation-comment payloads and receipts remain intact. No historical replay, recurring scan, new queue/state/provider/token or post edit is introduced. Four-second pacing is retained from the working pilot, with awaited upload/save responses as the readiness guarantee.
+
+Regression checks: initialized new-post scheduling and worker execution after the actual public date, user author, unchanged receipt with zero calls, group/user lost-response recovery, save failure preventing comment creation, and existing related-comment and CAPTCHA pause tests. Normal automatic delivery remains required after release. Start the owner-requested48-hour control only after live ordinary delivery is confirmed. Evidence: /home/dev/artifacts/events-bot-new/20261113T162224Z-vk-calendar-user-author-20261113.

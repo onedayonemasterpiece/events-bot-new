@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- New scheduled VK announcements again enqueue one calendar comment after public release plus 5–15 minutes. Calendar files are posted by the configured user, with paced upload/save/comment calls and persisted document/comment receipts; existing posts are not swept or edited for calendars.
 - Carry the carousel selection in the existing delayed-comment payload so a later graph cannot change its links before the one-time comment is sent.
 - Build image-bearing VK announcements after their shared related result is ready, using the existing outbox deferral. Graph completion never enqueues VK publications or reopens old jobs.
 - Keep already-sent VK recommendation comments untouched: no comment edits or deletions, including after graph refresh or lost-receipt recovery.
