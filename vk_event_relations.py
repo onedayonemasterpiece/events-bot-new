@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 from io import BytesIO
 import json
 import logging
+import random
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
-from models import Event, Setting
+from models import Event, Setting, JobOutbox, JobStatus
 
 ROOT = Path(__file__).parent
 
@@ -21,6 +22,8 @@ def graph_path(db):
 
 async def presentation(db, event):
     import main
+    if not event.photo_urls:
+        return {'dates': [], 'related': []}
     path = graph_path(db)
     graph = json.loads(path.read_text())['related'] if path.is_file() else {}
     # `similar` can contain broad discovery when pure matches are absent.
@@ -181,7 +184,7 @@ async def enqueue_refresh(db):
     logging.info('vk.relations_refresh queued=%s', len(targets))
 
 
-async def ensure_comment(db, event, post_url, data, bot=None):
+async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False):
     """One editable group comment; postponed posts use the existing delayed outbox."""
     import main
     owner, post = map(int, main._vk_owner_and_post_id(post_url))
@@ -195,30 +198,38 @@ async def ensure_comment(db, event, post_url, data, bot=None):
     async with db.get_session() as session:
         saved = await session.get(Setting, key)
         state = json.loads(saved.value) if saved else {}
-    if not data['related']:
-        if state.get('comment_id'):
-            await api('wall.deleteComment', owner_id=owner, comment_id=state['comment_id'])
-            async with db.get_session() as session:
-                saved = await session.get(Setting, key)
-                await session.delete(saved)
-                await session.commit()
+    message = 'ПОХОЖИЕ СОБЫТИЯ\n\n' + '\n\n'.join(
+        f"{listing([row])}\n{row['url']}" for row in data['related']) if data['related'] else ''
+    if state.get('text') == message or (not message and not state.get('comment_id')):
         return False
     response = await api('wall.getById', posts=f'{owner}_{post}')
     items = main._vk_wall_get_by_id_items({'response': response})
     if not items:
         raise RuntimeError('vk_relations_post_missing')
-    if 'ПОХОЖИЕ СОБЫТИЯ\n' not in str(items[0].get('text') or ''):
+    if message and 'ПОХОЖИЕ СОБЫТИЯ\n' not in str(items[0].get('text') or ''):
         return False
     publish_date = int(items[0].get('date') or 0)
-    if publish_date > datetime.now(timezone.utc).timestamp():
+    now = datetime.now(timezone.utc).timestamp()
+    if not deferred or publish_date + 180 > now:
+        if not deferred:
+            async with db.get_session() as session:
+                pending = (await session.execute(select(JobOutbox).where(
+                    JobOutbox.coalesce_key == key,
+                    JobOutbox.status.in_([JobStatus.pending, JobStatus.running]),
+                ))).first()
+            if pending:
+                return False
         await main.enqueue_job(db, event.id, main.JobTask.vk_calendar_comment,
             payload={'post_url': post_url, 'relations': True},
-            coalesce_key=f'vk_related_comment:{owner}:{post}', requeue_done=True,
-            next_run_at=datetime.fromtimestamp(publish_date + 60, timezone.utc))
+            coalesce_key=key, requeue_done=True,
+            next_run_at=datetime.fromtimestamp(max(publish_date, now) + random.randint(180, 1200), timezone.utc))
         return False
-    message = 'ПОХОЖИЕ СОБЫТИЯ\n\n' + '\n\n'.join(
-        f"{listing([row])}\n{row['url']}" for row in data['related'])
-    if state.get('text') == message:
+    if not message:
+        await api('wall.deleteComment', owner_id=owner, comment_id=state['comment_id'])
+        async with db.get_session() as session:
+            saved = await session.get(Setting, key)
+            await session.delete(saved)
+            await session.commit()
         return False
     if not state.get('comment_id'):
         comments = await api('wall.getComments', owner_id=owner, post_id=post, count=100)

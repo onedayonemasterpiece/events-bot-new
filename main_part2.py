@@ -7544,7 +7544,7 @@ async def sync_vk_source_post(
     photo_upload_expected = False
     partial_upload = False
     gallery_mode = None
-    if VK_PHOTOS_ENABLED and (photo_urls_source or any(relations.values())):
+    if VK_PHOTOS_ENABLED and photo_urls_source:
         photo_urls_for_publish = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
             :VK_MAX_ATTACHMENTS
         ]

@@ -97,18 +97,18 @@ async def test_comment_replay_edits_one_comment_and_defers_postponed(tmp_path, m
     event = SimpleNamespace(id=1)
     data = {'related': [{'id': 2, 'title': 'Концерт', 'date': '14.11', 'time': '19:00', 'url': 'https://vk.com/wall-1_2'}], 'dates': []}
     try:
-        assert await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data)
-        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data)
+        assert await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
+        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
         assert sum(method == 'wall.createComment' for method, _ in calls) == 1
         data['related'][0]['time'] = '20:00'
-        assert await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data)
+        assert await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
         assert calls[-1][0] == 'wall.editComment'
-        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', {'related': [], 'dates': []})
+        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', {'related': [], 'dates': []}, deferred=True)
         assert calls[-1][0] == 'wall.deleteComment'
         postponed = True
         assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_11', data)
         assert deferred[-1]['payload']['relations'] is True
-        assert deferred[-1]['next_run_at'].timestamp() == 4070908860
+        assert 4070908980 <= deferred[-1]['next_run_at'].timestamp() <= 4070910000
     finally:
         await db.close()
 
@@ -142,8 +142,9 @@ async def test_deferred_comment_uses_persisted_live_url_after_boolean_recovery(t
         return True
     async def data(*args):
         return {'dates': [], 'related': []}
-    async def comment(db, event, url, *args):
+    async def comment(db, event, url, *args, **kwargs):
         assert url == 'https://vk.com/wall-1_20'
+        assert kwargs['deferred'] is True
         return True
     monkeypatch.setattr(main, '_recover_managed_vk_live_url', recover)
     monkeypatch.setattr(relations, 'presentation', data)
@@ -161,26 +162,8 @@ async def test_deferred_comment_uses_persisted_live_url_after_boolean_recovery(t
 
 
 @pytest.mark.asyncio
-async def test_relation_card_is_uploaded_without_source_poster(monkeypatch):
-    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
-    monkeypatch.setattr(main, 'VK_PHOTOS_ENABLED', True)
-    monkeypatch.setattr(main, 'VK_MAX_ATTACHMENTS', 10)
-    event = main.Event(id=1, title='Концерт', description='', source_text='',
-        date='2099-01-01', time='19:00', location_name='Зал', photo_urls=[])
-    data = {'related': [{'id': 2, 'title': 'Другой концерт', 'date': '02.01',
-        'time': '19:00', 'url': 'https://vk.com/wall-1_2'}], 'dates': []}
-    async def cards(*args):
-        return [b'card']
-    async def upload(*args, **kwargs):
-        return 'photo-1_7'
-    async def post(group_id, message, *args, **kwargs):
-        assert args[2] == ['photo-1_7']
-        assert 'ПОХОЖИЕ СОБЫТИЯ' in message
-        return 'https://vk.com/wall-1_10'
-    monkeypatch.setattr(relations, 'cards', cards)
-    monkeypatch.setattr(main, 'upload_vk_photo_bytes', upload)
-    monkeypatch.setattr(main, 'post_to_vk', post)
-    assert await main.sync_vk_source_post(event, 'Текст', None, None, relations=data) == 'https://vk.com/wall-1_10'
+async def test_post_without_source_image_has_no_relations():
+    assert await relations.presentation(None, SimpleNamespace(photo_urls=[])) == {'dates': [], 'related': []}
 
 
 @pytest.mark.asyncio
@@ -199,3 +182,43 @@ async def test_ambiguous_live_identity_cannot_trigger_republication(monkeypatch)
     # A bounded refresh omits an ambiguous event and continues with other posts.
     assert await main._find_unique_live_managed_vk_item_for_event(event, owner_id=-1,
         db=None, bot=None, candidate_items=items) is None
+
+
+@pytest.mark.asyncio
+async def test_normal_sync_schedules_one_random_delayed_comment(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    db = main.Database(str(tmp_path / 'delay.sqlite'))
+    await db.init()
+    calls = []
+    published = int(datetime.now(timezone.utc).timestamp())
+    async def api(method, params, *args, **kwargs):
+        calls.append(method)
+        assert method == 'wall.getById'  # Normal publication must never write a comment.
+        return {'response': [{'id': 10, 'date': published,
+            'text': 'Анонс\nПОХОЖИЕ СОБЫТИЯ\nКонцерт'}]}
+    monkeypatch.setattr(main, '_vk_api', api)
+    monkeypatch.setattr(main, '_vk_user_token', lambda: 'fixture')
+    monkeypatch.setattr(relations.random, 'randint', lambda low, high: high)
+    try:
+        async with db.get_session() as session:
+            event = main.Event(title='Концерт', description='', source_text='',
+                date='2099-01-01', time='19:00', location_name='Зал')
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+        data = {'related': [{'id': 2, 'title': 'Концерт', 'date': '14.11',
+            'time': '19:00', 'url': 'https://vk.com/wall-1_2'}], 'dates': []}
+        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data)
+        async with db.get_session() as session:
+            job = (await session.execute(relations.select(main.JobOutbox).where(
+                main.JobOutbox.coalesce_key == 'vk_related_comment:-1:10'))).scalar_one()
+            first_due = job.next_run_at
+            assert 1200 <= first_due.replace(tzinfo=timezone.utc).timestamp() - published < 1202
+            assert job.task == main.JobTask.vk_calendar_comment
+        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data)
+        async with db.get_session() as session:
+            jobs = (await session.execute(relations.select(main.JobOutbox).where(
+                main.JobOutbox.coalesce_key == 'vk_related_comment:-1:10'))).scalars().all()
+            assert len(jobs) == 1 and jobs[0].next_run_at == first_due
+    finally:
+        await db.close()

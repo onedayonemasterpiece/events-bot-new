@@ -133,3 +133,14 @@ unchanged by this PR. Evidence: retained ci-base-media-proof.log in the canonica
 similar-events task directory. This is not a green identity suite. Use the
 release-governance explicit local fallback if the final current-head job repeats
 these exact baseline failures; do not disable or alter unrelated media policy.
+
+
+Superseded by direct owner clarification on13 November: a post with no source
+image must have no related content. The proposed standalone-card behavior above
+is withdrawn. Suppress presentation for such events and remove stale related
+text/comment through the normal consumer. Recommendation comments are queued
+with one persisted random due time3–20 minutes after actual publication (or
+scheduling time for an already-public backfill). Only the existing sequential
+vk_calendar_comment handler may send them; it also handles calendar comments,
+so comments to different posts cannot race through separate writers. Normal
+sync retains a pending comment due time instead of resampling on every refresh.
