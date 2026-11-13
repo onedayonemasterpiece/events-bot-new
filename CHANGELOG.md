@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Use the already-configured Gemma media escalation when the primary daily quota rejects a reservation; retain minute limits, existing credentials and actual-send accounting.
 - Resume an existing Telegram handoff before accepting an earlier partial slot delivery or delaying a new launch; preserve the existing recovery cadence and duplicate-launch guards.
 - Qtickets selects the declared higher-density event hero instead of the small JSON-LD thumbnail, preserving structured facts and the existing fallback without another page request.
 - Treat a visually related parent-program cover and its event card as compatible gallery images; retain rejection of incompatible event dates and unrelated programmes without resetting historical review receipts.

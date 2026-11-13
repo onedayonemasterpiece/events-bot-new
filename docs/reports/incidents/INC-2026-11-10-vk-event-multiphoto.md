@@ -435,3 +435,25 @@ Initialized DB regression со старым partial и новым cancelled run:
 Продуктовая проверка после выпуска — обычное продолжение сохранённого
 output, новые media candidates и initial VK attachments, а не запуск
 выбранного source packet. Evidence: тот же retained artifact PR 923.
+
+### Дневной primary quota отказ обходил существующую эскалацию, 13 ноября
+
+Обычный TG import12060 создал posters37535–37537 у10508 и новое
+событие10899 с двумя source candidates. Pair33239 получил RateLimitError
+rpd и был отложен до следующего дня; новый33241 также ушёл до14ноября.
+Это отказ shared LLM limiter, не VK CAPTCHA или удалённый feature cap.
+Код эскалировал uncertain/low confidence и retryable503, но RateLimitError
+сразу попадал в внешний except с переносом на следующий день.
+
+При rpd основной модели теперь используется уже настроенный Gemma review
+с прежними schema, ключом, shared model/project limiter и attempt_observer.
+Не создаются provider path, очередь, квота, retry или новое состояние.
+RPM/TPM, provider429 и auth401 сохраняют прежнее поведение. Отказ резерва
+не считается HTTP send; successful Gemma считается один раз.
+
+Initialized gallery→VK grid/carousel regression до фикса падает, после
+проходит. Контроли сохраняют отсутствие эскалации при minute limits и401/429,
+повторное редактирование без дублей и исходный publish_date.
+Production net+7 при бюджете15. Evidence:
+/home/dev/artifacts/events-bot-new/20261113T001857Z-vk-existing-media-rpd-escalation-20261113.
+До exact-main выпуска и обычного initial VK readback задача открыта.
