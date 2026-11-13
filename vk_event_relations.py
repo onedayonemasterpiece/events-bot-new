@@ -199,7 +199,7 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
         saved = await session.get(Setting, key)
         state = json.loads(saved.value) if saved else {}
     message = 'ПОХОЖИЕ СОБЫТИЯ\n\n' + '\n\n'.join(
-        f"{listing([row])}\n{row['url']}" for row in data['related']) if data['related'] else ''
+        f"{row['date']} {row['time']}".strip() + f" [{row['url']}|{row['title']}]" for row in data['related']) if data['related'] else ''
     if state.get('text') == message or (not message and not state.get('comment_id')):
         return False
     response = await api('wall.getById', posts=f'{owner}_{post}')

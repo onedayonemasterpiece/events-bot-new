@@ -100,6 +100,8 @@ async def test_comment_replay_edits_one_comment_and_defers_postponed(tmp_path, m
         assert await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
         assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
         assert sum(method == 'wall.createComment' for method, _ in calls) == 1
+        created = next(params for method, params in calls if method == 'wall.createComment')
+        assert created['message'] == 'ПОХОЖИЕ СОБЫТИЯ\n\n14.11 19:00 [https://vk.com/wall-1_2|Концерт]'
         data['related'][0]['time'] = '20:00'
         assert await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
         assert calls[-1][0] == 'wall.editComment'
