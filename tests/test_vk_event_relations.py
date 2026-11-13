@@ -59,6 +59,7 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
             for i in (1, 2, 3):
                 row = await session.get(main.Event, i)
                 row.vk_source_hash = 'published'
+            session.add(main.JobOutbox(event_id=4, task=main.JobTask.vk_sync, status=main.JobStatus.done))
             await session.commit()
         path.write_text(json.dumps({'related': {'1': {'pure_related': [2, 3]}, '4': {'pure_related': []}}}))
         async def forbidden(*args, **kwargs):
@@ -122,7 +123,7 @@ async def test_comment_is_created_once_never_edited_and_defers_postponed(tmp_pat
         assert all(method not in {'wall.editComment', 'wall.deleteComment'} for method, _ in calls)
         postponed = True
         assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_11', data)
-        assert deferred[-1]['payload']['relations'] is True
+        assert deferred[-1]['payload']['relations'] == data
         assert 4070908980 <= deferred[-1]['next_run_at'].timestamp() <= 4070910000
     finally:
         await db.close()
@@ -156,8 +157,10 @@ async def test_deferred_comment_uses_persisted_live_url_after_boolean_recovery(t
         event.source_vk_post_url = 'https://vk.com/wall-1_20'
         return True
     async def data(*args):
-        return {'dates': [], 'related': []}
+        raise AssertionError('A later graph must not replace the carousel selection')
+    selection = {'dates': [], 'related': [{'id': 2, 'title': 'Original carousel event'}]}
     async def comment(db, event, url, *args, **kwargs):
+        assert args[0] == selection
         assert url == 'https://vk.com/wall-1_20'
         assert kwargs['deferred'] is True
         return True
@@ -171,7 +174,7 @@ async def test_deferred_comment_uses_persisted_live_url_after_boolean_recovery(t
             session.add(event)
             await session.commit()
             await session.refresh(event)
-        assert await main.job_vk_calendar_comment(event.id, db, None, {'relations': True})
+        assert await main.job_vk_calendar_comment(event.id, db, None, {'relations': selection})
     finally:
         await db.close()
 
@@ -230,6 +233,7 @@ async def test_normal_sync_schedules_one_random_delayed_comment(tmp_path, monkey
             first_due = job.next_run_at
             assert 1200 <= first_due.replace(tzinfo=timezone.utc).timestamp() - published < 1202
             assert job.task == main.JobTask.vk_calendar_comment
+            assert job.payload['relations'] == data
         assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data)
         async with db.get_session() as session:
             jobs = (await session.execute(relations.select(main.JobOutbox).where(
@@ -272,5 +276,28 @@ async def test_related_peers_must_be_public_but_other_dates_need_no_post(tmp_pat
         monkeypatch.setattr(main, '_vk_api', failed)
         with pytest.raises(main.VKAPIError, match='Too many requests'):
             await relations.presentation(db, event)
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_ready_graph_only_wakes_requested_completed_initial_job(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / 'requested.sqlite'))
+    await db.init()
+    queued = []
+    async def enqueue(_db, eid, *_args, **kwargs):
+        queued.append(eid)
+    monkeypatch.setattr(main, 'enqueue_job', enqueue)
+    try:
+        async with db.get_session() as session:
+            for i in (1, 2, 3):
+                session.add(main.Event(id=i, title=f'Event {i}', description='', source_text='',
+                    date='2099-01-01', time='19:00', location_name='Hall'))
+            session.add(main.JobOutbox(event_id=2, task=main.JobTask.vk_sync, status=main.JobStatus.paused))
+            session.add(main.JobOutbox(event_id=3, task=main.JobTask.vk_sync, status=main.JobStatus.done))
+            await session.commit()
+        relations.graph_path(db).write_text(json.dumps({'related': {str(i): {'pure_related': []} for i in (1, 2, 3)}}))
+        await relations.enqueue_refresh(db)
+        assert queued == [3]  # No unsolicited publication and no resumed manual/provider pause.
     finally:
         await db.close()

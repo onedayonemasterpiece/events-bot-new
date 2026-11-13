@@ -167,6 +167,10 @@ async def enqueue_refresh(db):
     async with db.get_session() as session:
         events = (await session.execute(select(Event).where(
             Event.id.in_([int(i) for i in graph]), Event.vk_source_hash.is_(None),
+            Event.id.in_(select(JobOutbox.event_id).where(
+                JobOutbox.task == main.JobTask.vk_sync, JobOutbox.status == JobStatus.done,
+                JobOutbox.last_error.is_(None), JobOutbox.terminal_reason.is_(None),
+            )),
             Event.lifecycle_status == 'active', Event.silent.is_(False),
             Event.identity_status != 'merged',
         ))).scalars().all()
@@ -213,7 +217,7 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
             if pending:
                 return False
         await main.enqueue_job(db, event.id, main.JobTask.vk_calendar_comment,
-            payload={'post_url': post_url, 'relations': True},
+            payload={'post_url': post_url, 'relations': data},
             coalesce_key=key, requeue_done=True,
             next_run_at=datetime.fromtimestamp(max(publish_date, now) + random.randint(180, 1200), timezone.utc))
         return False
