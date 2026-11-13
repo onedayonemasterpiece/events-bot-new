@@ -213,10 +213,9 @@ HTML/Astro не запускаются, второй publisher или отдел
 многоточием и не перекрывает медальоны. В текстовом VK списке полное название
 сохраняется. Изменение renderer отражено в существующей версии VK format hash.
 
-После публикации postponed VK ID может измениться. Graph refresh перед
-постановкой VK задач применяет уже полученные public `postponed_id` через
-существующий `_recover_managed_vk_live_url`, чтобы peer links читали
-актуальные URL. Его результат — boolean, поэтому delayed comment всегда
+После публикации postponed VK ID может измениться. Существующий
+`_recover_managed_vk_live_url` сохраняет найденный public URL. Его результат —
+boolean, поэтому delayed comment всегда
 берёт обновлённый `Event.source_vk_post_url`, а не return value recovery.
 
 VK также может не вернуть `postponed_id`: это подтверждено живой public
