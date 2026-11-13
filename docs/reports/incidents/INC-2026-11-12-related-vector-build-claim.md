@@ -184,3 +184,20 @@ existing delay and without counting a failed attempt. Delete the graph-completio
 VK enqueue callback entirely: no catalogue scan, no unsolicited job creation,
 no resumed paused/completed job. Regression checks exercise pending -> ready ->
 done on one existing job, plus zero provider calls before readiness.
+
+
+## Terminal VK jobs resurrected by CAPTCHA recovery, November 13
+
+After the complete-initial-post release939, normal recovery resumed188 jobs
+at21:51UTC. A previously terminal failed job142439 then attempted to edit
+old post13322 and triggered CAPTCHA again. The pause query included terminal
+error rows, replacing their far-future due and diagnostic with the cohort
+marker; the resume query then changed them to pending. Three terminal failed
+VK jobs were present, including an explicitly stopped related backfill.
+The handler also incorrectly marked the temporary CAPTCHA pause as terminal
+failed. It now reserves terminal failure for a non-pause outcome. Both existing
+cohort queries preserve terminal rows by requiring a null terminal reason. A regression covers an existing terminal error, a terminal row already
+inside a paused cohort, and a normal initial publication; only the last resumes.
+No new queue, state, recovery path, provider request or CAPTCHA bypass is added.
+Fresh related JSON21:49UTC704anchors is verified; normal new-post/comment
+acceptance remains blocked by the real VK challenge.

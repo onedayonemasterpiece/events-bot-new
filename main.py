@@ -5604,6 +5604,7 @@ async def _resume_vk_captcha_outbox(
                 JobOutbox.task.in_(VK_JOB_TASKS),
                 JobOutbox.status == JobStatus.paused,
                 JobOutbox.last_error == marker,
+                JobOutbox.terminal_reason.is_(None),
             )
             .order_by(JobOutbox.id)
         )
@@ -5743,6 +5744,7 @@ async def vk_captcha_pause_outbox(
             update(JobOutbox)
             .where(
                 JobOutbox.task.in_(VK_JOB_TASKS),
+                JobOutbox.terminal_reason.is_(None),
                 JobOutbox.status.in_(
                     [JobStatus.pending, JobStatus.error, JobStatus.running]
                 ),
@@ -20710,7 +20712,7 @@ async def _run_due_jobs_once_locked(
                             ]
                             obj.next_run_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
                     else:
-                        if obj.terminal_reason != "outcome_unknown":
+                        if not pause and obj.terminal_reason != "outcome_unknown":
                             obj.terminal_reason = "failed"
                         obj.next_run_at = datetime.now(timezone.utc) + timedelta(days=3650)
                 session.add(obj)

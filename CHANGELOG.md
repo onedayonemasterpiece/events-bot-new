@@ -5,6 +5,8 @@
 - Fix Kaggle account migration to richss777 across runtime defaults and notebook metadata; stop duplicate pushes after invalid dataset-source responses.
 
 ## [Unreleased]
+- VK: CAPTCHA recovery preserves terminal publication failures instead of replaying old post edits.
+
 
 ### Fixed
 - New scheduled VK announcements again enqueue one calendar comment after public release plus 5–15 minutes. Calendar files are posted by the configured user, with paced upload/save/comment calls and persisted document/comment receipts; existing posts are not swept or edited for calendars.
