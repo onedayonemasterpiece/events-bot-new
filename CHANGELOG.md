@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Restore the mobile site SVG wordmark with its wide о in VK relation cards; reuse excursion-digest date tiles and row typography, and avoid marking fully fitted wrapped titles as truncated.
 - Upload related-event cards even when an event has no source poster; reject ambiguous live VK identity before the missing-post republish branch can create another duplicate.
 - Reuse the existing exact-title/date VK live-ID recovery on the already-fetched public frame when VK omits postponed_id, keeping recent published posts in related-card backfill.
 

@@ -379,7 +379,7 @@ def _wrap_by_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTyp
             break
         lines.append(current)
         current = word
-        consumed = idx
+        consumed = idx + 1
     if current and len(lines) < max_lines:
         lines.append(current)
     if len(lines) == max_lines and (truncated or consumed < len(words)):

@@ -7,7 +7,6 @@ from io import BytesIO
 import json
 import logging
 from pathlib import Path
-import textwrap
 
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
@@ -57,7 +56,7 @@ async def presentation(db, event):
         label = date.strftime('%d.%m') if date else row.date
         if date and end and end > date:
             label += '–' + end.strftime('%d.%m')
-        return {'id': row.id, 'date': label,
+        return {'id': row.id, 'date': label, 'date_iso': start, 'end_date_iso': end.isoformat() if end else '',
                 'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
                 'place': row.location_name or '', 'url': row.source_vk_post_url or '',
                 'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
@@ -79,52 +78,60 @@ def append_list(message, data):
 
 def render_card(items, *, schedule=False):
     from guide_excursions.hook_cards import _strip_emoji
-    from guide_excursions.hook_card_render import _wrap
-    image = Image.new('RGB', (1080, 1350), '#F7F5EF')
+    from guide_excursions.visual_digest import PALETTES, _draw_date_tile, _wrap_by_width
+    image = Image.new('RGBA', (1080, 1350), '#F7F5EF')
     draw = ImageDraw.Draw(image)
+    palette = PALETTES[0]
     draw.ellipse((-260, -300, 510, 360), fill='#E9EDE1')
     draw.ellipse((800, -300, 1400, 330), fill='#F2E3D8')
     def font(size, bold=False):
         return ImageFont.truetype(str(ROOT / 'assets/fonts' / ('Cygre-Bold.ttf' if bold else 'Cygre-SemiBold.ttf')), size)
     tag = Image.open(ROOT / 'site/public/assets/ui/mobile-head-skinny-leather-3x.webp').convert('RGBA')
     tag.thumbnail((288, 202))
-    image.paste(tag, (48, 0), tag)
-    for y, line, size in [(45, 'Полюбить', 30), (83, 'Калининград', 30), (126, 'АНОНСЫ', 25)]:
-        draw.text((73, y), line, font=font(size, True), fill='#FFF5E8')
-    heading = 'Другие даты' if schedule else 'Похожие события'
-    draw.text((48, 235), heading, font=font(64, True), fill='#24382D')
-    y = 350
-    for row in items:
-        draw.rounded_rectangle((48, y, 1032, y + 144), 20, fill='#E9EDE1')
-        draw.text((72, y + 16), f"{row['date']}  {row['time']}", font=font(32, True), fill='#315848')
+    image.alpha_composite(tag, (48, 0))
+    # Mobile Reference4 lockup at 2.4x, including its original wide-o SVG raster.
+    for y, line in [(80, 'ПОЛЮБИТЬ'), (100, 'КАЛИНИНГРАД')]:
+        x = 80
+        for char in line:
+            draw.text((x, y), char, font=font(18, True), fill='#FFFAF4')
+            x += draw.textlength(char, font=font(18, True)) + 1.35
+    wordmark = Image.open(ROOT / 'site/public/brand/announcements-wordmark-ui-white.png').convert('RGBA')
+    wordmark.thumbnail((230, 45))
+    image.alpha_composite(wordmark, (82, 128))
+    draw.text((48, 235), 'Другие даты' if schedule else 'Похожие события', font=font(64, True), fill=palette.text)
+    for i, row in enumerate(items):
+        accent = palette.accents[i % len(palette.accents)]
+        layer = Image.new('RGBA', (996, 174))
+        rd = ImageDraw.Draw(layer)
+        rd.rounded_rectangle((0, 0, 995, 173), 30, fill=palette.card, outline=palette.card_stroke)
+        rd.rounded_rectangle((0, 0, 10, 173), 5, fill=accent)
+        date_iso = row.get('date_iso', '')
+        _draw_date_tile(rd, {'date': date_iso, 'time': row['time']}, 174, accent, palette)
         medallions = list(row.get('medallions', []))
         if row.get('is_free'):
-            medallions = medallions[:1]
-            medallions.append('site/public/assets/badges/free-listing-medallion.png')
+            medallions = medallions[:1] + ['site/public/assets/badges/free-listing-medallion.png']
         medallions = medallions[:2]
         for index, asset in enumerate(medallions):
             medal = Image.open(ROOT / asset).convert('RGBA')
-            medal.thumbnail((112, 112))
-            image.paste(medal, (1008 - (len(medallions) - index) * 120, y + 16), medal)
-        label = row['place'] if schedule else row['title']
-        width = 924 - len(medallions) * 120
-        title_font = font(29)
-        lines = _wrap(draw, _strip_emoji(label).strip(), title_font, width)
-        if len(lines) > 2:
-            while draw.textlength(lines[1] + '…', font=title_font) > width:
-                lines[1] = lines[1][:-1]
-            lines[1] += '…'
-        for n, line in enumerate(lines[:2]):
-            draw.text((72, y + 48 + n * 30), line, font=title_font, fill='#24382D')
-        if row.get('place') and not schedule:
-            draw.text((72, y + 111), textwrap.shorten(row['place'], width=max(24, width // 15), placeholder='…'),
-                      font=font(24), fill='#315848')
-        y += 156
+            medal.thumbnail((100, 100))
+            layer.alpha_composite(medal, (974 - (len(medallions) - index) * 108, 36))
+        width = 738 - len(medallions) * 108
+        title = _strip_emoji(row['title']).strip()
+        for n, line in enumerate(_wrap_by_width(rd, title, font(32, True), width, 2)):
+            rd.text((238, 24 + n * 34), line, font=font(32, True), fill=palette.text)
+        details = row.get('place', '')
+        if '–' in row['date']:
+            details = row['date'] + (' · ' + details if details else '')
+        for n, line in enumerate(_wrap_by_width(rd, details, font(23), width, 2)):
+            rd.text((238, 102 + n * 26), line, font=font(23), fill=palette.route)
+        height = 148 if len(items) > 5 else 174
+        if height != 174:
+            layer = layer.resize((996, height), Image.Resampling.LANCZOS)
+        image.alpha_composite(layer, (42, 314 + i * (height + 12)))
     if not schedule:
-        draw.text((48, 1210), 'Ссылки на события', font=font(38, True), fill='#315848')
-        draw.text((48, 1264), 'в комментарии ↓', font=font(38, True), fill='#315848')
+        draw.text((58, 1290), 'Ссылки на события — в комментарии ↓', font=font(30, True), fill=palette.text)
     out = BytesIO()
-    image.save(out, 'PNG')
+    image.convert('RGB').save(out, 'PNG')
     return out.getvalue()
 
 

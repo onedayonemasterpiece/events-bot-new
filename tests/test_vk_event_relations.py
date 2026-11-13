@@ -121,14 +121,16 @@ def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monk
         seen.append((xy, text, kwargs.get('font')))
         return original(self, xy, text, *args, **kwargs)
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', record)
-    body = relations.render_card([{'date': '20.11', 'time': '19:00', 'title': '🎭 ' + 'Длинное название концерта ' * 12,
+    body = relations.render_card([{'date': '20.11', 'date_iso': '2026-11-20', 'time': '19:00', 'title': '🎭 ' + 'Длинное название концерта ' * 12,
         'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}])
     assert Image.open(BytesIO(body)).size == (1080, 1350)
     assert all('🎭' not in text for _, text, _ in seen)
-    title_lines = [(text, font) for xy, text, font in seen if xy[1] in (398, 428)]
+    assert any(text == 'НОЯБРЯ' for _, text, _ in seen)
+    assert any(text == 'пт · 19:00' for _, text, _ in seen)
+    title_lines = [(text, font) for xy, text, font in seen if xy[0] == 238 and xy[1] in (24, 58)]
     assert title_lines[-1][0].endswith('…')
     draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
-    assert all(draw.textlength(text, font=font) <= 684 for text, font in title_lines)
+    assert all(draw.textlength(text, font=font) <= 522 for text, font in title_lines)
 
 
 @pytest.mark.asyncio
