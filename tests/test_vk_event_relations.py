@@ -54,21 +54,20 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         async def enqueue(db, eid, task, **kwargs):
             queued.append((eid, task, kwargs))
         monkeypatch.setattr(main, 'enqueue_job', enqueue)
-        async def postponed(*args):
-            return [{'id': 1}]
-        async def public(method, params, *args, **kwargs):
-            if method == 'wall.getById':
-                return await visible(method, params, *args, **kwargs)
-            async with db.get_session() as session:
-                peer = await session.get(main.Event, 2)
-            return {'response': {'items': [{'id': 20, 'text': '\n'.join(main.build_vk_source_header(peer, None))}]}}
-        monkeypatch.setattr(main, '_fetch_vk_postponed_items_for_owner', postponed)
-        monkeypatch.setattr(main, '_vk_api', public)
+        async with db.get_session() as session:
+            # Previously created posts stay unchanged when a new graph arrives.
+            for i in (1, 2, 3):
+                row = await session.get(main.Event, i)
+                row.vk_source_hash = 'published'
+            await session.commit()
+        path.write_text(json.dumps({'related': {'1': {'pure_related': [2, 3]}, '4': {'pure_related': []}}}))
+        async def forbidden(*args, **kwargs):
+            raise AssertionError('Graph completion must not read or rewrite existing VK posts')
+        monkeypatch.setattr(main, '_vk_api', forbidden)
         await relations.enqueue_refresh(db)
-        assert {eid for eid, _, _ in queued} == {1, 2}
-        refreshed = await relations.presentation(db, event)
-        assert refreshed['related'][0]['url'] == 'https://vk.com/wall-1_20'
-        assert any(eid == 1 and task == main.JobTask.vk_sync and kw['requeue_done'] for eid, task, kw in queued)
+        assert [(eid, task) for eid, task, _ in queued] == [(4, main.JobTask.vk_sync)]
+        assert queued[0][2]['requeue_done']
+        monkeypatch.setattr(main, '_vk_api', visible)
         old_data = json.dumps(data, sort_keys=True)
         path.write_text(json.dumps({'related': {'1': {'pure_related': [4]}}}))
         updated = await relations.presentation(db, event)
