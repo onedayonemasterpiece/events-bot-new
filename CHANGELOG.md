@@ -7,6 +7,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Restore the mobile site SVG wordmark with its wide о in VK relation cards; reuse excursion-digest date tiles and row typography, and avoid marking fully fitted wrapped titles as truncated.
+- Omit related content for posts without source images. Queue recommendation comments 3–20 minutes after publication through the existing sequential calendar-comment worker. Reject ambiguous live VK identity before the missing-post republish branch can create another duplicate.
 - Reuse the existing exact-title/date VK live-ID recovery on the already-fetched public frame when VK omits postponed_id, keeping recent published posts in related-card backfill.
 
 - Related-only compute, ready VK sync and media blocking initial VK use their existing due times within one foreground lane, so repeated media or calculation cannot starve ready carousels.
