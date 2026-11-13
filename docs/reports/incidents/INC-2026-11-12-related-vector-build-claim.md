@@ -165,3 +165,14 @@ initial image-bearing publication waits for its anchor in the shared graph.
 Existing vector completion schedules related computation, and related completion
 wakes the same VK job. No new retry, persisted state, queue or publisher.
 Canonical event correction remains separate from graph-only fanout.
+
+One-time carousel/comment consistency: delayed comment previously called fresh
+presentation after the random wait, so a newer graph could change the selection
+relative to the already-created carousel. Carry the original presentation in
+the existing JobOutbox relations payload. The same sole writer and VK guid
+remain; old boolean payloads retain their existing read behavior.
+
+Initial wakeup is scoped to an already-requested, completed VK job with no
+error/terminal restriction. Graph membership alone must not request publication
+of another catalogued event or resume a paused job. Reuse existing outbox state;
+no new wait flag or publisher is added.
