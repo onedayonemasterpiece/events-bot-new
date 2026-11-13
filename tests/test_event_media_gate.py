@@ -2439,6 +2439,7 @@ async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monke
         pair = (await session.execute(select(EventMediaPairReview).where(
             EventMediaPairReview.event_id == eid))).scalar_one()
         pair.attempts = previous_attempts
+        pair.next_run_at = now  # Due in the same fixed clock used by the worker.
         session.add(pair)
         # Match the real outbox invocation: the current media job is leased.
         for job in (await session.execute(select(JobOutbox).where(JobOutbox.event_id == eid))).scalars():
