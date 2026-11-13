@@ -830,3 +830,11 @@ HTML candidate. That site-only check can reject the complete vector snapshot
 on the full exported Search catalog even though no Search UI is published.
 The immutable projection, complete vector coverage/model hashes and related
 retrieval checks still apply; production-candidate keeps the Search gate.
+
+Related-only foreground queue order uses the already-stored due time for global
+vector/related work, ready VK sync and media needed by an initial VK post.
+Repeated media or a new calculation cannot jump ahead of an older ready
+carousel; an older ready calculation likewise progresses during imports.
+Existing fresh Telegram/confirmed public repair lanes keep their precedence,
+ordinary media/backfill retain their own ordering, and dependency/rate/CAPTCHA
+checks are unchanged. Website-profile ordering is unchanged.

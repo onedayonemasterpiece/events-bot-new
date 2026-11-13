@@ -7,6 +7,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Reuse the existing exact-title/date VK live-ID recovery on the already-fetched public frame when VK omits postponed_id, keeping recent published posts in related-card backfill.
+
+- Related-only compute, ready VK sync and media blocking initial VK use their existing due times within one foreground lane, so repeated media or calculation cannot starve ready carousels.
+
 - Related comments use the persisted live VK URL after postponed-ID recovery, and graph refresh reconciles the already-fetched public aliases before rendering peer links.
 
 - Skip secret-website authorized-Search qualification for related-only calculation; retain immutable projection, full vector coverage and all website-profile checks.

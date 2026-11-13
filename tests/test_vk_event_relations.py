@@ -18,7 +18,9 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         async with db.get_session() as session:
             for i in range(1, 5):
                 session.add(main.Event(id=i, title=f'Концерт {i}', description='', source_text='',
-                    date='2099-01-01', time='19:00', location_name='Кафедральный собор',
+                    date='2099-01-01..2099-01-03' if i == 4 else '2099-01-01',
+                    end_date='2099-01-03' if i == 4 else None, time='00:00' if i == 4 else '19:00',
+                    time_is_default=i == 4, location_name='Кафедральный собор',
                     source_vk_post_url=f'https://vk.com/wall-1_{i}', is_free=i == 2,
                     linked_event_ids=[3] if i == 1 else [], photo_urls=['poster-a', 'poster-b']))
             await session.commit()
@@ -49,7 +51,9 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         async def postponed(*args):
             return [{'id': 1}]
         async def public(*args, **kwargs):
-            return {'response': {'items': [{'id': 20, 'postponed_id': 2}]}}
+            async with db.get_session() as session:
+                peer = await session.get(main.Event, 2)
+            return {'response': {'items': [{'id': 20, 'text': '\n'.join(main.build_vk_source_header(peer, None))}]}}
         monkeypatch.setattr(main, '_fetch_vk_postponed_items_for_owner', postponed)
         monkeypatch.setattr(main, '_vk_api', public)
         await relations.enqueue_refresh(db)
@@ -59,7 +63,10 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         assert any(eid == 1 and task == main.JobTask.vk_sync and kw['requeue_done'] for eid, task, kw in queued)
         old_data = json.dumps(data, sort_keys=True)
         path.write_text(json.dumps({'related': {'1': {'pure_related': [4]}}}))
-        assert json.dumps(await relations.presentation(db, event), sort_keys=True) != old_data
+        updated = await relations.presentation(db, event)
+        assert json.dumps(updated, sort_keys=True) != old_data
+        assert updated['related'][0]['date'] == '01.01–03.01'
+        assert updated['related'][0]['time'] == ''
         assert 'https://' not in relations.append_list('body', data)
         assert event.photo_urls == ['poster-a', 'poster-b']
         assert await relations.cards(data, 0) == []

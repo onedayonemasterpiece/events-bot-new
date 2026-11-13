@@ -4184,6 +4184,7 @@ async def _find_unique_live_managed_vk_item_for_event(
     owner_id: int,
     db: Database | None,
     bot: Bot | None,
+    candidate_items: list[dict] | None = None,
 ) -> dict | None:
     """Recover a live wall item whose postponed id changed on publication.
 
@@ -4216,12 +4217,12 @@ async def _find_unique_live_managed_vk_item_for_event(
             time_part = "" if getattr(event, "time_is_default", False) else str(event.time or "").strip()
             legacy_dates.add(f"\U0001f4c5 {format_day_pretty(start)}{(' ' + time_part) if time_part else ''}")
 
-    actors = _vk_wall_get_actors(owner_id)
+    actors = _vk_wall_get_actors(owner_id) if candidate_items is None else [None]
     for actor in actors:
-        token = actor.token if actor.kind == "group" else VK_USER_TOKEN
-        items: list[dict] = []
+        items: list[dict] = list(candidate_items or [])
         actor_failed = False
-        for offset in (0, 100, 200):
+        for offset in (() if candidate_items is not None else (0, 100, 200)):
+            token = actor.token if actor.kind == "group" else VK_USER_TOKEN
             try:
                 response = await _vk_api(
                     "wall.get",

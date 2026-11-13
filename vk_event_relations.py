@@ -51,9 +51,14 @@ async def presentation(db, event):
             break
     from tg_graphic_medallions import resolve_event_graphic_medallions
     def item(row):
-        date = main.parse_iso_date(row.date)
-        return {'id': row.id, 'date': date.strftime('%d.%m') if date else row.date,
-                'time': row.time or '', 'title': row.title,
+        start, _, span_end = row.date.partition('..')
+        date = main.parse_iso_date(start)
+        end = main.parse_iso_date(span_end or (row.end_date if not row.end_date_is_inferred else '') or '')
+        label = date.strftime('%d.%m') if date else row.date
+        if date and end and end > date:
+            label += '–' + end.strftime('%d.%m')
+        return {'id': row.id, 'date': label,
+                'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
                 'place': row.location_name or '', 'url': row.source_vk_post_url or '',
                 'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
                                for m in resolve_event_graphic_medallions(row, limit=2)],
@@ -155,9 +160,13 @@ async def enqueue_refresh(db):
                 or main._event_start_has_passed_for_publication(event)):
             continue
         ids = main._vk_owner_and_post_id(event.source_vk_post_url)
-        if int(ids[1]) not in target_ids:
+        item = public_by_old_id.get(int(ids[1]))
+        if item is None and int(ids[1]) not in target_ids:
+            item = await main._find_unique_live_managed_vk_item_for_event(
+                event, owner_id=owner, db=db, bot=None, candidate_items=main._vk_postponed_items(public))
+        if int(ids[1]) not in target_ids and item is None:
             continue
-        if item := public_by_old_id.get(int(ids[1])):
+        if item:
             await main._recover_managed_vk_live_url(db, event, bot=None, candidate_item=item)
         targets.append(event)
     for event in targets:

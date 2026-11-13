@@ -19842,8 +19842,8 @@ async def _run_due_jobs_once_locked(
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
         JobTask.interest_club_relation: 2,
-        JobTask.event_vector_sync: -3 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 2,
-        JobTask.static_site_build: -3 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 3,
+        JobTask.event_vector_sync: 2,
+        JobTask.static_site_build: 3,
         JobTask.event_age_bge_assessment: 4,
     }
     tg_event_added_at: dict[int, datetime | None] = {}
@@ -19913,6 +19913,9 @@ async def _run_due_jobs_once_locked(
 
     def _job_due_sort_key(j: JobOutbox) -> tuple[int, int, int, int]:
         task_priority = priority.get(j.task, 99)
+        related_only = os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
+        if related_only and j.task in {JobTask.vk_sync, JobTask.event_vector_sync, JobTask.static_site_build}:
+            return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if j.task == JobTask.event_media_review and j.event_id is not None:
             event_id = int(j.event_id)
             event_date, lifecycle, silent = media_review_event.get(event_id, ("", "", True))
@@ -19922,6 +19925,8 @@ async def _run_due_jobs_once_locked(
             # date; old events cannot exhaust the daily model budget first.
             date_rank = int(event_date.replace("-", "")) if len(event_date) == 10 and event_date.replace("-", "").isdigit() else 99999999
             if eligible and event_id in blocked_media_event_ids:
+                if related_only:
+                    return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
                 return (-3, 0, date_rank, j.id)
             if eligible:
                 return (task_priority, 0, date_rank, j.id)
