@@ -51,9 +51,14 @@ async def presentation(db, event):
             break
     from tg_graphic_medallions import resolve_event_graphic_medallions
     def item(row):
-        date = main.parse_iso_date(row.date)
-        return {'id': row.id, 'date': date.strftime('%d.%m') if date else row.date,
-                'time': row.time or '', 'title': row.title,
+        start, _, span_end = row.date.partition('..')
+        date = main.parse_iso_date(start)
+        end = main.parse_iso_date(span_end or (row.end_date if not row.end_date_is_inferred else '') or '')
+        label = date.strftime('%d.%m') if date else row.date
+        if date and end and end > date:
+            label += '–' + end.strftime('%d.%m')
+        return {'id': row.id, 'date': label,
+                'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
                 'place': row.location_name or '', 'url': row.source_vk_post_url or '',
                 'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
                                for m in resolve_event_graphic_medallions(row, limit=2)],
