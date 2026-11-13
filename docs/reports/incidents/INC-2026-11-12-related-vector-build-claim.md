@@ -88,3 +88,72 @@ independent-task set and their explicit snapshot/barrier contracts, not the
 owner Event's unrelated media FIFO. Related-only computation receives VK peer
 priority; no second operator vector writer is introduced. Live JSON remains
 required before closure.
+
+
+### 13 November: live VK consumer acceptance
+
+Calculation repeatedly succeeds in the existing related-only shared Kaggle kernel.
+Production cea78b3e2 yields fresh JSON (15:59 UTC), ordinary vector and build jobs
+complete. Public14271/14286 have uploaded readable branded similar-event cards,
+body lists and one link comment;14226 has a separate other-date card. Postponed
+14176 retains two original photos plus a recommendation card. On16:05 UTC all9
+postponed items had related lists,8 had images;10790/13973 had no source photos
+and exposed a card-upload condition that wrongly required a source poster.
+
+A second mechanical defect was exposed by repeated graph refresh:10936 moved
+from postponed14282 to public, but exact-title/date recovery found pre-existing
+multiple matches and returned the same value as confirmed absence. The normal
+missing-post branch then published again (logs14:40,14:57,15:12 UTC). Ambiguity
+must reject the current sync through the existing job error path, never enter
+republish. Prefetched refresh must still omit that item and process unrelated
+posts. No semantic matching or arbitrary selection is introduced.
+
+Mandatory distinguishing checks: no-source relation card is uploaded; ambiguous
+live network lookup raises before republish; prefetched ambiguity skips only the
+ambiguous event. Preserve source-gallery/card ordering and one-comment replay.
+Live closure pending merged release,13973 card readback and10936 canonical-ID
+reconciliation without another post. Existing public duplicates are not deleted
+by this change. Six-hour Crew configuration needed inclusion in the existing
+service allowlist; corrected without adding a timer or service. Wake delivery
+was delayed by host ENOSPC and native dispatch; it is not a punctuality proof.
+
+
+Owner visual correction: use the mobile Reference4 SVG wordmark with its wide
+о, rasterized transparently for Pillow without a new runtime dependency. Reuse
+the approved excursion digest date tile and row typography, retaining exact ISO
+dates for weekdays and explicit date spans. Visual preview retained centrally;
+20 VK/guide renderer and consumer checks pass. The shared text-wrap consumption
+counter is corrected to avoid ellipsis on fully fitted two-line titles.
+
+CI blocker evidence: the first PR933 head passed python, guide and static browser
+jobs, but identity failed eight media retry tests with normal-pool limiter
+unavailable. An isolated clean worktree at exact production/main cea78b3e2
+reproduced the same eight failures (6.78s); these tests and event_media.py are
+unchanged by this PR. Evidence: retained ci-base-media-proof.log in the canonical
+similar-events task directory. This is not a green identity suite. Use the
+release-governance explicit local fallback if the final current-head job repeats
+these exact baseline failures; do not disable or alter unrelated media policy.
+
+
+Superseded by direct owner clarification on13 November: a post with no source
+image must have no related content. The proposed standalone-card behavior above
+is withdrawn. Suppress presentation for such events and remove stale related
+text/comment through the normal consumer. Recommendation comments are queued
+with one persisted random due time3–20 minutes after actual publication (or
+scheduling time for an already-public backfill). Only the existing sequential
+vk_calendar_comment handler may send them; it also handles calendar comments,
+so comments to different posts cannot race through separate writers. Normal
+sync retains a pending comment due time instead of resampling on every refresh.
+
+Public peer regression on13 November: masterclass14271 linked five peers, but
+service wall.getById exposed only14151 and14000;14170 was still postponed.
+A stored VK URL is not proof of publication. Presentation now uses the existing
+public batch read before selecting up to five peers. Canonical other dates and
+source galleries stay intact; a provider read error uses the existing job retry.
+No new queue, cache, writer or recommendation algorithm is introduced.
+
+Owner clarification13 November: do not edit comments, minimizing CAPTCHA risk.
+This supersedes editable recommendation comments. Reuse the existing receipt
+to skip already-sent comments; recover a lost receipt by public text identity
+without editing or creating a duplicate. Empty recommendations do not delete
+an existing comment. New comments retain their random delayed, sequential path.

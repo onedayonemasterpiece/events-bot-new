@@ -8,6 +8,12 @@
 
 ### Fixed
 - New scheduled VK announcements again enqueue one calendar comment after public release plus 5–15 minutes. Calendar files are posted by the configured user, with paced upload/save/comment calls and persisted document/comment receipts; existing posts are not swept or edited for calendars.
+- Keep already-sent VK recommendation comments untouched: no comment edits or deletions, including after graph refresh or lost-receipt recovery.
+- Exclude unpublished or unavailable VK peers from recommendation cards and comments using the existing public batch read; retain separate canonical other-date schedules.
+- Link each recommendation title directly in the VK comment while keeping its date/time as plain text and omitting separate URL lines.
+- Give due VK calendar/recommendation comments the existing related-only due-time lane so ongoing media and computation cannot starve the sole sequential comment worker.
+- Restore the mobile site SVG wordmark with its wide о in VK relation cards; reuse excursion-digest date tiles and row typography, and avoid marking fully fitted wrapped titles as truncated.
+- Omit related content for posts without source images. Queue recommendation comments 3–20 minutes after publication through the existing sequential calendar-comment worker. Reject ambiguous live VK identity before the missing-post republish branch can create another duplicate.
 - Reuse the existing exact-title/date VK live-ID recovery on the already-fetched public frame when VK omits postponed_id, keeping recent published posts in related-card backfill.
 
 - Related-only compute, ready VK sync and media blocking initial VK use their existing due times within one foreground lane, so repeated media or calculation cannot starve ready carousels.

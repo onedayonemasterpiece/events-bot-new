@@ -4287,6 +4287,8 @@ async def _find_unique_live_managed_vk_item_for_event(
                 expected_title,
                 expected_date,
             )
+            if candidate_items is None:
+                raise RuntimeError("vk_live_id_ambiguous")
             return None
         # A successful authenticated wall read is authoritative for this
         # bounded window; trying a lower-priority actor adds no useful signal.
