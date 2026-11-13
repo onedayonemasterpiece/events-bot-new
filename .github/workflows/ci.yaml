@@ -243,6 +243,8 @@ jobs:
           tests/test_static_site_build_debounce.py
           tests/test_static_site_build_handoff.py
           tests/test_related_only_kaggle.py
+          tests/test_vk_event_relations.py
+          tests/test_job_worker_fresh_selection.py
           tests/test_static_site_auth_session_broker.py
           tests/test_static_site_auth_session_broker_http.py
           tests/test_static_site_auth_session_broker_sql.py
