@@ -157,3 +157,11 @@ This supersedes editable recommendation comments. Reuse the existing receipt
 to skip already-sent comments; recover a lost receipt by public text identity
 without editing or creating a duplicate. Empty recommendations do not delete
 an existing comment. New comments retain their random delayed, sequential path.
+
+Owner correction13 November: repeated post edits are a design failure.
+Root: related completion replayed bounded backfill on every graph refresh.
+Remove that producer loop. Reuse vk_source_hash to wake only uncreated posts;
+initial image-bearing publication waits for its anchor in the shared graph.
+Existing vector completion schedules related computation, and related completion
+wakes the same VK job. No new retry, persisted state, queue or publisher.
+Canonical event correction remains separate from graph-only fanout.
