@@ -83,7 +83,7 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
 
 
 @pytest.mark.asyncio
-async def test_comment_replay_edits_one_comment_and_defers_postponed(tmp_path, monkeypatch):
+async def test_comment_is_created_once_never_edited_and_defers_postponed(tmp_path, monkeypatch):
     db = main.Database(str(tmp_path / 'db.sqlite'))
     await db.init()
     calls, deferred = [], []
@@ -93,7 +93,7 @@ async def test_comment_replay_edits_one_comment_and_defers_postponed(tmp_path, m
         if method == 'wall.getById':
             return {'response': [{'id': 10, 'date': 4070908800 if postponed else 1, 'text': 'body\nПОХОЖИЕ СОБЫТИЯ\nКонцерт'}]}
         if method == 'wall.getComments':
-            return {'response': {'items': []}}
+            return {'response': {'items': [{'id': 101, 'from_id': -1, 'text': 'ПОХОЖИЕ СОБЫТИЯ\nOld text'}] if params['post_id'] == 12 else []}}
         if method == 'wall.createComment':
             return {'response': {'comment_id': 100}}
         return {'response': 1}
@@ -111,10 +111,16 @@ async def test_comment_replay_edits_one_comment_and_defers_postponed(tmp_path, m
         created = next(params for method, params in calls if method == 'wall.createComment')
         assert created['message'] == 'ПОХОЖИЕ СОБЫТИЯ\n\n14.11 19:00 [https://vk.com/wall-1_2|Концерт]'
         data['related'][0]['time'] = '20:00'
-        assert await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
-        assert calls[-1][0] == 'wall.editComment'
+        calls_before = len(calls)
+        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', data, deferred=True)
+        assert len(calls) == calls_before
         assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_10', {'related': [], 'dates': []}, deferred=True)
-        assert calls[-1][0] == 'wall.deleteComment'
+        assert len(calls) == calls_before
+        assert all(method not in {'wall.editComment', 'wall.deleteComment'} for method, _ in calls)
+        # Recover a lost receipt without editing or duplicating the existing comment.
+        assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_12', data, deferred=True)
+        assert sum(method == 'wall.createComment' for method, _ in calls) == 1
+        assert all(method not in {'wall.editComment', 'wall.deleteComment'} for method, _ in calls)
         postponed = True
         assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_11', data)
         assert deferred[-1]['payload']['relations'] is True

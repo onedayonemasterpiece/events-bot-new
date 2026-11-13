@@ -151,3 +151,9 @@ A stored VK URL is not proof of publication. Presentation now uses the existing
 public batch read before selecting up to five peers. Canonical other dates and
 source galleries stay intact; a provider read error uses the existing job retry.
 No new queue, cache, writer or recommendation algorithm is introduced.
+
+Owner clarification13 November: do not edit comments, minimizing CAPTCHA risk.
+This supersedes editable recommendation comments. Reuse the existing receipt
+to skip already-sent comments; recover a lost receipt by public text identity
+without editing or creating a duplicate. Empty recommendations do not delete
+an existing comment. New comments retain their random delayed, sequential path.
