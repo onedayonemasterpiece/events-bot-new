@@ -27,6 +27,12 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
             event = await session.get(main.Event, 1)
         path = relations.graph_path(db)
         path.write_text(json.dumps({'related': {'1': {'similar': [2, 3, 4], 'pure_related': [2, 3]}}}))
+        async def visible(method, params, *args, **kwargs):
+            assert method == 'wall.getById'
+            assert kwargs['token_kind'] == 'service'
+            return {'response': [{'owner_id': int(ids.split('_')[0]), 'id': int(ids.split('_')[1]),
+                'post_type': 'post'} for ids in params['posts'].split(',')]}
+        monkeypatch.setattr(main, '_vk_api', visible)
         data = await relations.presentation(db, event)
         assert [r['id'] for r in data['related']] == [2]
         assert [r['id'] for r in data['dates']] == [3]
@@ -50,7 +56,9 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         monkeypatch.setattr(main, 'enqueue_job', enqueue)
         async def postponed(*args):
             return [{'id': 1}]
-        async def public(*args, **kwargs):
+        async def public(method, params, *args, **kwargs):
+            if method == 'wall.getById':
+                return await visible(method, params, *args, **kwargs)
             async with db.get_session() as session:
                 peer = await session.get(main.Event, 2)
             return {'response': {'items': [{'id': 20, 'text': '\n'.join(main.build_vk_source_header(peer, None))}]}}
@@ -222,5 +230,42 @@ async def test_normal_sync_schedules_one_random_delayed_comment(tmp_path, monkey
             jobs = (await session.execute(relations.select(main.JobOutbox).where(
                 main.JobOutbox.coalesce_key == 'vk_related_comment:-1:10'))).scalars().all()
             assert len(jobs) == 1 and jobs[0].next_run_at == first_due
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_related_peers_must_be_public_but_other_dates_need_no_post(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / 'public-peers.sqlite'))
+    await db.init()
+    async def public(method, params, *args, **kwargs):
+        assert method == 'wall.getById'
+        assert kwargs['token_kind'] == 'service' and kwargs['skip_captcha']
+        # The first peer is still postponed; the next one is public.
+        # An ID from another wall must not make the third peer visible.
+        return {'response': [
+            {'owner_id': -1, 'id': 2, 'post_type': 'postpone'},
+            {'owner_id': -1, 'id': 3, 'post_type': 'post'},
+            {'owner_id': -2, 'id': 4, 'post_type': 'post'}]}
+    monkeypatch.setattr(main, '_vk_api', public)
+    try:
+        async with db.get_session() as session:
+            for i in range(1, 6):
+                session.add(main.Event(id=i, title=f'Концерт {i}', description='', source_text='',
+                    date='2099-01-01', time='19:00', location_name='Зал',
+                    source_vk_post_url=f'https://vk.com/wall-1_{i}' if i != 5 else None,
+                    linked_event_ids=[5] if i == 1 else [], photo_urls=['original']))
+            await session.commit()
+            event = await session.get(main.Event, 1)
+        relations.graph_path(db).write_text(json.dumps({'related': {'1': {'pure_related': [2, 3, 4]}}}))
+        data = await relations.presentation(db, event)
+        assert [row['id'] for row in data['related']] == [3]
+        assert [row['id'] for row in data['dates']] == [5]
+        assert event.photo_urls == ['original']
+        async def failed(*args, **kwargs):
+            return {'error': {'error_code': 6}}
+        monkeypatch.setattr(main, '_vk_api', failed)
+        with pytest.raises(RuntimeError, match='vk_related_public_read_failed'):
+            await relations.presentation(db, event)
     finally:
         await db.close()

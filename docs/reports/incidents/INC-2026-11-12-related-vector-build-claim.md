@@ -144,3 +144,10 @@ scheduling time for an already-public backfill). Only the existing sequential
 vk_calendar_comment handler may send them; it also handles calendar comments,
 so comments to different posts cannot race through separate writers. Normal
 sync retains a pending comment due time instead of resampling on every refresh.
+
+Public peer regression on13 November: masterclass14271 linked five peers, but
+service wall.getById exposed only14151 and14000;14170 was still postponed.
+A stored VK URL is not proof of publication. Presentation now uses the existing
+public batch read before selecting up to five peers. Canonical other dates and
+source galleries stay intact; a provider read error uses the existing job retry.
+No new queue, cache, writer or recommendation algorithm is introduced.

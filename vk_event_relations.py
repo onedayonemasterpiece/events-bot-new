@@ -42,10 +42,24 @@ async def presentation(db, event):
             and not main._event_start_has_passed_for_publication(row)}
     dates = sorted((rows[i] for i in linked_ids if i in rows),
                    key=lambda row: (row.date, row.time or '', row.id))
+    peer_ids = {row.id: main._vk_owner_and_post_id(row.source_vk_post_url or '')
+                for row in rows.values() if row.id in similar_ids and row.id not in linked_ids}
+    posts = ','.join('_'.join(ids) for ids in peer_ids.values() if ids)
+    public_ids = set()
+    if posts:
+        response = await main._vk_api('wall.getById', {'posts': posts}, db, None,
+            token=main.VK_SERVICE_TOKEN, token_kind='service', skip_captcha=True)
+        if response.get('error'):
+            raise RuntimeError('vk_related_public_read_failed')
+        public_ids = {(str(row['owner_id']), str(row['id']))
+                      for row in main._vk_wall_get_by_id_items(response)
+                      if row.get('post_type') == 'post' and not row.get('is_deleted')}
+        logging.info('vk_related_public_peers event_id=%s candidates=%s visible=%s',
+                     event.id, len(peer_ids), len(public_ids))
     related, seen_urls = [], {event.source_vk_post_url}
     for i in similar_ids:
         row = rows.get(i)
-        if not row or i in linked_ids or not row.source_vk_post_url or row.source_vk_post_url in seen_urls:
+        if not row or peer_ids.get(i) not in public_ids or row.source_vk_post_url in seen_urls:
             continue
         seen_urls.add(row.source_vk_post_url)
         related.append(row)

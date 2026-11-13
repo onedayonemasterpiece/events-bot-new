@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Exclude unpublished or unavailable VK peers from recommendation cards and comments using the existing public batch read; retain separate canonical other-date schedules.
 - Link each recommendation title directly in the VK comment while keeping its date/time as plain text and omitting separate URL lines.
 - Give due VK calendar/recommendation comments the existing related-only due-time lane so ongoing media and computation cannot starve the sole sequential comment worker.
 - Restore the mobile site SVG wordmark with its wide о in VK relation cards; reuse excursion-digest date tiles and row typography, and avoid marking fully fitted wrapped titles as truncated.
