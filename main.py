@@ -16362,7 +16362,7 @@ def _event_start_has_passed_for_publication(
     return start_dt <= local_now
 
 
-VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v4-city-location-and-exact-text-dedupe"
+VK_SOURCE_POST_FORMAT_VERSION = "vk-source-post-v5-related-cards-cygre-fit"
 
 
 def _tg_event_publish_window_hours() -> tuple[int, int]:

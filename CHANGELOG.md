@@ -7,6 +7,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Related VK cards omit unsupported decorative emoji and wrap titles by Cygre pixel width, keeping names clear of medallions and marking shortened titles with an ellipsis.
+
 - Limit automatic related-card refresh to existing postponed posts and the ten latest public posts; post links only after VK exposes the matching related list.
 
 - Related-only computation keeps its earliest coalesced run instead of restarting a quiet window on every import, and shares priority with media blocking an initial publication.
