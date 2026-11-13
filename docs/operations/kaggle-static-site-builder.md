@@ -816,3 +816,11 @@ spills to another key for `rpd`, `no_keys`, unknown admission, or a wait outside
 that bound. This avoids restarting an otherwise healthy projection every ten
 minutes at the next minute-bucket boundary while preserving fail-closed quota
 accounting.
+
+### Related-only queue progress during imports
+
+Related-only vector and graph jobs keep their earliest coalesced due time.
+A later Smart Update merges its facts without moving a ready snapshot back
+into a trailing quiet window. Both share priority with media needed by an
+initial VK post; they retain existing snapshot and single-flight contracts.
+Website profiles keep their fifteen-minute quiet window unchanged.

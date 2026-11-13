@@ -132,3 +132,33 @@ async def test_related_completion_releases_claim_without_site_success(tmp_path, 
     ) is True
     with sqlite3.connect(db_path) as c:
         assert c.execute('select active_job_id,last_success_at from static_site_build_state').fetchone() == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_import_stream_does_not_postpone_ready_related_compute(tmp_path, monkeypatch):
+    import main
+    from datetime import datetime, timedelta, timezone
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    db = main.Database(str(tmp_path / 'queue.sqlite'))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            event = main.Event(title='Event', description='', source_text='', date='2099-01-01', time='19:00', location_name='Venue')
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+        due = datetime.now(timezone.utc) + timedelta(seconds=30)
+        for offset in [0, 20, 40]:
+            await main.enqueue_job(db, event.id, main.JobTask.event_vector_sync,
+                coalesce_key='event_vector_sync:prod', next_run_at=due + timedelta(seconds=offset))
+        with sqlite3.connect(db.path) as c:
+            actual = datetime.fromisoformat(c.execute("select next_run_at from joboutbox where task='event_vector_sync'").fetchone()[0]).replace(tzinfo=timezone.utc)
+        assert actual == due
+        await main.enqueue_static_site_build_request(db, reason='vector_projection_ready', event_ids=[event.id])
+        with sqlite3.connect(db.path) as c:
+            before = c.execute("select next_run_at from joboutbox where task='static_site_build'").fetchone()[0]
+        await main.enqueue_static_site_build_request(db, reason='next_import', event_ids=[event.id], delay_seconds=900, trigger='smart_update')
+        with sqlite3.connect(db.path) as c:
+            assert c.execute("select next_run_at from joboutbox where task='static_site_build'").fetchone()[0] == before
+    finally:
+        await db.close()

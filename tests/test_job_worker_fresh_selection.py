@@ -290,6 +290,8 @@ async def test_related_compute_is_not_starved_by_media_stream(tmp_path, monkeypa
         event = main.Event(title='Event', description='', source_text='', date='2099-01-01', time='19:00', location_name='Venue')
         session.add(event)
         await session.flush()
+        session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync,
+                                  depends_on=f'event_media_review:{event.id}', next_run_at=now - timedelta(seconds=1)))
         for task in (main.JobTask.event_media_review, main.JobTask.event_vector_sync):
             session.add(main.JobOutbox(event_id=event.id, task=task, next_run_at=now - timedelta(seconds=1)))
         await session.commit()

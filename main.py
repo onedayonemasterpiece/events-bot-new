@@ -15333,7 +15333,7 @@ def _static_site_coalesced_next_run(
     """
 
     payload = incoming_payload if isinstance(incoming_payload, Mapping) else {}
-    if incoming_immediate:
+    if incoming_immediate or os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
         return min(old_next, requested)
     effect_evidence = (
         effect_payload if isinstance(effect_payload, Mapping) else payload
@@ -15752,7 +15752,9 @@ async def enqueue_job(
                 # re-armed from the current Smart Update cycle and must not keep
                 # stale tomorrow slots.
                 job_next_run = _ensure_utc(job.next_run_at)
-                if next_run_at and task == JobTask.tg_event_publish:
+                if task == JobTask.event_vector_sync and os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+                    job.next_run_at = min(job_next_run, run_time)
+                elif next_run_at and task == JobTask.tg_event_publish:
                     job.next_run_at = next_run_at
                 elif (
                     next_run_at
@@ -19840,8 +19842,8 @@ async def _run_due_jobs_once_locked(
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
         JobTask.interest_club_relation: 2,
-        JobTask.event_vector_sync: -2 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 2,
-        JobTask.static_site_build: -2 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 3,
+        JobTask.event_vector_sync: -3 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 2,
+        JobTask.static_site_build: -3 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 3,
         JobTask.event_age_bge_assessment: 4,
     }
     tg_event_added_at: dict[int, datetime | None] = {}
