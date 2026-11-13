@@ -1,11 +1,17 @@
 from datetime import date
 
 import pytest
+from unittest.mock import AsyncMock
 from sqlmodel import select
 import main
 from db import Database
 from models import Event, Setting
 import vk_calendar_comments as comments
+
+
+@pytest.fixture(autouse=True)
+def no_calendar_pacing_wait(monkeypatch):
+    monkeypatch.setattr(comments.asyncio, "sleep", AsyncMock())
 
 
 def event(**kw):
@@ -34,7 +40,7 @@ async def test_bad_date_is_not_invented():
 
 
 @pytest.mark.asyncio
-async def test_calendar_containment_keeps_new_post_free_of_document_jobs(tmp_path, monkeypatch):
+async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     from models import JobOutbox, JobStatus, JobTask
     db = Database(str(tmp_path / 'scheduled.sqlite'))
@@ -67,7 +73,8 @@ async def test_calendar_containment_keeps_new_post_free_of_document_jobs(tmp_pat
                 return {'response': {'items': [
                     {'id': 5, 'date': published_at-86400, 'text': 'Старый пост'},
                     # A prior gallery edit may have made the actual public date earlier.
-                    {'id': 20, 'postponed_id': 10, 'date': published_at-60, 'post_type': 'post'},
+                    {'id': 20, 'date': published_at+120, 'post_type': 'post',
+                     'text': 'Лекция\n' + next(line for line in main.build_vk_source_header(ev, None) if line.startswith('📅 '))},
                 ]}}
             if method == 'docs.getWallUploadServer':
                 return {'response': {'upload_url': 'https://upload.example/file'}}
@@ -75,6 +82,7 @@ async def test_calendar_containment_keeps_new_post_free_of_document_jobs(tmp_pat
                 return {'response': {'doc': {'id': 30, 'owner_id': 20, 'ext': 'ics'}}}
             if method == 'wall.createComment':
                 assert params['post_id'] == 20
+                assert 'from_group' not in params
                 assert params['attachments'] == 'doc20_30'
                 return {'response': {'comment_id': 90}}
             raise AssertionError(method)
@@ -90,10 +98,7 @@ async def test_calendar_containment_keeps_new_post_free_of_document_jobs(tmp_pat
         url = await main.post_to_vk('231920894', 'Анонс', db, None,
                                     publish_date=published_at, source_event_id=1)
         assert url == 'https://vk.com/wall-231920894_10'
-        async with db.get_session() as session:
-            assert list((await session.execute(select(JobOutbox))).scalars()) == []
-        # Exercise the retained scheduled helper explicitly; normal publishing is contained.
-        await comments.schedule_calendar_comment(db, 1, url, published_at)
+        assert all(not method.startswith('docs.') and method != 'wall.createComment' for method, _ in calls)
         async with db.get_session() as session:
             stored = await session.get(Event, 1)
             stored.source_vk_post_url = url
@@ -118,6 +123,18 @@ async def test_calendar_containment_keeps_new_post_free_of_document_jobs(tmp_pat
             def now(cls, tz=None): return due + timedelta(seconds=1)
         monkeypatch.setattr(main, 'datetime', Clock)
         assert await main._run_due_jobs_once(db, None) == 1
+        assert [method for method, _ in calls[len(before):]] == ['wall.get']
+        async with db.get_session() as session:
+            deferred = await session.get(JobOutbox, jobs[0].id)
+            assert deferred.status == JobStatus.pending
+            assert deferred.attempts == 0
+            assert deferred.next_run_at.replace(tzinfo=timezone.utc) == due + timedelta(seconds=120)
+        class PublicClock(datetime):
+            @classmethod
+            def now(cls, tz=None): return due + timedelta(seconds=121)
+        monkeypatch.setattr(main, 'datetime', PublicClock)
+        before = list(calls)
+        assert await main._run_due_jobs_once(db, None) == 1
         assert [method for method, _ in calls[len(before):]] == [
             'wall.get', 'docs.getWallUploadServer', 'docs.save', 'wall.createComment']
         async with db.get_session() as session:
@@ -134,7 +151,8 @@ async def test_calendar_containment_keeps_new_post_free_of_document_jobs(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_lost_comment_response_reuses_saved_document_without_second_write(tmp_path, monkeypatch):
+@pytest.mark.parametrize('author', [-231920894, 20])
+async def test_lost_comment_response_reuses_saved_document_without_second_write(tmp_path, monkeypatch, author):
     db = Database(str(tmp_path / 'lost-response.sqlite'))
     await db.init()
     try:
@@ -154,7 +172,7 @@ async def test_lost_comment_response_reuses_saved_document_without_second_write(
             if method == 'wall.createComment':
                 raise RuntimeError('Lost response')
             if method == 'wall.getComments':
-                return {'response': {'count': 1, 'items': [{'id': 90, 'from_id': -231920894,
+                return {'response': {'count': 1, 'items': [{'id': 90, 'from_id': author,
                     'attachments': [{'type': 'doc', 'doc': {'id': 30, 'owner_id': 20, 'ext': 'ics'}}]}]}}
             raise AssertionError(method)
         monkeypatch.setattr(main, '_vk_api', api)
@@ -170,5 +188,44 @@ async def test_lost_comment_response_reuses_saved_document_without_second_write(
             await comments.ensure_calendar_comment(db, ev, ev.source_vk_post_url)
         assert not await comments.ensure_calendar_comment(db, ev, ev.source_vk_post_url)
         assert calls == ['docs.getWallUploadServer', 'docs.save', 'wall.createComment', 'wall.getComments']
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_document_save_failure_never_creates_calendar_comment(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / 'save-failure.sqlite'))
+    await db.init()
+    try:
+        ev = event()
+        async with db.get_session() as session:
+            session.add(ev)
+            await session.commit()
+        monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
+        monkeypatch.setattr(main, '_vk_user_token', lambda: 'fixture')
+        calls = []
+        async def api(method, params, *args, **kw):
+            calls.append(method)
+            if method == 'docs.getWallUploadServer':
+                return {'response': {'upload_url': 'https://upload.example/file'}}
+            if method == 'docs.save':
+                raise main.VKAPIError(14, 'Fixture CAPTCHA', method=method)
+            raise AssertionError(method)
+        monkeypatch.setattr(main, '_vk_api', api)
+        class Response:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): pass
+            def raise_for_status(self): pass
+            async def json(self, **kw): return {'file': 'uploaded'}
+        class HTTP:
+            def post(self, *args, **kw): return Response()
+        monkeypatch.setattr(main, 'get_http_session', lambda: HTTP())
+        with pytest.raises(main.VKAPIError):
+            await comments.ensure_calendar_comment(db, ev, ev.source_vk_post_url)
+        assert calls == ['docs.getWallUploadServer', 'docs.save']
+        async with db.get_session() as session:
+            assert await session.get(Setting, 'vk_calendar_comment:-231920894:10') is None
+        assert comments.asyncio.sleep.await_args_list
+        assert all(call.args == (4,) for call in comments.asyncio.sleep.await_args_list)
     finally:
         await db.close()
