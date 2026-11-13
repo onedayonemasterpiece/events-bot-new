@@ -136,7 +136,9 @@ async def enqueue_refresh(db):
         ))).scalars().all()
     count = 0
     for event in events:
-        if main._event_has_ended_before_today(event) or main._event_start_has_passed_for_publication(event):
+        if (not main._event_has_managed_vk_post(event)
+                or main._event_has_ended_before_today(event)
+                or main._event_start_has_passed_for_publication(event)):
             continue
         await main.enqueue_job(db, event.id, main.JobTask.vk_sync, requeue_done=True)
         count += 1

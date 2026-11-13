@@ -10,6 +10,8 @@ import vk_event_relations as relations
 
 @pytest.mark.asyncio
 async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '1')
     db = main.Database(str(tmp_path / 'db.sqlite'))
     await db.init()
     try:
