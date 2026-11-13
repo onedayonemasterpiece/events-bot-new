@@ -7,6 +7,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Limit automatic related-card refresh to existing postponed posts and the ten latest public posts; post links only after VK exposes the matching related list.
+
 - Related-only computation keeps its earliest coalesced run instead of restarting a quiet window on every import, and shares priority with media blocking an initial publication.
 
 - Keep the existing deferred media retry after repeated transient provider failures instead of exhausting image review before a semantic answer; retain counters and uncertain-result cap.

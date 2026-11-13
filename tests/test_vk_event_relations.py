@@ -46,7 +46,14 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         async def enqueue(db, eid, task, **kwargs):
             queued.append((eid, task, kwargs))
         monkeypatch.setattr(main, 'enqueue_job', enqueue)
+        async def postponed(*args):
+            return [{'id': 1}]
+        async def public(*args, **kwargs):
+            return {'response': {'items': [{'id': 2}]}}
+        monkeypatch.setattr(main, '_fetch_vk_postponed_items_for_owner', postponed)
+        monkeypatch.setattr(main, '_vk_api', public)
         await relations.enqueue_refresh(db)
+        assert {eid for eid, _, _ in queued} == {1, 2}
         assert any(eid == 1 and task == main.JobTask.vk_sync and kw['requeue_done'] for eid, task, kw in queued)
         old_data = json.dumps(data, sort_keys=True)
         path.write_text(json.dumps({'related': {'1': {'pure_related': [4]}}}))
@@ -67,7 +74,7 @@ async def test_comment_replay_edits_one_comment_and_defers_postponed(tmp_path, m
     async def api(method, params, *args, **kwargs):
         calls.append((method, params))
         if method == 'wall.getById':
-            return {'response': [{'id': 10, 'date': 4070908800 if postponed else 1}]}
+            return {'response': [{'id': 10, 'date': 4070908800 if postponed else 1, 'text': 'body\nПОХОЖИЕ СОБЫТИЯ\nКонцерт'}]}
         if method == 'wall.getComments':
             return {'response': {'items': []}}
         if method == 'wall.createComment':
