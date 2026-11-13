@@ -213,3 +213,9 @@ public постами VK (с учётом `postponed_id`). Он не загру�
 считаются существующим pixel-wrap helper, длинное название заканчивается
 многоточием и не перекрывает медальоны. В текстовом VK списке полное название
 сохраняется. Изменение renderer отражено в существующей версии VK format hash.
+
+После публикации postponed VK ID может измениться. Graph refresh перед
+постановкой VK задач применяет уже полученные public `postponed_id` через
+существующий `_recover_managed_vk_live_url`, чтобы peer links читали
+актуальные URL. Его результат — boolean, поэтому delayed comment всегда
+берёт обновлённый `Event.source_vk_post_url`, а не return value recovery.

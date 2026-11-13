@@ -147,7 +147,8 @@ async def enqueue_refresh(db):
     # The owner's bounded backfill: postponed posts and up to ten recent public posts.
     target_ids = {int(row.get(key) or 0) for row in postponed + main._vk_postponed_items(public)
                   for key in ('id', 'postponed_id')}
-    count = 0
+    public_by_old_id = {int(row['postponed_id']): row for row in main._vk_postponed_items(public) if row.get('postponed_id')}
+    targets = []
     for event in events:
         if (not main._event_has_managed_vk_post(event)
                 or main._event_has_ended_before_today(event)
@@ -156,9 +157,12 @@ async def enqueue_refresh(db):
         ids = main._vk_owner_and_post_id(event.source_vk_post_url)
         if int(ids[1]) not in target_ids:
             continue
+        if item := public_by_old_id.get(int(ids[1])):
+            await main._recover_managed_vk_live_url(db, event, bot=None, candidate_item=item)
+        targets.append(event)
+    for event in targets:
         await main.enqueue_job(db, event.id, main.JobTask.vk_sync, requeue_done=True)
-        count += 1
-    logging.info('vk.relations_refresh queued=%s', count)
+    logging.info('vk.relations_refresh queued=%s', len(targets))
 
 
 async def ensure_comment(db, event, post_url, data, bot=None):

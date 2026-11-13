@@ -16224,8 +16224,8 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
             event = await session.get(Event, event_id)
         if not event or event.silent or event.lifecycle_status != "active":
             return False
-        live_url = await _recover_managed_vk_live_url(db, event, bot=bot) or event.source_vk_post_url
-        return await ensure_comment(db, event, live_url, await presentation(db, event), bot)
+        await _recover_managed_vk_live_url(db, event, bot=bot)
+        return await ensure_comment(db, event, event.source_vk_post_url, await presentation(db, event), bot)
     from vk_calendar_comments import ensure_calendar_comment
 
     async with db.get_session() as session:
