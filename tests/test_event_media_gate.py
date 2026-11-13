@@ -2414,7 +2414,8 @@ async def test_gallery_edit_preserves_known_postponed_publication_time(monkeypat
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('failure', ['503', 'timeout', 'rpd', 'uncertain'])
-async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize('previous_attempts', [0, 2])
+async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monkeypatch, failure, previous_attempts):
     from datetime import datetime, timezone, timedelta
     from google_ai.exceptions import ProviderError, RateLimitError
     now = datetime(2026, 11, 13, 12, tzinfo=timezone.utc)
@@ -2435,6 +2436,10 @@ async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monke
             PosterCandidate(catbox_url='https://static.example/a.png', sha256='a' * 64),
             PosterCandidate(catbox_url='https://static.example/b.png', sha256='b' * 64),
         ])
+        pair = (await session.execute(select(EventMediaPairReview).where(
+            EventMediaPairReview.event_id == eid))).scalar_one()
+        pair.attempts = previous_attempts
+        session.add(pair)
         # Match the real outbox invocation: the current media job is leased.
         for job in (await session.execute(select(JobOutbox).where(JobOutbox.event_id == eid))).scalars():
             job.status = JobStatus.running
@@ -2460,7 +2465,11 @@ async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monke
             pair = (await session.execute(select(EventMediaPairReview).where(
                 EventMediaPairReview.event_id == eid))).scalar_one()
             due = pair.next_run_at.replace(tzinfo=timezone.utc)
-            assert pair.status == 'deferred' and pair.attempts == 1
+            assert pair.attempts == previous_attempts + 1
+            if failure == 'uncertain' and previous_attempts == 2:
+                assert pair.status == 'unresolved'
+                return
+            assert pair.status == 'deferred'
             assert due == (now + timedelta(minutes=15) if failure in ('503', 'timeout')
                            else datetime(2026, 11, 14, 0, 5, tzinfo=timezone.utc))
             posters = (await session.execute(select(EventPoster).where(EventPoster.event_id == eid))).scalars().all()

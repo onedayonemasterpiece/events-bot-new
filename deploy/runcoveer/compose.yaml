@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-pair-existing-transient-retry-20261113
+    image: runcoveer/events:vk-pair-transient-liveness-20261113
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
