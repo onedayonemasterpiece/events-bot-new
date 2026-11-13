@@ -4287,6 +4287,8 @@ async def _find_unique_live_managed_vk_item_for_event(
                 expected_title,
                 expected_date,
             )
+            if candidate_items is None:
+                raise RuntimeError("vk_live_id_ambiguous")
             return None
         # A successful authenticated wall read is authoritative for this
         # bounded window; trying a lower-priority actor adds no useful signal.
@@ -7542,7 +7544,7 @@ async def sync_vk_source_post(
     photo_upload_expected = False
     partial_upload = False
     gallery_mode = None
-    if VK_PHOTOS_ENABLED and photo_urls_source:
+    if VK_PHOTOS_ENABLED and (photo_urls_source or any(relations.values())):
         photo_urls_for_publish = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
             :VK_MAX_ATTACHMENTS
         ]

@@ -88,3 +88,31 @@ independent-task set and their explicit snapshot/barrier contracts, not the
 owner Event's unrelated media FIFO. Related-only computation receives VK peer
 priority; no second operator vector writer is introduced. Live JSON remains
 required before closure.
+
+
+### 13 November: live VK consumer acceptance
+
+Calculation repeatedly succeeds in the existing related-only shared Kaggle kernel.
+Production cea78b3e2 yields fresh JSON (15:59 UTC), ordinary vector and build jobs
+complete. Public14271/14286 have uploaded readable branded similar-event cards,
+body lists and one link comment;14226 has a separate other-date card. Postponed
+14176 retains two original photos plus a recommendation card. On16:05 UTC all9
+postponed items had related lists,8 had images;10790/13973 had no source photos
+and exposed a card-upload condition that wrongly required a source poster.
+
+A second mechanical defect was exposed by repeated graph refresh:10936 moved
+from postponed14282 to public, but exact-title/date recovery found pre-existing
+multiple matches and returned the same value as confirmed absence. The normal
+missing-post branch then published again (logs14:40,14:57,15:12 UTC). Ambiguity
+must reject the current sync through the existing job error path, never enter
+republish. Prefetched refresh must still omit that item and process unrelated
+posts. No semantic matching or arbitrary selection is introduced.
+
+Mandatory distinguishing checks: no-source relation card is uploaded; ambiguous
+live network lookup raises before republish; prefetched ambiguity skips only the
+ambiguous event. Preserve source-gallery/card ordering and one-comment replay.
+Live closure pending merged release,13973 card readback and10936 canonical-ID
+reconciliation without another post. Existing public duplicates are not deleted
+by this change. Six-hour Crew configuration needed inclusion in the existing
+service allowlist; corrected without adding a timer or service. Wake delivery
+was delayed by host ENOSPC and native dispatch; it is not a punctuality proof.
