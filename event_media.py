@@ -2519,7 +2519,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         if error is None and decision is None and left_media is not None and right_media is not None:
             primary_model = (os.getenv("EVENT_MEDIA_REVIEW_PRIMARY_MODEL") or "gemini-3.1-flash-lite").strip()
             escalation_model = (os.getenv("EVENT_MEDIA_REVIEW_ESCALATION_MODEL") or "models/gemma-4-31b-it").strip()
-            from google_ai.exceptions import ProviderError
+            from google_ai.exceptions import ProviderError, RateLimitError
 
             try:
                 review.primary_model = primary_model
@@ -2533,6 +2533,13 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                         model=primary_model,
                         session=session,
                         attempt_observer=record_provider_send,
+                    )
+                except RateLimitError as exc:
+                    if exc.blocked_reason != "rpd":
+                        raise
+                    logger.warning(
+                        "event_media_pair_quota_escalation event_id=%s review_id=%s model=%s next_model=%s reason=%s",
+                        event_id, review.id, primary_model, escalation_model, exc.blocked_reason,
                     )
                 except ProviderError as exc:
                     if not exc.retryable or exc.status_code == 429:

@@ -244,3 +244,37 @@ async def test_approved_gallery_keeps_existing_linked_semantic_guard(tmp_path, m
         assert len(calls) == (0 if linked else 2)
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('waits_for_media', [True, False])
+async def test_initial_vk_media_dependency_precedes_unrelated_reviews(tmp_path, monkeypatch, waits_for_media):
+    db = main.Database(str(tmp_path / 'initial-vk-priority.sqlite'))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        old = main.Event(title='Existing review', description='d', source_text='s', date='2099-01-01', time='12:00', location_name='Venue')
+        fresh = main.Event(title='Initial VK announcement', description='d', source_text='s', date='2099-02-01', time='12:00', location_name='Venue')
+        session.add_all([old, fresh])
+        await session.flush()
+        old_id, fresh_id = old.id, fresh.id
+        for eid in (old_id, fresh_id):
+            session.add(main.JobOutbox(event_id=eid, task=main.JobTask.event_media_review,
+                                      next_run_at=now - timedelta(seconds=1)))
+        session.add(main.JobOutbox(event_id=fresh_id, task=main.JobTask.vk_sync,
+                                  depends_on=f'event_media_review:{fresh_id}' if waits_for_media else None,
+                                  next_run_at=now - timedelta(seconds=1)))
+        await session.commit()
+    calls = []
+    async def media(eid, *_args): calls.append(('media', eid))
+    async def publish(eid, *_args): calls.append(('vk', eid))
+    async def noop(*_args, **_kwargs): pass
+    monkeypatch.setitem(main.JOB_HANDLERS, 'event_media_review', media)
+    monkeypatch.setitem(main.JOB_HANDLERS, 'vk_sync', publish)
+    monkeypatch.setattr(main, '_watch_nav_jobs', noop)
+    monkeypatch.setattr(main, '_log_job_outbox_stats', noop)
+    try:
+        await main._run_due_jobs_once(db, None, max_jobs=1)
+        assert calls == [('media' if waits_for_media else 'vk', fresh_id)]
+    finally:
+        await db.engine.dispose()

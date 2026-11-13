@@ -1318,7 +1318,7 @@ def test_vk_carousel_cover_composites_transparency_and_bounds_jpeg_decode(monkey
 
 
 @pytest.mark.parametrize(("event_id", "layout"), [(100, "grid"), (101, "carousel")])
-@pytest.mark.parametrize("primary_error", [503, 429, 401])
+@pytest.mark.parametrize("primary_error", [503, 429, 401, "rpd", "rpm", "tpm"])
 @pytest.mark.asyncio
 async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, primary_error, tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
@@ -1352,7 +1352,7 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
         )
 
     import google_ai
-    from google_ai.exceptions import ProviderError
+    from google_ai.exceptions import ProviderError, RateLimitError
     from sqlalchemy import text
     provider_models = []
 
@@ -1373,6 +1373,9 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
                     k: v for k, v in event_media._REVIEW_SCHEMA.items() if k != "additionalProperties"
                 }
             provider_models.append(model)
+            if len(provider_models) == 1 and isinstance(primary_error, str):
+                # A rejected quota reservation did not send anything to the provider.
+                raise RateLimitError(blocked_reason=primary_error, model=model)
             if kwargs.get("attempt_observer"):
                 kwargs["attempt_observer"]({"requested_model": model})
             if len(provider_models) == 1:
@@ -1396,19 +1399,22 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
         pair = (await session.execute(select(EventMediaPairReview).where(
             EventMediaPairReview.event_id == event_id,
         ))).scalar_one()
-        if primary_error == 503:
+        if primary_error in (503, "rpd"):
             assert pair.status == "resolved" and pair.last_error is None
             assert pair.escalation_model == "models/gemma-4-31b-it"
-            assert pair.provider_calls == 2
+            assert pair.provider_calls == (1 if primary_error == "rpd" else 2)
             assert provider_models == ["gemini-3.1-flash-lite", "models/gemma-4-31b-it"]
         else:
-            assert pair.status == "deferred" and "ProviderError" in pair.last_error
-            assert pair.escalation_model is None and pair.provider_calls == 1
+            assert pair.status == "deferred"
+            expected_error = "RateLimitError" if isinstance(primary_error, str) else "ProviderError"
+            assert expected_error in pair.last_error
+            assert pair.escalation_model is None
+            assert pair.provider_calls == (0 if isinstance(primary_error, str) else 1)
         assert pair.attempts == 1
-        if primary_error != 503:
+        if primary_error not in (503, "rpd"):
             pair.next_run_at = event_media.datetime.now(event_media.timezone.utc)
         await session.commit()
-    if primary_error != 503:
+    if primary_error not in (503, "rpd"):
         await review_next_event_media_pair(event_id, db)
     async with db.get_session() as session:
         event = await session.get(Event, event_id)

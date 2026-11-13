@@ -141,9 +141,12 @@ Defaults:
 
 - primary: `gemini-3.1-flash-lite`;
 - escalation: `models/gemma-4-31b-it` для uncertain/low-confidence primary и
-  retryable provider failure primary (например HTTP 503). Это тот же
+  retryable provider failure primary (например HTTP 503) и отказа primary
+  reservation по дневной квоте `rpd`. Это тот же
   настроенный VLM-путь, а не положительный семантический вердикт по ошибке.
-  Provider 429 и nonretryable ошибки сохраняют прежний durable retry;
+  Минутные `rpm`/`tpm`, provider 429 и nonretryable ошибки сохраняют прежний durable retry.
+  Gemma получает собственный admission через тот же общий limiter; отказ
+  резерва primary не считается provider send;
 - Gemma получает тот же field/enum/required contract через проверенный
   geometry consumer компактный `response_schema` без unsupported
   `additionalProperties`; Gemini сохраняет strict `response_json_schema`.
@@ -431,3 +434,9 @@ existing projection fanout schedules with `refresh_existing_vk=True`. This
 requeues a completed managed `vk_sync` for the same post instead of treating
 its existence as completion of the new media projection. Unchanged galleries
 do not repeat this fanout; semantic exclusions still determine public media.
+
+Если pending `vk_sync` явно ждёт `event_media_review:<event_id>`, его
+медиазадание использует существующий приоритет заблокированной VK-публикации.
+Для этого не требуется сначала запускать публикацию до ошибки
+`vk_sync_missing_materialized_media`. Обычные unrelated reviews и готовые
+публикации сохраняют свой порядок; фильтр active/future/silent не меняется.

@@ -19886,8 +19886,12 @@ async def _run_due_jobs_once_locked(
                         select(JobOutbox.event_id).where(
                             JobOutbox.event_id.in_(media_review_ids),
                             JobOutbox.task == JobTask.vk_sync,
-                            JobOutbox.status == JobStatus.error,
-                            JobOutbox.last_error.like("vk_sync_missing_materialized_media%"),
+                            or_(
+                                and_(JobOutbox.status == JobStatus.error,
+                                     JobOutbox.last_error.like("vk_sync_missing_materialized_media%")),
+                                and_(JobOutbox.status == JobStatus.pending,
+                                     JobOutbox.depends_on.like("event_media_review:%")),
+                            ),
                         )
                     )
                 ).scalars()
@@ -19900,7 +19904,7 @@ async def _run_due_jobs_once_locked(
             event_id = int(j.event_id)
             event_date, lifecycle, silent = media_review_event.get(event_id, ("", "", True))
             eligible = lifecycle == "active" and not silent and event_date >= media_today
-            # A missing-media VK announcement must get the next available
+            # A VK announcement waiting for media must get the next available
             # semantic-review allowance. Ordinary future reviews follow event
             # date; old events cannot exhaust the daily model budget first.
             date_rank = int(event_date.replace("-", "")) if len(event_date) == 10 and event_date.replace("-", "").isdigit() else 99999999
