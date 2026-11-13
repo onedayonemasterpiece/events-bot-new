@@ -77,3 +77,14 @@ input remains the projected version while the live Event advances. The static
 job receives peer priority with vectors in this mode; site profiles retain
 their existing policy. Product acceptance still requires fresh related JSON
 and then the owner's authorized VK cards/links feature, not vector counters.
+
+November 13: PR906 exact main 4aab83233 was deployed with full 4,478-file
+verification and a network-none concurrent-ingest preflight. Health is ready.
+The receipt was still the previous snapshot because ordinary vector work waited
+behind the media/publication stream. The outbox also applied an implicit FIFO
+for the vector job's incidental owner Event: the regression selected media even
+with vector priority raised. Vector and static jobs now use the existing
+independent-task set and their explicit snapshot/barrier contracts, not the
+owner Event's unrelated media FIFO. Related-only computation receives VK peer
+priority; no second operator vector writer is introduced. Live JSON remains
+required before closure.

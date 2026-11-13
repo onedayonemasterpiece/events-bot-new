@@ -278,3 +278,30 @@ async def test_initial_vk_media_dependency_precedes_unrelated_reviews(tmp_path, 
         assert calls == [('media' if waits_for_media else 'vk', fresh_id)]
     finally:
         await db.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_related_compute_is_not_starved_by_media_stream(tmp_path, monkeypatch):
+    db = main.Database(str(tmp_path / 'related-priority.sqlite'))
+    await db.init()
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        event = main.Event(title='Event', description='', source_text='', date='2099-01-01', time='19:00', location_name='Venue')
+        session.add(event)
+        await session.flush()
+        for task in (main.JobTask.event_media_review, main.JobTask.event_vector_sync):
+            session.add(main.JobOutbox(event_id=event.id, task=task, next_run_at=now - timedelta(seconds=1)))
+        await session.commit()
+    calls = []
+    async def run(eid, *_args):
+        calls.append('vector')
+    async def media(eid, *_args):
+        calls.append('media')
+    monkeypatch.setitem(main.JOB_HANDLERS, 'event_vector_sync', run)
+    monkeypatch.setitem(main.JOB_HANDLERS, 'event_media_review', media)
+    try:
+        await main._run_due_jobs_once(db, None, max_jobs=1)
+        assert calls == ['vector']
+    finally:
+        await db.close()

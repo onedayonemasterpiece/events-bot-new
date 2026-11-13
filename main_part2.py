@@ -7370,15 +7370,21 @@ def _vk_event_gallery_mode(event_id: int | None, count: int) -> str | None:
 
 async def _upload_vk_event_gallery(
     group_id: str, urls: list[str], event_id: int | None, db: Database | None, bot: Bot | None,
+    relation_cards: list[bytes] | None = None, cue: str = "листай",
 ) -> tuple[list[str], str | None]:
     """Upload approved URLs in display order; label the cover only if a second photo is ready."""
-    mode = _vk_event_gallery_mode(event_id, len(urls))
+    mode = "carousel" if relation_cards else _vk_event_gallery_mode(event_id, len(urls))
     carousel = mode == "carousel"
     attachments: list[str] = []
+    for card in reversed(relation_cards or []):
+        uploaded = await upload_vk_photo_bytes(group_id, card, db, bot, filename="event-relations.png")
+        if not uploaded:
+            raise RuntimeError("vk_sync_relation_card_upload_failed")
+        attachments.append(uploaded)
     # Upload the cover last in a carousel: a partial edit can still use a lone unlabelled photo.
     for url in (reversed(urls) if carousel else urls):
         if carousel and url == urls[0] and attachments:
-            photo = await upload_vk_photo(group_id, url, db, bot, swipe_hint=True)
+            photo = await upload_vk_photo(group_id, url, db, bot, swipe_hint=cue if relation_cards else True)
             if not photo:
                 mode = "grid"
         else:
@@ -7402,6 +7408,7 @@ async def sync_vk_source_post(
     *,
     ics_url: str | None = None,
     append_text: bool = True,
+    relations: dict | None = None,
 ) -> str | None:
     """Create or update VK source post for an event."""
     target_group_id = VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID
@@ -7528,6 +7535,9 @@ async def sync_vk_source_post(
                         event.id,
                         len(telegraph_images),
                     )
+    from vk_event_relations import cards, append_list
+    relations = relations or {"dates": [], "related": []}
+    relation_cards = []
     photo_upload_expected = False
     partial_upload = False
     gallery_mode = None
@@ -7536,11 +7546,14 @@ async def sync_vk_source_post(
             :VK_MAX_ATTACHMENTS
         ]
         photo_upload_expected = bool(photo_urls_for_publish)
+        relation_cards = await cards(relations, VK_MAX_ATTACHMENTS - len(photo_urls_for_publish))
+        cue = ("Другие даты" if relations["dates"] else "Похожие события") if len(photo_urls_for_publish) == 1 else "листай"
         ids, gallery_mode = await _upload_vk_event_gallery(
             target_group_id, photo_urls_for_publish, event.id, db, bot,
+            **({"relation_cards": relation_cards, "cue": cue} if relation_cards else {}),
         )
         attachments = ids or None
-        partial_upload = len(ids) < len(photo_urls_for_publish)
+        partial_upload = len(ids) < len(photo_urls_for_publish) + len(relation_cards)
         if not existing_vk_post_url and ids and partial_upload:
             raise RuntimeError("vk_sync_partial_media_upload")
     elif photo_urls_source:
@@ -7679,7 +7692,7 @@ async def sync_vk_source_post(
                 new_lines.append(VK_BLANK_LINE)
             new_lines.append(hashtag_line)
         new_lines.append(VK_SOURCE_FOOTER)
-        new_message = "\n".join(new_lines)
+        new_message = append_list("\n".join(new_lines), relations)
         await edit_vk_post(
             existing_vk_post_url,
             new_message,
@@ -7701,6 +7714,7 @@ async def sync_vk_source_post(
         message = build_vk_source_message(
             event, text, festival=festival, calendar_url=calendar_line_value
         )
+        message = append_list(message, relations)
         has_unmaterialized_candidate = (
             await _event_has_unmaterialized_poster_candidate(event, db)
         )
@@ -7733,7 +7747,7 @@ async def sync_vk_source_post(
             coauthor = None
         url = None
         # CTA templates replace a single source image. A full event gallery uses its own layout.
-        if len(photo_urls_for_publish) == 1:
+        if len(photo_urls_for_publish) == 1 and not relation_cards:
             url = await _apply_afishaengagement_variant(
                 prepared_message=message,
                 prepared_photo_urls=photo_urls_for_publish,

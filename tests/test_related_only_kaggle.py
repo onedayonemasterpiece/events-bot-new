@@ -122,6 +122,8 @@ async def test_related_completion_releases_claim_without_site_success(tmp_path, 
     async def patch(*a, **kw):
         pass
     monkeypatch.setattr(main, '_patch_static_site_request_payload', patch)
+    import vk_event_relations
+    monkeypatch.setattr(vk_event_relations, 'enqueue_refresh', patch)
     assert await main._finish_static_site_candidate(
         db=SimpleNamespace(path=str(db_path)), job_id=12, output_dir=tmp_path,
         build_id='production-related-test', run_id='related-test', repo_sha='a' * 40,

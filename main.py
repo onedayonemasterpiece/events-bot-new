@@ -2323,7 +2323,7 @@ def ensure_jpeg(
     return data, name
 
 
-def _vk_carousel_cover(data: bytes) -> bytes:
+def _vk_carousel_cover(data: bytes, label: str = "листай") -> bytes:
     """Append a swipe cue outside the photo, only on the copy uploaded to VK."""
     from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -2349,7 +2349,7 @@ def _vk_carousel_cover(data: bytes) -> bytes:
     draw = ImageDraw.Draw(cover)
     middle = photo.height + footer // 2
     tip = photo.width - font_size // 2
-    draw.text((tip - 1.4 * font_size, middle), "листай", font=font, fill="white", anchor="rm")
+    draw.text((tip - 1.4 * font_size, middle), label, font=font, fill="white", anchor="rm")
     stroke = max(1, font_size // 12)
     draw.line((tip - font_size, middle, tip, middle), fill="white", width=stroke)
     head = font_size / 3
@@ -4274,7 +4274,7 @@ async def upload_vk_photo(
     *,
     token: str | None = None,
     token_kind: str = "group",
-    swipe_hint: bool = False,
+    swipe_hint: bool | str = False,
 ) -> str | None:
     """Upload an image to VK and return attachment id."""
     if not url:
@@ -4337,7 +4337,7 @@ async def upload_vk_photo(
 
                 img_bytes = await asyncio.wait_for(_download(), HTTP_TIMEOUT)
                 if swipe_hint:
-                    img_bytes = await asyncio.to_thread(_vk_carousel_cover, img_bytes)
+                    img_bytes = await asyncio.to_thread(_vk_carousel_cover, img_bytes, swipe_hint if isinstance(swipe_hint, str) else "листай")
                 source_image_bytes = img_bytes
                 try:
                     img_bytes, _ = ensure_jpeg(
@@ -16051,7 +16051,7 @@ def _vk_wall_item_has_photo(item: dict | None) -> bool:
     )
 
 
-async def _managed_vk_post_state(ev: Event) -> tuple[bool, bool]:
+async def _managed_vk_post_state(ev: Event, *, extra_photos: int = 0) -> tuple[bool, bool]:
     """Return ``(exists, media_complete)`` for our managed VK projection.
 
     Existence alone is not enough for idempotency: a previous text-only post
@@ -16066,14 +16066,14 @@ async def _managed_vk_post_state(ev: Event) -> tuple[bool, bool]:
     if not ids:
         return False, False
     expected_urls = await _dedupe_event_photo_urls_for_publish(getattr(ev, "photo_urls", None))
-    expected_count = len(expected_urls[:VK_MAX_ATTACHMENTS])
+    expected_count = min(VK_MAX_ATTACHMENTS, len(expected_urls) + extra_photos)
 
     def media_complete(item: dict) -> bool:
         photos = sum(
             isinstance(att, dict) and att.get("type") == "photo"
             for att in (item.get("attachments") or [])
         )
-        mode = _vk_event_gallery_mode(ev.id, expected_count)
+        mode = "carousel" if extra_photos else _vk_event_gallery_mode(ev.id, expected_count)
         reported_mode = item.get("primary_attachments_mode")
         return photos >= expected_count and (mode is None or reported_mode in (None, mode))
 
@@ -16216,6 +16216,14 @@ async def _recover_managed_vk_live_url(
 
 async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload: dict) -> bool:
     """Run once after this announcement's known public time, using JobOutbox."""
+    if payload.get("relations"):
+        from vk_event_relations import presentation, ensure_comment
+        async with db.get_session() as session:
+            event = await session.get(Event, event_id)
+        if not event or event.silent or event.lifecycle_status != "active":
+            return False
+        live_url = await _recover_managed_vk_live_url(db, event, bot=bot) or event.source_vk_post_url
+        return await ensure_comment(db, event, live_url, await presentation(db, event), bot)
     from vk_calendar_comments import ensure_calendar_comment
 
     async with db.get_session() as session:
@@ -19365,6 +19373,8 @@ JOB_MAX_RUNTIME: dict[JobTask, int] = {
 DEFAULT_JOB_TTL = 3600
 DEFAULT_JOB_MAX_RUNTIME = 900
 EVENT_PIPELINE_INDEPENDENT_TASKS: set[JobTask] = {
+    JobTask.event_vector_sync,
+    JobTask.static_site_build,
     JobTask.event_media_review,
     JobTask.telegraph_build,
     JobTask.vk_sync,
@@ -19830,8 +19840,8 @@ async def _run_due_jobs_once_locked(
         JobTask.weekend_pages: 1,
         JobTask.festival_pages: 1,
         JobTask.interest_club_relation: 2,
-        JobTask.event_vector_sync: 2,
-        JobTask.static_site_build: 2 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 3,
+        JobTask.event_vector_sync: -2 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 2,
+        JobTask.static_site_build: -2 if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" else 3,
         JobTask.event_age_bge_assessment: 4,
     }
     tg_event_added_at: dict[int, datetime | None] = {}
@@ -23802,6 +23812,10 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     text_for_vk = description_for_vk or (ev.source_text or "")
     # VK wall text includes event metadata built from `ev` (title/date/place)
     # plus the body text, so title-only repairs must not be invisible here.
+    from vk_event_relations import presentation, ensure_comment
+    relations = await presentation(db, ev)
+    source_photo_count = len(await _dedupe_event_photo_urls_for_publish(ev.photo_urls))
+    extra_photos = min(sum(bool(v) for v in relations.values()), max(0, VK_MAX_ATTACHMENTS - source_photo_count))
     new_hash = content_hash(
         "\n".join(
             [
@@ -23816,7 +23830,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
                 f"ics:{str(getattr(ev, 'ics_url', '') or '<none>')}",
                 json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
                 text_for_vk,
-            ]
+            ] + ([json.dumps(relations, ensure_ascii=False, sort_keys=True)] if any(relations.values()) else [])
         )
     )
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
@@ -23826,8 +23840,11 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
         managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
     if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
-        post_exists, media_complete = await _managed_vk_post_state(ev)
+        post_exists, media_complete = await _managed_vk_post_state(
+            ev, **({"extra_photos": extra_photos} if extra_photos else {})
+        )
         if post_exists and media_complete:
+            await ensure_comment(db, ev, existing_vk_post_url, relations, bot)
             await _copy_same_day_linked_vk_publication(
                 db,
                 source_event=ev,
@@ -23866,6 +23883,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         db,
         bot,
         ics_url=ev.ics_url,
+        relations=relations,
         # A managed post is our public projection, not a new independent
         # source. Rewrites must replace its previous body; appending creates a
         # visible history of mutually inconsistent LLM drafts.
@@ -23879,6 +23897,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         bot=bot,
     )
     if vk_url:
+        await ensure_comment(db, ev, vk_url, relations, bot)
         await _copy_same_day_linked_vk_publication(
             db,
             source_event=event_for_notice or ev,
@@ -25083,6 +25102,8 @@ async def _finish_static_site_candidate(
             effective_date=clock.effective_date, success=False,
             receipt={"status": "related_ready", "published": False},
         )
+        from vk_event_relations import enqueue_refresh
+        await enqueue_refresh(db)
         logging.info("related_ready run_id=%s build_id=%s published=false", run_id, build_id)
         return True
     result, candidate_archive = await asyncio.to_thread(

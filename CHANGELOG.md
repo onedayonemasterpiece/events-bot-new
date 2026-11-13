@@ -50,6 +50,8 @@
 - Related-only calculation uses the completed vector projection's immutable input instead of chasing ongoing live imports; vector completion wakes the existing shared Kaggle queue.
 
 ### Added
+- VK event carousels now include branded other-date and semantic-related cards, source-grounded medallions, a related-event text list and one linked comment; the shared graph refreshes existing managed announcements through vk_sync.
+
 - Attach calendar files in friendly, varied comments on managed Afisha event posts; preserve one comment on retries and updates, including all-day events and shared sessions.
 - Support long-term guide-digest VK repost campaigns in the existing promo runner: a frozen random delay, per-destination day cadence and restart-safe per-edition delivery receipts.
 
