@@ -109,6 +109,10 @@ async def test_initial_image_post_waits_for_shared_relations_before_any_provider
     assert await main.job_sync_vk_source_post(event.id, db, None) is False
     for call in calls:
         call.assert_not_called()
+    # The ordinary worker records the deferred initial call as done/nochange.
+    async with db.get_session() as session:
+        session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync, status=main.JobStatus.done))
+        await session.commit()
     # The existing related completion wakes only the uncreated post.
     vk_event_relations.graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': []}}}))
     queued = []
