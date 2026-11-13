@@ -42,10 +42,22 @@ async def presentation(db, event):
             and not main._event_start_has_passed_for_publication(row)}
     dates = sorted((rows[i] for i in linked_ids if i in rows),
                    key=lambda row: (row.date, row.time or '', row.id))
+    peer_ids = {row.id: main._vk_owner_and_post_id(row.source_vk_post_url or '')
+                for row in rows.values() if row.id in similar_ids and row.id not in linked_ids}
+    posts = ','.join('_'.join(ids) for ids in peer_ids.values() if ids)
+    public_ids = set()
+    if posts:
+        response = await main._vk_api('wall.getById', {'posts': posts}, db, None,
+            token=main.VK_SERVICE_TOKEN, token_kind='service', skip_captcha=True)
+        public_ids = {(str(row['owner_id']), str(row['id']))
+                      for row in main._vk_wall_get_by_id_items(response)
+                      if row.get('post_type') == 'post' and not row.get('is_deleted')}
+        logging.info('vk_related_public_peers event_id=%s candidates=%s visible=%s',
+                     event.id, len(peer_ids), len(public_ids))
     related, seen_urls = [], {event.source_vk_post_url}
     for i in similar_ids:
         row = rows.get(i)
-        if not row or i in linked_ids or not row.source_vk_post_url or row.source_vk_post_url in seen_urls:
+        if not row or peer_ids.get(i) not in public_ids or row.source_vk_post_url in seen_urls:
             continue
         seen_urls.add(row.source_vk_post_url)
         related.append(row)
@@ -185,7 +197,7 @@ async def enqueue_refresh(db):
 
 
 async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False):
-    """One editable group comment; postponed posts use the existing delayed outbox."""
+    """Create one group comment; existing comments are never edited or deleted."""
     import main
     owner, post = map(int, main._vk_owner_and_post_id(post_url))
     token = main._vk_user_token()
@@ -200,7 +212,7 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
         state = json.loads(saved.value) if saved else {}
     message = 'ПОХОЖИЕ СОБЫТИЯ\n\n' + '\n\n'.join(
         f"{row['date']} {row['time']}".strip() + f" [{row['url']}|{row['title']}]" for row in data['related']) if data['related'] else ''
-    if state.get('text') == message or (not message and not state.get('comment_id')):
+    if state.get('comment_id') or not message:
         return False
     response = await api('wall.getById', posts=f'{owner}_{post}')
     items = main._vk_wall_get_by_id_items({'response': response})
@@ -224,21 +236,12 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
             coalesce_key=key, requeue_done=True,
             next_run_at=datetime.fromtimestamp(max(publish_date, now) + random.randint(180, 1200), timezone.utc))
         return False
-    if not message:
-        await api('wall.deleteComment', owner_id=owner, comment_id=state['comment_id'])
-        async with db.get_session() as session:
-            saved = await session.get(Setting, key)
-            await session.delete(saved)
-            await session.commit()
-        return False
-    if not state.get('comment_id'):
-        comments = await api('wall.getComments', owner_id=owner, post_id=post, count=100)
-        existing = next((row for row in comments.get('items', [])
-                         if row.get('from_id') == owner and row.get('text', '').startswith('ПОХОЖИЕ СОБЫТИЯ\n')), None)
-        if existing:
-            state['comment_id'] = existing['id']
-    if state.get('comment_id'):
-        await api('wall.editComment', owner_id=owner, comment_id=state['comment_id'], message=message)
+    comments = await api('wall.getComments', owner_id=owner, post_id=post, count=100)
+    existing = next((row for row in comments.get('items', [])
+                     if row.get('from_id') == owner and row.get('text', '').startswith('ПОХОЖИЕ СОБЫТИЯ\n')), None)
+    if existing:
+        state['comment_id'] = existing['id']
+        message = existing['text']
     else:
         result = await api('wall.createComment', owner_id=owner, post_id=post, from_group=abs(owner),
                            message=message, guid=f'related:{owner}:{post}')
@@ -250,4 +253,4 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
         session.add(saved)
         await session.commit()
     logging.info('vk.relations_comment event_id=%s post_id=%s comment_id=%s', event.id, post, state['comment_id'])
-    return True
+    return not existing
