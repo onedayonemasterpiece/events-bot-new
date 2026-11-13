@@ -8,7 +8,7 @@
 
 ### Fixed
 - Carry the carousel selection in the existing delayed-comment payload so a later graph cannot change its links before the one-time comment is sent.
-- Build image-bearing VK announcements after their shared related result is ready. Later graph refreshes wake only uncreated announcements and never requeue existing posts for relation edits.
+- Build image-bearing VK announcements after their shared related result is ready, using the existing outbox deferral. Graph completion never enqueues VK publications or reopens old jobs.
 - Keep already-sent VK recommendation comments untouched: no comment edits or deletions, including after graph refresh or lost-receipt recovery.
 - Exclude unpublished or unavailable VK peers from recommendation cards and comments using the existing public batch read; retain separate canonical other-date schedules.
 - Link each recommendation title directly in the VK comment while keeping its date/time as plain text and omitting separate URL lines.

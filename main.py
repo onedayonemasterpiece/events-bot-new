@@ -23781,10 +23781,8 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         path = graph_path(db)
         graph = json.loads(path.read_text())["related"] if path.is_file() else {}
         if str(ev.id) not in graph:
-            # Vector completion already schedules shared related computation;
-            # its completion wakes this same initial VK job, without a retry loop.
             logging.info("vk.initial_waiting_related event_id=%s", event_id)
-            return False
+            raise StaticSiteSingleFlightDeferred("vk_initial_waiting_related")
     if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():
         raise VKPermissionError(None, "permission error")
     if _event_has_ended_before_today(ev):
@@ -25119,8 +25117,6 @@ async def _finish_static_site_candidate(
             effective_date=clock.effective_date, success=False,
             receipt={"status": "related_ready", "published": False},
         )
-        from vk_event_relations import enqueue_refresh
-        await enqueue_refresh(db)
         logging.info("related_ready run_id=%s build_id=%s published=false", run_id, build_id)
         return True
     result, candidate_archive = await asyncio.to_thread(

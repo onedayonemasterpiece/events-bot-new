@@ -9,7 +9,7 @@ import vk_event_relations as relations
 
 
 @pytest.mark.asyncio
-async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp_path, monkeypatch):
+async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, monkeypatch):
     monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
     monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '1')
     db = main.Database(str(tmp_path / 'db.sqlite'))
@@ -50,25 +50,6 @@ async def test_shared_graph_refresh_keeps_original_gallery_and_semantic_only(tmp
         attachments, mode = await main._upload_vk_event_gallery('1', event.photo_urls, event.id, db, None, cards)
         assert attachments == ['poster-a', 'poster-b', 'card-0', 'card-1']
         assert mode == 'carousel'  # Also for even event IDs.
-        queued = []
-        async def enqueue(db, eid, task, **kwargs):
-            queued.append((eid, task, kwargs))
-        monkeypatch.setattr(main, 'enqueue_job', enqueue)
-        async with db.get_session() as session:
-            # Previously created posts stay unchanged when a new graph arrives.
-            for i in (1, 2, 3):
-                row = await session.get(main.Event, i)
-                row.vk_source_hash = 'published'
-            session.add(main.JobOutbox(event_id=4, task=main.JobTask.vk_sync, status=main.JobStatus.done))
-            await session.commit()
-        path.write_text(json.dumps({'related': {'1': {'pure_related': [2, 3]}, '4': {'pure_related': []}}}))
-        async def forbidden(*args, **kwargs):
-            raise AssertionError('Graph completion must not read or rewrite existing VK posts')
-        monkeypatch.setattr(main, '_vk_api', forbidden)
-        await relations.enqueue_refresh(db)
-        assert [(eid, task) for eid, task, _ in queued] == [(4, main.JobTask.vk_sync)]
-        assert queued[0][2]['requeue_done']
-        monkeypatch.setattr(main, '_vk_api', visible)
         old_data = json.dumps(data, sort_keys=True)
         path.write_text(json.dumps({'related': {'1': {'pure_related': [4]}}}))
         updated = await relations.presentation(db, event)
@@ -276,28 +257,5 @@ async def test_related_peers_must_be_public_but_other_dates_need_no_post(tmp_pat
         monkeypatch.setattr(main, '_vk_api', failed)
         with pytest.raises(main.VKAPIError, match='Too many requests'):
             await relations.presentation(db, event)
-    finally:
-        await db.close()
-
-
-@pytest.mark.asyncio
-async def test_ready_graph_only_wakes_requested_completed_initial_job(tmp_path, monkeypatch):
-    db = main.Database(str(tmp_path / 'requested.sqlite'))
-    await db.init()
-    queued = []
-    async def enqueue(_db, eid, *_args, **kwargs):
-        queued.append(eid)
-    monkeypatch.setattr(main, 'enqueue_job', enqueue)
-    try:
-        async with db.get_session() as session:
-            for i in (1, 2, 3):
-                session.add(main.Event(id=i, title=f'Event {i}', description='', source_text='',
-                    date='2099-01-01', time='19:00', location_name='Hall'))
-            session.add(main.JobOutbox(event_id=2, task=main.JobTask.vk_sync, status=main.JobStatus.paused))
-            session.add(main.JobOutbox(event_id=3, task=main.JobTask.vk_sync, status=main.JobStatus.done))
-            await session.commit()
-        relations.graph_path(db).write_text(json.dumps({'related': {str(i): {'pure_related': []} for i in (1, 2, 3)}}))
-        await relations.enqueue_refresh(db)
-        assert queued == [3]  # No unsolicited publication and no resumed manual/provider pause.
     finally:
         await db.close()
