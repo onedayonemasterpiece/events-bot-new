@@ -263,9 +263,9 @@ async def test_related_peers_must_be_public_but_other_dates_need_no_post(tmp_pat
         assert [row['id'] for row in data['dates']] == [5]
         assert event.photo_urls == ['original']
         async def failed(*args, **kwargs):
-            return {'error': {'error_code': 6}}
+            raise main.VKAPIError(6, 'Too many requests')
         monkeypatch.setattr(main, '_vk_api', failed)
-        with pytest.raises(RuntimeError, match='vk_related_public_read_failed'):
+        with pytest.raises(main.VKAPIError, match='Too many requests'):
             await relations.presentation(db, event)
     finally:
         await db.close()

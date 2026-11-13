@@ -49,8 +49,6 @@ async def presentation(db, event):
     if posts:
         response = await main._vk_api('wall.getById', {'posts': posts}, db, None,
             token=main.VK_SERVICE_TOKEN, token_kind='service', skip_captcha=True)
-        if response.get('error'):
-            raise RuntimeError('vk_related_public_read_failed')
         public_ids = {(str(row['owner_id']), str(row['id']))
                       for row in main._vk_wall_get_by_id_items(response)
                       if row.get('post_type') == 'post' and not row.get('is_deleted')}
