@@ -2632,7 +2632,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
             review.reason_code = "automatic_retry_scheduled"
             review.last_error = error or "uncertain"
             review.response_json = decision
-            review.next_run_at = _next_utc_day()
+            review.next_run_at = _media_role_transient_retry_at(error) or _next_utc_day()
         session.add(review)
         await _reconcile_pending_posters(session, int(event_id))
         # ensure_event_media_reviews also syncs; retain this change for fanout.

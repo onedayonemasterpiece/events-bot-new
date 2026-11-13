@@ -469,3 +469,27 @@ depends_on event_media_review:10899. В00:24 UTC её media155516 всё ещё 
 worker тест: до1fail/1negativepass, после обязательны оба и весь worker suite.
 Дополнительно main.py net+4; общий production net+11 при прежнем бюджете15.
 Никакой новой очереди, lane, флага, polling или capacity reservation.
+
+### Временный отказ Gemma необоснованно переносил пару на день, 13 ноября
+
+После выпуска924 обычный worker взял новое10899 в00:42:12UTC.
+Primary rpd корректно вызвал existing Gemma escalation, actual send один.
+Gemma вернула настоящий503; pair33240 deferred до14ноября00:05.
+У10508 аналогичный503, у10727 timeout45секунд. Initial10899 остаётся
+безVK URL и блокируется собственной media dependency; extra photo pending.
+
+Ветка pair retry всегда использовала следующий день независимо от причины.
+Semantic-role consumer уже имеет transient-error scheduler:5xx/timeout900секунд,
+minute limits600секунд, rpd следующийUTC-day. Парная проверка теперь
+переиспользует ровно эту функцию, одна заменённая строка, net production0
+при бюджете5. Не добавлены state/queue/retry/лимит/provider path.
+Attempt cap и actual-send accounting сохраняются. Семантический uncertain
+без transport error сохраняет прежний следующий день; ошибка не даёт approval.
+
+Initialized pair regression с lease текущего worker job: до исправления
+503/timeout fail, rpd/uncertain negative controls pass. После обязательны
+даты retry, pending extra image и существующий durable followup не позже due.
+Доказательства в retained artifact:
+/home/dev/artifacts/events-bot-new/20261113T004847Z-vk-pair-existing-transient-retry-20261113.
+Обычный TG registry resume после924 подтверждён operation12066 с00:38:52UTC,
+quiet chat NULL. Ручного source replay не было. Product result ещё открыт.

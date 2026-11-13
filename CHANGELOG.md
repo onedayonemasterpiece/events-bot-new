@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### Fixed
+- Reuse the existing media transient-error schedule for pair reviews instead of postponing provider503/timeouts for a full day; preserve daily quotas and uncertain-result policy.
 - Prioritize the existing media dependency of a waiting initial VK publication before unrelated reviews, without requiring a failed publication attempt.
 - Use the already-configured Gemma media escalation when the primary daily quota rejects a reservation; retain minute limits, existing credentials and actual-send accounting.
 - Resume an existing Telegram handoff before accepting an earlier partial slot delivery or delaying a new launch; preserve the existing recovery cadence and duplicate-launch guards.

@@ -440,3 +440,10 @@ do not repeat this fanout; semantic exclusions still determine public media.
 Для этого не требуется сначала запускать публикацию до ошибки
 `vk_sync_missing_materialized_media`. Обычные unrelated reviews и готовые
 публикации сохраняют свой порядок; фильтр active/future/silent не меняется.
+
+Парная проверка использует то же существующее расписание временных ошибок,
+что semantic-role проверка: timeout/5xx — через
+`EVENT_MEDIA_ROLE_TRANSIENT_RETRY_SECONDS` (по умолчанию900секунд),
+минутный лимит — через существующий rate delay, дневная квота — следующий
+UTC-day. Semantic uncertain/disagreement без временной ошибки сохраняет
+прежний следующий день. Общий предел попыток и provider-send учёт не меняются.
