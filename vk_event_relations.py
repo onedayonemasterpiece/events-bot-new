@@ -160,40 +160,21 @@ async def cards(data, slots):
 
 
 async def enqueue_refresh(db):
+    """Wake initial announcements when their shared computation is ready."""
     import main
+    path = graph_path(db)
+    graph = json.loads(path.read_text())['related'] if path.is_file() else {}
     async with db.get_session() as session:
         events = (await session.execute(select(Event).where(
-            Event.source_vk_post_url.is_not(None), Event.lifecycle_status == 'active',
-            Event.silent.is_(False), Event.identity_status != 'merged',
+            Event.id.in_([int(i) for i in graph]), Event.vk_source_hash.is_(None),
+            Event.lifecycle_status == 'active', Event.silent.is_(False),
+            Event.identity_status != 'merged',
         ))).scalars().all()
-    owner = -abs(int(main.VK_EVENTS_GROUP_ID or main.VK_AFISHA_GROUP_ID))
-    postponed = await main._fetch_vk_postponed_items_for_owner(
-        owner, main._vk_wall_get_actors(owner), db, None)
-    public = await main._vk_api('wall.get', {'owner_id': owner, 'filter': 'owner', 'count': 10},
-        db, None, token=main.VK_SERVICE_TOKEN, token_kind='service', skip_captcha=True)
-    # The owner's bounded backfill: postponed posts and up to ten recent public posts.
-    target_ids = {int(row.get(key) or 0) for row in postponed + main._vk_postponed_items(public)
-                  for key in ('id', 'postponed_id')}
-    public_by_old_id = {int(row['postponed_id']): row for row in main._vk_postponed_items(public) if row.get('postponed_id')}
-    targets = []
     for event in events:
-        if (not main._event_has_managed_vk_post(event)
-                or main._event_has_ended_before_today(event)
-                or main._event_start_has_passed_for_publication(event)):
-            continue
-        ids = main._vk_owner_and_post_id(event.source_vk_post_url)
-        item = public_by_old_id.get(int(ids[1]))
-        if item is None and int(ids[1]) not in target_ids:
-            item = await main._find_unique_live_managed_vk_item_for_event(
-                event, owner_id=owner, db=db, bot=None, candidate_items=main._vk_postponed_items(public))
-        if int(ids[1]) not in target_ids and item is None:
-            continue
-        if item:
-            await main._recover_managed_vk_live_url(db, event, bot=None, candidate_item=item)
-        targets.append(event)
-    for event in targets:
-        await main.enqueue_job(db, event.id, main.JobTask.vk_sync, requeue_done=True)
-    logging.info('vk.relations_refresh queued=%s', len(targets))
+        if (not main._event_has_ended_before_today(event)
+                and not main._event_start_has_passed_for_publication(event)):
+            await main.enqueue_job(db, event.id, main.JobTask.vk_sync, requeue_done=True)
+    logging.info('vk.relations_initial_ready candidates=%s', len(events))
 
 
 async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False):

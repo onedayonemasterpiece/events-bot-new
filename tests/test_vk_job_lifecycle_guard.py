@@ -97,3 +97,23 @@ async def test_active_current_date_and_managed_repair_still_sync(db, monkeypatch
     assert sync.call_args.args[1] == "Current description"
     assert sync.call_args.kwargs["append_text"] is (not bool(existing_url))
     persist.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_initial_image_post_waits_for_shared_relations_before_any_provider_call(db, monkeypatch):
+    import json
+    import vk_event_relations
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    event = await save_event(db, photo_urls=['source-poster'])
+    calls = forbidden_calls(monkeypatch)
+    assert await main.job_sync_vk_source_post(event.id, db, None) is False
+    for call in calls:
+        call.assert_not_called()
+    # The existing related completion wakes only the uncreated post.
+    vk_event_relations.graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': []}}}))
+    queued = []
+    async def enqueue(_db, eid, task, **kwargs):
+        queued.append((eid, task))
+    monkeypatch.setattr(main, 'enqueue_job', enqueue)
+    await vk_event_relations.enqueue_refresh(db)
+    assert queued == [(event.id, main.JobTask.vk_sync)]
