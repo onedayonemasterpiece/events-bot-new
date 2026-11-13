@@ -189,8 +189,9 @@ done on one existing job, plus zero provider calls before readiness.
 ## Terminal VK jobs resurrected by CAPTCHA recovery, November 13
 
 After the complete-initial-post release939, normal recovery resumed188 jobs
-at21:51UTC. A previously terminal failed job142439 then attempted to edit
-old post13322 and triggered CAPTCHA again. The pause query included terminal
+at21:51UTC. Job142439 then attempted to edit old post13322 and triggered
+CAPTCHA again. Its failed marker was written by the CAPTCHA finalizer itself;
+the independently proven historical terminal row is stopped backfill155563. The pause query included terminal
 error rows, replacing their far-future due and diagnostic with the cohort
 marker; the resume query then changed them to pending. Three terminal failed
 VK jobs were present, including an explicitly stopped related backfill.
