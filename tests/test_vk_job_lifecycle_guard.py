@@ -101,23 +101,49 @@ async def test_active_current_date_and_managed_repair_still_sync(db, monkeypatch
 
 @pytest.mark.asyncio
 async def test_initial_image_post_waits_for_shared_relations_before_any_provider_call(db, monkeypatch):
-    import json
-    import vk_event_relations
     monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
     event = await save_event(db, photo_urls=['source-poster'])
     calls = forbidden_calls(monkeypatch)
-    assert await main.job_sync_vk_source_post(event.id, db, None) is False
+    with pytest.raises(main.StaticSiteSingleFlightDeferred, match='vk_initial_waiting_related'):
+        await main.job_sync_vk_source_post(event.id, db, None)
     for call in calls:
         call.assert_not_called()
-    # The ordinary worker records the deferred initial call as done/nochange.
+
+
+@pytest.mark.asyncio
+async def test_initial_related_wait_keeps_same_outbox_pending_then_completes(db, monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import select
+    event = await save_event(db)
     async with db.get_session() as session:
-        session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync, status=main.JobStatus.done))
+        job = main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync,
+            next_run_at=datetime.now(timezone.utc) - timedelta(seconds=1))
+        session.add(job)
         await session.commit()
-    # The existing related completion wakes only the uncreated post.
-    vk_event_relations.graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': []}}}))
-    queued = []
-    async def enqueue(_db, eid, task, **kwargs):
-        queued.append((eid, task))
-    monkeypatch.setattr(main, 'enqueue_job', enqueue)
-    await vk_event_relations.enqueue_refresh(db)
-    assert queued == [(event.id, main.JobTask.vk_sync)]
+        await session.refresh(job)
+        jid = job.id
+    ready = False
+    calls = []
+    async def handler(eid, *_args):
+        if not ready:
+            raise main.StaticSiteSingleFlightDeferred('vk_initial_waiting_related')
+        calls.append(eid)
+        return True
+    monkeypatch.setitem(main.JOB_HANDLERS, 'vk_sync', handler)
+    await main._run_due_jobs_once(db, None, max_jobs=1)
+    async with db.get_session() as session:
+        waiting = await session.get(main.JobOutbox, jid)
+        assert waiting.status == main.JobStatus.pending
+        assert waiting.last_error == 'vk_initial_waiting_related'
+        assert waiting.attempts == 0
+        assert waiting.next_run_at.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc) + timedelta(minutes=4)
+        waiting.next_run_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        await session.commit()
+    ready = True
+    await main._run_due_jobs_once(db, None, max_jobs=1)
+    async with db.get_session() as session:
+        complete = await session.get(main.JobOutbox, jid)
+        assert complete.status == main.JobStatus.done
+        assert complete.last_error is None
+        assert len((await session.execute(select(main.JobOutbox))).scalars().all()) == 1
+    assert calls == [event.id]

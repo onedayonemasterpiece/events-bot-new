@@ -159,28 +159,6 @@ async def cards(data, slots):
     return result
 
 
-async def enqueue_refresh(db):
-    """Wake initial announcements when their shared computation is ready."""
-    import main
-    path = graph_path(db)
-    graph = json.loads(path.read_text())['related'] if path.is_file() else {}
-    async with db.get_session() as session:
-        events = (await session.execute(select(Event).where(
-            Event.id.in_([int(i) for i in graph]), Event.vk_source_hash.is_(None),
-            Event.id.in_(select(JobOutbox.event_id).where(
-                JobOutbox.task == main.JobTask.vk_sync, JobOutbox.status == JobStatus.done,
-                JobOutbox.last_error.is_(None), JobOutbox.terminal_reason.is_(None),
-            )),
-            Event.lifecycle_status == 'active', Event.silent.is_(False),
-            Event.identity_status != 'merged',
-        ))).scalars().all()
-    for event in events:
-        if (not main._event_has_ended_before_today(event)
-                and not main._event_start_has_passed_for_publication(event)):
-            await main.enqueue_job(db, event.id, main.JobTask.vk_sync, requeue_done=True)
-    logging.info('vk.relations_initial_ready candidates=%s', len(events))
-
-
 async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False):
     """Create one group comment; existing comments are never edited or deleted."""
     import main

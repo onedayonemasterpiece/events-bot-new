@@ -176,3 +176,11 @@ Initial wakeup is scoped to an already-requested, completed VK job with no
 error/terminal restriction. Graph membership alone must not request publication
 of another catalogued event or resume a paused job. Reuse existing outbox state;
 no new wait flag or publisher is added.
+
+Simplification of initial waiting supersedes the wakeup producer above. Return
+the existing StaticSiteSingleFlightDeferred from the initial VK handler while
+its anchor is absent. The ordinary worker keeps the same job pending with its
+existing delay and without counting a failed attempt. Delete the graph-completion
+VK enqueue callback entirely: no catalogue scan, no unsolicited job creation,
+no resumed paused/completed job. Regression checks exercise pending -> ready ->
+done on one existing job, plus zero provider calls before readiness.
