@@ -11,6 +11,7 @@
 
 
 ### Fixed
+- Prepare bounded 1600 px JPEG working copies before VK uploads and image comparisons; preserve canonical sources and reuse their existing image identities.
 - Reuse an existing final identity MATCH for the same event owner instead of running a second semantic merge-identity decision that can contradict it and create a duplicate.
 - Resolve delayed VK recommendation comments against the original combined linked-time publication header, preserving their frozen carousel selection.
 - Resolve published calendar targets using the same local linked-time publication view as the original post while retaining the individual occurrence in the ICS.

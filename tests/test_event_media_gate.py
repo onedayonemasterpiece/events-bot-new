@@ -974,8 +974,8 @@ async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) ->
         event=_event(),
         left=EventPoster(event_id=1, poster_hash="left", review_status=APPROVED),
         right=EventPoster(event_id=1, poster_hash="right", review_status=PENDING_REVIEW),
-        left_media=DownloadedPoster(b"left", "image/png", "https://example/left.png"),
-        right_media=DownloadedPoster(b"right", "image/png", "https://example/right.png"),
+        left_media=DownloadedPoster(_png_bytes(metadata="left"), "image/png", "https://example/left.png"),
+        right_media=DownloadedPoster(_png_bytes(metadata="right"), "image/png", "https://example/right.png"),
         model="gemini-3.1-flash-lite-preview",
         session=FakeSession(),
     )
@@ -985,6 +985,10 @@ async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) ->
     assert isinstance(config, dict)
     assert config["response_json_schema"] == event_media._REVIEW_SCHEMA
     assert "response_schema" not in config
+    for part in captured["prompt"][1:]:
+        assert part["inline_data"]["mime_type"] == "image/jpeg"
+        with Image.open(io.BytesIO(part["inline_data"]["data"])) as image:
+            assert max(image.size) <= 1600
 
 
 @pytest.mark.asyncio
