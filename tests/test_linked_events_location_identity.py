@@ -297,3 +297,42 @@ async def test_programme_group_resolves_existing_review_pairs_without_negative_d
                 assert set((await session.get(Event, i)).linked_event_ids) == set(ids) - {i}
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_child_scope_and_summary_precede_latest_media_receipt(tmp_path, monkeypatch):
+    from linked_events import _programme_decisions
+    db = Database(str(tmp_path / 'proof.sqlite'))
+    await db.init()
+    summary = 'Дмитрий Сущенко ведёт курс: сценическая импровизация.'
+    selected = 'Выбранная программа: сценическая импровизация с Дмитрием Сущенко.'
+    receipt = 'Добавлена афиша: https://static.kenigevents.ru/p/image/v2/fixture.webp'
+    calls = []
+
+    async def inspect(prompt, schema, **kwargs):
+        packet = json.loads(prompt[prompt.index('{"target_ids"'):])
+        calls.append(packet)
+        proofs = {p['id']: p['proof'] for p in packet['events']}
+        assert proofs == {1: summary, 2: selected, 3: receipt}
+        return {'groups': [], 'decisions': []}
+
+    monkeypatch.setattr('smart_event_update._ask_gemma_json', inspect)
+    try:
+        async with db.get_session() as session:
+            for i in (1, 2, 3):
+                session.add(Event(id=i, title='Практика импровизации', description='', source_text='',
+                    short_description=summary if i < 3 else None,
+                    date=f'2099-12-{i:02}', time='19:00', location_name='Зал'))
+            await session.commit()
+            for i in (1, 2, 3):
+                source = EventSource(event_id=i, source_type='parser', source_url=f'https://example.test/{i}')
+                session.add(source)
+                await session.flush()
+                session.add(EventSourceFact(event_id=i, source_id=source.id, status='added', fact='Прежний факт программы'))
+                await session.flush()
+                session.add(EventSourceFact(event_id=i, source_id=source.id, status='added', fact=receipt))
+            await session.commit()
+        await _programme_decisions(db, {1: '', 2: selected, 3: ''})
+        assert len(calls) == 1
+    finally:
+        await db.close()

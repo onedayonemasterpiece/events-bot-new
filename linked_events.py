@@ -166,7 +166,7 @@ async def _programme_chunk(db, children, target_ids, past, future, limit):
         ).order_by(EventSourceFact.id.desc()).limit(512))).scalars().all()
         accepted = {f.event_id: f.fact[:180] for f in reversed(facts)}
         packets = {i: dict(id=i, title=e.title[:120], slot=f'{e.date} {e.time or ""}',
-            address=(e.location_address or '')[:90], proof=(children.get(i) or accepted.get(i) or e.short_description or '')[:180])
+            address=(e.location_address or '')[:90], proof=(children.get(i) or e.short_description or accepted.get(i) or '')[:180])
             for i, e in sorted(events.items(), key=lambda item: (item[0] not in children, -len(item[1].linked_event_ids or []), item[0]))}
         for p in packets.values():
             p['proof'] = '' if p['proof'] in p['title'] else p['proof']
