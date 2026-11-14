@@ -161,7 +161,7 @@ def test_media_role_visible_dates_reject_other_child_but_accept_matching_date() 
 
 
 @pytest.mark.asyncio
-async def test_linked_child_seed_waits_for_current_vision_identity(tmp_path) -> None:
+async def test_linked_child_seed_does_not_wait_for_optional_role_classification(tmp_path) -> None:
     db = Database(str(tmp_path / "linked-child-media.sqlite"))
     await db.init()
     async with db.get_session() as session:
@@ -186,7 +186,7 @@ async def test_linked_child_seed_waits_for_current_vision_identity(tmp_path) -> 
         )
         session.add(poster)
         await session.flush()
-        assert await event_media.get_event_gallery_rows(session, int(event.id)) == []
+        assert [row.id for row in await event_media.get_event_gallery_rows(session, int(event.id))] == [poster.id]
         poster.media_semantic_status = "classified"
         poster.media_semantic_prompt_version = event_media.MEDIA_ROLE_PROMPT_VERSION
         session.add(poster)
@@ -840,7 +840,7 @@ async def test_future_semantic_retry_remains_armed_after_geometry_is_current(
 
 
 @pytest.mark.asyncio
-async def test_future_pair_retry_remains_armed_after_early_noop_job(tmp_path) -> None:
+async def test_legacy_pair_deadline_does_not_hold_gallery(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "pair-retry-armed.sqlite"))
     await db.init()
     now = event_media.datetime.now(event_media.timezone.utc)
@@ -903,13 +903,21 @@ async def test_future_pair_retry_remains_armed_after_early_noop_job(tmp_path) ->
         await session.commit()
         event_id = int(event.id)
 
-    assert await event_media.review_next_event_media_pair(event_id, db) is False
+    async def download(poster):
+        return event_media.DownloadedPoster(_jpeg_bytes(100 + poster.id, 100), 'image/jpeg', poster.supabase_url)
+    async def review(**kwargs):
+        return dict(decision='distinct', duplicate_kind='none', confidence=0.99,
+                    semantic_conflict=False, canonical_side='either', reason_code='different_photos')
+    monkeypatch.setattr(event_media, '_download_poster', download)
+    monkeypatch.setattr(event_media, '_call_reviewer', review)
+    assert await event_media.review_next_event_media_pair(event_id, db)
     async with db.get_session() as session:
         jobs = (
             await session.execute(
                 event_media.select(event_media.JobOutbox).where(
                     event_media.JobOutbox.event_id == event_id,
                     event_media.JobOutbox.status == event_media.JobStatus.pending,
+                    event_media.JobOutbox.task == event_media.JobTask.event_media_review,
                 )
             )
         ).scalars().all()
@@ -926,9 +934,9 @@ async def test_future_pair_retry_remains_armed_after_early_noop_job(tmp_path) ->
     job_at = jobs[0].next_run_at
     if job_at.tzinfo is None:
         job_at = job_at.replace(tzinfo=event_media.timezone.utc)
-    assert job_at == retry_at
-    assert review.status == "deferred"
-    assert review.attempts == 1
+    assert job_at <= retry_at
+    assert review.status == "resolved"
+    assert review.attempts == 2
 
 
 @pytest.mark.asyncio

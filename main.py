@@ -16082,7 +16082,7 @@ async def _managed_vk_post_state(ev: Event, *, extra_photos: int = 0) -> tuple[b
     if not ids:
         return False, False
     expected_urls = await _dedupe_event_photo_urls_for_publish(getattr(ev, "photo_urls", None))
-    expected_count = min(VK_MAX_ATTACHMENTS, len(expected_urls) + extra_photos)
+    expected_count = min(VK_MAX_ATTACHMENTS, 9, min(8, len(expected_urls)) + extra_photos)
 
     def media_complete(item: dict) -> bool:
         photos = sum(
@@ -17238,11 +17238,11 @@ async def schedule_event_update_tasks(
             select(JobOutbox).join(EventPoster, EventPoster.event_id == JobOutbox.event_id).where(
                 JobOutbox.event_id == eid,
                 JobOutbox.task == JobTask.event_media_review,
-                or_(
-                    EventPoster.review_status == "pending_review",
-                    and_(bool(ev.linked_event_ids), EventPoster.review_status == "approved",
-                         EventPoster.media_semantic_status != "classified"),
-                ),
+                EventPoster.review_status == "pending_review",
+                EventPoster.id.in_(select(EventPoster.id).where(
+                    EventPoster.event_id == eid,
+                    EventPoster.review_status.in_(("approved", "pending_review")),
+                ).order_by(EventPoster.display_order, EventPoster.id).limit(8).correlate(None)),
             ).order_by(JobOutbox.id.desc()).limit(1)
         )).scalar_one_or_none()
     if media_job is not None and media_job.status != JobStatus.done:
@@ -26431,7 +26431,7 @@ async def job_event_media_review(
     db: Database,
     bot: Bot | None,
 ) -> bool:
-    """Rehydrate source media and adjudicate one cached pair automatically."""
+    """Rehydrate source media and review the selected gallery automatically."""
 
     rehydrated = 0
     cdn_updated = 0
@@ -26461,7 +26461,7 @@ async def job_event_media_review(
     from event_media import review_next_event_media_pair
 
     projection_changed = await review_next_event_media_pair(int(event_id), db, bot)
-    # The pair worker can return early after approving a seed/classifying its
+    # Optional enrichment can return after approving a seed/classifying its
     # role. That branch does not run its trailing fanout. Always refresh the
     # dependencies after progress. Publication waits for the existing media
     # followups, rather than creating a one-photo post from the first seed.

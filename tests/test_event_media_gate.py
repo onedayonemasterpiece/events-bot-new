@@ -974,8 +974,8 @@ async def test_pair_reviewer_uses_standard_json_schema_transport(monkeypatch) ->
         event=_event(),
         left=EventPoster(event_id=1, poster_hash="left", review_status=APPROVED),
         right=EventPoster(event_id=1, poster_hash="right", review_status=PENDING_REVIEW),
-        left_media=DownloadedPoster(_png_bytes(metadata="left"), "image/png", "https://example/left.png"),
-        right_media=DownloadedPoster(_png_bytes(metadata="right"), "image/png", "https://example/right.png"),
+        left_media=DownloadedPoster(event_media.prepare_consumer_jpeg(_png_bytes(metadata="left"), max_side=1200), "image/jpeg", "https://example/left.png"),
+        right_media=DownloadedPoster(event_media.prepare_consumer_jpeg(_png_bytes(metadata="right"), max_side=1200), "image/jpeg", "https://example/right.png"),
         model="gemini-3.1-flash-lite-preview",
         session=FakeSession(),
     )
@@ -1070,7 +1070,7 @@ async def test_review_frontier_does_not_eagerly_create_pending_pair_matrix(tmp_p
                 )
             ).scalars().all()
         )
-    assert len(reviews) == 1
+    assert len(reviews) == 2  # One seed edge per candidate, no candidate-pair matrix.
 
 
 @pytest.mark.asyncio
@@ -2478,7 +2478,10 @@ async def test_pair_retry_uses_existing_media_transient_schedule(tmp_path, monke
             assert due == (now + timedelta(minutes=15) if failure in ('503', 'timeout')
                            else datetime(2026, 11, 14, 0, 5, tzinfo=timezone.utc))
             posters = (await session.execute(select(EventPoster).where(EventPoster.event_id == eid))).scalars().all()
-            assert any(p.review_status == PENDING_REVIEW for p in posters)
+            # Optional vision transport failure does not hold source publication.
+            assert not any(p.review_status == PENDING_REVIEW for p in posters)
+            assert all(p.review_status == APPROVED for p in posters)
+            assert any(p.review_reason.startswith('optional_visual_review_') for p in posters)
             jobs = (await session.execute(select(JobOutbox).where(
                 JobOutbox.event_id == eid, JobOutbox.task == JobTask.event_media_review,
                 JobOutbox.status == JobStatus.pending))).scalars().all()
