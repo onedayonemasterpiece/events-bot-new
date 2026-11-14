@@ -313,8 +313,14 @@
 - Raw carrier не является child summary/evidence. Accepted child facts позволяют
   сравнение при пустом source_text. Unknown не создаёт новые связи и не останавливает
   импорт, уже принятые reciprocal semantic links сохраняются.
-- До 32 targets и 24 внешних peers на запрос: больший batch имеет явный coverage
-  gap, а не разрешение детерминированно связать непроверенные события.
+- Все accepted targets обрабатываются порциями по 32; source children других
+  порций доступны для recall и cross-chunk programme links. Семь children — один
+  запрос, 33 — два. 24 recall peers не вытесняют old linked peers из adjudication.
+- Programme groups содержат проверенные IDs и индивидуальные quotes, не 496
+  pair objects для 32 дат. Same-slot members, conflicting groups и address-only
+  identity evidence не создают edges. Canonical address доступен модели как факт.
+- TG Monitor process_telegram_results включён в тот же transient batch, включая
+  основные/bridge/attach-linked-source Smart Update calls. Publisher не меняется.
 - Model output и importer fixtures проверяются parent tests; mocked provider
   не подтверждает semantic quality. READY FOR PARENT TESTS, не deployed.
 - Восстановленные 10483–10489 не переигрываются; existing same-slot copies

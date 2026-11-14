@@ -139,11 +139,13 @@ entity/ranked surface оставляет одного representative на family
 
 `recompute_linked_event_ids` больше не утверждает programme identity по fuzzy
 title/venue. Обычные source import boundaries (`add_events_from_text`,
-`vk_intake.process_event`, VK auto/review и parser `process_source_events`)
+`vk_intake.process_event`, VK auto/review, parser `process_source_events` и
+реальный TG Monitor `source_parsing.telegram.handlers.process_telegram_results`)
 собирают accepted IDs в transient context, общий для вложенных вызовов.
-После завершения children выполняется не более одного дополнительного
-`_ask_gemma_json`; повторные parser/Smart Update observers не отправляют модельные
-запросы. Нынешние upstream ответы не содержат pair adjudication, поэтому
+После завершения children accepted IDs обрабатываются порциями по 32: семь
+children требуют одного дополнительного `_ask_gemma_json`, 33 — двух. Ни один
+accepted target не отбрасывается из-за размера batch. Повторные parser/Smart
+Update/linked-source observers только дополняют текущий transient context. Нынешние upstream ответы не содержат pair adjudication, поэтому
 piggyback отсутствующего verdict не имитируется. Изолированная ручная правка
 сохраняет singleton API и может выполнить один запрос.
 
@@ -160,41 +162,54 @@ Recall metadata pool ограничен прежним максимумом 800 
 (только recall). Aliases имеют приоритет, далее — близость даты к batch вместо
 самых ранних строк. После SQL title similarity/venue/city выбирают peers,
 но никогда не становятся semantic verdict.
-В запрос попадают до 32 принятых targets и 24 наиболее подходящих внешних peers,
-только canonical/active/not silent/not merged. Большие batches сверх target
-предела имеют неполную semantic coverage: непросмотренные IDs не получают новых
-edges; это ограничение полноты, а не proof independent_event.
+В запрос попадают до 32 targets текущей порции и 24 recall peers. Все остальные
+source children участвуют в recall, включая соседние порции и даты вне окна
+внешнего поиска; source children приоритетны до SQL LIMIT. Старые linked peers загружаются отдельно и не могут
+быть вытеснены из adjudication top24. Используются canonical/active/not silent/
+not merged rows. Лимит внешнего recall остаётся ограничением полноты; отсутствие
+peer/ответа не доказывает independent_event.
 
 Пакет child содержит title/type/date/time, venue/city, выбранный
 `occurrence_scope_text` до 600 символов, до четырёх accepted canonical facts
-по 160 символов и short description до 300 символов. Raw carrier не используется
+по 160 символов, short description до 300 символов и canonical address до
+160 символов. Адрес — child-selected evidence, не детерминированный verdict.
+Raw carrier не используется
 ни как child summary, ни как доказательство quotes. Поэтому отсутствие
 `source_text` не запрещает связывание при наличии accepted фактов. Выход ограничен
-6000 tokens. Ответ sparse: только доказанные programme/duplicate positives
-и explicit independent negatives для переданных old_links; irrelevant/unknown
-пары опускаются, unordered пара передаётся один раз. Все доказанные target-target
-programme edges сохраняют clique курса. Неполный ответ не разрешает угадывать
-отсутствующие пары. JSON Schema использует lowercase types как другие Smart
-Update contracts: `_gemma_native_response_schema` преобразует их в uppercase
-для native Google schema; prompt-schema fallback получает обычный JSON Schema.
+6000 tokens. Вместо quadratic pair output ответ содержит `groups` с `members`
+(`event_id`, индивидуальная `quote`) и отдельные sparse `decisions` для
+`duplicate_same_slot` / `independent_event` old edges. Группа из 32 дат требует
+32 короткие цитаты (в prompt запрошено до 120 символов) вместо 496 pair objects. Модель должна выбрать canonical representative
+каждого slot; разные матчи/материалы/аудитории не становятся одной программой.
+IDs и цитаты всех members проверяются по фактическому packet evidence; повтор
+member в нескольких группах, конфликтующие verdicts, same-slot members или
+address-only identity quote отклоняют новые решения, сохраняя известные edges.
+Проверенная группа разворачивается в reciprocal edges существующим writer,
+включая peers и соседние порции; persisted group_id не создаётся. Schema types
+lowercase, существующий `_gemma_native_response_schema` преобразует их для Google.
 
 Четыре исхода: `same_programme_other_slot`, `duplicate_same_slot`,
 `independent_event`, `unknown`. Проверяются passed target/peer IDs и дословные
 цитаты из child excerpt / accepted facts / canonical summary обеих сторон.
 Contradictory output не применяется. Same-slot не создаёт «Другие даты»;
-новые пары обновляются взаимно без вывода transitive clique; stale backlinks
+группа даёт только явно подтверждённую моделью clique, не inference из старых
+edges; stale backlinks
 снимаются. Unknown/отсутствующий ответ не создаёт edges и сохраняет существующие
 взаимные semantic links, включая восстановленную группу 10483–10489.
 
-Fixture `test_linked_events_location_identity.py` использует normal
-`vk_intake.process_event` boundary с mocked persist/model: семь children и два
-observer вызова на child должны дать один semantic request и взаимные даты.
-Она проверяет внешний cross-source peer за 801 ранней посторонней строкой,
-venue/title aliases, NULL address, accepted facts
-без source_text, same-slot copies, sports, standalone events и разные материалы
-живописи. Это проверки call routing/plumbing; они не доказывают качество
-семантического решения настоящей модели. Текущая версия **READY FOR PARENT TESTS**;
-старые три parent-теста относились к предыдущему эксперименту.
+Fixtures `test_linked_events_location_identity.py` используют реальные
+`vk_intake.process_event` и TG Monitor results entrypoints с mocked child import
+и моделью. Проверяются семь TG/VK children с одним запросом; полная 32-session
+группа с ответом <4000 JSON characters; 33 targets с проверкой final target и
+cross-chunk reciprocal links. Старый sporting edge окружён 30 более близкими
+recall rows: grounded negative всё равно удаляет обе стороны. Отдельные controls
+отклоняют foreign ID, conflicting memberships, address-only quotes и same-slot
+группы. Fixtures также проверяют адрес/NULL address, source facts без source_text,
+801 раннюю постороннюю строку, самостоятельные события и разные материалы
+живописи. Page-build не выполняется (fixture URL + failing pagebuild mock);
+observer только ставит штатные задачи. Это plumbing tests, не реальный provider
+semantic quality. **READY FOR PARENT TESTS**: 36 parent PASS относятся только к
+предыдущему HEAD `eb540a75`, не к текущему изменению.
 
 Существующие same-slot copies требуют source adjudication через normal
 match/create flow. Отдельного API merge двух существующих Event rows нет:
@@ -351,8 +366,10 @@ anchor не добавляется. `strict_verified` означает заве�
    моделью другая копия slot не доказывает выполненное слияние строк.
 4. Для `10990 ↔ 10991` review должен подтвердить `independent_event`
    (матчи за 5-е и 3-е места), а для `10992` — отдельный финал. После review
-   прямой вызов того же recompute с валидным child-grounded independent outcome
-   удалит edge с обеих сторон, не вызывая publisher или enqueue сам по себе.
+   прямой вызов существующего writer
+   `recompute_linked_event_ids(db, 10990, programme_decisions={10991: "independent_event", 10992: "independent_event"})`
+   после source-grounded review удалит неверный edge с обеих сторон; passed verdicts
+   не выполняют нового model request, publisher или enqueue сами по себе.
    Проверить обе строки, отсутствие link на 10992 и результат
    `_same_day_linked_publish_group`: отдельный anchor для каждого матча.
    При unknown существующая неверная взаимная связь останется, поэтому

@@ -20,9 +20,12 @@
 - Source-programme batch adjudication заменяет fuzzy title/venue linking:
   один дополнительный shared LLM request для children одного импорта, bounded
   child-local evidence, reciprocal cleanup и same-slot guard. READY FOR PARENT TESTS;
-  existing-row merge не добавлен, большие batches имеют bounded coverage.
+  existing-row merge не добавлен, внешние peers имеют bounded recall.
 - Programme recall сужается до SQL LIMIT и ранжируется по близости даты;
-  sparse verdict output исключает quadratic перечисление irrelevant pairs.
+  compact programme groups с индивидуальными quotes исключают quadratic output.
+- TG Monitor results включён в programme batch; все accepted targets обрабатываются
+  порциями по 32 с cross-chunk peers. Old linked peers не вытесняются top24;
+  address-only, conflicting memberships и same-slot groups не создают links.
 
 
 - VK: recommendation changes no longer change the source publication hash or force new card-count repairs; recovery prioritizes announcements and one-time comments at the existing pace.
