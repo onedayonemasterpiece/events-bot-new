@@ -194,3 +194,15 @@ Regression checks: initialized new-post scheduling and worker execution after th
 ## Early calendar recovery deadline, 14 November
 
 Production job 156657 was scheduled for 04:38 UTC after public release at 04:30, but generic CAPTCHA recovery moved its slot to 01:56 UTC. The calendar handler now returns the already known publication time plus its original delay before any VK read. It reuses the worker datetime deferral and does not change the recovery cohort. A distinguishing test fails before the fix and verifies zero provider calls before that deadline; the existing actual-public-date and user-author delivery tests remain. No new state, queue, timer or retry path.
+
+
+## Duplicate-source narrative churn, 14 November
+
+Live Telegram source 8363 merged into events 10956 and 10957, already published from source 8362. Both merges added zero facts and zero posters. Their fact ledgers contain duplicate semantic facts, the same poster URLs and the note “Описание перегенерировано: fact-first”. The changed wording rearmed completed VK jobs 156652/156665, which received CAPTCHA on wall.edit for posts 14357/14335 at 05:23/05:33 UTC. These two cases are not graph refreshes or same-day anchor merges.
+
+The existing semantic fact verdict now preserves the narrative and derived snippets for duplicate-only input. It does not skip source recording, age provenance or gallery handling. Actual fact, anchor, ticket and visible age changes, required cleanup and an empty initial description remain eligible for generation. A local initialized regression fails before the correction and confirms unchanged narrative plus zero calls to the VK upload/edit consumer afterward. Positive controls cover added facts, ticket changes, first description, visible age changes and required cleanup; provenance-only age changes preserve wording. This removes an avoidable caller, not the VK challenge itself. Ordinary live acceptance remains with the release coordinator.
+
+
+## Linked-time calendar target resolution, 14 November
+
+Calendar job 157046 for event 10990 failed with public_post_not_found although public post 14376 existed. Publication combined occurrences 10990/10991 into the header “14 ноября 11:00 и 12:30”; calendar matching used only the first occurrence’s 11:00. The fallback now builds its expected title/date header from the same existing local publication view. The original event remains the ICS input. The real linked-group worker regression fails before the one-line-net correction, while the single-occurrence control passes. No extra API reads, persisted identity, fallback path or retries are added.

@@ -11,6 +11,8 @@
 
 
 ### Fixed
+- Resolve published calendar targets using the same local linked-time publication view as the original post while retaining the individual occurrence in the ICS.
+- Preserve existing event narratives and derived snippets when another source contributes only duplicate facts; unchanged announcements no longer upload images or edit VK posts for new wording alone.
 - Skip legacy recommendation-comment jobs without their carousel selection instead of recalculating different links from a later graph.
 - Remember an existing linked same-day VK publication before editing it, so CAPTCHA recovery does not repeatedly prioritize that update as a new announcement.
 - Resume one-time VK comments before the import backlog at the existing cadence, preserving publication-relative deadlines.

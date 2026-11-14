@@ -4,6 +4,10 @@
 
 ## Event Posts
 
+- Calendar target resolution reuses the existing linked-time publication view when VK omits the original postponed ID. The calendar still describes the individual canonical occurrence. This adds no VK reads or new identity state.
+
+- A second source containing only facts already known to the semantic merge preserves the existing description, short description and search digest. Recording the source or age-evidence provenance does not regenerate public wording. New facts, conflicting facts, actual age/anchor/ticket changes, required schedule cleanup and an initially empty description retain their existing update paths; gallery additions still use the existing media projection.
+
 - При сравнении исходных изображений общая обложка программы и карточка входящего события могут составлять одну галерею: подтверждённая связь с программой и диапазон дат, включающий дату события, не являются смысловым конфликтом. Несовместимые сведения целевого события и материалы другой программы по-прежнему отклоняются. Уточнение инструкции не сбрасывает сохранённые решения и не запускает исторический пересмотр.
 - Входящие фотографии обрабатываются до первоначальной подготовки публикаций: `vk_sync` и Telegraph используют существующую зависимость `event_media_review:<event_id>`, а Telegram ждёт Telegraph. Готовая первая CDN-картинка не отменяет незавершённую обработку остальных исходных изображений. Продолжения той же media-задачи также входят в эту зависимость; новый пост создаётся сразу с полной завершённой галереей, а не серией последующих photo edits.
 - Зависимость media относится только к незавершённому отбору исходных фотографий и к смысловой проверке связанных событий, как в действующем контракте галереи. Когда все кандидаты разрешены и галерея готова, отложенная геометрия изображения не задерживает анонс. Замена зависимостей на пустой список действительно удаляет прежнюю зависимость и возвращает такую задачу к запрошенному времени запуска.
