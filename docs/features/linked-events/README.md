@@ -156,8 +156,10 @@ awaited source import; после выхода контекст сбрасыва
 удаление ложной связи само по себе не запускает VK публикацию.
 
 Recall metadata pool ограничен прежним максимумом 800 и окном 120 дней назад /
-365 вперёд. Точное совпадение source aliases имеет приоритет; title similarity,
-venue/city используются **только для recall**, не как semantic verdict.
+365 вперёд. До SQL LIMIT выборка сужается source aliases, городом, venue или title tokens
+(только recall). Aliases имеют приоритет, далее — близость даты к batch вместо
+самых ранних строк. После SQL title similarity/venue/city выбирают peers,
+но никогда не становятся semantic verdict.
 В запрос попадают до 32 принятых targets и 24 наиболее подходящих внешних peers,
 только canonical/active/not silent/not merged. Большие batches сверх target
 предела имеют неполную semantic coverage: непросмотренные IDs не получают новых
@@ -168,7 +170,13 @@ edges; это ограничение полноты, а не proof independent_e
 по 160 символов и short description до 300 символов. Raw carrier не используется
 ни как child summary, ни как доказательство quotes. Поэтому отсутствие
 `source_text` не запрещает связывание при наличии accepted фактов. Выход ограничен
-6000 tokens; неполный ответ не разрешает угадывать отсутствующие пары.
+6000 tokens. Ответ sparse: только доказанные programme/duplicate positives
+и explicit independent negatives для переданных old_links; irrelevant/unknown
+пары опускаются, unordered пара передаётся один раз. Все доказанные target-target
+programme edges сохраняют clique курса. Неполный ответ не разрешает угадывать
+отсутствующие пары. JSON Schema использует lowercase types как другие Smart
+Update contracts: `_gemma_native_response_schema` преобразует их в uppercase
+для native Google schema; prompt-schema fallback получает обычный JSON Schema.
 
 Четыре исхода: `same_programme_other_slot`, `duplicate_same_slot`,
 `independent_event`, `unknown`. Проверяются passed target/peer IDs и дословные
@@ -181,7 +189,8 @@ Contradictory output не применяется. Same-slot не создаёт 
 Fixture `test_linked_events_location_identity.py` использует normal
 `vk_intake.process_event` boundary с mocked persist/model: семь children и два
 observer вызова на child должны дать один semantic request и взаимные даты.
-Она проверяет cross-source venue/title aliases, NULL address, accepted facts
+Она проверяет внешний cross-source peer за 801 ранней посторонней строкой,
+venue/title aliases, NULL address, accepted facts
 без source_text, same-slot copies, sports, standalone events и разные материалы
 живописи. Это проверки call routing/plumbing; они не доказывают качество
 семантического решения настоящей модели. Текущая версия **READY FOR PARENT TESTS**;

@@ -20,11 +20,15 @@ async def test_source_grounded_address_keeps_course_dates_across_venue_labels(tm
     async def approve(prompt, schema, **kwargs):
         packet = json.loads(prompt[prompt.index('{"target_ids"'):])
         calls.append(packet)
+        assert schema['type'] == 'object'
+        from smart_event_update import _gemma_native_response_schema
+        assert _gemma_native_response_schema(schema)['properties']['decisions']['type'] == 'ARRAY'
         return {'decisions': [dict(target_id=tid, peer_id=p['id'],
             relation=('same_programme_other_slot' if p['id'] < 10707 else
                 copy_relation if p['date'] == f'2099-11-{tid - 10284:02d}' else 'unknown'),
             target_quote='Курс импровизации', peer_quote='Курс импровизации')
-            for tid in packet['target_ids'] for p in packet['events'] if p['id'] != tid]}
+            for tid in packet['target_ids'] for p in packet['events']
+            if (tid < p['id'] < 10707) or p['id'] == 10707 + tid - 10285]}
 
     async def drafts(*args, **kwargs):
         return list(range(10285, 10292)), None
@@ -41,11 +45,14 @@ async def test_source_grounded_address_keeps_course_dates_across_venue_labels(tm
     monkeypatch.setattr('smart_event_update._ask_gemma_json', approve)
     try:
         async with db.get_session() as session:
-            for n in range(7):
+            for n in range(8):
                 for eid in (10285 + n, 10707 + n):
                     session.add(Event(id=eid, title='Импровизация' if n % 2 else 'Курс сценической игры',
                         description='', source_text='', short_description=None if eid == 10286 else 'Курс импровизации', date=f'2099-11-{n + 1:02d}',
                         time='19:00', location_name='Светлый зал' if n % 2 else 'Винный факультет'))
+            session.add_all([Event(title='Посторонняя программа', description='', source_text='',
+                date='2099-08-01', time='19:00', location_name='Другая площадка')
+                for _ in range(801)])
             await session.commit()
             session.add(EventSource(event_id=10285, source_type='telegram', source_url='https://t.me/a/1'))
             source = EventSource(event_id=10286, source_type='parser', source_url='https://example.org/course')
@@ -54,13 +61,12 @@ async def test_source_grounded_address_keeps_course_dates_across_venue_labels(tm
             await session.refresh(source)
             session.add(EventSourceFact(event_id=10286, source_id=source.id, fact='Курс импровизации'))
             await session.commit()
-        # Even an approved programme cannot turn an exact same-slot copy into another date.
         await vk_intake.process_event('carrier', db=db)
         async with db.get_session() as session:
             for eid in range(10285, 10292):
                 links = (await session.get(Event, eid)).linked_event_ids
-                assert all(peer in links for peer in range(10285, 10292) if peer != eid)
-                assert not set(range(10707, 10714)).intersection(links)
+                assert all(peer in links for peer in range(10285, 10293) if peer != eid)
+                assert not set(range(10707, 10715)).intersection(links)
         assert len(calls) == 1  # Seven children, duplicate observers: one additional semantic request.
         assert all('facts' in p and 'type' in p for p in calls[0]['events'])
     finally:
@@ -98,16 +104,12 @@ async def test_distinct_children_cleanup_and_unknown_preserves_known_edges(tmp_p
         async with db.get_session() as session:
             base = await session.get(Event, 10990)
             assert base.linked_event_ids == [10993]
-            assert (await session.get(Event, 10991)).linked_event_ids == []
+            game = await session.get(Event, 10991)
+            assert game.linked_event_ids == []
             for eid in range(10994, 10999):
                 assert (await session.get(Event, eid)).linked_event_ids == []
         # Sports never collapse after adjudication; the independent rows remain available.
-        group = await main._same_day_linked_publish_group(db, await _get(db, 10991))
+        group = await main._same_day_linked_publish_group(db, game)
         assert [e.id for e in group] == [10991]
     finally:
         await db.close()
-
-
-async def _get(db, eid):
-    async with db.get_session() as session:
-        return await session.get(Event, eid)
