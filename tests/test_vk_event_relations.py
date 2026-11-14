@@ -10,10 +10,12 @@ import vk_event_relations as relations
 
 
 @pytest.mark.asyncio
-async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_path, monkeypatch):
+@pytest.mark.parametrize('publication_offset', [3600, -120])
+async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_path, monkeypatch, publication_offset):
     db = main.Database(str(tmp_path / 'early-related.sqlite'))
     await db.init()
-    published_at = int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp())
+    published_at = int(datetime.now(timezone.utc).timestamp()) + publication_offset
+    monkeypatch.setattr(relations.random, 'randint', lambda a, b: b)
     calls = []
     async def api(method, params, *args, **kwargs):
         calls.append(method)

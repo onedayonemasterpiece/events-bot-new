@@ -194,7 +194,7 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
                 ))).first()
             if pending:
                 return False
-        due = datetime.fromtimestamp(max(publish_date, now) + random.randint(180, 1200), timezone.utc)
+        due = datetime.fromtimestamp((publish_date if deferred else max(publish_date, now)) + random.randint(180, 1200), timezone.utc)
         if deferred:
             return due
         await main.enqueue_job(db, event.id, main.JobTask.vk_calendar_comment,

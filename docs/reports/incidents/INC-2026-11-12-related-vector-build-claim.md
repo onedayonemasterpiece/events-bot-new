@@ -301,3 +301,6 @@ after publication it creates exactly one comment and finishes. Initial
 scheduling still uses the original enqueue path. No new queue, marker, retry
 or manual repair is introduced. This is separate from calendar PR943's known
 publication guard and preserves that release.
+The same regression covers recovery two minutes after publication at the
+maximum random delay: the deadline remains publication +20 minutes, not
+execution +20 minutes. The random interval is anchored to actual publication.
