@@ -99,7 +99,7 @@ async def test_source_grounded_address_keeps_course_dates_across_venue_labels(tm
                 assert not set(range(10707, 10707 + size)).intersection(links)
         assert len(calls) == (size + 31) // 32
         assert set(ids) == {i for call in calls for i in call['target_ids']}
-        assert all('facts' in p and 'type' in p for p in calls[0]['events'])
+        assert all('proof' in p and 'slot' in p for p in calls[0]['events'])
     finally:
         await db.close()
 
@@ -178,5 +178,79 @@ async def test_group_grounding_rejects_unsafe_identity_without_erasing_known_lin
             assert (await session.get(Event, 1)).linked_event_ids == [2]
             assert (await session.get(Event, 2)).linked_event_ids == [1]
             assert (await session.get(Event, 3)).linked_event_ids == []
+    finally:
+        await db.close()
+
+
+@pytest.mark.parametrize('batch', ['course', 'sports', 'combined'])
+@pytest.mark.asyncio
+async def test_reported_probe_shape_compact_packets_and_title_grounding(tmp_path, monkeypatch, batch):
+    """Reconstruction from owner report; retained exact probe JSON is absent in this sandbox."""
+    from linked_events import _programme_decisions
+    db = Database(str(tmp_path / 'probe.sqlite'))
+    await db.init()
+    course = list(range(10483, 10490))
+    sports = [10990, 10991, 10992]
+    targets = course if batch == 'course' else sports if batch == 'sports' else course + sports
+    captured = []
+    bad = True
+
+    async def reply(prompt, schema, **kwargs):
+        packet = json.loads(prompt[prompt.index('{"target_ids"'):])
+        captured.append(packet)
+        assert len(prompt) < 11000  # Reported 34-event prompt was 24039 characters.
+        assert kwargs['max_tokens'] == 6000
+        from smart_event_update import _gemma_native_response_schema
+        native = _gemma_native_response_schema(schema)
+        allowed = native['properties']['decisions']['items']['properties']['relation']['enum']
+        assert set(allowed) == {'independent_event', 'duplicate_same_slot'} and 'old_links' not in allowed
+        assert 'COMPOSITE CARRIER' not in prompt
+        assert all(set(p) == {'id', 'title', 'slot', 'address', 'proof'} for p in packet['events'])
+        available = {p['id']: p for p in packet['events']}
+        aliases = [i for i in available if 10285 <= i <= 10291 or 10707 <= i <= 10713]
+        if batch != 'sports':
+            assert list(available)[:7] == course  # Stable target representatives, not lower-ID aliases.
+            assert len(available) <= len(targets) + 12 and not aliases
+        if batch != 'course':
+            assert [10990, 10991] in packet['review_pairs']
+        members = [dict(event_id=i, quote='Курс импровизации') for i in course if i in available]
+        if bad:
+            # Reconstruct observed mixed-slot group and invalid field-name relation.
+            if batch != 'sports':
+                members.append(dict(event_id=aliases[0] if aliases else 10285, quote='Курс импровизации'))
+            return {'groups': [{'members': members}] if batch != 'sports' else [], 'decisions': [
+                dict(target_id=10990, peer_id=10991, relation='old_links',
+                    target_quote='Матч за 5-е место', peer_quote='Матч за 3-е место')]}
+        return {'groups': [{'members': members}] if len(members) > 1 else [], 'decisions': [
+            dict(target_id=10990, peer_id=10991, relation='independent_event',
+                target_quote='Матч за 5-е место', peer_quote='Матч за 3-е место')] if batch != 'course' else []}
+
+    monkeypatch.setattr('smart_event_update._ask_gemma_json', reply)
+    try:
+        async with db.get_session() as session:
+            for n in range(7):
+                for eid in (10483 + n, 10285 + n, 10707 + n):
+                    session.add(Event(id=eid, title='Курс импровизации', description='',
+                        source_text='COMPOSITE CARRIER', short_description='Курс импровизации',
+                        date=f'2099-12-{n + 1:02}', time='19:00', location_name='Зал', location_address='Гаражная 2'))
+            for n, title in enumerate(['Матч за 5-е место', 'Матч за 3-е место', 'Финал']):
+                session.add(Event(id=10990 + n, title=title, description='', source_text='COMPOSITE CARRIER',
+                    date='2099-12-01', time=f'{12 + n * 2}:00', location_name='Зал',
+                    linked_event_ids=[10991] if n == 0 else [10990] if n == 1 else []))
+            session.add_all([Event(title='Независимый концерт', description='', source_text='',
+                date='2099-12-08', time='19:00', location_name='Зал') for _ in range(10)])
+            await session.commit()
+        children = dict.fromkeys(targets, '')
+        rejected = await _programme_decisions(db, children)
+        assert not any(rejected.values())
+        bad = False
+        verdicts = await _programme_decisions(db, children)
+        assert len(captured) == 2  # One bounded request for each separate reconstructed response.
+        if batch != 'sports':
+            for i in course:
+                assert {j for j, v in verdicts[i].items() if v == 'same_programme_other_slot'} == set(course) - {i}
+        if batch != 'course':
+            assert verdicts[10990][10991] == 'independent_event'
+            assert not any(v == 'same_programme_other_slot' for i in sports for v in verdicts[i].values())
     finally:
         await db.close()

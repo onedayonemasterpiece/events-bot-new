@@ -162,20 +162,30 @@ Recall metadata pool ограничен прежним максимумом 800 
 (только recall). Aliases имеют приоритет, далее — близость даты к batch вместо
 самых ранних строк. После SQL title similarity/venue/city выбирают peers,
 но никогда не становятся semantic verdict.
-В запрос попадают до 32 targets текущей порции и 24 recall peers. Все остальные
+В запрос попадают до 32 targets текущей порции и 12 recall peers. Все остальные
 source children участвуют в recall, включая соседние порции и даты вне окна
 внешнего поиска; source children приоритетны до SQL LIMIT. Старые linked peers загружаются отдельно и не могут
-быть вытеснены из adjudication top24. Используются canonical/active/not silent/
+быть вытеснены из adjudication top12. Используются canonical/active/not silent/
 not merged rows. Лимит внешнего recall остаётся ограничением полноты; отсутствие
 peer/ответа не доказывает independent_event.
 
-Пакет child содержит title/type/date/time, venue/city, выбранный
-`occurrence_scope_text` до 600 символов, до четырёх accepted canonical facts
-по 160 символов, short description до 300 символов и canonical address до
-160 символов. Адрес — child-selected evidence, не детерминированный verdict.
-Raw carrier не используется
-ни как child summary, ни как доказательство quotes. Поэтому отсутствие
-`source_text` не запрещает связывание при наличии accepted фактов. Выход ограничен
+Внешние peers с точным slot одного из targets исключаются до model grouping:
+они не могут стать другой датой этого slot. Old linked peers всё равно включаются
+для cleanup; source children других порций остаются доступны. Это slot invariant,
+не semantic verdict и не merge. При смешанном source batch такой bounded recall
+может не захватить внешний peer иной программы, совпавший со slot другого target.
+
+Компактный child packet содержит accepted canonical title до 120 символов,
+slot, canonical address до 90 символов и один proof до 180 символов: выбранный
+`occurrence_scope_text`, иначе последний accepted fact, иначе canonical summary.
+Повтор title в proof не передаётся. Raw carrier, полные facts/description и
+дублирующие location/type metadata не отправляются. Отсутствие `source_text`
+не запрещает связывание. Title — разрешённая цитата, в частности для
+различения 5-го/3-го места и финала; адрес сам по себе не доказывает identity.
+Accepted source children идут первыми, затем established family peers и остальные
+canonical peers; внутри доказанной программы модель предпочитает этот порядок
+для одного representative на slot. Review pairs старых links передаются один раз,
+без `old_links` в каждом packet. Выход по-прежнему ограничен
 6000 tokens. Вместо quadratic pair output ответ содержит `groups` с `members`
 (`event_id`, индивидуальная `quote`) и отдельные sparse `decisions` для
 `duplicate_same_slot` / `independent_event` old edges. Группа из 32 дат требует
@@ -186,11 +196,12 @@ member в нескольких группах, конфликтующие verdic
 address-only identity quote отклоняют новые решения, сохраняя известные edges.
 Проверенная группа разворачивается в reciprocal edges существующим writer,
 включая peers и соседние порции; persisted group_id не создаётся. Schema types
-lowercase, существующий `_gemma_native_response_schema` преобразует их для Google.
+lowercase, pair relation ограничен enum `duplicate_same_slot` /
+`independent_event`; field name `old_links` не является допустимым relation. Существующий `_gemma_native_response_schema` преобразует их для Google.
 
 Четыре исхода: `same_programme_other_slot`, `duplicate_same_slot`,
 `independent_event`, `unknown`. Проверяются passed target/peer IDs и дословные
-цитаты из child excerpt / accepted facts / canonical summary обеих сторон.
+цитаты из accepted canonical title или выбранного child proof обеих сторон.
 Contradictory output не применяется. Same-slot не создаёт «Другие даты»;
 группа даёт только явно подтверждённую моделью clique, не inference из старых
 edges; stale backlinks
@@ -208,8 +219,12 @@ recall rows: grounded negative всё равно удаляет обе стор�
 801 раннюю постороннюю строку, самостоятельные события и разные материалы
 живописи. Page-build не выполняется (fixture URL + failing pagebuild mock);
 observer только ставит штатные задачи. Это plumbing tests, не реальный provider
-semantic quality. **READY FOR PARENT TESTS**: 36 parent PASS относятся только к
-предыдущему HEAD `eb540a75`, не к текущему изменению.
+semantic quality. Дополнительный fixture реконструирует описанный владельцем
+mixed-alias response, недопустимый `old_links` relation и course/sports/combined
+prompt controls; это не exact replay отсутствующего retained JSON. Prompt в этом
+fixture должен быть <11000 characters (в описанном реальном probe было 24039).
+**READY FOR PARENT REAL-MODEL PROBES**: 42 parent PASS и зелёный CI относятся только
+к `09be7f96875e4f0cbb9f266b1e557eb62021c774`, не к текущему изменению.
 
 Существующие same-slot copies требуют source adjudication через normal
 match/create flow. Отдельного API merge двух существующих Event rows нет:

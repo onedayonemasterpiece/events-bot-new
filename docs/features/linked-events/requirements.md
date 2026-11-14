@@ -315,13 +315,17 @@
   импорт, уже принятые reciprocal semantic links сохраняются.
 - Все accepted targets обрабатываются порциями по 32; source children других
   порций доступны для recall и cross-chunk programme links. Семь children — один
-  запрос, 33 — два. 24 recall peers не вытесняют old linked peers из adjudication.
+  запрос, 33 — два. 12 recall peers не вытесняют old linked peers из adjudication.
 - Programme groups содержат проверенные IDs и индивидуальные quotes, не 496
   pair objects для 32 дат. Same-slot members, conflicting groups и address-only
   identity evidence не создают edges. Canonical address доступен модели как факт.
 - TG Monitor process_telegram_results включён в тот же transient batch, включая
   основные/bridge/attach-linked-source Smart Update calls. Publisher не меняется.
+- Compact packet передаёт title/slot/address и один child proof; canonical title
+  допустим как grounded quote. Pair relation schema содержит enum, исключающий
+  `old_links`; address-only identity остаётся запрещённой. Внешние exact same-slot
+  peers исключены из positive recall; old linked peers всегда доступны для cleanup.
 - Model output и importer fixtures проверяются parent tests; mocked provider
-  не подтверждает semantic quality. READY FOR PARENT TESTS, не deployed.
+  не подтверждает semantic quality. READY FOR PARENT REAL-MODEL PROBES, не deployed.
 - Восстановленные 10483–10489 не переигрываются; existing same-slot copies
   требуют отдельного native source review без выдуманного merge-existing API.
