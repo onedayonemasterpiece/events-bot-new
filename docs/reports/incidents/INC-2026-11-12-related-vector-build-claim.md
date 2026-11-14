@@ -262,3 +262,26 @@ uncreated announcement, one-time comment, managed update, then page jobs.
 A regression inserts an older managed row with a null hash before a fresh
 announcement, with both a null URL and an external source URL; the new row
 still goes first and every gap stays30seconds.40 focused checks pass.
+
+## Reimport erased an existing CAPTCHA schedule, November 14 at 00:49 UTC
+
+PR 941 produced a complete initial postponed carousel (event10946/post14327)
+through the ordinary wall.post path at 00:30 UTC. However a concurrent source
+and media update re-enqueued existing event10844. The generic enqueue merger
+cleared its CAPTCHA marker and could reset its future slot when dependencies
+changed; an already paused row could also be reopened through the ordinary
+requeue branch. At 00:49 UTC its wall.edit14266 triggered another CAPTCHA.
+This bypassed the established recovery ordering, rather than demonstrating a
+failure of the facts-only source hash.
+
+Enqueue now merges the latest payload/dependencies while retaining the existing
+VK CAPTCHA status, marker and scheduled slot. Only the existing CAPTCHA owner
+resumes paused rows. No new queue, timer, ledger field, provider request or
+manual resume was added. Two distinguishing cases (paused and already resumed
+pending) fail on unchanged main and pass with the fix. The two older job-dedup
+fixtures for August events also fail on unchanged main in November; they are
+separate past-date fixture failures, not caused by this change.
+
+Actual comment timing is still pending: post14327 is scheduled for 04:30 UTC;
+its initially selected related comment was due 04:44:11 UTC. A resumed job may
+run earlier, but its existing postponed check must defer until publication.

@@ -15737,7 +15737,11 @@ async def enqueue_job(
                     )
                     job = None
         if job:
-            if job.status == JobStatus.pending:
+            captcha_schedule = (job.next_run_at, job.last_error) if (
+                task in VK_JOB_TASKS and job.status in {JobStatus.pending, JobStatus.paused}
+                and (job.last_error or "").startswith("captcha_wait:")
+            ) else None
+            if job.status == JobStatus.pending or captcha_schedule:
                 for field, value in binding_fields.items():
                     setattr(job, field, value)
                 if payload is not None:
@@ -15784,6 +15788,8 @@ async def enqueue_job(
                 job.updated_at = now
                 job.attempts = 0
                 job.last_error = None
+                if captcha_schedule:
+                    job.next_run_at, job.last_error = captcha_schedule
                 session.add(job)
                 await session.commit()
                 logline(
@@ -15791,7 +15797,7 @@ async def enqueue_job(
                     event_id,
                     "merged",
                     job_key=job_key,
-                    status="pending",
+                    status=job.status.value,
                     owner_eid=job.event_id if job.event_id != event_id else None,
                     coalesce_key=job.coalesce_key,
                 )
