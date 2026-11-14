@@ -2526,3 +2526,20 @@ actual send, exact dedup before send, semantic rejection across exact copies,
 14-source prefix/tail, both cards inside 9, identity drift, existing shared
 limiter/models/observer. Release and ordinary initial source-gallery readback
 remain pending; source/tests do not close incident or start 48-hour acceptance.
+
+### 2026-11-14: prevent 400 px empty-upload downgrade
+
+Production manifest 14428/source index 6 was 400×267, while canonical 37221 was
+1200×800. Runtime showed empty 258326-byte initial upload, empty 800 px fallback,
+then 400 px success. Root is the shared helper's dimension-only 95/4:4:4 profiles,
+which skipped same-size JPEG reencoding; the server rejection cause is unknown.
+The helper now reencodes at prepared size 90/85 with 4:2:0 before a final 800 px quality 80
+profile. PNG's first full-original-size 95/4:4:4 fallback remains. Both callers,
+four-attempt bound and pacing are unchanged; no historical post repair is run.
+Initialized real-helper fake uploads fail before (third image 400×267) and pass
+after (third 1200×800), for URL and bytes callers. Four-empty attempts remain
+bounded; small originals never upscale; PNG 1080×1350 guard stays green.
+Offline actual canonical 37221 measurement through the real helper: initial
+258326 bytes at 1200×800; then 164862/121069 bytes at 1200×800; last 56374 bytes at 800×533.
+Twelve targeted checks and bounded peer review pass. Live acceptance of the new
+profiles is not yet demonstrated; release/readback remain owner task follow-up.

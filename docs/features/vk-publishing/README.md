@@ -223,6 +223,18 @@
   `VK_AFISHA_CHANNEL_PEER_IDS` (comma-separated) must be set explicitly; no
   fallback from `klgdevents` wall/group id is allowed.
 
+## Empty photo-upload responses
+
+When VK returns an empty `photo`/`server`/`hash`, both URL and bytes upload
+reuse the existing three fallback representations within the same four total
+attempts and pacing. Non-PNG input first tries its prepared dimensions (up to
+1600 px) at JPEG quality 90/4:2:0, then those dimensions at 85/4:2:0, then at
+most 800 px at 80/4:2:0. Smaller originals are never enlarged. PNG keeps its
+existing full-original-size quality 95/4:4:4 first fallback, before the latter
+two profiles. There is no 400 px downgrade solely to recover an empty response.
+This changes client encoding; it does not establish why VK rejected earlier
+uploads, or prove acceptance of the new profiles without ordinary live readback.
+
 ## Rejected media reimports
 
 Pending replacement images remain outside the selected public gallery; optional role classification alone does not hide an approved source photo, including linked child events. If the gallery is empty, `vk_sync` clears a prior attachment instead of preserving it or using the Telegraph fallback. A semantic rejection for an immutable hosted image continues to block the same object if a source reimport creates another poster row.
