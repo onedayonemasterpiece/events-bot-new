@@ -156,7 +156,7 @@ def render_card(items, *, schedule=False):
                 and y + 8 + len(lines) * 23 <= 154
                 and all(rd.textlength(line, font=description_font) <= width for line in lines)):
             for line in lines:
-                rd.text((238, y + 8), line, font=description_font, fill=palette.route)
+                rd.text((238, y + 8), line, font=description_font, fill=palette.sub)
                 y += 23
         height = 148 if len(items) > 5 else 174
         if height != 174:
