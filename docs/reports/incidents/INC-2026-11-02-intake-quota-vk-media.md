@@ -2543,3 +2543,17 @@ Offline actual canonical 37221 measurement through the real helper: initial
 258326 bytes at 1200×800; then 164862/121069 bytes at 1200×800; last 56374 bytes at 800×533.
 Twelve targeted checks and bounded peer review pass. Live acceptance of the new
 profiles is not yet demonstrated; release/readback remain owner task follow-up.
+
+### 2026-11-14: canonical gallery cap caused duplicate-import VK edits
+
+At 10:08 UTC wall.edit 13242 for event 10350/job 141839 followed an ordinary duplicate
+VK source 14853192/candidate 29401 (posters=[], added facts/posters 0). The 954
+canonical get_event_gallery_rows[:8] cap truncated ten already-approved photos
+during unconditional _apply_posters projection sync. This changed photo_urls
+without new source media and forced an old-publication edit/CAPTCHA.
+Remove only the canonical cap; retain the batch working prefix and VK consumer
+attachment limits. Initialized duplicate-only regression starts with ten approved
+ledger rows and applied hash 10: canonical 10 remains unchanged, while an already
+truncated canonical 8 restores 10 through normal import and matches the same
+applied hash 10. Neither case calls the VK upload/edit boundary. No historical
+mass repair, special empty-input path or successful receipt fabrication is used.

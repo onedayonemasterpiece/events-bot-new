@@ -12,6 +12,7 @@
 
 
 ### Fixed
+- Keep the complete canonical approved source gallery when applying duplicate-only imports; VK attachment limits apply only at publication, avoiding unnecessary edits of existing ten-photo posts.
 - Preserve source-photo detail after VK empty upload responses: try smaller JPEG encodings at prepared resolution before an 800 px fallback, retaining full-resolution PNG card recovery and the existing four-attempt bound.
 - Invalidate the current vector receipt before sidecar mutation so partial capped sync cannot reuse a previous success.
 - Restore the existing strict semantic verifier after vector retrieval, retaining relevant lower-cosine events without admitting unrelated ones; use the shared key pool and honor minute-bucket retry timing.
