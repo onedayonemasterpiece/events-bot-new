@@ -16250,6 +16250,10 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
     if not event or event.silent or event.lifecycle_status != "active" or event.identity_status == "merged":
         return False
     postponed_url = payload["post_url"]
+    delay = random.Random(postponed_url).randint(300, 900)
+    planned_due = datetime.fromtimestamp(int(payload["publish_date"]) + delay, timezone.utc)
+    if planned_due > datetime.now(timezone.utc):
+        return planned_due
     owner, postponed_id = map(int, _vk_owner_and_post_id(postponed_url))
     response = await _vk_api(
         "wall.get", {"owner_id": owner, "filter": "owner", "count": 100},
@@ -16270,7 +16274,6 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
     if len(matches) != 1:
         raise RuntimeError("vk_calendar_public_post_not_found")
     item = matches[0]
-    delay = random.Random(postponed_url).randint(300, 900)
     public_due = datetime.fromtimestamp(int(item["date"]) + delay, timezone.utc)
     if public_due > datetime.now(timezone.utc):
         logging.info("vk.calendar_comment deferred event_id=%s public_due=%s", event_id, public_due.isoformat())

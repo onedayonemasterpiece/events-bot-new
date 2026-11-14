@@ -189,3 +189,8 @@ A single owner-requested pilot on the newly public concert post14286 completed u
 Restoration reconnects only new scheduled announcements to the existing one-shot outbox. The handler defers the same row when the actual public date is later than planned, then resolves the exact final URL and sends the user-authored ICS. Existing relation-comment payloads and receipts remain intact. No historical replay, recurring scan, new queue/state/provider/token or post edit is introduced. Four-second pacing is retained from the working pilot, with awaited upload/save responses as the readiness guarantee.
 
 Regression checks: initialized new-post scheduling and worker execution after the actual public date, user author, unchanged receipt with zero calls, group/user lost-response recovery, save failure preventing comment creation, and existing related-comment and CAPTCHA pause tests. Normal automatic delivery remains required after release. Start the owner-requested48-hour control only after live ordinary delivery is confirmed. Evidence: /home/dev/artifacts/events-bot-new/20261113T162224Z-vk-calendar-user-author-20261113.
+
+
+## Early calendar recovery deadline, 14 November
+
+Production job 156657 was scheduled for 04:38 UTC after public release at 04:30, but generic CAPTCHA recovery moved its slot to 01:56 UTC. The calendar handler now returns the already known publication time plus its original delay before any VK read. It reuses the worker datetime deferral and does not change the recovery cohort. A distinguishing test fails before the fix and verifies zero provider calls before that deadline; the existing actual-public-date and user-author delivery tests remain. No new state, queue, timer or retry path.

@@ -118,6 +118,9 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
             with pytest.raises(asyncio.CancelledError):
                 await main.job_outbox_worker(db, None)
         assert calls == before  # An idle worker must not scan our public wall.
+        # CAPTCHA recovery may make the row due before its known publication time.
+        assert await main.job_vk_calendar_comment(1, db, None, jobs[0].payload) == due
+        assert calls == before
         class Clock(datetime):
             @classmethod
             def now(cls, tz=None): return due + timedelta(seconds=1)
