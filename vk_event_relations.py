@@ -194,10 +194,13 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
                 ))).first()
             if pending:
                 return False
+        due = datetime.fromtimestamp(max(publish_date, now) + random.randint(180, 1200), timezone.utc)
+        if deferred:
+            return due
         await main.enqueue_job(db, event.id, main.JobTask.vk_calendar_comment,
             payload={'post_url': post_url, 'relations': data},
             coalesce_key=key, requeue_done=True,
-            next_run_at=datetime.fromtimestamp(max(publish_date, now) + random.randint(180, 1200), timezone.utc))
+            next_run_at=due)
         return False
     comments = await api('wall.getComments', owner_id=owner, post_id=post, count=100)
     existing = next((row for row in comments.get('items', [])
