@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-related-linked-public-view-20261114
+    image: runcoveer/events:bounded-consumer-images-20261114
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

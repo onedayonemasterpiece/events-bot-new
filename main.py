@@ -2326,15 +2326,9 @@ def ensure_jpeg(
 def _vk_carousel_cover(data: bytes, label: str = "листай") -> bytes:
     """Append a swipe cue outside the photo, only on the copy uploaded to VK."""
     from PIL import Image, ImageDraw, ImageFont, ImageOps
+    from media_dedup import prepare_consumer_jpeg
 
-    with Image.open(BytesIO(data)) as source:
-        # JPEG draft downsamples in the decoder, before thumbnail loads the raster.
-        max_side = 1600
-        scale = max(1, max(source.size) / max_side)
-        source.draft("RGB", tuple(max(1, int(side / scale)) for side in source.size))
-        if source.width * source.height > 20_000_000:
-            raise ValueError("VK upload source exceeds 20 MP")
-        source.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+    with Image.open(BytesIO(prepare_consumer_jpeg(data))) as source:
         photo = ImageOps.exif_transpose(source)
     font_size = max(1, round(photo.width / 19))
     font = ImageFont.truetype(Path(__file__).parent / "assets/fonts/Cygre-Bold.ttf", font_size)
@@ -4339,6 +4333,9 @@ async def upload_vk_photo(
                 img_bytes = await asyncio.wait_for(_download(), HTTP_TIMEOUT)
                 if swipe_hint:
                     img_bytes = await asyncio.to_thread(_vk_carousel_cover, img_bytes, swipe_hint if isinstance(swipe_hint, str) else "листай")
+                else:
+                    from media_dedup import prepare_consumer_jpeg
+                    img_bytes = await asyncio.to_thread(prepare_consumer_jpeg, img_bytes)
                 source_image_bytes = img_bytes
                 try:
                     img_bytes, _ = ensure_jpeg(

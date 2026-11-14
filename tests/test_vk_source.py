@@ -537,6 +537,8 @@ async def test_sync_vk_source_post_attaches_photos(monkeypatch):
 )
 @pytest.mark.asyncio
 async def test_upload_vk_photo_retries_upload_server_request(monkeypatch, first_failure):
+    import media_dedup
+    monkeypatch.setattr(media_dedup, "prepare_consumer_jpeg", lambda data: data)
     monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
     monkeypatch.setattr(
         main,

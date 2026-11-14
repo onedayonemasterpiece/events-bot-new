@@ -21337,6 +21337,11 @@ async def _smart_event_update_impl(
     if (
         SMART_UPDATE_MERGE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF
         and not authoritative_candidate_anchor
+        and not (
+            identity_final_result is not None
+            and identity_final_result.action is IdentityFinalAction.FINAL_MATCH
+            and identity_final_result.owner_event_id == existing.id
+        )
     ):
         merge_identity_verdict = None
         gate_error: Exception | None = None
