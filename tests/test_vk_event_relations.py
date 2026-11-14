@@ -102,7 +102,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
     try:
         async with db.get_session() as session:
             for i in range(1, 5):
-                session.add(main.Event(id=i, title=f'Концерт {i}', description='', source_text='',
+                session.add(main.Event(id=i, title=f'Концерт {i}', event_type='концерт', description='', source_text='',
                     date='2099-01-01..2099-01-03' if i == 4 else '2099-01-01',
                     end_date='2099-01-03' if i == 4 else None, time='00:00' if i == 4 else '19:00',
                     time_is_default=i == 4, location_name='Кафедральный собор',
@@ -123,6 +123,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         assert [r['id'] for r in data['dates']] == [3]
         assert data['related'][0]['medallions'][0].endswith('kant-island.png')
         assert data['related'][0]['is_free']
+        assert data['related'][0]['event_type'] == 'концерт'
         cards = await relations.cards(data, 8)
         assert len(cards) == 2
         assert Image.open(BytesIO(cards[1])).size == (1080, 1350)
@@ -211,9 +212,10 @@ def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monk
         return original(self, xy, text, *args, **kwargs)
     monkeypatch.setattr(ImageDraw.ImageDraw, 'text', record)
     body = relations.render_card([{'date': '20.11', 'date_iso': '2026-11-20', 'time': '19:00', 'title': '🎭 ' + 'Длинное название концерта ' * 12,
-        'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}])
+        'event_type': 'кинопоказ', 'place': 'Кафедральный собор', 'medallions': ['site/public/assets/organizers/kant-island.png'], 'is_free': True}])
     assert Image.open(BytesIO(body)).size == (1080, 1350)
     assert all('🎭' not in text for _, text, _ in seen)
+    assert any('Кинопоказ' in text for _, text, _ in seen)
     assert any(text == 'НОЯБРЯ' for _, text, _ in seen)
     assert any(text == 'пт · 19:00' for _, text, _ in seen)
     title_lines = [(text, font) for xy, text, font in seen if xy[0] == 238 and font.size == 32]

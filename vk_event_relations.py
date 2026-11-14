@@ -76,7 +76,8 @@ async def presentation(db, event):
                        if date and end and end > date and hours and hours[1] else '')
         return {'id': row.id, 'date': label, 'date_iso': start, 'end_date_iso': end.isoformat() if end else '',
                 'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
-                'place': row.location_name or '', 'url': row.source_vk_post_url or '',
+                'place': row.location_name or '', 'event_type': row.event_type or '',
+                'url': row.source_vk_post_url or '',
                 'description': row.short_description or row.search_digest or '', 'daily_hours': daily_hours,
                 'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
                                for m in resolve_event_graphic_medallions(row, limit=2)],
@@ -143,7 +144,8 @@ def render_card(items, *, schedule=False):
             rd.text((238, y), line, font=font(32, True), fill=palette.text)
             y += 34
         y += 8
-        details = row.get('place', '')
+        details = ' · '.join(value for value in (row.get('event_type', '').strip().capitalize(),
+                                                row.get('place', '').strip()) if value)
         if '–' in row['date'] and not until:
             details = row['date'] + (' · ' + details if details else '')
         for line in _wrap_by_width(rd, details, font(23), width, 2):

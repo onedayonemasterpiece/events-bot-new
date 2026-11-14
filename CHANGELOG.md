@@ -1,5 +1,7 @@
 # Changelog
 
+- VK: карточки похожих и других дат показывают канонический формат события рядом с площадкой; даже без описания понятно, кинопоказ это, спектакль или другой формат.
+
 - Related: preserve detailed event facts alongside short captions; initial VK posts wait for the enabled strict verifier instead of consuming legacy unverified anchors.
 
 - Linked dates: exact nonempty city/address preserves an existing course family when venue labels differ.
