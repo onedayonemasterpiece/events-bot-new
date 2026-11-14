@@ -23808,7 +23808,8 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         from vk_event_relations import graph_path
         path = graph_path(db)
         graph = json.loads(path.read_text())["related"] if path.is_file() else {}
-        if str(ev.id) not in graph:
+        if str(ev.id) not in graph or (_env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY")
+                                      and not graph[str(ev.id)].get("strict_verified")):
             logging.info("vk.initial_waiting_related event_id=%s", event_id)
             raise StaticSiteSingleFlightDeferred("vk_initial_waiting_related")
     if vk_group_blocked.get("wall.post", 0.0) > _time.time() and not _vk_user_token():

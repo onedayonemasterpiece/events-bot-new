@@ -4181,6 +4181,7 @@ def _related_audit_text(value: Any, *, max_chars: int) -> str:
 
 def _related_audit_event_block(event: dict[str, Any], *, tag: str, fact_max_chars: int) -> str:
     summary = _related_audit_text(event.get("summary") or event.get("description_html") or "", max_chars=fact_max_chars)
+    description = _related_audit_text(plain_from_html(event.get("description_html") or ""), max_chars=fact_max_chars)
     title = _related_audit_text(event.get("title") or "", max_chars=180)
     event_type = _related_audit_text(event.get("event_type") or "", max_chars=80)
     venue = _related_audit_text(event.get("venue_name") or "", max_chars=120)
@@ -4192,6 +4193,7 @@ def _related_audit_event_block(event: dict[str, Any], *, tag: str, fact_max_char
         f"<title>{title}</title>\n"
         f"<type>{event_type}</type>\n"
         f"<summary>{summary}</summary>\n"
+        f"<description>{description}</description>\n"
         f"<venue>{venue}</venue>\n"
         f"<city>{city}</city>\n"
         f"<date>{date}</date>\n"
@@ -4221,10 +4223,9 @@ def build_gemma_related_audit_prompt(
         "Не добавляй event_id, которых нет в candidates. Верни только JSON по схеме.\n"
         "Задача: оценить, насколько каждый candidate тематически близок к anchor, и отсортировать ranked от наиболее похожего к менее похожему.\n"
         "Оценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\n"
-        "Сначала отдели ту же программу/курс в другую дату или время (same_occurrence_group) и дубль того же сеанса (duplicate_same_slot): для них reject=true, это не «Похожие».\n"
-        "Решай по фактам программы, а не только названию; общий исполнитель, площадка, жанр или лига сами по себе не означают одну программу. Самостоятельные похожие события оценивай далее.\n"
+        "Оцени самостоятельные события. Общий анонс, фестиваль или турнир может содержать разные программы: учитывай факты выбранного title/type, а не всего расписания.\n"
         "Если событие просто другое, даже качественное, ставь reject=true.\n"
-        "similarity_class выбери строго из: same_occurrence_group, duplicate_same_slot, identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
+        "similarity_class выбери строго из: identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
         "confidence: 0..1, насколько достаточно фактов и насколько ты уверен в оценке; снижай при скудном описании или спорной похожести.\n"
         "Не объясняй решение, не возвращай лишние поля.\n\n"
         "<anchor>\n"
@@ -4459,7 +4460,7 @@ def gemma_related_policy_signature(*, model: str) -> str:
             120,
             int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v6_independent_programs_two_pass",
+        "prompt_version": "related_gemma4_schema_v7_selected_event_description_two_pass",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 

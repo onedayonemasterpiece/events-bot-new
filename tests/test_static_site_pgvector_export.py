@@ -82,7 +82,7 @@ def test_build_gemma_related_audit_prompt_is_compact_and_xml_escaped() -> None:
     assert "similarity_class" in prompt
     assert "confidence" in prompt
     assert "reason_codes" not in prompt
-    assert len(prompt) < 1800
+    assert len(prompt) < 2100
 
 
 def test_city_level_fallback_is_not_exported_as_a_venue() -> None:
@@ -619,3 +619,12 @@ def test_occurrence_and_duplicate_verdicts_never_become_semantic_recommendations
     result, _ = exporter.maybe_apply_gemma_audit(events, chains, enabled=True,
         model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4', cache={}, max_anchors=0)
     assert [item['event_id'] for item in result['1']] == [4]
+
+
+def test_related_verifier_keeps_description_beyond_short_caption() -> None:
+    exporter = _load_exporter_module()
+    event = {'id': 1, 'title': 'Лекция', 'summary': 'Краткая подпись',
+             'description_html': '<p>История фотографии и документальные снимки</p>'}
+    block = exporter._related_audit_event_block(event, tag='event', fact_max_chars=360)
+    assert 'История фотографии и документальные снимки' in block
+    assert '<p>' not in block and '&lt;p&gt;' not in block

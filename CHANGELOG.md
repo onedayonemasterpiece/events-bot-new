@@ -1,5 +1,7 @@
 # Changelog
 
+- Related: preserve detailed event facts alongside short captions; initial VK posts wait for the enabled strict verifier instead of consuming legacy unverified anchors.
+
 - Linked dates: exact nonempty city/address preserves an existing course family when venue labels differ.
 
 - Related: shared semantic verification separates repeated sessions and same-slot duplicates from independent similar events, including incomplete legacy occurrence groups.
