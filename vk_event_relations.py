@@ -219,7 +219,7 @@ async def ensure_comment(db, event, post_url, data, bot=None, *, deferred=False)
         if deferred:
             return due
         await main.enqueue_job(db, event.id, main.JobTask.vk_calendar_comment,
-            payload={'post_url': post_url, 'relations': data},
+            payload={'post_url': post_url, 'relations': data, 'publish_date': publish_date},
             coalesce_key=key, requeue_done=True,
             next_run_at=due)
         return False
