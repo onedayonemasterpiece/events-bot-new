@@ -17573,6 +17573,9 @@ async def smart_event_update(
         )
     if authority_review_error is not None:
         raise authority_review_error
+    if result.is_accepted and result.event_id:
+        from linked_events import remember_programme_event
+        remember_programme_event(result.event_id, candidate.occurrence_scope_text or "")
     return result
 
 
@@ -21182,7 +21185,7 @@ async def _smart_event_update_impl(
         try:
             from linked_events import recompute_linked_event_ids
 
-            lr = await recompute_linked_event_ids(db, int(new_event.id or 0))
+            lr = await recompute_linked_event_ids(db, int(new_event.id or 0), selected_evidence=candidate.occurrence_scope_text or "")
             linked_refresh_ids = [
                 int(x)
                 for x in (lr.changed_event_ids or [])
@@ -22885,7 +22888,7 @@ async def _smart_event_update_impl(
         try:
             from linked_events import recompute_linked_event_ids
 
-            lr = await recompute_linked_event_ids(db, int(existing.id or 0))
+            lr = await recompute_linked_event_ids(db, int(existing.id or 0), selected_evidence=candidate.occurrence_scope_text or "")
             linked_refresh_ids = [
                 int(x)
                 for x in (lr.changed_event_ids or [])

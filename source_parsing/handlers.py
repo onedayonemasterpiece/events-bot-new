@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from linked_events import source_programme_batch
+
 import asyncio
 import hashlib
 import json
@@ -3082,6 +3084,7 @@ async def resume_source_parsing_jobs(
 
 
 
+@source_programme_batch
 async def process_source_events(
     db: Database,
     bot: Bot | None,

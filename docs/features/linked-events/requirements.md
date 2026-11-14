@@ -303,3 +303,19 @@
 Ветка не готова к применению, пока каждый релевантный gate не отмечен
 `PASS`, `N/A` с причиной или отдельным blocker. Скриншот без DOM/data/lifecycle
 проверки не закрывает acceptance.
+
+### Source programme batch acceptance (2026-11-14)
+
+- Семь принятых children одного source batch: максимум один дополнительный
+  semantic request на normal importer boundary, независимо от повторных observers.
+- Source aliases/title/venue/city дают recall, но не verdict. Взаимные links
+  требуют source-grounded programme decision; same-slot копии не являются датами.
+- Raw carrier не является child summary/evidence. Accepted child facts позволяют
+  сравнение при пустом source_text. Unknown не создаёт новые связи и не останавливает
+  импорт, уже принятые reciprocal semantic links сохраняются.
+- До 32 targets и 24 внешних peers на запрос: больший batch имеет явный coverage
+  gap, а не разрешение детерминированно связать непроверенные события.
+- Model output и importer fixtures проверяются parent tests; mocked provider
+  не подтверждает semantic quality. READY FOR PARENT TESTS, не deployed.
+- Восстановленные 10483–10489 не переигрываются; existing same-slot copies
+  требуют отдельного native source review без выдуманного merge-existing API.

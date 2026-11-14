@@ -16,6 +16,13 @@
 
 ## [Unreleased]
 
+### Changed
+- Source-programme batch adjudication заменяет fuzzy title/venue linking:
+  один дополнительный shared LLM request для children одного импорта, bounded
+  child-local evidence, reciprocal cleanup и same-slot guard. READY FOR PARENT TESTS;
+  existing-row merge не добавлен, большие batches имеют bounded coverage.
+
+
 - VK: recommendation changes no longer change the source publication hash or force new card-count repairs; recovery prioritizes announcements and one-time comments at the existing pace.
 
 - VK: CAPTCHA recovery preserves terminal publication failures instead of replaying old post edits.
