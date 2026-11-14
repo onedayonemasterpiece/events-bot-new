@@ -242,3 +242,13 @@ stopped row had been caused by recommendations; it honors the owner's stop
 on repeated old-post writes while initial delivery is restored. Evidence:
 stop-existing-edit-cohort-20261113T2345.json and source-facts-hash-final-2-focused.log.
 Live initial-carousel and delayed-comment acceptance remains open.
+
+Review caught the existing persisted-hash boundary. Exact old hashes can be
+reconstructed from the current selection or the original selection already
+saved in the related-comment outbox payload. On an exact full-input match,
+the existing persistence helper adopts the facts-only hash without upload/edit;
+no new marker/state is introduced. Three distinguishing cases cover new format,
+legacy current selection, and legacy original selection after graph changes.
+All three retain a later genuine source correction. Unmatched historical hashes
+are not silently rewritten as synchronized: missing original selection is not
+evidence of an unchanged source. No bulk baseline reset is performed.
