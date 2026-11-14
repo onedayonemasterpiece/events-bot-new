@@ -40,18 +40,24 @@ async def test_bad_date_is_not_invented():
 
 
 @pytest.mark.asyncio
-async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tmp_path, monkeypatch):
+@pytest.mark.parametrize("linked", [False, True])
+async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tmp_path, monkeypatch, linked):
     from datetime import datetime, timedelta, timezone
     from models import JobOutbox, JobStatus, JobTask
     db = Database(str(tmp_path / 'scheduled.sqlite'))
     await db.init()
     try:
-        ev = event(source_vk_post_url=None)
+        ev = event(source_vk_post_url=None, linked_event_ids=[3] if linked else [])
         async with db.get_session() as session:
             session.add(ev)
             session.add(event(id=2, source_vk_post_url='https://vk.com/wall-231920894_5'))
             session.add(event(id=3, time='19:00', source_vk_post_url='https://vk.com/wall-231920894_10'))
             await session.commit()
+        publish_event, _ = await main._prepare_same_day_linked_publish_event(db, ev)
+        public_header = next(line for line in main.build_vk_source_header(publish_event, None) if line.startswith('📅 '))
+        if linked:
+            assert '18:00 и 19:00' in public_header
+            assert ev.time == '18:00'  # Calendar keeps the original occurrence, not the combined view.
         monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '231920894')
         monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '231920894')
         monkeypatch.setattr(main, 'VK_TOKEN_AFISHA', 'group-fixture')
@@ -74,7 +80,7 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
                     {'id': 5, 'date': published_at-86400, 'text': 'Старый пост'},
                     # A prior gallery edit may have made the actual public date earlier.
                     {'id': 20, 'date': published_at+120, 'post_type': 'post',
-                     'text': 'Лекция\n' + next(line for line in main.build_vk_source_header(ev, None) if line.startswith('📅 '))},
+                     'text': 'Лекция\n' + public_header},
                 ]}}
             if method == 'docs.getWallUploadServer':
                 return {'response': {'upload_url': 'https://upload.example/file'}}
@@ -141,6 +147,7 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
         assert [method for method, _ in calls[len(before):]] == [
             'wall.get', 'docs.getWallUploadServer', 'docs.save', 'wall.createComment']
         async with db.get_session() as session:
+            assert (await session.get(Event, 1)).time == '18:00'
             assert (await session.get(Event, 1)).source_vk_post_url == 'https://vk.com/wall-231920894_20'
             assert (await session.get(Event, 2)).source_vk_post_url.endswith('_5')
             assert (await session.get(Event, 3)).source_vk_post_url.endswith('_20')

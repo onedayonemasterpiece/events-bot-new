@@ -21468,6 +21468,7 @@ async def _smart_event_update_impl(
     skip_topic_reclassify = False
     merge_digest_from_llm: str | None = None
     merge_fact_first_used = False
+    duplicate_only_narrative = False
 
     async with db.get_session() as session:
         await guard_event_operation_context(session, candidate, event_id=existing.id, effect="merged")
@@ -21494,6 +21495,7 @@ async def _smart_event_update_impl(
                     reason="source_binding_conflict", retry_reason=RetryReason.SOURCE_BINDING_CONFLICT,
                 )
         before_description = event_db.description or ""
+        before_age_restriction = event_db.age_restriction
         structured_age_decision = _candidate_age_decision(candidate)
         if structured_age_decision is not None:
             structured_age_decision = reconcile_age_decision(event_db, structured_age_decision)
@@ -21964,7 +21966,20 @@ async def _smart_event_update_impl(
 
                     # Fact-first: override public narrative with a fresh build from canonical facts,
                     # ignoring the merged description text (which is derived from raw sources).
-                    if SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED:
+                    duplicate_only_narrative = bool(
+                        SMART_UPDATE_FACT_FIRST and before_description.strip()
+                        and not (added_facts or conflict_facts or conflicting or ticket_changes_needed or needs_schedule_cleanup)
+                        and not any(merge_data.get(k) is not None and merge_data[k] != getattr(event_db, k, None)
+                                    for k in ("ticket_link", "ticket_price_min", "ticket_price_max", "ticket_status"))
+                        and event_db.age_restriction == before_age_restriction
+                        and not set(updated_keys).intersection({"title", "date", "time", "end_date", "location_name", "location_address", "city"})
+                    )
+                    if duplicate_only_narrative:
+                        clean_description = merge_digest_from_llm = None
+                        has_new_text = False
+                        merge_fact_first_used = True
+                        logger.info("smart_update.duplicate_narrative_preserved event_id=%s", event_db.id)
+                    elif SMART_UPDATE_FACT_FIRST and not SMART_UPDATE_LLM_DISABLED:
                         legacy_facts_for_fact_first: list[str] = list(legacy_facts_seed or [])
                         if not legacy_facts_for_fact_first:
                             try:
@@ -22498,7 +22513,7 @@ async def _smart_event_update_impl(
         )
         if ("description" in updated_keys) or has_new_text:
             short_needs_refresh = True
-        if short_needs_refresh:
+        if short_needs_refresh and not duplicate_only_narrative:
             normalized_short: str | None = None
             try:
                 normalized_short = await _llm_build_short_description(
@@ -22544,7 +22559,7 @@ async def _smart_event_update_impl(
             new_digest = normalized_candidate_digest
         if not new_digest:
             new_digest = _fallback_digest_from_description(event_db.description)
-        if new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
+        if not duplicate_only_narrative and new_digest and (new_digest.strip() != (event_db.search_digest or "").strip()):
             event_db.search_digest = new_digest
             updated_fields = True
             updated_keys.append("search_digest")
@@ -22627,7 +22642,7 @@ async def _smart_event_update_impl(
         # compared to rich available source text (usually site import), generate a
         # full rewritten description best-effort. This is important for Telegraph
         # pages: a short "search snippet" is not acceptable as the main text.
-        if "description" not in updated_keys:
+        if "description" not in updated_keys and not duplicate_only_narrative:
             cur_desc = (event_db.description or "").strip()
             min_expected = _min_expected_description_len_from_sources(event_db, candidate)
             if min_expected and len(cur_desc) < min_expected:

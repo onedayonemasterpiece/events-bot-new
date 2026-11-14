@@ -16267,11 +16267,12 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
                if int(item.get("postponed_id") or item.get("id") or 0) == postponed_id]
     if not matches:
         # Older VK responses omit postponed_id; retain the existing unique header match.
-        dates = {str(line).strip() for line in build_vk_source_header(event, None) if str(line).startswith("📅 ")}
+        publish_event, _ = await _prepare_same_day_linked_publish_event(db, event)
+        dates = {str(line).strip() for line in build_vk_source_header(publish_event, None) if str(line).startswith("📅 ")}
         matches = []
         for item in items:
             lines = [line.strip() for line in str(item.get("text") or "").splitlines() if line.strip()]
-            if lines and lines[0] == event.title.strip() and dates.intersection(lines):
+            if lines and lines[0] == publish_event.title.strip() and dates.intersection(lines):
                 matches.append(item)
     if len(matches) != 1:
         raise RuntimeError("vk_calendar_public_post_not_found")
