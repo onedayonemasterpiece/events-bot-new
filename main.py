@@ -2359,7 +2359,7 @@ def _vk_carousel_cover(data: bytes, label: str = "листай") -> bytes:
 
 
 def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
-    """4:4:4 JPEG format fallback before reducing a PNG text card."""
+    """Reencode at useful resolution before the final bounded JPEG fallback."""
     from PIL import Image, ImageOps
 
     variants: list[bytes] = []
@@ -2367,19 +2367,20 @@ def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
         width, height = source.size
         if width * height > 20_000_000:
             raise ValueError("VK upload source exceeds 20 MP")
-        sizes = (max(width, height), 800, 400) if source.format == "PNG" else (1600, 800, 400)
-        for max_side in sizes:
-            if max(width, height) < max_side or (max(width, height) == max_side and source.format != "PNG"):
-                continue
+        prepared_side = min(max(width, height), 1600)
+        profiles = (
+            (max(width, height), 95, 0) if source.format == "PNG" else (prepared_side, 90, 2),
+            (prepared_side, 85, 2),
+            (min(prepared_side, 800), 80, 2),
+        )
+        for max_side, quality, subsampling in profiles:
             image = ImageOps.exif_transpose(source).convert("RGB")
             image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
             output = BytesIO()
-            image.save(output, format="JPEG", quality=95, subsampling=0)
+            image.save(output, format="JPEG", quality=quality, subsampling=subsampling)
             variant = output.getvalue()
             validate_jpeg_markers(variant)
             variants.append(variant)
-            if len(variants) == 3:
-                break
     return variants
 
 

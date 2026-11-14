@@ -415,7 +415,7 @@ async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoste
         if resolve_poster_display_url(row)
         and str(row.supabase_path or "").strip() not in rejected_paths
         and not _unbound_text_photo_conflict(row.media_semantic_evidence_json)
-    ][:8]
+    ]
 
 
 async def get_event_gallery_urls(
