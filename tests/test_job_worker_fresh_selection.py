@@ -210,7 +210,7 @@ async def test_initial_publications_wait_for_complete_gallery_across_media_follo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('linked', [False, True])
-async def test_approved_gallery_keeps_existing_linked_semantic_guard(tmp_path, monkeypatch, linked):
+async def test_approved_gallery_does_not_wait_for_optional_linked_semantics(tmp_path, monkeypatch, linked):
     from unittest.mock import AsyncMock
     import event_media
     db = main.Database(str(tmp_path / 'linked-gallery.sqlite'))
@@ -241,7 +241,7 @@ async def test_approved_gallery_keeps_existing_linked_semantic_guard(tmp_path, m
             await session.commit()
         await main.schedule_event_update_tasks(db, ev)
         await main._run_due_jobs_once(db, None)
-        assert len(calls) == (0 if linked else 2)
+        assert len(calls) == 2
     finally:
         await db.close()
 
