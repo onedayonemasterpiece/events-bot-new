@@ -252,3 +252,13 @@ legacy current selection, and legacy original selection after graph changes.
 All three retain a later genuine source correction. Unmatched historical hashes
 are not silently rewritten as synchronized: missing original selection is not
 evidence of an unchanged source. No bulk baseline reset is performed.
+
+The peer's next actual read found job155630/event10906 editing managed14213
+without a source hash or retained related-comment selection. It was not among
+the22 hash-bearing stopped rows. The existing resume query now distinguishes
+a genuinely uncreated announcement from a managed URL using the configured
+owner and current Event fields, without another state/marker. Its order is
+uncreated announcement, one-time comment, managed update, then page jobs.
+A regression inserts an older managed row with a null hash before a fresh
+announcement, with both a null URL and an external source URL; the new row
+still goes first and every gap stays30seconds.40 focused checks pass.

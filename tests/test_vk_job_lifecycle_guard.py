@@ -217,18 +217,23 @@ async def test_graph_changes_do_not_rewrite_initial_complete_post(db, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_captcha_resume_uses_publication_priority_without_shortening_pacing(db, monkeypatch):
+@pytest.mark.parametrize('source_url', [None, 'https://vk.com/wall-9_12'])
+async def test_captcha_resume_uses_publication_priority_without_shortening_pacing(db, monkeypatch, source_url):
     from models import JobOutbox, JobTask
     from sqlmodel import select
-    event = await save_event(db)
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    existing = await save_event(db, source_vk_post_url='https://vk.com/wall-1_999')
+    event = await save_event(db, source_vk_post_url=source_url)
     monkeypatch.setattr(main, 'VK_CAPTCHA_RESUME_SPACING_SEC', 30)
     async with db.get_session() as session:
+        session.add(JobOutbox(event_id=existing.id, task=JobTask.vk_sync))
         for task in (JobTask.festival_pages, JobTask.vk_calendar_comment, JobTask.vk_sync):
             session.add(JobOutbox(event_id=event.id, task=task))
         await session.commit()
     await main.vk_captcha_pause_outbox(db, marker='captcha_wait:priority')
-    assert await main._resume_vk_captcha_outbox(db, 'captcha_wait:priority') == 3
+    assert await main._resume_vk_captcha_outbox(db, 'captcha_wait:priority') == 4
     async with db.get_session() as session:
         jobs = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
-    assert [j.task for j in jobs] == [JobTask.vk_sync, JobTask.vk_calendar_comment, JobTask.festival_pages]
-    assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30, 30]
+    assert [j.task for j in jobs] == [JobTask.vk_sync, JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.festival_pages]
+    assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30, 30, 30]
+    assert jobs[0].event_id == event.id and jobs[2].event_id == existing.id

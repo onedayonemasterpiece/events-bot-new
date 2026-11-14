@@ -5599,15 +5599,22 @@ async def _resume_vk_captcha_outbox(
     skipped = 0
     async with db.get_session() as session:
         rows = await session.execute(
-            select(JobOutbox)
+            select(JobOutbox).outerjoin(Event, Event.id == JobOutbox.event_id)
             .where(
                 JobOutbox.task.in_(VK_JOB_TASKS),
                 JobOutbox.status == JobStatus.paused,
                 JobOutbox.last_error == marker,
                 JobOutbox.terminal_reason.is_(None),
             )
-            .order_by(JobOutbox.task != JobTask.vk_sync,
-                      JobOutbox.task != JobTask.vk_calendar_comment, JobOutbox.id)
+            .order_by(
+                ((JobOutbox.task == JobTask.vk_sync) & Event.vk_source_hash.is_(None) & (
+                    Event.source_vk_post_url.is_(None) | ~Event.source_vk_post_url.contains(
+                        f"wall-{str(VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or '').lstrip('-')}_", autoescape=True
+                    )
+                )).desc(),
+                JobOutbox.task != JobTask.vk_calendar_comment,
+                JobOutbox.task != JobTask.vk_sync, JobOutbox.id,
+            )
         )
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
         for job in jobs:
