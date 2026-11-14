@@ -572,7 +572,7 @@ def test_related_audit_retry_respects_shared_minute_bucket(monkeypatch) -> None:
         [{'id': 1, 'title': 'Открытый микрофон'}, {'id': 2, 'title': 'Сольный стендап'}],
         chains, enabled=True, model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
         cache={}, max_anchors=0)
-    assert waits[0] == 42.0
+    assert waits == [42.0]
     assert len(calls) == 2
     assert result['1'][0]['slot_type'] == 'pure_related'
     assert meta['status'] == 'ok'
@@ -628,3 +628,28 @@ def test_related_verifier_keeps_description_beyond_short_caption() -> None:
     block = exporter._related_audit_event_block(event, tag='event', fact_max_chars=360)
     assert 'История фотографии и документальные снимки' in block
     assert '<p>' not in block and '&lt;p&gt;' not in block
+
+
+def test_strict_anchor_flag_requires_completed_audit_and_accepts_empty_candidates(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT', '6')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS', '1')
+    events = [_related_event(i, f'Event {i}', day=i) for i in range(1, 9)]
+    def audit(**kwargs):
+        if kwargs['candidates'][0]['id'] == 8:
+            raise RuntimeError('second audit pass failed')
+        return {e['id']: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                         'similarity_class': 'highly_similar'} for e in kwargs['candidates']}
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', lambda *a, **k: {
+        str(i): ([{'event_id': j, 'vector_similarity': .9, 'related_score': .9,
+                   'slot_type': 'pure_related'} for j in range(2, 9)] if i == 1 else [])
+        for i in range(1, 9)})
+    result = exporter.build_related(events, current_date='2026-07-20', related_mode='pgvector',
+                                    gemma_verify=True)
+    assert result['related']['1']['pure_related']
+    assert not result['related']['1']['strict_verified']
+    assert result['related']['2']['strict_verified']  # No candidates is a complete empty result.
+    assert not result['strict_verified_related']
