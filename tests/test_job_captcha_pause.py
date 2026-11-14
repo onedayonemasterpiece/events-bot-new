@@ -8,6 +8,40 @@ from main import Database, Event, JobOutbox, JobTask, JobStatus
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [JobStatus.paused, JobStatus.pending])
+async def test_reimport_preserves_captcha_pause_and_resumed_slot(tmp_path, status):
+    db = Database(str(tmp_path / "captcha-enqueue.sqlite"))
+    await db.init()
+    due = datetime.now(timezone.utc) + timedelta(hours=1)
+    paused_at = datetime.now(timezone.utc) - timedelta(minutes=15)
+    marker = "captcha_wait:reimport"
+    try:
+        async with db.get_session() as session:
+            event = Event(title="Concert", description="d", source_text="src",
+                          date="2099-01-01", time="19:00", location_name="loc")
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+            event_id = event.id
+            session.add(JobOutbox(event_id=event_id, task=JobTask.vk_sync,
+                status=status, next_run_at=due, updated_at=paused_at,
+                last_error=marker, depends_on="old-media"))
+            await session.commit()
+        await main.enqueue_job(db, event_id, JobTask.vk_sync, {"updated": True},
+                               depends_on=["new-media"], replace_depends_on=True)
+        async with db.get_session() as session:
+            job = (await session.execute(select(JobOutbox))).scalars().one()
+        assert job.status == status
+        assert main._ensure_utc(job.next_run_at) == due
+        assert job.last_error == marker
+        assert main._ensure_utc(job.updated_at) == paused_at
+        assert job.depends_on == "new-media"
+        assert job.payload == {"updated": True}
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_past_event_update_does_not_enqueue_missing_media_review(tmp_path, monkeypatch):
     monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
     monkeypatch.setattr(main, "DISABLE_PAGE_JOBS", True)
