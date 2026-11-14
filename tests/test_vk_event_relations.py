@@ -10,6 +10,32 @@ import vk_event_relations as relations
 
 
 @pytest.mark.asyncio
+async def test_legacy_related_job_without_carousel_selection_sends_nothing(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    db = main.Database(str(tmp_path / 'legacy-related.sqlite'))
+    await db.init()
+    recover = AsyncMock(return_value=False)
+    graph = AsyncMock(return_value={'dates': [], 'related': [{'id': 2}]})
+    comment = AsyncMock(return_value=True)
+    monkeypatch.setattr(main, '_recover_managed_vk_live_url', recover)
+    monkeypatch.setattr(relations, 'presentation', graph)
+    monkeypatch.setattr(relations, 'ensure_comment', comment)
+    try:
+        async with db.get_session() as session:
+            event = main.Event(title='Event', description='', source_text='', date='2099-01-01',
+                               time='19:00', location_name='Hall', source_vk_post_url='https://vk.com/wall-1_10')
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+        assert await main.job_vk_calendar_comment(event.id, db, None, {'relations': True}) is False
+        recover.assert_not_called()
+        graph.assert_not_called()
+        comment.assert_not_called()
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('publication_offset', [3600, -120])
 async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_path, monkeypatch, publication_offset):
     db = main.Database(str(tmp_path / 'early-related.sqlite'))

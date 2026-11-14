@@ -366,3 +366,19 @@ comments. Move the existing comment sort criterion first, preserving30-second
 spacing and the existing publication deferrals. The regression now requires
 comment, new announcement, managed update order. No current cohort slots are
 rewritten manually; this rule applies to ordinary subsequent recovery.
+
+## Legacy boolean comments could disagree with the carousel, November 14
+
+Live public14342 published04:20UTC and comment14349 appeared04:34:43 (14:43,
+within the requested interval). However, its last two links differed from the
+post's five-event list. Actual job156359 retained only relations=true, so the
+legacy branch recomputed presentation from the current graph. New jobs already
+persist the original carousel selection as a dictionary.
+
+Remove that dynamic legacy fallback. Jobs without a saved selection now finish
+without provider calls and log the missing selection; new frozen jobs retain
+their existing behavior. Existing posts/comments are neither edited nor
+deleted. No selection is guessed from titles or dates, and no new state,
+queue, retry or backfill is added (net two production lines, budget five).
+The baseline regression returns a write for a boolean job; after the fix it
+returns false without recovery, graph computation or comment API calls.
