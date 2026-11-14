@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-gallery-canonical-quality-20261114
+    image: runcoveer/events:vk-calendar-due-priority-20261114
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

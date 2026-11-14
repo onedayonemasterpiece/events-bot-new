@@ -146,3 +146,5 @@ an accepted creation with a lost response without duplicate writes, and the
 existing postponed/recent-post delay and one-changed-comment scan contracts.
 
 Temporary VK calendar containment: live-ID reconciliation recovers the exact published post using the service reader without invoking calendar document writes. Existing marker-scoped CAPTCHA recovery tests remain required; verify ordinary real photo delivery after recovery. Calendar helper tests qualify its retained implementation only, not automatic delivery.
+
+VK calendar due-task ordering: `tests/test_job_worker_fresh_selection.py::test_due_calendar_precedes_older_missing_media_and_static_work` initializes the actual outbox in both related-only and default profiles. An already due comment must run before older missing-media VK, static and blocking-media tasks; a future comment remains pending. Existing fresh-selection, USER ICS receipt/pacing and CAPTCHA suites remain controls. Local selection tests do not replace ordinary public comment timing evidence.

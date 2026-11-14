@@ -222,3 +222,29 @@ For candidate 29155, final adjudicator decision 22062 selected existing film eve
 The merge path now reuses an existing typed FINAL_MATCH only when its owner is the same selected canonical event. The existing result is already initialized before adjudication. No new semantic heuristic, prompt, persisted flag, provider path or retry is introduced. If there is no such final match, the existing merge gate still runs; explicit FINAL_DISTINCT keeps its existing create path. This correction does not choose historical start times, change the already-created duplicate or mark a rejected VK write successful.
 
 An initialized film-shaped replay fails before the correction: one final adjudicator selects the existing owner, then the second gate creates another event. Afterward the second gate is not called and the same owner is merged. The explicit separate-screening control still creates a distinct event; existing merge-gate tests cover paths without a final adjudicator result. Release and ordinary live verification remain with the coordinator.
+
+
+## Due calendar job starved by related-only foreground, 14 November
+
+Theatre event 10784 became public at 10:26 UTC. Its calendar task 157232 was
+due at 10:38:33 but selected at 10:48:19 and completed at 10:48:39. The transport
+took about 19.5 seconds; the queue wait caused delivery after 22 minutes 39 seconds.
+Event 10785 task 157234, due 10:46:08, completed 10:54:14. Read-only runtime
+inspection confirmed STATIC_SITE_BUILD_PROFILE=related-only. The selector loads
+all due rows, but its foreground override replaced comment priority with the
+same due-time tuple as old missing-media VK, vector and static work. Long media
+and static runs and repeated old VK deferrals therefore preceded due comments.
+
+The correction uses two existing ordering decisions: comment priority becomes
+-4 and comment jobs leave that foreground override. No queue, state, timer,
+retry, producer delay, provider pacing or CAPTCHA behavior changes. Both ICS
+and relation comments share the affected enum. An initialized worker regression
+fails before for due comments in default and related-only profiles; its future
+comment controls pass before. The same cases must pass after the correction,
+along with existing foreground, ICS and CAPTCHA controls. A running job remains
+non-preemptible; verify the next ordinary comment's actual publication-to-write
+time after release rather than declaring a hard deadline from local tests.
+
+Retained evidence: events-bot-new/20261114T060834Z-duplicate-source-preserve-narrative-20261114/gallery-release/canonical-quality-release/calendar-due-priority-review.md
+and ordinary-ics-runtime-timing.log. Release and live verification belong to the
+parent coordinator; no production writes were made during this correction.

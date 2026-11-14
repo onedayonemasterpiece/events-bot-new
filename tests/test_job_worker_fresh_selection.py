@@ -340,3 +340,60 @@ async def test_ready_vk_gets_a_turn_before_new_compute_and_repeated_unrelated_me
         assert calls == [('vk', rid)]
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("related_only", [True, False], ids=["related-only", "default"])
+@pytest.mark.parametrize("calendar_due", [True, False], ids=["due-comment", "future-comment"])
+async def test_due_calendar_precedes_older_missing_media_and_static_work(
+    tmp_path, monkeypatch, related_only, calendar_due
+):
+    """A public post's calendar deadline must survive the shared foreground backlog."""
+    db = main.Database(str(tmp_path / "calendar-deadline.sqlite"))
+    await db.init()
+    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", "related-only" if related_only else "default")
+    monkeypatch.setattr(main, "_vk_captcha_needed", False)
+    now = datetime.now(timezone.utc)
+    try:
+        async with db.get_session() as session:
+            events = [main.Event(title=title, description="d", source_text="s", date="2099-01-01",
+                                 time="12:00", location_name="Venue")
+                      for title in ("Missing old media", "Static rebuild", "Blocking review", "Published event")]
+            session.add_all(events)
+            await session.flush()
+            old_id, static_id, media_id, published_id = [event.id for event in events]
+            session.add(main.JobOutbox(event_id=old_id, task=main.JobTask.vk_sync,
+                                      status=main.JobStatus.error, last_error="vk_sync_missing_materialized_media",
+                                      next_run_at=now - timedelta(minutes=5)))
+            session.add(main.JobOutbox(event_id=static_id, task=main.JobTask.static_site_build,
+                                      next_run_at=now - timedelta(minutes=4)))
+            session.add(main.JobOutbox(event_id=media_id, task=main.JobTask.event_media_review,
+                                      next_run_at=now - timedelta(minutes=3)))
+            session.add(main.JobOutbox(event_id=media_id, task=main.JobTask.vk_sync,
+                                      depends_on=f"event_media_review:{media_id}",
+                                      next_run_at=now - timedelta(minutes=3)))
+            calendar = main.JobOutbox(event_id=published_id, task=main.JobTask.vk_calendar_comment,
+                                     payload={"post_url": "https://vk.com/wall-231920894_100"},
+                                     next_run_at=now + timedelta(minutes=-1 if calendar_due else 10))
+            session.add(calendar)
+            await session.commit()
+            calendar_id = calendar.id
+        calls = []
+        def handler(task):
+            async def run(event_id, *_args):
+                calls.append((task, event_id))
+                return True
+            return run
+        for task in (main.JobTask.vk_sync, main.JobTask.static_site_build,
+                     main.JobTask.event_media_review, main.JobTask.vk_calendar_comment):
+            monkeypatch.setitem(main.JOB_HANDLERS, task.value, handler(task))
+        assert await main._run_due_jobs_once(db, None, max_jobs=1) == 1
+        if calendar_due:
+            assert calls == [(main.JobTask.vk_calendar_comment, published_id)]
+        else:
+            assert len(calls) == 1
+            assert calls[0][0] != main.JobTask.vk_calendar_comment
+            async with db.get_session() as session:
+                assert (await session.get(main.JobOutbox, calendar_id)).status == main.JobStatus.pending
+    finally:
+        await db.close()
