@@ -18,6 +18,22 @@
 
 ## [Unreleased]
 
+### Changed
+- Source-programme batch adjudication заменяет fuzzy title/venue linking:
+  один дополнительный shared LLM request для children одного импорта, bounded
+  child-local evidence, reciprocal cleanup и same-slot guard. READY FOR PARENT TESTS;
+  existing-row merge не добавлен, внешние peers имеют bounded recall.
+- Programme recall сужается до SQL LIMIT и ранжируется по близости даты;
+  compact programme groups с индивидуальными quotes исключают quadratic output.
+- TG Monitor results включён в programme batch; все accepted targets обрабатываются
+  порциями по 32 с cross-chunk peers. Old linked peers не вытесняются top12;
+  address-only, conflicting memberships и same-slot groups не создают links.
+- Programme prompt сокращён до bounded title/slot/address/одного child proof,
+  без raw carrier и дублирующих facts. Внешние exact same-slot aliases исключены
+  из positive recall; canonical title разрешён как evidence, pair relation задан enum.
+  READY FOR PARENT REAL-MODEL PROBES; новый HEAD ещё не проверен реальной моделью.
+
+
 - VK: recommendation changes no longer change the source publication hash or force new card-count repairs; recovery prioritizes announcements and one-time comments at the existing pace.
 
 - VK: CAPTCHA recovery preserves terminal publication failures instead of replaying old post edits.

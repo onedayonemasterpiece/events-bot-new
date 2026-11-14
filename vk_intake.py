@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from linked_events import source_programme_batch
+
 import asyncio
 import calendar
 import hashlib
@@ -5172,6 +5174,7 @@ def _build_smart_update_posters(
     return posters
 
 
+@source_programme_batch
 async def process_event(
     text: str,
     photos: list[str] | None = None,

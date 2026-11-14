@@ -135,18 +135,101 @@ entity/ranked surface оставляет одного representative на family
 
 ## Уже работающая legacy-механика `linked_event_ids`
 
-Legacy-каноническая функция
-`linked_events.recompute_linked_event_ids(db, event_id)`
-связывает только однодневные события и требует строгого совпадения title.
-Площадка сопоставляется по точному `location_name` либо по точной непустой паре
-`city + location_address`: разные названия одной физической площадки не должны
-разрывать расписание курса. Адрес без города не расширяет выборку. Это
-нормализация площадки существующего legacy matcher, а не новое семантическое
-решение по адресу; другой программе тот же адрес family не создаёт. Intended recompute invariant: связь симметрична, self-link
-запрещён, все члены пересчитанной группы получают один состав siblings.
-Это не гарантия качества всех legacy rows: production-derived snapshot содержит
-one-way/dangling/same-slot defects, а некоторые early-return paths не очищают
-старые edges.
+### Source-programme adjudication (2026-11-14)
+
+`recompute_linked_event_ids` больше не утверждает programme identity по fuzzy
+title/venue. Обычные source import boundaries (`add_events_from_text`,
+`vk_intake.process_event`, VK auto/review, parser `process_source_events` и
+реальный TG Monitor `source_parsing.telegram.handlers.process_telegram_results`)
+собирают accepted IDs в transient context, общий для вложенных вызовов.
+После завершения children accepted IDs обрабатываются порциями по 32: семь
+children требуют одного дополнительного `_ask_gemma_json`, 33 — двух. Ни один
+accepted target не отбрасывается из-за размера batch. Повторные parser/Smart
+Update/linked-source observers только дополняют текущий transient context. Нынешние upstream ответы не содержат pair adjudication, поэтому
+piggyback отсутствующего verdict не имитируется. Изолированная ручная правка
+сохраняет singleton API и может выполнить один запрос.
+
+Нет persistent cache/state/schema, новых queues/workers/services или provider
+bypass. ContextVar содержит только ID и selected child excerpt текущего
+awaited source import; после выхода контекст сбрасывается, accepted imports
+не становятся ошибкой при недоступности derived programme observer.
+Запрос выполняется вне DB session; изменённые пары получают штатный
+`telegraph_build`. Publisher не вызывает LLM, его same-day поведение не изменено;
+удаление ложной связи само по себе не запускает VK публикацию.
+
+Recall metadata pool ограничен прежним максимумом 800 и окном 120 дней назад /
+365 вперёд. До SQL LIMIT выборка сужается source aliases, городом, venue или title tokens
+(только recall). Aliases имеют приоритет, далее — близость даты к batch вместо
+самых ранних строк. После SQL title similarity/venue/city выбирают peers,
+но никогда не становятся semantic verdict.
+В запрос попадают до 32 targets текущей порции и 12 recall peers. Все остальные
+source children участвуют в recall, включая соседние порции и даты вне окна
+внешнего поиска; source children приоритетны до SQL LIMIT. Старые linked peers загружаются отдельно и не могут
+быть вытеснены из adjudication top12. Используются canonical/active/not silent/
+not merged rows. Лимит внешнего recall остаётся ограничением полноты; отсутствие
+peer/ответа не доказывает independent_event.
+
+Внешние peers с точным slot одного из targets исключаются до model grouping:
+они не могут стать другой датой этого slot. Old linked peers всё равно включаются
+для cleanup; source children других порций остаются доступны. Это slot invariant,
+не semantic verdict и не merge. При смешанном source batch такой bounded recall
+может не захватить внешний peer иной программы, совпавший со slot другого target.
+
+Компактный child packet содержит accepted canonical title до 120 символов,
+slot, canonical address до 90 символов и один proof до 180 символов: выбранный
+`occurrence_scope_text`, иначе последний accepted fact, иначе canonical summary.
+Повтор title в proof не передаётся. Raw carrier, полные facts/description и
+дублирующие location/type metadata не отправляются. Отсутствие `source_text`
+не запрещает связывание. Title — разрешённая цитата, в частности для
+различения 5-го/3-го места и финала; адрес сам по себе не доказывает identity.
+Accepted source children идут первыми, затем established family peers и остальные
+canonical peers; внутри доказанной программы модель предпочитает этот порядок
+для одного representative на slot. Review pairs старых links передаются один раз,
+без `old_links` в каждом packet. Выход по-прежнему ограничен
+6000 tokens. Вместо quadratic pair output ответ содержит `groups` с `members`
+(`event_id`, индивидуальная `quote`) и отдельные sparse `decisions` для
+`duplicate_same_slot` / `independent_event` old edges. Группа из 32 дат требует
+32 короткие цитаты (в prompt запрошено до 120 символов) вместо 496 pair objects. Модель должна выбрать canonical representative
+каждого slot; разные матчи/материалы/аудитории не становятся одной программой.
+IDs и цитаты всех members проверяются по фактическому packet evidence; повтор
+member в нескольких группах, конфликтующие verdicts, same-slot members или
+address-only identity quote отклоняют новые решения, сохраняя известные edges.
+Проверенная группа разворачивается в reciprocal edges существующим writer,
+включая peers и соседние порции; persisted group_id не создаётся. Schema types
+lowercase, pair relation ограничен enum `duplicate_same_slot` /
+`independent_event`; field name `old_links` не является допустимым relation. Существующий `_gemma_native_response_schema` преобразует их для Google.
+
+Четыре исхода: `same_programme_other_slot`, `duplicate_same_slot`,
+`independent_event`, `unknown`. Проверяются passed target/peer IDs и дословные
+цитаты из accepted canonical title или выбранного child proof обеих сторон.
+Contradictory output не применяется. Same-slot не создаёт «Другие даты»;
+группа даёт только явно подтверждённую моделью clique, не inference из старых
+edges; stale backlinks
+снимаются. Unknown/отсутствующий ответ не создаёт edges и сохраняет существующие
+взаимные semantic links, включая восстановленную группу 10483–10489.
+
+Fixtures `test_linked_events_location_identity.py` используют реальные
+`vk_intake.process_event` и TG Monitor results entrypoints с mocked child import
+и моделью. Проверяются семь TG/VK children с одним запросом; полная 32-session
+группа с ответом <4000 JSON characters; 33 targets с проверкой final target и
+cross-chunk reciprocal links. Старый sporting edge окружён 30 более близкими
+recall rows: grounded negative всё равно удаляет обе стороны. Отдельные controls
+отклоняют foreign ID, conflicting memberships, address-only quotes и same-slot
+группы. Fixtures также проверяют адрес/NULL address, source facts без source_text,
+801 раннюю постороннюю строку, самостоятельные события и разные материалы
+живописи. Page-build не выполняется (fixture URL + failing pagebuild mock);
+observer только ставит штатные задачи. Это plumbing tests, не реальный provider
+semantic quality. Дополнительный fixture реконструирует описанный владельцем
+mixed-alias response, недопустимый `old_links` relation и course/sports/combined
+prompt controls; это не exact replay отсутствующего retained JSON. Prompt в этом
+fixture должен быть <11000 characters (в описанном реальном probe было 24039).
+**READY FOR PARENT REAL-MODEL PROBES**: 42 parent PASS и зелёный CI относятся только
+к `09be7f96875e4f0cbb9f266b1e557eb62021c774`, не к текущему изменению.
+
+Существующие same-slot copies требуют source adjudication через normal
+match/create flow. Отдельного API merge двух существующих Event rows нет:
+model duplicate outcome не выдаётся за выполненное слияние. Native correction
+план ниже остаётся review-first и не запускается этим изменением.
 
 Пересчёт вызывается после Smart Update create/merge и правок
 `title/location_name/date/time`, в source parsing и в ручном UI. Изменённые
@@ -263,3 +346,51 @@ Managed URL определяется по настроенной группе, �
 anchor не добавляется. `strict_verified` означает завершение всех проходов
 проверки anchor, а не включённый флаг. Пустой набор кандидатов — готовый
 пустой результат; частичный сбой не разрешает первоначальную публикацию.
+
+## Передача native owner: коррекция данных после review
+
+Это read-only план; в данном эксперименте данные и публичные поверхности
+не изменялись. Восстановленные `10483–10489` (`meowafisha/9080`, включая 10488)
+не переигрывать и не включать в повторный repair.
+
+1. Снять read-only строки `Event`, все `EventSource` (включая aliases,
+   candidate/occurrence keys), `EventSourceFact` и принятые identity decisions
+   для `10285–10291`, `10707–10713` и `10990–10992`. Сверить каждый child
+   с его локальным фрагментом `kultrunaya_chaika/8657` или спортивного carrier.
+   Подготовить таблицу `source child → programme → date/time → canonical row → copies`
+   с дословными цитатами, не summary всего исходного поста. ID не является
+   доказательством canonical ownership. Проверить, что пары `10285+n/10707+n`
+   действительно имеют один slot; указанное соответствие пока дано владельцем,
+   а не подтверждено новым production чтением.
+2. Для source adjudication использовать существующий `smart_event_update` и
+   его обычный match/create flow (`_llm_match_or_create_bundle` / final identity
+   adjudication), передавая исходный source child и сохранённые ключи.
+   Принадлежность источника и фактов должна перейти к принятому существующему
+   canonical row штатным match outcome. Exact replay может вернуть no-op:
+   это НЕ означает, что отдельный уже существующий duplicate row был слит.
+   **Общего API merge двух существующих rows нет.** Нельзя выдумывать такой
+   вызов, менять request key для обхода replay или обещать, что повторный import
+   удалит `10707–10713`. Неустранённые existing copies остаются отдельной
+   незавершённой domain-задачей; новый repair framework не предлагается.
+3. Только после принятого canonical соответствия построить source-grounded
+   programme edges между разными slots `10285–10291`. Existing
+   `recompute_linked_event_ids(db, event_id)` — доменный путь reciprocal update
+   и stale backlink cleanup; запускать его для такой коррекции можно лишь
+   после проверки model-selected canonical representative каждого slot.
+   При недостаточном подтверждении неизвестные peers не связывать: выбранная
+   моделью другая копия slot не доказывает выполненное слияние строк.
+4. Для `10990 ↔ 10991` review должен подтвердить `independent_event`
+   (матчи за 5-е и 3-е места), а для `10992` — отдельный финал. После review
+   прямой вызов существующего writer
+   `recompute_linked_event_ids(db, 10990, programme_decisions={10991: "independent_event", 10992: "independent_event"})`
+   после source-grounded review удалит неверный edge с обеих сторон; passed verdicts
+   не выполняют нового model request, publisher или enqueue сами по себе.
+   Проверить обе строки, отсутствие link на 10992 и результат
+   `_same_day_linked_publish_group`: отдельный anchor для каждого матча.
+   При unknown существующая неверная взаимная связь останется, поэтому
+   unknown не считается выполненной коррекцией.
+5. Acceptance после будущей разрешённой коррекции: семь canonical дат имеют
+   взаимные links, copies не участвуют в «Другие даты», sports не сворачиваются,
+   самостоятельные standup/photo/children/painting rows сохраняются для
+   независимого semantic-related retrieval. Никаких VK post/comment/site edits
+   этот план не предусматривает.
