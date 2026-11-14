@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:bounded-consumer-images-20261114
+    image: runcoveer/events:source-gallery-batch-eight-20261114
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

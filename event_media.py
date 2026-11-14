@@ -410,20 +410,12 @@ async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoste
     ).scalars().all()
     rejected_paths = {str(row.supabase_path or "").strip() for row in rejected}
     rejected_paths.discard("")
-    linked = bool(getattr(event, "linked_event_ids", None))
     return [
         row for row in rows
         if resolve_poster_display_url(row)
         and str(row.supabase_path or "").strip() not in rejected_paths
         and not _unbound_text_photo_conflict(row.media_semantic_evidence_json)
-        and not (
-            linked
-            and (
-                row.media_semantic_status != "classified"
-                or row.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION
-            )
-        )
-    ]
+    ][:8]
 
 
 async def get_event_gallery_urls(
@@ -683,7 +675,7 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
             .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
         )
     ).scalars().all()
-    rows = [row for row in rows if resolve_poster_display_url(row)]
+    rows = [row for row in rows if resolve_poster_display_url(row)][:8]
     rows = await _collapse_exact_display_url_duplicates(
         session, int(event_id), rows
     )
@@ -702,19 +694,16 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
         return 0
 
     context_hash = _context_hash(event)
-    # Review one quarantined image against the currently approved gallery at a
-    # time. This keeps a legacy 30-image backfill bounded and avoids eagerly
-    # materialising O(n²) pending rows; later candidates will compare against a
-    # newly approved target in their own turn.
+    # One existing evidence row per selected candidate; gallery vision decides
+    # duplicates across all images in the same request, without a pair matrix.
     pending_rows = [row for row in rows if row.review_status == PENDING_REVIEW]
     approved_rows = [row for row in rows if row.review_status == APPROVED]
     if not pending_rows:
         await sync_event_gallery_projection(session, int(event_id))
         return 0
-    target = pending_rows[0]
     created = 0
-    for approved in approved_rows:
-        left, right = approved, target
+    for target in pending_rows:
+        left, right = approved_rows[0], target
         left_id, right_id = sorted((int(left.id or 0), int(right.id or 0)))
         if not left_id or not right_id:
             continue
@@ -745,8 +734,7 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
             pair_input_hash=pair_input_hash,
         )
         created += int(inserted)
-    if created:
-        await enqueue_event_media_review_job(session, int(event_id))
+    await enqueue_event_media_review_job(session, int(event_id))
     await sync_event_gallery_projection(session, int(event_id))
     return created
 
@@ -1309,7 +1297,9 @@ async def _call_reviewer(
     model: str,
     session: Any,
     attempt_observer: Callable[[dict[str, Any]], None] | None = None,
+    gallery: Sequence[tuple[EventPoster, DownloadedPoster]] | None = None,
 ) -> dict[str, Any] | None:
+    # Inputs are the already decoded, bounded JPEG working copies from the gallery worker.
     await session.commit()
 
     from google_ai import GoogleAIClient, SecretsProvider
@@ -1334,33 +1324,46 @@ async def _call_reviewer(
     client.provider_timeout_seconds = float(
         _env_int("EVENT_MEDIA_REVIEW_PROVIDER_TIMEOUT_SEC", 45, lo=10, hi=120)
     )
-    left_media = replace(left_media, data=await asyncio.to_thread(prepare_consumer_jpeg, left_media.data), mime_type="image/jpeg")
-    right_media = replace(right_media, data=await asyncio.to_thread(prepare_consumer_jpeg, right_media.data), mime_type="image/jpeg")
-    ssim = await asyncio.to_thread(compute_global_ssim, left_media.data, right_media.data)
-    prompt = [
-        _review_prompt(event, left, right, ssim=ssim),
-        {"inline_data": {"mime_type": left_media.mime_type, "data": left_media.data}},
-        {"inline_data": {"mime_type": right_media.mime_type, "data": right_media.data}},
-    ]
-    generation_config = {
-        "temperature": 0,
-        "response_mime_type": "application/json",
-        "response_json_schema": _REVIEW_SCHEMA,
-    }
+    schema = _REVIEW_SCHEMA
+    if gallery is not None:
+        schema = {"type": "object", "properties": {"images": {"type": "array", "items": {
+            "type": "object", "properties": {**_REVIEW_SCHEMA["properties"],
+                "poster_id": {"type": "integer"}, "duplicate_of_id": {"type": ["integer", "null"]}},
+            "required": [*_REVIEW_SCHEMA["required"], "poster_id", "duplicate_of_id"],
+            "additionalProperties": False}}}, "required": ["images"], "additionalProperties": False}
+        prompt = [_review_prompt(event, left, right, ssim=None).replace(
+            "РОВНО ДВА изображения", "галерею изображений") +
+            "\nОцени каждое изображение всей галереи. Верни images по одному объекту на poster_id. "
+            "Для уникального изображения decision=distinct, duplicate_of_id=null. Для копии "
+            "decision=duplicate и duplicate_of_id=ID другого изображения этой галереи; "
+            "semantic_conflict=true только у изображения другого/несовместимого события. "
+            "canonical_side=unknown для всей галереи. Не пропускай изображения."]
+        for poster, media in gallery:
+            prompt.extend([f"poster_id={poster.id}", {"inline_data": {"mime_type": media.mime_type, "data": media.data}}])
+    else:
+        ssim = await asyncio.to_thread(compute_global_ssim, left_media.data, right_media.data)
+        prompt = [_review_prompt(event, left, right, ssim=ssim),
+            {"inline_data": {"mime_type": left_media.mime_type, "data": left_media.data}},
+            {"inline_data": {"mime_type": right_media.mime_type, "data": right_media.data}}]
+    generation_config = {"temperature": 0, "response_mime_type": "application/json", "response_json_schema": schema}
     if model.removeprefix("models/").startswith("gemma-4"):
         # Reuse the hosted Gemma Schema subset proven by geometry review.
         generation_config.pop("response_json_schema")
         generation_config["response_schema"] = {
-            key: value for key, value in _REVIEW_SCHEMA.items() if key != "additionalProperties"
+            key: value for key, value in schema.items() if key != "additionalProperties"
         }
+        if gallery is not None:
+            item_schema = generation_config["response_schema"]["properties"]["images"]["items"]
+            item_schema.pop("additionalProperties", None)
+            item_schema["properties"]["duplicate_of_id"] = {"type": "integer", "nullable": True}
     raw, _usage = await client.generate_content_async(
         model=model,
         prompt=prompt,
         generation_config=generation_config,
-        max_output_tokens=_env_int("EVENT_MEDIA_REVIEW_MAX_OUTPUT_TOKENS", 256, lo=128, hi=512),
+        max_output_tokens=_env_int("EVENT_MEDIA_REVIEW_MAX_OUTPUT_TOKENS", 2048 if gallery is not None else 256, lo=128, hi=4096),
         attempt_observer=attempt_observer,
     )
-    return _validated_decision(_parse_json_object(raw))
+    return _parse_json_object(raw) if gallery is not None else _validated_decision(_parse_json_object(raw))
 
 
 def _validated_media_role(value: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -2264,425 +2267,344 @@ async def _recover_stale_running_reviews(
     return len(rows)
 
 
-async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) -> bool:
-    """Process at most one pair; unresolved media never enters the public gallery."""
-
-    del bot
+async def _review_event_media_enrichment(event_id: int, db: Any) -> bool:
     projection_changed = False
     async with db.get_session() as session:
         event = await session.get(Event, int(event_id))
         if event is None:
             return False
         now = datetime.now(timezone.utc)
-        recovered = await _recover_stale_running_reviews(
-            session, int(event_id), now=now
-        )
-        if recovered:
-            logger.warning(
-                "event_media: recovered stale running reviews event_id=%s count=%s",
-                event_id,
-                recovered,
-            )
-        await ensure_event_media_reviews(session, int(event_id))
-        review = (
+        projection_changed = await sync_event_gallery_projection(session, int(event_id))
+        context_hash = _context_hash(event)
+        role_candidate_id = (
             await session.execute(
-                select(EventMediaPairReview)
+                select(EventPoster.id)
                 .where(
-                    EventMediaPairReview.event_id == int(event_id),
-                    EventMediaPairReview.status.in_(("pending", "deferred")),
-                    EventMediaPairReview.next_run_at <= now,
+                    EventPoster.event_id == int(event_id),
+                    EventPoster.review_status == APPROVED,
+                    _media_role_candidate_condition(context_hash, now=now),
                 )
-                .order_by(EventMediaPairReview.created_at.asc(), EventMediaPairReview.id.asc())
+                .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
                 .limit(1)
             )
         ).scalar_one_or_none()
-        if review is None:
-            projection_changed = await sync_event_gallery_projection(session, int(event_id))
-            context_hash = _context_hash(event)
-            role_candidate_id = (
-                await session.execute(
-                    select(EventPoster.id)
-                    .where(
-                        EventPoster.event_id == int(event_id),
-                        EventPoster.review_status == APPROVED,
-                        _media_role_candidate_condition(context_hash, now=now),
-                    )
-                    .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
-                    .limit(1)
-                )
-            ).scalar_one_or_none()
-            role_retry_at = await _next_media_role_retry_at(
-                session, int(event_id), context_hash, now=now
+        role_retry_at = await _next_media_role_retry_at(
+            session, int(event_id), context_hash, now=now
+        )
+        pair_retry_at = None
+        geometry_candidate_id = await _next_geometry_candidate_id(
+            session, int(event_id)
+        )
+        await session.commit()
+        if role_candidate_id is not None:
+            classified = await _classify_event_poster_role(
+                int(event_id), int(role_candidate_id), db
             )
-            pair_retry_at = (
-                await session.execute(
-                    select(func.min(EventMediaPairReview.next_run_at)).where(
-                        EventMediaPairReview.event_id == int(event_id),
-                        EventMediaPairReview.status.in_(("pending", "deferred")),
-                        EventMediaPairReview.next_run_at > now,
-                    )
-                )
-            ).scalar_one_or_none()
-            if pair_retry_at is not None and getattr(pair_retry_at, "tzinfo", None) is None:
-                pair_retry_at = pair_retry_at.replace(tzinfo=timezone.utc)
-            geometry_candidate_id = await _next_geometry_candidate_id(
-                session, int(event_id)
-            )
-            await session.commit()
-            if role_candidate_id is not None:
-                classified = await _classify_event_poster_role(
-                    int(event_id), int(role_candidate_id), db
-                )
-                if classified:
-                    async with db.get_session() as followup_session:
-                        await _enqueue_geometry_followup_if_needed(
-                            followup_session, int(event_id)
-                        )
-                        if pair_retry_at is not None:
-                            await enqueue_event_media_review_job(
-                                followup_session,
-                                int(event_id),
-                                next_run_at=pair_retry_at,
-                                force_followup=True,
-                            )
-                        await followup_session.commit()
-                    return bool(projection_changed or classified)
-                # Semantic role and geometry have independent daily budgets.
-                # If role classification cannot make progress, fall through
-                # so its still-pending first poster cannot starve geometry.
-            if geometry_candidate_id is not None:
-                outcome = await analyze_event_poster_geometry(
-                    int(event_id), int(geometry_candidate_id), db
-                )
+            if classified:
                 async with db.get_session() as followup_session:
-                    next_run_at = None
-                    if outcome.status == "pending":
-                        next_run_at = _next_utc_day()
-                    elif outcome.status == "error":
-                        # Match _next_geometry_candidate_id's stale-error
-                        # window. Scheduling only at the next UTC boundary can
-                        # wake too early, see no candidate, and lose the retry.
-                        next_run_at = datetime.now(timezone.utc) + timedelta(
-                            hours=20, minutes=1
-                        )
-                    remaining_id = await _next_geometry_candidate_id(
+                    await _enqueue_geometry_followup_if_needed(
                         followup_session, int(event_id)
                     )
-                    if (
-                        remaining_id is not None
-                        or outcome.status in {"pending", "error"}
-                        or role_retry_at is not None
-                        or pair_retry_at is not None
-                    ):
-                        geometry_followup_needed = (
-                            remaining_id is not None
-                            or outcome.status in {"pending", "error"}
-                        )
-                        if geometry_followup_needed:
-                            requested_next_run = next_run_at or datetime.now(
-                                timezone.utc
-                            ) + timedelta(
-                                seconds=_env_int(
-                                    "EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS",
-                                    7,
-                                    lo=5,
-                                    hi=3600,
-                                )
-                            )
-                        else:
-                            requested_next_run = role_retry_at or pair_retry_at
-                        for retry_at in (role_retry_at, pair_retry_at):
-                            if retry_at is None:
-                                continue
-                            if getattr(retry_at, "tzinfo", None) is None:
-                                retry_at = retry_at.replace(tzinfo=timezone.utc)
-                            requested_next_run = (
-                                retry_at
-                                if requested_next_run is None
-                                else min(requested_next_run, retry_at)
-                            )
-                        assert requested_next_run is not None
+                    if pair_retry_at is not None:
                         await enqueue_event_media_review_job(
                             followup_session,
                             int(event_id),
-                            next_run_at=requested_next_run,
+                            next_run_at=pair_retry_at,
                             force_followup=True,
                         )
                     await followup_session.commit()
-                return bool(projection_changed or outcome.status == "classified")
-            future_retry_at = None
-            for retry_at in (role_retry_at, pair_retry_at):
-                if retry_at is None:
-                    continue
-                if getattr(retry_at, "tzinfo", None) is None:
-                    retry_at = retry_at.replace(tzinfo=timezone.utc)
-                future_retry_at = (
-                    retry_at
-                    if future_retry_at is None
-                    else min(future_retry_at, retry_at)
+                return bool(projection_changed or classified)
+            # Semantic role and geometry have independent daily budgets.
+            # If role classification cannot make progress, fall through
+            # so its still-pending first poster cannot starve geometry.
+        if geometry_candidate_id is not None:
+            outcome = await analyze_event_poster_geometry(
+                int(event_id), int(geometry_candidate_id), db
+            )
+            async with db.get_session() as followup_session:
+                next_run_at = None
+                if outcome.status == "pending":
+                    next_run_at = _next_utc_day()
+                elif outcome.status == "error":
+                    # Match _next_geometry_candidate_id's stale-error
+                    # window. Scheduling only at the next UTC boundary can
+                    # wake too early, see no candidate, and lose the retry.
+                    next_run_at = datetime.now(timezone.utc) + timedelta(
+                        hours=20, minutes=1
+                    )
+                remaining_id = await _next_geometry_candidate_id(
+                    followup_session, int(event_id)
                 )
-            if future_retry_at is not None:
-                async with db.get_session() as followup_session:
+                if (
+                    remaining_id is not None
+                    or outcome.status in {"pending", "error"}
+                    or role_retry_at is not None
+                    or pair_retry_at is not None
+                ):
+                    geometry_followup_needed = (
+                        remaining_id is not None
+                        or outcome.status in {"pending", "error"}
+                    )
+                    if geometry_followup_needed:
+                        requested_next_run = next_run_at or datetime.now(
+                            timezone.utc
+                        ) + timedelta(
+                            seconds=_env_int(
+                                "EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS",
+                                7,
+                                lo=5,
+                                hi=3600,
+                            )
+                        )
+                    else:
+                        requested_next_run = role_retry_at or pair_retry_at
+                    for retry_at in (role_retry_at, pair_retry_at):
+                        if retry_at is None:
+                            continue
+                        if getattr(retry_at, "tzinfo", None) is None:
+                            retry_at = retry_at.replace(tzinfo=timezone.utc)
+                        requested_next_run = (
+                            retry_at
+                            if requested_next_run is None
+                            else min(requested_next_run, retry_at)
+                        )
+                    assert requested_next_run is not None
                     await enqueue_event_media_review_job(
                         followup_session,
                         int(event_id),
-                        next_run_at=future_retry_at,
+                        next_run_at=requested_next_run,
                         force_followup=True,
                     )
-                    await followup_session.commit()
-            return projection_changed
-        left = await session.get(EventPoster, int(review.left_poster_id))
-        right = await session.get(EventPoster, int(review.right_poster_id))
-        if left is None or right is None:
-            review.status = "resolved"
-            review.decision = "distinct"
-            review.reason_code = "missing_poster_row"
-            review.resolved_at = now
-            session.add(review)
+                await followup_session.commit()
+            return bool(projection_changed or outcome.status == "classified")
+        future_retry_at = None
+        for retry_at in (role_retry_at, pair_retry_at):
+            if retry_at is None:
+                continue
+            if getattr(retry_at, "tzinfo", None) is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            future_retry_at = (
+                retry_at
+                if future_retry_at is None
+                else min(future_retry_at, retry_at)
+            )
+        if future_retry_at is not None:
+            async with db.get_session() as followup_session:
+                await enqueue_event_media_review_job(
+                    followup_session,
+                    int(event_id),
+                    next_run_at=future_retry_at,
+                    force_followup=True,
+                )
+                await followup_session.commit()
+        return projection_changed
+
+
+async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) -> bool:
+    """Review the selected source gallery once; optional vision never holds publication."""
+    del bot
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        await ensure_event_media_reviews(session, int(event_id))
+        event = await session.get(Event, int(event_id))
+        rows = list((await session.execute(select(EventPoster).where(
+            EventPoster.event_id == int(event_id),
+            EventPoster.review_status.in_((APPROVED, PENDING_REVIEW)),
+        ).order_by(EventPoster.display_order, EventPoster.id).limit(8))).scalars())
+        if not any(row.review_status == PENDING_REVIEW for row in rows):
             await session.commit()
-            return False
-        review.status = "running"
-        review.attempts = int(review.attempts or 0) + 1
-        review.updated_at = now
-        session.add(review)
+            return await _review_event_media_enrichment(event_id, db)
+        reviews = list((await session.execute(select(EventMediaPairReview).where(
+            EventMediaPairReview.event_id == int(event_id),
+            EventMediaPairReview.left_poster_id.in_([r.id for r in rows]),
+            EventMediaPairReview.right_poster_id.in_([r.id for r in rows]),
+            EventMediaPairReview.status.notin_(("resolved", "cancelled")),
+        ))).scalars())
+        for review in reviews:
+            review.status = "running"
+            review.attempts = int(review.attempts or 0) + 1
+            review.updated_at = now
+            session.add(review)
         await session.commit()
-
+    identities = {r.id: _poster_visual_identity_snapshot(r) for r in rows}
+    media, fingerprints, decisions, prepared_media = {}, {}, {}, {}
+    error = None
     provider_calls = 0
-
-    def record_provider_send(metadata: dict[str, Any]) -> None:
+    escalated = False
+    primary_model = (os.getenv("EVENT_MEDIA_REVIEW_PRIMARY_MODEL") or "gemini-3.1-flash-lite").strip()
+    escalation_model = (os.getenv("EVENT_MEDIA_REVIEW_ESCALATION_MODEL") or "models/gemma-4-31b-it").strip()
+    def record_provider_send(metadata):
         nonlocal provider_calls
         provider_calls += 1
-        logger.info(
-            "event_media_pair_provider_sent event_id=%s review_id=%s model=%s calls=%s",
-            event_id, review.id, metadata.get("requested_model"), provider_calls,
-        )
-
-    decision: dict[str, Any] | None = None
-    left_media: DownloadedPoster | None = None
-    right_media: DownloadedPoster | None = None
-    error: str | None = None
+        logger.info("event_media_gallery_provider_sent event_id=%s poster_ids=%s model=%s sends=%s",
+                    event_id, [r.id for r in vision_rows], metadata.get("requested_model"), provider_calls)
     try:
-        left_media, right_media = await asyncio.gather(_download_poster(left), _download_poster(right))
-        left_fp = await asyncio.to_thread(_review_fingerprints, left, left_media.data)
-        right_fp = await asyncio.to_thread(_review_fingerprints, right, right_media.data)
-        if left_fp is None or right_fp is None:
-            raise RuntimeError("image_decode_failed")
-        if left_fp.raw_sha256 == right_fp.raw_sha256:
-            decision = {
-                "decision": "duplicate",
-                "duplicate_kind": "exact",
-                "confidence": 1.0,
-                "semantic_conflict": False,
-                "canonical_side": "either",
-                "reason_code": "raw_sha256_equal",
-            }
-        elif left_fp.pixel_sha256 == right_fp.pixel_sha256:
-            decision = {
-                "decision": "duplicate",
-                "duplicate_kind": "exact",
-                "confidence": 1.0,
-                "semantic_conflict": False,
-                "canonical_side": "either",
-                "reason_code": "pixel_sha256_equal",
-            }
+        for row in rows:
+            media[row.id] = await _download_poster(row)
+            fingerprints[row.id] = await asyncio.to_thread(_review_fingerprints, row, media[row.id].data)
+            if fingerprints[row.id] is None:
+                raise RuntimeError("image_decode_failed")
+            _apply_pixel_fingerprints(row, fingerprints[row.id])
+            prepared_media[row.id] = replace(media[row.id], data=await asyncio.to_thread(
+                prepare_consumer_jpeg, media[row.id].data, max_side=1200), mime_type="image/jpeg")
+        groups = {}
+        for row in rows:
+            groups.setdefault(fingerprints[row.id].pixel_sha256, []).append(row)
+        exact_decisions = {}
+        for group in groups.values():
+            winner = max(group, key=_poster_quality_key)
+            for row in group:
+                if row.id != winner.id:
+                    exact_decisions[row.id] = dict(decision="duplicate", duplicate_kind="exact", confidence=1.0,
+                        semantic_conflict=False, canonical_side="either", reason_code="pixel_sha256_equal", duplicate_of_id=winner.id)
+        vision_rows = [r for r in rows if r.id not in exact_decisions]
+        async def call(model, session):
+            result = await _call_reviewer(event=event, left=vision_rows[0], right=vision_rows[-1],
+                left_media=prepared_media[vision_rows[0].id], right_media=prepared_media[vision_rows[-1].id], model=model,
+                session=session, attempt_observer=record_provider_send,
+                **({"gallery": [(r, prepared_media[r.id]) for r in vision_rows]} if len(vision_rows) > 2 else {}))
+            if len(vision_rows) <= 2:
+                decision = _validated_decision(result)
+                if decision is None:
+                    return {}
+                result = {"images": [{**decision, "poster_id": r.id, "duplicate_of_id": None} for r in vision_rows]}
+                if decision["decision"] == "duplicate":
+                    winner = _choose_survivor(vision_rows[0], vision_rows[-1])
+                    for item in result["images"]:
+                        item["decision"] = "distinct" if item["poster_id"] == winner.id else "duplicate"
+                        item["duplicate_of_id"] = None if item["poster_id"] == winner.id else winner.id
+                elif decision["semantic_conflict"]:
+                    keep = vision_rows[-1] if decision["canonical_side"] == "right" else vision_rows[0]
+                    for item in result["images"]:
+                        item["semantic_conflict"] = item["poster_id"] != keep.id
+            items = result.get("images", []) if isinstance(result, dict) else []
+            mapped = {item.get("poster_id"): {**(_validated_decision(item) or {}),
+                "duplicate_of_id": item.get("duplicate_of_id")} for item in items if isinstance(item, dict)}
+            if len(mapped) != len(items) or set(mapped) != {r.id for r in vision_rows}:
+                logger.warning("event_media_gallery_invalid_ids event_id=%s", event.id)
+                return {}
+            for pid, item in mapped.items():
+                target = item["duplicate_of_id"]
+                if "decision" not in item or ((item.get("decision") == "duplicate") != (target is not None)) or (target is not None and (target == pid or target not in mapped
+                    or mapped[target].get("decision") != "distinct"
+                    or mapped[target].get("duplicate_of_id") is not None
+                    or mapped[target].get("semantic_conflict") or item.get("semantic_conflict"))):
+                    logger.warning("event_media_gallery_invalid_decision event_id=%s poster_id=%s", event.id, pid)
+                    return {}
+            return mapped
+        if len(vision_rows) == 1:
+            only = vision_rows[0]
+            decisions = {only.id: dict(decision="distinct", duplicate_kind="none", confidence=1.0,
+                semantic_conflict=False, canonical_side="either", reason_code="single_unique_image", duplicate_of_id=None)}
+        else:
+            from google_ai.exceptions import ProviderError, RateLimitError
+            async with db.get_session() as session:
+                try:
+                    decisions = await call(primary_model, session)
+                except (RateLimitError, ProviderError) as exc:
+                    if isinstance(exc, RateLimitError) and exc.blocked_reason != "rpd":
+                        raise
+                    if isinstance(exc, ProviderError) and (not exc.retryable or exc.status_code == 429):
+                        raise
+                if not decisions or any(d["decision"] == "uncertain" or d["confidence"] <
+                    _env_float("EVENT_MEDIA_REVIEW_PRIMARY_CONFIDENCE", 0.92) for d in decisions.values()):
+                    escalated = True
+                    escalation = await call(escalation_model, session)
+                    decisions = {pid: item for pid, item in escalation.items() if not decisions.get(pid)
+                        or decisions[pid]["decision"] in {"uncertain", item["decision"]}}
+        decisions.update(exact_decisions)
     except Exception as exc:
         error = f"{type(exc).__name__}:{exc}"[:500]
-
+        decisions.update(locals().get("exact_decisions", {}))
+    decisions = {pid: item for pid, item in decisions.items()
+        if item["decision"] != "uncertain" and item["confidence"] >= _env_float("EVENT_MEDIA_REVIEW_PRIMARY_CONFIDENCE", 0.92)}
     async with db.get_session() as session:
-        review = await session.get(EventMediaPairReview, int(review.id or 0))
-        left = await session.get(EventPoster, int(left.id or 0))
-        right = await session.get(EventPoster, int(right.id or 0))
-        event = await session.get(Event, int(event_id))
-        if review is None or left is None or right is None or event is None:
+        rows = [await session.get(EventPoster, r.id) for r in rows]
+        if any(r is None or r.event_id != int(event_id) or r.review_status not in (APPROVED, PENDING_REVIEW)
+               or _poster_visual_identity_snapshot(r) != identities[r.id] for r in rows):
+            due = datetime.now(timezone.utc) + timedelta(seconds=2)
+            for review in reviews:
+                fresh_review = await session.get(EventMediaPairReview, review.id)
+                if fresh_review is not None:
+                    fresh_review.status, fresh_review.next_run_at = "deferred", due
+                    fresh_review.last_error = "poster_drifted_during_download"
+                    session.add(fresh_review)
+            await enqueue_event_media_review_job(session, int(event_id), next_run_at=due, force_followup=True)
+            await session.commit()
             return False
-        if error is None and left_media is not None and right_media is not None:
-            if left_fp and right_fp:
-                # Avoid the partial unique raw-SHA index by keeping the duplicate
-                # fingerprint on the survivor only; the decision row preserves evidence.
-                if left_fp.raw_sha256 == right_fp.raw_sha256:
-                    survivor = _choose_survivor(left, right)
-                    loser = right if survivor.id == left.id else left
-                    survivor_fp = left_fp if survivor.id == left.id else right_fp
-                    _apply_pixel_fingerprints(left, left_fp)
-                    _apply_pixel_fingerprints(right, right_fp)
-                    await assign_event_poster_raw_sha256(
-                        survivor, survivor_fp.raw_sha256, session=session
-                    )
-                    # The partial unique index keeps the byte identity on the
-                    # canonical row. The loser still retains pixel/perceptual
-                    # evidence and the pair row records raw equality.
-                    loser.raw_sha256 = None
-                    session.add(survivor)
-                    session.add(loser)
-                else:
-                    _apply_pixel_fingerprints(left, left_fp)
-                    _apply_pixel_fingerprints(right, right_fp)
-                    await assign_event_poster_raw_sha256(
-                        left, left_fp.raw_sha256, session=session
-                    )
-                    await assign_event_poster_raw_sha256(
-                        right, right_fp.raw_sha256, session=session
-                    )
-                    session.add(left)
-                    session.add(right)
-
-        if error is None and decision is None and left_media is not None and right_media is not None:
-            primary_model = (os.getenv("EVENT_MEDIA_REVIEW_PRIMARY_MODEL") or "gemini-3.1-flash-lite").strip()
-            escalation_model = (os.getenv("EVENT_MEDIA_REVIEW_ESCALATION_MODEL") or "models/gemma-4-31b-it").strip()
-            from google_ai.exceptions import ProviderError, RateLimitError
-
-            try:
-                review.primary_model = primary_model
-                try:
-                    decision = await _call_reviewer(
-                        event=event,
-                        left=left,
-                        right=right,
-                        left_media=left_media,
-                        right_media=right_media,
-                        model=primary_model,
-                        session=session,
-                        attempt_observer=record_provider_send,
-                    )
-                except RateLimitError as exc:
-                    if exc.blocked_reason != "rpd":
-                        raise
-                    logger.warning(
-                        "event_media_pair_quota_escalation event_id=%s review_id=%s model=%s next_model=%s reason=%s",
-                        event_id, review.id, primary_model, escalation_model, exc.blocked_reason,
-                    )
-                except ProviderError as exc:
-                    if not exc.retryable or exc.status_code == 429:
-                        raise
-                    logger.warning(
-                        "event_media_pair_provider_fallback event_id=%s review_id=%s model=%s next_model=%s status=%s error_type=%s",
-                        event_id, review.id, primary_model, escalation_model,
-                        exc.status_code, exc.error_type,
-                    )
-                min_confidence = _env_float("EVENT_MEDIA_REVIEW_PRIMARY_CONFIDENCE", 0.92)
-                needs_escalation = (
-                    decision is None
-                    or decision["decision"] == "uncertain"
-                    or float(decision["confidence"]) < min_confidence
-                )
-                if needs_escalation:
-                    review.escalation_model = escalation_model
-                    escalation = await _call_reviewer(
-                        event=event,
-                        left=left,
-                        right=right,
-                        left_media=left_media,
-                        right_media=right_media,
-                        model=escalation_model,
-                        session=session,
-                        attempt_observer=record_provider_send,
-                    )
-                    if escalation is not None:
-                        if decision and decision["decision"] not in {"uncertain", escalation["decision"]}:
-                            decision = None
-                            error = "primary_escalation_disagreement"
-                        else:
-                            decision = escalation
-            except Exception as exc:
-                error = f"{type(exc).__name__}:{exc}"[:500]
-
-        review.provider_calls = int(review.provider_calls or 0) + provider_calls
-        review.updated_at = datetime.now(timezone.utc)
-        max_attempts = _env_int("EVENT_MEDIA_REVIEW_MAX_UNCERTAIN_ATTEMPTS", 3, lo=1, hi=20)
-        if decision and decision["decision"] in {"duplicate", "distinct"}:
-            survivor = _choose_survivor(left, right)
-            review.status = "resolved"
-            review.decision = str(decision["decision"])
-            review.duplicate_kind = str(decision["duplicate_kind"])
-            review.confidence = float(decision["confidence"])
-            review.semantic_conflict = bool(decision["semantic_conflict"])
-            canonical: EventPoster | None = None
-            if decision["decision"] == "duplicate":
-                canonical = survivor
-                duplicate = right if canonical.id == left.id else left
-                canonical.review_status = APPROVED
-                canonical.duplicate_of_id = None
-                canonical.review_reason = "automated_pair_duplicate_survivor"
-                canonical.reviewed_at = review.updated_at
-                duplicate.review_status = DUPLICATE
-                duplicate.duplicate_of_id = canonical.id
-                duplicate.review_reason = "automated_pair_duplicate"
-                duplicate.reviewed_at = review.updated_at
-                session.add(canonical)
-                session.add(duplicate)
-            elif bool(decision["semantic_conflict"]):
-                if decision["canonical_side"] == "left":
-                    canonical = left
-                elif decision["canonical_side"] == "right":
-                    canonical = right
-                else:
-                    # Fail closed for an ambiguous relevance conflict: keep the
-                    # already-public side and quarantine/reject the candidate.
-                    canonical = left if left.review_status == APPROVED else right
-                noncanonical = right if canonical.id == left.id else left
-                noncanonical.review_status = REJECTED
-                noncanonical.duplicate_of_id = None
-                noncanonical.review_reason = "automated_semantic_conflict"
-                noncanonical.reviewed_at = datetime.now(timezone.utc)
-                session.add(noncanonical)
-            review.canonical_poster_id = int(canonical.id or 0) if canonical is not None else None
-            review.reason_code = str(decision["reason_code"])
-            review.response_json = decision
-            review.last_error = None
-            review.resolved_at = datetime.now(timezone.utc)
-        elif int(review.attempts or 0) >= max_attempts and _media_role_transient_retry_at(error) is None:
-            review.status = "unresolved"
-            review.decision = "uncertain"
-            review.reason_code = "automatic_review_exhausted"
-            review.last_error = error or "uncertain"
-            review.response_json = decision
-        else:
-            review.status = "deferred"
-            review.decision = "uncertain"
-            review.reason_code = "automatic_retry_scheduled"
-            review.last_error = error or "uncertain"
-            review.response_json = decision
-            review.next_run_at = _media_role_transient_retry_at(error) or _next_utc_day()
-        session.add(review)
-        await _reconcile_pending_posters(session, int(event_id))
-        # ensure_event_media_reviews also syncs; retain this change for fanout.
-        projection_changed = await sync_event_gallery_projection(session, int(event_id))
+        by_id = {r.id: r for r in rows}
+        for row in rows:
+            if row.id in fingerprints:
+                _apply_pixel_fingerprints(row, fingerprints[row.id])
+            decision = decisions.get(row.id)
+            if decision and decision["decision"] in {"distinct", "duplicate"}:
+                row.review_status = REJECTED if decision["semantic_conflict"] else APPROVED
+                row.review_reason = "automated_semantic_conflict" if decision["semantic_conflict"] else "automated_gallery_distinct"
+            elif len(prepared_media) == len(rows):
+                row.review_status = APPROVED
+                row.review_reason = "optional_visual_review_unavailable" if error else "optional_visual_review_uncertain"
+            row.reviewed_at = now
+            session.add(row)
+        for target in {d["duplicate_of_id"] for d in decisions.values() if d["duplicate_of_id"] is not None}:
+            group = [by_id[target], *[by_id[pid] for pid, d in decisions.items() if d["duplicate_of_id"] == target]]
+            if any(row.review_status == REJECTED for row in group):
+                for row in group:
+                    row.review_status, row.review_reason = REJECTED, "automated_semantic_conflict"
+                    session.add(row)
+                continue
+            winner = max(group, key=_poster_quality_key)
+            for row in group:
+                row.review_status = APPROVED if row.id == winner.id else DUPLICATE
+                row.duplicate_of_id = None if row.id == winner.id else winner.id
+                row.review_reason = "automated_pair_duplicate_survivor" if row.id == winner.id else "automated_pair_duplicate"
+                if row.id != winner.id:
+                    row.raw_sha256 = None
+                session.add(row)
+        await session.flush()
+        for row in rows:
+            if row.id in fingerprints and row.review_status != DUPLICATE:
+                await assign_event_poster_raw_sha256(row, fingerprints[row.id].raw_sha256, session=session)
+                await session.flush()
+        for review in reviews:
+            review = await session.get(EventMediaPairReview, review.id)
+            left, right = by_id[review.left_poster_id], by_id[review.right_poster_id]
+            decision = decisions.get(right.id)
+            review.provider_calls += provider_calls
+            review.primary_model = primary_model
+            review.escalation_model = escalation_model if escalated else None
+            review.updated_at = now
+            if decision and all(decisions.get(r.id, {}).get("decision") in {"duplicate", "distinct"} for r in (left, right)):
+                duplicate = left.duplicate_of_id == right.id or right.duplicate_of_id == left.id
+                review.status, review.decision = "resolved", "duplicate" if duplicate else "distinct"
+                review.duplicate_kind, review.confidence = decision["duplicate_kind"], decision["confidence"]
+                review.semantic_conflict = left.review_status == REJECTED or right.review_status == REJECTED
+                review.canonical_poster_id = (left.duplicate_of_id or right.duplicate_of_id) if duplicate else None
+                review.reason_code, review.response_json = decision["reason_code"], decision
+                review.last_error, review.resolved_at = None, now
+            else:
+                review.status = "unresolved" if review.attempts >= _env_int("EVENT_MEDIA_REVIEW_MAX_UNCERTAIN_ATTEMPTS", 3, lo=1, hi=20) and _media_role_transient_retry_at(error) is None else "deferred"
+                review.decision, review.last_error = "uncertain", error or "uncertain"
+                review.next_run_at = _media_role_transient_retry_at(error) or _next_utc_day()
+            session.add(review)
+        changed = await sync_event_gallery_projection(session, int(event_id))
         await ensure_event_media_reviews(session, int(event_id))
-        # Resolving the final pending pair can promote a new approved poster
-        # after the last pair-review job has already been consumed. Arm the
-        # independent semantic/geometry enrichment pass for that new poster.
+        selected = list((await session.execute(select(EventPoster).where(
+            EventPoster.event_id == int(event_id), EventPoster.review_status.in_((APPROVED, PENDING_REVIEW)),
+        ).order_by(EventPoster.display_order, EventPoster.id).limit(8))).scalars())
+        if any(r.review_status == PENDING_REVIEW and r.id not in by_id for r in selected):
+            await enqueue_event_media_review_job(session, int(event_id), next_run_at=now, force_followup=True)
+        if any(r.review_status == PENDING_REVIEW for r in rows):
+            retry = min((r.next_run_at for r in reviews if r.status == "deferred"), default=None)
+            if retry is not None:
+                await enqueue_event_media_review_job(session, int(event_id), next_run_at=retry, force_followup=True)
         await _enqueue_geometry_followup_if_needed(session, int(event_id))
-
-        remaining = (
-            await session.execute(
-                select(func.min(EventMediaPairReview.next_run_at)).where(
-                    EventMediaPairReview.event_id == int(event_id),
-                    EventMediaPairReview.status.in_(("pending", "deferred")),
-                )
-            )
-        ).scalar_one_or_none()
-        if remaining is not None:
-            if getattr(remaining, "tzinfo", None) is None:
-                remaining = remaining.replace(tzinfo=timezone.utc)
-            await enqueue_event_media_review_job(
-                session,
-                int(event_id),
-                next_run_at=max(datetime.now(timezone.utc) + timedelta(seconds=2), remaining),
-                force_followup=True,
-            )
         await session.commit()
-
-    if projection_changed:
-        try:
-            from main import schedule_event_update_tasks
-
-            async with db.get_session() as session:
-                fresh = await session.get(Event, int(event_id))
-            if fresh is not None:
-                await schedule_event_update_tasks(db, fresh, refresh_existing_vk=True)
-        except Exception:
-            logger.warning("event_media: failed to schedule projection rebuild event_id=%s", event_id, exc_info=True)
-    return projection_changed
+    if changed:
+        from main import schedule_event_update_tasks
+        async with db.get_session() as session:
+            fresh = await session.get(Event, int(event_id))
+        await schedule_event_update_tasks(db, fresh, refresh_existing_vk=True)
+    return changed
 
 
 async def ingest_event_media_urls(
