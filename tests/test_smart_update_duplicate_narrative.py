@@ -9,11 +9,11 @@ import main
 import smart_event_update as su
 import vk_event_relations
 from db import Database
-from models import Event, EventSource, EventSourceFact
+from models import Event, EventPoster, EventSource, EventSourceFact
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change", ["duplicate", "added_fact", "ticket", "empty", "age_provenance", "age_value", "cleanup"])
+@pytest.mark.parametrize("change", ["duplicate", "added_fact", "ticket", "empty", "age_provenance", "age_value", "cleanup", "duplicate_gallery", "restored_gallery"])
 async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, monkeypatch, change):
     monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(su, "SMART_UPDATE_FACT_FIRST", True)
@@ -29,6 +29,7 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
         original = ""
     fact = "Участники рисуют морской пейзаж акрилом на грунтованном картоне."
     date = (main.datetime.now(main.LOCAL_TZ).date() + main.timedelta(days=10)).isoformat()
+    canonical_photos = [f"https://static.kenigevents.ru/p/source-{i}.webp" for i in range(10)] if change in {"duplicate_gallery", "restored_gallery"} else []
     try:
         async with db.get_session() as session:
             event = Event(title="Прибрежный покой", description=original, short_description=original,
@@ -37,12 +38,18 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
                           source_texts=[fact], ticket_price_min=800, ticket_price_max=800,
                           age_restriction="12+", age_restriction_status="declared",
                           source_vk_post_url="https://vk.com/wall-1_10")
+            event.photo_urls = canonical_photos[:8] if change == "restored_gallery" else canonical_photos
+            event.photo_count = len(event.photo_urls)
             event.vk_source_hash = main.content_hash("\n".join([
                 main.VK_SOURCE_POST_FORMAT_VERSION, event.title, date, "14:00", "Музей", "",
-                "Калининград", "", "ics:<none>", json.dumps([], ensure_ascii=False), original,
+                "Калининград", "", "ics:<none>", json.dumps(canonical_photos, ensure_ascii=False), original,
             ]))
+            applied_hash = event.vk_source_hash  # Existing successful public snapshot retains all ten sources.
             session.add(event)
             await session.flush()
+            for i, url in enumerate(canonical_photos):
+                session.add(EventPoster(event_id=event.id, poster_hash=f"source-{i}", supabase_url=url,
+                                        review_status="approved", display_order=i, width=1600, height=900))
             source = EventSource(event_id=event.id, source_type="telegram",
                                  source_url="https://t.me/museum/8362", source_text=fact)
             session.add(source)
@@ -74,12 +81,18 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
             city="Калининград", event_type="мастер-класс", trust_level="high",
             ticket_price_min=900 if change == "ticket" else 800,
             ticket_price_max=900 if change == "ticket" else 800)
+        assert candidate.posters == []
         result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
         assert result.event_id == eid
         async with db.get_session() as session:
             saved = await session.get(Event, eid)
             sources = (await session.execute(select(EventSource).where(EventSource.event_id == eid))).scalars().all()
         assert any(source.source_url == candidate.source_url for source in sources)
+        if canonical_photos:
+            assert result.added_facts == [] and result.added_posters == 0
+            assert saved.photo_urls == canonical_photos
+            assert saved.photo_count == 10
+            assert saved.vk_source_hash == applied_hash
         sync = AsyncMock(return_value="https://vk.com/wall-1_10")
         monkeypatch.setattr(main, "sync_vk_source_post", sync)
         monkeypatch.setattr(main, "_prepare_same_day_linked_publish_event", AsyncMock(side_effect=lambda _db, ev: (ev, [ev])))
@@ -88,7 +101,7 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
         monkeypatch.setattr(main, "_managed_vk_post_state", AsyncMock(return_value=(True, True)))
         monkeypatch.setattr(vk_event_relations, "presentation", AsyncMock(return_value={}))
         monkeypatch.setattr(vk_event_relations, "ensure_comment", AsyncMock())
-        if change in {"duplicate", "age_provenance"}:
+        if change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery"}:
             assert (saved.description, saved.short_description, saved.search_digest) == (original,) * 3
             narrative.assert_not_awaited()
             if change == "age_provenance":
@@ -101,7 +114,7 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
             if change == "ticket":
                 assert saved.ticket_price_min == 900
         await main.job_sync_vk_source_post(eid, db, None)
-        if change in {"duplicate", "age_provenance"}:
+        if change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery"}:
             sync.assert_not_awaited()  # The actual consumer never reaches uploads or wall.edit.
         else:
             sync.assert_awaited_once()

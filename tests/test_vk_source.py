@@ -662,8 +662,8 @@ def test_vk_upload_fallback_variants_reduce_large_poster_without_invalid_jpeg():
 
     assert [Image.open(BytesIO(data)).size for data in variants] == [
         (1280, 1600),
+        (1280, 1600),
         (640, 800),
-        (320, 400),
     ]
     for data in variants:
         main.validate_jpeg_markers(data)
@@ -673,9 +673,13 @@ def test_vk_upload_fallback_variants_reduce_large_poster_without_invalid_jpeg():
     narrow.save(narrow_source, format="WEBP")
     narrow_variants = main._vk_upload_jpeg_fallback_variants(narrow_source.getvalue())
     assert [Image.open(BytesIO(data)).size for data in narrow_variants] == [
+        (922, 1152),
+        (922, 1152),
         (640, 800),
-        (320, 400),
     ]
+    tiny = BytesIO()
+    Image.new("RGB", (320, 240), "white").save(tiny, "JPEG")
+    assert [Image.open(BytesIO(data)).size for data in main._vk_upload_jpeg_fallback_variants(tiny.getvalue())] == [(320, 240)] * 3
 
 
 @pytest.mark.asyncio
@@ -2600,3 +2604,80 @@ def test_vk_png_card_fallback_preserves_full_resolution():
     with Image.open(BytesIO(variants[0])) as card:
         assert card.format == "JPEG"
         assert card.size == (1080, 1350)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('caller', ['url', 'bytes'])
+@pytest.mark.parametrize('empty_responses', [2, 4])
+async def test_real_jpeg_fallback_keeps_resolution_after_empty_uploads(monkeypatch, caller, empty_responses):
+    """Exercise both real callers/codec; two empty replies must not yield400px."""
+    from unittest.mock import AsyncMock
+    from PIL import JpegImagePlugin
+
+    image = Image.new('RGB', (1200, 800), '#74696b')
+    for x in range(0, 1200, 12):
+        for y in range(0, 800, 12):
+            image.paste(((x * 7) % 256, (y * 11) % 256, (x + y) % 256), (x, y, x + 6, y + 6))
+    output = BytesIO()
+    image.save(output, 'JPEG', quality=95, subsampling=0)
+    original = output.getvalue()
+    monkeypatch.setattr(main, 'VK_USER_TOKEN', 'fixture')
+    monkeypatch.setattr(main, 'choose_vk_actor', lambda *_: [main.VkActor('user', 'fixture', 'user:test')])
+    monkeypatch.setattr(main.asyncio, 'sleep', AsyncMock())
+    sent = []
+    save_calls = []
+
+    class Download:
+        headers = {'Content-Length': str(len(original))}
+        content_length = len(original)
+        @property
+        def content(self):
+            return self
+        async def iter_chunked(self, size):
+            yield original
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *_):
+            return False
+        def raise_for_status(self):
+            pass
+
+    class Upload:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *_):
+            return False
+        async def json(self):
+            return {'photo': '' if len(sent) <= empty_responses else 'accepted', 'server': 7, 'hash': 'receipt'}
+
+    class Session:
+        def get(self, _):
+            return Download()
+        def post(self, url, data):
+            sent.append(data._fields[0][2])
+            return Upload()
+
+    async def vk(method, params=None, *args, **kwargs):
+        if method == 'photos.getWallUploadServer':
+            return {'response': {'upload_url': 'https://upload.invalid'}}
+        assert method == 'photos.saveWallPhoto'
+        save_calls.append(params)
+        return {'response': [{'owner_id': -1, 'id': 42}]}
+
+    monkeypatch.setattr(main, 'get_http_session', lambda: Session())
+    monkeypatch.setattr(main, '_vk_api', vk)
+    if caller == 'url':
+        result = await main.upload_vk_photo('1', 'https://source.invalid/source.jpg')
+    else:
+        result = await main.upload_vk_photo_bytes('1', original)
+    assert len(sent) == (3 if empty_responses == 2 else 4)
+    assert result == ('photo-1_42' if empty_responses == 2 else None)
+    assert len(save_calls) == (1 if empty_responses == 2 else 0)
+    with Image.open(BytesIO(sent[2])) as third:
+        assert third.size == (1200, 800)
+        assert JpegImagePlugin.get_sampling(third) == 2
+    if empty_responses == 4:
+        with Image.open(BytesIO(sent[3])) as last:
+            assert last.size == (800, 533)
+    for payload in sent:
+        main.validate_jpeg_markers(payload)

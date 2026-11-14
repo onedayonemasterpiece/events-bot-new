@@ -38,8 +38,11 @@ CDN, Supabase и legacy bucket не могут быть renderer fallback.
 
 - `EventPoster` — ledger логических изображений и их alternate locations.
 - Публично доступны только строки `review_status=approved`.
-- `Event.photo_urls`/`photo_count` — производная совместимая проекция approved
-  rows, не второй источник истины.
+- `Event.photo_urls`/`photo_count` — полная производная совместимая проекция
+  approved rows, не второй источник истины. Лимиты рабочей gallery batch и VK
+  attachments не обрезают canonical ledger/projection. Duplicate-only import без
+  новых фотографий сохраняет существующую галерею, включая более восьми approved
+  изображений; прежний applied VK hash не меняется из-за лимита публикации.
 - Telegraph, Telegram, managed VK, promo/video recovery и static exporter читают
   approved projection. Renderer не добавляет изображения в БД и не принимает
   perceptual-решения.
