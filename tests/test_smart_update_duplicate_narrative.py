@@ -13,7 +13,7 @@ from models import Event, EventPoster, EventSource, EventSourceFact
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change", ["duplicate", "added_fact", "ticket", "empty", "age_provenance", "age_value", "cleanup", "duplicate_gallery", "restored_gallery"])
+@pytest.mark.parametrize("change", ["duplicate", "added_fact", "ticket", "empty", "age_provenance", "age_value", "cleanup", "duplicate_gallery", "restored_gallery", "expanded_title", "generic_title", "time", "date", "added_fact_title"])
 async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, monkeypatch, change):
     monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(su, "SMART_UPDATE_FACT_FIRST", True)
@@ -32,8 +32,8 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
     canonical_photos = [f"https://static.kenigevents.ru/p/source-{i}.webp" for i in range(10)] if change in {"duplicate_gallery", "restored_gallery"} else []
     try:
         async with db.get_session() as session:
-            event = Event(title="Прибрежный покой", description=original, short_description=original,
-                          search_digest=original, date=date, time="14:00", location_name="Музей",
+            event = Event(title="мастер-класс — Музей" if change == "generic_title" else "Прибрежный покой", description=original, short_description=original,
+                          search_digest=original, date=date, time="" if change == "time" else "14:00", location_name="Музей",
                           city="Калининград", event_type="мастер-класс", source_text=fact,
                           source_texts=[fact], ticket_price_min=800, ticket_price_max=800,
                           age_restriction="12+", age_restriction_status="declared",
@@ -50,8 +50,12 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
             for i, url in enumerate(canonical_photos):
                 session.add(EventPoster(event_id=event.id, poster_hash=f"source-{i}", supabase_url=url,
                                         review_status="approved", display_order=i, width=1600, height=900))
-            source = EventSource(event_id=event.id, source_type="telegram",
-                                 source_url="https://t.me/museum/8362", source_text=fact)
+            source = EventSource(event_id=event.id, source_type="parser:fixture" if change in {"time", "date"} else "telegram",
+                                 source_url="https://t.me/museum/8362", source_text=fact,
+                                 canonical_source_url="https://t.me/museum/8362",
+                                 candidate_key="known-child" if change in {"generic_title", "time", "date"} else None,
+                                 source_role="identity_bearing",
+                                 occurrence_key="child:0" if change in {"generic_title", "time", "date"} else None)
             session.add(source)
             await session.flush()
             session.add(EventSourceFact(event_id=event.id, source_id=source.id, fact=fact, status="added"))
@@ -59,9 +63,9 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
             eid = event.id
         if change == "cleanup":
             monkeypatch.setattr(su, "_description_has_foreign_schedule_noise", lambda *_a, **_kw: True)
-        added = ["После занятия можно забрать картину домой."] if change == "added_fact" else []
+        added = ["После занятия можно забрать картину домой."] if change in {"added_fact", "added_fact_title"} else []
         monkeypatch.setattr(su, "_llm_merge_event", AsyncMock(return_value={
-            "title": "Прибрежный покой", "description": "Альтернативная редакция прежнего текста.",
+            "title": "Мастер-класс «Прибрежный покой»" if change in {"expanded_title", "added_fact_title"} else "Прибрежный покой", "description": "Альтернативная редакция прежнего текста.",
             "added_facts": added, "duplicate_facts": [fact], "conflict_facts": [],
             "skipped_conflicts": [], "ticket_price_min": 900 if change == "ticket" else 800,
             "ticket_price_max": 900 if change == "ticket" else 800,
@@ -75,14 +79,20 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
             decision = declared_structured_decision("16+" if change == "age_value" else "12+",
                 source_url="https://t.me/museum/8363", source_type="telegram", input_hash="new-proof")
             monkeypatch.setattr(su, "_candidate_age_decision", lambda *_a, **_kw: decision)
-        candidate = su.EventCandidate(source_type="telegram", source_url="https://t.me/museum/8363",
-            source_text=fact + f" Стоимость участия {900 if change == 'ticket' else 800} рублей. " + " ".join(added),
-            title="Прибрежный покой", date=date, time="14:00", location_name="Музей",
+        candidate = su.EventCandidate(source_type="parser:fixture" if change in {"time", "date"} else "telegram", source_url="https://t.me/museum/8362" if change in {"generic_title", "time", "date"} else "https://t.me/museum/8363",
+            source_text=("Прибрежный покой. " if change == "generic_title" else "") + fact + f" Стоимость участия {900 if change == 'ticket' else 800} рублей. " + " ".join(added),
+            title="Мастер-класс «Прибрежный покой»" if change in {"expanded_title", "added_fact_title"} else "Прибрежный покой", date=(main.datetime.fromisoformat(date) + main.timedelta(days=1)).date().isoformat() if change == "date" else date, time="15:00" if change == "time" else "14:00", location_name="Музей",
             city="Калининград", event_type="мастер-класс", trust_level="high",
             ticket_price_min=900 if change == "ticket" else 800,
             ticket_price_max=900 if change == "ticket" else 800)
+        if change in {"generic_title", "time", "date"}:
+            candidate.candidate_key = "known-child"
+            candidate.occurrence_key = "child:0"
         assert candidate.posters == []
-        result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
+        real_schedule = main.schedule_event_update_tasks
+        schedule = AsyncMock()
+        monkeypatch.setattr(main, "schedule_event_update_tasks", schedule)
+        result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=True)
         assert result.event_id == eid
         async with db.get_session() as session:
             saved = await session.get(Event, eid)
@@ -101,8 +111,20 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
         monkeypatch.setattr(main, "_managed_vk_post_state", AsyncMock(return_value=(True, True)))
         monkeypatch.setattr(vk_event_relations, "presentation", AsyncMock(return_value={}))
         monkeypatch.setattr(vk_event_relations, "ensure_comment", AsyncMock())
-        if change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery"}:
+        if change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery", "expanded_title"}:
             assert (saved.description, saved.short_description, saved.search_digest) == (original,) * 3
+            assert saved.title == "Прибрежный покой"
+            assert main.content_hash("\n".join([
+                main.VK_SOURCE_POST_FORMAT_VERSION, saved.title, saved.date, saved.time, saved.location_name, "",
+                saved.city, "", "ics:<none>", json.dumps(saved.photo_urls or [], ensure_ascii=False), saved.description,
+            ])) == applied_hash
+            assert schedule.await_args.kwargs["refresh_existing_vk"] is (change == "restored_gallery")
+            if change == "expanded_title":
+                enqueue = AsyncMock(return_value="queued")
+                monkeypatch.setattr(main, "enqueue_job", enqueue)
+                monkeypatch.setattr(main, "_event_has_existing_managed_vk_post", AsyncMock(return_value=True))
+                await real_schedule(db, saved, **schedule.await_args.kwargs)
+                assert all(call.args[2] != main.JobTask.vk_sync for call in enqueue.await_args_list)
             narrative.assert_not_awaited()
             if change == "age_provenance":
                 assert saved.age_restriction_source_url == candidate.source_url
@@ -113,8 +135,16 @@ async def test_duplicate_source_preserves_narrative_and_managed_vk(tmp_path, mon
                 assert saved.age_restriction != "12+"
             if change == "ticket":
                 assert saved.ticket_price_min == 900
+            if change == "time":
+                assert saved.time == "15:00"
+            if change == "generic_title":
+                assert saved.title == "Прибрежный покой"
+            if change == "added_fact_title":
+                assert saved.title == "Мастер-класс «Прибрежный покой»"
+            if change == "date":
+                assert saved.date != date
         await main.job_sync_vk_source_post(eid, db, None)
-        if change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery"}:
+        if change in {"duplicate", "age_provenance", "duplicate_gallery", "restored_gallery", "expanded_title"}:
             sync.assert_not_awaited()  # The actual consumer never reaches uploads or wall.edit.
         else:
             sync.assert_awaited_once()

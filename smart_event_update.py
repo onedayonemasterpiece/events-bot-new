@@ -21499,6 +21499,7 @@ async def _smart_event_update_impl(
                     diagnostic_event_id=conflicting_binding,
                     reason="source_binding_conflict", retry_reason=RetryReason.SOURCE_BINDING_CONFLICT,
                 )
+        duplicate_only_narrative = False
         before_description = event_db.description or ""
         before_age_restriction = event_db.age_restriction
         structured_age_decision = _candidate_age_decision(candidate)
@@ -21863,6 +21864,20 @@ async def _smart_event_update_impl(
                             continue
                         skipped_conflicts.append(text)
 
+                    duplicate_only_narrative = bool(
+                        SMART_UPDATE_FACT_FIRST and before_description.strip()
+                        and not (added_facts or conflict_facts or conflicting or ticket_changes_needed or needs_schedule_cleanup)
+                        and not any(merge_data.get(k) is not None and merge_data[k] != getattr(event_db, k, None)
+                                    for k in ("ticket_link", "ticket_price_min", "ticket_price_max", "ticket_status"))
+                        and event_db.age_restriction == before_age_restriction
+                        and not set(updated_keys).intersection({"title", "date", "time", "end_date", "location_name", "location_address", "city"})
+                    )
+                    if (duplicate_only_narrative and not is_canonical_site and _title_has_meaningful_tokens(event_db.title)
+                        and not _is_generic_title_event_type_venue(
+                            event_db.title, event_type=event_db.event_type,
+                            location_name=event_db.location_name, city=event_db.city,
+                        )):
+                        merge_data["title"] = event_db.title
                     title = merge_data.get("title")
                     description = merge_data.get("description")
                     clean_title = _strip_private_use(title) if isinstance(title, str) else None
@@ -21971,14 +21986,7 @@ async def _smart_event_update_impl(
 
                     # Fact-first: override public narrative with a fresh build from canonical facts,
                     # ignoring the merged description text (which is derived from raw sources).
-                    duplicate_only_narrative = bool(
-                        SMART_UPDATE_FACT_FIRST and before_description.strip()
-                        and not (added_facts or conflict_facts or conflicting or ticket_changes_needed or needs_schedule_cleanup)
-                        and not any(merge_data.get(k) is not None and merge_data[k] != getattr(event_db, k, None)
-                                    for k in ("ticket_link", "ticket_price_min", "ticket_price_max", "ticket_status"))
-                        and event_db.age_restriction == before_age_restriction
-                        and not set(updated_keys).intersection({"title", "date", "time", "end_date", "location_name", "location_address", "city"})
-                    )
+                    duplicate_only_narrative = duplicate_only_narrative and "title" not in updated_keys
                     if duplicate_only_narrative:
                         clean_description = merge_digest_from_llm = None
                         has_new_text = False
@@ -22927,7 +22935,9 @@ async def _smart_event_update_impl(
                 # A managed VK post is an editable projection, not a terminal
                 # publication.  Re-arm its idempotent sync whenever Smart Update
                 # actually changed the canonical event.
-                task_kwargs["refresh_existing_vk"] = True
+                task_kwargs["refresh_existing_vk"] = not duplicate_only_narrative or bool(
+                    added_posters or pruned_posters or photo_urls_changed
+                )
                 from private_events_mcp.publication_status import bind_event_operation
                 with bind_event_operation(refreshed, candidate):
                     await schedule_event_update_tasks(db, refreshed, **task_kwargs)
