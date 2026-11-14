@@ -682,3 +682,27 @@ async def test_smart_update_fanout_enqueues_coalesced_vector_projection(monkeypa
     assert vector_calls[0][2]["coalesce_key"] == "event_vector_sync:prod"
     assert vector_calls[0][2]["payload"] == {"reason": "smart_update", "event_id": event.id}
     assert main.JOB_HANDLERS["event_vector_sync"] is evs.job_event_vector_sync
+
+
+@pytest.mark.asyncio
+async def test_partial_projection_invalidates_previous_complete_receipt(monkeypatch, tmp_path):
+    monkeypatch.setenv('ENABLE_EVENT_VECTOR_SYNC', '1')
+    receipt = tmp_path / 'receipt.json'
+    receipt.write_text(json.dumps({'status': 'complete', 'complete': True, 'run_id': 1}))
+    monkeypatch.setenv('EVENT_VECTOR_SYNC_RECEIPT_PATH', str(receipt))
+    monkeypatch.setattr(evs, 'static_release_guard', lambda *_: None)
+    monkeypatch.setattr(evs, '_create_sqlite_snapshot', lambda *_: None)
+    monkeypatch.setattr(evs, '_snapshot_event_revisions', lambda *_: {})
+    async def start(*args, **kwargs): return 2
+    async def finish(*args, **kwargs): pass
+    async def process(*args, stage, **kwargs):
+        if stage == 'project':
+            state = json.loads(receipt.read_text())
+            assert state['complete'] is False
+            raise RuntimeError('provider-call cap leaves partial projection')
+    monkeypatch.setattr(evs, 'start_ops_run', start)
+    monkeypatch.setattr(evs, 'finish_ops_run', finish)
+    monkeypatch.setattr(evs, '_run_process', process)
+    with pytest.raises(RuntimeError, match='partial projection'):
+        await evs.run_event_vector_sync(SimpleNamespace(path=str(tmp_path / 'live.sqlite')), trigger='scheduled')
+    assert json.loads(receipt.read_text())['complete'] is False

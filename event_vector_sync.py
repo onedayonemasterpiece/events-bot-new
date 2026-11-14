@@ -274,6 +274,10 @@ async def run_event_vector_sync(
                     stage="export",
                     run_id=ops_run_id,
                 )
+                await asyncio.to_thread(_atomic_write_json, receipt_path, {
+                    "schema_version": RECEIPT_SCHEMA_VERSION, "status": "incomplete",
+                    "complete": False, "run_id": ops_run_id,
+                })
                 await _run_process(
                     [
                         sys.executable,
