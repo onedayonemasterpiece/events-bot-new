@@ -598,3 +598,24 @@ async def test_related_audit_inherits_operator_normal_pool(monkeypatch) -> None:
         anchor={'id': 1, 'title': 'Standup'}, candidates=[{'id': 2, 'title': 'Comedy'}])
     assert captured['reserve_key_envs'] == 'GOOGLE_API_KEY,GOOGLE_API_KEY4'
     assert result[2]['llm_semantic_score'] == .8
+
+
+def test_occurrence_and_duplicate_verdicts_never_become_semantic_recommendations(monkeypatch) -> None:
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    monkeypatch.setattr(exporter.time, 'sleep', lambda _: None)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', lambda **_: {
+        2: {'llm_semantic_score': .99, 'confidence': .95, 'reject': False,
+            'similarity_class': 'same_occurrence_group'},
+        3: {'llm_semantic_score': .99, 'confidence': .95, 'reject': False,
+            'similarity_class': 'duplicate_same_slot'},
+        4: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+            'similarity_class': 'highly_similar'},
+    })
+    events = [{'id': i, 'title': f'Event {i}'} for i in range(1, 5)]
+    chains = {'1': [{'event_id': i, 'vector_similarity': .95, 'related_score': .95,
+                     'slot_type': 'pure_related'} for i in (2, 3, 4)]}
+    result, _ = exporter.maybe_apply_gemma_audit(events, chains, enabled=True,
+        model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4', cache={}, max_anchors=0)
+    assert [item['event_id'] for item in result['1']] == [4]

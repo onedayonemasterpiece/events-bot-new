@@ -4221,8 +4221,10 @@ def build_gemma_related_audit_prompt(
         "Не добавляй event_id, которых нет в candidates. Верни только JSON по схеме.\n"
         "Задача: оценить, насколько каждый candidate тематически близок к anchor, и отсортировать ranked от наиболее похожего к менее похожему.\n"
         "Оценка: 0.90+ почти тот же интерес; 0.72+ можно показывать в блоке «Похожие»; 0.55-0.71 слабая/смежная рекомендация; <0.55 reject=true.\n"
+        "Сначала отдели ту же программу/курс в другую дату или время (same_occurrence_group) и дубль того же сеанса (duplicate_same_slot): для них reject=true, это не «Похожие».\n"
+        "Решай по фактам программы, а не только названию; общий исполнитель, площадка, жанр или лига сами по себе не означают одну программу. Самостоятельные похожие события оценивай далее.\n"
         "Если событие просто другое, даже качественное, ставь reject=true.\n"
-        "similarity_class выбери строго из: identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
+        "similarity_class выбери строго из: same_occurrence_group, duplicate_same_slot, identical_or_near_identical, highly_similar, thematically_close, weak_or_adjacent_related, different_topic.\n"
         "confidence: 0..1, насколько достаточно фактов и насколько ты уверен в оценке; снижай при скудном описании или спорной похожести.\n"
         "Не объясняй решение, не возвращай лишние поля.\n\n"
         "<anchor>\n"
@@ -4424,6 +4426,8 @@ def classify_gemma_similarity(score: float, *, reject: bool) -> str:
 
 def normalize_gemma_similarity_class(value: Any, *, score: float, reject: bool) -> str:
     allowed = {
+        "same_occurrence_group",
+        "duplicate_same_slot",
         "identical_or_near_identical",
         "highly_similar",
         "thematically_close",
@@ -4455,7 +4459,7 @@ def gemma_related_policy_signature(*, model: str) -> str:
             120,
             int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v5_factual_no_category_two_pass",
+        "prompt_version": "related_gemma4_schema_v6_independent_programs_two_pass",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -4693,7 +4697,7 @@ def maybe_apply_gemma_audit(
                 score=llm_score,
                 reject=bool(verdict.get("reject")),
             )
-            item["gemma_reject"] = bool(verdict.get("reject"))
+            item["gemma_reject"] = bool(verdict.get("reject")) or item["similarity_class"] in {"same_occurrence_group", "duplicate_same_slot"}
             if item["gemma_reject"]:
                 item["display_eligible"] = False
             item["reason_codes"] = list(dict.fromkeys([*(item.get("reason_codes") or []), "gemma4_26b_audit"]))
