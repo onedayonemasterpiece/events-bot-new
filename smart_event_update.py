@@ -21873,6 +21873,7 @@ async def _smart_event_update_impl(
                         and not set(updated_keys).intersection({"title", "date", "time", "end_date", "location_name", "location_address", "city"})
                     )
                     if (duplicate_only_narrative and not is_canonical_site and _title_has_meaningful_tokens(event_db.title)
+                        and _titles_look_related(str(merge_data.get("title") or ""), event_db.title)
                         and not _is_generic_title_event_type_venue(
                             event_db.title, event_type=event_db.event_type,
                             location_name=event_db.location_name, city=event_db.city,

@@ -564,3 +564,9 @@ cover added facts plus changed title, tickets, visible age, age provenance,
 cleanup, canonical date correction, filling missing time and generic title.
 This producer fix does not undo event10906's already changed canonical payload
 or prove CAPTCHA resolved. Parent owns release and ordinary product verification.
+
+CI caught an unrelated-title proposal hidden by the new preservation ordering.
+Preservation now additionally requires the existing related-title evidence.
+An unrelated proposal reaches the unchanged catastrophic merge rollback guard;
+test_late_incoherent_merge_rolls_back_and_creates_distinct remains unchanged.
+This check is one production line (total net+11, approved budget12).
