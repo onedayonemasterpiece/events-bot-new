@@ -653,3 +653,4 @@ def test_strict_anchor_flag_requires_completed_audit_and_accepts_empty_candidate
     assert not result['related']['1']['strict_verified']
     assert result['related']['2']['strict_verified']  # No candidates is a complete empty result.
     assert not result['strict_verified_related']
+    assert result['gemma_verification']['status'] == 'partial'

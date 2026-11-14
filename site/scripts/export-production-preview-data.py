@@ -4730,7 +4730,7 @@ def maybe_apply_gemma_audit(
     meta["audited_anchors"] = audited
     meta["verified_event_ids"] = sorted(set(int(item) for item in meta["verified_event_ids"]))
     meta["attempted_anchors"] = attempted_anchors
-    meta["status"] = "ok" if audited > 0 and not meta["errors"] else ("partial" if audited > 0 else "failed")
+    meta["status"] = "ok" if len(meta["verified_event_ids"]) == len(events) and not meta["errors"] else ("partial" if meta["verified_event_ids"] else "failed")
     return chains, meta
 
 
