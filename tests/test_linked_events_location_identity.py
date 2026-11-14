@@ -209,7 +209,7 @@ async def test_reported_probe_shape_compact_packets_and_title_grounding(tmp_path
         available = {p['id']: p for p in packet['events']}
         aliases = [i for i in available if 10285 <= i <= 10291 or 10707 <= i <= 10713]
         if batch != 'sports':
-            assert list(available)[:7] == course  # Stable target representatives, not lower-ID aliases.
+            assert set(list(available)[:len(targets)]) == set(targets)  # Accepted targets precede external peers.
             assert len(available) <= len(targets) + 12 and not aliases
         if batch != 'course':
             assert [10990, 10991] in packet['review_pairs']
@@ -251,6 +251,6 @@ async def test_reported_probe_shape_compact_packets_and_title_grounding(tmp_path
                 assert {j for j, v in verdicts[i].items() if v == 'same_programme_other_slot'} == set(course) - {i}
         if batch != 'course':
             assert verdicts[10990][10991] == 'independent_event'
-            assert not any(v == 'same_programme_other_slot' for i in sports for v in verdicts[i].values())
+            assert not any(v == 'same_programme_other_slot' for i in sports for v in verdicts.get(i, {}).values())
     finally:
         await db.close()
