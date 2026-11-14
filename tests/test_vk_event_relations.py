@@ -413,3 +413,22 @@ async def test_related_comment_resolves_public_linked_header_once(tmp_path, monk
         assert sum(method == 'wall.createComment' for method, _ in calls) == 1
     finally:
         await db.close()
+
+
+def test_until_tile_has_no_weekday_or_time_but_normal_tile_keeps_them(monkeypatch):
+    from guide_excursions.visual_digest import _draw_date_tile, PALETTES
+    from PIL import Image, ImageDraw
+    rendered = []
+    original = ImageDraw.ImageDraw.text
+    def capture(self, xy, text, *args, **kwargs):
+        rendered.append(text)
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', capture)
+    draw = ImageDraw.Draw(Image.new('RGB', (250, 200)))
+    _draw_date_tile(draw, {'date': '2027-05-30', 'time': '11:00', 'date_prefix': 'до'},
+                    174, PALETTES[0].accents[0], PALETTES[0])
+    assert rendered == ['МАЯ', 'до', '30']
+    rendered.clear()
+    _draw_date_tile(draw, {'date': '2027-05-30', 'time': '11:00'},
+                    174, PALETTES[0].accents[0], PALETTES[0])
+    assert 'вс · 11:00' in rendered

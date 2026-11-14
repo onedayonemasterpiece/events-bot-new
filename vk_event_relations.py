@@ -9,7 +9,7 @@ import logging
 import random
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
 from models import Event, Setting, JobOutbox, JobStatus
 
@@ -129,19 +129,10 @@ def render_card(items, *, schedule=False):
         if row.get('is_free'):
             medallions = medallions[:1] + ['site/public/assets/badges/free-listing-medallion.png']
         medallions = medallions[:2]
-        mask = Image.new('L', (100, 100))
-        ImageDraw.Draw(mask).ellipse((0, 0, 99, 99), fill=255)
         for index, asset in enumerate(medallions):
             medal = Image.open(ROOT / asset).convert('RGBA')
-            bounds = medal.getchannel('A').getbbox()
-            if medal.getchannel('A').getextrema() == (255, 255):
-                background = Image.new('RGB', medal.size, medal.getpixel((0, 0))[:3])
-                bounds = ImageChops.difference(medal.convert('RGB'), background).getbbox()
-            medal = ImageOps.fit(medal.crop(bounds) if bounds else medal, (100, 100), method=Image.Resampling.LANCZOS)
-            medal.putalpha(ImageChops.multiply(medal.getchannel('A'), mask))
-            x = 974 - (len(medallions) - index) * 108
-            layer.alpha_composite(medal, (x, 36))
-            rd.ellipse((x, 36, x + 99, 135), outline=palette.card_stroke, width=1)
+            medal.thumbnail((100, 100), Image.Resampling.LANCZOS)
+            layer.alpha_composite(medal, (974 - (len(medallions) - index) * 108, 36))
         width = 738 - len(medallions) * 108 - (20 if medallions else 0)
         title = _strip_emoji(row['title']).strip()
         y = 20

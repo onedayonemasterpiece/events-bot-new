@@ -13,7 +13,7 @@
 
 ### Fixed
 - Event similarity embeds only factual title/summary/description and uses cosine without category/facet/title boosts; PNG VK cards first retry as full-resolution JPEG.
-- Polish VK related cards with end-date «до» tiles for multi-day events, consistent date/time spacing, circular medallions and complete short descriptions only where they fit.
+- Polish VK related cards with end-date «до» tiles for multi-day events, consistent date/time spacing, shared website/VK circular medallion assets and complete short descriptions only where they fit.
 - Prepare bounded 1600 px JPEG working copies before VK uploads and image comparisons; preserve canonical sources and reuse their existing image identities.
 - Reuse an existing final identity MATCH for the same event owner instead of running a second semantic merge-identity decision that can contradict it and create a duplicate.
 - Resolve delayed VK recommendation comments against the original combined linked-time publication header, preserving their frozen carousel selection.

@@ -75,3 +75,7 @@ The normative design-system architecture lives in `onedayonemasterpiece/lovekgd-
 - `receipts/penpot/resource-graph-to-be-structure-v1.json`.
 
 The integrated Product Atlas/UI Exploration vision in this repository must reference these documents rather than duplicate the Resource Graph page schema or component authority rules.
+
+## Общие медальонные ресурсы
+
+Сайт, VK и Telegram используют единый curated organizerMedallions.json и подготовленные круговые ресурсы. site/scripts/normalize-organizer-medallions.py нормализует поля и видимый диаметр и сохраняет одинаковые PNG и lossless WebP. Исправление ресурса относится ко всем потребителям; локальная коррекция формы в VK renderer не применяется. В /lab/design-system/ существующий EventTokenMedallions показывает контрольные площадки «Бастион», «Дом китобоя» и «Дом семьи». Это исправление ошибочных исходных ресурсов; API и геометрия существующего компонента не меняются.
