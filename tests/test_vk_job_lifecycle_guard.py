@@ -274,3 +274,34 @@ async def test_captcha_resume_uses_publication_priority_without_shortening_pacin
     assert [j.task for j in jobs] == [JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.vk_sync, JobTask.festival_pages]
     assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30, 30, 30]
     assert jobs[1].event_id == event.id and jobs[2].event_id == existing.id
+
+
+@pytest.mark.asyncio
+async def test_initial_post_cannot_use_unverified_legacy_graph_when_verifier_enabled(db, monkeypatch):
+    import json
+    from vk_event_relations import graph_path
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_VERIFY', '1')
+    event = await save_event(db, photo_urls=['source-poster'])
+    graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': [2], 'strict_verified': False}}}))
+    calls = forbidden_calls(monkeypatch)
+    with pytest.raises(main.StaticSiteSingleFlightDeferred, match='vk_initial_waiting_related'):
+        await main.job_sync_vk_source_post(event.id, db, None)
+    for call in calls:
+        call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_verified_empty_anchor_can_continue_initial_publication(db, monkeypatch):
+    import json
+    from vk_event_relations import graph_path
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_VERIFY', '1')
+    event = await save_event(db, photo_urls=['source-poster'])
+    graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': [], 'strict_verified': True}}}))
+    monkeypatch.setitem(main.vk_group_blocked, 'wall.post', 0)
+    def reached_publication(_event):
+        raise AssertionError('verified empty anchor passed the wait')
+    monkeypatch.setattr(main, '_event_has_ended_before_today', reached_publication)
+    with pytest.raises(AssertionError, match='verified empty anchor passed the wait'):
+        await main.job_sync_vk_source_post(event.id, db, None)
