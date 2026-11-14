@@ -133,53 +133,48 @@ object identity нельзя, поскольку разные пиксели м�
 
 ### Автоматический VLM review
 
-Каждое новое второе и последующее изображение остается `pending_review`. Worker
-сравнивает ровно одну пару за job/call. Один pending frontier сравнивается с
-текущими approved rows; матрица всех pending пар заранее не создается.
+Worker выбирает до восьми первых исходных `approved`/`pending_review` изображений
+в порядке галереи. Известные duplicate/rejected строки исключены. Оригиналы
+скачиваются и декодируются последовательно; canonical bytes и CDN не меняются.
+Рабочие JPEG для сравнения ограничены 1200 px по длинной стороне. Равные pixel SHA
+схлопываются до запроса, с сохранением качественного оригинала.
 
-Defaults:
+Один запрос Gemini Lite оценивает всю выбранную галерею, включая копии между
+новыми изображениями. Ответ привязан к ID каждого изображения; лишние,
+повторные ID и противоречивые ссылки duplicate не являются подтверждением.
+Полная матрица pending-пар не создаётся: существующие pair rows сохраняют
+доказательства, но их исторический budget/status не блокирует выбор фотографий.
 
-- primary: `gemini-3.1-flash-lite`;
-- escalation: `models/gemma-4-31b-it` для uncertain/low-confidence primary и
-  retryable provider failure primary (например HTTP 503) и отказа primary
-  reservation по дневной квоте `rpd`. Это тот же
-  настроенный VLM-путь, а не положительный семантический вердикт по ошибке.
-  Минутные `rpm`/`tpm`, provider 429 и nonretryable ошибки сохраняют прежний durable retry.
-  Gemma получает собственный admission через тот же общий limiter; отказ
-  резерва primary не считается provider send;
-- Gemma получает тот же field/enum/required contract через проверенный
-  geometry consumer компактный `response_schema` без unsupported
-  `additionalProperties`; Gemini сохраняет strict `response_json_schema`.
-  Оба ответа проходят один application validator;
-- ключ: scoped `GOOGLE_API_KEY4`, без reserve overflow и без `GOOGLE_API_KEY2`;
-- capacity admission: shared project/model atomic Google AI limiter; отдельного
-  pair-specific суточного лимита нет. Неиспользуемые старые env
-  `EVENT_MEDIA_REVIEW_DAILY_PRIMARY_CALLS` / `EVENT_MEDIA_REVIEW_DAILY_ESCALATION_CALLS`
-  больше не влияют на worker; оставшиеся исторические counter rows не удаляются;
-- максимум 3 automatic attempts, затем `unresolved`; изображение остается
-  непубличным, ручной очереди нет;
-- pending/deferred пары с уже rejected/duplicate/unavailable изображением
-  отменяются до скачивания и provider admission. Они не мешают отдельному
-  кандидату получить approval по оставшимся действующим парам;
-- если другой/ручной `event_media_review` пришёл раньше `next_run_at`
-  отложенной пары, no-op проход повторно ставит ровно один durable job на
-  минимальный future retry. Ранний проход не расходует VLM budget и не может
-  потерять отложенную пару или превратить её в tight loop;
-- cache/idempotency: `event_media_pair_review.pair_input_hash` включает event,
-  fingerprints, event context и policy/prompt versions.
-- `running` pair, прерванный deploy/restart, автоматически возвращается в
-  `deferred` через десять минут; evidence попытки сохраняется, а дальнейшая
-  обработка следует обычным budget/retry правилам без ручного вмешательства.
+Используются прежние `EVENT_MEDIA_REVIEW_PRIMARY_MODEL` (default
+`gemini-3.1-flash-lite`), `EVENT_MEDIA_REVIEW_ESCALATION_MODEL` (default
+`models/gemma-4-31b-it`), scoped key, общий Google AI limiter и
+`attempt_observer`. Дневного pair-specific лимита нет. Configured escalation
+сохраняется для uncertain/low-confidence, primary rpd и retryable provider failure.
+`EVENT_MEDIA_REVIEW_MAX_OUTPUT_TOKENS` обслуживает и пакетный ответ (default
+2048, bounded 4096); отдельная настройка/клиент/лимитер не добавлены.
 
-`provider_calls` учитывает физические отправки через общий
-`GoogleAIClient.attempt_observer`, после atomic `mark_sent`: HTTP 503 тоже
-является вызовом. Structured logs `event_media_pair_provider_sent` и
-`event_media_pair_provider_fallback` связывают событие, пару, модель и статус
-провайдера без изображений и credentials. Если обе модели недоступны, пара
-остаётся в прежнем bounded automatic retry; новый таймер не создаётся.
+Только уверенный visual duplicate/conflict исключает исходное фото. Если после
+настроенного пути нет надёжного ответа, декодированные разные исходники
+сохраняются с `optional_visual_review_unavailable` или
+`optional_visual_review_uncertain`, без выдуманной confidence/classification.
+Ошибка скачивания или декодирования таким допуском не считается. Известное
+semantic rejection сохраняется для всех exact-копий, включая качественную.
+При смене исходника во время запроса старый вердикт не применяется; новая
+visual identity обрабатывается существующим продолжением media job.
 
-Результаты: duplicate → `duplicate`; distinct → `approved`; semantic conflict/
-unrelated candidate → `rejected`; failure/uncertain → fail-closed quarantine.
+До первоначального поста ожидается только выбранная галерея. Если duplicate
+освободил место, следующий исходник входит через обычное продолжение. После
+восьми готовых исходников хвост сохраняется в ledger без ложных rejected/duplicate
+решений и не задерживает публикацию. Optional role и geometry enrichment не
+блокируют готовую галерею, в том числе linked events.
+VK получает не более девяти вложений: сначала резервируются имеющиеся карточки
+других дат/похожих событий, затем до восьми исходных фото в оставшиеся места.
+Порядок: source photos → dates → related.
+
+`event_media_gallery_provider_sent` фиксирует один фактический запрос и ID
+изображений. Pair `provider_calls` отражает участие в запросе; сумма counters
+нескольких pair rows не является числом сетевых отправок.
+
 После подтверждения duplicate managed rendition сохраняет прежний приоритет,
 затем canonical выбирается по площади изображения; прежний approved статус
 служит только tie-breaker при равном качестве. Победитель становится approved,

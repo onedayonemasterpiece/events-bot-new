@@ -2509,3 +2509,20 @@ release veto. Retained Telegram results remain present and ordinary recovery
 12035 resumed after restart; its final result is a separate acceptance, not
 proved by Boyko success. No accepted siblings, earlier sources or guide scans
 were replayed, and no additional digest or story was published.
+
+### 2026-11-14: gallery publication root correction
+
+Read-only evidence confirmed Dramteatr event 10783 collected 14 source images
+(12 pending); unpublished 10784/10785 held 13/8 posters. Historical zero-send
+`media_review_primary_budget_exhausted` pair rows prevented pair selection.
+Owner decision Slack1794644175.186489 replaces mandatory pair-by-pair visual
+admission with one optional gallery request up to 8 images, 1200 px copies, total 9
+VK attachments including cards. Normal selection now reads pending posters
+directly: no pair-status migration or historical public backfill is required.
+Confirmed exact/semantic exclusions remain authoritative; provider absence or
+uncertainty has honest reasons without invented confidence. Source download/
+decode failure does not approve photos. Regression guards: eight images one
+actual send, exact dedup before send, semantic rejection across exact copies,
+14-source prefix/tail, both cards inside 9, identity drift, existing shared
+limiter/models/observer. Release and ordinary initial source-gallery readback
+remain pending; source/tests do not close incident or start 48-hour acceptance.

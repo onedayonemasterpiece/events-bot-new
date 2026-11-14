@@ -7548,11 +7548,11 @@ async def sync_vk_source_post(
     partial_upload = False
     gallery_mode = None
     if VK_PHOTOS_ENABLED and photo_urls_source:
+        relation_cards = await cards(relations, max(0, min(VK_MAX_ATTACHMENTS, 9) - 1))
         photo_urls_for_publish = (await _dedupe_event_photo_urls_for_publish(photo_urls_source))[
-            :VK_MAX_ATTACHMENTS
+            :min(8, max(0, min(VK_MAX_ATTACHMENTS, 9) - len(relation_cards)))
         ]
         photo_upload_expected = bool(photo_urls_for_publish)
-        relation_cards = await cards(relations, VK_MAX_ATTACHMENTS - len(photo_urls_for_publish))
         cue = ("Другие даты" if relations["dates"] else "Похожие события") if len(photo_urls_for_publish) == 1 else "листай"
         ids, gallery_mode = await _upload_vk_event_gallery(
             target_group_id, photo_urls_for_publish, event.id, db, bot,
