@@ -1,5 +1,7 @@
 # Changelog
 
+- Related-only: готовность anchor учитывает завершённые проходы проверки, а RPM/TPM регулирует общий limiter без дополнительной фиксированной паузы.
+
 - VK: карточки похожих и других дат показывают канонический формат события рядом с площадкой; даже без описания понятно, кинопоказ это, спектакль или другой формат.
 
 - Related: preserve detailed event facts alongside short captions; initial VK posts wait for the enabled strict verifier instead of consuming legacy unverified anchors.

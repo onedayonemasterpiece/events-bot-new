@@ -4460,7 +4460,7 @@ def gemma_related_policy_signature(*, model: str) -> str:
             120,
             int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v7_selected_event_description_two_pass",
+        "prompt_version": "related_gemma4_schema_v8_complete_anchor_two_pass",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -4539,6 +4539,7 @@ def maybe_apply_gemma_audit(
         chain = chains.get(anchor_id) or []
         top_ids = [int(item["event_id"]) for item in chain[:total_candidate_limit]]
         if not top_ids:
+            meta["verified_event_ids"].append(int(anchor["id"]))
             continue
         anchor_int_id = int(anchor["id"])
         affected_by_change = (
@@ -4678,9 +4679,7 @@ def maybe_apply_gemma_audit(
                     })
                 if successful_passes == expected_passes:
                     audit_cache[cache_key] = {str(k): v for k, v in audit.items()}
-                meta["verified_event_ids"].append(anchor_int_id)
-                # Respect free-tier RPM without introducing a queue.
-                time.sleep(4.2)
+                    meta["verified_event_ids"].append(anchor_int_id)
             except Exception as exc:
                 meta["errors"].append({"anchor_event_id": anchor_int_id, "error": str(exc)[:500]})
                 log_stage("gemma_audit_error", anchor_event_id=anchor_int_id, error=str(exc)[:500])
@@ -4731,7 +4730,7 @@ def maybe_apply_gemma_audit(
     meta["audited_anchors"] = audited
     meta["verified_event_ids"] = sorted(set(int(item) for item in meta["verified_event_ids"]))
     meta["attempted_anchors"] = attempted_anchors
-    meta["status"] = "ok" if audited > 0 and not meta["errors"] else ("partial" if audited > 0 else "failed")
+    meta["status"] = "ok" if len(meta["verified_event_ids"]) == len(events) and not meta["errors"] else ("partial" if meta["verified_event_ids"] else "failed")
     return chains, meta
 
 
@@ -5095,7 +5094,7 @@ def build_related(
             "adjacent_discovery": explore[:10],
             "chain": chain[:40],
             "underfilled": len(chain) < min(20, max(0, len(events) - 1)),
-            "strict_verified": bool(gemma_verify),
+            "strict_verified": bool(gemma_verify and int(event["id"]) in gemma_meta.get("verified_event_ids", [])),
         }
     return {
         "schema_version": schema_version,
@@ -5128,7 +5127,7 @@ def build_related(
         "graph_reciprocity": graph_meta,
         "retrieval_receipt": retrieval_receipt,
         "gemma_verification": gemma_meta,
-        "strict_verified_related": bool(gemma_verify),
+        "strict_verified_related": bool(gemma_verify and current_id_set.issubset(set(gemma_meta.get("verified_event_ids", [])))),
         "cache": {
             "state": cache_state,
             "path": str(cache_path) if cache_path else None,
