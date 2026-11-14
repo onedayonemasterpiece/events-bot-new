@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from difflib import SequenceMatcher
 
-from sqlmodel import select
+from sqlmodel import and_, or_, select
 
 from db import Database
 from models import Event
@@ -143,7 +143,7 @@ async def recompute_linked_event_ids(
     """Recompute `Event.linked_event_ids` for an event and keep backlinks consistent.
 
     The linking rule is deliberately simple and deterministic:
-    - same `location_name`
+    - same `location_name`, or an exact nonempty address and city
     - title matches by a strict fuzzy matcher (`_titles_match_for_linking`)
     - different dates/times are allowed (we link occurrences, not merge them)
     """
@@ -166,6 +166,8 @@ async def recompute_linked_event_ids(
         if not base:
             return LinkedEventsRecomputeResult(group_event_ids=[], changed_event_ids=[])
         loc = (getattr(base, "location_name", None) or "").strip()
+        address = (getattr(base, "location_address", None) or "").strip()
+        city = (getattr(base, "city", None) or "").strip()
         title = (getattr(base, "title", None) or "").strip()
         date_raw = (getattr(base, "date", None) or "").strip()
         end_date_raw = (getattr(base, "end_date", None) or "").strip()
@@ -189,7 +191,10 @@ async def recompute_linked_event_ids(
             await session.execute(
                 select(Event.id, Event.title, Event.date, Event.time)
                 .where(
-                    Event.location_name == loc,
+                    or_(
+                        Event.location_name == loc,
+                        and_(bool(address and city), Event.location_address == address, Event.city == city),
+                    ),
                     Event.date >= start_iso,
                     Event.date <= end_iso,
                 )
