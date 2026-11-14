@@ -100,6 +100,43 @@ async def test_active_current_date_and_managed_repair_still_sync(db, monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_linked_existing_post_is_remembered_before_edit_failure(db, monkeypatch):
+    import vk_event_relations
+    from models import JobOutbox, JobTask
+    from sqlmodel import select
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    monkeypatch.setitem(main.vk_group_blocked, 'wall.post', 0.0)
+    anchor = await save_event(db, source_vk_post_url='https://vk.com/wall-1_42',
+                              vk_source_hash='existing-source-hash')
+    member = await save_event(db, linked_event_ids=[anchor.id])
+    fresh = await save_event(db)
+    monkeypatch.setattr(main, '_should_skip_ticket_giveaway_publication', AsyncMock(return_value=False))
+    monkeypatch.setattr(main, '_recover_managed_vk_live_url', AsyncMock(return_value=False))
+    monkeypatch.setattr(vk_event_relations, 'presentation', AsyncMock(return_value={'dates': [], 'related': []}))
+    sync = AsyncMock(side_effect=RuntimeError('captcha_wait:test'))
+    monkeypatch.setattr(main, 'sync_vk_source_post', sync)
+    with pytest.raises(RuntimeError, match='captcha_wait'):
+        await main.job_sync_vk_source_post(member.id, db, None)
+    assert sync.call_args.args[0].id == anchor.id
+    async with db.get_session() as session:
+        stored = await session.get(Event, member.id)
+        assert stored.source_vk_post_url == anchor.source_vk_post_url
+        assert stored.vk_source_hash == anchor.vk_source_hash
+        jobs = [JobOutbox(event_id=member.id, task=JobTask.vk_sync),
+                JobOutbox(event_id=fresh.id, task=JobTask.vk_calendar_comment),
+                JobOutbox(event_id=fresh.id, task=JobTask.vk_sync)]
+        session.add_all(jobs)
+        await session.commit()
+    await main.vk_captcha_pause_outbox(db, marker='captcha_wait:linked')
+    await main._resume_vk_captcha_outbox(db, 'captcha_wait:linked')
+    async with db.get_session() as session:
+        rows = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
+    assert [(r.event_id, r.task) for r in rows] == [
+        (fresh.id, JobTask.vk_calendar_comment), (fresh.id, JobTask.vk_sync), (member.id, JobTask.vk_sync)]
+    assert (rows[1].next_run_at - rows[0].next_run_at).total_seconds() == main.VK_CAPTCHA_RESUME_SPACING_SEC
+
+
+@pytest.mark.asyncio
 async def test_initial_image_post_waits_for_shared_relations_before_any_provider_call(db, monkeypatch):
     monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
     event = await save_event(db, photo_urls=['source-poster'])
@@ -234,6 +271,6 @@ async def test_captcha_resume_uses_publication_priority_without_shortening_pacin
     assert await main._resume_vk_captcha_outbox(db, 'captcha_wait:priority') == 4
     async with db.get_session() as session:
         jobs = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
-    assert [j.task for j in jobs] == [JobTask.vk_sync, JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.festival_pages]
+    assert [j.task for j in jobs] == [JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.vk_sync, JobTask.festival_pages]
     assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30, 30, 30]
-    assert jobs[0].event_id == event.id and jobs[2].event_id == existing.id
+    assert jobs[1].event_id == event.id and jobs[2].event_id == existing.id
