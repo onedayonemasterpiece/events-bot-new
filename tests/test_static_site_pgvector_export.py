@@ -538,3 +538,63 @@ def test_pgvector_similarity_is_not_promoted_by_category_or_facets(monkeypatch) 
     literature = next(item for item in chain if item["event_id"] == 2)
     assert literature["slot_type"] == "adjacent_discovery"
     assert literature["related_score"] == round(scores[2], 4)
+
+
+def test_related_audit_uses_semantics_without_generated_category() -> None:
+    exporter = _load_exporter_module()
+    event = {'id': 1, 'title': 'Матч женской баскетбольной лиги',
+             'summary': 'Баскетбольный матч', 'topics': ['kraevedenie_kaliningrad_oblast']}
+    prompt = exporter.build_gemma_related_audit_prompt(anchor=event, candidates=[event], fact_max_chars=360)
+    assert '<category>' not in prompt
+    assert 'Баскетбольный матч' in prompt
+
+
+def test_related_audit_retry_respects_shared_minute_bucket(monkeypatch) -> None:
+    from google_ai.exceptions import RateLimitError
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS', '2')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_RETRY_BACKOFF_SEC', '10')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    calls = []
+    waits = []
+    def audit(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise RateLimitError(blocked_reason='tpm', retry_after_ms=42000)
+        return {2: {'llm_semantic_score': .8, 'confidence': .9, 'reject': False,
+                    'similarity_class': 'highly_similar'}}
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    monkeypatch.setattr(exporter.time, 'sleep', waits.append)
+    chains = {'1': [{'event_id': 2, 'vector_similarity': .78, 'related_score': .78,
+                     'slot_type': 'adjacent_discovery'}]}
+    result, meta = exporter.maybe_apply_gemma_audit(
+        [{'id': 1, 'title': 'Открытый микрофон'}, {'id': 2, 'title': 'Сольный стендап'}],
+        chains, enabled=True, model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
+        cache={}, max_anchors=0)
+    assert waits[0] == 42.0
+    assert len(calls) == 2
+    assert result['1'][0]['slot_type'] == 'pure_related'
+    assert meta['status'] == 'ok'
+
+
+@pytest.mark.asyncio
+async def test_related_audit_inherits_operator_normal_pool(monkeypatch) -> None:
+    import google_ai.client
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('GOOGLE_AI_NORMAL_KEY_ENVS', 'GOOGLE_API_KEY,GOOGLE_API_KEY4')
+    captured = {}
+    class Client:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+        async def generate_content_async(self, **kwargs):
+            return json.dumps({'ranked': [{'event_id': 2, 'llm_semantic_score': .8,
+                   'similarity_class': 'highly_similar', 'confidence': .9, 'reject': False}]}), None
+    monkeypatch.setattr(google_ai.client, 'GoogleAIClient', Client)
+    monkeypatch.setattr(exporter, 'supabase_limiter_client', object)
+    result = await exporter.call_gemma_related_audit_async(
+        model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
+        anchor={'id': 1, 'title': 'Standup'}, candidates=[{'id': 2, 'title': 'Comedy'}])
+    assert captured['reserve_key_envs'] == 'GOOGLE_API_KEY,GOOGLE_API_KEY4'
+    assert result[2]['llm_semantic_score'] == .8

@@ -1083,10 +1083,13 @@ def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
         'ENABLE_INTEREST_CLUB_STATIC_PROJECTION',
         'PUBLIC_INTEREST_CLUBS_ENABLED',
         'GOOGLE_API_LOCALNAME',
+        'GOOGLE_AI_NORMAL_KEY_ENVS',
+        'GOOGLE_AI_MODEL_KEY_ENVS_JSON',
         'GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV',
         'GOOGLE_AI_RESERVE_DIRECT_RETRY',
         'GOOGLE_AI_RESERVE_DIRECT_SCHEMA',
     ]
+    names.extend(name.strip() for name in os.getenv('GOOGLE_AI_NORMAL_KEY_ENVS', '').split(',') if name.strip())
     payload = {name: os.getenv(name, '').strip() for name in dict.fromkeys(names) if os.getenv(name, '').strip()}
     missing = []
     if args.gemma_related_verify and not payload.get(key_env):

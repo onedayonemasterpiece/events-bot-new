@@ -4183,7 +4183,6 @@ def _related_audit_event_block(event: dict[str, Any], *, tag: str, fact_max_char
     summary = _related_audit_text(event.get("summary") or event.get("description_html") or "", max_chars=fact_max_chars)
     title = _related_audit_text(event.get("title") or "", max_chars=180)
     event_type = _related_audit_text(event.get("event_type") or "", max_chars=80)
-    event_category = _related_audit_text(category(event) or "", max_chars=80)
     venue = _related_audit_text(event.get("venue_name") or "", max_chars=120)
     city = _related_audit_text(event.get("city") or "", max_chars=80)
     date = _related_audit_text(event.get("start_date") or "", max_chars=40)
@@ -4192,7 +4191,6 @@ def _related_audit_event_block(event: dict[str, Any], *, tag: str, fact_max_char
         f'<{tag} id="{event_id}">\n'
         f"<title>{title}</title>\n"
         f"<type>{event_type}</type>\n"
-        f"<category>{event_category}</category>\n"
         f"<summary>{summary}</summary>\n"
         f"<venue>{venue}</venue>\n"
         f"<city>{city}</city>\n"
@@ -4304,6 +4302,7 @@ async def call_gemma_related_audit_async(
             consumer="static_site_related_builder",
             account_name=os.getenv("STATIC_SITE_GEMMA_ACCOUNT_NAME") or "static-site-related",
             default_env_var_name=key_env,
+            reserve_key_envs=os.getenv("GOOGLE_AI_NORMAL_KEY_ENVS") or None,
         )
         max_output_tokens = max(384, int(os.getenv("STATIC_SITE_GEMMA_RELATED_MAX_OUTPUT_TOKENS", "768") or "768"))
         text, _usage = await client.generate_content_async(
@@ -4456,7 +4455,7 @@ def gemma_related_policy_signature(*, model: str) -> str:
             120,
             int(os.getenv("STATIC_SITE_GEMMA_RELATED_FACT_MAX_CHARS", "360") or "360"),
         ),
-        "prompt_version": "related_gemma4_schema_v4_compact_xml_model_confidence_two_pass",
+        "prompt_version": "related_gemma4_schema_v5_factual_no_category_two_pass",
     }
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -4644,6 +4643,8 @@ def maybe_apply_gemma_audit(
                                 })
                                 break
                             sleep_seconds = backoff_seconds * attempt
+                            if getattr(exc, "blocked_reason", None) in {"rpm", "tpm"}:
+                                sleep_seconds = max(sleep_seconds, float(getattr(exc, "retry_after_ms", 0) or 0) / 1000)
                             log_stage(
                                 "gemma_audit_retry",
                                 anchor_event_id=anchor_int_id,

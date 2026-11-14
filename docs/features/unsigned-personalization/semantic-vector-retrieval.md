@@ -450,3 +450,11 @@ If pgvector quality or availability fails, publish the last-good static sparse m
 - `semantic_embeddings=false`.
 
 Rollback must be visible in manifest metadata and must not be labeled semantic.
+
+### November 2026 precision/recall correction
+
+Production related-only builds enable the existing strict Gemma verifier. Vectors remain the candidate recall stage; raw cosine alone is not a reliable universal publication threshold. On the measured content-only catalog, valid standup pairs scored 0.780–0.788 while a basketball/KVN false pair scored 0.777. Lowering a global cutoff cannot robustly separate them. Existing Gemma controls retained both standup peers (0.73/0.75) and rejected basketball/KVN (0.30) and basketball/literature (0.10). These are supplementary provider probes, not an external consultant review or full catalog acceptance.
+
+The verifier receives factual title/type/summary/place/date without the derived category field. The changed prompt uses the existing cache policy signature. Calls use the operator-configured normal key pool through the canonical atomic limiter; the existing bounded retry waits for the shared RPM/TPM retry time before its next attempt. No alternate model, local quota authority, new service or queue is introduced. Full current-catalog comparison and ordinary new-publication readback remain required for acceptance.
+
+Before the vector owner mutates the sidecar, it atomically replaces the current complete receipt with the existing incomplete outcome. A partial capped projection or provider failure must not leave an older success authorizing a builder against a now-mixed sidecar. The existing vector barrier defers until the same normal owner finishes the projection and writes its complete receipt; previously published related JSON continues serving during that interval.

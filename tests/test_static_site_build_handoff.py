@@ -557,6 +557,9 @@ def test_kaggle_runtime_payload_forwards_interest_club_release_gates(
     from scripts import run_static_site_builder_kaggle as runner
 
     monkeypatch.setenv("GOOGLE_API_KEY4", "google-test")
+    monkeypatch.setenv("GOOGLE_API_KEY", "normal-pool-test")
+    monkeypatch.setenv("GOOGLE_AI_NORMAL_KEY_ENVS", "GOOGLE_API_KEY,GOOGLE_API_KEY4")
+    monkeypatch.setenv("GOOGLE_API_KEY9", "unselected-test")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_SECRET_KEY", "secret-test")
     monkeypatch.setenv(
@@ -579,6 +582,9 @@ def test_kaggle_runtime_payload_forwards_interest_club_release_gates(
 
     assert payload["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "1"
     assert payload["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
+    assert payload["GOOGLE_AI_NORMAL_KEY_ENVS"] == "GOOGLE_API_KEY,GOOGLE_API_KEY4"
+    assert payload["GOOGLE_API_KEY"] == "normal-pool-test"
+    assert "GOOGLE_API_KEY9" not in payload
     assert payload["GOOGLE_AI_LIMITER_SUPABASE_URL"] == "https://limiter.supabase.co"
 
 
