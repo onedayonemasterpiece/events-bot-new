@@ -206,3 +206,10 @@ The existing semantic fact verdict now preserves the narrative and derived snipp
 ## Linked-time calendar target resolution, 14 November
 
 Calendar job 157046 for event 10990 failed with public_post_not_found although public post 14376 existed. Publication combined occurrences 10990/10991 into the header “14 ноября 11:00 и 12:30”; calendar matching used only the first occurrence’s 11:00. The fallback now builds its expected title/date header from the same existing local publication view. The original event remains the ICS input. The real linked-group worker regression fails before the one-line-net correction, while the single-occurrence control passes. No extra API reads, persisted identity, fallback path or retries are added.
+
+
+## Linked-time recommendation comment target, 14 November
+
+Related job 157047 for event 10990 encountered vk_relations_post_missing after postponed post 14353 became public 14376. Its sibling calendar job exposed the same mismatch: the initial publication header combined 11:00 and 12:30, while delayed identity recovery used one occurrence. The related handler now reuses the existing local linked publication view before its unchanged URL recovery and one-time comment consumer. This is one net production line, with no new state, API call, actor, retry or selection calculation.
+
+An initialized outbox regression uses the real local grouping helper, a disappeared postponed ID and the combined public header. Before the correction, the linked case fails with vk_relations_post_missing while the single-occurrence control passes. Acceptance requires the existing delayed job to resolve the public URL, create exactly one comment from its frozen payload and retain both canonical occurrence times. Live verification remains with the release coordinator.

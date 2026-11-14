@@ -11,6 +11,7 @@
 
 
 ### Fixed
+- Resolve delayed VK recommendation comments against the original combined linked-time publication header, preserving their frozen carousel selection.
 - Resolve published calendar targets using the same local linked-time publication view as the original post while retaining the individual occurrence in the ICS.
 - Preserve existing event narratives and derived snippets when another source contributes only duplicate facts; unchanged announcements no longer upload images or edit VK posts for new wording alone.
 - Skip legacy recommendation-comment jobs without their carousel selection instead of recalculating different links from a later graph.
