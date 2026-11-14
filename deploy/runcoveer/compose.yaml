@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-calendar-user-author-20261113
+    image: runcoveer/events:vk-calendar-known-deadline-20261114
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
