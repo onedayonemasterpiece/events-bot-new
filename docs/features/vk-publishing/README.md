@@ -4,6 +4,8 @@
 
 ## Event Posts
 
+- Delayed recommendation comments resolve a changed public post ID using the same existing linked-time view as the initial publication. The saved carousel selection is reused unchanged; the local view does not alter canonical occurrence times or add VK reads.
+
 - Calendar target resolution reuses the existing linked-time publication view when VK omits the original postponed ID. The calendar still describes the individual canonical occurrence. This adds no VK reads or new identity state.
 
 - A second source containing only facts already known to the semantic merge preserves the existing description, short description and search digest. Recording the source or age-evidence provenance does not regenerate public wording. New facts, conflicting facts, actual age/anchor/ticket changes, required schedule cleanup and an initially empty description retain their existing update paths; gallery additions still use the existing media projection.

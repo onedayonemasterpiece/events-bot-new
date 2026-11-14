@@ -344,3 +344,72 @@ async def test_related_peers_must_be_public_but_other_dates_need_no_post(tmp_pat
             await relations.presentation(db, event)
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('linked', [False, True])
+async def test_related_comment_resolves_public_linked_header_once(tmp_path, monkeypatch, linked):
+    """The delayed job uses the same real linked-time view as initial publication."""
+    from unittest.mock import AsyncMock
+    db = main.Database(str(tmp_path / 'linked-public-related.sqlite'))
+    await db.init()
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    monkeypatch.setattr(main, 'VK_AFISHA_GROUP_ID', '1')
+    monkeypatch.setattr(main, 'VK_TOKEN_AFISHA', 'group-fixture')
+    monkeypatch.setattr(main, 'VK_USER_TOKEN', 'user-fixture')
+    monkeypatch.setattr(main, '_vk_user_token', lambda: 'user-fixture')
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    monkeypatch.setattr(main, 'get_bot', lambda: None)
+    monkeypatch.setattr(relations, 'presentation', AsyncMock(side_effect=AssertionError('frozen selection must not be recomputed')))
+    data = {'dates': [], 'related': [{'id': 4, 'date': '15.11', 'time': '19:00',
+        'title': 'Сохранённый выбор', 'url': 'https://vk.com/wall-1_4'}]}
+    payload = {'post_url': 'https://vk.com/wall-1_10', 'relations': data}
+    calls = []
+    try:
+        async with db.get_session() as session:
+            for eid, time in [(1, '11:00'), (2, '12:30')]:
+                session.add(main.Event(id=eid, title='Матч за 5 место', description='', source_text='',
+                    date='2099-11-14', time=time, location_name='Зал', linked_event_ids=[2] if linked and eid == 1 else [],
+                    source_vk_post_url='https://vk.com/wall-1_10'))
+            session.add(main.JobOutbox(event_id=1, task=main.JobTask.vk_calendar_comment,
+                coalesce_key='vk_related_comment:-1:10', payload=payload,
+                next_run_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
+            await session.commit()
+            event = await session.get(main.Event, 1)
+        publish_event, _ = await main._prepare_same_day_linked_publish_event(db, event)
+        header = next(line for line in main.build_vk_source_header(publish_event, None) if line.startswith('📅 '))
+        assert ('11:00 и 12:30' in header) == linked
+        public = {'id': 20, 'date': int(datetime.now(timezone.utc).timestamp()) - 1800,
+                  'post_type': 'post', 'text': 'Матч за 5 место\n' + header + '\nПОХОЖИЕ СОБЫТИЯ\nСохранённый выбор'}
+        async def api(method, params, *args, **kwargs):
+            calls.append((method, params))
+            if method == 'wall.getById':
+                return {'response': [public] if params['posts'] == '-1_20' else []}
+            if method == 'wall.get':
+                return {'response': {'items': [] if params['filter'] == 'postponed' else [public]}}
+            if method == 'wall.getComments':
+                assert params['post_id'] == 20
+                return {'response': {'items': []}}
+            if method == 'wall.createComment':
+                assert params['post_id'] == 20
+                assert params['message'] == 'ПОХОЖИЕ СОБЫТИЯ\n\n15.11 19:00 [https://vk.com/wall-1_4|Сохранённый выбор]'
+                return {'response': {'comment_id': 100}}
+            raise AssertionError(method)
+        async def legacy_api(method, **params):
+            return await api(method, params)
+        monkeypatch.setattr(main, '_vk_api', api)
+        monkeypatch.setattr(main, 'vk_api', legacy_api)
+        assert await main._run_due_jobs_once(db, None) == 1
+        async with db.get_session() as session:
+            job = (await session.execute(main.select(main.JobOutbox))).scalars().one()
+            assert job.status == main.JobStatus.done
+            assert job.payload == payload
+            assert (await session.get(main.Event, 1)).source_vk_post_url.endswith('_20')
+            assert (await session.get(main.Event, 1)).time == '11:00'
+            assert (await session.get(main.Event, 2)).time == '12:30'
+        assert sum(method == 'wall.createComment' for method, _ in calls) == 1
+        assert await main._run_due_jobs_once(db, None) == 0
+        assert not await main.job_vk_calendar_comment(1, db, None, payload)
+        assert sum(method == 'wall.createComment' for method, _ in calls) == 1
+    finally:
+        await db.close()
