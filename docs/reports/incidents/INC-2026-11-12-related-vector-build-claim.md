@@ -286,3 +286,21 @@ separate past-date fixture failures, not caused by this change.
 Actual comment timing is still pending: post14327 is scheduled for 04:30 UTC;
 its initially selected related comment was due 04:44:11 UTC. A resumed job may
 run earlier, but its existing postponed check must defer until publication.
+
+## Early related-comment execution lost its deferred job, November 14
+
+The existing CAPTCHA resume can schedule a related comment before its post is
+published. The handler correctly read the future post date, but then enqueued
+the same currently-running coalesced job. The generic merger returned merged;
+the handler returned False and the worker finalized that sole job as done.
+A full-worker regression reproduced the lost comment on unchanged main.
+
+When already running as a deferred comment, return the existing datetime
+worker outcome instead. The same job stays pending with zero retry attempts;
+after publication it creates exactly one comment and finishes. Initial
+scheduling still uses the original enqueue path. No new queue, marker, retry
+or manual repair is introduced. This is separate from calendar PR943's known
+publication guard and preserves that release.
+The same regression covers recovery two minutes after publication at the
+maximum random delay: the deadline remains publication +20 minutes, not
+execution +20 minutes. The random interval is anchored to actual publication.

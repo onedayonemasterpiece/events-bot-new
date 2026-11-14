@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
 
@@ -6,6 +7,64 @@ import pytest
 from PIL import Image
 import main
 import vk_event_relations as relations
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('publication_offset', [3600, -120])
+async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_path, monkeypatch, publication_offset):
+    db = main.Database(str(tmp_path / 'early-related.sqlite'))
+    await db.init()
+    published_at = int(datetime.now(timezone.utc).timestamp()) + publication_offset
+    monkeypatch.setattr(relations.random, 'randint', lambda a, b: b)
+    calls = []
+    async def api(method, params, *args, **kwargs):
+        calls.append(method)
+        if method == 'wall.getById':
+            return {'response': [{'id': 10, 'date': published_at,
+                                  'text': 'Event\nПОХОЖИЕ СОБЫТИЯ\nPeer'}]}
+        if method == 'wall.getComments':
+            return {'response': {'items': []}}
+        if method == 'wall.createComment':
+            return {'response': {'comment_id': 100}}
+        raise AssertionError(method)
+    async def recovered(*args, **kwargs): return False
+    monkeypatch.setattr(main, '_vk_api', api)
+    monkeypatch.setattr(main, '_recover_managed_vk_live_url', recovered)
+    monkeypatch.setattr(main, '_vk_user_token', lambda: 'fixture')
+    monkeypatch.setattr(main, '_vk_captcha_needed', False)
+    monkeypatch.setattr(main, 'get_bot', lambda: None)
+    data = {'dates': [], 'related': [{'id': 2, 'date': '01.01', 'time': '19:00',
+                                    'title': 'Peer', 'url': 'https://vk.com/wall-1_2'}]}
+    try:
+        async with db.get_session() as session:
+            session.add(main.Event(id=1, title='Event', description='', source_text='',
+                date='2099-01-01', time='19:00', location_name='loc',
+                source_vk_post_url='https://vk.com/wall-1_10'))
+            session.add(main.JobOutbox(event_id=1, task=main.JobTask.vk_calendar_comment,
+                coalesce_key='vk_related_comment:-1:10',
+                payload={'post_url': 'https://vk.com/wall-1_10', 'relations': data},
+                next_run_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
+            await session.commit()
+        assert await main._run_due_jobs_once(db, None) == 1
+        async with db.get_session() as session:
+            job = (await session.execute(main.select(main.JobOutbox))).scalars().one()
+        assert job.status == main.JobStatus.pending
+        assert job.attempts == 0
+        due = main._ensure_utc(job.next_run_at)
+        assert 180 <= due.timestamp() - published_at <= 1200
+        assert calls == ['wall.getById']
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None): return due + timedelta(seconds=1)
+        monkeypatch.setattr(main, 'datetime', Clock)
+        monkeypatch.setattr(relations, 'datetime', Clock)
+        assert await main._run_due_jobs_once(db, None) == 1
+        async with db.get_session() as session:
+            assert (await session.get(main.JobOutbox, job.id)).status == main.JobStatus.done
+        assert calls.count('wall.createComment') == 1
+        assert await main._run_due_jobs_once(db, None) == 0
+    finally:
+        await db.close()
 
 
 @pytest.mark.asyncio
