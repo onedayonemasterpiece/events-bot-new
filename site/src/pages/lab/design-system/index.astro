@@ -283,6 +283,12 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           <article class="ds-component-block">
             <div class="ds-component-block__head"><div><h3>Факты и медальоны</h3><p>Короткое решение до длинного описания.</p></div><Badge tone="success">Approved</Badge></div>
             <div class="ds-component-stage"><EventFacts event={medallionEvent} /><EventTokenMedallions event={medallionEvent} /></div>
+            <p>Общие ресурсы сайта, VK и Telegram: одинаковые поля, круглая форма и видимый диаметр.</p>
+            <div class="ds-component-stage">
+              {['Бар Бастион', 'Дом китобоя', 'Дом семьи'].map((venue_name) => (
+                <EventTokenMedallions event={{ ...baseEvent, venue_name, organizer_names: [], source_urls: [], source_url: '', festival: '' }} />
+              ))}
+            </div>
           </article>
 
           <article class="ds-component-block">

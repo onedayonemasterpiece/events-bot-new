@@ -432,3 +432,22 @@ def test_search_v3_embedding_document_does_not_passthrough_legacy_event_search_d
     assert "Струнный квартет и солист" in doc.search_embedding_input
     assert "Филармония" in doc.search_embedding_input
     assert "Калининград" in doc.search_embedding_input
+
+
+def test_related_embedding_ignores_generated_facets_and_place() -> None:
+    event = _event(10990, title="Матч женской лиги")
+    event.update(summary="Баскетбольный матч за пятое место.",
+                 description_html="<p>Баскетбольный матч за пятое место.</p>",
+                 event_type="спорт", topics=["ACTIVE", "KRAEVEDENIE_KALININGRAD_OBLAST"],
+                 venue_name="Янтарный", city="Калининград")
+    options = dict(site_origin="https://kenigevents.ru", base_path="", ics_base_url="")
+    before = sync.build_search_doc(event, **options)
+    event.update(event_type="встреча", topics=["LECTURES"],
+                 venue_name="Кафедральный собор", city="Светлогорск")
+    after = sync.build_search_doc(event, **options)
+    assert before.related_embedding_input == after.related_embedding_input
+    assert before.document["related_text_hash"] == after.document["related_text_hash"]
+    assert before.related_embedding_input.count("Баскетбольный матч за пятое место.") == 1
+    assert "Краеведение" not in before.related_embedding_input
+    assert "Янтарный" not in before.related_embedding_input
+    assert before.search_embedding_input != after.search_embedding_input

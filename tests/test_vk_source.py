@@ -2589,3 +2589,14 @@ def calendar_comment_delivery(monkeypatch):
     delivery = AsyncMock(return_value=True)
     monkeypatch.setattr(vk_calendar_comments, "ensure_calendar_comment", delivery)
     return delivery
+
+
+def test_vk_png_card_fallback_preserves_full_resolution():
+    from PIL import Image
+    from io import BytesIO
+    source = BytesIO()
+    Image.new("RGB", (1080, 1350), "white").save(source, "PNG")
+    variants = main._vk_upload_jpeg_fallback_variants(source.getvalue())
+    with Image.open(BytesIO(variants[0])) as card:
+        assert card.format == "JPEG"
+        assert card.size == (1080, 1350)

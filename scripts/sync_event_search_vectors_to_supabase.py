@@ -647,45 +647,16 @@ def build_search_digest(event: dict[str, Any], category: str, tags: list[str]) -
 
 
 def build_related_digest(event: dict[str, Any], category: str, tags: list[str]) -> str:
-    """Cleaner event-to-event document for related pages.
+    """Content-only related text; category/tags remain caller-compatible inputs.
 
-    Search documents intentionally include weekday/month/price/free words so
-    explicit user queries like "бесплатно в воскресенье вечером" work. Related
-    pages need a different representation: theme, format, audience and venue are
-    useful; calendar/admission words can pollute similarity.
+    The title is already supplied by the embedding prefix. Generated facets,
+    venue/city and inferred audience are search metadata, not event similarity.
     """
-    joined_text = clean_text(" ".join(clean_text(part) for part in [
-        event.get("title"),
-        event.get("event_type"),
-        event.get("summary"),
-        event.get("description_html"),
-        *(event.get("topics") or []),
-    ] if part is not None))
-    audience_flags: list[str] = []
-    tag_set = set(tags)
-    if {"family", "kids", "kids_school"} & tag_set or re.search(r"детск|детям|реб[её]н|семейн|для\s+дет", joined_text, re.I):
-        audience_flags.extend(["для детей", "для семьи"])
-    if re.search(r"турист|экскурс", joined_text, re.I):
-        audience_flags.append("для туристов")
-    if re.search(r"благотвор|пожертв|донат", joined_text, re.I):
-        audience_flags.append("благотворительное")
-    if event.get("pushkin_card"):
-        audience_flags.append("Пушкинская карта")
-    semantic_tags = [
-        tag for tag in tags
-        if tag not in {"free", "ticketed", clean_text(event.get("city")).lower()}
-    ]
-    facts = [
-        f"Категория: {category}",
-        f"Тип/формат: {clean_text(event.get('event_type')) or 'событие'}",
-        f"Название: {clean_text(event.get('title'))}",
-        f"Кратко: {clean_text(event.get('summary'))}",
-        f"Описание: {clean_text(event.get('description_html'))[:2200]}",
-        f"Место/контекст: {join_parts([event.get('venue_name'), event.get('city')])}",
-        f"Темы: {', '.join(semantic_tags)}" if semantic_tags else "",
-        f"Аудитория/свойства: {', '.join(unique(audience_flags))}" if audience_flags else "",
-    ]
-    return "\n".join(part for part in facts if part and not part.endswith(": "))[:5200]
+    content = dict.fromkeys([
+        clean_text(event.get('summary')),
+        clean_text(event.get('description_html'))[:2200],
+    ])
+    return "\n".join(part for part in content if part)[:5200]
 
 
 def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: str, ics_base_url: str) -> dict[str, Any]:
@@ -806,7 +777,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
     doc = {
         "event_id": int(event["id"]),
         "search_doc_version": "event-search-doc-v3-search-facets",
-        "related_doc_version": "event-related-doc-v1",
+        "related_doc_version": "event-related-doc-v2-content-only",
         "card_snapshot_version": "event-card-v3-media-layout",
         "text_hash": search_text_hash,
         "related_text_hash": related_text_hash,

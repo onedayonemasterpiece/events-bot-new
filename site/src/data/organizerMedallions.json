@@ -145,7 +145,7 @@
         640
       ],
       "ariaLabel": "Локация: Дом китобоя",
-      "renderNote": "Медальон упрощён до читаемого стекового знака: исходные слова «дом» и «Китобоя» размещены одно над другим и вписаны в круг; слово «дом» дополнительно увеличено и сдвинуто левее так, чтобы правая граница визуально оставалась почти на прежнем месте, а верх круга использовался эффективнее. Цветовая схема взята из публичного Telegram-аватара @domkitoboya: доминирующий синий фон #5060A0, светлая рукописная подпись #D0D8E5 и светло-синий ring #CFD6EA. SVG-исходник на сайте не найден (проверены публичные logo.svg-кандидаты); медальон оставлен в исходном WebP виде с PNG fallback по design contract.",
+      "renderNote": "Единый круглый ресурс с нормализованными полями и диаметром для сайта, VK и Telegram. PNG и lossless WebP получены одной функцией normalize-organizer-medallions.py; отдельной коррекции у потребителей нет.",
       "avatarUrl": "/assets/organizers/dom-kitoboya-stacked.webp",
       "fallbackPngUrl": "/assets/organizers/dom-kitoboya-stacked.png",
       "sourcePath": "site/src/assets/organizers/source/dom-kitoboya.logo.webp",
@@ -597,7 +597,7 @@
         430
       ],
       "ariaLabel": "Площадка: Бар Бастион",
-      "renderNote": "VK-аватар теперь маскируется во внутренний круг до отрисовки бренд-обводки; золотое кольцо рисуется последним и больше не разрывается квадратной картинкой. Runtime остаётся WebP-primary с PNG fallback.",
+      "renderNote": "Единый круглый ресурс с нормализованными полями и диаметром для сайта, VK и Telegram. PNG и lossless WebP получены одной функцией normalize-organizer-medallions.py; отдельной коррекции у потребителей нет.",
       "avatarUrl": "/assets/organizers/bar-bastion.webp",
       "sourcePath": "site/src/assets/organizers/source/bar-bastion.vk-avatar-20260704.jpg",
       "retrievedAt": "2026-07-03",
@@ -878,6 +878,27 @@
       "sourcePath": "site/src/assets/organizers/source/greza-khutor-variant-04.png",
       "retrievedAt": "2026-07-08",
       "category": "venue_brand"
+    },
+    {
+      "slug": "dom-semyi",
+      "name": "Дом семьи",
+      "shortName": "Дом семьи",
+      "aliases": [
+        "Дом семьи",
+        "Пространство Дом семьи"
+      ],
+      "category": "venue_brand",
+      "sourcePage": "https://vk.com/dom_semii",
+      "sourceUrl": "https://sun1-89.userapi.com/s/v1/ig2/Lq1rN8yngSPFszf9k6qUq_FT_JQJKMSWizmuKnYE78cPzvqYzBR34Iv5mJ-EXCAGSw-G85gF8tW8i9AVzxwjWEJ_.jpg?quality=95&crop=175,271,640,640&as=32x32,48x48,72x72,108x108,160x160,240x240,360x360,480x480,540x540,640x640&ava=1&cs=200x200",
+      "avatarUrl": "/assets/organizers/dom-semyi.webp",
+      "retrievedAt": "2026-11-14",
+      "assetFormat": "webp-source-vk-avatar",
+      "ariaLabel": "Площадка: Дом семьи",
+      "renderNote": "Единый круглый ресурс с нормализованными полями и диаметром для сайта, VK и Telegram. PNG и lossless WebP получены одной функцией normalize-organizer-medallions.py; отдельной коррекции у потребителей нет.",
+      "fallbackPngUrl": "/assets/organizers/dom-semyi.png",
+      "sourcePath": "site/src/assets/organizers/source/dom-semyi.vk-avatar-20261114.jpg",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     }
   ]
 }

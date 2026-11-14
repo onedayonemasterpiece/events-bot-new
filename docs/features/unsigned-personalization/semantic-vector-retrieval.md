@@ -98,7 +98,7 @@ Query:    task: search result | query: {user_query}
 Raw poster OCR does **not** go directly into either vector document kind:
 
 - `/poisk/` embeds and searches `search_v3`, built from canonical public event facts and the curated `search_digest`;
-- static event-to-event related chains embed and search `related_v1`, built from cleaner title/type/category/summary/venue/audience context;
+- static event-to-event related chains embed and search `related_v1`, built only from the canonical title, summary and factual description;
 - the LLM verifier for `/poisk/` receives retrieved event ids plus compact public facts (`search_digest`/card facts), not raw poster OCR text.
 
 Poster OCR can still influence search **indirectly** when Smart Update has already promoted a source-grounded poster fact into the canonical event row, for example a corrected title, date/time, venue/address, ticket status, topic or `search_digest`. That is intentional: the vector layer indexes the accepted event meaning, not the raw image transcript.
@@ -110,8 +110,8 @@ Do not add raw OCR dumps, poster service headings or unreviewed poster venue str
 The current implementation deliberately uses **one embedding model and one table**, but **two document representations** per event:
 
 - `search_v3` — broad query-search document. It includes weekday/month/season, daypart (`утро/день/вечер/ночь`), weekend/holiday language, free/registration/paid/sold-out status, charity/family/tourist/Pushkin-card hints and query-friendly synonyms. This is the document kind used by `/poisk/`.
-- `related_v1` — cleaner event-to-event document. It emphasizes title, event type, category, format, themes, concise meaning, venue/context and audience. Calendar/admission noise is intentionally reduced so “бесплатно вечером” does not beat true thematic similarity in related cards. This is the document kind used by static related generation.
-- When canonical `location_name` is only the same settlement fallback as `city`, the preview/vector projection exports no synthetic `venue_name`; both `search_v3` and `related_v1` keep the city once. Exact presentation deduplication does not infer a venue and does not replace the LLM grounding verdict.
+- `related_v1` — cleaner event-to-event document. Its current document version is `event-related-doc-v2-content-only`: title once, summary and factual description, with identical summary/description included once. Generated categories, types, topics, venue/city and inferred audience are excluded. These metadata remain available to `search_v3`, but cannot influence event-to-event embeddings. This is the document kind used by static related generation.
+- When canonical `location_name` is only the same settlement fallback as `city`, the preview/vector projection exports no synthetic `venue_name`; `search_v3` keeps the city once; `related_v1` does not embed the place metadata. Exact presentation deduplication does not infer a venue and does not replace the LLM grounding verdict.
 
 Why this is not “two vector databases”: both kinds use `gemini-embedding-2/vector(768)` and live in `event_embeddings`; the key difference is `embedding_doc_kind`. RPCs filter by `embedding_model`, `embedding_dim` and `embedding_doc_kind`, so search and related retrieval cannot accidentally mix representations.
 
@@ -154,7 +154,7 @@ For `--related-mode pgvector`:
 1. write preview event JSON;
 2. optionally run `--sync-pgvector-vectors` to upsert documents/vectors;
 3. call service-role RPC `event_related_candidates_by_event_id_v1` for each anchor;
-4. score primarily by `vector_similarity`, with small deterministic/facet boosts only;
+4. rank and classify by `vector_similarity` only: the existing 0.80 cosine threshold identifies `pure_related`; weaker neighbors remain broad discovery. Categories, shared facets, place/date bonuses and exact-title reciprocity never promote similarity or its score;
 5. optionally run Gemma 4 26B verifier over retrieved IDs only;
 6. export static discovery JSON with `algorithm_id=event_pgvector_related_chain_v2_two_doc`, `retrieval_method=supabase_pgvector_hnsw_cosine_v1`, `semantic_embeddings=true`, `embedding_document_version=related_v1`.
 

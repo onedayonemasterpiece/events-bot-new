@@ -139,6 +139,13 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         path.write_text(json.dumps({'related': {'1': {'pure_related': [4]}}}))
         updated = await relations.presentation(db, event)
         assert json.dumps(updated, sort_keys=True) != old_data
+        assert updated['related'][0]['daily_hours'] == ''
+        async with db.get_session() as session:
+            daily = await session.get(main.Event, 4)
+            daily.time, daily.time_is_default = '12:00..20:00', False
+            await session.commit()
+        daily_data = await relations.presentation(db, event)
+        assert daily_data['related'][0]['daily_hours'] == '12:00–20:00'
         assert updated['related'][0]['date'] == '01.01–03.01'
         assert updated['related'][0]['time'] == ''
         assert 'https://' not in relations.append_list('body', data)
@@ -209,10 +216,10 @@ def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monk
     assert all('🎭' not in text for _, text, _ in seen)
     assert any(text == 'НОЯБРЯ' for _, text, _ in seen)
     assert any(text == 'пт · 19:00' for _, text, _ in seen)
-    title_lines = [(text, font) for xy, text, font in seen if xy[0] == 238 and xy[1] in (24, 58)]
+    title_lines = [(text, font) for xy, text, font in seen if xy[0] == 238 and font.size == 32]
     assert title_lines[-1][0].endswith('…')
     draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
-    assert all(draw.textlength(text, font=font) <= 522 for text, font in title_lines)
+    assert all(draw.textlength(text, font=font) <= 502 for text, font in title_lines)
 
 
 @pytest.mark.asyncio
@@ -413,3 +420,27 @@ async def test_related_comment_resolves_public_linked_header_once(tmp_path, monk
         assert sum(method == 'wall.createComment' for method, _ in calls) == 1
     finally:
         await db.close()
+
+
+def test_until_tile_has_no_weekday_or_time_but_normal_tile_keeps_them(monkeypatch):
+    from guide_excursions.visual_digest import _draw_date_tile, PALETTES
+    from PIL import Image, ImageDraw
+    rendered = []
+    original = ImageDraw.ImageDraw.text
+    def capture(self, xy, text, *args, **kwargs):
+        rendered.append(text)
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', capture)
+    draw = ImageDraw.Draw(Image.new('RGB', (250, 200)))
+    _draw_date_tile(draw, {'date': '2027-05-30', 'time': '11:00', 'date_prefix': 'до'},
+                    174, PALETTES[0].accents[0], PALETTES[0])
+    assert rendered == ['МАЯ', 'до', '30']
+    rendered.clear()
+    _draw_date_tile(draw, {'date': '2027-05-30', 'time': '11:00'},
+                    174, PALETTES[0].accents[0], PALETTES[0])
+    assert 'вс · 11:00' in rendered
+    rendered.clear()
+    _draw_date_tile(draw, {'date': '2027-05-30', 'time': '11:00',
+                          'date_prefix': 'до', 'daily_hours': '12:00–20:00'},
+                    174, PALETTES[0].accents[0], PALETTES[0])
+    assert rendered == ['МАЯ', 'до', '30', '12:00–20:00']

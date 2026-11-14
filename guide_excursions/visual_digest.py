@@ -893,13 +893,21 @@ def _draw_date_tile(draw: ImageDraw.ImageDraw, row: Mapping[str, Any], row_h: in
     mon_txt = mon.upper()
     bb = draw.textbbox((0, 0), mon_txt, font=f_mon)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, y + 12 - (bb[1] / 2)), mon_txt, font=f_mon, fill=(255, 255, 255))
-    day_y = y + (97 if row_h <= 190 else 118)
-    bb = draw.textbbox((0, 0), day, font=f_day)
-    draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, day_y - (bb[3] - bb[1]) / 2 - 16), day, font=f_day, fill=_hex(pal.text))
-    meta = " · ".join(p for p in (wd, time_text) if p) if time_text else wdf
-    bb = draw.textbbox((0, 0), meta, font=f_meta)
-    meta_y = y + tile_h - (25 if row_h <= 190 else 30)
-    draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, meta_y - (bb[3] - bb[1]) / 2 - 2), meta, font=f_meta, fill=_hex(pal.route))
+    prefix = _plain(row.get("date_prefix"))
+    meta = _plain(row.get("daily_hours")) if prefix == "до" else (" · ".join(p for p in (wd, time_text) if p) if time_text else wdf)
+    day_bb = draw.textbbox((0, 0), day, font=f_day)
+    meta_bb = draw.textbbox((0, 0), meta, font=f_meta)
+    day_h, meta_h = day_bb[3] - day_bb[1], meta_bb[3] - meta_bb[1]
+    gap = 8 if meta else 0
+    top = y + bar_h + (tile_h - bar_h - day_h - gap - meta_h) / 2
+    prefix_w = draw.textlength(prefix + " ", font=f_meta) if prefix else 0
+    day_x = x + (w - (day_bb[2] - day_bb[0]) - prefix_w) / 2
+    if prefix:
+        prefix_bb = draw.textbbox((0, 0), prefix, font=f_meta)
+        draw.text((day_x, top + day_h - prefix_bb[3]), prefix, font=f_meta, fill=_hex(pal.text))
+    draw.text((day_x + prefix_w - day_bb[0], top - day_bb[1]), day, font=f_day, fill=_hex(pal.text))
+    if meta:
+        draw.text((x + (w - meta_bb[2] + meta_bb[0]) / 2 - meta_bb[0], top + day_h + gap - meta_bb[1]), meta, font=f_meta, fill=_hex(pal.route))
 
 
 def render_visual_digest_card(

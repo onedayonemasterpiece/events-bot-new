@@ -511,3 +511,30 @@ def test_kaggle_runner_and_kernel_forward_compact_response_budgets() -> None:
         assert "--related-response-max-bytes" in source
         assert "--related-total-response-max-bytes" in source
     assert "'related_retrieval': related_retrieval" in kernel
+
+
+def test_pgvector_similarity_is_not_promoted_by_category_or_facets(monkeypatch) -> None:
+    exporter = _load_exporter_module()
+    events = [_related_event(i, title, day=i) for i, title in (
+        (1, "Матч женской лиги"), (2, "Дни литературы"),
+        (3, "Финал женской лиги"), (4, "Лига КВН"))]
+    for event in events:
+        event.update(event_type="краеведение", topics=["KRAEVEDENIE_KALININGRAD_OBLAST"],
+                     city="Калининград", venue_name="Общая площадка")
+    events[2].update(event_type="спорт", topics=["ACTIVE"], city="Другой город")
+    scores = {2: 0.689028663, 3: 0.832861571, 4: 0.776931994}
+    monkeypatch.setattr(exporter, "personalization_supabase_request",
+                        lambda _rpc, payload, **_kw: [
+                            {"event_id": i, "vector_similarity": score}
+                            for i, score in scores.items()
+                        ] if payload["p_anchor_event_id"] == 1 else [])
+    chain = exporter.build_pgvector_related_chain(events, current_date="2026-08-01")["1"]
+    assert [item["event_id"] for item in chain] == [3, 4, 2]
+    assert [item["event_id"] for item in chain if item["slot_type"] == "pure_related"] == [3]
+    assert all(item["related_score"] == round(scores[item["event_id"]], 4) for item in chain)
+    # Equal titles may remain discoverable, but cannot manufacture a vector match.
+    events[1]["title"] = events[0]["title"]
+    chain = exporter.build_pgvector_related_chain(events, current_date="2026-08-01")["1"]
+    literature = next(item for item in chain if item["event_id"] == 2)
+    assert literature["slot_type"] == "adjacent_discovery"
+    assert literature["related_score"] == round(scores[2], 4)

@@ -5,12 +5,15 @@
 - Fix Kaggle account migration to richss777 across runtime defaults and notebook metadata; stop duplicate pushes after invalid dataset-source responses.
 
 ## [Unreleased]
+
 - VK: recommendation changes no longer change the source publication hash or force new card-count repairs; recovery prioritizes announcements and one-time comments at the existing pace.
 
 - VK: CAPTCHA recovery preserves terminal publication failures instead of replaying old post edits.
 
 
 ### Fixed
+- Event similarity embeds only factual title/summary/description and uses cosine without category/facet/title boosts; PNG VK cards first retry as full-resolution JPEG.
+- Polish VK related cards with end-date «до» tiles for multi-day events, consistent date/time spacing, shared website/VK circular medallion assets and complete short descriptions only where they fit.
 - Compare up to eight source images in one bounded Gemini Lite gallery request; unavailable or uncertain optional vision no longer blocks decoded source photos. Reserve both generated cards inside nine VK attachments, preserving unselected source evidence.
 - Prepare bounded 1600 px JPEG working copies before VK uploads and image comparisons; preserve canonical sources and reuse their existing image identities.
 - Reuse an existing final identity MATCH for the same event owner instead of running a second semantic merge-identity decision that can contradict it and create a duplicate.
