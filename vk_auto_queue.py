@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from linked_events import source_programme_batch
+
 import asyncio
 import copy
 import json
@@ -2222,6 +2224,7 @@ async def run_vk_auto_import(
     return report
 
 
+@source_programme_batch
 async def _process_vk_inbox_row(
     db: Database,
     bot: Any,

@@ -4542,11 +4542,6 @@ def maybe_apply_gemma_audit(
             meta["verified_event_ids"].append(int(anchor["id"]))
             continue
         anchor_int_id = int(anchor["id"])
-        affected_by_change = (
-            not changed_event_ids
-            or anchor_int_id in changed_event_ids
-            or any(candidate_id in changed_event_ids for candidate_id in top_ids)
-        )
         cache_key = hashlib.sha1(json.dumps({
             "model": model,
             "policy_signature": policy_signature,
@@ -4558,9 +4553,6 @@ def maybe_apply_gemma_audit(
             meta["cache_hits"] += 1
             audit = {int(k): v for k, v in cached.items()}
             meta["verified_event_ids"].append(anchor_int_id)
-        elif not affected_by_change:
-            meta["skipped_unchanged_without_cache"] += 1
-            continue
         else:
             attempted_anchors += 1
             try:

@@ -1,4 +1,6 @@
 import logging
+from linked_events import source_programme_batch
+
 import os
 import html
 import re
@@ -17121,6 +17123,7 @@ async def _vkrev_show_next(chat_id: int, batch_id: str, operator_id: int, db: Da
     )
 
 
+@source_programme_batch
 async def _vkrev_import_flow(
     chat_id: int,
     operator_id: int,

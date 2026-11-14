@@ -10,6 +10,8 @@ import sys
 if __name__ == "__main__":
     sys.modules.setdefault("main", sys.modules[__name__])
 
+from linked_events import source_programme_batch
+
 import asyncio
 import base64
 from weakref import WeakKeyDictionary
@@ -17784,6 +17786,7 @@ class AddEventsResult(list):
         )
 
 
+@source_programme_batch
 async def add_events_from_text(
     db: Database,
     text: str,
