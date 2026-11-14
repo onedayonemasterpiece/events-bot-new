@@ -4,6 +4,8 @@
 
 ## Event Posts
 
+- A typed final identity `MATCH` for the selected canonical owner is reused through the merge path; the same candidate is not independently adjudicated again before updating that owner. Other merge paths retain their existing identity gate, and an explicitly distinct occurrence still follows normal creation. This prevents contradictory decisions from creating a second event that later forces an old announcement into a combined-time edit.
+
 - Delayed recommendation comments resolve a changed public post ID using the same existing linked-time view as the initial publication. The saved carousel selection is reused unchanged; the local view does not alter canonical occurrence times or add VK reads.
 
 - Calendar target resolution reuses the existing linked-time publication view when VK omits the original postponed ID. The calendar still describes the individual canonical occurrence. This adds no VK reads or new identity state.
