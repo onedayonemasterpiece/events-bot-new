@@ -23834,6 +23834,11 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         )
         return False
     ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
+    if ev.id != event_id and _event_has_managed_vk_post(ev):
+        await _copy_same_day_linked_vk_publication(
+            db, source_event=ev, covered_event_ids=_same_day_publish_group_ids(same_day_group),
+        )
+        logging.info("vk.linked_publication_reused event_id=%s anchor_id=%s", event_id, ev.id)
     await _filter_vk_event_gallery_against_ledger(db, ev)
     # A postponed VK item may receive a different id at the exact moment it is
     # published.  Recover the unique live projection before hash/idempotency

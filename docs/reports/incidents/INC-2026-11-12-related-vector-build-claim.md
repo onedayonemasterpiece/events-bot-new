@@ -342,3 +342,20 @@ accepting its terminal callback. This uses existing ledger/resource fields,
 without another recovery loop, queue, timer or writer (11 production lines).
 The regression fails on baseline, then verifies failure releases the lease,
 late start/alive/acquire cannot reopen it, and a successor keeps ownership.
+
+## Existing same-day updates kept new-publication priority, November 14
+
+At 03:57 UTC, member10967 again selected its canonical same-day anchor10606
+and attempted wall.edit13713, receiving CAPTCHA763970275209. Member10967
+still had NULL publication URL/hash, despite that existing managed anchor,
+because the shared pointer was copied only after successful provider writes.
+Normal recovery therefore repeatedly classified this old-post update as a
+new announcement, ahead of the paused calendar/recommendation comments.
+
+Persist the already-known managed publication through the existing group-copy
+helper before provider work. A failed edit now retains that canonical pointer;
+the unchanged resume ordering recognizes it as a managed update and puts new
+posts and one-time comments first, at the same existing cadence. This adds
+five production lines and no field, queue, retry, manual resume or provider
+write. The baseline regression fails on the lost member URL; after the fix it
+also checks new announcement, comment, managed-update order and spacing.
