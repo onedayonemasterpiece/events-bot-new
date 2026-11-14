@@ -756,6 +756,12 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
     resource_result: dict[str, Any] = {}
     progress = with_progress_percent(progress, event=event, status=status, phase=phase)
     async with _fresh_status_write_transaction(db, run_id=run_id) as conn:
+        cur = await conn.execute("SELECT terminal_at FROM kaggle_run_ledger WHERE run_id=?", (run_id,))
+        ledger = await cur.fetchone()
+        await cur.close()
+        if ledger and ledger[0]:
+            logger.info("kaggle_status: ignored late callback run_id=%s event=%s", run_id, event)
+            return 200, {"ok": True, "run_id": run_id, "resource_action": "blocked"}
         await _expire_resource_leases(conn, now=now)
         if isinstance(payload.get("resource"), dict):
             resource_result = await _record_resource(conn, run_id=run_id, resource=payload["resource"])
@@ -809,6 +815,11 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
             )
         terminal_at = now if event in TERMINAL_EVENTS and status in {"done", "partial", "failed", "error"} else None
         error = message if status in {"failed", "error"} else None
+        if terminal_at:
+            await conn.execute(
+                "UPDATE kaggle_resource_lease SET status='released', released_at=?, updated_at=? "
+                "WHERE run_id=? AND status='active'", (now, now, run_id),
+            )
         await conn.execute(
             """
             UPDATE kaggle_run_ledger

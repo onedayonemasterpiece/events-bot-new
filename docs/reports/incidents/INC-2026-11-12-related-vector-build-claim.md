@@ -323,3 +323,22 @@ state field, scheduler or provider limit was added (four production lines).
 The regression fails before this change and verifies one push, retained input,
 no premature result finalization, then adoption/cleanup without another push.
 84 related/handoff/debounce/VK checks pass. Actual VK acceptance remains open.
+
+## Late callbacks reopened a terminal resource holder, November 14
+
+At 03:37 UTC, related-only submission correctly returned the shared worker
+after one push, but successive remote runs failed acquiring static_site:builder.
+Its holder was run045002: report_written recorded failure at 02:52:13, while
+the ledger had subsequently reverted to running/preflight with an earlier
+updated_at (02:51:29) and retained terminal_at plus the failure message. The
+resource remained active until 05:52. Callback order can differ from kernel
+execution order; the status handler applied resource effects before checking
+for a terminal ledger and overwrote its outcome unconditionally.
+
+The existing host failure reconciliation confirmed that exact retained failed
+report and released only its lease. The normal callback transaction now ignores
+late events after terminal_at and releases the exact run's active leases when
+accepting its terminal callback. This uses existing ledger/resource fields,
+without another recovery loop, queue, timer or writer (11 production lines).
+The regression fails on baseline, then verifies failure releases the lease,
+late start/alive/acquire cannot reopen it, and a successor keeps ownership.

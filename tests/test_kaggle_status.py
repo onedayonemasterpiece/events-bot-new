@@ -753,6 +753,41 @@ async def test_publish_target_events_are_recorded_as_status_history(tmp_path, mo
 
 
 @pytest.mark.asyncio
+async def test_terminal_callback_releases_resource_and_late_events_cannot_reopen(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    first = await create_kaggle_run_config(db, run_id="static:finished", session_id=None,
+                                         kind="static_site_builder", notebook="StaticSiteBuilder")
+    second = await create_kaggle_run_config(db, run_id="static:next", session_id=None,
+                                          kind="static_site_builder", notebook="StaticSiteBuilder")
+    async def emit(config, event, **fields):
+        return await record_kaggle_run_event(db, {"run_id": config["run_id"],
+                                                 "token": config["token"], "event": event, **fields})
+    resource = {"key": "static_site:builder", "action": "acquire"}
+    await emit(first, "resource_acquire", event_uid="acquire", resource=resource)
+    await emit(first, "report_written", status="failed", message="kernel failed")
+    async with db.raw_conn() as conn:
+        lease = await (await conn.execute("SELECT status FROM kaggle_resource_lease")).fetchone()
+    assert lease[0] == "released"
+    for event, fields in (("kernel_started", {}), ("alive", {}),
+                          ("resource_acquire", {"event_uid": "acquire", "resource": resource})):
+        status, _ = await emit(first, event, **fields)
+        assert status == 200
+    async with db.raw_conn() as conn:
+        ledger = await (await conn.execute("SELECT status,error FROM kaggle_run_ledger WHERE run_id=?",
+                                          (first["run_id"],))).fetchone()
+    assert tuple(ledger) == ("failed", "kernel failed")
+    _, result = await emit(second, "resource_acquire", resource=resource)
+    assert result["resource_action"] == "acquired"
+    await emit(first, "alive")
+    async with db.raw_conn() as conn:
+        lease = await (await conn.execute("SELECT run_id,status FROM kaggle_resource_lease")).fetchone()
+    assert tuple(lease) == (second["run_id"], "active")
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_resource_lease_blocks_parallel_holder(tmp_path, monkeypatch):
     monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
     db = Database(str(tmp_path / "db.sqlite"))
