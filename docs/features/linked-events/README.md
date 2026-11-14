@@ -137,8 +137,12 @@ entity/ranked surface оставляет одного representative на family
 
 Legacy-каноническая функция
 `linked_events.recompute_linked_event_ids(db, event_id)`
-связывает только однодневные события, требует точного `location_name` и строгого
-совпадения title. Intended recompute invariant: связь симметрична, self-link
+связывает только однодневные события и требует строгого совпадения title.
+Площадка сопоставляется по точному `location_name` либо по точной непустой паре
+`city + location_address`: разные названия одной физической площадки не должны
+разрывать расписание курса. Адрес без города не расширяет выборку. Это
+нормализация площадки существующего legacy matcher, а не новое семантическое
+решение по адресу; другой программе тот же адрес family не создаёт. Intended recompute invariant: связь симметрична, self-link
 запрещён, все члены пересчитанной группы получают один состав siblings.
 Это не гарантия качества всех legacy rows: production-derived snapshot содержит
 one-way/dangling/same-slot defects, а некоторые early-return paths не очищают
