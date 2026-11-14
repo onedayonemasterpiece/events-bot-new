@@ -878,6 +878,23 @@
       "sourcePath": "site/src/assets/organizers/source/greza-khutor-variant-04.png",
       "retrievedAt": "2026-07-08",
       "category": "venue_brand"
+    },
+    {
+      "slug": "dom-semyi",
+      "name": "Дом семьи",
+      "shortName": "Дом семьи",
+      "aliases": [
+        "Дом семьи",
+        "Пространство Дом семьи"
+      ],
+      "category": "venue_brand",
+      "sourcePage": "https://vk.com/dom_semii",
+      "sourceUrl": "https://sun1-89.userapi.com/s/v1/ig2/Lq1rN8yngSPFszf9k6qUq_FT_JQJKMSWizmuKnYE78cPzvqYzBR34Iv5mJ-EXCAGSw-G85gF8tW8i9AVzxwjWEJ_.jpg?quality=95&crop=175,271,640,640&as=32x32,48x48,72x72,108x108,160x160,240x240,360x360,480x480,540x540,640x640&ava=1&cs=200x200",
+      "avatarUrl": "/assets/organizers/dom-semyi.jpg",
+      "retrievedAt": "2026-11-14",
+      "assetFormat": "jpg",
+      "ariaLabel": "Площадка: Дом семьи",
+      "renderNote": "Официальный аватар VK сообщества 228087066; идентичность подтверждена canonical source posts и groups.getById."
     }
   ]
 }

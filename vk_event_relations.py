@@ -9,7 +9,7 @@ import logging
 import random
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 from sqlalchemy import select
 from models import Event, Setting, JobOutbox, JobStatus
 
@@ -74,6 +74,7 @@ async def presentation(db, event):
         return {'id': row.id, 'date': label, 'date_iso': start, 'end_date_iso': end.isoformat() if end else '',
                 'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
                 'place': row.location_name or '', 'url': row.source_vk_post_url or '',
+                'description': row.short_description or row.search_digest or '',
                 'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
                                for m in resolve_event_graphic_medallions(row, limit=2)],
                 'is_free': bool(row.is_free)}
@@ -99,8 +100,9 @@ def render_card(items, *, schedule=False):
     palette = PALETTES[0]
     draw.ellipse((-260, -300, 510, 360), fill='#E9EDE1')
     draw.ellipse((800, -300, 1400, 330), fill='#F2E3D8')
-    def font(size, bold=False):
-        return ImageFont.truetype(str(ROOT / 'assets/fonts' / ('Cygre-Bold.ttf' if bold else 'Cygre-SemiBold.ttf')), size)
+    def font(size, bold=False, regular=False):
+        face = 'Cygre-Regular.ttf' if regular else 'Cygre-Bold.ttf' if bold else 'Cygre-SemiBold.ttf'
+        return ImageFont.truetype(str(ROOT / 'assets/fonts' / face), size)
     tag = Image.open(ROOT / 'site/public/assets/ui/mobile-head-skinny-leather-3x.webp').convert('RGBA')
     tag.thumbnail((288, 202))
     image.alpha_composite(tag, (48, 0))
@@ -120,25 +122,48 @@ def render_card(items, *, schedule=False):
         rd = ImageDraw.Draw(layer)
         rd.rounded_rectangle((0, 0, 995, 173), 30, fill=palette.card, outline=palette.card_stroke)
         rd.rounded_rectangle((0, 0, 10, 173), 5, fill=accent)
-        date_iso = row.get('date_iso', '')
-        _draw_date_tile(rd, {'date': date_iso, 'time': row['time']}, 174, accent, palette)
+        until = not schedule and row.get('end_date_iso', '') > row.get('date_iso', '')
+        date_iso = row['end_date_iso'] if until else row.get('date_iso', '')
+        _draw_date_tile(rd, {'date': date_iso, 'time': row['time'], 'date_prefix': 'до' if until else ''}, 174, accent, palette)
         medallions = list(row.get('medallions', []))
         if row.get('is_free'):
             medallions = medallions[:1] + ['site/public/assets/badges/free-listing-medallion.png']
         medallions = medallions[:2]
+        mask = Image.new('L', (100, 100))
+        ImageDraw.Draw(mask).ellipse((0, 0, 99, 99), fill=255)
         for index, asset in enumerate(medallions):
             medal = Image.open(ROOT / asset).convert('RGBA')
-            medal.thumbnail((100, 100))
-            layer.alpha_composite(medal, (974 - (len(medallions) - index) * 108, 36))
-        width = 738 - len(medallions) * 108
+            bounds = medal.getchannel('A').getbbox()
+            if medal.getchannel('A').getextrema() == (255, 255):
+                background = Image.new('RGB', medal.size, medal.getpixel((0, 0))[:3])
+                bounds = ImageChops.difference(medal.convert('RGB'), background).getbbox()
+            medal = ImageOps.fit(medal.crop(bounds) if bounds else medal, (100, 100), method=Image.Resampling.LANCZOS)
+            medal.putalpha(ImageChops.multiply(medal.getchannel('A'), mask))
+            x = 974 - (len(medallions) - index) * 108
+            layer.alpha_composite(medal, (x, 36))
+            rd.ellipse((x, 36, x + 99, 135), outline=palette.card_stroke, width=1)
+        width = 738 - len(medallions) * 108 - (20 if medallions else 0)
         title = _strip_emoji(row['title']).strip()
-        for n, line in enumerate(_wrap_by_width(rd, title, font(32, True), width, 2)):
-            rd.text((238, 24 + n * 34), line, font=font(32, True), fill=palette.text)
+        y = 20
+        for line in _wrap_by_width(rd, title, font(32, True), width, 2):
+            rd.text((238, y), line, font=font(32, True), fill=palette.text)
+            y += 34
+        y += 8
         details = row.get('place', '')
-        if '–' in row['date']:
+        if '–' in row['date'] and not until:
             details = row['date'] + (' · ' + details if details else '')
-        for n, line in enumerate(_wrap_by_width(rd, details, font(23), width, 2)):
-            rd.text((238, 102 + n * 26), line, font=font(23), fill=palette.route)
+        for line in _wrap_by_width(rd, details, font(23), width, 2):
+            rd.text((238, y), line, font=font(23), fill=palette.route)
+            y += 26
+        description = ' '.join(_strip_emoji(row.get('description', '')).split())
+        description_font = font(21, regular=True)
+        lines = _wrap_by_width(rd, description, description_font, width, max(1, (154 - y - 8) // 23))
+        if (description and ' '.join(lines) == description
+                and y + 8 + len(lines) * 23 <= 154
+                and all(rd.textlength(line, font=description_font) <= width for line in lines)):
+            for line in lines:
+                rd.text((238, y + 8), line, font=description_font, fill=palette.route)
+                y += 23
         height = 148 if len(items) > 5 else 174
         if height != 174:
             layer = layer.resize((996, height), Image.Resampling.LANCZOS)

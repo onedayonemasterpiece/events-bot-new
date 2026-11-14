@@ -2365,7 +2365,7 @@ def _vk_carousel_cover(data: bytes, label: str = "листай") -> bytes:
 
 
 def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
-    """Smaller 4:4:4 JPEGs for VK upload servers that silently reject a photo."""
+    """4:4:4 JPEG format fallback before reducing a PNG text card."""
     from PIL import Image, ImageOps
 
     variants: list[bytes] = []
@@ -2373,8 +2373,9 @@ def _vk_upload_jpeg_fallback_variants(data: bytes) -> list[bytes]:
         width, height = source.size
         if width * height > 20_000_000:
             raise ValueError("VK upload source exceeds 20 MP")
-        for max_side in (1600, 800, 400):
-            if max(width, height) <= max_side:
+        sizes = (max(width, height), 800, 400) if source.format == "PNG" else (1600, 800, 400)
+        for max_side in sizes:
+            if max(width, height) < max_side or (max(width, height) == max_side and source.format != "PNG"):
                 continue
             image = ImageOps.exif_transpose(source).convert("RGB")
             image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)

@@ -5,12 +5,15 @@
 - Fix Kaggle account migration to richss777 across runtime defaults and notebook metadata; stop duplicate pushes after invalid dataset-source responses.
 
 ## [Unreleased]
+
 - VK: recommendation changes no longer change the source publication hash or force new card-count repairs; recovery prioritizes announcements and one-time comments at the existing pace.
 
 - VK: CAPTCHA recovery preserves terminal publication failures instead of replaying old post edits.
 
 
 ### Fixed
+- Event similarity embeds only factual title/summary/description and uses cosine without category/facet/title boosts; PNG VK cards first retry as full-resolution JPEG.
+- Polish VK related cards with end-date «до» tiles for multi-day events, consistent date/time spacing, circular medallions and complete short descriptions only where they fit.
 - Resolve delayed VK recommendation comments against the original combined linked-time publication header, preserving their frozen carousel selection.
 - Resolve published calendar targets using the same local linked-time publication view as the original post while retaining the individual occurrence in the ICS.
 - Preserve existing event narratives and derived snippets when another source contributes only duplicate facts; unchanged announcements no longer upload images or edit VK posts for new wording alone.

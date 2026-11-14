@@ -209,10 +209,10 @@ def test_related_card_has_no_missing_emoji_glyph_or_title_medallion_overlap(monk
     assert all('🎭' not in text for _, text, _ in seen)
     assert any(text == 'НОЯБРЯ' for _, text, _ in seen)
     assert any(text == 'пт · 19:00' for _, text, _ in seen)
-    title_lines = [(text, font) for xy, text, font in seen if xy[0] == 238 and xy[1] in (24, 58)]
+    title_lines = [(text, font) for xy, text, font in seen if xy[0] == 238 and font.size == 32]
     assert title_lines[-1][0].endswith('…')
     draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
-    assert all(draw.textlength(text, font=font) <= 522 for text, font in title_lines)
+    assert all(draw.textlength(text, font=font) <= 502 for text, font in title_lines)
 
 
 @pytest.mark.asyncio

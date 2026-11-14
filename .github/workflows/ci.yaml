@@ -244,6 +244,9 @@ jobs:
           tests/test_static_site_build_handoff.py
           tests/test_related_only_kaggle.py
           tests/test_vk_event_relations.py
+          tests/test_event_search_corpus_revision.py
+          tests/test_static_site_pgvector_export.py
+          tests/test_vk_source.py::test_vk_png_card_fallback_preserves_full_resolution
           tests/test_job_captcha_pause.py
           tests/test_job_worker_fresh_selection.py
           tests/test_static_site_auth_session_broker.py

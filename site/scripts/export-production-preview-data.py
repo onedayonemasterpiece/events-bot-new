@@ -52,12 +52,12 @@ SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
 PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v2_two_doc"
 PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v2"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
-PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20260720_graph_reciprocity"
+PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20261114_content_vector_only"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 BGE_RELATED_ALGORITHM = "event_bge_m3_related_chain_v1"
 BGE_RELATED_SCHEMA_VERSION = "event_bge_m3_related_chain_v1"
 BGE_RELATED_RETRIEVAL_METHOD = "local_bge_m3_dense_cosine_v1"
-BGE_RELATED_CACHE_SCHEMA_VERSION = "event_bge_m3_related_chain_v1_cache_20260727"
+BGE_RELATED_CACHE_SCHEMA_VERSION = "event_bge_m3_related_chain_v1_cache_20261114_content_vector_only"
 BGE_MODEL_ID_DEFAULT = "BAAI/bge-m3"
 BGE_MODEL_REVISION_DEFAULT = "5617a9f61b028005a4858fdac845db406aefb181"
 BGE_DIMENSION_DEFAULT = 1024
@@ -3544,22 +3544,16 @@ def _reverse_related_item(
     *,
     event_id: int,
     reason: str,
-    force_similar: bool,
 ) -> dict[str, Any]:
-    related_score = float(item.get("related_score") or 0.0)
-    if reason == "exact_normalized_title":
-        related_score = max(0.97, related_score)
-    elif reason == "high_confidence_reciprocal":
-        related_score = max(0.84, related_score * 0.985)
-    else:
-        related_score = max(0.60, related_score * 0.965)
-    slot_type = "pure_related" if force_similar else str(item.get("slot_type") or "adjacent_discovery")
+    related_score = float(item.get("vector_similarity") or 0.0)
+    slot_type = "pure_related" if related_score >= 0.80 else "adjacent_discovery"
     return {
         **item,
         "event_id": int(event_id),
         "related_score": round(min(1.0, related_score), 4),
         "slot_type": slot_type,
-        "similarity_class": "same_domain" if force_similar else str(item.get("similarity_class") or "adjacent_discovery"),
+        "similarity_class": "same_domain" if slot_type == "pure_related" else "adjacent_discovery",
+        "confidence": round(related_score, 4),
         "reason_codes": list(dict.fromkeys([*(item.get("reason_codes") or []), f"mutual_link:{reason}"])),
         "retrieval_sources": list(dict.fromkeys([*(item.get("retrieval_sources") or []), "graph_reciprocity"])),
         "display_eligible": True,
@@ -3636,17 +3630,17 @@ def apply_pgvector_graph_reciprocity(
                 if not eligible_related_pair(left, right):
                     continue
                 source = forward_item(right_id, left_id) or forward_item(left_id, right_id) or {
-                    "related_score": 0.97,
+                    "related_score": 0.0,
                     "vector_similarity": 0.0,
-                    "deterministic_score": score_pair(left, right),
-                    "confidence": 0.97,
+                    "deterministic_score": 0.0,
+                    "confidence": 0.0,
                     "reason_codes": [],
                     "retrieval_sources": ["exact_title_recall"],
                 }
                 before = forward_item(left_id, right_id)
                 _insert_forced_related(
                     chains.setdefault(str(left_id), []),
-                    _reverse_related_item(source, event_id=right_id, reason="exact_normalized_title", force_similar=True),
+                    _reverse_related_item(source, event_id=right_id, reason="exact_normalized_title"),
                 )
                 if before is None:
                     exact_links += 1
@@ -3664,7 +3658,7 @@ def apply_pgvector_graph_reciprocity(
             before = forward_item(right_id, left_id)
             _insert_forced_related(
                 chains.setdefault(str(right_id), []),
-                _reverse_related_item(item, event_id=left_id, reason="high_confidence_reciprocal", force_similar=True),
+                _reverse_related_item(item, event_id=left_id, reason="high_confidence_reciprocal"),
             )
             if before is None:
                 high_confidence_links += 1
@@ -3693,7 +3687,7 @@ def apply_pgvector_graph_reciprocity(
         before = forward_item(neighbor_id, event_id)
         _insert_forced_related(
             chains.setdefault(str(neighbor_id), []),
-            _reverse_related_item(outgoing, event_id=event_id, reason="zero_incoming_rescue", force_similar=False),
+            _reverse_related_item(outgoing, event_id=event_id, reason="zero_incoming_rescue"),
         )
         if before is None:
             rescue_links += 1
@@ -3966,7 +3960,6 @@ def build_pgvector_related_chain(
     if len(by_id) != len(events):
         raise RuntimeError("pgvector related build requires unique anchor event ids")
     allowed_ids = set(by_id)
-    facets_by_id = {int(event["id"]): facet_set(event) for event in events}
     chains: dict[str, list[dict[str, Any]]] = {}
     retrieval_metrics: dict[str, Any] = {
         "schema_version": "static_related_retrieval_receipt_v1",
@@ -4002,7 +3995,6 @@ def build_pgvector_related_chain(
         ) or []
         scored: list[dict[str, Any]] = []
         excluded_ids = {event_id, *[int(item) for item in event.get("other_date_ids") or []]}
-        anchor_facets = facets_by_id.get(event_id, set())
         for row in rows:
             try:
                 candidate_id = int(row.get("event_id"))
@@ -4016,51 +4008,20 @@ def build_pgvector_related_chain(
             if not eligible_related_pair(event, candidate):
                 continue
             vector_similarity = max(0.0, min(1.0, float(row.get("vector_similarity") or 0)))
-            deterministic = score_pair(event, candidate)
-            same_category = category(event) == category(candidate)
-            candidate_facets = facets_by_id.get(candidate_id, set())
-            shared_facets = sorted(anchor_facets & candidate_facets)
-            facet_score = min(1.0, len(shared_facets) / 2) if shared_facets else 0.0
-            same_date = bool(event.get("start_date") and candidate.get("start_date") and event.get("start_date") == candidate.get("start_date"))
-            strong_domain = vector_similarity >= 0.80 or bool(shared_facets) or (same_category and vector_similarity >= 0.76)
-            slot_type = "pure_related" if strong_domain else "adjacent_discovery"
-            # In pgvector mode semantic similarity is the retrieval contract.
-            # Deterministic facets are only light tie-breakers; they must not
-            # let a broad lexical/category overlap outrank a stronger semantic
-            # neighbor (the 6447 urbanism/music regression).
-            related_score = (
-                0.90 * vector_similarity
-                + 0.035 * facet_score
-                + 0.025 * deterministic
-                + (0.018 if same_category else 0.0)
-                + (0.035 if "urbanism" in shared_facets else 0.0)
-                + (0.015 if "music" in shared_facets else 0.0)
-                + (0.006 if same_date else 0.0)
-                + stable_jitter(event_id, candidate_id, f"{PGVECTOR_RELATED_ALGORITHM}:{embedding_model}")
-            )
+            slot_type = "pure_related" if vector_similarity >= 0.80 else "adjacent_discovery"
+            related_score = vector_similarity
             reason_codes = [
                 f"vector:{PGVECTOR_RELATED_RETRIEVAL_METHOD}",
                 f"embedding:{embedding_model}",
-                f"category:{category(candidate)}",
             ]
-            if same_category:
-                reason_codes.append("same_category")
-            for facet in shared_facets:
-                reason_codes.append(f"facet:{facet}")
-            if event.get("city") and event.get("city") == candidate.get("city"):
-                reason_codes.append("same_city")
-            if event.get("venue_name") and event.get("venue_name") == candidate.get("venue_name"):
-                reason_codes.append("same_venue")
-            if same_date:
-                reason_codes.append("same_date")
             scored.append({
                 "event_id": candidate_id,
                 "related_score": round(max(0.0, min(1.0, related_score)), 4),
                 "vector_similarity": round(vector_similarity, 4),
-                "deterministic_score": round(deterministic, 4),
+                "deterministic_score": 0.0,
                 "slot_type": slot_type,
                 "similarity_class": "same_domain" if slot_type == "pure_related" else "adjacent_discovery",
-                "confidence": round(max(0.15, min(0.97, 0.35 + vector_similarity * 0.45 + (0.08 if same_category else 0.0) + 0.07 * facet_score)), 4),
+                "confidence": round(vector_similarity, 4),
                 "reason_codes": reason_codes,
                 "retrieval_sources": ["supabase_pgvector", "event_embedding"],
                 "display_eligible": True,
@@ -4831,12 +4792,7 @@ def build_bge_related_chain(
                 right = event_by_id[candidate_id]
                 if not eligible_related_pair(left, right):
                     continue
-                same_category = bool(category(left) and category(left) == category(right))
-                shared_facets = sorted(
-                    set(str(value) for value in (left.get("topics") or []))
-                    .intersection(str(value) for value in (right.get("topics") or []))
-                )
-                strong = similarity >= 0.72 or same_category or bool(shared_facets)
+                strong = similarity >= 0.72
                 chain.append(
                     {
                         "event_id": candidate_id,
@@ -4846,8 +4802,6 @@ def build_bge_related_chain(
                         "similarity_class": "same_domain" if strong else "adjacent_discovery",
                         "reasons": [
                             f"vector:{BGE_RELATED_RETRIEVAL_METHOD}",
-                            *(["same_category"] if same_category else []),
-                            *(f"facet:{value}" for value in shared_facets[:3]),
                         ],
                         "retrieval_sources": ["shared_static_event_bge"],
                     }

@@ -4,6 +4,8 @@
 
 ## Event Posts
 
+- Related cards show a multi-day event's known end date with «до», using the existing date tile and an even ink-to-ink gap before weekday/time. Original date ranges remain in the post and comment lists. Graphical medallions are circular. A complete existing short description (or search digest) appears in smaller Cygre Regular only when it fits the text area beside the medallions; it is otherwise omitted, never truncated or regenerated.
+
 - Delayed recommendation comments resolve a changed public post ID using the same existing linked-time view as the initial publication. The saved carousel selection is reused unchanged; the local view does not alter canonical occurrence times or add VK reads.
 
 - Calendar target resolution reuses the existing linked-time publication view when VK omits the original postponed ID. The calendar still describes the individual canonical occurrence. This adds no VK reads or new identity state.
@@ -233,3 +235,5 @@ For linked child events, a pending or unclassified replacement image is not a pu
 Only a newly created managed scheduled announcement enqueues `vk_calendar_comment` in the existing JobOutbox. Its initial due time is the known publication time plus a reproducible random delay of 5–15 minutes. At that time one bounded public-ID lookup resolves the new public post; if its actual publication was later, the same outbox row defers to the actual date plus that delay. This is not a periodic wall scan or a catch-up of old posts. Calendar delivery does not edit the announcement.
 
 The configured user uploads the ICS, waits for the upload response and `docs.save`, then creates the comment without `from_group`. Each document API step and the multipart upload are paced by four seconds, matching the qualified live pilot; this is application pacing, not a claimed VK requirement. The saved document is reused after failures, and document-matching recovery accepts previous group comments and user comments. A saved comment receipt performs no further VK calls. Related-event comments retain their separate payload and lifecycle.
+
+Карточки похожих событий используют дату окончания с «до» для многодневных событий, одинаковый небольшой отступ до времени, круглые медальоны одинакового видимого размера и существующее краткое описание шрифтом Cygre Regular, только когда оно помещается целиком. При отказе PNG-загрузки сначала пробуется JPEG полного разрешения, чтобы текстовая карточка не уменьшалась сразу до 800/400 пикселей.
