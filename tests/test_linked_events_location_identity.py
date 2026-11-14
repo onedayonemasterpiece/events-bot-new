@@ -254,3 +254,46 @@ async def test_reported_probe_shape_compact_packets_and_title_grounding(tmp_path
             assert not any(v == 'same_programme_other_slot' for i in sports for v in verdicts.get(i, {}).values())
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_programme_group_resolves_existing_review_pairs_without_negative_decisions(tmp_path, monkeypatch):
+    from itertools import combinations
+    from linked_events import _programme_decisions
+    db = Database(str(tmp_path / 'family.sqlite'))
+    await db.init()
+    ids = list(range(1, 8))
+    pairs = list(combinations(ids, 2))
+    group = {'members': [dict(event_id=i, quote='Курс импровизации') for i in ids]}
+    # Owner-reported AUX failure shape, then ordinary-helper success shape; not exact captured JSON.
+    answers = iter([
+        {'groups': [group], 'decisions': [dict(target_id=i, peer_id=j, relation='independent_event',
+            target_quote='Курс импровизации', peer_quote='Курс импровизации') for i, j in pairs]},
+        {'groups': [group], 'decisions': []},
+    ])
+
+    async def replay(prompt, schema, **kwargs):
+        packet = json.loads(prompt[prompt.index('{"target_ids"'):])
+        assert packet['review_pairs'] == [list(pair) for pair in pairs]
+        return next(answers)
+
+    monkeypatch.setattr('smart_event_update._ask_gemma_json', replay)
+    try:
+        async with db.get_session() as session:
+            for i in ids:
+                session.add(Event(id=i, title='Курс импровизации', description='', source_text='',
+                    date=f'2099-12-{i:02}', time='19:00', location_name='Зал',
+                    linked_event_ids=[j for j in ids if j > i]))
+            await session.commit()
+        children = dict.fromkeys(ids, '')
+        assert await _programme_decisions(db, children) == {}  # Group + 21 negatives contradict.
+        verdicts = await _programme_decisions(db, children)
+        assert sum(len(peers) for peers in verdicts.values()) == 42
+        for i in ids:
+            assert verdicts[i] == {j: 'same_programme_other_slot' for j in ids if j != i}
+            await recompute_linked_event_ids(db, i, programme_decisions=verdicts[i])
+        async with db.get_session() as session:
+            for i in ids:
+                assert set((await session.get(Event, i)).linked_event_ids) == set(ids) - {i}
+    finally:
+        await db.close()
