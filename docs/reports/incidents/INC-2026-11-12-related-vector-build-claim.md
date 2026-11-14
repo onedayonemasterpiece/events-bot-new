@@ -214,3 +214,51 @@ rejected as a past event. Its test now explicitly disables past-event rejection,
 as neighbouring historical-source tests do, keeping the original source/date
 and all seven canonical ticket-price expectations. Seven cases pass locally;
 production ingestion policy remains unchanged.
+
+
+## Graph changes still invalidated source publication, November 13 at23:41UTC
+
+After release940 the normal recovery again stopped on an old wall.edit,
+post14231/event10926. The source hash still serialized current relations;
+unchanged-post media validation also required the current number of graph
+cards. Removing the producer did not remove these independent write triggers.
+The source hash now excludes recommendations, and unchanged-source validation
+checks original images rather than demanding new graph cards. Initial gallery
+and one-time comment creation remain. The existing no-change comment recovery
+is retained so a lost initial enqueue does not silently lose its comment.
+Real canonical source corrections still invoke the ordinary sync path.
+
+A distinguishing initialized test creates the initial post with two source
+photos and its selected relations, changes both peers and card count, then
+verifies no second sync and an unchanged source hash; a later description
+correction still syncs. Existing create-once comment tests verify no duplicate
+provider write. The CAPTCHA cohort reuses the ordinary publication/comment
+priority before page jobs, preserving the same30-second cadence.37 focused
+checks pass. A one-time guarded cleanup stopped22 unbound existing-post update
+rows in the current cohort as superseded, with no provider calls; initial
+publication156444 and delayed comment jobs remain untouched. Canonical Event
+facts and existing public posts were not changed. This does not claim every
+stopped row had been caused by recommendations; it honors the owner's stop
+on repeated old-post writes while initial delivery is restored. Evidence:
+stop-existing-edit-cohort-20261113T2345.json and source-facts-hash-final-2-focused.log.
+Live initial-carousel and delayed-comment acceptance remains open.
+
+Review caught the existing persisted-hash boundary. Exact old hashes can be
+reconstructed from the current selection or the original selection already
+saved in the related-comment outbox payload. On an exact full-input match,
+the existing persistence helper adopts the facts-only hash without upload/edit;
+no new marker/state is introduced. Three distinguishing cases cover new format,
+legacy current selection, and legacy original selection after graph changes.
+All three retain a later genuine source correction. Unmatched historical hashes
+are not silently rewritten as synchronized: missing original selection is not
+evidence of an unchanged source. No bulk baseline reset is performed.
+
+The peer's next actual read found job155630/event10906 editing managed14213
+without a source hash or retained related-comment selection. It was not among
+the22 hash-bearing stopped rows. The existing resume query now distinguishes
+a genuinely uncreated announcement from a managed URL using the configured
+owner and current Event fields, without another state/marker. Its order is
+uncreated announcement, one-time comment, managed update, then page jobs.
+A regression inserts an older managed row with a null hash before a fresh
+announcement, with both a null URL and an external source URL; the new row
+still goes first and every gap stays30seconds.40 focused checks pass.

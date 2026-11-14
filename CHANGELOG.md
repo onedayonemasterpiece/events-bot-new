@@ -5,6 +5,8 @@
 - Fix Kaggle account migration to richss777 across runtime defaults and notebook metadata; stop duplicate pushes after invalid dataset-source responses.
 
 ## [Unreleased]
+- VK: recommendation changes no longer change the source publication hash or force new card-count repairs; recovery prioritizes announcements and one-time comments at the existing pace.
+
 - VK: CAPTCHA recovery preserves terminal publication failures instead of replaying old post edits.
 
 

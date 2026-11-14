@@ -5599,14 +5599,22 @@ async def _resume_vk_captcha_outbox(
     skipped = 0
     async with db.get_session() as session:
         rows = await session.execute(
-            select(JobOutbox)
+            select(JobOutbox).outerjoin(Event, Event.id == JobOutbox.event_id)
             .where(
                 JobOutbox.task.in_(VK_JOB_TASKS),
                 JobOutbox.status == JobStatus.paused,
                 JobOutbox.last_error == marker,
                 JobOutbox.terminal_reason.is_(None),
             )
-            .order_by(JobOutbox.id)
+            .order_by(
+                ((JobOutbox.task == JobTask.vk_sync) & Event.vk_source_hash.is_(None) & (
+                    Event.source_vk_post_url.is_(None) | ~Event.source_vk_post_url.contains(
+                        f"wall-{str(VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or '').lstrip('-')}_", autoescape=True
+                    )
+                )).desc(),
+                JobOutbox.task != JobTask.vk_calendar_comment,
+                JobOutbox.task != JobTask.vk_sync, JobOutbox.id,
+            )
         )
         jobs = [_normalize_job(job) for job in rows.scalars().all()]
         for job in jobs:
@@ -23838,35 +23846,46 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     # plus the body text, so title-only repairs must not be invisible here.
     from vk_event_relations import presentation, ensure_comment
     relations = await presentation(db, ev)
-    source_photo_count = len(await _dedupe_event_photo_urls_for_publish(ev.photo_urls))
-    extra_photos = min(sum(bool(v) for v in relations.values()), max(0, VK_MAX_ATTACHMENTS - source_photo_count))
-    new_hash = content_hash(
-        "\n".join(
-            [
-                VK_SOURCE_POST_FORMAT_VERSION,
-                str(getattr(ev, "title", "") or ""),
-                str(getattr(ev, "date", "") or ""),
-                str(getattr(ev, "time", "") or ""),
-                str(getattr(ev, "location_name", "") or ""),
-                str(getattr(ev, "location_address", "") or ""),
-                str(getattr(ev, "city", "") or ""),
-                str(getattr(ev, "ticket_link", "") or ""),
-                f"ics:{str(getattr(ev, 'ics_url', '') or '<none>')}",
-                json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
-                text_for_vk,
-            ] + ([json.dumps(relations, ensure_ascii=False, sort_keys=True)] if any(relations.values()) else [])
-        )
+    source_hash_input = "\n".join(
+        [
+            VK_SOURCE_POST_FORMAT_VERSION,
+            str(getattr(ev, "title", "") or ""),
+            str(getattr(ev, "date", "") or ""),
+            str(getattr(ev, "time", "") or ""),
+            str(getattr(ev, "location_name", "") or ""),
+            str(getattr(ev, "location_address", "") or ""),
+            str(getattr(ev, "city", "") or ""),
+            str(getattr(ev, "ticket_link", "") or ""),
+            f"ics:{str(getattr(ev, 'ics_url', '') or '<none>')}",
+            json.dumps(list(getattr(ev, "photo_urls", None) or []), ensure_ascii=False),
+            text_for_vk,
+        ]
     )
+    new_hash = content_hash(source_hash_input)
     existing_vk_post_url = (ev.source_vk_post_url or "").strip()
     managed_vk_post = False
     if existing_vk_post_url:
         ids = _vk_owner_and_post_id(existing_vk_post_url)
         target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
         managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
+    if managed_vk_post and ev.vk_source_hash and ev.vk_source_hash != new_hash:
+        async with db.get_session() as session:
+            saved_selection = (await session.execute(select(JobOutbox.payload).where(
+                JobOutbox.event_id == event_id,
+                JobOutbox.coalesce_key.like("vk_related_comment:%"),
+            ).order_by(JobOutbox.id.desc()).limit(1))).scalar_one_or_none()
+        selections = [relations]
+        if isinstance(saved_selection, dict) and isinstance(saved_selection.get("relations"), dict):
+            selections.append(saved_selection["relations"])
+        if ev.vk_source_hash in {
+            content_hash(source_hash_input + "\n" + json.dumps(selection, ensure_ascii=False, sort_keys=True))
+            for selection in selections if any(selection.values())
+        }:
+            await _persist_vk_source_post_result(event_id, db, existing_vk_post_url, new_hash, bot=None)
+            ev.vk_source_hash = new_hash
+            logging.info("vk.source_hash_adopted event_id=%s provider_writes=0", event_id)
     if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
-        post_exists, media_complete = await _managed_vk_post_state(
-            ev, **({"extra_photos": extra_photos} if extra_photos else {})
-        )
+        post_exists, media_complete = await _managed_vk_post_state(ev)
         if post_exists and media_complete:
             await ensure_comment(db, ev, existing_vk_post_url, relations, bot)
             await _copy_same_day_linked_vk_publication(

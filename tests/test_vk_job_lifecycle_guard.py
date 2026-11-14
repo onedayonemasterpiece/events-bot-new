@@ -147,3 +147,93 @@ async def test_initial_related_wait_keeps_same_outbox_pending_then_completes(db,
         assert complete.last_error is None
         assert len((await session.execute(select(main.JobOutbox))).scalars().all()) == 1
     assert calls == [event.id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [None, "current", "snapshot"])
+async def test_graph_changes_do_not_rewrite_initial_complete_post(db, monkeypatch, legacy):
+    import json
+    import vk_event_relations as relations
+
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    monkeypatch.setitem(main.vk_group_blocked, 'wall.post', 0.0)
+    event = await save_event(db, photo_urls=['source-a', 'source-b'])
+    relations.graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': [2]}}}))
+    monkeypatch.setattr(main, '_should_skip_ticket_giveaway_publication', AsyncMock(return_value=False))
+    async def prepare(database, current):
+        return current, [current]
+    monkeypatch.setattr(main, '_prepare_same_day_linked_publish_event', prepare)
+    monkeypatch.setattr(main, '_recover_managed_vk_live_url', AsyncMock(return_value=None))
+    state = AsyncMock(return_value=(True, True))
+    monkeypatch.setattr(main, '_managed_vk_post_state', state)
+    monkeypatch.setattr(main, '_enqueue_static_site_after_vk_publication', AsyncMock())
+    selection = {'dates': [], 'related': [{'id': 2, 'title': 'Original carousel'}]}
+    presentation = AsyncMock(return_value=selection)
+    comment = AsyncMock(return_value=False)
+    monkeypatch.setattr(relations, 'presentation', presentation)
+    monkeypatch.setattr(relations, 'ensure_comment', comment)
+    sync = AsyncMock(return_value='https://vk.com/wall-1_42')
+    monkeypatch.setattr(main, 'sync_vk_source_post', sync)
+
+    real_hash = main.content_hash
+    hash_inputs = []
+    def capture_hash(value):
+        hash_inputs.append(value)
+        return real_hash(value)
+    monkeypatch.setattr(main, 'content_hash', capture_hash)
+    await main.job_sync_vk_source_post(event.id, db, None)
+    assert sync.call_args.kwargs['relations'] == selection
+    async with db.get_session() as session:
+        initial_hash = (await session.get(Event, event.id)).vk_source_hash
+    if legacy:
+        from models import JobOutbox, JobTask
+        async with db.get_session() as session:
+            current = await session.get(Event, event.id)
+            current.vk_source_hash = real_hash(hash_inputs[0] + "\n" + json.dumps(selection, ensure_ascii=False, sort_keys=True))
+            session.add(current)
+            if legacy == 'snapshot':
+                session.add(JobOutbox(event_id=event.id, task=JobTask.vk_calendar_comment,
+                    coalesce_key='vk_related_comment:-1:42', payload={'relations': selection}))
+            await session.commit()
+    # A new graph may add a second card or change every peer; neither is a source edit.
+    relations.graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': [3, 4]}}}))
+    presentation.return_value = selection if legacy == 'current' else {'dates': [{'date': '2099-12-22'}], 'related': [{'id': 3}, {'id': 4}]}
+    await main.job_sync_vk_source_post(event.id, db, None)
+    assert sync.await_count == 1
+    assert comment.await_count == 2
+    state.assert_awaited_once()
+    assert state.call_args.kwargs == {}
+    async with db.get_session() as session:
+        current = await session.get(Event, event.id)
+        assert current.vk_source_hash == initial_hash
+        current.description = 'Corrected source fact'
+        session.add(current)
+        await session.commit()
+    # A real canonical source correction retains the existing update path.
+    await main.job_sync_vk_source_post(event.id, db, None)
+    assert sync.await_count == 2
+    assert sync.call_args.args[1] == 'Corrected source fact'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('source_url', [None, 'https://vk.com/wall-9_12'])
+async def test_captcha_resume_uses_publication_priority_without_shortening_pacing(db, monkeypatch, source_url):
+    from models import JobOutbox, JobTask
+    from sqlmodel import select
+    monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
+    existing = await save_event(db, source_vk_post_url='https://vk.com/wall-1_999')
+    event = await save_event(db, source_vk_post_url=source_url)
+    monkeypatch.setattr(main, 'VK_CAPTCHA_RESUME_SPACING_SEC', 30)
+    async with db.get_session() as session:
+        session.add(JobOutbox(event_id=existing.id, task=JobTask.vk_sync))
+        for task in (JobTask.festival_pages, JobTask.vk_calendar_comment, JobTask.vk_sync):
+            session.add(JobOutbox(event_id=event.id, task=task))
+        await session.commit()
+    await main.vk_captcha_pause_outbox(db, marker='captcha_wait:priority')
+    assert await main._resume_vk_captcha_outbox(db, 'captcha_wait:priority') == 4
+    async with db.get_session() as session:
+        jobs = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
+    assert [j.task for j in jobs] == [JobTask.vk_sync, JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.festival_pages]
+    assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30, 30, 30]
+    assert jobs[0].event_id == event.id and jobs[2].event_id == existing.id
