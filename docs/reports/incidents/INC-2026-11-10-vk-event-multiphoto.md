@@ -542,3 +542,31 @@ Isolated production-runtime measurements: standard Pillow decode peaked at
 conversion setting, native library, provider path, queue or recovery mode added.
 Retained evidence: /home/dev/artifacts/events-bot-new/20261114T080301Z-vk-bounded-upload-prep-20261114.
 This source fix does not prove fresh multiple-source-photo delivery by itself.
+
+
+### Duplicate title expansion bypassed narrative preservation, 14 November
+
+Actual99c701f6b event10906/job155630 repeatedly attempted wall.edit14213;
+11:51:54 UTC received code14. The single source poster remained unchanged.
+Later imports recorded zero added facts/posters but regenerated fact-first text;
+at05:21 the model also expanded the specific title. Title application preceded
+the duplicate-only preservation decision, so this cosmetic change bypassed it.
+The existing duplicate-only evidence is now evaluated before applying the title.
+Specific titles remain stable; existing canonical, meaningful-title recovery and
+generic-title upgrade rules still apply. True fact, age, ticket and schedule
+changes retain their normal update path. Source-only fanout uses that same
+decision to avoid rearming an existing VK publication; gallery changes still
+rearm it. No state, provider, queue, retry or historical hash adoption added.
+
+Initialized equivalent-title regression failed before and preserves title,
+description, canonical hash, zero VK enqueue and zero upload/edit after. Controls
+cover added facts plus changed title, tickets, visible age, age provenance,
+cleanup, canonical date correction, filling missing time and generic title.
+This producer fix does not undo event10906's already changed canonical payload
+or prove CAPTCHA resolved. Parent owns release and ordinary product verification.
+
+CI caught an unrelated-title proposal hidden by the new preservation ordering.
+Preservation now additionally requires the existing related-title evidence.
+An unrelated proposal reaches the unchanged catastrophic merge rollback guard;
+test_late_incoherent_merge_rolls_back_and_creates_distinct remains unchanged.
+This check is one production line (total net+11, approved budget12).
