@@ -132,7 +132,7 @@ async def test_linked_existing_post_is_remembered_before_edit_failure(db, monkey
     async with db.get_session() as session:
         rows = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
     assert [(r.event_id, r.task) for r in rows] == [
-        (fresh.id, JobTask.vk_sync), (fresh.id, JobTask.vk_calendar_comment), (member.id, JobTask.vk_sync)]
+        (fresh.id, JobTask.vk_calendar_comment), (fresh.id, JobTask.vk_sync), (member.id, JobTask.vk_sync)]
     assert (rows[1].next_run_at - rows[0].next_run_at).total_seconds() == main.VK_CAPTCHA_RESUME_SPACING_SEC
 
 
@@ -271,6 +271,6 @@ async def test_captcha_resume_uses_publication_priority_without_shortening_pacin
     assert await main._resume_vk_captcha_outbox(db, 'captcha_wait:priority') == 4
     async with db.get_session() as session:
         jobs = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
-    assert [j.task for j in jobs] == [JobTask.vk_sync, JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.festival_pages]
+    assert [j.task for j in jobs] == [JobTask.vk_calendar_comment, JobTask.vk_sync, JobTask.vk_sync, JobTask.festival_pages]
     assert [(b.next_run_at - a.next_run_at).total_seconds() for a, b in zip(jobs, jobs[1:])] == [30, 30, 30]
-    assert jobs[0].event_id == event.id and jobs[2].event_id == existing.id
+    assert jobs[1].event_id == event.id and jobs[2].event_id == existing.id

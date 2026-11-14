@@ -5607,12 +5607,12 @@ async def _resume_vk_captcha_outbox(
                 JobOutbox.terminal_reason.is_(None),
             )
             .order_by(
+                JobOutbox.task != JobTask.vk_calendar_comment,
                 ((JobOutbox.task == JobTask.vk_sync) & Event.vk_source_hash.is_(None) & (
                     Event.source_vk_post_url.is_(None) | ~Event.source_vk_post_url.contains(
                         f"wall-{str(VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or '').lstrip('-')}_", autoescape=True
                     )
                 )).desc(),
-                JobOutbox.task != JobTask.vk_calendar_comment,
                 JobOutbox.task != JobTask.vk_sync, JobOutbox.id,
             )
         )

@@ -12,6 +12,7 @@
 
 ### Fixed
 - Remember an existing linked same-day VK publication before editing it, so CAPTCHA recovery does not repeatedly prioritize that update as a new announcement.
+- Resume one-time VK comments before the import backlog at the existing cadence, preserving publication-relative deadlines.
 - Keep terminal Kaggle runs terminal when callbacks arrive late, and release their own resource leases when accepting the terminal callback.
 - Calendar jobs resumed before their known publication deadline defer locally without scanning VK or consuming a failed attempt.
 - New scheduled VK announcements again enqueue one calendar comment after public release plus 5–15 minutes. Calendar files are posted by the configured user, with paced upload/save/comment calls and persisted document/comment receipts; existing posts are not swept or edited for calendars.

@@ -359,3 +359,10 @@ posts and one-time comments first, at the same existing cadence. This adds
 five production lines and no field, queue, retry, manual resume or provider
 write. The baseline regression fails on the lost member URL; after the fix it
 also checks new announcement, comment, managed-update order and spacing.
+
+Normal recovery at04:08 additionally scheduled comments156657/156658 for05:10,
+despite planned publication04:30: the entire uncreated import backlog preceded
+comments. Move the existing comment sort criterion first, preserving30-second
+spacing and the existing publication deferrals. The regression now requires
+comment, new announcement, managed update order. No current cohort slots are
+rewritten manually; this rule applies to ordinary subsequent recovery.
