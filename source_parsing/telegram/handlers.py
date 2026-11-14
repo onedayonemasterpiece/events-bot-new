@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import OperationalError
 
+from linked_events import source_programme_batch
 from db import Database
 from event_utils import strip_city_from_address
 from festival_grounding import ground_kgd80_festival
@@ -5870,6 +5871,7 @@ async def _terminalize_missing_forced_messages(
     return terminal
 
 
+@source_programme_batch
 async def process_telegram_results(
     results_path: str | Path,
     db: Database,
