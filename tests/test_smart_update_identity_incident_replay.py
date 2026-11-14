@@ -391,6 +391,8 @@ async def _run_vector_veto_adjudicator_replay(
     candidate_source_type: str = "telegram",
     expected_created_id: int | None = None,
     replay_twice: bool = False,
+    enforce_merge_gate: bool = False,
+    candidate_text: str | None = None,
 ) -> tuple[Database, su.SmartUpdateResult, int]:
     db = Database(str(tmp_path / f"typed-final-{suffix}.sqlite"))
     await db.init()
@@ -421,7 +423,8 @@ async def _run_vector_veto_adjudicator_replay(
     monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(su, "SMART_UPDATE_DEDUP_ADJUDICATOR", True)
     monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
-    monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+    monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE",
+                        su.IdentityGateMode.ENFORCE if enforce_merge_gate else su.IdentityGateMode.OFF)
     monkeypatch.setattr(su, "_classify_topics", _no_topics)
     async def _eventness(*_args, **_kwargs):
         return "event", 0.99, "sanitized fixture"
@@ -471,7 +474,7 @@ async def _run_vector_veto_adjudicator_replay(
     candidate = EventCandidate(
         source_type=candidate_source_type,
         source_url=candidate_source_url or f"https://t.me/incident_replay/{suffix}",
-        source_text=(
+        source_text=candidate_text or (
             f"{candidate_title}. Отдельное описание из источника; "
             f"время {candidate_time or 'не указано'}."
         ),
@@ -866,3 +869,49 @@ async def test_rejected_match_and_provider_abstention_are_retry(
     assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
     async with db.get_session() as session:
         assert await session.scalar(select(func.count()).select_from(Event)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("distinct", [False, True])
+async def test_final_film_identity_is_not_adjudicated_again_by_merge_gate(tmp_path, monkeypatch, distinct):
+    from unittest.mock import AsyncMock
+    gate = AsyncMock(return_value={
+        "action": "skip_merge_side_effects", "relation": "related_but_distinct",
+        "confidence": 0.9, "reason_code": "time_conflict_in_festival_schedule",
+        "reason": "Other workshops run in parallel; source clock differs.",
+        "source_grounded_evidence": ["15:30 — Кинопоказ «Архитектор»"],
+        "blocking_conflicts": ["time"], "allowed_fields": [],
+    })
+    monkeypatch.setattr(su, "_llm_merge_identity_gate", gate)
+    db, result, owner_id = await _run_vector_veto_adjudicator_replay(
+        tmp_path, monkeypatch, suffix="film-final-distinct" if distinct else "film-final-match",
+        owner_id=10606, owner_title="Кинопоказ «Архитектор»",
+        owner_date="2099-11-21", candidate_date="2099-11-21",
+        owner_time="15:00", candidate_time="15:30",
+        candidate_title="Кинопоказ «Архитектор»", candidate_type="кинопоказ",
+        owner_end_date=None, candidate_end_date=None, enforce_merge_gate=True,
+        candidate_text="Кинопоказ «Архитектор». Первый показ в 15:00. Второй самостоятельный показ в 15:30." if distinct else None,
+        owner_source_url="https://gallery.example/tickets/52456",
+        candidate_source_url="https://t.me/gallery/4281",
+        decision=_typed_adjudicator_decision(
+            action="create" if distinct else "match",
+            relation="distinct_occurrence" if distinct else "same_event",
+            reason_code="session_split_keep" if distinct else "doors_start_skew",
+            confidence=0.95, match_event_id=None if distinct else 10606,
+            evidence=["Второй самостоятельный показ в 15:30" if distinct else "Кинопоказ «Архитектор»"],
+            conflicts=["time: 15:00 vs 15:30"],
+        ),
+    )
+    try:
+        gate.assert_not_awaited()
+        expected = su.SmartUpdateTerminalOutcome.CREATED if distinct else su.SmartUpdateTerminalOutcome.MERGED
+        assert result.outcome is expected
+        assert (result.event_id != owner_id) if distinct else (result.event_id == owner_id)
+        async with db.get_session() as session:
+            count = await session.scalar(select(func.count()).select_from(Event))
+            assert count == (2 if distinct else 1)
+            logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
+            assert not any(row.decision_payload.get("stage") == "merge_identity_gate" for row in logs)
+            assert sum(row.decision_payload.get("stage") == "final_identity_adjudicator" for row in logs) == 1
+    finally:
+        await db.close()

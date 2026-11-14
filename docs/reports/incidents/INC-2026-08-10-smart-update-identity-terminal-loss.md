@@ -479,3 +479,8 @@ entitlement, a guaranteed atomic production snapshot rehearsal, approved
 disposition of the 195 known FK-orphan references, and model-derived recovery
 through the typed pipeline. Merge, deploy and recovery apply were outside that
 checkpoint's scope; see the current correction above for the later release.
+
+
+### 2026-11-14: final MATCH survives the merge path
+
+The existing typed final adjudicator can resolve a widened-recall candidate as FINAL_MATCH, but a second independent merge-identity call was still allowed to contradict it for the same owner and create a duplicate. The merge path now reuses that final result only for its exact selected owner. Unresolved/absent results and ordinary matches retain the merge gate; explicit FINAL_DISTINCT creation is unchanged. An initialized film/time-skew replay and explicit separate-screening negative control accompany the existing incident question-bank corpus. This is local contract repair; it does not close this incident or authorize historical data reconciliation.

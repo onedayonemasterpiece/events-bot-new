@@ -11,6 +11,7 @@
 
 
 ### Fixed
+- Reuse an existing final identity MATCH for the same event owner instead of running a second semantic merge-identity decision that can contradict it and create a duplicate.
 - Resolve delayed VK recommendation comments against the original combined linked-time publication header, preserving their frozen carousel selection.
 - Resolve published calendar targets using the same local linked-time publication view as the original post while retaining the individual occurrence in the ICS.
 - Preserve existing event narratives and derived snippets when another source contributes only duplicate facts; unchanged announcements no longer upload images or edit VK posts for new wording alone.
