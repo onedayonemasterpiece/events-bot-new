@@ -16235,14 +16235,16 @@ async def _recover_managed_vk_live_url(
 async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload: dict) -> bool | datetime:
     """Run once after this announcement's known public time, using JobOutbox."""
     if payload.get("relations"):
-        from vk_event_relations import presentation, ensure_comment
+        if not isinstance(payload["relations"], dict):
+            logging.info("vk.related_comment_skipped event_id=%s reason=missing_carousel_selection", event_id)
+            return False
+        from vk_event_relations import ensure_comment
         async with db.get_session() as session:
             event = await session.get(Event, event_id)
         if not event or event.silent or event.lifecycle_status != "active":
             return False
         await _recover_managed_vk_live_url(db, event, bot=bot)
-        data = payload["relations"] if isinstance(payload["relations"], dict) else await presentation(db, event)
-        return await ensure_comment(db, event, event.source_vk_post_url, data, bot, deferred=True)
+        return await ensure_comment(db, event, event.source_vk_post_url, payload["relations"], bot, deferred=True)
     from vk_calendar_comments import ensure_calendar_comment
 
     async with db.get_session() as session:
