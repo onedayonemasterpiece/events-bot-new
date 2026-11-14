@@ -26305,6 +26305,8 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             ),
             semantic_cache_mode=semantic_cache_mode,
         )
+        if profile == "related-only":
+            cmd.append("--no-wait")
         logging.info(
             "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s semantic_cache_mode=%s sync_pgvector=%s gemma_verify=%s",
             event_id,
@@ -26339,6 +26341,8 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             raise StaticSiteRetryableError(
                 f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
             )
+        if profile == "related-only":
+            raise StaticSiteSingleFlightDeferred(f"static_site_remote_submitted:{run_id}")
         output_dir = static_site_output_root() / f"output-{build_id}"
         completed = await _finish_static_site_candidate(
             db=db,
