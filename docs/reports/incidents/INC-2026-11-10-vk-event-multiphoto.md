@@ -517,3 +517,28 @@ Evidence retained:
 /home/dev/artifacts/events-bot-new/20261113T011138Z-vk-pair-transient-liveness-20261113.
 Подтверждённый ordinary update13778 с двумя разными фото и листай→
 не заменяет ещё открытый критерий initial fresh10899.
+
+
+## 14 November: bounded consumer copies for large canonical WebP
+
+The ordinary job for event 10963 resolves to canonical event 10509. Its canonical
+WebP is 9449×4017 (37,957,633 pixels), 3,108,668 encoded bytes. JPEG draft does
+not downsample WebP, so the former 20 MP cover guard rejected this source before
+VK upload, leaving an incomplete gallery. This is separate from CAPTCHA.
+
+Reuse one Pillow consumer-copy helper for VK upload and pair-review image inputs:
+1600 px longest side, JPEG quality 95, no chroma subsampling, original bytes and
+raw/pixel identity preserved. Reject non-draft inputs above 40 MP before loading.
+Source fingerprints already stored on immutable posters are reused; missing
+fingerprints are calculated sequentially and the pair does not calculate them
+again. Pair-review SSIM and provider inline images use the smaller working copies.
+No semantic decision is bypassed, and generated cards retain their ordering after
+all source photos.
+
+Isolated production-runtime measurements: standard Pillow decode peaked at
+640,136 KiB; three repeated decodes returned resident memory to approximately
+46 MiB. Main service RSS was 234 MiB; the host had 1000 MiB available RAM and
+3811 MiB free swap. Sequential decoding is material to this budget. No global
+conversion setting, native library, provider path, queue or recovery mode added.
+Retained evidence: /home/dev/artifacts/events-bot-new/20261114T080301Z-vk-bounded-upload-prep-20261114.
+This source fix does not prove fresh multiple-source-photo delivery by itself.

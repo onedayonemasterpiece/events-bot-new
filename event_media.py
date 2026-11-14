@@ -20,6 +20,7 @@ from media_dedup import (
     ImageFingerprints,
     compute_global_ssim,
     compute_image_fingerprints,
+    prepare_consumer_jpeg,
     hamming_distance_hex,
 )
 from models import (
@@ -1103,6 +1104,17 @@ def invalidate_event_poster_visual_evidence(
         poster.updated_at = datetime.now(timezone.utc)
 
 
+def _review_fingerprints(poster: EventPoster, data: bytes) -> ImageFingerprints | None:
+    if all((poster.raw_sha256, poster.pixel_sha256, poster.phash,
+            poster.perceptual_hash, poster.width, poster.height)):
+        return ImageFingerprints(
+            raw_sha256=poster.raw_sha256, pixel_sha256=poster.pixel_sha256,
+            dhash_hex=poster.phash, phash_hex=poster.perceptual_hash,
+            width=poster.width, height=poster.height, mime_type=poster.mime_type,
+        )
+    return compute_image_fingerprints(data)
+
+
 def _apply_fingerprints(poster: EventPoster, fp: ImageFingerprints) -> None:
     _apply_pixel_fingerprints(poster, fp)
     poster.raw_sha256 = fp.raw_sha256
@@ -1322,6 +1334,8 @@ async def _call_reviewer(
     client.provider_timeout_seconds = float(
         _env_int("EVENT_MEDIA_REVIEW_PROVIDER_TIMEOUT_SEC", 45, lo=10, hi=120)
     )
+    left_media = replace(left_media, data=await asyncio.to_thread(prepare_consumer_jpeg, left_media.data), mime_type="image/jpeg")
+    right_media = replace(right_media, data=await asyncio.to_thread(prepare_consumer_jpeg, right_media.data), mime_type="image/jpeg")
     ssim = await asyncio.to_thread(compute_global_ssim, left_media.data, right_media.data)
     prompt = [
         _review_prompt(event, left, right, ssim=ssim),
@@ -2449,10 +2463,8 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
     error: str | None = None
     try:
         left_media, right_media = await asyncio.gather(_download_poster(left), _download_poster(right))
-        left_fp, right_fp = await asyncio.gather(
-            asyncio.to_thread(compute_image_fingerprints, left_media.data),
-            asyncio.to_thread(compute_image_fingerprints, right_media.data),
-        )
+        left_fp = await asyncio.to_thread(_review_fingerprints, left, left_media.data)
+        right_fp = await asyncio.to_thread(_review_fingerprints, right, right_media.data)
         if left_fp is None or right_fp is None:
             raise RuntimeError("image_decode_failed")
         if left_fp.raw_sha256 == right_fp.raw_sha256:
@@ -2484,8 +2496,6 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         if review is None or left is None or right is None or event is None:
             return False
         if error is None and left_media is not None and right_media is not None:
-            left_fp = await asyncio.to_thread(compute_image_fingerprints, left_media.data)
-            right_fp = await asyncio.to_thread(compute_image_fingerprints, right_media.data)
             if left_fp and right_fp:
                 # Avoid the partial unique raw-SHA index by keeping the duplicate
                 # fingerprint on the survivor only; the decision row preserves evidence.

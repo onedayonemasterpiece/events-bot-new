@@ -44,6 +44,26 @@ class ImageFingerprints:
     mime_type: str | None = None
 
 
+def prepare_consumer_jpeg(data: bytes) -> bytes:
+    """Bound a working copy for VK and visual review; keep canonical bytes intact."""
+    from PIL import Image, ImageOps
+
+    with Image.open(BytesIO(data)) as source:
+        # A 38 MP WebP peaked at 640 MiB on the 1.6 GiB host (1 GiB available).
+        # Keep a 40 MP source ceiling and decode consumers sequentially.
+        scale = max(1, max(source.size) / 1600)
+        source.draft("RGB", tuple(max(1, int(side / scale)) for side in source.size))
+        if source.width * source.height > 40_000_000:
+            raise ValueError("consumer image source exceeds 40 MP")
+        source.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+        photo = ImageOps.exif_transpose(source).convert("RGBA")
+    background = Image.new("RGB", photo.size, "white")
+    background.paste(photo, mask=photo.getchannel("A"))
+    output = BytesIO()
+    background.save(output, "JPEG", quality=95, subsampling=0)
+    return output.getvalue()
+
+
 def _normalized_rgb_image(image_bytes: bytes):
     if not image_bytes:
         return None
