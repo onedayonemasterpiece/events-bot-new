@@ -540,6 +540,41 @@ def test_pgvector_similarity_is_not_promoted_by_category_or_facets(monkeypatch) 
     assert literature["related_score"] == round(scores[2], 4)
 
 
+def test_related_audit_completes_uncached_unchanged_anchors_during_import(monkeypatch) -> None:
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    calls = []
+
+    def audit(**kwargs):
+        calls.append(kwargs['anchor']['id'])
+        return {event['id']: {'llm_semantic_score': .8, 'confidence': .9,
+                'reject': False, 'similarity_class': 'highly_similar'}
+                for event in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    events = [{'id': 1, 'title': 'Открытый микрофон'},
+              {'id': 2, 'title': 'Сольный стендап'},
+              {'id': 3, 'title': 'Новая выставка'}]
+    cache = {}
+
+    def run():
+        chains = {str(i): [{'event_id': 3 - i, 'vector_similarity': .8,
+                           'related_score': .8, 'slot_type': 'pure_related'}]
+                  for i in (1, 2)}
+        return exporter.maybe_apply_gemma_audit(events, chains, enabled=True,
+            model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
+            cache=cache, max_anchors=0, changed_event_ids={3})[1]
+
+    cold = run()
+    assert cold['verified_event_ids'] == [1, 2, 3]
+    assert cold['status'] == 'ok'
+    assert calls == [1, 2]
+    warm = run()
+    assert warm['status'] == 'ok' and warm['cache_hits'] == 2
+    assert calls == [1, 2]
+
+
 def test_related_audit_uses_semantics_without_generated_category() -> None:
     exporter = _load_exporter_module()
     event = {'id': 1, 'title': 'Матч женской баскетбольной лиги',
