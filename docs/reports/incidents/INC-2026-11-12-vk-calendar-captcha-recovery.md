@@ -248,3 +248,23 @@ time after release rather than declaring a hard deadline from local tests.
 Retained evidence: events-bot-new/20261114T060834Z-duplicate-source-preserve-narrative-20261114/gallery-release/canonical-quality-release/calendar-due-priority-review.md
 and ordinary-ics-runtime-timing.log. Release and live verification belong to the
 parent coordinator; no production writes were made during this correction.
+
+
+## 14 November: related-comment early resume reads before public time
+
+Related job 157231 resumed at 12:13 UTC for a post whose known public time was
+16:00 UTC, issuing getById and wall.get during identity recovery. The producer
+already knew publish_date, but stored only post_url and relations. The shared
+calendar task handler processed the related branch before checking any deadline.
+
+Persist that existing publish_date in the same job payload and return the existing
+publication-plus-180-second minimum before prepare/recover when it is still future.
+This is four net production lines within six, reusing JobOutbox datetime reschedule.
+The random 3–20 minute producer due, frozen selection, identity checks, CAPTCHA
+handling and request pacing are unchanged. Old payloads are not migrated.
+
+Initialized controls before the change fail both known-time early cases while
+legacy controls pass. Final controls must show zero early VK/recovery calls, the
+same job pending at its future deadline, and exactly one comment after due.
+Evidence is retained in gallery-release/canonical-quality-release/calendar-priority-release.
+This source fix alone does not prove a live comment was delivered on time.

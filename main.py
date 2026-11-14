@@ -16244,6 +16244,10 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
             event = await session.get(Event, event_id)
         if not event or event.silent or event.lifecycle_status != "active":
             return False
+        if payload.get("publish_date"):
+            public_due = datetime.fromtimestamp(int(payload["publish_date"]) + 180, timezone.utc)
+            if public_due > datetime.now(timezone.utc):
+                return public_due
         event, _ = await _prepare_same_day_linked_publish_event(db, event)
         await _recover_managed_vk_live_url(db, event, bot=bot)
         return await ensure_comment(db, event, event.source_vk_post_url, payload["relations"], bot, deferred=True)

@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:vk-duplicate-title-preserve-narrative-20261114
+    image: runcoveer/events:vk-related-known-deadline-20261114
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production

@@ -37,7 +37,8 @@ async def test_legacy_related_job_without_carousel_selection_sends_nothing(tmp_p
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('publication_offset', [3600, -120])
-async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_path, monkeypatch, publication_offset):
+@pytest.mark.parametrize('known_publication', [False, True], ids=['legacy', 'known-time'])
+async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_path, monkeypatch, publication_offset, known_publication):
     db = main.Database(str(tmp_path / 'early-related.sqlite'))
     await db.init()
     published_at = int(datetime.now(timezone.utc).timestamp()) + publication_offset
@@ -53,7 +54,10 @@ async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_pa
         if method == 'wall.createComment':
             return {'response': {'comment_id': 100}}
         raise AssertionError(method)
-    async def recovered(*args, **kwargs): return False
+    recover_calls = []
+    async def recovered(*args, **kwargs):
+        recover_calls.append(True)
+        return False
     monkeypatch.setattr(main, '_vk_api', api)
     monkeypatch.setattr(main, '_recover_managed_vk_live_url', recovered)
     monkeypatch.setattr(main, '_vk_user_token', lambda: 'fixture')
@@ -68,7 +72,8 @@ async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_pa
                 source_vk_post_url='https://vk.com/wall-1_10'))
             session.add(main.JobOutbox(event_id=1, task=main.JobTask.vk_calendar_comment,
                 coalesce_key='vk_related_comment:-1:10',
-                payload={'post_url': 'https://vk.com/wall-1_10', 'relations': data},
+                payload={'post_url': 'https://vk.com/wall-1_10', 'relations': data,
+                         **({'publish_date': published_at} if known_publication else {})},
                 next_run_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
             await session.commit()
         assert await main._run_due_jobs_once(db, None) == 1
@@ -78,7 +83,8 @@ async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_pa
         assert job.attempts == 0
         due = main._ensure_utc(job.next_run_at)
         assert 180 <= due.timestamp() - published_at <= 1200
-        assert calls == ['wall.getById']
+        assert calls == ([] if known_publication else ['wall.getById'])
+        assert recover_calls == ([] if known_publication else [True])
         class Clock(datetime):
             @classmethod
             def now(cls, tz=None): return due + timedelta(seconds=1)
@@ -88,6 +94,7 @@ async def test_early_related_job_keeps_same_job_pending_until_publication(tmp_pa
         async with db.get_session() as session:
             assert (await session.get(main.JobOutbox, job.id)).status == main.JobStatus.done
         assert calls.count('wall.createComment') == 1
+        assert len(recover_calls) == (1 if known_publication else 2)
         assert await main._run_due_jobs_once(db, None) == 0
     finally:
         await db.close()
@@ -197,6 +204,8 @@ async def test_comment_is_created_once_never_edited_and_defers_postponed(tmp_pat
         assert all(method not in {'wall.editComment', 'wall.deleteComment'} for method, _ in calls)
         postponed = True
         assert not await relations.ensure_comment(db, event, 'https://vk.com/wall-1_11', data)
+        assert deferred[-1]['payload']['publish_date'] == 4070908800
+        assert deferred[-1]['payload']['relations'] == data
         assert deferred[-1]['payload']['relations'] == data
         assert 4070908980 <= deferred[-1]['next_run_at'].timestamp() <= 4070910000
     finally:
