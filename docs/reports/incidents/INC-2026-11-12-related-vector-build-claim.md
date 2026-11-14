@@ -275,7 +275,8 @@ This bypassed the established recovery ordering, rather than demonstrating a
 failure of the facts-only source hash.
 
 Enqueue now merges the latest payload/dependencies while retaining the existing
-VK CAPTCHA status, marker and scheduled slot. Only the existing CAPTCHA owner
+VK CAPTCHA status, marker, original pause timestamp and scheduled slot. Reimports
+do not extend the recovery waiting period. Only the existing CAPTCHA owner
 resumes paused rows. No new queue, timer, ledger field, provider request or
 manual resume was added. Two distinguishing cases (paused and already resumed
 pending) fail on unchanged main and pass with the fix. The two older job-dedup

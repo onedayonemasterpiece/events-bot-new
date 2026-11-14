@@ -15737,7 +15737,7 @@ async def enqueue_job(
                     )
                     job = None
         if job:
-            captcha_schedule = (job.next_run_at, job.last_error) if (
+            captcha_schedule = (job.next_run_at, job.last_error, job.updated_at) if (
                 task in VK_JOB_TASKS and job.status in {JobStatus.pending, JobStatus.paused}
                 and (job.last_error or "").startswith("captcha_wait:")
             ) else None
@@ -15789,7 +15789,7 @@ async def enqueue_job(
                 job.attempts = 0
                 job.last_error = None
                 if captcha_schedule:
-                    job.next_run_at, job.last_error = captcha_schedule
+                    job.next_run_at, job.last_error, job.updated_at = captcha_schedule
                 session.add(job)
                 await session.commit()
                 logline(
