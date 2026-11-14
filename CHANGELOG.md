@@ -18,6 +18,7 @@
 
 
 ### Fixed
+- Give already due VK comment jobs precedence over old missing-media retries and related-only static/media work, using the existing outbox priority; leave calendar delay and provider pacing unchanged.
 - Keep the complete canonical approved source gallery when applying duplicate-only imports; VK attachment limits apply only at publication, avoiding unnecessary edits of existing ten-photo posts.
 - Preserve source-photo detail after VK empty upload responses: try smaller JPEG encodings at prepared resolution before an 800 px fallback, retaining full-resolution PNG card recovery and the existing four-attempt bound.
 - Invalidate the current vector receipt before sidecar mutation so partial capped sync cannot reuse a previous success.

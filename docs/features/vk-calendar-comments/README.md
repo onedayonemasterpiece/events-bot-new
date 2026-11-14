@@ -31,3 +31,16 @@ real `docs.save` code 14 also occurred on the replacement primary token.
 The scheduled task replaces that scan; previously published posts lacking a
 comment do not create work. Live acceptance requires a normal new post,
 its public URL and actual delayed comment, not just passing tests.
+
+## Due task ordering, 14 November
+
+Ordinary user-authored ICS delivery is active in the current runtime. The earlier
+containment description above records the November 12 incident, not its current
+producer state. The existing JobOutbox priority now gives already due comment
+jobs precedence over media-blocking review, old missing-media VK retries and
+static builds. The related-only foreground override no longer collapses these
+comment jobs into the static/VK FIFO lane. This applies to both ICS and relation
+comments, which share the existing task enum. Future tasks remain excluded by
+the existing due-time SQL predicate; random delays, pacing, CAPTCHA handling
+and the one-job worker are unchanged. An already running operation is not
+preempted, so this ordering correction is not a hard wall-clock deadline proof.
