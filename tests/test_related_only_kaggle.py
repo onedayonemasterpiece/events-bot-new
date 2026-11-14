@@ -8,6 +8,64 @@ import pytest
 
 
 @pytest.mark.asyncio
+async def test_related_remote_wait_releases_worker_and_reuses_handoff(tmp_path, monkeypatch):
+    import main
+    from unittest.mock import AsyncMock
+    db = main.Database(str(tmp_path / 'live.sqlite'))
+    await db.init()
+    monkeypatch.setenv('ENABLE_STATIC_SITE_KAGGLE_BUILDER', '1')
+    monkeypatch.setenv('STATIC_SITE_BUILD_PROFILE', 'related-only')
+    monkeypatch.setenv('STATIC_SITE_RELATED_MODE', 'sparse')
+    monkeypatch.setenv('STATIC_SITE_SNAPSHOT_DIR', str(tmp_path / 'snapshots'))
+    monkeypatch.setenv('STATIC_SITE_RELATED_CACHE', str(tmp_path / 'cache.json'))
+    monkeypatch.delenv('STATIC_SITE_REQUIRE_VECTOR_BARRIER', raising=False)
+    payload, claim_args, commands = {}, {}, []
+    async def request(*args): return 12, payload
+    async def patch(db, job_id, values): payload.update(values)
+    async def noop(*args, **kwargs): pass
+    previous = AsyncMock(side_effect=[(False, None), (True, True)])
+    def claim(*args, **kwargs):
+        claim_args.update(kwargs)
+        return SimpleNamespace(action='build', claim_token='claim')
+    def recoverable(*args, **kwargs):
+        return SimpleNamespace(run_id=claim_args['run_id'], dataset_ref='owner/input', remote_status='running')
+    class Output:
+        async def readline(self): return b''
+    class Process:
+        stdout = Output()
+        async def wait(self): return 0
+    async def launch(*args, **kwargs):
+        commands.append(args)
+        return Process()
+    for name in ('_prune_static_site_terminal_outputs', '_prune_static_site_terminal_snapshots_for_capacity',
+                 '_prune_static_site_abandoned_scratch_for_capacity', '_reconcile_current_static_site_candidate_status'):
+        monkeypatch.setattr(main, name, noop)
+    monkeypatch.setattr(main, '_static_site_running_request', request)
+    monkeypatch.setattr(main, '_patch_static_site_request_payload', patch)
+    monkeypatch.setattr(main, '_recover_previous_static_site_attempt', previous)
+    monkeypatch.setattr(main, '_static_site_storage_preflight', lambda: None)
+    monkeypatch.setattr(main, '_resolve_static_site_repo_sha', lambda: 'a' * 40)
+    monkeypatch.setattr(main, '_resolve_static_site_image_source_identity', lambda *args: None)
+    monkeypatch.setattr(main, 'claim_static_site_build', claim)
+    monkeypatch.setattr(main, 'recoverable_static_site_build', recoverable)
+    monkeypatch.setattr(main.asyncio, 'create_subprocess_exec', launch)
+    finish = AsyncMock(side_effect=AssertionError('worker tried to finish a still-running remote'))
+    monkeypatch.setattr(main, '_finish_static_site_candidate', finish)
+    try:
+        with pytest.raises(main.StaticSiteSingleFlightDeferred):
+            await main.job_static_site_build_kaggle(1, db, None)
+        assert len(commands) == 1 and '--no-wait' in commands[0]
+        finish.assert_not_awaited()
+        snapshot = Path(payload['snapshot']['sqlite_path'])
+        assert snapshot.is_file()  # The existing remote owner retains its input.
+        assert await main.job_static_site_build_kaggle(1, db, None) is True
+        assert len(commands) == 1  # Existing recovery adopts; no second push.
+        assert not snapshot.exists()
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_path, monkeypatch):
     import event_vector_sync as vectors
     import main

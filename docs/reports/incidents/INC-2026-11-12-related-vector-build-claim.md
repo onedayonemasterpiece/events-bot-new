@@ -304,3 +304,22 @@ publication guard and preserves that release.
 The same regression covers recovery two minutes after publication at the
 maximum random delay: the deadline remains publication +20 minutes, not
 execution +20 minutes. The random interval is anchored to actual publication.
+
+## Remote Kaggle polling occupied the shared worker, November 14
+
+After release944, the ordinary related job started at 02:30 UTC and kept the
+single outbox worker while the Kaggle CLI polled. Initial VK job156444 (due
+02:24) and comments due02:32–02:36 remained pending after their due times.
+The older verified related comment had already missed the 20-minute target
+(23:37 actual delay). Fair selection cannot serve comments while a selected
+handler waits for remote compute.
+
+Related-only submission now uses the CLI's existing --no-wait option and
+returns through StaticSiteSingleFlightDeferred after a successful push. The
+existing finally retains the exact remote handoff/snapshot, and the existing
+adopt-existing path probes once and imports completed output without another
+push. Other profiles retain their previous behavior. No new queue, owner,
+state field, scheduler or provider limit was added (four production lines).
+The regression fails before this change and verifies one push, retained input,
+no premature result finalization, then adoption/cleanup without another push.
+84 related/handoff/debounce/VK checks pass. Actual VK acceptance remains open.
