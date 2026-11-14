@@ -12,6 +12,7 @@
 
 
 ### Fixed
+- Restore the existing strict semantic verifier after vector retrieval, retaining relevant lower-cosine events without admitting unrelated ones; use the shared key pool and honor minute-bucket retry timing.
 - Event similarity embeds only factual title/summary/description and uses cosine without category/facet/title boosts; PNG VK cards first retry as full-resolution JPEG.
 - Polish VK related cards with end-date «до» tiles for multi-day events, consistent date/time spacing, shared website/VK circular medallion assets and complete short descriptions only where they fit.
 - Compare up to eight source images in one bounded Gemini Lite gallery request; unavailable or uncertain optional vision no longer blocks decoded source photos. Reserve both generated cards inside nine VK attachments, preserving unselected source evidence.

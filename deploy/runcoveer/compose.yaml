@@ -6,6 +6,7 @@ services:
       - /opt/runcoveer/events/.env.production
     environment:
       STATIC_SITE_BUILD_PROFILE: "related-only"
+      STATIC_SITE_GEMMA_RELATED_VERIFY: "1"
       ENABLE_GUIDE_VISUAL_DIGEST_MAX: "1"
       GUIDE_VIBEPUBLISH_URL: "https://mcp-vibepublish.kenigevents.ru"
       GUIDE_VISUAL_DIGEST_MAX_ALIAS: "max_224b98c2579885727f4c"
