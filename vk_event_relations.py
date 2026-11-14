@@ -71,10 +71,13 @@ async def presentation(db, event):
         label = date.strftime('%d.%m') if date else row.date
         if date and end and end > date:
             label += '–' + end.strftime('%d.%m')
+        hours = main.parse_time_range(row.time or '') if not row.time_is_default else None
+        daily_hours = (f'{hours[0]:%H:%M}–{hours[1]:%H:%M}'
+                       if date and end and end > date and hours and hours[1] else '')
         return {'id': row.id, 'date': label, 'date_iso': start, 'end_date_iso': end.isoformat() if end else '',
                 'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
                 'place': row.location_name or '', 'url': row.source_vk_post_url or '',
-                'description': row.short_description or row.search_digest or '',
+                'description': row.short_description or row.search_digest or '', 'daily_hours': daily_hours,
                 'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
                                for m in resolve_event_graphic_medallions(row, limit=2)],
                 'is_free': bool(row.is_free)}
@@ -124,7 +127,7 @@ def render_card(items, *, schedule=False):
         rd.rounded_rectangle((0, 0, 10, 173), 5, fill=accent)
         until = not schedule and row.get('end_date_iso', '') > row.get('date_iso', '')
         date_iso = row['end_date_iso'] if until else row.get('date_iso', '')
-        _draw_date_tile(rd, {'date': date_iso, 'time': row['time'], 'date_prefix': 'до' if until else ''}, 174, accent, palette)
+        _draw_date_tile(rd, {'date': date_iso, 'time': row['time'], 'date_prefix': 'до' if until else '', 'daily_hours': row.get('daily_hours', '')}, 174, accent, palette)
         medallions = list(row.get('medallions', []))
         if row.get('is_free'):
             medallions = medallions[:1] + ['site/public/assets/badges/free-listing-medallion.png']

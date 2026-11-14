@@ -894,7 +894,7 @@ def _draw_date_tile(draw: ImageDraw.ImageDraw, row: Mapping[str, Any], row_h: in
     bb = draw.textbbox((0, 0), mon_txt, font=f_mon)
     draw.text((x + w / 2 - (bb[2] - bb[0]) / 2, y + 12 - (bb[1] / 2)), mon_txt, font=f_mon, fill=(255, 255, 255))
     prefix = _plain(row.get("date_prefix"))
-    meta = "" if prefix == "до" else (" · ".join(p for p in (wd, time_text) if p) if time_text else wdf)
+    meta = _plain(row.get("daily_hours")) if prefix == "до" else (" · ".join(p for p in (wd, time_text) if p) if time_text else wdf)
     day_bb = draw.textbbox((0, 0), day, font=f_day)
     meta_bb = draw.textbbox((0, 0), meta, font=f_meta)
     day_h, meta_h = day_bb[3] - day_bb[1], meta_bb[3] - meta_bb[1]
