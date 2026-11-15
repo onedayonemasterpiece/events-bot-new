@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Wide VK carousel covers retain the full source photo, label and arrow inside the landscape 16:9 frame.
+
 - Fresh Docker builds install libatomic1 before the Playwright Node driver starts Chromium dependency installation.
 
 - Guide source startup seeding preserves runtime flags, including resolved VK IDs, while explicit seed fields retain precedence.
