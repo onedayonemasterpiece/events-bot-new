@@ -1,12 +1,14 @@
 # Kaggle static-site builder
 
-In `related-only` pgvector mode, vector completion preserves the same bounded
-immutable input used for embedding and wakes the existing static outbox. The
-builder consumes that projection while newer imports remain for the next pass.
-It shares the vector lane's queue priority, so constant ingestion cannot keep
-the older ready calculation behind every new vector update. Existing snapshot
-validation, complete coverage, single-flight and vector release guard remain.
-Website profiles continue to use their current live snapshot/revision policy.
+In `related-only` mode, automatic content, startup, date-rollover and periodic
+requests coalesce into the existing vector outbox. Successful vector completion
+queues the related build against its retained immutable projection. A ready
+related build runs before the next vector update; newer imports remain for that
+next pass. Automatic updates do not also enqueue a competing static build.
+Explicit operator cold/force requests and website-profile scheduling retain
+their existing behavior. Snapshot validation, complete coverage, single-flight
+and the vector release guard remain. This ordering does not establish an export
+wall-time bound or fairness of the capped semantic-audit selection.
 
 Status: immutable secret-candidate pipeline implemented. A reader-atomic
 two-root-bucket/Yandex-ALB publisher is implemented default-off; its live

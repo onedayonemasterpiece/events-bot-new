@@ -507,6 +507,8 @@ async def _upsert_relation(
 
 
 async def _schedule_projection_build(db: Database, event_id: int) -> None:
+    if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+        return
     if (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() not in _ENABLED_VALUES:
         return
     try:

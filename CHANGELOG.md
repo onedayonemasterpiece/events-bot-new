@@ -1,5 +1,7 @@
 # Changelog
 
+- Fix related-only automatic scheduling to use vector completion as the build producer, and consume ready related projections before later vector updates. Keep explicit operator and website paths unchanged.
+
 - Related-only: обычная adoption сохраняет результат исходного расчёта после обновления приложения; проверки исходного run/input и целостности артефакта остаются, новые события не считаются покрытыми старым снимком.
 
 - Related-only: уменьшение актуального каталога больше не теряет сохранённый прогресс semantic audit.

@@ -17143,6 +17143,15 @@ async def enqueue_static_site_build_request(
         raise ValueError(
             "cold semantic cache mode is restricted to explicit operator requests"
         )
+    if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" and trigger != "operator_request":
+        return await enqueue_job(
+            db, ids[0] if ids else 0, JobTask.event_vector_sync,
+            payload={"reason": reason, "event_id": ids[0] if ids else 0},
+            coalesce_key="event_vector_sync:prod",
+            next_run_at=datetime.now(timezone.utc) + timedelta(
+                seconds=max(0, _env_int("EVENT_VECTOR_SYNC_DEBOUNCE_SECONDS", 90))
+            ),
+        )
     clock = resolve_static_site_build_clock(
         current_date=(os.getenv("STATIC_SITE_CURRENT_DATE") or "").strip() or None,
         current_datetime=(os.getenv("STATIC_SITE_CURRENT_DATETIME") or "").strip() or None,
@@ -17448,7 +17457,7 @@ async def schedule_event_update_tasks(
             results[JobTask.festival_pages] = await enqueue_job(
                 db, eid, JobTask.festival_pages
             )
-        if (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        if (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {"1", "true", "yes", "on"} and os.getenv("STATIC_SITE_BUILD_PROFILE") != "related-only":
             revision = event_public_revision(ev)
             results[JobTask.static_site_build] = await enqueue_static_site_build_request(
                 db,
@@ -19966,7 +19975,9 @@ async def _run_due_jobs_once_locked(
         related_only = os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"
         if j.task == JobTask.vk_sync and j.id in initial_vk_jobs and j.last_error != "vk_initial_waiting_related":
             return (-2, -1, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
-        if related_only and j.task in {JobTask.vk_sync, JobTask.event_vector_sync, JobTask.static_site_build}:
+        if related_only and j.task == JobTask.static_site_build:
+            return (-2, 1, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
+        if related_only and j.task in {JobTask.vk_sync, JobTask.event_vector_sync}:
             return (-2, 2, int(_ensure_utc(j.next_run_at).timestamp()), j.id)
         if j.task == JobTask.event_media_review and j.event_id is not None:
             event_id = int(j.event_id)
