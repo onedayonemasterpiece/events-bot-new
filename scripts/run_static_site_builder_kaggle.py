@@ -18,6 +18,7 @@ import os
 import re
 import secrets
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tarfile
@@ -964,6 +965,20 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
     return staged_site
 
 
+def related_publication_anchor_ids(status_db: str) -> list[int]:
+    """Reuse the pending first-publication workset, including CAPTCHA deferrals."""
+    group_id = str(os.getenv("VK_EVENTS_GROUP_ID") or os.getenv("VK_AFISHA_GROUP_ID") or "").lstrip("-")
+    with sqlite3.connect(f'file:{Path(status_db).resolve()}?mode=ro', uri=True) as db:
+        return [row[0] for row in db.execute(
+            "SELECT DISTINCT j.event_id FROM joboutbox j JOIN event e ON e.id=j.event_id "
+            "WHERE j.task='vk_sync' AND j.status IN ('pending','running','error','paused') "
+            "AND j.terminal_reason IS NULL AND COALESCE(e.vk_source_hash,'')='' "
+            "AND COALESCE(e.lifecycle_status,'active')='active' AND COALESCE(e.silent,0)=0 "
+            "AND json_array_length(COALESCE(e.photo_urls,'[]'))>0 "
+            "AND instr(COALESCE(e.source_vk_post_url,''), ?)=0", (f"wall-{group_id}_",)
+        )]
+
+
 def write_dataset_metadata(dataset_dir: Path, dataset_ref: str, title: str) -> None:
     (dataset_dir / 'dataset-metadata.json').write_text(json.dumps({
         'title': title,
@@ -1319,6 +1334,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'export_in_kaggle': bool(args.export_in_kaggle),
         'sqlite_db_filename': None,
         'related_cache_filename': 'event_related_chain_cache.json',
+        'related_anchor_ids': (related_publication_anchor_ids(args.status_db)
+                               if args.profile == 'related-only' and args.status_db else []),
         'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
         'unusual_cache_filename': 'unusual_events_cache.json',
