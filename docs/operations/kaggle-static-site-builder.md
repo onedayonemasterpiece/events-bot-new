@@ -847,3 +847,7 @@ carousel; an older ready calculation likewise progresses during imports.
 Existing fresh Telegram/confirmed public repair lanes keep their precedence,
 ordinary media/backfill retain their own ordering, and dependency/rate/CAPTCHA
 checks are unchanged. Website-profile ordering is unchanged.
+
+### Related-only progress after an incompatible terminal result
+
+After rejecting and cleaning a terminal run from an incompatible release, the related-only handler completes that attempt without submitting its replacement in the same call. The existing pending vector job can then refresh the completed projection and request the next related build through its normal completion path. A live remote run continues to hold its existing claim. This prevents repeatedly building the previous vector snapshot before newly imported events are projected.

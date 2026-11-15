@@ -25624,6 +25624,9 @@ async def _recover_previous_static_site_attempt(
             incompatible_reason,
             removed_snapshot_bytes,
         )
+        if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
+            # End this attempt so queued vector work can refresh the next input.
+            return True, False
         return False, None
     snapshot_path = Path(required["snapshot_path"])
     manifest_path = Path(required["manifest_path"])

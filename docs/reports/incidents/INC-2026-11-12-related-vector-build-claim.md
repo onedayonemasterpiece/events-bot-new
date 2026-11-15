@@ -402,3 +402,27 @@ Owner correction before PR953 release: medallion padding/shape is fixed in share
 Owner requested autonomous product ownership and 20-minute checks for at least two days. Related-only runtime had STATIC_SITE_GEMMA_RELATED_VERIFY=0. The paired 500-event subset showed sparse valid standup links drop below cosine0.80, so the content-only change alone is not accepted. Read-only canonical provider probes of the existing verifier accepted the two standup controls and rejected basketball/KVN/literature. Separate probes hit shared TPM and demonstrated that the existing fixed10s retry could occur before the limiter42s retry time. Restore the existing strict verifier, remove derived category from its factual input, inherit the existing normal key pool and respect RPM/TPM timing within the same bounded retry. No new algorithm or writer. Retained evidence: related-catalog-v2-comparison.json, existing-semantic-audit-quality.jsonl, existing-semantic-audit-standup-recheck.jsonl under the canonical incident artifact directory. Live acceptance remains open.
 
 The first v2 owner pass12204 reached the existing500-call cap, leaving219 embeddings unconverted. The old complete receipt12202 remained, and shared build157146 could claim while the sidecar was mixed. Invalidate the existing receipt immediately before the sidecar project stage; on any partial failure the existing barrier then waits for a normal complete retry. A distinguishing test fails before provider effect on baseline and passes after; no new receipt schema or recovery queue.
+
+### 15 November: preserve bounded audit progress and yield after rejection
+
+Two mechanical defects remain after the ready-initial priority correction.
+When the actionable catalog becomes smaller, the exporter count-only shrink
+guard refuses to persist successful semantic audit entries. An offline exact
+function control with22 anchors and the existing20-miss budget repeats40
+provider stubs on every run; removing that guard advances40→4→0 while
+retaining all expensive compatible audit entries. The initialized exporter
+regression uses a real cache file and a one-miss budget: before it cannot write;
+after it advances1→2→3 verified anchors and a warm run makes no new calls.
+
+After rejecting an incompatible terminal run, the same related-only handler
+previously fell through into replacement submission using the previous vector
+projection. The pending vector job could not run between those two steps.
+Complete that rejected attempt as handled/nochange in the existing related-only
+profile so normal vector completion can request the next calculation. HTML
+profiles retain their replacement behavior; active remote runs remain protected.
+The baseline terminal regression fails in three related-only cases; the profile
+negative controls pass. The80 exporter/debounce/related-only checks pass after
+the change, with no real provider calls. This does not prove complete liveness:
+vector backoff, continuous intake, remaining cold-audit continuation and a
+hung remote calculation still require separate modeling and ordinary new VK
+publication evidence. No production delivery or incident closure is claimed.
