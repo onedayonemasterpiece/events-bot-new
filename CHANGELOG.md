@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Fresh Docker builds install libatomic1 before the Playwright Node driver starts Chromium dependency installation.
+
 - Guide source startup seeding preserves runtime flags, including resolved VK IDs, while explicit seed fields retain precedence.
 - Rich-fact completeness applies to the selected event, so full carrier OCR does not turn neighbouring events into its programme; target OCR and age evidence remain available.
 
