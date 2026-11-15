@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:related-incremental-progress-20261115
+    image: runcoveer/events:related-normal-owner-order-20261115
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
