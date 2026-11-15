@@ -1,5 +1,7 @@
 # Changelog
 
+- Merge identity decisions use primary source/OCR citations rather than generated summaries and discard the whole decision when any cited evidence is unsupported.
+
 - Guide visual digests choose the source-grounded canonical variant; card text fits before portraits, unknown location sentinels stay hidden, and four rows clear the footer.
 - Multi-event VK imports retain already-read attachment OCR for identity and child-scope review even when no image is assigned for publication; gallery assignment stays separate.
 
