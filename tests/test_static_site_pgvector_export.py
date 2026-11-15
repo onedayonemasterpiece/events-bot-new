@@ -689,3 +689,71 @@ def test_strict_anchor_flag_requires_completed_audit_and_accepts_empty_candidate
     assert result['related']['2']['strict_verified']  # No candidates is a complete empty result.
     assert not result['strict_verified_related']
     assert result['gemma_verification']['status'] == 'partial'
+
+
+def test_related_cold_budget_preserves_later_cache_and_empty_anchors(monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    calls = []
+
+    def audit(**kwargs):
+        calls.append(kwargs['anchor']['id'])
+        return {candidate['id']: {'llm_semantic_score': .8, 'confidence': .9,
+                'reject': False, 'similarity_class': 'highly_similar'}
+                for candidate in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    cache = {}
+    events = [{'id': i, 'title': f'Event {i}'} for i in range(1, 5)]
+
+    def run(selected, limit, only=None):
+        chains = {str(event['id']): ([{'event_id': 2 if event['id'] == 1 else 1,
+            'vector_similarity': .8, 'related_score': .8, 'slot_type': 'pure_related'}]
+            if event['id'] != 4 and (only is None or event['id'] in only) else [])
+            for event in selected}
+        return exporter.maybe_apply_gemma_audit(selected, chains, enabled=True,
+            model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
+            cache=cache, max_anchors=limit)[1]
+
+    run(events, 0, {1})  # An older anchor already has a strict semantic verdict.
+    calls.clear()
+    first = run(list(reversed(events)), 1)
+    assert calls == [3]  # Newest uncached ID first, not old catalog order.
+    assert first['verified_event_ids'] == [1, 3, 4]
+    assert first['cache_hits'] == 1 and first['attempted_anchors'] == 1
+    assert first['status'] == 'partial'  # Unreviewed anchor2 stays unverified.
+    second = run(events, 1)
+    assert calls == [3, 2]
+    assert second['verified_event_ids'] == [1, 2, 3, 4]
+    assert second['status'] == 'ok'
+    warm = run(events, 1)
+    assert calls == [3, 2]  # Repeated warm progress spends no new calls.
+    assert warm['cache_hits'] == 3 and warm['attempted_anchors'] == 0
+    assert warm['verified_event_ids'] == [1, 2, 3, 4]
+
+
+@pytest.mark.parametrize('limit, changed, expected_calls', [
+    (1, {2}, [2]), (1, set(), [3]), (0, {2}, [1, 2, 3])])
+def test_related_cold_budget_prioritizes_changed_but_zero_remains_unbounded(
+        monkeypatch, limit, changed, expected_calls):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    calls = []
+
+    def audit(**kwargs):
+        calls.append(kwargs['anchor']['id'])
+        return {candidate['id']: {'llm_semantic_score': .8, 'confidence': .9,
+                'reject': False, 'similarity_class': 'highly_similar'}
+                for candidate in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    events = [{'id': i, 'title': f'Event {i}'} for i in range(1, 4)]
+    chains = {str(i): [{'event_id': 2 if i == 1 else 1, 'vector_similarity': .8,
+              'related_score': .8, 'slot_type': 'pure_related'}] for i in (1, 2, 3)}
+    _, meta = exporter.maybe_apply_gemma_audit(events, chains, enabled=True,
+        model='models/gemma-4-26b-a4b-it', key_env='GOOGLE_API_KEY4',
+        cache={}, max_anchors=limit, changed_event_ids=changed)
+    assert calls == expected_calls
+    assert meta['verified_event_ids'] == sorted(expected_calls)
