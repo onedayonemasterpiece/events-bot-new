@@ -1004,10 +1004,9 @@ def _vk_post_to_scanned_post(
     attachments = post.get("attachments") if isinstance(post.get("attachments"), list) else []
     if not text and not attachments:
         return None
-    if owner_type == "user":
-        source_url = f"https://vk.com/wall{group_id}_{message_id}"
-    else:
-        source_url = f"https://vk.com/wall-{group_id}_{message_id}"
+    fallback_owner_id = group_id if owner_type == "user" else -group_id
+    post_owner_id = int(post.get("owner_id") or fallback_owner_id)
+    source_url = f"https://vk.com/wall{post_owner_id}_{message_id}"
     return ScannedPost(
         message_id=message_id,
         grouped_id=None,

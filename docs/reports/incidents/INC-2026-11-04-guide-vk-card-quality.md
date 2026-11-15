@@ -74,3 +74,13 @@ for 14:20. Missing new guides in edition 328 does not mean no future tours.
 Afisha repost is prepared for 13:26 local. Announcements activity has a
 three-day cadence and last posted November 3; November 4 is not eligible.
 Do not duplicate posts or collapse these independent schedules.
+
+
+## 2026-11-15: returned VK wall owner differs from requested wall
+
+- Incident registry: `inc_f5d0a79f3a7ffa6073158f3c`. Status: open; new-source acceptance and source-link repair are ongoing.
+- Live `wall.get(owner_id=-237389053)` returned post `3892` with `owner_id=-211429559`, and personal posts owned by `41501067` and `408521495`. The scanner constructed URLs using the requested wall, so `wall-237389053_3892` did not resolve; `wall-211429559_3892` resolved with matching text through ordinary service API readback.
+- This is a mechanical source identity error, not a semantic/event classification decision. Use the returned signed item owner when constructing source URLs; retain the requested owner only for older payloads without that field. No extra crawler, retry, state, source-date change or semantic bypass is needed.
+- Regression: the actual cross-community case and a personal-owner case fail before the fix; both pass afterwards, alongside unchanged group/user fallback controls. Eight focused AST/runtime contract tests pass. These tests intentionally avoid notebook bootstrap and external providers.
+- Evidence: retained `new-guide-source-post-links-check-20261115.log`, `new-guide-wall-owner-check-20261115.log` and `guide-recover-exact-1d1d54f10511-20261115.log` in `/home/dev/artifacts/events-bot-new/20261104T093210Z-guide-digest-vk-quality-20261104`.
+- Release and product verification remain outstanding at this entry: merge with successful required CI, preserve actual runtime ancestry, deliver the corrected source used to generate the next notebook, then verify canonical source links and occurrences through the ordinary new-registry scan. Do not publish the previously frozen old-only issue 346 or count source variants as independent tours.
