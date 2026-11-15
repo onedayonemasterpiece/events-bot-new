@@ -1,5 +1,7 @@
 # Changelog
 
+- VK: automatic outbox publication creates new announcements only; existing managed posts are preserved without API reads or edits. A new occurrence linked to an already published one receives its own initial post and delayed user calendar comment.
+
 - Fix related-only automatic scheduling to use vector completion as the build producer, and consume ready related projections before later vector updates. Keep explicit operator and website paths unchanged.
 
 - Related-only: обычная adoption сохраняет результат исходного расчёта после обновления приложения; проверки исходного run/input и целостности артефакта остаются, новые события не считаются покрытыми старым снимком.

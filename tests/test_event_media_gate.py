@@ -1325,7 +1325,7 @@ def test_vk_carousel_cover_composites_transparency_and_bounds_jpeg_decode(monkey
 @pytest.mark.parametrize(("event_id", "layout"), [(100, "grid"), (101, "carousel")])
 @pytest.mark.parametrize("primary_error", [503, 429, 401, "rpd", "rpm", "tpm"])
 @pytest.mark.asyncio
-async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, primary_error, tmp_path, monkeypatch):
+async def test_initial_vk_gallery_publish_has_no_automatic_edit_replay(event_id, layout, primary_error, tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
     import main
 
@@ -1486,39 +1486,16 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
     assert await main._run_due_jobs_once(
         db, None, only_event=event_id, allowed_tasks={JobTask.vk_sync},
     ) == 1
-    # Existing managed post has only its first image, even though its hash matches.
-    wall["attachments"].pop()
     async with db.get_session() as session:
         managed = await session.get(Event, event_id)
         assert managed.source_vk_post_url == "https://vk.com/wall-1_9"
-    assert not await main._event_has_existing_managed_vk_post(managed)
-    await main.job_sync_vk_source_post(event_id, db, None)
-    await main.job_sync_vk_source_post(event_id, db, None)
-    assert writes == ["wall.post", "wall.edit"]
-    assert sorted(uploads) == [(1, layout == "carousel")] * 2 + [(2, False)] * 2
-
-    # VK may omit the layout after accepting a gallery. Its absence alone
-    # must not trigger another upload or wall.edit for the completed publication.
-    post_url = managed.source_vk_post_url
-    wall.pop("primary_attachments_mode")
-    writes.clear()
-    uploads.clear()
-    await main.job_sync_vk_source_post(event_id, db, None)
-    assert not writes and not uploads
-
-    # VK explicitly reports the wrong layout on this legacy post.
+        initial_hash = managed.vk_source_hash
+    assert writes == ["wall.post"]
+    assert sorted(uploads) == [(1, layout == "carousel"), (2, False)]
+    # Later missing/wrong media and a source gallery replacement do not edit
+    # an already-created announcement or manufacture an applied hash.
+    wall["attachments"].pop()
     wall["primary_attachments_mode"] = "grid" if layout == "carousel" else "carousel"
-    assert not await main._event_has_existing_managed_vk_post(managed)
-    await main.job_sync_vk_source_post(event_id, db, None)
-    await main.job_sync_vk_source_post(event_id, db, None)
-    assert writes == ["wall.edit"] and sorted(uploads) == [(1, layout == "carousel"), (2, False)]
-    assert wall["primary_attachments_mode"] == layout
-
-    # A caller outside ordinary events leaves the format alone on a no-op.
-    assert not await main.edit_vk_post(post_url, wall["text"], attachments=["photo-1_1", "photo-1_2"])
-    assert writes == ["wall.edit"]
-
-    # The approved pair changes from [A, B] to [A, C]. Equal counts cannot prove delivery.
     async with db.get_session() as session:
         row = (await session.execute(select(EventPoster).where(
             EventPoster.event_id == event_id, EventPoster.catbox_url == second,
@@ -1527,23 +1504,13 @@ async def test_managed_vk_gallery_publish_and_edit_replay(event_id, layout, prim
         await session.flush()
         await event_media.sync_event_gallery_projection(session, event_id)
         await session.commit()
-    unavailable.add(replacement)
     writes.clear()
-    with pytest.raises(RuntimeError, match="vk_sync_partial_media_upload"):
-        await main.job_sync_vk_source_post(event_id, db, None)
-    async with db.get_session() as session:
-        assert (await session.get(Event, event_id)).vk_source_hash == managed.vk_source_hash
-    assert not writes and [a["photo"]["id"] for a in wall["attachments"]] == [1, 2]
-
-    unavailable.clear()
     uploads.clear()
     await main.job_sync_vk_source_post(event_id, db, None)
     await main.job_sync_vk_source_post(event_id, db, None)
-    assert writes == ["wall.edit"] and sorted(uploads) == [(1, layout == "carousel"), (3, False)]
-    assert [a["photo"]["id"] for a in wall["attachments"]] == [1, 3]
+    assert writes == [] and uploads == []
     async with db.get_session() as session:
-        updated = await session.get(Event, event_id)
-        assert updated.source_vk_post_url == post_url and updated.vk_source_hash != managed.vk_source_hash
+        assert (await session.get(Event, event_id)).vk_source_hash == initial_hash
     await db.engine.dispose()
 
 
@@ -2332,7 +2299,7 @@ def test_media_download_encodes_international_host_and_path(monkeypatch, authori
 
 
 @pytest.mark.asyncio
-async def test_reviewed_gallery_change_requeues_done_managed_vk_job(tmp_path, monkeypatch):
+async def test_reviewed_gallery_change_does_not_requeue_done_managed_vk_job(tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
     import main
 
@@ -2374,7 +2341,7 @@ async def test_reviewed_gallery_change_requeues_done_managed_vk_job(tmp_path, mo
         ))).scalar_one()
         assert len(ev.photo_urls) == 2
         assert ev.source_vk_post_url == "https://vk.com/wall-1_5"
-        assert job.status == main.JobStatus.pending
+        assert job.status == main.JobStatus.done
         job.status = main.JobStatus.done
         await session.commit()
         unchanged_at = job.updated_at

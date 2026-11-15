@@ -16255,7 +16255,9 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
             public_due = datetime.fromtimestamp(int(payload["publish_date"]) + 180, timezone.utc)
             if public_due > datetime.now(timezone.utc):
                 return public_due
-        event, _ = await _prepare_same_day_linked_publish_event(db, event)
+        publish_event, group = await _prepare_same_day_linked_publish_event(db, event)
+        if all(item.source_vk_post_url == event.source_vk_post_url for item in group):
+            event = publish_event
         await _recover_managed_vk_live_url(db, event, bot=bot)
         return await ensure_comment(db, event, event.source_vk_post_url, payload["relations"], bot, deferred=True)
     from vk_calendar_comments import ensure_calendar_comment
@@ -16280,7 +16282,9 @@ async def job_vk_calendar_comment(event_id: int, db: Database, bot: Bot, payload
                if int(item.get("postponed_id") or item.get("id") or 0) == postponed_id]
     if not matches:
         # Older VK responses omit postponed_id; retain the existing unique header match.
-        publish_event, _ = await _prepare_same_day_linked_publish_event(db, event)
+        publish_event, group = await _prepare_same_day_linked_publish_event(db, event)
+        if any(item.source_vk_post_url != event.source_vk_post_url for item in group):
+            publish_event = event
         dates = {str(line).strip() for line in build_vk_source_header(publish_event, None) if str(line).startswith("📅 ")}
         matches = []
         for item in items:
@@ -17317,7 +17321,7 @@ async def schedule_event_update_tasks(
         # keep `source_vk_post_url` pointing at the external source wall post;
         # those must still get a redactional post in `VK_EVENTS_GROUP_ID`, but
         # VK media/API failures must not block Telegram event announcements.
-        if refresh_existing_vk or not await _event_has_existing_managed_vk_post(ev):
+        if refresh_existing_vk or not _event_has_managed_vk_post(ev):
             results[JobTask.vk_sync] = vk_dep_key
             vk_enqueue_kwargs: dict[str, Any] = {
                 "requeue_done": refresh_existing_vk,
@@ -23840,6 +23844,9 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
     if getattr(ev, "lifecycle_status", "active") != "active" or getattr(ev, "silent", False):
         logging.info("job_sync_vk_source_post: skip hidden event_id=%s", event_id)
         return False
+    if _event_has_managed_vk_post(ev):
+        logging.info("vk.automatic_existing_post_skipped event_id=%s url=%s", event_id, ev.source_vk_post_url)
+        return False
     if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only" and ev.photo_urls and not ev.vk_source_hash:
         from vk_event_relations import graph_path
         path = graph_path(db)
@@ -23872,17 +23879,12 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
             event_id,
         )
         return False
-    ev, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
-    if ev.id != event_id and _event_has_managed_vk_post(ev):
-        await _copy_same_day_linked_vk_publication(
-            db, source_event=ev, covered_event_ids=_same_day_publish_group_ids(same_day_group),
-        )
-        logging.info("vk.linked_publication_reused event_id=%s anchor_id=%s", event_id, ev.id)
+    publish_event, same_day_group = await _prepare_same_day_linked_publish_event(db, ev)
+    if any(_event_has_managed_vk_post(item) for item in same_day_group):
+        same_day_group = [ev]
+    else:
+        ev = publish_event
     await _filter_vk_event_gallery_against_ledger(db, ev)
-    # A postponed VK item may receive a different id at the exact moment it is
-    # published.  Recover the unique live projection before hash/idempotency
-    # checks so a stale stored id cannot create a duplicate wall post.
-    recovered_live_url = await _recover_managed_vk_live_url(db, ev, bot=bot)
     # VK source post should track its own hash; `content_hash` is used by Telegraph (HTML).
     description_for_vk = (getattr(ev, "description", None) or "").strip()
     # Defense-in-depth (INC-2026-05-17): a leaked stringified provider SDK response
@@ -23915,61 +23917,6 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         ]
     )
     new_hash = content_hash(source_hash_input)
-    existing_vk_post_url = (ev.source_vk_post_url or "").strip()
-    managed_vk_post = False
-    if existing_vk_post_url:
-        ids = _vk_owner_and_post_id(existing_vk_post_url)
-        target_group_id = (VK_EVENTS_GROUP_ID or VK_AFISHA_GROUP_ID or "").lstrip("-")
-        managed_vk_post = bool(ids and str(abs(int(ids[0]))) == target_group_id)
-    if managed_vk_post and ev.vk_source_hash and ev.vk_source_hash != new_hash:
-        async with db.get_session() as session:
-            saved_selection = (await session.execute(select(JobOutbox.payload).where(
-                JobOutbox.event_id == event_id,
-                JobOutbox.coalesce_key.like("vk_related_comment:%"),
-            ).order_by(JobOutbox.id.desc()).limit(1))).scalar_one_or_none()
-        selections = [relations]
-        if isinstance(saved_selection, dict) and isinstance(saved_selection.get("relations"), dict):
-            selections.append(saved_selection["relations"])
-        if ev.vk_source_hash in {
-            content_hash(source_hash_input + "\n" + json.dumps(selection, ensure_ascii=False, sort_keys=True))
-            for selection in selections if any(selection.values())
-        }:
-            await _persist_vk_source_post_result(event_id, db, existing_vk_post_url, new_hash, bot=None)
-            ev.vk_source_hash = new_hash
-            logging.info("vk.source_hash_adopted event_id=%s provider_writes=0", event_id)
-    if getattr(ev, "vk_source_hash", None) == new_hash and managed_vk_post:
-        post_exists, media_complete = await _managed_vk_post_state(ev)
-        if post_exists and media_complete:
-            await ensure_comment(db, ev, existing_vk_post_url, relations, bot)
-            await _copy_same_day_linked_vk_publication(
-                db,
-                source_event=ev,
-                covered_event_ids=_same_day_publish_group_ids(same_day_group),
-                vk_url=existing_vk_post_url,
-                vk_source_hash=new_hash,
-            )
-            if recovered_live_url:
-                await _enqueue_static_site_after_vk_publication(
-                    db,
-                    same_day_group,
-                    vk_url=str(ev.source_vk_post_url or existing_vk_post_url),
-                )
-            return
-        if post_exists:
-            logging.warning(
-                "job_sync_vk_source_post: managed VK post media incomplete; editing event_id=%s url=%s expected_photos=%s",
-                event_id,
-                existing_vk_post_url,
-                len(list(getattr(ev, "photo_urls", None) or [])),
-            )
-        else:
-            logging.warning(
-                "job_sync_vk_source_post: managed VK post missing, republishing event_id=%s url=%s",
-                event_id,
-                existing_vk_post_url,
-            )
-            ev.source_vk_post_url = None
-            ev.vk_source_hash = None
     replace_existing_text = len(same_day_group) >= 3 and all(
         _event_is_feeding_series_item(item) for item in same_day_group
     )
@@ -23980,10 +23927,7 @@ async def job_sync_vk_source_post(event_id: int, db: Database, bot: Bot | None) 
         bot,
         ics_url=ev.ics_url,
         relations=relations,
-        # A managed post is our public projection, not a new independent
-        # source. Rewrites must replace its previous body; appending creates a
-        # visible history of mutually inconsistent LLM drafts.
-        append_text=not (replace_existing_text or managed_vk_post),
+        append_text=not replace_existing_text,
     )
     event_for_notice, partner_user = await _persist_vk_source_post_result(
         event_id,

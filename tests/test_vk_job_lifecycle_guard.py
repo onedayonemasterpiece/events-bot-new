@@ -73,7 +73,7 @@ async def test_missing_canonical_row_skips_before_provider_state(db, monkeypatch
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("existing_url", [None, "https://vk.com/wall-1_42"])
-async def test_active_current_date_and_managed_repair_still_sync(db, monkeypatch, existing_url):
+async def test_only_unpublished_active_current_event_syncs(db, monkeypatch, existing_url):
     event = await save_event(db, source_vk_post_url=existing_url)
     async with db.get_session() as session:
         current = await session.get(Event, event.id)
@@ -92,6 +92,10 @@ async def test_active_current_date_and_managed_repair_still_sync(db, monkeypatch
     persist = AsyncMock(return_value=(None, None))
     monkeypatch.setattr(main, "_persist_vk_source_post_result", persist)
     await main.job_sync_vk_source_post(event.id, db, None)
+    if existing_url:
+        sync.assert_not_awaited()
+        persist.assert_not_awaited()
+        return
     sync.assert_awaited_once()
     assert sync.call_args.args[0].date == "2099-12-21"
     assert sync.call_args.args[1] == "Current description"
@@ -100,40 +104,26 @@ async def test_active_current_date_and_managed_repair_still_sync(db, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_linked_existing_post_is_remembered_before_edit_failure(db, monkeypatch):
+async def test_linked_initial_failure_never_copies_existing_anchor_receipt(db, monkeypatch):
     import vk_event_relations
-    from models import JobOutbox, JobTask
-    from sqlmodel import select
     monkeypatch.setattr(main, 'VK_EVENTS_GROUP_ID', '1')
     monkeypatch.setitem(main.vk_group_blocked, 'wall.post', 0.0)
     anchor = await save_event(db, source_vk_post_url='https://vk.com/wall-1_42',
                               vk_source_hash='existing-source-hash')
     member = await save_event(db, linked_event_ids=[anchor.id])
-    fresh = await save_event(db)
     monkeypatch.setattr(main, '_should_skip_ticket_giveaway_publication', AsyncMock(return_value=False))
-    monkeypatch.setattr(main, '_recover_managed_vk_live_url', AsyncMock(return_value=False))
     monkeypatch.setattr(vk_event_relations, 'presentation', AsyncMock(return_value={'dates': [], 'related': []}))
-    sync = AsyncMock(side_effect=RuntimeError('captcha_wait:test'))
+    sync = AsyncMock(side_effect=RuntimeError('initial failed'))
     monkeypatch.setattr(main, 'sync_vk_source_post', sync)
-    with pytest.raises(RuntimeError, match='captcha_wait'):
+    with pytest.raises(RuntimeError, match='initial failed'):
         await main.job_sync_vk_source_post(member.id, db, None)
-    assert sync.call_args.args[0].id == anchor.id
+    assert sync.call_args.args[0].id == member.id
     async with db.get_session() as session:
         stored = await session.get(Event, member.id)
-        assert stored.source_vk_post_url == anchor.source_vk_post_url
-        assert stored.vk_source_hash == anchor.vk_source_hash
-        jobs = [JobOutbox(event_id=member.id, task=JobTask.vk_sync),
-                JobOutbox(event_id=fresh.id, task=JobTask.vk_calendar_comment),
-                JobOutbox(event_id=fresh.id, task=JobTask.vk_sync)]
-        session.add_all(jobs)
-        await session.commit()
-    await main.vk_captcha_pause_outbox(db, marker='captcha_wait:linked')
-    await main._resume_vk_captcha_outbox(db, 'captcha_wait:linked')
-    async with db.get_session() as session:
-        rows = (await session.execute(select(JobOutbox).order_by(JobOutbox.next_run_at))).scalars().all()
-    assert [(r.event_id, r.task) for r in rows] == [
-        (fresh.id, JobTask.vk_calendar_comment), (fresh.id, JobTask.vk_sync), (member.id, JobTask.vk_sync)]
-    assert (rows[1].next_run_at - rows[0].next_run_at).total_seconds() == main.VK_CAPTCHA_RESUME_SPACING_SEC
+        assert stored.source_vk_post_url is None and stored.vk_source_hash is None
+        old = await session.get(Event, anchor.id)
+        assert old.source_vk_post_url == anchor.source_vk_post_url
+        assert old.vk_source_hash == 'existing-source-hash'
 
 
 @pytest.mark.asyncio
@@ -188,7 +178,7 @@ async def test_initial_related_wait_keeps_same_outbox_pending_then_completes(db,
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("legacy", [None, "current", "snapshot"])
-async def test_graph_changes_do_not_rewrite_initial_complete_post(db, monkeypatch, legacy):
+async def test_existing_post_does_not_rewrite_or_adopt_hash_for_graph_or_source_changes(db, monkeypatch, legacy):
     import json
     import vk_event_relations as relations
 
@@ -236,21 +226,23 @@ async def test_graph_changes_do_not_rewrite_initial_complete_post(db, monkeypatc
     # A new graph may add a second card or change every peer; neither is a source edit.
     relations.graph_path(db).write_text(json.dumps({'related': {str(event.id): {'pure_related': [3, 4]}}}))
     presentation.return_value = selection if legacy == 'current' else {'dates': [{'date': '2099-12-22'}], 'related': [{'id': 3}, {'id': 4}]}
+    async with db.get_session() as session:
+        applied_hash = (await session.get(Event, event.id)).vk_source_hash
     await main.job_sync_vk_source_post(event.id, db, None)
     assert sync.await_count == 1
-    assert comment.await_count == 2
-    state.assert_awaited_once()
-    assert state.call_args.kwargs == {}
+    assert comment.await_count == 1
+    state.assert_not_awaited()
     async with db.get_session() as session:
         current = await session.get(Event, event.id)
-        assert current.vk_source_hash == initial_hash
+        assert current.vk_source_hash == applied_hash
         current.description = 'Corrected source fact'
         session.add(current)
         await session.commit()
-    # A real canonical source correction retains the existing update path.
+    # Canonical facts may change without automatically rewriting a created announcement.
     await main.job_sync_vk_source_post(event.id, db, None)
-    assert sync.await_count == 2
-    assert sync.call_args.args[1] == 'Corrected source fact'
+    assert sync.await_count == 1
+    async with db.get_session() as session:
+        assert (await session.get(Event, event.id)).vk_source_hash == applied_hash
 
 
 @pytest.mark.asyncio
@@ -305,3 +297,129 @@ async def test_verified_empty_anchor_can_continue_initial_publication(db, monkey
     monkeypatch.setattr(main, '_event_has_ended_before_today', reached_publication)
     with pytest.raises(AssertionError, match='verified empty anchor passed the wait'):
         await main.job_sync_vk_source_post(event.id, db, None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["source", "gallery", "legacy"])
+async def test_existing_managed_automatic_job_makes_zero_vk_calls(db, monkeypatch, change):
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    event = await save_event(db, source_vk_post_url="https://vk.com/wall-1_42",
+                             vk_source_hash=None if change == "legacy" else "previous-success",
+                             photo_urls=["https://cdn.example/a.jpg", "https://cdn.example/b.jpg"])
+    async with db.get_session() as session:
+        row = await session.get(Event, event.id)
+        if change == "source":
+            row.description = "A genuinely changed canonical source fact"
+        elif change == "gallery":
+            row.photo_urls.append("https://cdn.example/c.jpg")
+        session.add(row)
+        session.add(main.JobOutbox(event_id=event.id, task=main.JobTask.vk_sync))
+        await session.commit()
+    calls = forbidden_calls(monkeypatch)
+    api = AsyncMock(side_effect=AssertionError("existing announcements must not call VK"))
+    monkeypatch.setattr(main, "_vk_api", api)
+    monkeypatch.setattr(main, "vk_api", api)
+    assert await main._run_due_jobs_once(db, None, only_event=event.id,
+                                        allowed_tasks={main.JobTask.vk_sync}) == 1
+    for call in calls + [api]:
+        call.assert_not_called()
+    async with db.get_session() as session:
+        row = await session.get(Event, event.id)
+        assert row.source_vk_post_url == "https://vk.com/wall-1_42"
+        assert row.vk_source_hash == event.vk_source_hash
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("managed_peer", [None, "18:00", "20:00"])
+async def test_linked_initial_groups_only_when_every_member_is_unpublished(db, monkeypatch, managed_peer):
+    import vk_event_relations
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setitem(main.vk_group_blocked, "wall.post", 0.0)
+    peer = await save_event(db, source_vk_post_url="https://vk.com/wall-1_100" if managed_peer else None,
+                           vk_source_hash="old-success" if managed_peer else None)
+    member = await save_event(db, linked_event_ids=[peer.id], photo_urls=["source-a", "source-b"])
+    async with db.get_session() as session:
+        old = await session.get(Event, peer.id)
+        old.time = managed_peer or "18:00"
+        old.linked_event_ids = [member.id]
+        session.add(old)
+        await session.commit()
+    selection = {"dates": [], "related": []}
+    monkeypatch.setattr(vk_event_relations, "presentation", AsyncMock(return_value=selection))
+    monkeypatch.setattr(vk_event_relations, "ensure_comment", AsyncMock())
+    monkeypatch.setattr(main, "_enqueue_static_site_after_vk_publication", AsyncMock())
+    sync = AsyncMock(return_value="https://vk.com/wall-1_200")
+    monkeypatch.setattr(main, "sync_vk_source_post", sync)
+    await main.job_sync_vk_source_post(member.id, db, None)
+    published = sync.call_args.args[0]
+    assert published.id == (member.id if managed_peer else peer.id)
+    assert published.time == ("19:00" if managed_peer else "18:00 и 19:00")
+    async with db.get_session() as session:
+        current = await session.get(Event, member.id)
+        old = await session.get(Event, peer.id)
+        assert current.source_vk_post_url == "https://vk.com/wall-1_200"
+        assert old.source_vk_post_url == ("https://vk.com/wall-1_100" if managed_peer else current.source_vk_post_url)
+        if managed_peer:
+            assert old.vk_source_hash == "old-success"
+
+
+@pytest.mark.asyncio
+async def test_initial_two_sources_and_both_cards_schedule_delayed_calendar(db, monkeypatch):
+    import vk_event_relations
+    from datetime import datetime, timedelta, timezone
+    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", "default")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "fixture")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setitem(main.vk_group_blocked, "wall.post", 0.0)
+    monkeypatch.setattr(main, "_vk_user_token", lambda: "fixture")
+    monkeypatch.setattr(main, "choose_vk_actor", lambda *_: [main.VkActor("user", "fixture", "user")])
+    photos = ["https://cdn.example/source-a.jpg", "https://cdn.example/source-b.jpg"]
+    event = await save_event(db, photo_urls=photos)
+    slot = int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp())
+    monkeypatch.setattr(main, "_reserve_vk_postponed_publish_date", AsyncMock(return_value=slot))
+    monkeypatch.setattr(main, "_resolve_vk_postponed_wall_id_any_actor", AsyncMock(return_value=42))
+    selection = {"dates": [{"id": 2, "date": "21.12", "time": "20:00", "url": "https://vk.com/wall-1_2"}],
+                 "related": [{"id": 3, "date": "22.12", "time": "19:00", "title": "Another event",
+                              "place": "Hall", "url": "https://vk.com/wall-1_3"}]}
+    monkeypatch.setattr(vk_event_relations, "presentation", AsyncMock(return_value=selection))
+    monkeypatch.setattr(vk_event_relations, "ensure_comment", AsyncMock())
+    card_bytes = [b"other dates card", b"similar events card"]
+    monkeypatch.setattr(vk_event_relations, "cards", AsyncMock(return_value=card_bytes))
+    gallery = AsyncMock(return_value=(["photo-1_1", "photo-1_2", "photo-1_3", "photo-1_4"], "grid"))
+    monkeypatch.setattr(main, "_upload_vk_event_gallery", gallery)
+    calls = []
+    async def api(method, params, *args, **kwargs):
+        calls.append(method)
+        assert method == "wall.post"
+        assert params["attachments"] == "photo-1_1,photo-1_2,photo-1_3,photo-1_4"
+        assert params["publish_date"] == slot
+        return {"response": {"post_id": 42}}
+    monkeypatch.setattr(main, "_vk_api", api)
+    monkeypatch.setattr(main, "_enqueue_static_site_after_vk_publication", AsyncMock())
+    await main.job_sync_vk_source_post(event.id, db, None)
+    assert calls == ["wall.post"]
+    assert gallery.await_args.args[1] == photos
+    assert gallery.await_args.kwargs["relation_cards"] == card_bytes
+    async with db.get_session() as session:
+        current = await session.get(Event, event.id)
+        assert current.source_vk_post_url == "https://vk.com/wall-1_42" and current.vk_source_hash
+        jobs = list((await session.execute(main.select(main.JobOutbox).where(
+            main.JobOutbox.task == main.JobTask.vk_calendar_comment))).scalars())
+        assert len(jobs) == 1 and jobs[0].payload["publish_date"] == slot
+        assert 300 <= jobs[0].next_run_at.replace(tzinfo=timezone.utc).timestamp() - slot <= 900
+
+
+@pytest.mark.asyncio
+async def test_normal_scheduler_does_not_probe_or_requeue_managed_post(db, monkeypatch):
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "1")
+    event = await save_event(db, source_vk_post_url="https://vk.com/wall-1_42",
+                             photo_urls=["https://cdn.example/new.jpg"])
+    probe = AsyncMock(side_effect=AssertionError("automatic scheduling must not probe existing media"))
+    monkeypatch.setattr(main, "_event_has_existing_managed_vk_post", probe)
+    enqueue = AsyncMock(return_value="queued")
+    monkeypatch.setattr(main, "enqueue_job", enqueue)
+    await main.schedule_event_update_tasks(db, event)
+    probe.assert_not_awaited()
+    assert all(call.args[2] != main.JobTask.vk_sync for call in enqueue.await_args_list)

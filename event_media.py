@@ -2168,7 +2168,7 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
             async with db.get_session() as session:
                 fresh = await session.get(Event, int(event_id))
             if fresh is not None:
-                await schedule_event_update_tasks(db, fresh, refresh_existing_vk=True)
+                await schedule_event_update_tasks(db, fresh)
         except Exception:
             logger.warning(
                 "event_media: failed to schedule semantic projection rebuild event_id=%s",
@@ -2606,7 +2606,7 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         from main import schedule_event_update_tasks
         async with db.get_session() as session:
             fresh = await session.get(Event, int(event_id))
-        await schedule_event_update_tasks(db, fresh, refresh_existing_vk=True)
+        await schedule_event_update_tasks(db, fresh)
     return changed
 
 

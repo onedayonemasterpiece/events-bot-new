@@ -599,3 +599,22 @@ handler derives its existing deterministic URL-based delay, while the related
 handler retains its existing minimum guard. Normal producer randomized due
 remains unchanged. This source fix does not prove a new VK publication or
 resolve CAPTCHA; parent owns deployment and ordinary product verification.
+
+
+### 2026-11-15: remove automatic writes to already created announcements
+
+Genuine wall.edit CAPTCHA on posts13912/job93339 and14090/job154752 again
+paused an unpublished initial announcement. Media fanout explicitly refreshed
+existing VK jobs, and the consumer still repaired or rewrote managed posts.
+The automatic consumer now skips a locally known managed receipt before any
+external calls; the default scheduler uses that same local identity. Removed
+the obsolete automatic edit/adoption/repair block and both media refresh flags.
+Manual edit actions and canonical source/gallery ingestion remain available.
+
+A new event with an already managed same-day peer publishes individually,
+without copying its peer receipt. Entirely unpublished groups still publish
+together. Calendar and related public-URL resolution use a combined header only
+for members sharing the same saved publication URL. Delayed user ICS remains
+independent of automatic post updates. No state, flag, queue, retry or repair
+mechanism was added. Production changes are net negative; deployment and actual
+ordinary publication verification remain the parent operator's responsibility.
