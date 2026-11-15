@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Guide source startup seeding preserves runtime flags, including resolved VK IDs, while explicit seed fields retain precedence.
+
 - Merge identity decisions use primary source/OCR citations rather than generated summaries and discard the whole decision when any cited evidence is unsupported.
 
 - Guide visual digests choose the source-grounded canonical variant; card text fits before portraits, unknown location sentinels stay hidden, and four rows clear the footer.

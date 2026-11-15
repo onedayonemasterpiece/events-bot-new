@@ -113,11 +113,13 @@ async def seed_guide_sources(
             metrics["profiles_inserted"] += 1
 
         cur = await conn.execute(
-            "SELECT id FROM guide_source WHERE platform=? AND username=?",
+            "SELECT id, flags_json FROM guide_source WHERE platform=? AND username=?",
             (spec.platform, spec.username),
         )
         existing = await cur.fetchone()
-        flags_json = _json_dumps(spec.flags or {})
+        flags = json.loads(existing[1] or "{}") if existing else {}
+        flags.update(spec.flags or {})
+        flags_json = _json_dumps(flags)
         if existing:
             await conn.execute(
                 """
