@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:related-cold-anchor-budget-20261115
+    image: runcoveer/events:vk-initial-dependency-priority-20261115
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
