@@ -458,3 +458,55 @@ def test_until_tile_has_no_weekday_or_time_but_normal_tile_keeps_them(monkeypatc
                           'date_prefix': 'до', 'daily_hours': '12:00–20:00'},
                     174, PALETTES[0].accents[0], PALETTES[0])
     assert rendered == ['МАЯ', 'до', '30', '12:00–20:00']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('slots,has_dates,has_related,cta', [
+    (2, True, True, True), (1, True, True, False),
+    (2, True, False, False), (2, False, True, False), (0, True, True, False),
+])
+async def test_other_dates_points_to_related_only_when_next_card_is_uploaded(monkeypatch, slots, has_dates, has_related, cta):
+    from PIL import ImageDraw
+    texts = []
+    original = ImageDraw.ImageDraw.text
+    def capture(self, xy, text, *args, **kwargs):
+        texts.append(text)
+        return original(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', capture)
+    row = {'date': '20.11', 'date_iso': '2099-11-20', 'time': '19:00',
+           'title': 'Театральная сказка', 'event_type': 'спектакль', 'place': 'Театр'}
+    result = await relations.cards({'dates': [row] if has_dates else [],
+                                    'related': [row] if has_related else []}, slots)
+    assert ('Похожие события →' in texts) == cta
+    assert len(result) == min(slots, int(has_dates) + int(has_related))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('other_programmes,expected', [(4, [2, 6, 7, 8, 9]), (1, [2, 6, 5, 3, 4]), (0, [2, 5, 3, 4])])
+async def test_related_selection_prefers_distinct_canonical_programmes_then_fills_dates(tmp_path, monkeypatch, other_programmes, expected):
+    db = main.Database(str(tmp_path / 'programme-selection.sqlite'))
+    await db.init()
+    async def public(method, params, *args, **kwargs):
+        assert method == 'wall.getById'
+        return {'response': [{'owner_id': -1, 'id': int(pair.split('_')[1]), 'post_type': 'post'}
+                             for pair in params['posts'].split(',')]}
+    monkeypatch.setattr(main, '_vk_api', public)
+    try:
+        async with db.get_session() as session:
+            for i in range(1, 6 + other_programmes):
+                # The same programme has variant titles and partial canonical peer lists.
+                links = {2: [3], 3: [2, 4], 4: [3, 5], 5: [4]}.get(i, [])
+                session.add(main.Event(id=i, title=f'Разное название {i}', description='', source_text='',
+                    date=f'2099-01-{i:02}', time='19:00', location_name='Зал',
+                    source_vk_post_url=f'https://vk.com/wall-1_{i}', linked_event_ids=links,
+                    photo_urls=['original']))
+            await session.commit()
+            event = await session.get(main.Event, 1)
+        relations.graph_path(db).write_text(json.dumps({'related': {'1': {
+            'pure_related': [2, 5, 3, 4] + list(range(6, 6 + other_programmes))}}}))
+        data = await relations.presentation(db, event)
+        assert [row['id'] for row in data['related']] == expected
+        assert data['dates'] == []
+        assert all(row['title'] in relations.append_list('body', data) for row in data['related'])
+    finally:
+        await db.close()

@@ -42,6 +42,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- VK: карточка других дат указывает на следующую карточку похожих; разные программы получают приоритет над повторными датами одной программы, с заполнением оставшихся мест при коротком выборе.
+
 ### Changed
 - Source-programme batch adjudication заменяет fuzzy title/venue linking:
   один дополнительный shared LLM request для children одного импорта, bounded
