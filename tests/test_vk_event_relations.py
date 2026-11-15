@@ -113,6 +113,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
                     date='2099-01-01..2099-01-03' if i == 4 else '2099-01-01',
                     end_date='2099-01-03' if i == 4 else None, time='00:00' if i == 4 else '19:00',
                     time_is_default=i == 4, location_name='Кафедральный собор',
+                    short_description='Другое краткое описание', search_digest='Готовое описание ежедневного анонса',
                     source_vk_post_url=f'https://vk.com/wall-1_{i}', is_free=i == 2,
                     linked_event_ids=[3] if i == 1 else [], photo_urls=['poster-a', 'poster-b']))
             await session.commit()
@@ -131,6 +132,7 @@ async def test_shared_graph_keeps_original_gallery_and_semantic_only(tmp_path, m
         assert data['related'][0]['medallions'][0].endswith('kant-island.png')
         assert data['related'][0]['is_free']
         assert data['related'][0]['event_type'] == 'концерт'
+        assert data['related'][0]['description'] == 'Готовое описание ежедневного анонса'
         cards = await relations.cards(data, 8)
         assert len(cards) == 2
         assert Image.open(BytesIO(cards[1])).size == (1080, 1350)
@@ -510,3 +512,27 @@ async def test_related_selection_prefers_distinct_canonical_programmes_then_fill
         assert all(row['title'] in relations.append_list('body', data) for row in data['related'])
     finally:
         await db.close()
+
+
+def test_five_related_rows_keep_full_search_digest_below_medallions(monkeypatch):
+    from PIL import ImageDraw
+    from guide_excursions.visual_digest import PALETTES
+    description = 'Великолепный вечер органной музыки объединит шедевры Иоганна Себастьяна Баха, произведения европейских классиков, современные сочинения и знаменитые киносаундтреки.'
+    drawn = []
+    original = ImageDraw.ImageDraw.text
+    def text(draw, xy, value, *args, **kwargs):
+        if kwargs.get('fill') == PALETTES[0].sub:
+            drawn.append((xy, value))
+        return original(draw, xy, value, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', text)
+    row = dict(date='01.01', date_iso='2099-01-01', time='19:00',
+        title='Концерт «Два короля: Бах и орган»', event_type='концерт',
+        place='Филармония им. Светланова', description=description,
+        medallions=['site/public/assets/badges/free-listing-medallion.png'], is_free=True)
+    # Medallions occupy both right-hand slots; the digest must fit below them.
+    payload = relations.render_card([row] * 5)
+    assert Image.open(BytesIO(payload)).size == (1080, 1350)
+    assert len(drawn) == 15
+    for offset in range(0, len(drawn), 3):
+        assert ' '.join(value for _, value in drawn[offset:offset + 3]) == description
+        assert all(124 <= xy[1] and xy[1] + 19 <= 184 for xy, _ in drawn[offset:offset + 3])

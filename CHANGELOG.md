@@ -1,5 +1,7 @@
 # Changelog
 
+- VK related cards use the ready search_digest in neutral secondary text; descriptions use the space below venue medallions and rows share the available card height.
+
 - Related-only: missing historical fingerprints are not source changes. Pending first posts still request their own anchors; failed or capped known changes retain their previous fingerprint until successful verification.
 
 - Related cache drops departed events, peer links and unreachable verifier entries without treating missing retrieval data as verified empty.

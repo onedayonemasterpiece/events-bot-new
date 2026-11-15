@@ -87,7 +87,7 @@ async def presentation(db, event):
                 'time': '' if row.time_is_default else (row.time or ''), 'title': row.title,
                 'place': row.location_name or '', 'event_type': row.event_type or '',
                 'url': row.source_vk_post_url or '',
-                'description': row.short_description or row.search_digest or '', 'daily_hours': daily_hours,
+                'description': row.search_digest or '', 'daily_hours': daily_hours,
                 'medallions': [str(Path(m['asset_path']).relative_to(ROOT))
                                for m in resolve_event_graphic_medallions(row, limit=2)],
                 'is_free': bool(row.is_free)}
@@ -129,15 +129,16 @@ def render_card(items, *, schedule=False, more_related=False):
     wordmark.thumbnail((230, 45))
     image.alpha_composite(wordmark, (82, 128))
     draw.text((48, 235), 'Другие даты' if schedule else 'Похожие события', font=font(64, True), fill=palette.text)
+    height = min(230, (962 - 8 * (len(items) - 1)) // max(1, len(items)))
     for i, row in enumerate(items):
         accent = palette.accents[i % len(palette.accents)]
-        layer = Image.new('RGBA', (996, 174))
+        layer = Image.new('RGBA', (996, height))
         rd = ImageDraw.Draw(layer)
-        rd.rounded_rectangle((0, 0, 995, 173), 30, fill=palette.card, outline=palette.card_stroke)
-        rd.rounded_rectangle((0, 0, 10, 173), 5, fill=accent)
+        rd.rounded_rectangle((0, 0, 995, height - 1), 30, fill=palette.card, outline=palette.card_stroke)
+        rd.rounded_rectangle((0, 0, 10, height - 1), 5, fill=accent)
         until = not schedule and row.get('end_date_iso', '') > row.get('date_iso', '')
         date_iso = row['end_date_iso'] if until else row.get('date_iso', '')
-        _draw_date_tile(rd, {'date': date_iso, 'time': row['time'], 'date_prefix': 'до' if until else '', 'daily_hours': row.get('daily_hours', '')}, 174, accent, palette)
+        _draw_date_tile(rd, {'date': date_iso, 'time': row['time'], 'date_prefix': 'до' if until else '', 'daily_hours': row.get('daily_hours', '')}, height, accent, palette)
         medallions = list(row.get('medallions', []))
         if row.get('is_free'):
             medallions = medallions[:1] + ['site/public/assets/badges/free-listing-medallion.png']
@@ -145,14 +146,14 @@ def render_card(items, *, schedule=False, more_related=False):
         for index, asset in enumerate(medallions):
             medal = Image.open(ROOT / asset).convert('RGBA')
             medal.thumbnail((100, 100), Image.Resampling.LANCZOS)
-            layer.alpha_composite(medal, (974 - (len(medallions) - index) * 108, 36))
+            layer.alpha_composite(medal, (974 - (len(medallions) - index) * 108, 20))
         width = 738 - len(medallions) * 108 - (20 if medallions else 0)
         title = _strip_emoji(row['title']).strip()
-        y = 20
+        y = 12
         for line in _wrap_by_width(rd, title, font(32, True), width, 2):
             rd.text((238, y), line, font=font(32, True), fill=palette.text)
             y += 34
-        y += 8
+        y += 4
         details = ' · '.join(value for value in (row.get('event_type', '').strip().capitalize(),
                                                 row.get('place', '').strip()) if value)
         if '–' in row['date'] and not until:
@@ -161,18 +162,16 @@ def render_card(items, *, schedule=False, more_related=False):
             rd.text((238, y), line, font=font(23), fill=palette.route)
             y += 26
         description = ' '.join(_strip_emoji(row.get('description', '')).split())
-        description_font = font(21, regular=True)
-        lines = _wrap_by_width(rd, description, description_font, width, max(1, (154 - y - 8) // 23))
+        description_font = font(19, regular=True)
+        y = max(y + 6, 124 if medallions else y + 6)
+        lines = _wrap_by_width(rd, description, description_font, 738, max(1, (height - y - 2) // 20))
         if (description and ' '.join(lines) == description
-                and y + 8 + len(lines) * 23 <= 154
-                and all(rd.textlength(line, font=description_font) <= width for line in lines)):
+                and y + len(lines) * 20 <= height - 2
+                and all(rd.textlength(line, font=description_font) <= 738 for line in lines)):
             for line in lines:
-                rd.text((238, y + 8), line, font=description_font, fill=palette.sub)
-                y += 23
-        height = 148 if len(items) > 5 else 174
-        if height != 174:
-            layer = layer.resize((996, height), Image.Resampling.LANCZOS)
-        image.alpha_composite(layer, (42, 314 + i * (height + 12)))
+                rd.text((238, y), line, font=description_font, fill=palette.sub)
+                y += 20
+        image.alpha_composite(layer, (42, 314 + i * (height + 8)))
     if not schedule or more_related:
         draw.text((58, 1290), 'Похожие события →' if schedule else 'Ссылки на события — в комментарии ↓',
                   font=font(30, True), fill=palette.text)
