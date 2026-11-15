@@ -307,7 +307,7 @@ def _safe_json_object(value: Any) -> dict[str, Any]:
 
 def _plain(value: Any) -> str:
     text = collapse_ws("" if value is None else str(value))
-    if text.lower() in {"не указано", "not specified", "none", "null", "unknown", "n/a"}:
+    if text.lower() in {"не указано", "not specified", "not_specified", "none", "null", "unknown", "n/a"}:
         return ""
     return text
 
@@ -978,7 +978,7 @@ def render_visual_digest_card(
     draw.line((58, 296, 1022, 296), fill=_rgba(palette.divider, 180), width=2)
 
     expanded = len(page_rows) <= 4
-    row_h = 236 if expanded else 174
+    row_h = 228 if expanded else 174
     gap = 18 if expanded else 12
     if not expanded:
         row_h = 180
@@ -1004,20 +1004,20 @@ def render_visual_digest_card(
         _draw_date_tile(rd, row, row_h, accent, palette)
         tx = 238
         ty = 42 if expanded else 28
-        title_lines = _wrap_by_width(rd, _plain(row.get("canonical_title")) or "Экскурсия", title_font, 555, 2)
+        title_lines = _wrap_by_width(rd, _plain(row.get("canonical_title")) or "Экскурсия", title_font, 515, 2)
         for line in title_lines:
             rd.text((tx, ty), line, font=title_font, fill=_hex(palette.text))
             ty += 40 if expanded else 34
         guide = _source_name(row)
         if guide:
-            rd.text((tx, ty + 2), _fit(guide, 48 if expanded else 44), font=guide_font, fill=_hex(palette.guide))
+            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, guide, guide_font, 515, 1)), font=guide_font, fill=_hex(palette.guide))
             ty += 34 if expanded else 27
         place = _place_line(row)
-        rd.text((tx, ty + 2), _fit(place, 58 if expanded else 52), font=route_font, fill=_hex(palette.route))
+        rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, place, route_font, 515, 1)), font=route_font, fill=_hex(palette.route))
         ty += 34 if expanded else 26
         focus = _focus_line(row)
         if focus:
-            rd.text((tx, ty + 2), _fit(focus, 54 if expanded else 44), font=focus_font, fill=_hex(palette.focus))
+            rd.text((tx, ty + 2), "".join(_wrap_by_width(rd, focus, focus_font, 515, 1)), font=focus_font, fill=_hex(palette.focus))
         seats = _seats_text(row)
         if seats:
             _draw_chip(rd, seats, 654, row_h - (54 if expanded else 52), accent)

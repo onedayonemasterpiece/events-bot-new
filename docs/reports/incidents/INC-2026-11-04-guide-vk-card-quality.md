@@ -151,3 +151,12 @@ Retained files: guide-745-753-dedup-probe-20261115.log,
 guide-alias-dedup-shadow-20261115.log and guide-dedup-pro-review-20261115.log
 in the existing incident artifact directory. Release and final VK
 publication are not yet performed at this entry; preview 347 is unpublished.
+
+
+### 15 November: canonical variant and four-row rendering acceptance
+
+PR 995 was delivered as main 97f3a9988, image sha256:96d348e4c715179bcda6792dadf7c277323f20b658f6e689b54c75aa8dc53360, with all four CI, 4499-file proof, isolated preflight and live readiness. Preview 348 merged the alias pair but selected stale 753 instead of 745. Its city came from the Dostoevsky biography, organisation names replaced the actual guide, and booking_url retained a wrong-owner source fallback absent from the text. Normal source user-token API reads do return personal post 41501067_3447; the initial service-token omission was not proof of an inaccessible wall. The source explicitly names Olga Rubtsova and a Google registration form.
+
+The existing pair judge now receives city and source URL and chooses canonical_side by facts grounded in the specific outing's full text, rather than favouring extra details borrowed from narrative context. No manual Event/occurrence edit or second selection mechanism is used. The updated context contract fails before and passes after adding these missing fields. Read-only semantic acceptance uses the actual pair plus the different-route negative control; artifacts are guide-canonical-grounding-shadow-20261115.log in the retained incident directory. External consultant review remains unavailable for the previously recorded provider reasons; these probes are not expert review.
+
+Visual inspection of preview 348 also exposed not_specified in place text, long organiser text behind the portrait, and fourth-row/footer overlap. Extend the existing empty-value sanitizer, apply the existing pixel wrapper to row text with room before portraits, and reduce expanded row height from 236 to 228. No new renderer, fallback, persisted state or retry. Preview 348 was not published. A fresh normal builder and actual VK readback remain required after delivery.
