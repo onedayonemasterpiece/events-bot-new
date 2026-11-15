@@ -49,7 +49,7 @@ from location_reference import (
     normalize_venue_key,
 )
 from markup import looks_like_genai_response_dump, unescape_public_text_escapes
-from llm_source_grounding import claim_is_grounded
+from llm_source_grounding import claim_is_grounded, source_contains_quote
 from models import (
     Event,
     EventIdentityDecisionLog,
@@ -2541,6 +2541,15 @@ MERGE_RESPONSE_FORMAT = {
                 "ticket_price_max": {"type": ["integer", "null"]},
                 "ticket_status": {"type": ["string", "null"]},
                 "age_decision": AGE_DECISION_JSON_SCHEMA,
+                "event_type_decision": {
+                    "type": ["object", "null"],
+                    "properties": {
+                        "value": {"type": "string"},
+                        "evidence_quote": {"type": "string"},
+                    },
+                    "required": ["value", "evidence_quote"],
+                    "additionalProperties": False,
+                },
                 "added_facts": {
                     "type": "array",
                     "items": {
@@ -14071,6 +14080,7 @@ async def _llm_merge_event(
     payload = {
         "event_before": {
             "title": event.title,
+            "event_type": event.event_type,
             "description": _clip(event.description, SMART_UPDATE_MERGE_EVENT_DESC_MAX_CHARS),
             "facts": [
                 _clip(str(f), 220) for f in (facts_before or []) if isinstance(f, str) and f.strip()
@@ -14092,6 +14102,7 @@ async def _llm_merge_event(
         },
         "candidate": {
             "title": candidate.title,
+            "event_type": candidate.event_type,
             "raw_excerpt": _clip(_strip_promo_lines(candidate.raw_excerpt) or candidate.raw_excerpt, 1200),
             "text": _clip(
                 _strip_promo_lines(candidate.source_text) or candidate.source_text,
@@ -14146,6 +14157,13 @@ async def _llm_merge_event(
         "Какую версию оставить в описании — решай по уровню доверия источников: "
         "если `candidate.trust_priority` выше, можно заменить старую версию на новую, "
         "если ниже или равен — сохраняй старую версию. "
+        "Поля event_before.event_type и candidate.event_type — прежние результаты классификации, не цитаты источников. "
+        "В event_type_decision верни русский тип события и дословную evidence_quote из candidate.text или candidate.poster_texts, "
+        "только если источник явно подтверждает формат именно выбранного события; иначе null. "
+        "Для event_type_decision не цитируй raw_excerpt: это пересказ, а не первоисточник; также не цитируй собственный description или пересказ фактов. "
+        "Прямое описание формата источником может исправить прежний ошибочно выведенный тип даже при равном доверии. "
+        "Это не разрешает менять тип по одной метке кандидата или его новизне; реальные противоречия между утверждениями "
+        "самих источников разрешай по прежнему правилу доверия. Замены отражай в conflict_facts. "
         "Любой конфликт обязательно опиши в `conflict_facts` с указанием, какая версия выбрана "
         "(например `Старый факт -> Новый факт (выбран: candidate)` или `(выбран: event_before)`). "
         "Обязательно старайся добавлять конкретные новые детали из кандидата, которых нет в текущем описании (имена/участники/уникальные детали/программа). "
@@ -14191,7 +14209,7 @@ async def _llm_merge_event(
         "Также верни `search_digest`: 1 предложение, 120–220 символов (макс 260), без эмодзи/хэштегов/списков; "
         "не указывай дату/время/адрес/город/цены/ссылки; не начинай с дословного повторения title. "
         "Верни JSON с полями title (если нужно улучшить), description (обязательно), search_digest, "
-        "ticket_link, ticket_price_min/max, ticket_status, added_facts, duplicate_facts, conflict_facts, skipped_conflicts. "
+        "ticket_link, ticket_price_min/max, ticket_status, event_type_decision, added_facts, duplicate_facts, conflict_facts, skipped_conflicts. "
         "added_facts должен содержать список КОНКРЕТНЫХ НОВЫХ фактов (короткими пунктами), которых НЕ было в event_before.facts. "
         "duplicate_facts должен содержать список фактов из candidate, которые уже есть в event_before.facts (дубли). "
         "conflict_facts должен содержать список конфликтов (см. выше) и выбранную сторону по доверию. "
@@ -21860,6 +21878,25 @@ async def _smart_event_update_impl(
                     )
                     conflict_facts = list(merge_data.get("conflict_facts") or [])
                     llm_skipped_conflicts = list(merge_data.get("skipped_conflicts") or [])
+                    type_decision = merge_data.get("event_type_decision")
+                    if isinstance(type_decision, dict):
+                        type_value = type_decision.get("value")
+                        type_quote = type_decision.get("evidence_quote")
+                        if isinstance(type_value, str) and type_value.strip() and isinstance(type_quote, str):
+                            if any(source_contains_quote(text, type_quote) for text in [
+                                _clip(_strip_promo_lines(candidate.source_text) or candidate.source_text,
+                                      SMART_UPDATE_MERGE_CANDIDATE_TEXT_MAX_CHARS),
+                                *[_clip(p.ocr_text, 400) for p in candidate.posters if p.ocr_text][:3],
+                            ]):
+                                type_value = type_value.strip()
+                                if type_value != event_db.event_type:
+                                    event_db.event_type = type_value
+                                    updated_fields = True
+                                    updated_keys.append("event_type")
+                                    added_facts.append(f"Тип: {type_value}")
+                                    logger.info("smart_update.event_type_updated event_id=%s", event_db.id)
+                            else:
+                                logger.warning("smart_update.event_type_rejected event_id=%s reason=quote_not_in_source", event_db.id)
                     skipped_conflicts = []
                     for item in deterministic_skipped_conflicts + llm_skipped_conflicts:
                         text = str(item or "").strip()
