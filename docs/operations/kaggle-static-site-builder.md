@@ -711,14 +711,6 @@ profile. Return to `production-candidate` when site restoration is ready; the
 same exporter/cache remains in use. A computation-only completion releases the
 site claim with a `related_ready` receipt rather than recording an HTML success.
 
-Across an unrelated Events release, data-only adoption keeps the original
-`run_id`, input fingerprint, dataset, original source receipt, model/policy
-configuration and JSON artifact checks. It does not compare the old Kaggle
-result with the **new** app image/source tree. An incompatible semantic
-configuration is rejected by the existing terminal handoff path; incomplete
-Gemma anchors stay unverified. Full HTML candidates retain strict cross-deploy
-source matching and publication checks.
-
 For API-started Kaggle static-site builds, do **not** depend on Kaggle UI Secrets for Gemma verification. The documented project pattern is encrypted split datasets. `scripts/run_static_site_builder_kaggle.py` now creates two short-lived private datasets when `--gemma-related-verify` is enabled:
 
 - cipher dataset: `secrets.enc` plus non-secret `config.json`;
@@ -855,3 +847,7 @@ carousel; an older ready calculation likewise progresses during imports.
 Existing fresh Telegram/confirmed public repair lanes keep their precedence,
 ordinary media/backfill retain their own ordering, and dependency/rate/CAPTCHA
 checks are unchanged. Website-profile ordering is unchanged.
+
+### Related data survive an application release
+
+A recovered related-only run returns saved recommendations for its frozen catalog, not evidence that the current app image executed. When both the current profile and original handoff are related-only, adoption uses the original run, repo SHA and immutable dataset. It does not require the current image manifest or tree to match. Existing run/input/clock, source schema and artifact validation remain; the original cache and JSON are imported together by the ordinary adoption path. Per-anchor strict readiness still controls first VK publication. New imports absent from that snapshot require the next vector/related batch. The producer's existing policy-keyed audit cache decides reuse on that batch; no configuration matcher is added. HTML candidate adoption retains its exact current-image requirements.

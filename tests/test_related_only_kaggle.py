@@ -120,7 +120,8 @@ async def test_related_uses_completed_vector_snapshot_while_ingest_advances(tmp_
         await db.close()
 
 
-def test_related_only_returns_importable_json_without_site_build(tmp_path, monkeypatch):
+@pytest.mark.parametrize("adopt_existing", [False, True])
+def test_related_only_returns_importable_json_without_site_build(tmp_path, monkeypatch, adopt_existing):
     from scripts import run_static_site_builder_kaggle as runner
 
     source = Path(__file__).parents[1] / 'kaggle/StaticSiteBuilder/static_site_builder.py'
@@ -142,7 +143,12 @@ def test_related_only_returns_importable_json_without_site_build(tmp_path, monke
     monkeypatch.setattr(kernel, 'read_config', lambda: config)
     monkeypatch.setattr(kernel, 'validate_build_clock', lambda _: clock)
     monkeypatch.setattr(kernel, 'validate_semantic_cache_contract', lambda _: {'mode': 'warm', 'inputs_staged': []})
-    monkeypatch.setattr(kernel, 'ensure_site_source', lambda _: {})
+    from static_site_release import STATIC_SITE_SOURCE_IDENTITY_SCHEMA
+    source_identity = {'schema_version': STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
+        'repo_sha': config['repo_sha'], 'image_source_manifest_sha256': 'c' * 64,
+        'image_source_tree_sha256': 'd' * 64, 'payload_tree_sha256': 'e' * 64,
+        'payload_archive_sha256': 'f' * 64}
+    monkeypatch.setattr(kernel, 'ensure_site_source', lambda _: source_identity)
     for name in ('init_status', 'cleanup_transient_workspace'):
         monkeypatch.setattr(kernel, name, lambda: None)
     for name in ('ensure_python_deps_for_bge', 'export_preview_data_if_configured'):
@@ -155,10 +161,10 @@ def test_related_only_returns_importable_json_without_site_build(tmp_path, monke
     monkeypatch.setattr(kernel, 'render_daily_service_share', unexpected)
     assert kernel.main() == 0
 
-    args = SimpleNamespace(**config, build_clock=clock, image_source_contract={
+    args = SimpleNamespace(**config, build_clock=clock, adopt_existing=adopt_existing,
+        image_source_contract=None if adopt_existing else {
         'manifest_sha256': 'c' * 64, 'source_tree_sha256': 'd' * 64},
         related_cache=str(tmp_path / 'durable/cache.json'))
-    monkeypatch.setattr(runner, 'validate_static_site_source_identity', lambda *a, **kw: None)
     result = runner.validate_downloaded_result(tmp_path, args)
     assert result['event_count'] == 1
     assert json.loads((tmp_path / 'durable/static_site_event_related.json').read_text()) == related
@@ -266,8 +272,34 @@ async def test_related_job_does_not_require_website_authorized_search(tmp_path, 
     finally:
         await db.close()
 
+
+def test_related_adoption_cli_does_not_resolve_current_image(tmp_path, monkeypatch):
+    from scripts import run_static_site_builder_kaggle as runner
+    from video_announce.kaggle_client import KaggleClient
+    import sys
+    old_sha = "a" * 40
+    monkeypatch.setattr(sys, "argv", ["builder", "--profile", "related-only",
+        "--catalog-mode", "full", "--export-in-kaggle", "--adopt-existing",
+        "--repo-sha", old_sha, "--build-id", "production-original",
+        "--expected-dataset-ref", "owner/original-input"])
+    monkeypatch.setattr(runner, "load_snapshot_contract", lambda args: {})
+    def forbidden(args): pytest.fail("data adoption resolved current app source")
+    monkeypatch.setattr(runner, "resolve_image_source_contract", forbidden)
+    monkeypatch.setattr(runner, "ARTIFACT_ROOT", tmp_path)
+    monkeypatch.setattr(runner, "LOCK_PATH", tmp_path / "lock")
+    monkeypatch.setattr(runner, "prune_abandoned_static_site_scratch",
+                        lambda path: {"removed_directories": []})
+    monkeypatch.setattr(KaggleClient, "__init__", lambda self: None)
+    monkeypatch.setenv("KAGGLE_USERNAME", "fixture-owner")
+    def adopt(args, client, kernel_ref):
+        assert args.repo_sha == old_sha and args.image_source_contract is None
+        assert args.expected_dataset_ref == "owner/original-input"
+        return 0
+    monkeypatch.setattr(runner, "adopt_existing_kernel_output", adopt)
+    assert runner.main() == 0
+
 @pytest.mark.asyncio
-async def test_related_adopts_old_deploy_data_but_not_changed_policy_or_input(tmp_path, monkeypatch):
+async def test_related_saved_data_survives_model_config_change_but_not_wrong_input(tmp_path, monkeypatch):
     """An unrelated release cannot discard the exact immutable data-only result."""
     import hashlib
     from copy import deepcopy
@@ -376,8 +408,8 @@ async def test_related_adopts_old_deploy_data_but_not_changed_policy_or_input(tm
 
     changed = deepcopy(payload)
     changed["fingerprint_evidence"]["config"]["gemma_related_model"] = "models/other"
-    with pytest.raises(main.StaticSiteSingleFlightDeferred, match="related_policy_mismatch"):
-        await recover(changed)
+    # Saved recommendations remain original-run data, not current-model execution.
+    assert await recover(changed) == (True, True)
     claim.input_fingerprint = "f" * 64
     with pytest.raises(main.StaticSitePermanentError, match="handoff_identity_mismatch"):
         await recover(payload)
@@ -386,4 +418,4 @@ async def test_related_adopts_old_deploy_data_but_not_changed_policy_or_input(tm
     html_payload["remote_handoff"]["profile"] = "production-candidate"
     with pytest.raises(main.StaticSiteSingleFlightDeferred, match="cross_deploy_source_identity_mismatch"):
         await recover(html_payload)
-    assert commands == [("adopt-only",)]
+    assert commands == [("adopt-only",), ("adopt-only",)]

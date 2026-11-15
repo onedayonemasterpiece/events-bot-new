@@ -402,3 +402,38 @@ Owner correction before PR953 release: medallion padding/shape is fixed in share
 Owner requested autonomous product ownership and 20-minute checks for at least two days. Related-only runtime had STATIC_SITE_GEMMA_RELATED_VERIFY=0. The paired 500-event subset showed sparse valid standup links drop below cosine0.80, so the content-only change alone is not accepted. Read-only canonical provider probes of the existing verifier accepted the two standup controls and rejected basketball/KVN/literature. Separate probes hit shared TPM and demonstrated that the existing fixed10s retry could occur before the limiter42s retry time. Restore the existing strict verifier, remove derived category from its factual input, inherit the existing normal key pool and respect RPM/TPM timing within the same bounded retry. No new algorithm or writer. Retained evidence: related-catalog-v2-comparison.json, existing-semantic-audit-quality.jsonl, existing-semantic-audit-standup-recheck.jsonl under the canonical incident artifact directory. Live acceptance remains open.
 
 The first v2 owner pass12204 reached the existing500-call cap, leaving219 embeddings unconverted. The old complete receipt12202 remained, and shared build157146 could claim while the sidecar was mixed. Invalidate the existing receipt immediately before the sidecar project stage; on any partial failure the existing barrier then waits for a normal complete retry. A distinguishing test fails before provider effect on baseline and passes after; no new receipt schema or recovery queue.
+
+### 15 November: preserve bounded audit progress
+
+When the actionable catalog becomes smaller, the exporter count-only shrink
+guard refuses to persist successful semantic audit entries. An offline exact
+function control with 22 anchors and the existing 20-miss budget repeats 40
+provider stubs on every run; removing that guard advances 40→4→0 while
+retaining all expensive compatible audit entries. The initialized exporter
+regression uses a real cache file and a one-miss budget: before it cannot write;
+after it advances 1→2→3 verified anchors and a warm run makes no new calls.
+
+An initial draft yielded after terminal rejection instead of immediately
+submitting the previous vector snapshot. That branch was removed: data-only
+adoption below eliminates the cross-release rejection that required yielding.
+There is no need to retain an extra terminal path for the same defect.
+
+### 15 November: saved related data are independent of the current image
+
+The same data-only output was rejected after unrelated app releases because
+recovery compared its repo SHA and image tree to the new container, and the
+adoption runner resolved the current image manifest again. Already accepted
+related JSON survives those releases. Treat newly adopted frozen JSON the
+same way: keep the original run/input/clock and source/artifact validation,
+without demanding current app bytes. Both current and handoff profiles must
+be related-only; HTML candidate requirements are unchanged. The original
+cache is imported with its result through existing adoption, never salvaged
+separately. This neither covers later imports nor proves current quality.
+
+Four new recovery/result/CLI controls fail on the original functions; the
+unchanged fresh-result control passes. They include a still-live run that
+retains single-flight and an adoption CLI that must not resolve current
+source. After the change the focused exporter/debounce/related suite passes.
+Independent complexity review accepts this subtraction and rejects replacing
+the removed image gate with an ad hoc model/config matcher. Normal producer
+ordering, partial-audit fairness and actual new VK publication remain open.

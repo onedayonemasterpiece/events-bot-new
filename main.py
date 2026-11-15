@@ -25502,27 +25502,13 @@ async def _recover_previous_static_site_attempt(
         else None
     )
     incompatible_reason = None
-    related_only = handoff.get("profile") == "related-only"
-    if related_only:
-        evidence = request_payload.get("fingerprint_evidence")
-        saved = evidence.get("config") if isinstance(evidence, Mapping) else None
-        mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower()
-        expected = {
-            "profile": (os.getenv("STATIC_SITE_BUILD_PROFILE") or "production-candidate").strip(),
-            "related_mode": mode,
-            "gemma_related_verify": _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
-        }
-        if mode == "pgvector":
-            expected["pgvector_embedding_model"] = (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2").strip()
-        if mode == "bge":
-            expected["bge_model_revision"] = (os.getenv("STATIC_SITE_BGE_MODEL_REVISION") or "5617a9f61b028005a4858fdac845db406aefb181").strip()
-        if expected["gemma_related_verify"]:
-            expected["gemma_related_model"] = (os.getenv("STATIC_SITE_GEMMA_RELATED_MODEL") or "models/gemma-4-26b-a4b-it").strip()
-        if not isinstance(saved, Mapping) or any(saved.get(key) != value for key, value in expected.items()):
-            incompatible_reason = "static_site_recovery_related_policy_mismatch"
-    if not related_only and required["repo_sha"] != current_repo_sha:
+    if (handoff.get("profile") == "related-only"
+            and os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only"):
+        # Adopt frozen data from its original run, independently of this app image.
+        current_source_identity = None
+    elif required["repo_sha"] != current_repo_sha:
         incompatible_reason = "static_site_recovery_cross_deploy_repo_sha_mismatch"
-    if not related_only and current_source_identity is not None:
+    if current_source_identity is not None:
         expected_source = {
             "image_source_manifest_sha256": str(
                 current_source_identity.get("image_source_manifest_sha256") or ""

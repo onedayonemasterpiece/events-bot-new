@@ -4114,18 +4114,8 @@ def load_related_cache(path: Path | None) -> dict[str, Any] | None:
         return None
 
 
-def save_related_cache(path: Path | None, payload: dict[str, Any], *, previous_event_count: int = 0) -> bool:
+def save_related_cache(path: Path | None, payload: dict[str, Any]) -> bool:
     if not path:
-        return False
-    new_event_count = len(payload.get("event_ids") or [])
-    allow_shrink = str(os.getenv("STATIC_SITE_ALLOW_RELATED_CACHE_SHRINK", "")).strip().lower() in {"1", "true", "yes", "on"}
-    if previous_event_count and new_event_count and new_event_count < previous_event_count and not allow_shrink:
-        log_stage(
-            "related_cache_write_skipped_shrink_guard",
-            path=str(path),
-            previous_event_count=previous_event_count,
-            new_event_count=new_event_count,
-        )
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write_json(path, payload)
@@ -5054,7 +5044,7 @@ def build_related(
         else [],
         "updated_at": generated_at,
     }
-    cache_written = save_related_cache(cache_path, cache_payload, previous_event_count=len(previous_ids))
+    cache_written = save_related_cache(cache_path, cache_payload)
     related: dict[str, dict[str, Any]] = {}
     for event in events:
         chain = chains.get(str(event["id"]), [])

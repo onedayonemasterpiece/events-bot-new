@@ -246,7 +246,7 @@ Important evidence:
   - `5370` («Точка и линия») strict related starts with art/exhibition events (`6214`, `5969`, `6080`, `5391`).
 - Browser evidence: mocked authorized search UI smoke and real Edge smoke both rendered scrollable cards with shared actions; the real Edge smoke for `концерт классической музыки` returned `12` rendered cards.
 
-The v62 failure mode was operational, not semantic: leaving `node22` in `/kaggle/working` made the failed notebook artifact too large/noisy. The Kaggle kernel now deletes transient `node22` and extracted site paths on both success and failure while preserving recoverable cache/SQLite outputs. The exporter also refuses to overwrite a larger expensive related cache with a smaller canary run unless `STATIC_SITE_ALLOW_RELATED_CACHE_SHRINK=1` is explicitly set.
+The v62 failure mode was operational, not semantic: leaving `node22` in `/kaggle/working` made the failed notebook artifact too large/noisy. The Kaggle kernel now deletes transient `node22` and extracted site paths on both success and failure while preserving recoverable cache/SQLite outputs. The exporter persists completed audit entries even when the active catalog shrinks after date rollover. Canary exports can use the existing `--related-cache` argument to select their own cache file.
 
 ### Authorized search
 

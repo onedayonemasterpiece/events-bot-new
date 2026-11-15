@@ -757,3 +757,39 @@ def test_related_cold_budget_prioritizes_changed_but_zero_remains_unbounded(
         cache={}, max_anchors=limit, changed_event_ids=changed)
     assert calls == expected_calls
     assert meta['verified_event_ids'] == sorted(expected_calls)
+
+
+def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
+    monkeypatch.delenv('STATIC_SITE_ALLOW_RELATED_CACHE_SHRINK', raising=False)
+    cache_path = tmp_path / 'related-cache.json'
+    old_audit = {'99': {'llm_semantic_score': .8}}
+    cache_path.write_text(json.dumps({'event_ids': [1, 2, 3, 4],
+        'gemma_audit_cache': {'previous-verdict': old_audit}}))
+    events = [{'id': i, 'title': f'Event {i}'} for i in (1, 2, 3)]
+    calls = []
+
+    def audit(**kwargs):
+        calls.append(kwargs['anchor']['id'])
+        return {candidate['id']: {'llm_semantic_score': .8, 'confidence': .9,
+                'reject': False, 'similarity_class': 'highly_similar'}
+                for candidate in kwargs['candidates']}
+
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', lambda *a, **k: {
+        str(i): [{'event_id': 2 if i == 1 else 1, 'vector_similarity': .8,
+                  'related_score': .8, 'slot_type': 'pure_related'}] for i in (1, 2, 3)})
+    for expected_ready in (1, 2, 3, 3):
+        result = exporter.build_related(events, current_date='2026-11-15',
+            related_mode='pgvector', cache_path=cache_path, gemma_verify=True,
+            gemma_max_anchors=1)
+        assert result['cache']['written']
+        assert len(result['gemma_verification']['verified_event_ids']) == expected_ready
+    assert calls == [3, 2, 1]
+    assert result['strict_verified_related']
+    assert result['gemma_verification']['cache_hits'] == 3
+    saved = json.loads(cache_path.read_text())
+    assert saved['event_ids'] == [1, 2, 3]
+    assert saved['gemma_audit_cache']['previous-verdict'] == old_audit
