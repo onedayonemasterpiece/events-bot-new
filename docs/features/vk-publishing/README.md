@@ -259,3 +259,12 @@ The configured user uploads the ICS, waits for the upload response and `docs.sav
 Исключение для строки под «до» — явно заданный канонический диапазон ежедневных часов работы (`12:00–20:00`), без дня недели. Одиночное время открытия и время по умолчанию не используются. Это следует существующему exhibition-range extraction contract, без нового парсинга описаний или генерации расписания.
 
 Краткое описание на карточке набирается нейтральным secondary text цветом palette.sub; цвет площадки/акцентов не переносится на описание.
+
+### Known public time for related comments
+
+Related-comment jobs retain the publication timestamp already read by their
+producer, alongside the frozen carousel selection. If recovery resumes the job
+early, the handler returns the existing publication-plus-three-minute minimum
+before linked-publication preparation or any VK identity recovery. The producer
+keeps its existing random 3–20 minute due time. Legacy payloads without the
+timestamp retain their existing behavior; no migration or historical scan runs.
