@@ -848,10 +848,6 @@ Existing fresh Telegram/confirmed public repair lanes keep their precedence,
 ordinary media/backfill retain their own ordering, and dependency/rate/CAPTCHA
 checks are unchanged. Website-profile ordering is unchanged.
 
-### Related-only progress after an incompatible terminal result
-
-After rejecting and cleaning a terminal run from an incompatible release, the related-only handler completes that attempt without submitting its replacement in the same call. The existing pending vector job can then refresh the completed projection and request the next related build through its normal completion path. A live remote run continues to hold its existing claim. This prevents repeatedly building the previous vector snapshot before newly imported events are projected.
-
 ### Related data survive an application release
 
 A recovered related-only run returns saved recommendations for its frozen catalog, not evidence that the current app image executed. When both the current profile and original handoff are related-only, adoption uses the original run, repo SHA and immutable dataset. It does not require the current image manifest or tree to match. Existing run/input/clock, source schema and artifact validation remain; the original cache and JSON are imported together by the ordinary adoption path. Per-anchor strict readiness still controls first VK publication. New imports absent from that snapshot require the next vector/related batch. The producer's existing policy-keyed audit cache decides reuse on that batch; no configuration matcher is added. HTML candidate adoption retains its exact current-image requirements.

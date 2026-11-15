@@ -403,9 +403,8 @@ Owner requested autonomous product ownership and 20-minute checks for at least t
 
 The first v2 owner pass12204 reached the existing500-call cap, leaving219 embeddings unconverted. The old complete receipt12202 remained, and shared build157146 could claim while the sidecar was mixed. Invalidate the existing receipt immediately before the sidecar project stage; on any partial failure the existing barrier then waits for a normal complete retry. A distinguishing test fails before provider effect on baseline and passes after; no new receipt schema or recovery queue.
 
-### 15 November: preserve bounded audit progress and yield after rejection
+### 15 November: preserve bounded audit progress
 
-Two mechanical defects remain after the ready-initial priority correction.
 When the actionable catalog becomes smaller, the exporter count-only shrink
 guard refuses to persist successful semantic audit entries. An offline exact
 function control with 22 anchors and the existing 20-miss budget repeats 40
@@ -414,18 +413,10 @@ retaining all expensive compatible audit entries. The initialized exporter
 regression uses a real cache file and a one-miss budget: before it cannot write;
 after it advances 1→2→3 verified anchors and a warm run makes no new calls.
 
-After rejecting an incompatible terminal run, the same related-only handler
-previously fell through into replacement submission using the previous vector
-projection. The pending vector job could not run between those two steps.
-Complete that rejected attempt as handled/nochange in the existing related-only
-profile so normal vector completion can request the next calculation. HTML
-profiles retain their replacement behavior; active remote runs remain protected.
-The baseline terminal regression fails in three related-only cases; the profile
-negative controls pass. The 80 exporter/debounce/related-only checks pass after
-the change, with no real provider calls. This does not prove complete liveness:
-vector backoff, continuous intake, remaining cold-audit continuation and a
-hung remote calculation still require separate modeling and ordinary new VK
-publication evidence. No production delivery or incident closure is claimed.
+An initial draft yielded after terminal rejection instead of immediately
+submitting the previous vector snapshot. That branch was removed: data-only
+adoption below eliminates the cross-release rejection that required yielding.
+There is no need to retain an extra terminal path for the same defect.
 
 ### 15 November: saved related data are independent of the current image
 

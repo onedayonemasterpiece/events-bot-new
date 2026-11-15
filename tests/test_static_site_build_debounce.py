@@ -186,11 +186,9 @@ async def test_terminal_recovery_rejects_cross_owner_output_identity(monkeypatch
     (False, "exception", True),
 ])
 @pytest.mark.asyncio
-@pytest.mark.parametrize("profile", ["related-only", "production-candidate"])
 async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replacement(
-    monkeypatch, callback_terminal, status, matches, profile,
+    monkeypatch, callback_terminal, status, matches,
 ):
-    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", profile)
     fingerprint = "a" * 64
     calls = []
     monkeypatch.setattr(
@@ -299,7 +297,7 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
             await recovery
         assert calls == []  # No reconcile, deletion, finish or payload mutation.
     else:
-        assert await recovery == ((True, False) if profile == "related-only" else (False, None))
+        assert await recovery == (False, None)
     assert probes == ([] if callback_terminal else ["sources", "status"] if matches else ["sources"])
     if not calls:
         return

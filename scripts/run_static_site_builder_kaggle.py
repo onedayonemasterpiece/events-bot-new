@@ -626,14 +626,20 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
     if result.get('ok') is not True or result.get('build_id') != args.build_id:
         raise RuntimeError('Kaggle result build identity/status mismatch')
     if args.profile == 'related-only':
+        if result.get('schema_version') != 'static_site_build_result_v2':
+            raise RuntimeError('Kaggle related result schema mismatch')
         for key in ('profile', 'run_id', 'repo_sha', 'input_fingerprint', 'build_clock'):
             if result.get(key) != getattr(args, key):
                 raise RuntimeError(f'Kaggle related result {key} mismatch')
-        image_source = args.image_source_contract or {}
+        image_source = args.image_source_contract
         validate_static_site_source_identity(
             result.get('source') or {}, repo_sha=args.repo_sha,
-            image_source_manifest_sha256=image_source.get('manifest_sha256'),
-            image_source_tree_sha256=image_source.get('source_tree_sha256'),
+            image_source_manifest_sha256=(
+                str(image_source['manifest_sha256']) if image_source else None
+            ),
+            image_source_tree_sha256=(
+                str(image_source['source_tree_sha256']) if image_source else None
+            ),
         )
         artifacts = result.get('artifacts') or []
         if len(artifacts) != 1 or artifacts[0].get('filename') != 'event_related.json':
@@ -1703,9 +1709,10 @@ def main() -> int:
     elif args.catalog_mode != 'slice':
         raise SystemExit('preview profile requires --catalog-mode slice')
     args.snapshot_contract = load_snapshot_contract(args)
-    # Existing data adoption validates the original run, not the current image.
-    args.image_source_contract = (None if args.adopt_existing and args.profile == 'related-only'
-                                  else resolve_image_source_contract(args))
+    args.image_source_contract = (
+        None if args.adopt_existing and args.profile == 'related-only'
+        else resolve_image_source_contract(args)
+    )
 
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open('w') as lock_file:

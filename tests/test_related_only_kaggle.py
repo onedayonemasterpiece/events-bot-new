@@ -297,3 +297,125 @@ def test_related_adoption_cli_does_not_resolve_current_image(tmp_path, monkeypat
         return 0
     monkeypatch.setattr(runner, "adopt_existing_kernel_output", adopt)
     assert runner.main() == 0
+
+@pytest.mark.asyncio
+async def test_related_saved_data_survives_model_config_change_but_not_wrong_input(tmp_path, monkeypatch):
+    """An unrelated release cannot discard the exact immutable data-only result."""
+    import hashlib
+    from copy import deepcopy
+    from dataclasses import asdict
+    import main
+    from scripts import run_static_site_builder_kaggle as runner
+
+    old_sha, new_sha = "b" * 40, "d" * 40
+    fingerprint = "a" * 64
+    build_id = "production-old-run"
+    run_id = f"static-site:{build_id}:legacy"
+    monkeypatch.setenv("STATIC_SITE_BUILD_PROFILE", "related-only")
+    monkeypatch.setenv("STATIC_SITE_RELATED_MODE", "pgvector")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_VERIFY", "true")
+    monkeypatch.setenv("STATIC_SITE_GEMMA_RELATED_MODEL", "models/gemma-4-26b-a4b-it")
+    monkeypatch.setenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL", "gemini-embedding-2")
+    clock_text = "2026-11-15T09:00:00+02:00"
+    clock = main.resolve_static_site_build_clock(
+        current_date="2026-11-15", current_datetime=clock_text,
+    )
+    source = {
+        "schema_version": "static_site_source_identity_v1",
+        "repo_sha": old_sha,
+        "image_source_manifest_sha256": "1" * 64,
+        "image_source_tree_sha256": "2" * 64,
+        "payload_tree_sha256": "3" * 64,
+        "payload_archive_sha256": "4" * 64,
+    }
+    output = tmp_path / "download"
+    output.mkdir()
+    related = output / "event_related.json"
+    related.write_text(json.dumps({"related": {"42": {"pure_related": [43], "strict_verified": True}}}))
+    (output / "event_related_chain_cache.json").write_text("{}")
+    receipt = {
+        "schema_version": "static_site_build_result_v2",
+        "ok": True, "profile": "related-only",
+        "build_id": build_id, "run_id": run_id,
+        "repo_sha": old_sha, "input_fingerprint": fingerprint,
+        "build_clock": asdict(clock), "source": source,
+        "artifacts": [{"filename": "event_related.json",
+                       "sha256": hashlib.sha256(related.read_bytes()).hexdigest()}],
+    }
+    (output / "static_site_build_result.json").write_text(json.dumps(receipt))
+    args = SimpleNamespace(profile="related-only", build_id=build_id, run_id=run_id,
+                           repo_sha=old_sha, input_fingerprint=fingerprint,
+                           build_clock=asdict(clock), image_source_contract=None,
+                           related_cache=str(tmp_path / "persist/cache.json"))
+    assert runner.validate_downloaded_result(output, args)["run_id"] == run_id
+    assert (tmp_path / "persist/static_site_event_related.json").is_file()
+
+    snapshot = tmp_path / "original.sqlite"
+    manifest = tmp_path / "original.manifest.json"
+    snapshot.write_bytes(b"original")
+    manifest.write_text("{}")
+    handoff = {
+        "profile": "related-only", "build_id": build_id, "run_id": run_id,
+        "repo_sha": old_sha, "candidate_token": "c" * 43,
+        "snapshot_path": str(snapshot), "manifest_path": str(manifest),
+        "input_fingerprint": fingerprint, "current_datetime": clock_text,
+        "source_identity": source,
+    }
+    policy = {
+        "profile": "related-only", "related_mode": "pgvector",
+        "pgvector_embedding_model": "gemini-embedding-2",
+        "gemma_related_verify": True, "gemma_related_model": "models/gemma-4-26b-a4b-it",
+    }
+    payload = {"remote_handoff": handoff, "fingerprint_evidence": {"config": policy}}
+    claim = SimpleNamespace(run_id=run_id, input_fingerprint=fingerprint,
+                            dataset_ref="owner/original-input", effective_date="2026-11-15",
+                            claim_token="exact-claim", remote_status="alive",
+                            remote_terminal_at=None, kernel_ref=None)
+    monkeypatch.setattr(main, "recoverable_static_site_build", lambda *_a, **_k: claim)
+    monkeypatch.setattr(main, "validate_snapshot", lambda *_a: SimpleNamespace(
+        snapshot_id="original", sha256="5" * 64, size_bytes=8,
+    ))
+    commands = []
+    def make_command(**kwargs):
+        assert kwargs["adopt_existing"] and kwargs["expected_dataset_ref"] == claim.dataset_ref
+        assert kwargs["repo_sha"] == old_sha and kwargs["profile"] == "related-only"
+        return ["adopt-only"]
+    class Process:
+        returncode = 0
+        async def communicate(self):
+            return b"adopted", None
+    async def launch(*cmd, **_kw):
+        commands.append(cmd)
+        return Process()
+    async def finish(**kwargs):
+        assert kwargs["run_id"] == run_id and kwargs["repo_sha"] == old_sha
+        return True
+    monkeypatch.setattr(main, "_static_site_build_kaggle_command", make_command)
+    monkeypatch.setattr(main.asyncio, "create_subprocess_exec", launch)
+    monkeypatch.setattr(main, "_finish_static_site_candidate", finish)
+    async def recover(current_payload):
+        return await main._recover_previous_static_site_attempt(
+            db=SimpleNamespace(path=str(tmp_path / "live.sqlite")),
+            job_id=17, request_payload=current_payload, limit=5000,
+            current_repo_sha=new_sha,
+            current_source_identity={
+                "image_source_manifest_sha256": "8" * 64,
+                "image_source_tree_sha256": "9" * 64,
+            },
+        )
+    assert await recover(payload) == (True, True)
+    assert commands == [("adopt-only",)]  # No second Kaggle push.
+
+    changed = deepcopy(payload)
+    changed["fingerprint_evidence"]["config"]["gemma_related_model"] = "models/other"
+    # Saved recommendations remain original-run data, not current-model execution.
+    assert await recover(changed) == (True, True)
+    claim.input_fingerprint = "f" * 64
+    with pytest.raises(main.StaticSitePermanentError, match="handoff_identity_mismatch"):
+        await recover(payload)
+    claim.input_fingerprint = fingerprint
+    html_payload = deepcopy(payload)
+    html_payload["remote_handoff"]["profile"] = "production-candidate"
+    with pytest.raises(main.StaticSiteSingleFlightDeferred, match="cross_deploy_source_identity_mismatch"):
+        await recover(html_payload)
+    assert commands == [("adopt-only",), ("adopt-only",)]

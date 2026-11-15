@@ -25529,9 +25529,8 @@ async def _recover_previous_static_site_attempt(
         # immutable source identity.  It also must not leave an already
         # terminal exact-owner claim permanently wedged: prove terminality,
         # release only that run's resources, record the rejected handoff, and
-        # only then allow normal work to continue. Related-only yields to
-        # queued vector work before replacement. A live/unknown remote remains
-        # single-flight and is never replaced.
+        # only then continue to a fresh current-image build.  A live/unknown
+        # remote remains single-flight and is never replaced.
         from kaggle_status import (
             TERMINAL_STATUSES,
             reconcile_kaggle_run_failure_from_host,
@@ -25629,9 +25628,6 @@ async def _recover_previous_static_site_attempt(
             incompatible_reason,
             removed_snapshot_bytes,
         )
-        if os.getenv("STATIC_SITE_BUILD_PROFILE") == "related-only":
-            # End this attempt so queued vector work can refresh the next input.
-            return True, False
         return False, None
     snapshot_path = Path(required["snapshot_path"])
     manifest_path = Path(required["manifest_path"])
