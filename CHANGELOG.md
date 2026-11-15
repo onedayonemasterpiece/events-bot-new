@@ -5,6 +5,8 @@
 ### Fixed
 
 - Guide source startup seeding preserves runtime flags, including resolved VK IDs, while explicit seed fields retain precedence.
+- Rich-fact completeness applies to the selected event, so full carrier OCR does not turn neighbouring events into its programme; target OCR and age evidence remain available.
+
 - Multi-event scope review preserves complete target quotations and the applicable city; rich facts retain explicitly stated plot details and character ages separately from the audience rating.
 
 - Merge identity decisions use primary source/OCR citations rather than generated summaries and discard the whole decision when any cited evidence is unsupported.

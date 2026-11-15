@@ -923,6 +923,11 @@ Rich public facts retain the supplied work's particular plot, named characters,
 relationships and numbers. Character ages belong to the plot and do not replace
 the separately grounded audience `age_decision`.
 
+Full `raw_excerpt` and poster OCR remain available for target facts and age
+marks. Every completeness/list rule applies to that selected event: independent
+neighbour events in a carrier schedule are not its programme or performers.
+The shared list rule and its other consumers remain unchanged.
+
 One narrow recovery is allowed after an LLM abstention: when a complete typed
 producer result already selected a positive child, Smart Update may construct
 the scope from one **unique verbatim** source line that matches the child's
