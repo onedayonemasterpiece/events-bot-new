@@ -798,3 +798,48 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
     assert saved['event_ids'] == [1, 2, 3]
     assert 'previous-verdict' not in saved['gemma_audit_cache']
     assert len(saved['gemma_audit_cache']) == 3
+
+
+@pytest.mark.parametrize('empty_first_batch', [False, True])
+def test_partial_related_batches_survive_save_and_resume(tmp_path, monkeypatch, empty_first_batch):
+    exporter = _load_exporter_module()
+    monkeypatch.setenv('GOOGLE_API_KEY4', 'unit-test-only')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '2')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT', '6')
+    monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_MAX_ATTEMPTS', '1')
+    events = [{'id': i, 'title': f'Programme {i}', 'date': '2026-12-01'} for i in range(1, 14)]
+    calls = []
+    cycle = 1
+    def retrieve(*args, **kwargs):
+        return {'1': [{'event_id': i, 'vector_similarity': .8, 'related_score': .8,
+                        'slot_type': 'adjacent_discovery'} for i in range(2, 14)]}
+    def audit(**kwargs):
+        ids = [event['id'] for event in kwargs['candidates']]
+        calls.append(ids)
+        if cycle == 1 and ids[0] == 8:
+            raise RuntimeError('provider minute bucket exhausted')
+        if cycle == 2 and ids[0] == 2:
+            pytest.fail('completed batch was repeated after saving the cache')
+        if empty_first_batch and ids[0] == 2:
+            return {}
+        return {ids[0]: {'llm_semantic_score': .8, 'confidence': .9,
+                        'reject': False, 'similarity_class': 'highly_similar'}}
+    monkeypatch.setattr(exporter, 'build_pgvector_related_chain', retrieve)
+    monkeypatch.setattr(exporter, 'call_gemma_related_audit', audit)
+    path = tmp_path / 'cache.json'
+    def run():
+        return exporter.build_related(events, current_date='2026-11-15',
+            related_mode='pgvector', cache_path=path, gemma_verify=True,
+            gemma_max_anchors=20, anchor_ids={1})
+    first = run()
+    assert not first['related']['1']['strict_verified']
+    cycle = 2
+    second = run()
+    assert second['related']['1']['strict_verified']
+    assert calls == [list(range(2, 8)), list(range(8, 14)), list(range(8, 14))]
+    cycle = 3
+    events[1]['title'] = 'Changed source programme'
+    third = run()
+    assert third['related']['1']['strict_verified']
+    assert calls[-1] == list(range(2, 8))
+    assert len(calls) == 4, 'changed peer invalidates its batch, while the other stays reusable'
