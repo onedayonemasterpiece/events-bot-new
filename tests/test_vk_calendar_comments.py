@@ -47,11 +47,12 @@ async def test_new_post_schedules_user_calendar_after_actual_public_time_once(tm
     db = Database(str(tmp_path / 'scheduled.sqlite'))
     await db.init()
     try:
-        ev = event(source_vk_post_url=None, linked_event_ids=[3] if linked else [])
+        event_day = (datetime.now(main.LOCAL_TZ) + timedelta(days=1)).date().isoformat()
+        ev = event(date=event_day, source_vk_post_url=None, linked_event_ids=[3] if linked else [])
         async with db.get_session() as session:
             session.add(ev)
-            session.add(event(id=2, source_vk_post_url='https://vk.com/wall-231920894_5'))
-            session.add(event(id=3, time='19:00', source_vk_post_url='https://vk.com/wall-231920894_10'))
+            session.add(event(date=event_day, id=2, source_vk_post_url='https://vk.com/wall-231920894_5'))
+            session.add(event(date=event_day, id=3, time='19:00', source_vk_post_url='https://vk.com/wall-231920894_10'))
             await session.commit()
         publish_event, _ = await main._prepare_same_day_linked_publish_event(db, ev)
         public_header = next(line for line in main.build_vk_source_header(publish_event, None) if line.startswith('📅 '))
