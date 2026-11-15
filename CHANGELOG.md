@@ -48,6 +48,9 @@
 
 ## [Unreleased]
 
+- Fixed guide monitoring source links for VK wall items owned by another community or person: use the returned signed post owner instead of the requested wall.
+
+
 ### Fixed
 - Диагностика связанных дат различает пустой выбор модели и отклонение programme identity по конкретной причине; тексты источников и цитаты не журналируются.
 
