@@ -370,6 +370,14 @@ by the state-machine audit.
 
 ## VK/source parse quality boundary
 
+For a multi-event VK carrier, each draft retains the caption and labelled OCR
+in its full source corpus, including OCR from images not assigned for publication.
+The existing occurrence scope review selects the child evidence; preserving OCR
+does not select a date or create a second occurrence. The publishing gallery
+continues to contain only assigned media. Single-event and text-only carriers
+keep their existing source text. Regression: `tests/test_vk_source_ocr_evidence.py`
+uses source packet29477 and its original cached OCR with empty media assignment.
+
 Smart Update получает уже типизированный source verdict и полный evidence
 manifest от producer. Source/OCR-grounded normalization ссылок, placeholder
 очистка и reference venue normalization допустимы; подозрительная площадка,
