@@ -3948,6 +3948,7 @@ def build_pgvector_related_chain(
     events: list[dict[str, Any]],
     *,
     current_date: str,
+    anchor_ids: set[int] | None = None,
     embedding_model: str = "gemini-embedding-2",
     match_count: int = 60,
     embedding_doc_kind: str = "related_v1",
@@ -3976,6 +3977,8 @@ def build_pgvector_related_chain(
     }
     for event in events:
         event_id = int(event["id"])
+        if anchor_ids is not None and event_id not in anchor_ids:
+            continue
         rows = personalization_supabase_request(
             COMPACT_RELATED_RPC,
             {
@@ -4455,6 +4458,15 @@ def gemma_related_policy_signature(*, model: str) -> str:
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def gemma_related_audit_cache_key(*, model, policy_signature, anchor_id, fingerprints, candidate_ids):
+    return hashlib.sha1(json.dumps({
+        "model": model,
+        "policy_signature": policy_signature,
+        "anchor": fingerprints.get(str(anchor_id)),
+        "candidates": {str(cid): fingerprints.get(str(cid)) for cid in candidate_ids},
+    }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def maybe_apply_gemma_audit(
     events: list[dict[str, Any]],
     chains: dict[str, list[dict[str, Any]]],
@@ -4465,6 +4477,7 @@ def maybe_apply_gemma_audit(
     cache: dict[str, Any],
     max_anchors: int,
     changed_event_ids: set[int] | None = None,
+    anchor_ids: set[int] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     changed_event_ids = set(changed_event_ids or set())
     meta = {
@@ -4528,6 +4541,8 @@ def maybe_apply_gemma_audit(
         reverse=True,
     ) if max_anchors > 0 else events
     for anchor in audit_order:
+        if anchor_ids is not None and int(anchor["id"]) not in anchor_ids:
+            continue
         anchor_id = str(anchor["id"])
         chain = chains.get(anchor_id) or []
         top_ids = [int(item["event_id"]) for item in chain[:total_candidate_limit]]
@@ -4535,12 +4550,10 @@ def maybe_apply_gemma_audit(
             meta["verified_event_ids"].append(int(anchor["id"]))
             continue
         anchor_int_id = int(anchor["id"])
-        cache_key = hashlib.sha1(json.dumps({
-            "model": model,
-            "policy_signature": policy_signature,
-            "anchor": fingerprints.get(anchor_id),
-            "candidates": {str(cid): fingerprints.get(str(cid)) for cid in top_ids},
-        }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+        cache_key = gemma_related_audit_cache_key(
+            model=model, policy_signature=policy_signature, anchor_id=anchor_id,
+            fingerprints=fingerprints, candidate_ids=top_ids,
+        )
         cached = audit_cache.get(cache_key)
         if cached:
             meta["cache_hits"] += 1
@@ -4808,6 +4821,7 @@ def build_related(
     events: list[dict[str, Any]],
     *,
     current_date: str,
+    anchor_ids: set[int] | None = None,
     related_mode: str = "sparse",
     cache_path: Path | None = None,
     gemma_verify: bool = False,
@@ -4881,11 +4895,14 @@ def build_related(
         if previous_fingerprints.get(event_id) != fingerprint
     }
     changed_event_ids.update(previous_id_set - current_id_set)
-    cache_valid = (
+    cache_compatible = (
         cache.get("schema_version") == cache_schema_version
         and cache.get("algorithm") == algorithm
         and (related_mode == "sparse" or cache.get("embedding_model") == embedding_model)
         and (related_mode == "sparse" or cache.get("embedding_document_version") == embedding_doc_version)
+    )
+    cache_valid = (
+        cache_compatible
         and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and (
             related_mode != "bge"
@@ -4922,7 +4939,59 @@ def build_related(
     )
     raw_chains_for_cache: dict[str, list[dict[str, Any]]] | None = None
     cached_raw_chains = cache.get("raw_chains") if isinstance(cache.get("raw_chains"), dict) else None
-    if cache_valid and (not gemma_verify or gemma_cache_ready):
+    unfinished_anchor_ids: set[int] = set()
+    if anchor_ids is not None and related_mode == "pgvector":
+        if not cache_compatible:
+            cached_verified_event_ids = set()
+            cached_raw_chains = None
+        candidate_limit = max(6, min(12, int(os.getenv("STATIC_SITE_GEMMA_RELATED_CANDIDATE_LIMIT", "10") or "10")))
+        pass_count = max(1, min(3, int(os.getenv("STATIC_SITE_GEMMA_RELATED_PASSES", "2") or "2")))
+        cached_verified_event_ids = {
+            event_id for event_id in cached_verified_event_ids
+            if str(event_id) in (cached_raw_chains or {}) and (
+                not cached_raw_chains[str(event_id)] or gemma_related_audit_cache_key(
+                    model=gemma_model, policy_signature=gemma_policy_signature,
+                    anchor_id=event_id, fingerprints=previous_fingerprints,
+                    candidate_ids=[int(item["event_id"]) for item in cached_raw_chains[str(event_id)][:candidate_limit * pass_count]],
+                ) in (cache.get("gemma_audit_cache") or {})
+            )
+        }
+        # First publications need their own anchors, not a cold audit of every
+        # old page. Keep the complete catalog available to retrieval/verifier.
+        targets = set(anchor_ids) | (changed_event_ids if previous_fingerprints else set())
+        targets.difference_update(cached_verified_event_ids - changed_event_ids)
+        targets.update(
+            int(anchor) for anchor, chain in (cached_raw_chains or {}).items()
+            if any(int(item["event_id"]) in changed_event_ids for item in chain)
+        )
+        targets.intersection_update(current_id_set)
+        chains = copy.deepcopy(cache.get("chains") or {}) if cache_compatible else {}
+        raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
+        fresh = build_pgvector_related_chain(
+            events, current_date=current_date, anchor_ids=targets,
+            embedding_model=embedding_model,
+            embedding_doc_kind=embedding_doc_version,
+            graph_meta_out=graph_meta, retrieval_receipt_out=retrieval_receipt,
+            response_max_bytes=related_response_max_bytes,
+            total_response_max_bytes=related_total_response_max_bytes,
+        ) if targets else {}
+        fresh = {key: chain for key, chain in fresh.items() if int(key) in targets}
+        raw_chains_for_cache.update(copy.deepcopy(fresh))
+        fresh, gemma_meta = maybe_apply_gemma_audit(
+            events, fresh, enabled=gemma_verify, model=gemma_model,
+            key_env=gemma_key_env, cache=cache, max_anchors=gemma_max_anchors,
+            changed_event_ids=targets, anchor_ids=targets,
+        )
+        chains.update(fresh)
+        gemma_meta["verified_event_ids"] = sorted(
+            (cached_verified_event_ids - targets) & current_id_set
+            | set(gemma_meta["verified_event_ids"])
+        )
+        if gemma_verify:
+            gemma_meta["status"] = "ok" if current_id_set.issubset(set(gemma_meta["verified_event_ids"])) and not gemma_meta["errors"] else ("partial" if gemma_meta["verified_event_ids"] else "failed")
+        unfinished_anchor_ids = targets - set(gemma_meta["verified_event_ids"]) if gemma_verify else set()
+        cache_state = "incremental"
+    elif cache_valid and (not gemma_verify or gemma_cache_ready):
         chains = cache["chains"]
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains or chains)
         cache_state = "hit"
@@ -5022,7 +5091,8 @@ def build_related(
             else None
         ),
         "event_ids": event_ids,
-        "event_fingerprints": fingerprints,
+        "event_fingerprints": {key: value for key, value in fingerprints.items()
+                               if int(key) not in unfinished_anchor_ids},
         "chains": chains,
         "raw_chains": raw_chains_for_cache or copy.deepcopy(chains),
         "graph_reciprocity": graph_meta,
@@ -6266,6 +6336,7 @@ def main() -> int:
     )
     parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
     parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
+    parser.add_argument("--related-anchor-ids", default=None, help="Selected related anchors; empty selects changed anchors only")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
     parser.add_argument("--related-mode", choices=["sparse", "pgvector", "bge"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
@@ -6751,6 +6822,8 @@ def main() -> int:
     related_payload = build_related(
         events,
         current_date=effective_date,
+        anchor_ids=({int(value) for value in args.related_anchor_ids.split(",") if value.strip()}
+                    if args.related_anchor_ids is not None else None),
         related_mode=args.related_mode,
         cache_path=related_cache,
         gemma_verify=bool(args.gemma_related_verify),
@@ -6767,7 +6840,7 @@ def main() -> int:
             else None
         ),
     )
-    if args.catalog_mode == "full" and args.related_mode == "pgvector":
+    if args.catalog_mode == "full" and args.related_mode == "pgvector" and args.related_anchor_ids is None:
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")

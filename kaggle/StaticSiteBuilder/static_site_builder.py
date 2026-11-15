@@ -658,6 +658,8 @@ def export_preview_data_if_configured(config: dict) -> None:
             '--collection-product-evidence-trust-scope',
             str(config.get('collection_product_evidence_trust_scope') or 'all'),
         ])
+    if config.get('profile') == 'related-only' and semantic_cache['mode'] == 'warm':
+        cmd.extend(['--related-anchor-ids', ','.join(map(str, config.get('related_anchor_ids') or []))])
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})
