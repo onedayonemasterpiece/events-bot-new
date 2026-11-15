@@ -1,5 +1,7 @@
 # Changelog
 
+- Multi-event scope review preserves complete target quotations and the applicable city; rich facts retain explicitly stated plot details and character ages separately from the audience rating.
+
 - Merge identity decisions use primary source/OCR citations rather than generated summaries and discard the whole decision when any cited evidence is unsupported.
 
 - Guide visual digests choose the source-grounded canonical variant; card text fits before portraits, unknown location sentinels stay hidden, and four rows clear the footer.

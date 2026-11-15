@@ -914,6 +914,15 @@ failure blocks automatic creation. This prevents performer/program facts from
 sibling dates being written into `event_source_fact`, descriptions, search
 digests and public projections.
 
+`single_event` describes the whole carrier, including its OCR blocks, rather
+than one named child inside a multi-event programme. Each selected excerpt is
+one continuous source quotation; date, plot and genuinely shared city from
+different places remain separate array items. An explicit target city must
+stay tied to that target's date, without borrowing a sibling's city.
+Rich public facts retain the supplied work's particular plot, named characters,
+relationships and numbers. Character ages belong to the plot and do not replace
+the separately grounded audience `age_decision`.
+
 One narrow recovery is allowed after an LLM abstention: when a complete typed
 producer result already selected a positive child, Smart Update may construct
 the scope from one **unique verbatim** source line that matches the child's
