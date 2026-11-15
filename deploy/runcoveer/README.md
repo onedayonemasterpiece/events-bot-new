@@ -24,6 +24,16 @@ release context rather than a deployment gate. A concrete observed risk may
 need an action specific to that operation; it does not justify a general ban.
 This owner decision supersedes the historical wait-for-import wording below.
 
+## Completed static handoff after a release
+
+If an old-source static handoff has no terminal callback, its normal recovery
+checks the existing kernel's exact dataset ownership and provider status.
+Only a terminal execution with matching inputs can pass to the existing
+incompatible-result rejection and cleanup. Running, unknown or different-input
+executions remain single-flight. This prevents a lost callback from blocking
+fresh VK announcements indefinitely; it does not adopt old-source output or
+start a second kernel.
+
 ## VK gallery replay and cover correction, 2026-11-10
 
 Events-only image `runcoveer/events:vk-multiphoto-replay-20261110` contains

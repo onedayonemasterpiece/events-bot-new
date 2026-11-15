@@ -25517,9 +25517,19 @@ async def _recover_previous_static_site_attempt(
 
         remote_status = str(claim.remote_status or "").strip().lower()
         if not claim.remote_terminal_at or remote_status not in TERMINAL_STATUSES:
-            raise StaticSiteSingleFlightDeferred(
-                f"{incompatible_reason}:terminal_evidence_pending:{claim.run_id}"
-            )
+            from video_announce.kaggle_client import KaggleClient
+
+            client = KaggleClient()
+            matched, _ = await asyncio.to_thread(
+                client.kernel_has_dataset_sources, claim.kernel_ref, [claim.dataset_ref]
+            ) if claim.kernel_ref else (False, {})
+            provider_status = await asyncio.to_thread(
+                client.get_kernel_status, claim.kernel_ref
+            ) if matched else {}
+            if str(provider_status.get("status") or "").lower() not in TERMINAL_STATUSES:
+                raise StaticSiteSingleFlightDeferred(
+                    f"{incompatible_reason}:terminal_evidence_pending:{claim.run_id}"
+                )
         await reconcile_kaggle_run_failure_from_host(
             db,
             run_id=claim.run_id,

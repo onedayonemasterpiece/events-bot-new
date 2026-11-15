@@ -175,8 +175,9 @@ async def test_terminal_recovery_rejects_cross_owner_output_identity(monkeypatch
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("provider_terminal", [False, True])
 async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replacement(
-    monkeypatch,
+    monkeypatch, provider_terminal,
 ):
     fingerprint = "a" * 64
     calls = []
@@ -192,11 +193,23 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
                 "input_fingerprint": fingerprint,
                 "effective_date": "2026-08-09",
                 "dataset_ref": "owner/exact-input",
-                "remote_status": "done",
-                "remote_terminal_at": "2026-08-09T12:30:00Z",
+                "kernel_ref": "owner/exact-kernel",
+                "remote_status": "alive" if provider_terminal else "done",
+                "remote_terminal_at": None if provider_terminal else "2026-08-09T12:30:00Z",
             },
         )(),
     )
+
+    from types import SimpleNamespace
+    probes = []
+    def dataset_matches(kernel, sources):
+        probes.append((kernel, sources))
+        return True, {}
+    def provider_status(kernel):
+        probes.append(kernel)
+        return {"status": "COMPLETE"}
+    monkeypatch.setattr("video_announce.kaggle_client.KaggleClient", lambda: SimpleNamespace(
+        kernel_has_dataset_sources=dataset_matches, get_kernel_status=provider_status))
 
     async def forbidden_subprocess(*_args, **_kwargs):
         raise AssertionError("cross-deploy recovery crossed the subprocess boundary")
@@ -259,6 +272,7 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
     )
 
     assert result == (False, None)
+    assert len(probes) == (2 if provider_terminal else 0)
     assert [call[0] for call in calls] == [
         "reconcile",
         "validate_cleanup",
@@ -277,8 +291,9 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("provider_status, matched", [("RUNNING", True), ("COMPLETE", False), ("", True)])
 async def test_live_remote_recovery_cross_deploy_stays_single_flight(
-    monkeypatch,
+    monkeypatch, provider_status, matched,
 ):
     fingerprint = "a" * 64
     monkeypatch.setattr(
@@ -293,11 +308,17 @@ async def test_live_remote_recovery_cross_deploy_stays_single_flight(
                 "input_fingerprint": fingerprint,
                 "effective_date": "2026-08-09",
                 "dataset_ref": "owner/exact-input",
+                "kernel_ref": "owner/exact-kernel",
                 "remote_status": "running",
                 "remote_terminal_at": None,
             },
         )(),
     )
+
+    from types import SimpleNamespace
+    monkeypatch.setattr("video_announce.kaggle_client.KaggleClient", lambda: SimpleNamespace(
+        kernel_has_dataset_sources=lambda *_: (matched, {}),
+        get_kernel_status=lambda *_: {"status": provider_status}))
 
     handoff = {
         "build_id": "production-old-run",
