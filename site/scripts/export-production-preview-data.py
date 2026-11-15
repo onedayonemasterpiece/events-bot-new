@@ -4586,6 +4586,14 @@ def maybe_apply_gemma_audit(
                     pass_candidates = candidate_events[pass_index * candidate_limit : (pass_index + 1) * candidate_limit]
                     if not pass_candidates:
                         continue
+                    pass_key = gemma_related_audit_cache_key(
+                        model=model, policy_signature=policy_signature, anchor_id=anchor_id,
+                        fingerprints=fingerprints, candidate_ids=[event["id"] for event in pass_candidates])
+                    if pass_key in audit_cache:
+                        audit.update({int(k): v for k, v in audit_cache[pass_key].items()})
+                        successful_passes += 1
+                        log_stage("gemma_audit_pass_cache_hit", anchor_event_id=anchor_int_id, pass_index=pass_index + 1)
+                        continue
                     last_exc: Exception | None = None
                     for attempt in range(1, max_attempts + 1):
                         started = time.monotonic()
@@ -4613,6 +4621,7 @@ def maybe_apply_gemma_audit(
                             )
                             elapsed_ms = int((time.monotonic() - started) * 1000)
                             audit.update(pass_audit)
+                            audit_cache[pass_key] = {str(k): v for k, v in pass_audit.items()}
                             successful_passes += 1
                             meta["provider_calls"] += 1
                             meta["attempts"].append({
@@ -5097,7 +5106,15 @@ def build_related(
                 fingerprints=fingerprints, candidate_ids=[int(item["event_id"]) for item in chain[:candidate_limit * pass_count]])
             for anchor, chain in raw_chains_for_cache.items()
         }
-        retained_keys = set(audit_keys.values()) & (cache.get("gemma_audit_cache") or {}).keys()
+        retained_keys = set(audit_keys.values())
+        for anchor, chain in raw_chains_for_cache.items():
+            top_ids = [int(item["event_id"]) for item in chain[:candidate_limit * pass_count]]
+            retained_keys.update(
+                gemma_related_audit_cache_key(
+                    model=gemma_model, policy_signature=gemma_policy_signature, anchor_id=anchor,
+                    fingerprints=fingerprints, candidate_ids=top_ids[offset:offset + candidate_limit])
+                for offset in range(0, len(top_ids), candidate_limit))
+        retained_keys &= (cache.get("gemma_audit_cache") or {}).keys()
         cache["gemma_audit_cache"] = {key: cache["gemma_audit_cache"][key] for key in retained_keys}
         previous_verified_ids = gemma_meta["verified_event_ids"]
         gemma_meta["verified_event_ids"] = [

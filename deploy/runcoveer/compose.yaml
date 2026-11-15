@@ -1,6 +1,6 @@
 services:
   events:
-    image: runcoveer/events:programme-identity-outcomes-20261115
+    image: runcoveer/events:related-batch-progress-20261115
     restart: unless-stopped
     env_file:
       - /opt/runcoveer/events/.env.production
