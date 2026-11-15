@@ -111,3 +111,43 @@ source-level acceptance and corrected product publication are separate
 outstanding actions; this release entry does not close them. The first
 one-off helper exited before submission due to Python import path; the
 corrected invocation uses the existing `/app` module path.
+
+
+### 15 November: alias and schedule cards selected twice
+
+Normal version 12 completed all 81 sources and 135 posts; local run 12271
+was interrupted by another runtime release. Its exact completed output
+was recovered by authenticated SDK version-number download (session
+369966876) and imported by the existing saved-results handler as 12281:
+6 created, 37 updated, 13 past skipped, 60 LLM OK and one provider error.
+Source receipts are 76 OK, four access-denied private walls and one partial
+source (unonatravel 503). These errors do not mean no events. The scheduled
+20:10 run 12280/version 13 independently includes all then-current 87
+sources. Later additions remain outside its frozen config.
+
+Visual preview 347 selected both 745 “Зелёные истории” and 753 “Зелёный
+наряд города” for 17 November 14:00. The candidate router did not offer
+this pair to the LLM because title/route token overlap was zero. Source
+texts were 3,214 and 2,099 characters; the existing 1,400-character clipping
+removed the tail schedule, and guide names were absent from judge input.
+Removing clipping alone was tested and still yielded DISTINCT: it is not
+a sufficient correction. Route same-source/same-time candidates to the
+existing judge, preserve full source and guide names, and instruct it to
+check whether a narrative title aliases one specific scheduled outing.
+Date, contact and organiser alone still cannot merge different outings.
+
+Two contract tests fail before the change and pass afterwards. A live
+read-only shadow of the ordinary dedup flow reduced 745/753 to 745 with
+LLM confidence 0.95; a same-organiser/date/time negative control with
+different routes and guides remained two rows (DISTINCT, confidence 1).
+No occurrence IDs, dates, priority, roles or stored source payloads were
+manually edited. No second dedup mechanism, retry or queue is introduced.
+
+Expert review attempts failed: DevCoveer Opus returned provider_error;
+Antigravity Opus was ineligible in this location; Gemini 3.1 Pro reservation
+failed model_not_found in the central limiter. The live Flash-Lite results
+are semantic acceptance probes, not a completed external consultant review.
+Retained files: guide-745-753-dedup-probe-20261115.log,
+guide-alias-dedup-shadow-20261115.log and guide-dedup-pro-review-20261115.log
+in the existing incident artifact directory. Release and final VK
+publication are not yet performed at this entry; preview 347 is unpublished.
