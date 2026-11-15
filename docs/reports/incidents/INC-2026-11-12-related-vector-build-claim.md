@@ -408,11 +408,11 @@ The first v2 owner pass12204 reached the existing500-call cap, leaving219 embedd
 Two mechanical defects remain after the ready-initial priority correction.
 When the actionable catalog becomes smaller, the exporter count-only shrink
 guard refuses to persist successful semantic audit entries. An offline exact
-function control with22 anchors and the existing20-miss budget repeats40
-provider stubs on every run; removing that guard advances40→4→0 while
+function control with 22 anchors and the existing 20-miss budget repeats 40
+provider stubs on every run; removing that guard advances 40→4→0 while
 retaining all expensive compatible audit entries. The initialized exporter
 regression uses a real cache file and a one-miss budget: before it cannot write;
-after it advances1→2→3 verified anchors and a warm run makes no new calls.
+after it advances 1→2→3 verified anchors and a warm run makes no new calls.
 
 After rejecting an incompatible terminal run, the same related-only handler
 previously fell through into replacement submission using the previous vector
@@ -421,7 +421,7 @@ Complete that rejected attempt as handled/nochange in the existing related-only
 profile so normal vector completion can request the next calculation. HTML
 profiles retain their replacement behavior; active remote runs remain protected.
 The baseline terminal regression fails in three related-only cases; the profile
-negative controls pass. The80 exporter/debounce/related-only checks pass after
+negative controls pass. The 80 exporter/debounce/related-only checks pass after
 the change, with no real provider calls. This does not prove complete liveness:
 vector backoff, continuous intake, remaining cold-audit continuation and a
 hung remote calculation still require separate modeling and ordinary new VK

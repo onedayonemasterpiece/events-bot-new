@@ -765,7 +765,9 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
     monkeypatch.setenv('STATIC_SITE_GEMMA_RELATED_PASSES', '1')
     monkeypatch.delenv('STATIC_SITE_ALLOW_RELATED_CACHE_SHRINK', raising=False)
     cache_path = tmp_path / 'related-cache.json'
-    cache_path.write_text(json.dumps({'event_ids': [1, 2, 3, 4]}))
+    old_audit = {'99': {'llm_semantic_score': .8}}
+    cache_path.write_text(json.dumps({'event_ids': [1, 2, 3, 4],
+        'gemma_audit_cache': {'previous-verdict': old_audit}}))
     events = [{'id': i, 'title': f'Event {i}'} for i in (1, 2, 3)]
     calls = []
 
@@ -788,4 +790,6 @@ def test_shrinking_catalog_persists_bounded_audit_progress(tmp_path, monkeypatch
     assert calls == [3, 2, 1]
     assert result['strict_verified_related']
     assert result['gemma_verification']['cache_hits'] == 3
-    assert json.loads(cache_path.read_text())['event_ids'] == [1, 2, 3]
+    saved = json.loads(cache_path.read_text())
+    assert saved['event_ids'] == [1, 2, 3]
+    assert saved['gemma_audit_cache']['previous-verdict'] == old_audit
