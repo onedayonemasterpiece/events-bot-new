@@ -25512,7 +25512,22 @@ async def _recover_previous_static_site_attempt(
         )
 
         remote_status = str(claim.remote_status or "").strip().lower()
-        if not claim.remote_terminal_at or remote_status not in TERMINAL_STATUSES:
+        terminal = bool(claim.remote_terminal_at) and remote_status in TERMINAL_STATUSES
+        if not terminal and getattr(claim, "kernel_ref", None):
+            try:
+                from video_announce.kaggle_client import KaggleClient
+
+                client = KaggleClient()
+                matched, _ = await asyncio.to_thread(
+                    client.kernel_has_dataset_sources, claim.kernel_ref, [claim.dataset_ref]
+                )
+                if matched:
+                    status = await asyncio.to_thread(client.get_kernel_status, claim.kernel_ref)
+                    remote_status = str(status.get("status") or "").strip().lower()
+                    terminal = remote_status in TERMINAL_STATUSES
+            except Exception:
+                logging.exception("static_site_build: terminal evidence probe failed run_id=%s", claim.run_id)
+        if not terminal:
             raise StaticSiteSingleFlightDeferred(
                 f"{incompatible_reason}:terminal_evidence_pending:{claim.run_id}"
             )

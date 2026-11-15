@@ -99,7 +99,7 @@ The production rail is a durable state machine, not a local process lock:
    accumulated effects. A deploy can make that terminal handoff intentionally
    non-adoptable because its repo/source identity differs from the running
    image. In that case replacement is still forbidden until the exact Kaggle
-   ledger proves a terminal status. The host releases only resources owned by
+   ledger or dataset-bound remote status proves terminality. The host releases only resources owned by
    that run, then validates that the snapshot/manifest pair is a direct child
    of the configured snapshot root, matches the active payload and immutable
    manifest hash/size, and that the output has the recognized exact build
@@ -108,6 +108,15 @@ The production rail is a durable state machine, not a local process lock:
    `cross_deploy_recovery_rejected` claim/handoff cleared and a fresh
    current-image run allowed. A cleanup error, live or terminal-unknown handoff
    remains deferred under the same single-flight contract.
+   If callback terminal evidence is absent, recovery may instead read the exact
+   claim's `kernel_ref` metadata and verify its bound `dataset_ref` with
+   `KaggleClient.kernel_has_dataset_sources`, then read `get_kernel_status`.
+   Only matching inputs plus an authoritative terminal status permit the same
+   existing failure-reconcile, strict cleanup and claim-finish path. Live,
+   unknown, missing kernel, different inputs or probe errors remain deferred.
+   Existing callback terminal evidence does not require these remote probes;
+   no old output adoption/download or replacement push occurs in this check.
+
 6. Review publication remains create-only under a fresh secret prefix. After full
    result/manifest/object verification, the durable internal current-review
    receipt advances atomically. Failed, no-op and artifact-only runs preserve
