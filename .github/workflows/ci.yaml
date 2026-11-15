@@ -32,6 +32,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install native WebP decoder
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends webp
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Compile final automatic-ingestion boundary
@@ -76,6 +78,7 @@ jobs:
           tests/test_qtickets_poster_density.py
           tests/test_tg_recovery_delivery_priority.py
           tests/test_event_media_gate.py
+          tests/test_consumer_image_resize.py
           tests/test_tg_mixed_album_media.py
           tests/test_source_parse_prompt_contract.py
           tests/test_event_parse_llm_first_contract.py

@@ -28,6 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends webp
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install ruff flake8 vulture mypy
